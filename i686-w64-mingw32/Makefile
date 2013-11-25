@@ -1,6 +1,6 @@
-#!/bin/make
+#!/usr/bin/make
 
-# mingw toolchain
+# Build cross toolchain for i686 processor with a win32 (mingw) ABI
 
 UPSTREAM_GCC_VERSION := 4.6.3
 UPSTREAM_GCC_TARBALL := gcc-core-$(UPSTREAM_GCC_VERSION).tar.bz2
