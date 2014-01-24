@@ -49,6 +49,8 @@ GCC_AUTOCONF := autoconf2.64
 GCC_AUTOHEADER := autoheader2.64
 GCC_AUTORECONF := autoreconf2.64
 GCC_AUTOM4TE := autom4te2.64
+GCC_AUTOMAKE := automake-1.11
+GCC_ACLOCAL := aclocal-1.11
 
 TOP := $(CURDIR)
 RECIPES := $(TOP)/recipes
@@ -131,7 +133,7 @@ $(BUILDSTEPS)/mintlib.d: $(BUILDSTEPS)/bootstrap-compiler.d $(SOURCESDIR)/$(UPST
 # Rules to build and install the bootstrap compiler
 ###
 
-GCC_ENV_PARAMS := AUTOCONF=$(GCC_AUTOCONF) AUTOHEADER=$(GCC_AUTOHEADER) AUTOM4TE=$(GCC_AUTOM4TE) PATH="$(PREFIX)/bin:$(PATH)"
+GCC_ENV_PARAMS := AUTOCONF=$(GCC_AUTOCONF) AUTOHEADER=$(GCC_AUTOHEADER) AUTOM4TE=$(GCC_AUTOM4TE) ACLOCAL=$(GCC_ACLOCAL) AUTOMAKE=$(GCC_AUTOMAKE) PATH="$(PREFIX)/bin:$(PATH)"
 
 $(BUILDSTEPS)/bootstrap-compiler.d: $(BUILDSTEPS)/srcdir-step3.d $(BUILDSTEPS)/binutils.d $(BUILDSTEPS)/mintbin.d
 	cd $(BUILDDIR) && $(GCC_ENV_PARAMS) $(GCC_SRCDIR)/configure \
@@ -154,9 +156,9 @@ $(BUILDSTEPS)/bootstrap-compiler.d: $(BUILDSTEPS)/srcdir-step3.d $(BUILDSTEPS)/b
 $(BUILDSTEPS)/srcdir-step3.d: $(BUILDSTEPS)/srcdir-step2.d $(SOURCESDIR)/$(UPSTREAM_GCC_PATCH)
 	bzcat $(SOURCESDIR)/$(UPSTREAM_GCC_PATCH) | patch -d $(GCC_SRCDIR) -p1
 	cd $(GCC_SRCDIR) && ./contrib/gcc_update --touch
-	$(GCC_AUTORECONF) -f $(GCC_SRCDIR)/libmudflap
-	$(GCC_AUTORECONF) -f $(GCC_SRCDIR)/libssp
-	$(GCC_AUTORECONF) -f $(GCC_SRCDIR)/libquadmath
+	$(GCC_ENV_PARAMS) $(GCC_AUTORECONF) -f $(GCC_SRCDIR)/libmudflap
+	$(GCC_ENV_PARAMS) $(GCC_AUTORECONF) -f $(GCC_SRCDIR)/libssp
+	$(GCC_ENV_PARAMS) $(GCC_AUTORECONF) -f $(GCC_SRCDIR)/libquadmath
 	for p in `ls $(RECIPES)/patches/gcc/*.p` ; do patch -d $(GCC_SRCDIR) -p0 <$$p ; done
 	touch $@
 

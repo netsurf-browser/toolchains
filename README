@@ -5,7 +5,7 @@ Pre-requisites for Debian systems
 
 	$ apt-get install build-essential autoconf automake autogen flex bison
 	$ apt-get install libtool texinfo help2man subversion cvs git
-	$ apt-get install lhasa unzip autoconf2.64
+	$ apt-get install lhasa unzip autoconf2.64 automake1.11
 
  On multiarch-aware systems:
 
