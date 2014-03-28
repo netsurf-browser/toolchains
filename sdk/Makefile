@@ -32,6 +32,7 @@ VERSION_LIBJPEG := 8d
 VERSION_LIBJPEG_TURBO := 1.5.1
 VERSION_LIBCARES := 1.12.0
 VERSION_LIBCURL := 7.51.0
+VERSION_NGHTTP2 := 0.3.2
 VERSION_LIBGNURX := 2.5.1
 VERSION_LIBPBL := 1_04
 VERSION_LIBCF := CVS-20130415
@@ -77,7 +78,7 @@ FETCHSRC := $(CURDIR)/fetchsrc
 # Compute the SDK components
 SDK_ITEMS :=
 
-COMMON_SDK_ITEMS := zlib.d openssl.d libpng.d libcares.d libcurl.d libexpat.d
+COMMON_SDK_ITEMS := zlib.d openssl.d libpng.d libcares.d nghttp2.d libcurl.d libexpat.d
 
 LIBCURL_DISABLES := $(patsubst %,--disable-%,ftp file dict ldap ldaps rtsp telnet gopher tftp pop3 imap smb smtp manual)
 FREETYPE_ENV := LIBPNG_CFLAGS=$$($(GCCSDK_INSTALL_ENV)/bin/libpng-config --cflags) LIBPNG_LDFLAGS=$$($(GCCSDK_INSTALL_ENV)/bin/libpng-config --ldflags)
@@ -425,8 +426,8 @@ $(SOURCEDIR)/c-ares-$(VERSION_LIBCARES).tar.gz:
 
 
 # libcurl
-$(BUILDSTEPS)/libcurl.d: $(BUILDSTEPS)/builddir.d $(BUILDSTEPS)/zlib.d $(BUILDSTEPS)/openssl.d $(BUILDSTEPS)/libcares.d $(BUILDSTEPS)/libcurl-src.d
-	cd $(BUILDDIR)/libcurl/curl-$(VERSION_LIBCURL) && $(env) CFLAGS="" $(LIBCURL_ENV) ./configure --prefix=$(GCCSDK_INSTALL_ENV) --target=$(TARGET) --host=$(TARGET) --disable-shared --without-libidn ${EXTRAARGS_LIBCURL}
+$(BUILDSTEPS)/libcurl.d: $(BUILDSTEPS)/builddir.d $(BUILDSTEPS)/zlib.d $(BUILDSTEPS)/openssl.d $(BUILDSTEPS)/libcares.d $(BUILDSTEPS)/nghttp2.d $(BUILDSTEPS)/libcurl-src.d
+	cd $(BUILDDIR)/libcurl/curl-$(VERSION_LIBCURL) && $(env) CFLAGS="" $(LIBCURL_ENV) ./configure --prefix=$(GCCSDK_INSTALL_ENV) --target=$(TARGET) --host=$(TARGET) --disable-shared --without-libidn --with-nghttp2 ${EXTRAARGS_LIBCURL}
 	cd $(BUILDDIR)/libcurl/curl-$(VERSION_LIBCURL) && $(env) make install
 	touch $@
 
@@ -456,4 +457,22 @@ $(BUILDSTEPS)/libexpat-src.d: $(BUILDSTEPS)/sourcedir.d $(SOURCEDIR)/expat-$(VER
 
 $(SOURCEDIR)/expat-$(VERSION_LIBEXPAT).tar.bz2:
 	$(FETCHSRC) sdk $(subst $(SOURCEDIR)/,,$@) "http://downloads.sourceforge.net/project/expat/expat/$(VERSION_LIBEXPAT)/expat-$(VERSION_LIBEXPAT).tar.bz2" $@
+
+# nghttp2
+$(BUILDSTEPS)/nghttp2.d: $(BUILDSTEPS)/builddir.d $(BUILDSTEPS)/nghttp2-src.d
+	mkdir -p $(BUILDDIR)/nghttp2
+	cd $(BUILDDIR)/nghttp2 && tar xaf $(SOURCEDIR)/nghttp2-$(VERSION_NGHTTP2).tar.gz
+	for p in `ls $(RECIPES)/patches/nghttp2/*.p` ; do $(PATCH) -d $(BUILDDIR)/nghttp2/nghttp2-$(VERSION_NGHTTP2) -p0 <$$p ; done
+ifneq ($(realpath $(RECIPES)/patches/nghttp2/$(TARGET)),)
+	for p in `ls $(RECIPES)/patches/nghttp2/$(TARGET)/*.p` ; do $(PATCH) -d $(BUILDDIR)/nghttp2/nghttp2-$(VERSION_NGHTTP2) -p0 <$$p ; done
+endif
+	cd $(BUILDDIR)/nghttp2/nghttp2-$(VERSION_NGHTTP2) && $(env) ./configure --prefix=$(GCCSDK_INSTALL_ENV) --target=$(TARGET) --host=$(TARGET) --disable-shared $(EXTRAARGS_NGHTTP2)
+	cd $(BUILDDIR)/nghttp2/nghttp2-$(VERSION_NGHTTP2) && $(env) make install
+	touch $@
+
+$(BUILDSTEPS)/nghttp2-src.d: $(BUILDSTEPS)/sourcedir.d $(SOURCEDIR)/nghttp2-$(VERSION_NGHTTP2).tar.gz
+	touch $@
+
+$(SOURCEDIR)/nghttp2-$(VERSION_NGHTTP2).tar.gz:
+	$(FETCHSRC) sdk $(subst $(SOURCEDIR)/,,$@) "https://github.com/tatsuhiro-t/nghttp2/releases/download/v0.3.2/$(subst $(SOURCEDIR)/,,$@)" $@
 
