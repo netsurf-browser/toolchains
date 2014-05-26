@@ -474,5 +474,5 @@ $(BUILDSTEPS)/nghttp2-src.d: $(BUILDSTEPS)/sourcedir.d $(SOURCEDIR)/nghttp2-$(VE
 	touch $@
 
 $(SOURCEDIR)/nghttp2-$(VERSION_NGHTTP2).tar.gz:
-	$(FETCHSRC) sdk $(subst $(SOURCEDIR)/,,$@) "https://github.com/tatsuhiro-t/nghttp2/releases/download/v0.3.2/$(subst $(SOURCEDIR)/,,$@)" $@
+	$(FETCHSRC) sdk $(subst $(SOURCEDIR)/,,$@) "https://github.com/tatsuhiro-t/nghttp2/releases/download/v$(VERSION_NGHTTP2)/$(subst $(SOURCEDIR)/,,$@)" $@
 
