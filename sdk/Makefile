@@ -111,6 +111,7 @@ ifeq ($(TARGET),m68k-atari-mint)
   SDK_ITEMS := $(addprefix $(BUILDSTEPS)/, libiconv.d $(COMMON_SDK_ITEMS) libjpeg.d libcf.d ldg.d windom.d hermes.d freetype.d)
   EXTRAARGS_LIBCARES := --disable-shared
   EXTRAARGS_LIBCURL := --enable-optimize --enable-nonblocking --enable-ares --with-random="/dev/urandom" --disable-manual --disable-curldebug --disable-thread --disable-threaded-resolver 
+  EXTRAARGS_OPENSSL := $(EXTRAARGS_OPENSSL) no-asm
   EXTRAARGS_LIBICONV := --enable-extra-encodings
   LIBICONV_ENV := CFLAGS="-DPATH_MAX=1024"
 endif
@@ -119,6 +120,7 @@ ifeq ($(TARGET),m5475-atari-mint)
   SDK_ITEMS := $(addprefix $(BUILDSTEPS)/, libiconv.d $(COMMON_SDK_ITEMS) libjpeg.d libcf.d ldg.d windom.d hermes.d freetype.d)
   EXTRAARGS_LIBCARES := --disable-shared
   EXTRAARGS_LIBCURL := --enable-optimize --enable-nonblocking --enable-ares --with-random="/dev/urandom" --disable-manual --disable-curldebug --disable-thread --disable-threaded-resolver
+  EXTRAARGS_OPENSSL := $(EXTRAARGS_OPENSSL) no-asm
   EXTRAARGS_LIBICONV := --enable-extra-encodings
   LIBICONV_ENV := CFLAGS="-DPATH_MAX=1024"
 endif
@@ -127,6 +129,7 @@ ifeq ($(TARGET),ppc-amigaos)
   SDK_ITEMS := $(addprefix $(BUILDSTEPS)/, libiconv.d libtre.d libpbl.d spidermonkey.d $(COMMON_SDK_ITEMS) libjpeg.d)
   EXTRAARGS_LIBCARES := --disable-shared
   EXTRAARGS_LIBCURL := --disable-ntlm-wb --without-random --enable-threaded-resolver LIBS=-lpthread
+  EXTRAARGS_OPENSSL := $(EXTRAARGS_OPENSSL) no-asm
   VERSION_SPIDERMONKEY := 1.7.0
 endif
 
@@ -134,6 +137,7 @@ ifeq ($(TARGET),i686-w64-mingw32)
   SDK_ITEMS := $(addprefix $(BUILDSTEPS)/, libiconv.d libgnurx.d $(COMMON_SDK_ITEMS) libjpeg.d)
   EXTRAARGS_LIBCARES := --disable-shared
   EXTRAARGS_LIBCURL := --enable-nonblocking --enable-ares --disable-ldap --without-random
+  EXTRAARGS_OPENSSL := $(EXTRAARGS_OPENSSL) no-asm
   LIBCURL_ENV := CFLAGS="-DCARES_STATICLIB" LIBS="-lgdi32"
 endif
 
@@ -141,6 +145,7 @@ ifeq ($(TARGET),m68k-unknown-amigaos)
   SDK_ITEMS := $(addprefix $(BUILDSTEPS)/, libiconv.d libtre.d libpbl.d $(COMMON_SDK_ITEMS) libjpeg.d)
   EXTRAARGS_LIBCARES := --disable-shared --without-random
   EXTRAARGS_LIBCURL := --disable-ntlm-wb --without-random --disable-threaded-resolver --with-ssl --with-zlib
+  EXTRAARGS_OPENSSL := $(EXTRAARGS_OPENSSL) no-asm
   LIBICONV_ENV := CFLAGS="-DPATH_MAX=1024"
   LIBJPEG_ENV := LDFLAGS="-lm"
   LIBJPEG_TURBO_ENV := LDFLAGS="-lm"
@@ -355,7 +360,7 @@ $(BUILDSTEPS)/openssl.d: $(BUILDSTEPS)/builddir.d $(BUILDSTEPS)/zlib.d $(BUILDST
 ifneq ($(realpath $(RECIPES)/patches/openssl/$(TARGET)),)
 	for p in `ls $(RECIPES)/patches/openssl/$(TARGET)/*.p` ; do $(PATCH) -d $(BUILDDIR)/openssl/openssl-$(VERSION_OPENSSL) -p0 <$$p ; done
 endif
-	cd $(BUILDDIR)/openssl/openssl-$(VERSION_OPENSSL) && $(env) ./Configure --prefix=$(GCCSDK_INSTALL_ENV) $(TARGET) no-shared no-asm no-threads $(EXTRAARGS_OPENSSL)
+	cd $(BUILDDIR)/openssl/openssl-$(VERSION_OPENSSL) && $(env) ./Configure --prefix=$(GCCSDK_INSTALL_ENV) $(TARGET) no-shared no-threads $(EXTRAARGS_OPENSSL)
 	cd $(BUILDDIR)/openssl/openssl-$(VERSION_OPENSSL) && $(env) make install
 	touch $@
 
