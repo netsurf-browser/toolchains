@@ -88,6 +88,12 @@ FREETYPE_ENV := LIBPNG_CFLAGS=$$($(GCCSDK_INSTALL_ENV)/bin/libpng-config --cflag
 # per target environments
 LIBJPEG_TURBO_BUILDDIR:=$(BUILDDIR)/libjpegturbo
 
+# OpenSSL defaults:
+#  * Disable IDEA, MCD2, RC5, and zlib
+#  * Enable TLS extensions
+#  * Disable SSLv2 and SSLv3
+EXTRAARGS_OPENSSL := no-idea no-mdc2 no-rc5 no-zlib enable-tlsext no-ssl2 no-ssl3
+
 # Target Specific setup
 ifeq ($(TARGET),arm-unknown-riscos)
   SDK_ITEMS := $(addprefix $(BUILDSTEPS)/, $(COMMON_SDK_ITEMS) spidermonkey.d libjpeg-turbo.d)
@@ -349,7 +355,7 @@ $(BUILDSTEPS)/openssl.d: $(BUILDSTEPS)/builddir.d $(BUILDSTEPS)/zlib.d $(BUILDST
 ifneq ($(realpath $(RECIPES)/patches/openssl/$(TARGET)),)
 	for p in `ls $(RECIPES)/patches/openssl/$(TARGET)/*.p` ; do $(PATCH) -d $(BUILDDIR)/openssl/openssl-$(VERSION_OPENSSL) -p0 <$$p ; done
 endif
-	cd $(BUILDDIR)/openssl/openssl-$(VERSION_OPENSSL) && $(env) ./Configure --prefix=$(GCCSDK_INSTALL_ENV) $(TARGET) no-shared no-asm no-threads
+	cd $(BUILDDIR)/openssl/openssl-$(VERSION_OPENSSL) && $(env) ./Configure --prefix=$(GCCSDK_INSTALL_ENV) $(TARGET) no-shared no-asm no-threads $(EXTRAARGS_OPENSSL)
 	cd $(BUILDDIR)/openssl/openssl-$(VERSION_OPENSSL) && $(env) make install
 	touch $@
 
