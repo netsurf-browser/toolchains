@@ -52,10 +52,10 @@
 +#if __ARM_ARCH__>=4
  	ldrh	$Tll,[sp,$nhi]		@ rem_4bit[rem]
 +#else
-+	add	$len,$nhi,#1
-+	ldrb	$len,[sp,$len]
 +	ldrb	$Tll,[sp,$nhi]
-+	orr	$Tll,$Tll,$len,lsl#8
++	add	$nhi,$nhi,#1
++	ldrb	$nhi,[sp,$nhi]
++	orr	$Tll,$Tll,$nhi,lsl#8
 +#endif
  	eor	$Zll,$Zll,$Zlh,lsl#28
  	ldrb	$nhi,[$Xi,#14]
@@ -67,10 +67,10 @@
 +#if __ARM_ARCH__>=4
  	ldrh	$Tll,[sp,$nlo]		@ rem_4bit[rem]
 +#else
-+	add	$len,$nlo,#1
-+	ldrb	$len,[sp,$len]
 +	ldrb	$Tll,[sp,$nlo]
-+	orr	$Tll,$Tll,$len,lsl#8
++	add	$Tlh,$nlo,#1
++	ldrb	$Tlh,[sp,$Tlh]
++	orr	$Tll,$Tll,$Tlh,lsl#8
 +#endif
  	eor	$Zhl,$Thl,$Zhl,lsr#4
  	ldrplb	$nlo,[$inp,$cnt]
@@ -79,14 +79,13 @@
  	ldrplb	$Tll,[$Xi,$cnt]
  	eor	$Zll,$Zll,$Zlh,lsl#28
  	eor	$Zlh,$Tlh,$Zlh,lsr#4
--	ldrh	$Tlh,[sp,$nhi]
 +#if __ARM_ARCH__>=4
-+	ldrh	$Tll,[sp,$nhi]		@ rem_4bit[rem]
+ 	ldrh	$Tlh,[sp,$nhi]
 +#else
-+	add	$len,$nhi,#1
-+	ldrb	$len,[sp,$len]
-+	ldrb	$Tll,[sp,$nhi]
-+	orr	$Tll,$Tll,$len,lsl#8
++	ldrb	$Tlh,[sp,$nhi]
++	add	$nhi,$nhi,#1
++	ldrb	$nhi,[sp,$nhi]
++	orr	$Tlh,$Tlh,$nhi,lsl#8
 +#endif
  	eor	$Zlh,$Zlh,$Zhl,lsl#28
  	eor	$Zhl,$Thl,$Zhl,lsr#4
@@ -98,10 +97,10 @@
 +#if __ARM_ARCH__>=4
  	ldrh	$Tll,[$rem_4bit,$nhi]	@ rem_4bit[rem]
 +#else
-+	add	$inp,$nhi,#1
-+	ldrb	$inp,[$rem_4bit,$inp]
 +	ldrb	$Tll,[$rem_4bit,$nhi]
-+	orr	$Tll,$Tll,$inp,lsl#8
++	add	$nhi,$nhi,#1
++	ldrb	$nhi,[$rem_4bit,$nhi]
++	orr	$Tll,$Tll,$nhi,lsl#8
 +#endif
  	eor	$Zll,$Zll,$Zlh,lsl#28
  	eor	$Zlh,$Tlh,$Zlh,lsr#4
@@ -113,10 +112,10 @@
 +#if __ARM_ARCH__>=4
  	ldrh	$Tll,[$rem_4bit,$nlo]	@ rem_4bit[rem]
 +#else
-+	add	$inp,$nlo,#1
-+	ldrb	$inp,[$rem_4bit,$inp]
 +	ldrb	$Tll,[$rem_4bit,$nlo]
-+	orr	$Tll,$Tll,$inp,lsl#8
++	add	$Tlh,$nlo,#1
++	ldrb	$Tlh,[$rem_4bit,$Tlh]
++	orr	$Tll,$Tll,$Tlh,lsl#8
 +#endif
  	eor	$Zhl,$Thl,$Zhl,lsr#4
  	ldrplb	$nlo,[$Xi,$cnt]
@@ -128,10 +127,10 @@
 +#if __ARM_ARCH__>=4
  	ldrh	$Tll,[$rem_4bit,$nhi]	@ rem_4bit[rem]
 +#else
-+	add	$inp,$nhi,#1
-+	ldrb	$inp,[$rem_4bit,$inp]
 +	ldrb	$Tll,[$rem_4bit,$nhi]
-+	orr	$Tll,$Tll,$inp,lsl#8
++	add	$Tlh,$nhi,#1
++	ldrb	$Tlh,[$rem_4bit,$Tlh]
++	orr	$Tll,$Tll,$Tlh,lsl#8
 +#endif
  	eor	$Zlh,$Zlh,$Zhl,lsl#28
  	eor	$Zhl,$Thl,$Zhl,lsr#4
