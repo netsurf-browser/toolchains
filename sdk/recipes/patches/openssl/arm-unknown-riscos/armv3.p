@@ -11,16 +11,7 @@
  #   endif
 --- crypto/armcap.c	2015-07-09 12:21:24.000000000 +0000
 +++ crypto/armcap.c	2015-11-13 15:12:20.385640267 +0000
-@@ -7,6 +7,8 @@
- 
- #include "arm_arch.h"
- 
-+extern unsigned int __get_cpu_arch (void);
-+
- unsigned int OPENSSL_armcap_P;
- 
- static sigset_t all_masked;
-@@ -67,13 +69,15 @@
+@@ -67,13 +67,15 @@
      sigprocmask(SIG_SETMASK, &ill_act.sa_mask, &oset);
      sigaction(SIGILL, &ill_act, &ill_oact);
  
@@ -31,7 +22,7 @@
 -    if (sigsetjmp(ill_jmp, 1) == 0) {
 -        _armv7_tick();
 -        OPENSSL_armcap_P |= ARMV7_TICK;
-+    if (__get_cpu_arch() == 0) {
++    if (0) {
 +        if (sigsetjmp(ill_jmp, 1) == 0) {
 +            _armv7_neon_probe();
 +            OPENSSL_armcap_P |= ARMV7_NEON;
