@@ -13,14 +13,6 @@
     COPY = cp
     DELETE = rm -rf
     MAKEDIR = mkdir -p
-@@ -326,7 +326,6 @@ C_LIB = \
- 	stdlib_dosbase.o \
- 	stdlib_exit.o \
- 	stdlib_free.o \
--	stdlib_free_unused_slabs.o \
- 	stdlib_getdefstacksize.o \
- 	stdlib_getenv.o \
- 	stdlib_getmemstats.o \
 @@ -533,6 +532,7 @@ UNIX_LIB = \
  	stdlib_realloc.o \
  	stdlib_resetmemstats.o \
@@ -44,12 +36,3 @@
  
  ##############################################################################
  
-@@ -1132,8 +1132,6 @@ $(LIBC_OBJS)/stdlib_malloc.o : stdlib_ma
- 
- $(LIBC_OBJS)/stdlib_slab.o : stdlib_slab.c stdlib_memory.h
- 
--$(LIBC_OBJS)/stdlib_free_unused_slabs.o : stdlib_free_unused_slabs.c stdlib_memory.h
--
- $(LIBC_OBJS)/stdlib_realloc.o : stdlib_realloc.c stdlib_memory.h
- 
- $(LIBC_OBJS)/stdlib_red_black.o : stdlib_red_black.c stdlib_memory.h
