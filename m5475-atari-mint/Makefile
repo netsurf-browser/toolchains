@@ -62,6 +62,8 @@ SRCDIR := $(BUILDDIR)/srcdir
 GCC_SRCDIR := $(SRCDIR)/gcc
 BINUTILS_SRCDIR := $(SRCDIR)/binutils
 MINTBIN_SRCDIR := $(SRCDIR)/mintbin
+# optionally pass -jN here
+BUILD_SMP :=
 
 TARGET_NAME := m5475-atari-mint
 
@@ -143,9 +145,9 @@ $(BUILDSTEPS)/bootstrap-compiler.d: $(BUILDSTEPS)/srcdir-step3.d $(BUILDSTEPS)/b
 			--enable-checking=no --enable-c99 \
 			--enable-maintainer-mode --without-headers \
 			--with-arch=cf
-	cd $(BUILDDIR) && $(GCC_ENV_PARAMS) make all-gcc
+	cd $(BUILDDIR) && $(GCC_ENV_PARAMS) make $(BUILD_SMP) all-gcc
 	cd $(BUILDDIR) && $(GCC_ENV_PARAMS) make install-gcc
-	cd $(BUILDDIR) && $(GCC_ENV_PARAMS) make all-target-libgcc
+	cd $(BUILDDIR) && $(GCC_ENV_PARAMS) make $(BUILD_SMP) all-target-libgcc
 	cd $(BUILDDIR) && $(GCC_ENV_PARAMS) make install-target-libgcc
 	touch $@
 
@@ -203,7 +205,7 @@ $(BUILDSTEPS)/mintbin-srcdir.d: $(SOURCESDIR)/$(UPSTREAM_MINTBIN_TARBALL)
 $(BUILDSTEPS)/binutils.d: $(BUILDSTEPS)/binutils-srcdir.d
 	mkdir -p $(BUILDDIR)/binutils
 	cd $(BUILDDIR)/binutils && $(BINUTILS_SRCDIR)/configure --prefix=$(PREFIX) --target=$(TARGET_NAME) --disable-nls
-	cd $(BUILDDIR)/binutils && make
+	cd $(BUILDDIR)/binutils && make $(BUILD_SMP)
 	cd $(BUILDDIR)/binutils && make install
 	touch $@
 
