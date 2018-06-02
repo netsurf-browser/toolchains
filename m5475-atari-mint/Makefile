@@ -8,10 +8,10 @@ UPSTREAM_GCC_URI := http://ftp.gnu.org/gnu/gcc/gcc-$(UPSTREAM_GCC_VERSION)/$(UPS
 UPSTREAM_GCC_PATCH := gcc-4.6.4-mint-20130415.patch.bz2
 UPSTREAM_GCC_PATCH_URI := http://vincent.riviere.free.fr/soft/m68k-atari-mint/archives/$(UPSTREAM_GCC_PATCH)
 
-UPSTREAM_BINUTILS_VERSION := 2.24
+UPSTREAM_BINUTILS_VERSION := 2.28
 UPSTREAM_BINUTILS_TARBALL := binutils-$(UPSTREAM_BINUTILS_VERSION).tar.bz2
 UPSTREAM_BINUTILS_URI := ftp://ftp.gnu.org/gnu/binutils/$(UPSTREAM_BINUTILS_TARBALL)
-UPSTREAM_BINUTILS_PATCH := binutils-2.24-mint-20131217.patch.bz2
+UPSTREAM_BINUTILS_PATCH := binutils-2.28-mint-20170531.patch.bz2
 UPSTREAM_BINUTILS_PATCH_URI := http://vincent.riviere.free.fr/soft/m68k-atari-mint/archives/$(UPSTREAM_BINUTILS_PATCH)
 
 UPSTREAM_GMP_VERSION := 4.3.2
