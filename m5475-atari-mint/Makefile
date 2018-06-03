@@ -188,7 +188,7 @@ $(BUILDSTEPS)/$(UPSTREAM_GCC_TARBALL).d: $(BUILDSTEPS)/buildsteps.d $(SOURCESDIR
 
 $(BUILDSTEPS)/mintbin.d: $(BUILDSTEPS)/mintbin-srcdir.d
 	mkdir -p $(BUILDDIR)/mintbin
-	cd $(BUILDDIR)/mintbin && $(BINUTILS_SRCDIR)/configure --prefix=$(PREFIX) --target=$(TARGET_NAME) --disable-nls
+	cd $(BUILDDIR)/mintbin && $(MINTBIN_SRCDIR)/configure --prefix=$(PREFIX) --target=$(TARGET_NAME) --disable-nls
 	cd $(BUILDDIR)/mintbin && make
 	cd $(BUILDDIR)/mintbin && make install
 	touch $@
