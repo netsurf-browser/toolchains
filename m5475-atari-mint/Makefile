@@ -191,7 +191,9 @@ $(BUILDSTEPS)/mintbin.d: $(BUILDSTEPS)/mintbin-srcdir.d
 	cd $(BUILDDIR)/mintbin && $(MINTBIN_SRCDIR)/configure --prefix=$(PREFIX) --target=$(TARGET_NAME) --disable-nls
 	cd $(BUILDDIR)/mintbin && make
 	cd $(BUILDDIR)/mintbin && make install
-	mv $(PREFIX)/$(TARGET_NAME)/bin/$(TARGET_NAME)-* $(PREFIX)/bin/
+	#mv $(PREFIX)/{$(TARGET_NAME)/bin/$(TARGET_NAME)-* $(PREFIX)/bin/
+	#HACK: mintbin install traget looks broken
+	mv $(PREFIX)/*-atari-mint/bin/$(TARGET_NAME)-* $(PREFIX)/bin/
 	touch $@
 
 $(BUILDSTEPS)/mintbin-srcdir.d: $(SOURCESDIR)/$(UPSTREAM_MINTBIN_TARBALL) 
