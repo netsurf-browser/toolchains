@@ -104,6 +104,7 @@ $(BUILDSTEPS)/mingw-srcdir.d: $(SOURCESDIR)/$(UPSTREAM_MINGW_TARBALL)
 ###
 
 $(BUILDSTEPS)/srcdir-step3.d: $(BUILDSTEPS)/srcdir-step2.d
+	for p in `ls $(RECIPES)/patches/gcc4/*.p` ; do patch -d $(GCC_SRCDIR) -p0 <$$p ; done
 	touch $@
 
 $(BUILDSTEPS)/srcdir-step2.d: $(BUILDSTEPS)/srcdir-step1.d $(SOURCESDIR)/$(UPSTREAM_GMP_TARBALL) $(SOURCESDIR)/$(UPSTREAM_MPFR_TARBALL) $(SOURCESDIR)/$(UPSTREAM_MPC_TARBALL)

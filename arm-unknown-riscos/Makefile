@@ -1,6 +1,6 @@
 # Use a tested trunk version of GCCSDK
-UPSTREAM_GCCSDK_TARBALL := gcc4
 UPSTREAM_GCCSDK_VERSION := release_4_7_4_v2
+UPSTREAM_GCCSDK_TARBALL := gcc4$(UPSTREAM_GCCSDK_VERSION).tar.gz
 UPSTREAM_GCCSDK_URI := svn://svn.riscos.info/gccsdk/tags/$(UPSTREAM_GCCSDK_VERSION)
 
 # OSLib 7.00
@@ -38,6 +38,9 @@ TARGET_NAME := arm-unknown-riscos
 
 PREFIX ?= /opt/netsurf/$(TARGET_NAME)
 
+# tools
+FETCHSRC:=$(CURDIR)/fetchsrc
+
 .PHONY: all clean distclean
 all: $(BUILDSTEPS)/toolchain.d
 
@@ -59,7 +62,7 @@ $(BUILDSTEPS)/toolchain.d: $(BUILDSTEPS)/ccres.d $(BUILDSTEPS)/makerun.d $(BUILD
 ###
 
 $(BUILDSTEPS)/infozip.d: $(BUILDSTEPS)/gcc.d $(SOURCESDIR)/$(UPSTREAM_INFOZIP_TARBALL)
-	tar -C $(BUILDDIR) -xzf $(SOURCESDIR)/$(UPSTREAM_INFOZIP_TARBALL)
+	tar -C $(BUILDDIR) -xaf $(SOURCESDIR)/$(UPSTREAM_INFOZIP_TARBALL)
 	for p in `ls $(RECIPES)/patches/infozip/*.p` ; do patch -d $(BUILDDIR)/zip$(UPSTREAM_INFOZIP_VERSION) -p0 <$$p ; done
 	cd $(BUILDDIR)/zip$(UPSTREAM_INFOZIP_VERSION) && make -f unix/Makefile generic LOCAL_ZIP=-DFORRISCOS
 	cp $(BUILDDIR)/zip$(UPSTREAM_INFOZIP_VERSION)/zip $(PREFIX)/cross/bin/zip
@@ -119,8 +122,9 @@ $(BUILDSTEPS)/gcc.d: $(BUILDSTEPS)/gccsdk-srcdir.d
 	touch $@
 
 $(BUILDSTEPS)/gccsdk-srcdir.d: $(BUILDSTEPS)/buildsteps.d $(SOURCESDIR)/$(UPSTREAM_GCCSDK_TARBALL)
-	cp -r $(SOURCESDIR)/$(UPSTREAM_GCCSDK_TARBALL) $(BUILDDIR)/gcc4
+	tar -C $(BUILDDIR) -xaf $(SOURCESDIR)/$(UPSTREAM_GCCSDK_TARBALL)
 	cp -p $(RECIPES)/files/gcc4/gccsdk-params $(BUILDDIR)/gcc4/gcc4/gccsdk-params
+	cp -p $(RECIPES)/files/gcc4/*.p $(BUILDDIR)/gcc4/gcc4/recipe/patches/gcc/
 	sed -i 's#{PREFIX}#$(PREFIX)#' $(BUILDDIR)/gcc4/gcc4/gccsdk-params
 	for p in `ls $(RECIPES)/patches/gcc4/*.p` ; do patch -d $(BUILDDIR)/gcc4 -p0 <$$p ; done
 	touch $@
@@ -130,7 +134,8 @@ $(BUILDSTEPS)/gccsdk-srcdir.d: $(BUILDSTEPS)/buildsteps.d $(SOURCESDIR)/$(UPSTRE
 ###
 
 $(SOURCESDIR)/$(UPSTREAM_GCCSDK_TARBALL):
-	svn co $(UPSTREAM_GCCSDK_URI) $@
+	svn co $(UPSTREAM_GCCSDK_URI) $(SOURCESDIR)/gcc4
+	tar -C $(SOURCESDIR) -caf $@ gcc4
 
 $(SOURCESDIR)/$(UPSTREAM_OSLIB_TARBALL):
 	svn co $(UPSTREAM_OSLIB_URI) $@
@@ -144,8 +149,8 @@ $(SOURCESDIR)/$(UPSTREAM_MAKERUN_TARBALL):
 $(SOURCESDIR)/$(UPSTREAM_SQUEEZE_TARBALL):
 	git clone $(UPSTREAM_SQUEEZE_URI) $@
 
-$(SOURCESDIR)/$(UPSTREAM_INFOZIP_TARBALL):
-	wget -q -O $@ $(UPSTREAM_INFOZIP_URI)
+$(SOURCEDIR)/$(UPSTREAM_INFOZIP_TARBALL):
+        $(FETCHSRC) arm-unknown-riscos $(subst $(SOURCEDIR)/,,$@) $(UPSTREAM_INFOZIP_URI) $@
 
 ###
 # Rule to create buildsteps dir

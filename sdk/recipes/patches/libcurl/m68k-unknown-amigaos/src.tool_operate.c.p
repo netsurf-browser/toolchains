@@ -1,6 +1,6 @@
---- src/tool_operate.c.orig	2015-02-24 21:49:02.000000000 +0000
-+++ src/tool_operate.c	2015-03-19 22:13:50.477958123 +0000
-@@ -1620,15 +1620,6 @@
+--- src/tool_operate.c.orig	2018-01-26 13:44:37.960724591 +0000
++++ src/tool_operate.c	2018-01-26 13:44:48.385035073 +0000
+@@ -1832,15 +1832,6 @@
            }
          }
  
@@ -13,6 +13,6 @@
 -        }
 -#endif
 -
- #ifdef HAVE_UTIME
+ #if defined(HAVE_UTIME) || \
+     (defined(WIN32) && (SIZEOF_CURL_OFF_T >= 8))
          /* File time can only be set _after_ the file has been closed */
-         if(!result && config->remote_time && outs.s_isreg && outs.filename) {

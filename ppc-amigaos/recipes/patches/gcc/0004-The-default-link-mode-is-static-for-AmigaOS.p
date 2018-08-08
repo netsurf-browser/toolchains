@@ -1,7 +1,7 @@
-From 8eb1aa062283f82007d639e862278a750f314da5 Mon Sep 17 00:00:00 2001
+From 0a073e9854a2f5b558631929467837cec073d624 Mon Sep 17 00:00:00 2001
 From: Sebastian Bauer <mail@sebastianbauer.info>
 Date: Wed, 2 Dec 2015 20:56:33 +0100
-Subject: [PATCH 4/6] The default link mode is static for AmigaOS.
+Subject: [PATCH 4/9] The default link mode is static for AmigaOS.
 
 Changed the g++ driver to reflect this.
 ---
@@ -9,10 +9,10 @@ Changed the g++ driver to reflect this.
  1 file changed, 6 insertions(+), 2 deletions(-)
 
 diff --git a/gcc/cp/g++spec.c b/gcc/cp/g++spec.c
-index 6536d7e776f861b4bd40277e96c80a635cbcc85e..ff1d77eaefc20039f7e5df48ffb849ee533b9797 100644
+index 03cbde090cb361f7f6244c97a91c8ad567d9a092..c8dec4b7a0ad1d95811dd9a50a7916e3b4c76336 100644
 --- gcc/cp/g++spec.c
 +++ gcc/cp/g++spec.c
-@@ -102,14 +102,14 @@ lang_specific_driver (struct cl_decoded_option **in_decoded_options,
+@@ -101,14 +101,14 @@ lang_specific_driver (struct cl_decoded_option **in_decoded_options,
    /* By default, we throw on the math library if we have one.  */
    int need_math = (MATH_LIBRARY[0] != '\0');
  
@@ -29,7 +29,7 @@ index 6536d7e776f861b4bd40277e96c80a635cbcc85e..ff1d77eaefc20039f7e5df48ffb849ee
  
    /* The total number of arguments with the new stuff.  */
    unsigned int argc;
-@@ -196,12 +196,16 @@ lang_specific_driver (struct cl_decoded_option **in_decoded_options,
+@@ -195,12 +195,16 @@ lang_specific_driver (struct cl_decoded_option **in_decoded_options,
  	  break;
  
  	case OPT_static:
@@ -47,5 +47,5 @@ index 6536d7e776f861b4bd40277e96c80a635cbcc85e..ff1d77eaefc20039f7e5df48ffb849ee
  	case OPT_static_libstdc__:
  	  library = library >= 0 ? 2 : library;
 -- 
-2.1.4
+1.9.1
 

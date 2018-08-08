@@ -24,23 +24,23 @@ endif
 
 # Upstream package versions
 VERSION_ZLIB := 1.2.11
-VERSION_LIBICONV := 1.14
+VERSION_LIBICONV := 1.15
 VERSION_LIBTRE := 0.8.0
-VERSION_OPENSSL := 1.0.2k
-VERSION_LIBPNG := 1.6.28
+VERSION_OPENSSL := 1.1.0g
+VERSION_LIBPNG := 1.6.29
 VERSION_LIBJPEG := 8d
-VERSION_LIBJPEG_TURBO := 1.5.1
-VERSION_LIBCARES := 1.12.0
-VERSION_LIBCURL := 7.51.0
-VERSION_NGHTTP2 := 1.19.0
+VERSION_LIBJPEG_TURBO := 1.5.3
+VERSION_LIBCARES := 1.13.0
+VERSION_LIBCURL := 7.58.0
+VERSION_NGHTTP2 := 1.32.0
 VERSION_LIBGNURX := 2.5.1
 VERSION_LIBPBL := 1_04
 VERSION_LIBCF := CVS-20130415
-VERSION_LIBEXPAT := 2.2.0
+VERSION_LIBEXPAT := 2.2.1
 VERSION_LDG := 2.32
 VERSION_WINDOM := 2.0.1
 VERSION_HERMES := 1.3.3
-VERSION_FREETYPE := 2.7
+VERSION_FREETYPE := 2.7.1
 
 # Path
 path__ := $(GCCSDK_INSTALL_CROSSBIN):$(PATH)
@@ -91,6 +91,7 @@ ifeq ($(TARGET),arm-unknown-riscos)
   SDK_ITEMS := $(addprefix $(BUILDSTEPS)/, $(COMMON_SDK_ITEMS) libjpeg-turbo.d)
   EXTRAARGS_LIBCARES := --disable-shared
   EXTRAARGS_LIBCURL := --enable-nonblocking --enable-ares --with-random="/dev/urandom" $(LIBCURL_DISABLES)
+  EXTRAARGS_OPENSSL := no-asm
 endif
 
 ifeq ($(TARGET),m68k-atari-mint)
@@ -107,6 +108,7 @@ ifeq ($(TARGET),m5475-atari-mint)
   EXTRAARGS_LIBCURL := --enable-optimize --enable-nonblocking --enable-ares --with-random="/dev/urandom" --disable-manual --disable-curldebug --disable-thread --disable-threaded-resolver
   EXTRAARGS_LIBICONV := --enable-extra-encodings
   LIBICONV_ENV := CFLAGS="-DPATH_MAX=1024"
+  EXTRAARGS_OPENSSL := no-asm
 endif
 
 ifeq ($(TARGET),ppc-amigaos)
@@ -119,7 +121,8 @@ ifeq ($(TARGET),i686-w64-mingw32)
   SDK_ITEMS := $(addprefix $(BUILDSTEPS)/, libiconv.d libgnurx.d $(COMMON_SDK_ITEMS) libjpeg.d)
   EXTRAARGS_LIBCARES := --disable-shared
   EXTRAARGS_LIBCURL := --enable-nonblocking --enable-ares --disable-ldap --without-random
-  LIBCURL_ENV := CFLAGS="-DCARES_STATICLIB" LIBS="-lgdi32"
+  LIBCURL_ENV := CFLAGS="-DCARES_STATICLIB" LIBS="-lgdi32 -lcrypt32"
+  EXTRAARGS_OPENSSL := no-asm enable-capieng
 endif
 
 ifeq ($(TARGET),m68k-unknown-amigaos)
@@ -340,7 +343,10 @@ $(BUILDSTEPS)/openssl.d: $(BUILDSTEPS)/builddir.d $(BUILDSTEPS)/zlib.d $(BUILDST
 ifneq ($(realpath $(RECIPES)/patches/openssl/$(TARGET)),)
 	for p in `ls $(RECIPES)/patches/openssl/$(TARGET)/*.p` ; do $(PATCH) -d $(BUILDDIR)/openssl/openssl-$(VERSION_OPENSSL) -p0 <$$p ; done
 endif
-	cd $(BUILDDIR)/openssl/openssl-$(VERSION_OPENSSL) && $(env) ./Configure --prefix=$(GCCSDK_INSTALL_ENV) $(TARGET) no-shared no-asm no-threads
+ifneq ($(realpath $(RECIPES)/files/openssl/$(TARGET)),)
+	cp -r $(RECIPES)/files/openssl/$(TARGET)/* $(BUILDDIR)/openssl/openssl-$(VERSION_OPENSSL)
+endif
+	cd $(BUILDDIR)/openssl/openssl-$(VERSION_OPENSSL) && $(env) ./Configure --prefix=$(GCCSDK_INSTALL_ENV) $(TARGET) no-shared no-threads $(EXTRAARGS_OPENSSL)
 	cd $(BUILDDIR)/openssl/openssl-$(VERSION_OPENSSL) && $(env) make install
 	touch $@
 

@@ -1,7 +1,7 @@
-From c8d51b6ed56c643f9744d7a18fee3b13a76b98d3 Mon Sep 17 00:00:00 2001
+From cf7a9bcb04858a3a694cc64ccd440dd560bfc7a9 Mon Sep 17 00:00:00 2001
 From: Sebastian Bauer <mail@sebastianbauer.info>
 Date: Fri, 14 Nov 2014 20:03:56 +0100
-Subject: [PATCH 2/6] Added new function attribute "lineartags" and pragma
+Subject: [PATCH 2/9] Added new function attribute "lineartags" and pragma
  "amigaos tagtype".
 
 Functions that have the lineartags attribute are assumed to be functions
@@ -38,10 +38,10 @@ functions.
  5 files changed, 171 insertions(+)
 
 diff --git a/gcc/c-family/c-pragma.c b/gcc/c-family/c-pragma.c
-index 6894f0e7c3d1ea932ff05f370680be3d18dfcf94..24278250901bfa75c9aae9be63a62351f33e390e 100644
+index c73aa8221049b85949b0b62e88f58120e43aa39d..6cda91994f9140398841610063c297735b797863 100644
 --- gcc/c-family/c-pragma.c
 +++ gcc/c-family/c-pragma.c
-@@ -1066,12 +1066,21 @@ handle_pragma_message (cpp_reader *ARG_UNUSED(dummy))
+@@ -1124,12 +1124,21 @@ handle_pragma_message (cpp_reader *ARG_UNUSED(dummy))
      warning (OPT_Wpragmas, "junk at end of %<#pragma message%>");
  
    if (TREE_STRING_LENGTH (message) > 1)
@@ -63,7 +63,7 @@ index 6894f0e7c3d1ea932ff05f370680be3d18dfcf94..24278250901bfa75c9aae9be63a62351
  
  void
  mark_valid_location_for_stdc_pragma (bool flag)
-@@ -1483,12 +1492,13 @@ init_pragma (void)
+@@ -1555,12 +1564,13 @@ init_pragma (void)
  
    c_register_pragma_with_expansion (0, "redefine_extname",
  				    handle_pragma_redefine_extname);
@@ -75,18 +75,18 @@ index 6894f0e7c3d1ea932ff05f370680be3d18dfcf94..24278250901bfa75c9aae9be63a62351
    REGISTER_TARGET_PRAGMAS ();
  #endif
  
-   /* Allow plugins to register their own pragmas. */
-   invoke_plugin_callbacks (PLUGIN_PRAGMAS, NULL);
+   global_sso = default_sso;
+   c_register_pragma (0, "scalar_storage_order", 
 diff --git a/gcc/c/c-parser.c b/gcc/c/c-parser.c
-index 86cbc404a4c10edac0ce2341ae0099f624ee36ea..cc77530b090576db35610468052d84763c3965fd 100644
+index 1b6bacd7498fb8ec37dc4b76bcfa26eacc1c8e1b..60eecd4854780322205cee5d47727d3376a6c9eb 100644
 --- gcc/c/c-parser.c
 +++ gcc/c/c-parser.c
-@@ -80,12 +80,74 @@ along with GCC; see the file COPYING3.  If not see
- #include "cgraph.h"
- #include "plugin.h"
- #include "omp-low.h"
- #include "builtins.h"
- #include "gomp-constants.h"
+@@ -84,12 +84,74 @@ set_c_expr_source_range (c_expr *expr,
+ {
+   expr->src_range = src_range;
+   if (expr->value)
+     set_source_range (expr->value, src_range);
+ }
  
 +static htab_t amigaos_tagdecl_to_type;
 +
@@ -156,7 +156,7 @@ index 86cbc404a4c10edac0ce2341ae0099f624ee36ea..cc77530b090576db35610468052d8476
  void
  c_parse_init (void)
  {
-@@ -2390,12 +2452,15 @@ c_parser_declspecs (c_parser *parser, struct c_declspecs *specs,
+@@ -2514,12 +2576,15 @@ c_parser_declspecs (c_parser *parser, struct c_declspecs *specs,
  	    goto out;
  	  attrs_ok = true;
  	  seen_type = true;
@@ -172,7 +172,7 @@ index 86cbc404a4c10edac0ce2341ae0099f624ee36ea..cc77530b090576db35610468052d8476
  	  if (!typespec_ok)
  	    goto out;
  	  attrs_ok = true;
-@@ -9590,12 +9655,32 @@ c_parser_objc_at_dynamic_declaration (c_parser *parser)
+@@ -10011,12 +10076,32 @@ c_parser_objc_at_dynamic_declaration (c_parser *parser)
      }
    c_parser_skip_until_found (parser, CPP_SEMICOLON, "expected %<;%>");
    objc_add_dynamic_declaration (loc, list);
@@ -205,7 +205,7 @@ index 86cbc404a4c10edac0ce2341ae0099f624ee36ea..cc77530b090576db35610468052d8476
     true if we actually parsed such a pragma.  */
  
  static bool
-@@ -9777,12 +9862,56 @@ c_parser_pragma (c_parser *parser, enum pragma_context context)
+@@ -10210,12 +10295,56 @@ c_parser_pragma (c_parser *parser, enum pragma_context context, bool *if_p)
        break;
      }
  
@@ -263,10 +263,10 @@ index 86cbc404a4c10edac0ce2341ae0099f624ee36ea..cc77530b090576db35610468052d8476
    c_parser_skip_to_pragma_eol (parser);
  
 diff --git a/gcc/c/c-typeck.c b/gcc/c/c-typeck.c
-index a98622b16f546b88eb7fdce9ca7631c3ca37470a..2c03a10f1127c2bec5d9280ecc2f786fd5d13153 100644
+index b1c5cd6d3db3bd6d21185bcb49af14d9bfc83d12..ebb7f5741007c6769e4af94c3c6b856af305132c 100644
 --- gcc/c/c-typeck.c
 +++ gcc/c/c-typeck.c
-@@ -3100,12 +3100,14 @@ convert_arguments (location_t loc, vec<location_t> arg_loc, tree typelist,
+@@ -3169,12 +3169,14 @@ convert_arguments (location_t loc, vec<location_t> arg_loc, tree typelist,
    unsigned int parmnum;
    bool error_args = false;
    const bool type_generic = fundecl
@@ -281,7 +281,7 @@ index a98622b16f546b88eb7fdce9ca7631c3ca37470a..2c03a10f1127c2bec5d9280ecc2f786f
    if (TREE_CODE (function) == ADDR_EXPR
        && TREE_CODE (TREE_OPERAND (function, 0)) == FUNCTION_DECL)
      function = TREE_OPERAND (function, 0);
-@@ -3139,12 +3141,14 @@ convert_arguments (location_t loc, vec<location_t> arg_loc, tree typelist,
+@@ -3208,12 +3210,14 @@ convert_arguments (location_t loc, vec<location_t> arg_loc, tree typelist,
    if (flag_cilkplus && fundecl && is_cilkplus_reduce_builtin (fundecl))
      return vec_safe_length (values);
  
@@ -296,7 +296,7 @@ index a98622b16f546b88eb7fdce9ca7631c3ca37470a..2c03a10f1127c2bec5d9280ecc2f786f
      {
        tree type = typetail ? TREE_VALUE (typetail) : 0;
        tree valtype = TREE_TYPE (val);
-@@ -3193,12 +3197,32 @@ convert_arguments (location_t loc, vec<location_t> arg_loc, tree typelist,
+@@ -3262,12 +3266,32 @@ convert_arguments (location_t loc, vec<location_t> arg_loc, tree typelist,
  	}
        val = c_fully_fold (val, false, NULL);
        STRIP_TYPE_NOPS (val);
@@ -348,10 +348,10 @@ index eb5f8fc5f3d546b8d8e1cdd8118a3085079df50e..3b8c994cdbd192eaf7112c780f0106a4
  extern int amigaos_baserel_operand(rtx x);
  extern int amigaos_not_baserel_tree_p(tree decl);
 diff --git a/gcc/config/rs6000/amigaos.c b/gcc/config/rs6000/amigaos.c
-index 0f575a38e4dc4aac0b454c56bf62f625c0f7eb9c..ccf4f912cb66cd424a2398c6535e05fa493f39f1 100644
+index a6da7d543241e2fc8cf51a952633c62e19d7d875..797261177e46a34ac0aba97f2b9c2b8af8df2e72 100644
 --- gcc/config/rs6000/amigaos.c
 +++ gcc/config/rs6000/amigaos.c
-@@ -345,12 +345,19 @@ amigaos_handle_linearvarargs_attribute (tree *node, tree name,
+@@ -342,12 +342,19 @@ amigaos_handle_linearvarargs_attribute (tree *node, tree name,
        *no_add_attrs = true;
      }
  
@@ -372,5 +372,5 @@ index 0f575a38e4dc4aac0b454c56bf62f625c0f7eb9c..ccf4f912cb66cd424a2398c6535e05fa
  amigaos_legitimize_baserel_address (rtx addr)
  {
 -- 
-2.1.4
+1.9.1
 

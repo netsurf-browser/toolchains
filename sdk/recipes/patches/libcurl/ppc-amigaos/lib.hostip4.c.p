@@ -1,6 +1,6 @@
---- lib/hostip4.c	2013-10-23 21:55:34.000000000 +0100
-+++ lib/hostip4.c	2014-01-30 10:19:46.900018967 +0000
-@@ -122,6 +122,11 @@ Curl_addrinfo *Curl_getaddrinfo(struct c
+--- lib/hostip4.c	2017-03-26 23:41:52.304617207 +0100
++++ lib/hostip4.c	2017-03-26 23:41:11.000000000 +0100
+@@ -119,6 +119,10 @@ Curl_addrinfo *Curl_getaddrinfo(struct c
   * implying that only threadsafe code and function calls may be used.
   *
   */
@@ -8,11 +8,10 @@
 +#include <proto/exec.h>
 +#include <proto/bsdsocket.h>
 +#endif
-+
  Curl_addrinfo *Curl_ipv4_resolve_r(const char *hostname,
                                     int port)
  {
-@@ -132,6 +137,9 @@ Curl_addrinfo *Curl_ipv4_resolve_r(const
+@@ -129,6 +133,9 @@ Curl_addrinfo *Curl_ipv4_resolve_r(const
    struct hostent *h = NULL;
    struct in_addr in;
    struct hostent *buf = NULL;
@@ -22,7 +21,7 @@
  
    if(Curl_inet_pton(AF_INET, hostname, &in) > 0)
      /* This is a dotted IP address 123.123.123.123-style */
-@@ -294,7 +302,20 @@ Curl_addrinfo *Curl_ipv4_resolve_r(const
+@@ -291,7 +298,20 @@ Curl_addrinfo *Curl_ipv4_resolve_r(const
       * gethostbyname() is the preferred one.
       */
    else {
@@ -38,12 +37,12 @@
 +       h = ISocket->gethostbyname((void*)hostname);
 +    }
 +#else  
-     h = gethostbyname((void*)hostname);
-+#endif	
+     h = gethostbyname((void *)hostname);
++#endif
  #endif /* HAVE_GETADDRINFO_THREADSAFE || HAVE_GETHOSTBYNAME_R */
    }
  
-@@ -304,7 +325,14 @@ Curl_addrinfo *Curl_ipv4_resolve_r(const
+@@ -301,7 +321,14 @@ Curl_addrinfo *Curl_ipv4_resolve_r(const
      if(buf) /* used a *_r() function */
        free(buf);
    }

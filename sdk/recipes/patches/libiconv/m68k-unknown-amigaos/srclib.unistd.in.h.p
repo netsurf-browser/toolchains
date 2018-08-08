@@ -1,6 +1,6 @@
---- srclib/unistd.in.h.orig	2014-01-15 01:06:20.525844246 +0000
-+++ srclib/unistd.in.h	2014-01-15 01:06:48.717471325 +0000
-@@ -1145,40 +1145,6 @@
+--- srclib/unistd.in.h.orig	2017-03-27 23:12:52.149619622 +0100
++++ srclib/unistd.in.h	2017-03-27 23:13:12.582243962 +0100
+@@ -1262,40 +1262,6 @@
  #endif
  
  
@@ -8,8 +8,8 @@
 -/* Read the contents of the symbolic link FILE and place the first BUFSIZE
 -   bytes of it into BUF.  Return the number of bytes placed into BUF if
 -   successful, otherwise -1 and errno set.
--   See the POSIX:2001 specification
--   <http://www.opengroup.org/susv3xsh/readlink.html>.  */
+-   See the POSIX:2008 specification
+-   <http://pubs.opengroup.org/onlinepubs/9699919799/functions/readlink.html>.  */
 -# if @REPLACE_READLINK@
 -#  if !(defined __cplusplus && defined GNULIB_NAMESPACE)
 -#   define readlink rpl_readlink
@@ -39,5 +39,5 @@
 -
 -
  #if @GNULIB_READLINKAT@
- # if !@HAVE_READLINKAT@
- _GL_FUNCDECL_SYS (readlinkat, ssize_t,
+ # if @REPLACE_READLINKAT@
+ #  if !(defined __cplusplus && defined GNULIB_NAMESPACE)

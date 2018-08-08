@@ -1,7 +1,7 @@
 From 1678a95339b8893195b307a953a0053ceeca0133 Mon Sep 17 00:00:00 2001
 From: Sebastian Bauer <mail@sebastianbauer.info>
 Date: Sat, 14 Feb 2015 14:54:44 +0100
-Subject: [PATCH 1/7] Changes for various Amiga targets.
+Subject: [PATCH 1/8] Changes for various Amiga targets.
 
 ---
  bfd/ChangeLog-9697                                |   64 +
@@ -9509,6 +9509,785 @@ index 0000000000000000000000000000000000000000..cf6c6cb9efdd15c786932adedd2476ec
 +#define elf_backend_reloc_type_class		ppc_elf_reloc_type_class
 +
 +#include "elf32-target.h"
+diff --git a/bfd/elf32-ppc.c b/bfd/elf32-amigaos.c
+similarity index 97%
+copy from bfd/elf32-ppc.c
+copy to bfd/elf32-amigaos.c
+index 6454a8350da35adf6ed1e2209d9e4774ab7c50e3..9bf9535888f2345d60a8f802680ae03f41f67a5f 100644
+--- bfd/elf32-ppc.c
++++ bfd/elf32-amigaos.c
+@@ -31,32 +31,50 @@
+ #include <stdarg.h>
+ #include "bfd.h"
+ #include "bfdlink.h"
+ #include "libbfd.h"
+ #include "elf-bfd.h"
+ #include "elf/ppc.h"
++#include "elf/amigaos.h"
+ #include "elf32-ppc.h"
+ #include "elf-vxworks.h"
+ #include "dwarf2.h"
+ 
++#undef DEBUG
++
+ typedef enum split16_format_type
+ {
+   split16a_type = 0,
+   split16d_type
+ }
+ split16_format_type;
+ 
+ /* RELA relocations are used here.  */
++#define USE_RELA
++#define USE_REL 0
+ 
+ static bfd_reloc_status_type ppc_elf_addr16_ha_reloc
+   (bfd *, arelent *, asymbol *, void *, asection *, bfd *, char **);
+ static bfd_reloc_status_type ppc_elf_unhandled_reloc
+   (bfd *, arelent *, asymbol *, void *, asection *, bfd *, char **);
+ static void ppc_elf_vle_split16
+   (bfd *, bfd_byte *, bfd_vma, bfd_vma, split16_format_type);
+ 
++int ppc_elf_amigaos_select_plt_layout (bfd *, struct bfd_link_info *,
++    enum ppc_elf_plt_type, int);
++
++bfd_boolean ppc_elf_amigaos_section_processing (bfd *abfd, Elf_Internal_Shdr *shdr);
++bfd_boolean ppc_elf_amigaos_modify_segment_map (bfd *abfd,
++                            struct bfd_link_info *info ATTRIBUTE_UNUSED);
++asection *ppc_elf_amigaos_tls_setup (bfd *obfd, struct bfd_link_info *info,
++                   int no_tls_get_addr_opt);
++bfd_boolean ppc_elf_amigaos_tls_optimize (bfd *obfd ATTRIBUTE_UNUSED,
++                      struct bfd_link_info *info);
++unsigned int _bfd_elf_amigaos_ppc_at_tls_transform (unsigned int insn, unsigned int reg);
++unsigned int _bfd_elf_amigaos_ppc_at_tprel_transform (unsigned int insn, unsigned int reg);
++
+ /* Branch prediction bit for branch taken relocs.  */
+ #define BRANCH_PREDICT_BIT 0x200000
+ /* Mask to set RA in memory instructions.  */
+ #define RA_REGISTER_MASK 0x001f0000
+ /* Value to shift register by to insert RA.  */
+ #define RA_REGISTER_SHIFT 16
+@@ -1381,12 +1399,74 @@ static reloc_howto_type ppc_elf_howto_raw[] = {
+   /* Relocation not handled: R_PPC_EMB_RELSEC16 */
+   /* Relocation not handled: R_PPC_EMB_RELST_LO */
+   /* Relocation not handled: R_PPC_EMB_RELST_HI */
+   /* Relocation not handled: R_PPC_EMB_RELST_HA */
+   /* Relocation not handled: R_PPC_EMB_BIT_FLD */
+ 
++
++	  /* A standard 32 bit base relative relocation.  */
++	  HOWTO (R_PPC_AMIGAOS_BREL,	/* type */
++		 0,			/* rightshift */
++		 2,			/* size (0 = byte, 1 = short, 2 = long) */
++		 32,			/* bitsize */
++		 FALSE,			/* pc_relative */
++		 0,			/* bitpos */
++		 complain_overflow_bitfield, /* complain_on_overflow */
++		 bfd_elf_generic_reloc,	/* special_function */
++		 "R_PPC_AMIGAOS_BREL",	/* name */
++		 FALSE,			/* partial_inplace */
++		 0,			/* src_mask */
++		 0xffffffff,		/* dst_mask */
++		 FALSE),		/* pcrel_offset */
++
++	 /* A 16 bit base relative relocation without overflow.  */
++	  HOWTO (R_PPC_AMIGAOS_BREL_LO,	/* type */
++		 0,			/* rightshift */
++		 1,			/* size (0 = byte, 1 = short, 2 = long) */
++		 16,			/* bitsize */
++		 FALSE,			/* pc_relative */
++		 0,			/* bitpos */
++		 complain_overflow_dont,/* complain_on_overflow */
++		 bfd_elf_generic_reloc,	/* special_function */
++		 "R_PPC_AMIGAOS_BREL_LO",/* name */
++		 FALSE,			/* partial_inplace */
++		 0,			/* src_mask */
++		 0xffff,		/* dst_mask */
++		 FALSE),		/* pcrel_offset */
++
++	  /* The high order 16 bits of a base relative address.  */
++	  HOWTO (R_PPC_AMIGAOS_BREL_HI,	/* type */
++		 16,			/* rightshift */
++		 1,			/* size (0 = byte, 1 = short, 2 = long) */
++		 16,			/* bitsize */
++		 FALSE,			/* pc_relative */
++		 0,			/* bitpos */
++		 complain_overflow_dont, /* complain_on_overflow */
++		 bfd_elf_generic_reloc,	/* special_function */
++		 "R_PPC_AMIGAOS_BREL_HI",/* name */
++		 FALSE,			/* partial_inplace */
++		 0,			/* src_mask */
++		 0xffff,		/* dst_mask */
++		 FALSE),		/* pcrel_offset */
++
++	  /* The high order 16 bits of a base relative address, plus 1 if the contents
++	     of the low 16 bits, treated as a signed number, is negative.  */
++	  HOWTO (R_PPC_AMIGAOS_BREL_HA,	/* type */
++		 16,			/* rightshift */
++		 1,			/* size (0 = byte, 1 = short, 2 = long) */
++		 16,			/* bitsize */
++		 FALSE,			/* pc_relative */
++		 0,			/* bitpos */
++		 complain_overflow_dont, /* complain_on_overflow */
++		 ppc_elf_addr16_ha_reloc, /* special_function */
++		 "R_PPC_AMIGAOS_BREL_HA",/* name */
++		 FALSE,			/* partial_inplace */
++		 0,			/* src_mask */
++		 0xffff,		/* dst_mask */
++		 FALSE),		/* pcrel_offset */
++
+   /* PC relative relocation against either _SDA_BASE_ or _SDA2_BASE_, filling
+      in the 16 bit signed offset from the appropriate base, and filling in the
+      register field with the appropriate register (0, 2, or 13).  */
+   HOWTO (R_PPC_EMB_RELSDA,	/* type */
+ 	 0,			/* rightshift */
+ 	 1,			/* size (0 = byte, 1 = short, 2 = long) */
+@@ -1935,12 +2015,16 @@ ppc_elf_reloc_type_lookup (bfd *abfd ATTRIBUTE_UNUSED,
+       r = R_PPC_VLE_SDAREL_HA16D;
+       break;
+     case BFD_RELOC_16_PCREL:		r = R_PPC_REL16;		break;
+     case BFD_RELOC_LO16_PCREL:		r = R_PPC_REL16_LO;		break;
+     case BFD_RELOC_HI16_PCREL:		r = R_PPC_REL16_HI;		break;
+     case BFD_RELOC_HI16_S_PCREL:	r = R_PPC_REL16_HA;		break;
++    case BFD_RELOC_PPC_AMIGAOS_BREL:	r = R_PPC_AMIGAOS_BREL;		break;
++    case BFD_RELOC_PPC_AMIGAOS_BREL_LO:	r = R_PPC_AMIGAOS_BREL_LO;	break;
++    case BFD_RELOC_PPC_AMIGAOS_BREL_HI:	r = R_PPC_AMIGAOS_BREL_HI;	break;
++    case BFD_RELOC_PPC_AMIGAOS_BREL_HA:	r = R_PPC_AMIGAOS_BREL_HA;	break;
+     case BFD_RELOC_VTABLE_INHERIT:	r = R_PPC_GNU_VTINHERIT;	break;
+     case BFD_RELOC_VTABLE_ENTRY:	r = R_PPC_GNU_VTENTRY;		break;
+     }
+ 
+   return ppc_elf_howto_table[r];
+ };
+@@ -2268,13 +2352,13 @@ ppc_elf_lookup_section_flags (char *flag_name)
+   return 0;
+ }
+ 
+ /* Add the VLE flag if required.  */
+ 
+ bfd_boolean
+-ppc_elf_section_processing (bfd *abfd, Elf_Internal_Shdr *shdr)
++ppc_elf_amigaos_section_processing (bfd *abfd, Elf_Internal_Shdr *shdr)
+ {
+   if (bfd_get_mach (abfd) == bfd_mach_ppc_vle
+       && (shdr->sh_flags & SHF_EXECINSTR) != 0)
+     shdr->sh_flags |= SHF_PPC_VLE;
+ 
+   return TRUE;
+@@ -2285,12 +2369,15 @@ ppc_elf_section_processing (bfd *abfd, Elf_Internal_Shdr *shdr)
+ 
+ static bfd_vma
+ ppc_elf_plt_sym_val (bfd_vma i ATTRIBUTE_UNUSED,
+ 		     const asection *plt ATTRIBUTE_UNUSED,
+ 		     const arelent *rel)
+ {
++#ifdef DEBUG
++  fprintf (stderr, "ppc_elf_plt_sym_cal (0x%08x)\n", (unsigned int)rel->address);
++#endif
+   return rel->address;
+ }
+ 
+ /* Handle a PowerPC specific section when reading an object file.  This
+    is called when bfd_section_from_shdr finds a section with an unknown
+    type.  */
+@@ -2337,13 +2424,14 @@ ppc_elf_fake_sections (bfd *abfd ATTRIBUTE_UNUSED,
+ 
+ static int
+ ppc_elf_additional_program_headers (bfd *abfd,
+ 				    struct bfd_link_info *info ATTRIBUTE_UNUSED)
+ {
+   asection *s;
+-  int ret = 0;
++//  int ret = 0;
++  int ret = 1;
+ 
+   s = bfd_get_section_by_name (abfd, ".sbss2");
+   if (s != NULL && (s->flags & SEC_ALLOC) != 0)
+     ++ret;
+ 
+   s = bfd_get_section_by_name (abfd, ".PPC.EMB.sbss0");
+@@ -2353,13 +2441,13 @@ ppc_elf_additional_program_headers (bfd *abfd,
+   return ret;
+ }
+ 
+ /* Modify the segment map for VLE executables.  */ 
+ 
+ bfd_boolean
+-ppc_elf_modify_segment_map (bfd *abfd,
++ppc_elf_amigaos_modify_segment_map (bfd *abfd,
+ 			    struct bfd_link_info *info ATTRIBUTE_UNUSED)
+ {
+   struct elf_segment_map *m, *n;
+   bfd_size_type amt;
+   unsigned int j, k;
+   bfd_boolean sect0_vle, sectj_vle;
+@@ -2546,13 +2634,13 @@ apuinfo_list_finish (void)
+ #define APUINFO_LABEL		"APUinfo"
+ 
+ /* Scan the input BFDs and create a linked list of
+    the APUinfo values that will need to be emitted.  */
+ 
+ static void
+-ppc_elf_begin_write_processing (bfd *abfd, struct bfd_link_info *link_info)
++ppc_elf_amigaos_begin_write_processing (bfd *abfd, struct bfd_link_info *link_info)
+ {
+   bfd *ibfd;
+   asection *asec;
+   char *buffer = NULL;
+   bfd_size_type largest_input_size = 0;
+   unsigned i;
+@@ -2646,24 +2734,24 @@ ppc_elf_begin_write_processing (bfd *abfd, struct bfd_link_info *link_info)
+ }
+ 
+ /* Prevent the output section from accumulating the input sections'
+    contents.  We have already stored this in our linked list structure.  */
+ 
+ static bfd_boolean
+-ppc_elf_write_section (bfd *abfd ATTRIBUTE_UNUSED,
++ppc_elf_amigaos_write_section (bfd *abfd ATTRIBUTE_UNUSED,
+ 		       struct bfd_link_info *link_info ATTRIBUTE_UNUSED,
+ 		       asection *asec,
+ 		       bfd_byte *contents ATTRIBUTE_UNUSED)
+ {
+   return apuinfo_set && strcmp (asec->name, APUINFO_SECTION_NAME) == 0;
+ }
+ 
+ /* Finally we can generate the output section.  */
+ 
+ static void
+-ppc_elf_final_write_processing (bfd *abfd, bfd_boolean linker ATTRIBUTE_UNUSED)
++ppc_elf_amigaos_final_write_processing (bfd *abfd, bfd_boolean linker ATTRIBUTE_UNUSED)
+ {
+   bfd_byte *buffer;
+   asection *asec;
+   unsigned i;
+   unsigned num_entries;
+   bfd_size_type length;
+@@ -3232,13 +3320,13 @@ ppc_elf_create_got (bfd *abfd, struct bfd_link_info *info)
+ 	abort ();
+     }
+   else
+     {
+       /* The powerpc .got has a blrl instruction in it.  Mark it
+ 	 executable.  */
+-      flags = (SEC_ALLOC | SEC_LOAD | SEC_CODE | SEC_HAS_CONTENTS
++      flags = (SEC_ALLOC | SEC_LOAD | /*SEC_CODE |*/ SEC_HAS_CONTENTS
+ 	       | SEC_IN_MEMORY | SEC_LINKER_CREATED);
+       if (!bfd_set_section_flags (abfd, s, flags))
+ 	return FALSE;
+     }
+ 
+   htab->relgot = bfd_get_linker_section (abfd, ".rela.got");
+@@ -3340,13 +3428,13 @@ ppc_elf_create_dynamic_sections (bfd *abfd, struct bfd_link_info *info)
+ 
+   htab->relplt = bfd_get_linker_section (abfd, ".rela.plt");
+   htab->plt = s = bfd_get_linker_section (abfd, ".plt");
+   if (s == NULL)
+     abort ();
+ 
+-  flags = SEC_ALLOC | SEC_CODE | SEC_LINKER_CREATED;
++  flags = SEC_ALLOC | SEC_CODE | SEC_LINKER_CREATED | SEC_READONLY;
+   if (htab->plt_type == PLT_VXWORKS)
+     /* The VxWorks PLT is a loaded section with contents.  */
+     flags |= SEC_HAS_CONTENTS | SEC_LOAD | SEC_READONLY;
+   return bfd_set_section_flags (abfd, s, flags);
+ }
+ 
+@@ -3410,13 +3498,13 @@ ppc_elf_copy_indirect_symbol (struct bfd_link_info *info,
+       eind->dyn_relocs = NULL;
+     }
+ 
+   /* If we were called to copy over info for a weak sym, that's all.
+      You might think dyn_relocs need not be copied over;  After all,
+      both syms will be dynamic or both non-dynamic so we're just
+-     moving reloc accounting around.  However, ELIMINATE_COPY_RELOCS 
++     moving reloc accounting around.  However, ELIMINATE_COPY_RELOCS
+      code in ppc_elf_adjust_dynamic_symbol needs to check for
+      dyn_relocs in read-only sections, and it does so on what is the
+      DIR sym here.  */
+   if (eind->elf.root.type != bfd_link_hash_indirect)
+     return;
+ 
+@@ -4186,12 +4274,19 @@ ppc_elf_check_relocs (bfd *abfd,
+ 	case R_PPC_EMB_RELST_LO:
+ 	case R_PPC_EMB_RELST_HI:
+ 	case R_PPC_EMB_RELST_HA:
+ 	case R_PPC_EMB_BIT_FLD:
+ 	  break;
+ 
++	  /* These don't work with a GOT */
++	case R_PPC_AMIGAOS_BREL:
++	case R_PPC_AMIGAOS_BREL_HI:
++	case R_PPC_AMIGAOS_BREL_LO:
++	case R_PPC_AMIGAOS_BREL_HA:
++	  break;
++
+ 	  /* This refers only to functions defined in the shared library.  */
+ 	case R_PPC_LOCAL24PC:
+ 	  if (h != NULL && h == htab->elf.hgot && htab->plt_type == PLT_UNSET)
+ 	    {
+ 	      htab->plt_type = PLT_OLD;
+ 	      htab->old_bfd = abfd;
+@@ -4679,13 +4774,13 @@ ppc_elf_vle_split16 (bfd *output_bfd, bfd_byte *contents,
+ }
+ 
+ 
+ /* Choose which PLT scheme to use, and set .plt flags appropriately.
+    Returns -1 on error, 0 for old PLT, 1 for new PLT.  */
+ int
+-ppc_elf_select_plt_layout (bfd *output_bfd ATTRIBUTE_UNUSED,
++ppc_elf_amigaos_select_plt_layout (bfd *output_bfd ATTRIBUTE_UNUSED,
+ 			   struct bfd_link_info *info,
+ 			   enum ppc_elf_plt_type plt_style,
+ 			   int emit_stub_syms)
+ {
+   struct ppc_elf_link_hash_table *htab;
+   flagword flags;
+@@ -4976,13 +5071,13 @@ ppc_elf_gc_sweep_hook (bfd *abfd,
+ }
+ 
+ /* Set plt output section type, htab->tls_get_addr, and call the
+    generic ELF tls_setup function.  */
+ 
+ asection *
+-ppc_elf_tls_setup (bfd *obfd,
++ppc_elf_amigaos_tls_setup (bfd *obfd,
+ 		   struct bfd_link_info *info,
+ 		   int no_tls_get_addr_opt)
+ {
+   struct ppc_elf_link_hash_table *htab;
+ 
+   htab = ppc_elf_hash_table (info);
+@@ -5075,13 +5170,13 @@ branch_reloc_hash_match (const bfd *ibfd,
+ }
+ 
+ /* Run through all the TLS relocs looking for optimization
+    opportunities.  */
+ 
+ bfd_boolean
+-ppc_elf_tls_optimize (bfd *obfd ATTRIBUTE_UNUSED,
++ppc_elf_amigaos_tls_optimize (bfd *obfd ATTRIBUTE_UNUSED,
+ 		      struct bfd_link_info *info)
+ {
+   bfd *ibfd;
+   asection *sec;
+   struct ppc_elf_link_hash_table *htab;
+   int pass;
+@@ -6008,12 +6103,16 @@ ppc_elf_size_dynamic_sections (bfd *output_bfd ATTRIBUTE_UNUSED,
+   fprintf (stderr, "ppc_elf_size_dynamic_sections called\n");
+ #endif
+ 
+   htab = ppc_elf_hash_table (info);
+   BFD_ASSERT (htab->elf.dynobj != NULL);
+ 
++#ifdef DEBUG
++  fprintf (stderr, "ppc_elf_size_dynamic_sections: dynamic_sections_created = %d\n", elf_hash_table (info)->dynamic_sections_created);
++#endif
++
+   if (elf_hash_table (info)->dynamic_sections_created)
+     {
+       /* Set the contents of the .interp section to the interpreter.  */
+       if (info->executable)
+ 	{
+ 	  s = bfd_get_linker_section (htab->elf.dynobj, ".interp");
+@@ -6037,12 +6136,16 @@ ppc_elf_size_dynamic_sections (bfd *output_bfd ATTRIBUTE_UNUSED,
+       struct plt_entry **local_plt;
+       struct plt_entry **end_local_plt;
+       char *lgot_masks;
+       bfd_size_type locsymcount;
+       Elf_Internal_Shdr *symtab_hdr;
+ 
++#ifdef DEBUG
++  fprintf (stderr, "ppc_elf_size_dynamic_sections: is_ppc_elf() = %d (flavour = %d)\n", is_ppc_elf (ibfd), bfd_get_flavour (ibfd));
++#endif
++
+       if (!is_ppc_elf (ibfd))
+ 	continue;
+ 
+       for (s = ibfd->sections; s != NULL; s = s->next)
+ 	{
+ 	  struct elf_dyn_relocs *p;
+@@ -6400,12 +6503,16 @@ ppc_elf_size_dynamic_sections (bfd *output_bfd ATTRIBUTE_UNUSED,
+ 	  if (!add_dynamic_entry (DT_TEXTREL, 0))
+ 	    return FALSE;
+ 	}
+       if (htab->is_vxworks
+ 	  && !elf_vxworks_add_dynamic_entries (output_bfd, info))
+ 	return FALSE;
++
++      /* Flag it as a version 2 dynamic binary */
++      if (!add_dynamic_entry(DT_AMIGAOS_DYNVERSION, 2))
++        return FALSE;
+    }
+ #undef add_dynamic_entry
+ 
+   if (htab->glink_eh_frame != NULL
+       && htab->glink_eh_frame->contents != NULL)
+     {
+@@ -7172,13 +7279,13 @@ is_static_defined (struct elf_link_hash_entry *h)
+ 
+ /* If INSN is an opcode that may be used with an @tls operand, return
+    the transformed insn for TLS optimisation, otherwise return 0.  If
+    REG is non-zero only match an insn with RB or RA equal to REG.  */
+ 
+ unsigned int
+-_bfd_elf_ppc_at_tls_transform (unsigned int insn, unsigned int reg)
++_bfd_elf_amigaos_ppc_at_tls_transform (unsigned int insn, unsigned int reg)
+ {
+   unsigned int rtra;
+ 
+   if ((insn & (0x3f << 26)) != 31 << 26)
+     return 0;
+ 
+@@ -7212,13 +7319,13 @@ _bfd_elf_ppc_at_tls_transform (unsigned int insn, unsigned int reg)
+ 
+ /* If INSN is an opcode that may be used with an @tprel operand, return
+    the transformed insn for an undefined weak symbol, ie. with the
+    thread pointer REG operand removed.  Otherwise return 0.  */
+ 
+ unsigned int
+-_bfd_elf_ppc_at_tprel_transform (unsigned int insn, unsigned int reg)
++_bfd_elf_amigaos_ppc_at_tprel_transform (unsigned int insn, unsigned int reg)
+ {
+   if ((insn & (0x1f << 16)) == reg << 16
+       && ((insn & (0x3f << 26)) == 14u << 26 /* addi */
+ 	  || (insn & (0x3f << 26)) == 15u << 26 /* addis */
+ 	  || (insn & (0x3f << 26)) == 32u << 26 /* lwz */
+ 	  || (insn & (0x3f << 26)) == 34u << 26 /* lbz */
+@@ -8076,13 +8183,13 @@ ppc_elf_relocate_section (bfd *output_bfd,
+ 	      /* Make this relocation against an undefined weak symbol
+ 		 resolve to zero.  This is really just a tweak, since
+ 		 code using weak externs ought to check that they are
+ 		 defined before using them.  */
+ 	      bfd_byte *p = contents + rel->r_offset - d_offset;
+ 	      unsigned int insn = bfd_get_32 (output_bfd, p);
+-	      insn = _bfd_elf_ppc_at_tprel_transform (insn, 2);
++	      insn = _bfd_elf_amigaos_ppc_at_tprel_transform (insn, 2);
+ 	      if (insn != 0)
+ 		bfd_put_32 (output_bfd, insn, p);
+ 	      break;
+ 	    }
+ 	  addend -= htab->elf.tls_sec->vma + TP_OFFSET;
+ 	  /* The TPREL16 relocs shouldn't really be used in shared
+@@ -8502,13 +8609,47 @@ ppc_elf_relocate_section (bfd *output_bfd,
+ 		   sym_name,
+ 		   howto->name,
+ 		   name);
+ 	      }
+ 	  }
+ 	  break;
++#if 0
++	case R_PPC_AMIGAOS_BREL:
++	case R_PPC_AMIGAOS_BREL_HI:
++	case R_PPC_AMIGAOS_BREL_LO:
++	case R_PPC_AMIGAOS_BREL_HA:
++	  {
++	    if (data_section == NULL)
++	      data_section = bfd_get_section_by_name (output_bfd, ".data");
++
++	    if (sec)
++	      {
++		const char *name = bfd_get_section_name (abfd, sec->output_section);
++		if (strcmp (name, ".sdata") != 0
++		    && strcmp (name, ".sbss") != 0
++		    && strcmp (name, ".data") != 0
++		    && strcmp (name, ".bss") != 0
++		    && strncmp (name, ".ctors", 6) != 0
++		    && strncmp (name, ".dtors", 6) != 0)
++		  {
++		    (*_bfd_error_handler) (_("%s: The target (%s) of a %s relocation is in the wrong output section (%s)"),
++					   input_bfd,
++					   sym_name,
++					   howto->name,
++					   name);
++		  }
++	      }
++
++	    addend = addend - data_section->vma;
++
++	    if (r_type == R_PPC_AMIGAOS_BREL_HA)
++	      addend += ((relocation + addend) & 0x8000) << 1;
+ 
++	    }
++	    break;
++#endif
+ 	case R_PPC_VLE_LO16A:
+ 	  relocation = (relocation + addend) & 0xffff;
+ 	  ppc_elf_vle_split16 (output_bfd, contents, rel->r_offset,
+                                relocation, split16a_type);
+ 	  continue;
+ 
+@@ -8899,12 +9040,15 @@ ppc_elf_relocate_section (bfd *output_bfd,
+ 				    input_section,
+ 				    contents,
+ 				    rel->r_offset,
+ 				    relocation,
+ 				    addend);
+ 
++#ifdef DEBUG
++      fprintf (stderr, "%p %p %p\n", (void *)rel->r_offset, (void *)relocation, (void *)addend);
++#endif
+       if (r != bfd_reloc_ok)
+ 	{
+ 	  if (r == bfd_reloc_overflow)
+ 	    {
+ 	      if (warned)
+ 		continue;
+@@ -9124,18 +9268,24 @@ ppc_elf_finish_dynamic_symbol (bfd *output_bfd,
+ 		    || h->dynindx == -1)
+ 		  splt = htab->iplt;
+ 
+ 		rela.r_offset = (splt->output_section->vma
+ 				 + splt->output_offset
+ 				 + ent->plt.offset);
++#ifdef DEBUG
++  fprintf (stderr, "   r_offset = %p ", (void *)rela.r_offset);
++#endif
+ 		if (htab->plt_type == PLT_OLD
+ 		    || !htab->elf.dynamic_sections_created
+ 		    || h->dynindx == -1)
+ 		  {
+ 		    /* We don't need to fill in the .plt.  The ppc dynamic
+ 		       linker will fill it in.  */
++#ifdef DEBUG
++  fprintf (stderr, "     not filling in .plt ");
++#endif
+ 		  }
+ 		else
+ 		  {
+ 		    bfd_vma val = (htab->glink_pltresolve + ent->plt.offset
+ 				   + htab->glink->output_section->vma
+ 				   + htab->glink->output_offset);
+@@ -9166,24 +9316,34 @@ ppc_elf_finish_dynamic_symbol (bfd *output_bfd,
+ 			* sizeof (Elf32_External_Rela)));
+ 	    else
+ 	      loc = (htab->relplt->contents
+ 		     + reloc_index * sizeof (Elf32_External_Rela));
+ 	    bfd_elf32_swap_reloca_out (output_bfd, &rela, loc);
+ 
++#ifdef DEBUG
++	    fprintf (stderr, "   r_offset = %p r_addednd = %p, r_info = 0x%08x, h->def_regular = %d", (void *)rela.r_offset, (void *)rela.r_addend, (unsigned int)rela.r_info, (int)h->def_regular);
++#endif
+ 	    if (!h->def_regular)
+ 	      {
+ 		/* Mark the symbol as undefined, rather than as
+ 		   defined in the .plt section.  Leave the value if
+ 		   there were any relocations where pointer equality
+ 		   matters (this is a clue for the dynamic linker, to
+ 		   make function pointer comparisons work between an
+ 		   application and shared library), otherwise set it
+ 		   to zero.  */
+ 		sym->st_shndx = SHN_UNDEF;
+ 		if (!h->pointer_equality_needed)
+-		  sym->st_value = 0;
++		  {
++		    /* THF: This is peculiar. The compiler generates a R_PPC_REL24 for externally referenced
++		     * symbols impoted from libc.so. Relocation in elf.library requires the symbol to have it's .plt
++		     * stub value, but the linker specifically clears the value to 0, resulting in run-time
++		     * errors when the binary tries to call libc functions.
++		     */
++		    // sym->st_value = 0;
++                  }
+ 		else if (!h->ref_regular_nonweak)
+ 		  {
+ 		    /* This breaks function pointer comparisons, but
+ 		       that is better than breaking tests for a NULL
+ 		       function pointer.  */
+ 		    sym->st_value = 0;
+@@ -9275,12 +9435,15 @@ ppc_elf_finish_dynamic_symbol (bfd *output_bfd,
+       rela.r_addend = 0;
+       loc = s->contents + s->reloc_count++ * sizeof (Elf32_External_Rela);
+       bfd_elf32_swap_reloca_out (output_bfd, &rela, loc);
+     }
+ 
+ #ifdef DEBUG
++      fprintf (stderr, " SYM_VAL(%p) ", (void *)SYM_VAL(h));
++#endif
++#ifdef DEBUG
+   fprintf (stderr, "\n");
+ #endif
+ 
+   return TRUE;
+ }
+ 
+@@ -9735,16 +9898,14 @@ ppc_elf_finish_dynamic_sections (bfd *output_bfd,
+ 	return FALSE;
+     }
+ 
+   return ret;
+ }
+ 
+-#define TARGET_LITTLE_SYM	bfd_elf32_powerpcle_vec
+-#define TARGET_LITTLE_NAME	"elf32-powerpcle"
+-#define TARGET_BIG_SYM		bfd_elf32_powerpc_vec
+-#define TARGET_BIG_NAME		"elf32-powerpc"
++#define TARGET_BIG_SYM		bfd_elf32_amigaos_vec
++#define TARGET_BIG_NAME		"elf32-amigaos"
+ #define ELF_ARCH		bfd_arch_powerpc
+ #define ELF_TARGET_ID		PPC32_ELF_DATA
+ #define ELF_MACHINE_CODE	EM_PPC
+ #ifdef __QNXTARGET__
+ #define ELF_MAXPAGESIZE		0x1000
+ #else
+@@ -9789,153 +9950,23 @@ ppc_elf_finish_dynamic_sections (bfd *output_bfd,
+ #define elf_backend_size_dynamic_sections	ppc_elf_size_dynamic_sections
+ #define elf_backend_hash_symbol			ppc_elf_hash_symbol
+ #define elf_backend_finish_dynamic_symbol	ppc_elf_finish_dynamic_symbol
+ #define elf_backend_finish_dynamic_sections	ppc_elf_finish_dynamic_sections
+ #define elf_backend_fake_sections		ppc_elf_fake_sections
+ #define elf_backend_additional_program_headers	ppc_elf_additional_program_headers
+-#define elf_backend_modify_segment_map     	ppc_elf_modify_segment_map
++#define elf_backend_modify_segment_map     	ppc_elf_amigaos_modify_segment_map
+ #define elf_backend_grok_prstatus		ppc_elf_grok_prstatus
+ #define elf_backend_grok_psinfo			ppc_elf_grok_psinfo
+ #define elf_backend_write_core_note		ppc_elf_write_core_note
+ #define elf_backend_reloc_type_class		ppc_elf_reloc_type_class
+-#define elf_backend_begin_write_processing	ppc_elf_begin_write_processing
+-#define elf_backend_final_write_processing	ppc_elf_final_write_processing
+-#define elf_backend_write_section		ppc_elf_write_section
++#define elf_backend_begin_write_processing	ppc_elf_amigaos_begin_write_processing
++#define elf_backend_final_write_processing	ppc_elf_amigaos_final_write_processing
++#define elf_backend_write_section		ppc_elf_amigaos_write_section
+ #define elf_backend_get_sec_type_attr		ppc_elf_get_sec_type_attr
+ #define elf_backend_plt_sym_val			ppc_elf_plt_sym_val
+ #define elf_backend_action_discarded		ppc_elf_action_discarded
+ #define elf_backend_init_index_section		_bfd_elf_init_1_index_section
+ #define elf_backend_post_process_headers	_bfd_elf_set_osabi
+ #define elf_backend_lookup_section_flags_hook	ppc_elf_lookup_section_flags
+-#define elf_backend_section_processing		ppc_elf_section_processing
+-
+-#include "elf32-target.h"
+-
+-/* FreeBSD Target */
+-
+-#undef  TARGET_LITTLE_SYM
+-#undef  TARGET_LITTLE_NAME
+-
+-#undef  TARGET_BIG_SYM
+-#define TARGET_BIG_SYM  bfd_elf32_powerpc_freebsd_vec
+-#undef  TARGET_BIG_NAME
+-#define TARGET_BIG_NAME "elf32-powerpc-freebsd"
+-
+-#undef  ELF_OSABI
+-#define ELF_OSABI	ELFOSABI_FREEBSD
+-
+-#undef  elf32_bed
+-#define elf32_bed	elf32_powerpc_fbsd_bed
+-
+-#include "elf32-target.h"
+-
+-/* VxWorks Target */
+-
+-#undef TARGET_LITTLE_SYM
+-#undef TARGET_LITTLE_NAME
+-
+-#undef TARGET_BIG_SYM
+-#define TARGET_BIG_SYM		bfd_elf32_powerpc_vxworks_vec
+-#undef TARGET_BIG_NAME
+-#define TARGET_BIG_NAME		"elf32-powerpc-vxworks"
+-
+-#undef  ELF_OSABI
+-
+-/* VxWorks uses the elf default section flags for .plt.  */
+-static const struct bfd_elf_special_section *
+-ppc_elf_vxworks_get_sec_type_attr (bfd *abfd ATTRIBUTE_UNUSED, asection *sec)
+-{
+-  if (sec->name == NULL)
+-    return NULL;
+-
+-  if (strcmp (sec->name, ".plt") == 0)
+-    return _bfd_elf_get_sec_type_attr (abfd, sec);
+-
+-  return ppc_elf_get_sec_type_attr (abfd, sec);
+-}
+-
+-/* Like ppc_elf_link_hash_table_create, but overrides
+-   appropriately for VxWorks.  */
+-static struct bfd_link_hash_table *
+-ppc_elf_vxworks_link_hash_table_create (bfd *abfd)
+-{
+-  struct bfd_link_hash_table *ret;
+-
+-  ret = ppc_elf_link_hash_table_create (abfd);
+-  if (ret)
+-    {
+-      struct ppc_elf_link_hash_table *htab
+-        = (struct ppc_elf_link_hash_table *)ret;
+-      htab->is_vxworks = 1;
+-      htab->plt_type = PLT_VXWORKS;
+-      htab->plt_entry_size = VXWORKS_PLT_ENTRY_SIZE;
+-      htab->plt_slot_size = VXWORKS_PLT_ENTRY_SIZE;
+-      htab->plt_initial_entry_size = VXWORKS_PLT_INITIAL_ENTRY_SIZE;
+-    }
+-  return ret;
+-}
+-
+-/* Tweak magic VxWorks symbols as they are loaded.  */
+-static bfd_boolean
+-ppc_elf_vxworks_add_symbol_hook (bfd *abfd,
+-				 struct bfd_link_info *info,
+-				 Elf_Internal_Sym *sym,
+-				 const char **namep ATTRIBUTE_UNUSED,
+-				 flagword *flagsp ATTRIBUTE_UNUSED,
+-				 asection **secp,
+-				 bfd_vma *valp)
+-{
+-  if (!elf_vxworks_add_symbol_hook(abfd, info, sym,namep, flagsp, secp,
+-				   valp))
+-    return FALSE;
+-
+-  return ppc_elf_add_symbol_hook(abfd, info, sym,namep, flagsp, secp, valp);
+-}
+-
+-static void
+-ppc_elf_vxworks_final_write_processing (bfd *abfd, bfd_boolean linker)
+-{
+-  ppc_elf_final_write_processing(abfd, linker);
+-  elf_vxworks_final_write_processing(abfd, linker);
+-}
+-
+-/* On VxWorks, we emit relocations against _PROCEDURE_LINKAGE_TABLE_, so
+-   define it.  */
+-#undef elf_backend_want_plt_sym
+-#define elf_backend_want_plt_sym		1
+-#undef elf_backend_want_got_plt
+-#define elf_backend_want_got_plt		1
+-#undef elf_backend_got_symbol_offset
+-#define elf_backend_got_symbol_offset		0
+-#undef elf_backend_plt_not_loaded
+-#define elf_backend_plt_not_loaded		0
+-#undef elf_backend_plt_readonly
+-#define elf_backend_plt_readonly		1
+-#undef elf_backend_got_header_size
+-#define elf_backend_got_header_size		12
+-
+-#undef bfd_elf32_get_synthetic_symtab
+-
+-#undef bfd_elf32_bfd_link_hash_table_create
+-#define bfd_elf32_bfd_link_hash_table_create \
+-  ppc_elf_vxworks_link_hash_table_create
+-#undef elf_backend_add_symbol_hook
+-#define elf_backend_add_symbol_hook \
+-  ppc_elf_vxworks_add_symbol_hook
+-#undef elf_backend_link_output_symbol_hook
+-#define elf_backend_link_output_symbol_hook \
+-  elf_vxworks_link_output_symbol_hook
+-#undef elf_backend_final_write_processing
+-#define elf_backend_final_write_processing \
+-  ppc_elf_vxworks_final_write_processing
+-#undef elf_backend_get_sec_type_attr
+-#define elf_backend_get_sec_type_attr \
+-  ppc_elf_vxworks_get_sec_type_attr
+-#undef elf_backend_emit_relocs
+-#define elf_backend_emit_relocs \
+-  elf_vxworks_emit_relocs
+-
+-#undef elf32_bed
+-#define elf32_bed				ppc_elf_vxworks_bed
+-#undef elf_backend_post_process_headers
++#define elf_backend_section_processing		ppc_elf_amigaos_section_processing
+ 
+ #include "elf32-target.h"
 diff --git a/bfd/elf32-i386-amithlon.c b/bfd/elf32-i386-amithlon.c
 new file mode 100644
 index 0000000000000000000000000000000000000000..4e029a5e90187a96013ed97e078fba920d95db28
@@ -20701,13 +21480,19 @@ diff --git a/include/elf/ppc.h b/include/elf/ppc.h
 index f80a1e8a3e9c5852902beaafbb6a2a9e36d815c3..9893a88d96a77d730d91ef2bfe89a18d75029dd1 100644
 --- include/elf/ppc.h
 +++ include/elf/ppc.h
-@@ -128,12 +128,18 @@ START_RELOC_NUMBERS (elf_ppc_reloc_type)
+@@ -128,12 +128,24 @@ START_RELOC_NUMBERS (elf_ppc_reloc_type)
    RELOC_NUMBER (R_PPC_EMB_RELST_LO,	112)
    RELOC_NUMBER (R_PPC_EMB_RELST_HI,	113)
    RELOC_NUMBER (R_PPC_EMB_RELST_HA,	114)
    RELOC_NUMBER (R_PPC_EMB_BIT_FLD,	115)
    RELOC_NUMBER (R_PPC_EMB_RELSDA,	116)
  
++/* Special MorphOS relocs. */
++  RELOC_NUMBER (R_PPC_MORPHOS_DREL,	200)
++  RELOC_NUMBER (R_PPC_MORPHOS_DREL_LO,	201)
++  RELOC_NUMBER (R_PPC_MORPHOS_DREL_HI,	202)
++  RELOC_NUMBER (R_PPC_MORPHOS_DREL_HA,	203)
++
 +/* AmigaOS4 relocs */
 +  RELOC_NUMBER (R_PPC_AMIGAOS_BREL,	210)
 +  RELOC_NUMBER (R_PPC_AMIGAOS_BREL_LO,	211)
@@ -26110,6 +26895,460 @@ index 3fc1352e19184c0319302e809cccf7cc861ec8d7..b8248cd4966e34e95c8b262e515ace18
 +  .libnix___LIB_LIST__  ${RELOCATING-0} : { *(.libnix___LIB_LIST__)  }
  }
  EOF
+diff --git a/ld/scripttempl/elfi370.sc b/ld/scripttempl/morphos.sc
+similarity index 88%
+copy from ld/scripttempl/elfi370.sc
+copy to ld/scripttempl/morphos.sc
+index a845b2980105fa8504b5bf8a83aeb6fc086caa6e..469a8f5f2cad237c9317faf5d23db7f2b7a63eee 100644
+--- ld/scripttempl/elfi370.sc
++++ ld/scripttempl/morphos.sc
+@@ -1,17 +1,14 @@
+ #
+-# This is just a raw copy of elfppc.sc and has not been otherwise modified
+-#
+ # Unusual variables checked by this code:
+-#	NOP - four byte opcode for no-op (defaults to 0)
++#	NOP - two byte opcode for no-op (defaults to 0)
+ #	DATA_ADDR - if end-of-text-plus-one-page isn't right for data start
+ #	OTHER_READONLY_SECTIONS - other than .text .init .rodata ...
+ #		(e.g., .PARISC.milli)
+ #	OTHER_READWRITE_SECTIONS - other than .data .bss .ctors .sdata ...
+ #		(e.g., .PARISC.global)
+-#	ATTRS_SECTIONS - at the end
+ #	OTHER_SECTIONS - at the end
+ #	EXECUTABLE_SYMBOLS - symbols that must be defined for an
+ #		executable (e.g., _DYNAMIC_LINK)
+ #	TEXT_START_SYMBOLS - symbols that appear at the start of the
+ #		.text section.
+ #	DATA_START_SYMBOLS - symbols that appear at the start of the
+@@ -19,37 +16,35 @@
+ #	OTHER_BSS_SYMBOLS - symbols that appear at the start of the
+ #		.bss section besides __bss_start.
+ #
+ # When adding sections, do note that the names of some sections are used
+ # when specifying the start address of the next.
+ #
+-test -z "$ENTRY" && ENTRY=_start
+ test -z "${BIG_OUTPUT_FORMAT}" && BIG_OUTPUT_FORMAT=${OUTPUT_FORMAT}
+ test -z "${LITTLE_OUTPUT_FORMAT}" && LITTLE_OUTPUT_FORMAT=${OUTPUT_FORMAT}
+-test -z "$ATTRS_SECTIONS" && ATTRS_SECTIONS=".gnu.attributes 0 : { KEEP (*(.gnu.attributes)) }"
+ test "$LD_FLAG" = "N" && DATA_ADDR=.
+ SBSS2=".sbss2 ${RELOCATING-0} : { *(.sbss2) }"
+ SDATA2=".sdata2 ${RELOCATING-0} : { *(.sdata2) }"
+ INTERP=".interp ${RELOCATING-0} : { *(.interp) }"
+ PLT=".plt ${RELOCATING-0} : { *(.plt) }"
+ cat <<EOF
+ OUTPUT_FORMAT("${OUTPUT_FORMAT}", "${BIG_OUTPUT_FORMAT}",
+ 	      "${LITTLE_OUTPUT_FORMAT}")
+ OUTPUT_ARCH(${ARCH})
+-${RELOCATING+ENTRY(${ENTRY})}
+ 
+ ${RELOCATING+${LIB_SEARCH_DIRS}}
+ ${RELOCATING+/* Do we need any of these for elf?
+    __DYNAMIC = 0; ${STACKZERO+${STACKZERO}} ${SHLIB_PATH+${SHLIB_PATH}}  */}
+ ${RELOCATING+${EXECUTABLE_SYMBOLS}}
+ ${RELOCATING- /* For some reason, the Solaris linker makes bad executables
+   if gld -r is used and the intermediate file has sections starting
+   at non-zero addresses.  Could be a Solaris ld bug, could be a GNU ld
+   bug.  But for now assigning the zero vmas works.  */}
+ 
+ ${RELOCATING+PROVIDE (__stack = 0);}
++PROVIDE (__machtype = 0x1);
+ SECTIONS
+ {
+   /* Read-only sections, merged into text segment: */
+   ${CREATE_SHLIB-${RELOCATING+. = ${TEXT_START_ADDR} + SIZEOF_HEADERS;}}
+   ${CREATE_SHLIB+${RELOCATING+. = SIZEOF_HEADERS;}}
+   ${CREATE_SHLIB-${INTERP}}
+@@ -77,27 +72,30 @@ SECTIONS
+   .rela.sdata	${RELOCATING-0} : { *(.rela.sdata)	}
+   .rela.sbss	${RELOCATING-0} : { *(.rela.sbss)	}
+   .rela.sdata2	${RELOCATING-0} : { *(.rela.sdata2)	}
+   .rela.sbss2	${RELOCATING-0} : { *(.rela.sbss2)	}
+   .text    ${RELOCATING-0} :
+   {
++    PROVIDE (__text_start = .);
+     ${RELOCATING+${TEXT_START_SYMBOLS}}
+     *(.text)
+     /* .gnu.warning sections are handled specially by elf32.em.  */
+     *(.gnu.warning)
+     *(.gnu.linkonce.t*)
++    PROVIDE (__text_end = .);
+   } =${NOP-0}
++  PROVIDE (__text_size = SIZEOF(.text));
+   .init		${RELOCATING-0} : { *(.init)		} =${NOP-0}
+   .fini		${RELOCATING-0} : { *(.fini)		} =${NOP-0}
+   .rodata	${RELOCATING-0} : { *(.rodata) *(.gnu.linkonce.r*) }
+   .rodata1	${RELOCATING-0} : { *(.rodata1) }
+   ${RELOCATING+_etext = .;}
+   ${RELOCATING+PROVIDE (etext = .);}
+   ${CREATE_SHLIB-${SDATA2}}
+   ${CREATE_SHLIB-${SBSS2}}
+-  ${OTHER_READONLY_SECTIONS}
++  ${RELOCATING+${OTHER_READONLY_SECTIONS}}
+ 
+   /* Adjust the address for the data segment.  We want to adjust up to
+      the same address within the page on the next page up.  It would
+      be more correct to do this:
+        ${RELOCATING+. = ${DATA_ADDR-ALIGN(${MAXPAGESIZE}) + (ALIGN(8) & (${MAXPAGESIZE} - 1))};}
+      The current expression does not correctly handle the case of a
+@@ -111,19 +109,22 @@ SECTIONS
+      that no actual memory is lost; the page which is skipped can not
+      be referenced).  */
+   ${RELOCATING+. = ${DATA_ADDR- ALIGN(8) + ${MAXPAGESIZE}};}
+ 
+   .data  ${RELOCATING-0} :
+   {
++    PROVIDE (__data_start = .);
+     ${RELOCATING+${DATA_START_SYMBOLS}}
+     *(.data)
+     *(.gnu.linkonce.d*)
+     ${CONSTRUCTING+CONSTRUCTORS}
++    PROVIDE (__data_end = .);
+   }
++  PROVIDE (__data_size = SIZEOF(.data));
+   .data1 ${RELOCATING-0} : { *(.data1) }
+-  ${OTHER_READWRITE_SECTIONS}
++  ${RELOCATING+${OTHER_READWRITE_SECTIONS}}
+ 
+   .got1		${RELOCATING-0} : { *(.got1) }
+   .dynamic	${RELOCATING-0} : { *(.dynamic) }
+ 
+   /* Put .ctors and .dtors next to the .got2 section, so that the pointers
+      get relocated with -mrelocatable. Also put in the .fixup pointers.
+@@ -152,32 +153,43 @@ SECTIONS
+   ${CREATE_SHLIB+${SBSS2}}
+ 		${RELOCATING+PROVIDE (_GOT_END_ = .);}
+ 
+   /* We want the small data sections together, so single-instruction offsets
+      can access them all, and initialized data all before uninitialized, so
+      we can shorten the on-disk segment size.  */
+-  .sdata	${RELOCATING-0} : { *(.sdata) }
++  .sdata	${RELOCATING-0} :
++  {
++    PROVIDE (__sdata_start = .);
++    *(.sdata)
++    PROVIDE (__r13_init = 0x8000);
++    PROVIDE (__sdata_end = .);
++  }
++  PROVIDE (__sdata_size = SIZEOF(.sdata));
+   ${RELOCATING+_edata  =  .;}
+   ${RELOCATING+PROVIDE (edata = .);}
+   .sbss    ${RELOCATING-0} :
+   {
+-    ${RELOCATING+PROVIDE (__sbss_start = .);}
++    PROVIDE (__sbss_start = .);
+     *(.sbss)
+     *(.scommon)
+     *(.dynsbss)
+-    ${RELOCATING+PROVIDE (__sbss_end = .);}
++    PROVIDE (__sbss_end = .);
+   }
++  PROVIDE (__sbss_size = SIZEOF(.sbss));
+   ${PLT}
+   .bss     ${RELOCATING-0} :
+   {
+-   ${RELOCATING+${OTHER_BSS_SYMBOLS}}
+-   ${RELOCATING+PROVIDE (__bss_start = .);}
+-   *(.dynbss)
+-   *(.bss)
+-   *(COMMON)
++    PROVIDE (__bss_start = .);
++    ${RELOCATING+${OTHER_BSS_SYMBOLS}}
++    ${RELOCATING+PROVIDE (__bss_start = .);}
++    *(.dynbss)
++    *(.bss)
++    *(COMMON)
++    PROVIDE (__bss_end = .);
+   }
++  PROVIDE (__bss_size = SIZEOF(.bss));
+   ${RELOCATING+_end = . ;}
+   ${RELOCATING+PROVIDE (end = .);}
+ 
+   /* These are needed for ELF backends which have not yet been
+      converted to the new style linker.  */
+   .stab 0 : { *(.stab) }
+@@ -197,13 +209,13 @@ SECTIONS
+ 
+   /* DWARF 1.1 and DWARF 2 */
+   .debug_aranges  0 : { *(.debug_aranges) }
+   .debug_pubnames 0 : { *(.debug_pubnames) }
+ 
+   /* DWARF 2 */
+-  .debug_info     0 : { *(.debug_info) *(.gnu.linkonce.wi.*) }
++  .debug_info     0 : { *(.debug_info) }
+   .debug_abbrev   0 : { *(.debug_abbrev) }
+   .debug_line     0 : { *(.debug_line) }
+   .debug_frame    0 : { *(.debug_frame) }
+   .debug_str      0 : { *(.debug_str) }
+   .debug_loc      0 : { *(.debug_loc) }
+   .debug_macinfo  0 : { *(.debug_macinfo) }
+@@ -211,17 +223,10 @@ SECTIONS
+   /* SGI/MIPS DWARF 2 extensions */
+   .debug_weaknames 0 : { *(.debug_weaknames) }
+   .debug_funcnames 0 : { *(.debug_funcnames) }
+   .debug_typenames 0 : { *(.debug_typenames) }
+   .debug_varnames  0 : { *(.debug_varnames) }
+ 
+-  /* DWARF 3 */
+-  .debug_pubtypes 0 : { *(.debug_pubtypes) }
+-  .debug_ranges   0 : { *(.debug_ranges) }
+-
+-  /* DWARF Extension.  */
+-  .debug_macro    0 : { *(.debug_macro) } 
+-  
+-  ${ATTRS_SECTIONS}
++  /* These must appear regardless of ${RELOCATING}.  */
+   ${OTHER_SECTIONS}
+ }
+ EOF
+diff --git a/ld/scripttempl/elfi370.sc b/ld/scripttempl/morphos_baserel.sc
+similarity index 69%
+copy from ld/scripttempl/elfi370.sc
+copy to ld/scripttempl/morphos_baserel.sc
+index a845b2980105fa8504b5bf8a83aeb6fc086caa6e..4f0f4aba86bddb4e76a9405c0da04df4c0091d9e 100644
+--- ld/scripttempl/elfi370.sc
++++ ld/scripttempl/morphos_baserel.sc
+@@ -1,17 +1,14 @@
+ #
+-# This is just a raw copy of elfppc.sc and has not been otherwise modified
+-#
+ # Unusual variables checked by this code:
+-#	NOP - four byte opcode for no-op (defaults to 0)
++#	NOP - two byte opcode for no-op (defaults to 0)
+ #	DATA_ADDR - if end-of-text-plus-one-page isn't right for data start
+ #	OTHER_READONLY_SECTIONS - other than .text .init .rodata ...
+ #		(e.g., .PARISC.milli)
+ #	OTHER_READWRITE_SECTIONS - other than .data .bss .ctors .sdata ...
+ #		(e.g., .PARISC.global)
+-#	ATTRS_SECTIONS - at the end
+ #	OTHER_SECTIONS - at the end
+ #	EXECUTABLE_SYMBOLS - symbols that must be defined for an
+ #		executable (e.g., _DYNAMIC_LINK)
+ #	TEXT_START_SYMBOLS - symbols that appear at the start of the
+ #		.text section.
+ #	DATA_START_SYMBOLS - symbols that appear at the start of the
+@@ -19,37 +16,35 @@
+ #	OTHER_BSS_SYMBOLS - symbols that appear at the start of the
+ #		.bss section besides __bss_start.
+ #
+ # When adding sections, do note that the names of some sections are used
+ # when specifying the start address of the next.
+ #
+-test -z "$ENTRY" && ENTRY=_start
+ test -z "${BIG_OUTPUT_FORMAT}" && BIG_OUTPUT_FORMAT=${OUTPUT_FORMAT}
+ test -z "${LITTLE_OUTPUT_FORMAT}" && LITTLE_OUTPUT_FORMAT=${OUTPUT_FORMAT}
+-test -z "$ATTRS_SECTIONS" && ATTRS_SECTIONS=".gnu.attributes 0 : { KEEP (*(.gnu.attributes)) }"
+ test "$LD_FLAG" = "N" && DATA_ADDR=.
+ SBSS2=".sbss2 ${RELOCATING-0} : { *(.sbss2) }"
+ SDATA2=".sdata2 ${RELOCATING-0} : { *(.sdata2) }"
+ INTERP=".interp ${RELOCATING-0} : { *(.interp) }"
+ PLT=".plt ${RELOCATING-0} : { *(.plt) }"
+ cat <<EOF
+ OUTPUT_FORMAT("${OUTPUT_FORMAT}", "${BIG_OUTPUT_FORMAT}",
+ 	      "${LITTLE_OUTPUT_FORMAT}")
+ OUTPUT_ARCH(${ARCH})
+-${RELOCATING+ENTRY(${ENTRY})}
+ 
+ ${RELOCATING+${LIB_SEARCH_DIRS}}
+ ${RELOCATING+/* Do we need any of these for elf?
+    __DYNAMIC = 0; ${STACKZERO+${STACKZERO}} ${SHLIB_PATH+${SHLIB_PATH}}  */}
+ ${RELOCATING+${EXECUTABLE_SYMBOLS}}
+ ${RELOCATING- /* For some reason, the Solaris linker makes bad executables
+   if gld -r is used and the intermediate file has sections starting
+   at non-zero addresses.  Could be a Solaris ld bug, could be a GNU ld
+   bug.  But for now assigning the zero vmas works.  */}
+ 
+ ${RELOCATING+PROVIDE (__stack = 0);}
++PROVIDE (__machtype = 0x1);
+ SECTIONS
+ {
+   /* Read-only sections, merged into text segment: */
+   ${CREATE_SHLIB-${RELOCATING+. = ${TEXT_START_ADDR} + SIZEOF_HEADERS;}}
+   ${CREATE_SHLIB+${RELOCATING+. = SIZEOF_HEADERS;}}
+   ${CREATE_SHLIB-${INTERP}}
+@@ -58,72 +53,53 @@ SECTIONS
+   .dynstr	${RELOCATING-0} : { *(.dynstr)		}
+   .gnu.version ${RELOCATING-0} : { *(.gnu.version)      }
+   .gnu.version_d ${RELOCATING-0} : { *(.gnu.version_d)  }
+   .gnu.version_r ${RELOCATING-0} : { *(.gnu.version_r)  }
+   .rela.text   ${RELOCATING-0} :
+     { *(.rela.text) *(.rela.gnu.linkonce.t*) }
+-  .rela.data   ${RELOCATING-0} :
+-    { *(.rela.data) *(.rela.gnu.linkonce.d*) }
+-  .rela.rodata ${RELOCATING-0} :
+-    { *(.rela.rodata) *(.rela.gnu.linkonce.r*) }
+   .rela.got	${RELOCATING-0} : { *(.rela.got)	}
+   .rela.got1	${RELOCATING-0} : { *(.rela.got1)	}
+   .rela.got2	${RELOCATING-0} : { *(.rela.got2)	}
+   .rela.ctors	${RELOCATING-0} : { *(.rela.ctors)	}
+   .rela.dtors	${RELOCATING-0} : { *(.rela.dtors)	}
+   .rela.init	${RELOCATING-0} : { *(.rela.init)	}
+   .rela.fini	${RELOCATING-0} : { *(.rela.fini)	}
+-  .rela.bss	${RELOCATING-0} : { *(.rela.bss)	}
+   .rela.plt	${RELOCATING-0} : { *(.rela.plt)	}
+-  .rela.sdata	${RELOCATING-0} : { *(.rela.sdata)	}
+-  .rela.sbss	${RELOCATING-0} : { *(.rela.sbss)	}
++  .rela.rodata  ${RELOCATING-0} :
++    { *(.rela.rodata) *(.rela.gnu.linkonce.r*) }
++  .rela.sdata	${RELOCATING-0} :
++  {
++    *(.rela.data)
++    *(.rela.gnu.linkonce.d*)
++    *(.rela.sdata)
++  }
++  .rela.sbss	${RELOCATING-0} :
++  {
++    *(.rela.sbss)
++    *(.rela.bss)
++  }
+   .rela.sdata2	${RELOCATING-0} : { *(.rela.sdata2)	}
+   .rela.sbss2	${RELOCATING-0} : { *(.rela.sbss2)	}
+   .text    ${RELOCATING-0} :
+   {
++    PROVIDE (__text_start = .);
+     ${RELOCATING+${TEXT_START_SYMBOLS}}
+     *(.text)
+     /* .gnu.warning sections are handled specially by elf32.em.  */
+     *(.gnu.warning)
+     *(.gnu.linkonce.t*)
++    PROVIDE (__text_end = .);
+   } =${NOP-0}
++  PROVIDE (__text_size = SIZEOF(.text));
+   .init		${RELOCATING-0} : { *(.init)		} =${NOP-0}
+   .fini		${RELOCATING-0} : { *(.fini)		} =${NOP-0}
+-  .rodata	${RELOCATING-0} : { *(.rodata) *(.gnu.linkonce.r*) }
+-  .rodata1	${RELOCATING-0} : { *(.rodata1) }
+   ${RELOCATING+_etext = .;}
+   ${RELOCATING+PROVIDE (etext = .);}
+   ${CREATE_SHLIB-${SDATA2}}
+   ${CREATE_SHLIB-${SBSS2}}
+-  ${OTHER_READONLY_SECTIONS}
+-
+-  /* Adjust the address for the data segment.  We want to adjust up to
+-     the same address within the page on the next page up.  It would
+-     be more correct to do this:
+-       ${RELOCATING+. = ${DATA_ADDR-ALIGN(${MAXPAGESIZE}) + (ALIGN(8) & (${MAXPAGESIZE} - 1))};}
+-     The current expression does not correctly handle the case of a
+-     text segment ending precisely at the end of a page; it causes the
+-     data segment to skip a page.  The above expression does not have
+-     this problem, but it will currently (2/95) cause BFD to allocate
+-     a single segment, combining both text and data, for this case.
+-     This will prevent the text segment from being shared among
+-     multiple executions of the program; I think that is more
+-     important than losing a page of the virtual address space (note
+-     that no actual memory is lost; the page which is skipped can not
+-     be referenced).  */
+-  ${RELOCATING+. = ${DATA_ADDR- ALIGN(8) + ${MAXPAGESIZE}};}
+-
+-  .data  ${RELOCATING-0} :
+-  {
+-    ${RELOCATING+${DATA_START_SYMBOLS}}
+-    *(.data)
+-    *(.gnu.linkonce.d*)
+-    ${CONSTRUCTING+CONSTRUCTORS}
+-  }
+-  .data1 ${RELOCATING-0} : { *(.data1) }
+-  ${OTHER_READWRITE_SECTIONS}
++  ${RELOCATING+${OTHER_READONLY_SECTIONS}}
+ 
+   .got1		${RELOCATING-0} : { *(.got1) }
+   .dynamic	${RELOCATING-0} : { *(.dynamic) }
+ 
+   /* Put .ctors and .dtors next to the .got2 section, so that the pointers
+      get relocated with -mrelocatable. Also put in the .fixup pointers.
+@@ -148,38 +124,41 @@ SECTIONS
+ 		${RELOCATING+PROVIDE (_GOT_START_ = .);}
+   .got		${RELOCATING-0} : { *(.got) }
+   .got.plt	${RELOCATING-0} : { *(.got.plt) }
+   ${CREATE_SHLIB+${SDATA2}}
+   ${CREATE_SHLIB+${SBSS2}}
+ 		${RELOCATING+PROVIDE (_GOT_END_ = .);}
+-
+-  /* We want the small data sections together, so single-instruction offsets
++  .rodata	${RELOCATING-0} : { *(.rodata) }
++ /* We want the small data sections together, so single-instruction offsets
+      can access them all, and initialized data all before uninitialized, so
+      we can shorten the on-disk segment size.  */
+-  .sdata	${RELOCATING-0} : { *(.sdata) }
++  .sdata	${RELOCATING-0} : 
++  { 
++    /*PROVIDE (__sdata_start = .);*/
++    __sdata_start = .;
++    *(.data)
++    *(.data1)
++    __small_start = .;	
++    *(.sdata) 
++    PROVIDE (__r13_init = /*__small_start*/ __sdata_start + 0x8000);
++    PROVIDE (__sdata_end = .);
++  }
++  PROVIDE (__sdata_size = SIZEOF(.sdata));
+   ${RELOCATING+_edata  =  .;}
+   ${RELOCATING+PROVIDE (edata = .);}
+   .sbss    ${RELOCATING-0} :
+   {
+-    ${RELOCATING+PROVIDE (__sbss_start = .);}
++    PROVIDE (__sbss_start = .);
+     *(.sbss)
+     *(.scommon)
+     *(.dynsbss)
+-    ${RELOCATING+PROVIDE (__sbss_end = .);}
+-  }
+-  ${PLT}
+-  .bss     ${RELOCATING-0} :
+-  {
+-   ${RELOCATING+${OTHER_BSS_SYMBOLS}}
+-   ${RELOCATING+PROVIDE (__bss_start = .);}
+-   *(.dynbss)
+-   *(.bss)
+-   *(COMMON)
++    *(.bss)
++    *(COMMON)
++    PROVIDE (__sbss_end = .);
+   }
+-  ${RELOCATING+_end = . ;}
+-  ${RELOCATING+PROVIDE (end = .);}
++  PROVIDE (__sbss_size = SIZEOF(.sbss));
+ 
+   /* These are needed for ELF backends which have not yet been
+      converted to the new style linker.  */
+   .stab 0 : { *(.stab) }
+   .stabstr 0 : { *(.stabstr) }
+ 
+@@ -197,13 +176,13 @@ SECTIONS
+ 
+   /* DWARF 1.1 and DWARF 2 */
+   .debug_aranges  0 : { *(.debug_aranges) }
+   .debug_pubnames 0 : { *(.debug_pubnames) }
+ 
+   /* DWARF 2 */
+-  .debug_info     0 : { *(.debug_info) *(.gnu.linkonce.wi.*) }
++  .debug_info     0 : { *(.debug_info) }
+   .debug_abbrev   0 : { *(.debug_abbrev) }
+   .debug_line     0 : { *(.debug_line) }
+   .debug_frame    0 : { *(.debug_frame) }
+   .debug_str      0 : { *(.debug_str) }
+   .debug_loc      0 : { *(.debug_loc) }
+   .debug_macinfo  0 : { *(.debug_macinfo) }
+@@ -211,17 +190,10 @@ SECTIONS
+   /* SGI/MIPS DWARF 2 extensions */
+   .debug_weaknames 0 : { *(.debug_weaknames) }
+   .debug_funcnames 0 : { *(.debug_funcnames) }
+   .debug_typenames 0 : { *(.debug_typenames) }
+   .debug_varnames  0 : { *(.debug_varnames) }
+ 
+-  /* DWARF 3 */
+-  .debug_pubtypes 0 : { *(.debug_pubtypes) }
+-  .debug_ranges   0 : { *(.debug_ranges) }
+-
+-  /* DWARF Extension.  */
+-  .debug_macro    0 : { *(.debug_macro) } 
+-  
+-  ${ATTRS_SECTIONS}
++  /* These must appear regardless of ${RELOCATING}.  */
+   ${OTHER_SECTIONS}
+ }
+ EOF
 diff --git a/libiberty/config/mh-amigaos b/libiberty/config/mh-amigaos
 new file mode 100644
 index 0000000000000000000000000000000000000000..495fa7e35897000efe600c9f1dd844b086731fcd
@@ -26189,5 +27428,5 @@ index bc2dd491592e56fb664cdf96fc32491c08e1e075..bc40541b7c5aecc30a7a74fd61f29225
     Seperate from reg_names since 'spu', 'fpl' look weird.  */
  static char *const reg_half_names[] =
 -- 
-2.1.4
+2.11.0
 

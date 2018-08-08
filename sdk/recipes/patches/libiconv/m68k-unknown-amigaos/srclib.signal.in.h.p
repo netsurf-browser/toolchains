@@ -1,12 +1,12 @@
---- srclib/signal.in.h.orig	2011-08-07 14:42:06.000000000 +0100
-+++ srclib/signal.in.h	2014-01-15 00:57:27.620548058 +0000
-@@ -168,69 +168,6 @@
- 
- # endif
+--- srclib/signal.in.h	2017-01-01 23:02:22.000000000 +0000
++++ srclib/signal.in.h	2017-03-26 22:56:18.360017409 +0100
+@@ -211,69 +211,6 @@ typedef int verify_NSIG_constraint[NSIG
+ # undef sigismember
+ #endif
  
 -/* Test whether a given signal is contained in a signal set.  */
 -# if @HAVE_POSIX_SIGNALBLOCKING@
--/* This function is defined as a macro on MacOS X.  */
+-/* This function is defined as a macro on Mac OS X.  */
 -#  if defined __cplusplus && defined GNULIB_NAMESPACE
 -#   undef sigismember
 -#  endif
@@ -19,7 +19,7 @@
 -
 -/* Initialize a signal set to the empty set.  */
 -# if @HAVE_POSIX_SIGNALBLOCKING@
--/* This function is defined as a macro on MacOS X.  */
+-/* This function is defined as a macro on Mac OS X.  */
 -#  if defined __cplusplus && defined GNULIB_NAMESPACE
 -#   undef sigemptyset
 -#  endif
@@ -31,7 +31,7 @@
 -
 -/* Add a signal to a signal set.  */
 -# if @HAVE_POSIX_SIGNALBLOCKING@
--/* This function is defined as a macro on MacOS X.  */
+-/* This function is defined as a macro on Mac OS X.  */
 -#  if defined __cplusplus && defined GNULIB_NAMESPACE
 -#   undef sigaddset
 -#  endif
@@ -44,7 +44,7 @@
 -
 -/* Remove a signal from a signal set.  */
 -# if @HAVE_POSIX_SIGNALBLOCKING@
--/* This function is defined as a macro on MacOS X.  */
+-/* This function is defined as a macro on Mac OS X.  */
 -#  if defined __cplusplus && defined GNULIB_NAMESPACE
 -#   undef sigdelset
 -#  endif
@@ -57,7 +57,7 @@
 -
 -/* Fill a signal set with all possible signals.  */
 -# if @HAVE_POSIX_SIGNALBLOCKING@
--/* This function is defined as a macro on MacOS X.  */
+-/* This function is defined as a macro on Mac OS X.  */
 -#  if defined __cplusplus && defined GNULIB_NAMESPACE
 -#   undef sigfillset
 -#  endif
