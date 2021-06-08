@@ -43,7 +43,7 @@ VERSION_LIBWEBP := 1.0.3
 # https://c-ares.haxx.se/
 VERSION_LIBCARES := 1.15.0
 # https://curl.haxx.se/
-VERSION_LIBCURL := 7.76.1
+VERSION_LIBCURL := 7.77.0
 VERSION_LIBGNURX := 2.5.1
 # http://mission-base.com/peter/source/
 VERSION_LIBPBL := 1_04
