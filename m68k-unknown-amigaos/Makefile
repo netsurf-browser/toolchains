@@ -29,8 +29,8 @@ UPSTREAM_CLIB2_VERSION := 1_214
 UPSTREAM_CLIB2_TARBALL := V$(UPSTREAM_CLIB2_VERSION).tar.gz
 UPSTREAM_CLIB2_URI := https://github.com/adtools/clib2/archive/$(UPSTREAM_CLIB2_TARBALL)
 
-UPSTREAM_NDK_TARBALL := NDK3.2R2.lha
-UPSTREAM_NDK_URI := "http://hyperion-entertainment.biz/index.php/downloads?view=download&format=raw&file=122"
+UPSTREAM_NDK_TARBALL := NDK3.2R3.lha
+UPSTREAM_NDK_URI := "http://hyperion-entertainment.biz/index.php/downloads?view=download&format=raw&file=123"
 
 UPSTREAM_OPENURL_VERSION := 7.16
 UPSTREAM_OPENURL_TARBALL := openurl-$(UPSTREAM_OPENURL_VERSION)
