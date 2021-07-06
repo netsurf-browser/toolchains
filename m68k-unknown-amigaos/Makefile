@@ -127,6 +127,9 @@ $(BUILDSTEPS)/clib2-src.d: $(SOURCESDIR)/$(UPSTREAM_CLIB2_TARBALL)
 $(BUILDSTEPS)/ndk.d: $(SOURCESDIR)/$(UPSTREAM_NDK_TARBALL) $(SOURCESDIR)/$(UPSTREAM_OPENURL_TARBALL) $(SOURCESDIR)/$(UPSTREAM_GUIGFX_TARBALL) $(SOURCESDIR)/$(UPSTREAM_RENDER_TARBALL) $(SOURCESDIR)/$(UPSTREAM_CODESETS_TARBALL) $(SOURCESDIR)/$(UPSTREAM_AMISSL_TARBALL)
 	mkdir -p $(BUILDDIR)/ndk
 	lha xw=$(BUILDDIR)/ndk $(SOURCESDIR)/$(UPSTREAM_NDK_TARBALL)
+	for p in `ls $(RECIPES)/patches/ndk/*.p` ; do patch -d $(BUILDDIR)/ndk -p0 <$$p || exit $0 ; done
+	for dir in `find $(RECIPES)/files/ndk/ -type d | grep -v '\.svn' | sed 's#$(RECIPES)/files/ndk##'` ; do mkdir -p $(BUILDDIR)/ndk/NDK3.2$$dir ; done
+	for file in `find $(RECIPES)/files/ndk/ -type f | grep -v '\.svn' | sed 's#$(RECIPES)/files/ndk##'` ; do cp -p $(RECIPES)/files/ndk$$file $(BUILDDIR)/ndk/NDK3.2$$file ; done
 	mkdir -p $(PREFIX)/$(TARGET_NAME)/sys-include
 	cp -r $(BUILDDIR)/ndk/NDK3.2/Include_H/* $(PREFIX)/$(TARGET_NAME)/sys-include
 	mkdir -p $(BUILDDIR)/openurl
