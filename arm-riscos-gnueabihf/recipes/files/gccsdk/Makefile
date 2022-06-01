@@ -75,7 +75,7 @@ GCC_CONFIG_ARGS += --with-pkgversion='GCCSDK GCC $(GCC_VERSION) Release $(GCCSDK
 	--with-bugurl=http://gccsdk.riscos.info/
 BINUTILS_CONFIG_ARGS += --with-pkgversion='GCCSDK GCC $(GCC_VERSION) Release $(GCCSDK_GCC_RISCOS_RELEASE)' \
 	--with-bugurl=http://gccsdk.riscos.info/
-BINUTILS_CONFIG_ARGS += --enable-maintainer-mode --disable-werror --with-gcc --enable-interwork --disable-nls
+BINUTILS_CONFIG_ARGS += --disable-werror --with-gcc --enable-interwork --disable-nls #--enable-maintainer-mode
 # --disable-werror is added because --enable-maintainer-mode turns all warnings into errors and
 # the gcc build is not 100% warning free.
 # However, this does not help for libstdc++ builds when newlib is used, cfr http://gcc.gnu.org/PR47058.
