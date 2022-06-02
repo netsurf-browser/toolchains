@@ -3,6 +3,7 @@ UPSTREAM_GCCSDK_VERSION := 7698
 UPSTREAM_GCCSDK_TARBALL := gccsdk$(UPSTREAM_GCCSDK_VERSION).tar.gz
 UPSTREAM_GCCSDK_URI := svn://svn.riscos.info/gccsdk/trunk/autobuilder/develop/gcc@$(UPSTREAM_GCCSDK_VERSION)
 UPSTREAM_GCCSDK_SGP_URI := svn://svn.riscos.info/gccsdk/trunk/gcc4/setup-gccsdk-params@$(UPSTREAM_GCCSDK_VERSION)
+UPSTREAM_GCCSDK_ROINSTALL_URI := svn://svn.riscos.info/gccsdk/trunk/gcc4/porting-scripts/ro-install@$(UPSTREAM_GCCSDK_VERSION)
 UPSTREAM_GCCSDK_AMP_URI := svn://svn.riscos.info/gccsdk/trunk/gcc4/recipe/patches/automake-for-binutils@$(UPSTREAM_GCCSDK_VERSION)
 UPSTREAM_GCCSDK_UNIXLIB_URI := svn://svn.riscos.info/gccsdk/trunk/gcc4/recipe/files/gcc/libunixlib@$(UPSTREAM_GCCSDK_VERSION)
 UPSTREAM_GCCSDK_LD_URI := svn://svn.riscos.info/gccsdk/trunk/gcc4/riscos/soloader/dynamic/ld.so-1.9.9@$(UPSTREAM_GCCSDK_VERSION)
@@ -124,6 +125,10 @@ $(BUILDSTEPS)/oslib.d: $(BUILDSTEPS)/gcc.d $(SOURCESDIR)/$(UPSTREAM_OSLIB_TARBAL
 
 $(BUILDSTEPS)/gcc.d: $(BUILDSTEPS)/gccsdk-srcdir.d
 	cd $(BUILDDIR)/gccsdk && make
+	@# Install ro-install
+	mkdir -p $(PREFIX)/env
+	sed -e s:GCCSDK_ENV:$(PREFIX)/env:g < $(BUILDDIR)/gccsdk/ro-install > $(PREFIX)/env/ro-install
+	chmod 755 $(PREFIX)/env/ro-install
 	@# Install empty libraries needed to fool configure scripts
 	for l in c pthread gcc_s ; do $(PREFIX)/cross/bin/$(TARGET_NAME)-ar mv $(PREFIX)/cross/$(TARGET_NAME)/lib/lib$$l.a ; done
 	@# Newer GCCSDK adds these trampoline binaries that for us
@@ -152,6 +157,7 @@ $(BUILDSTEPS)/gccsdk-srcdir.d: $(BUILDSTEPS)/buildsteps.d $(SOURCESDIR)/$(UPSTRE
 $(SOURCESDIR)/$(UPSTREAM_GCCSDK_TARBALL):
 	svn export $(UPSTREAM_GCCSDK_URI) $(SOURCESDIR)/gccsdk/gcc
 	svn export $(UPSTREAM_GCCSDK_SGP_URI) $(SOURCESDIR)/gccsdk/
+	svn export $(UPSTREAM_GCCSDK_ROINSTALL_URI) $(SOURCESDIR)/gccsdk/
 	svn export $(UPSTREAM_GCCSDK_AMP_URI) $(SOURCESDIR)/gccsdk/automake
 	svn export $(UPSTREAM_GCCSDK_UNIXLIB_URI) $(SOURCESDIR)/gccsdk/libunixlib
 	svn export $(UPSTREAM_GCCSDK_LD_URI) $(SOURCESDIR)/gccsdk/ld
