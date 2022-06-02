@@ -2,10 +2,14 @@
 UPSTREAM_GCCSDK_VERSION := 7698
 UPSTREAM_GCCSDK_TARBALL := gccsdk$(UPSTREAM_GCCSDK_VERSION).tar.gz
 UPSTREAM_GCCSDK_URI := svn://svn.riscos.info/gccsdk/trunk/autobuilder/develop/gcc@$(UPSTREAM_GCCSDK_VERSION)
-UPSTREAM_GCCSDK_AMP_URI := svn://svn.riscos.info/gccsdk/trunk/gcc4/recipe/patches/automake-for-binutils@$(UPSTREAM_GCCSDK_VERSION)
-UPSTREAM_GCCSDK_LD_URI := svn://svn.riscos.info/gccsdk/trunk/gcc4/riscos/soloader/dynamic/ld.so-1.9.9@$(UPSTREAM_GCCSDK_VERSION)
 UPSTREAM_GCCSDK_SGP_URI := svn://svn.riscos.info/gccsdk/trunk/gcc4/setup-gccsdk-params@$(UPSTREAM_GCCSDK_VERSION)
+UPSTREAM_GCCSDK_AMP_URI := svn://svn.riscos.info/gccsdk/trunk/gcc4/recipe/patches/automake-for-binutils@$(UPSTREAM_GCCSDK_VERSION)
 UPSTREAM_GCCSDK_UNIXLIB_URI := svn://svn.riscos.info/gccsdk/trunk/gcc4/recipe/files/gcc/libunixlib@$(UPSTREAM_GCCSDK_VERSION)
+UPSTREAM_GCCSDK_LD_URI := svn://svn.riscos.info/gccsdk/trunk/gcc4/riscos/soloader/dynamic/ld.so-1.9.9@$(UPSTREAM_GCCSDK_VERSION)
+UPSTREAM_GCCSDK_ASASM_URI := svn://svn.riscos.info/gccsdk/trunk/tools/asasm@$(UPSTREAM_GCCSDK_VERSION)
+UPSTREAM_GCCSDK_ELF2AIF_URI := svn://svn.riscos.info/gccsdk/trunk/gcc4/riscos/elf2aif@$(UPSTREAM_GCCSDK_VERSION)
+UPSTREAM_GCCSDK_LN_URI := svn://svn.riscos.info/gccsdk/trunk/gcc4/riscos/ln@$(UPSTREAM_GCCSDK_VERSION)
+UPSTREAM_GCCSDK_MKRESFS_URI := svn://svn.riscos.info/gccsdk/trunk/gcc4/riscos/mkresfs@$(UPSTREAM_GCCSDK_VERSION)
 
 # OSLib 7.00
 UPSTREAM_OSLIB_VERSION := 700
@@ -147,10 +151,14 @@ $(BUILDSTEPS)/gccsdk-srcdir.d: $(BUILDSTEPS)/buildsteps.d $(SOURCESDIR)/$(UPSTRE
 
 $(SOURCESDIR)/$(UPSTREAM_GCCSDK_TARBALL):
 	svn export $(UPSTREAM_GCCSDK_URI) $(SOURCESDIR)/gccsdk/gcc
-	svn export $(UPSTREAM_GCCSDK_AMP_URI) $(SOURCESDIR)/gccsdk/automake
-	svn export $(UPSTREAM_GCCSDK_LD_URI) $(SOURCESDIR)/gccsdk/ld
 	svn export $(UPSTREAM_GCCSDK_SGP_URI) $(SOURCESDIR)/gccsdk/
+	svn export $(UPSTREAM_GCCSDK_AMP_URI) $(SOURCESDIR)/gccsdk/automake
 	svn export $(UPSTREAM_GCCSDK_UNIXLIB_URI) $(SOURCESDIR)/gccsdk/libunixlib
+	svn export $(UPSTREAM_GCCSDK_LD_URI) $(SOURCESDIR)/gccsdk/ld
+	svn export $(UPSTREAM_GCCSDK_ASASM_URI) $(SOURCESDIR)/gccsdk/asasm
+	svn export $(UPSTREAM_GCCSDK_ELF2AIF_URI) $(SOURCESDIR)/gccsdk/elf2aif
+	svn export $(UPSTREAM_GCCSDK_LN_URI) $(SOURCESDIR)/gccsdk/ln
+	svn export $(UPSTREAM_GCCSDK_MKRESFS_URI) $(SOURCESDIR)/gccsdk/mkresfs
 	tar -C $(SOURCESDIR) -caf $@ gccsdk
 
 $(SOURCESDIR)/$(UPSTREAM_OSLIB_TARBALL):

@@ -247,14 +247,38 @@ cross-gcc-built: cross-gcc-configured
 	cd $(BUILDDIR)/cross-gcc && PATH="$(PREFIX_BUILDTOOL_GCC)/bin:$(PREFIX_CROSS)/bin:$(PATH)" && $(MAKE) $(GCC_BUILD_FLAGS) && $(MAKE) install
 	touch $(BUILDSTEPSDIR)/$@
 
-# Build the RISC OS related tools (cmunge, elf2aif, asasm, etc) cross:
-# XXX: currently, this just builds ld -- what more do we need?
+# Build the RISC OS related tools (elf2aif, asasm, etc) cross:
 cross-riscostools-built: cross-gcc-built
+	@# LD
 	-rm -rf $(BUILDDIR)/cross-ld
 	mkdir -p $(BUILDDIR)/cross-ld
-	cd $(ROOT)/ld && PATH="$(PREFIX_CROSS)/bin:$(PREFIX_BUILDTOOL_BINUTILS)/bin:$(PATH)" autoreconf --install
+	cd $(ROOT)/ld && PATH="$(PREFIX_CROSS)/bin:$(PREFIX_BUILDTOOL_BINUTILS)/bin:$(PATH)" autoreconf -f --install
 	cd $(BUILDDIR)/cross-ld && PATH="$(PREFIX_CROSS)/bin:$(PREFIX_BUILDTOOL_BINUTILS)/bin:$(PATH)" CC=$(GCCSDK_INSTALL_CROSSBIN)/$(TARGET)-gcc $(ROOT)/ld/configure --prefix=$(PREFIX_CROSS)/$(TARGET) --host=$(TARGET) --target=$(TARGET)
 	cd $(BUILDDIR)/cross-ld && PATH="$(PREFIX_CROSS)/bin:$(PREFIX_BUILDTOOL_BINUTILS)/bin:$(PATH)" make install
+	@# asasm
+	-rm -rf $(BUILDDIR)/cross-asasm
+	mkdir -p $(BUILDDIR)/cross-asasm
+	cd $(ROOT)/asasm && PATH="$(PREFIX_CROSS)/bin:$(PREFIX_BUILDTOOL_BINUTILS)/bin:$(PATH)" ACLOCAL='aclocal -I $(ROOT)/asasm/m4' autoreconf -f --install
+	cd $(BUILDDIR)/cross-asasm && PATH="$(PREFIX_CROSS)/bin:$(PREFIX_BUILDTOOL_BINUTILS)/bin:$(PATH)" $(ROOT)/asasm/configure --prefix=$(PREFIX_CROSS) --target=$(TARGET) --disable-building-tools
+	cd $(BUILDDIR)/cross-asasm && PATH="$(PREFIX_CROSS)/bin:$(PREFIX_BUILDTOOL_BINUTILS)/bin:$(PATH)" make install-minimum
+	@# elf2aif
+	-rm -rf $(BUILDDIR)/cross-elf2aif
+	mkdir -p $(BUILDDIR)/cross-elf2aif
+	cd $(ROOT)/elf2aif && PATH="$(PREFIX_CROSS)/bin:$(PREFIX_BUILDTOOL_BINUTILS)/bin:$(PATH)" autoreconf -f --install
+	cd $(BUILDDIR)/cross-elf2aif && PATH="$(PREFIX_CROSS)/bin:$(PREFIX_BUILDTOOL_BINUTILS)/bin:$(PATH)" $(ROOT)/elf2aif/configure --prefix=$(PREFIX_CROSS) --target=$(TARGET)
+	cd $(BUILDDIR)/cross-elf2aif && PATH="$(PREFIX_CROSS)/bin:$(PREFIX_BUILDTOOL_BINUTILS)/bin:$(PATH)" make install
+	@# ln
+	-rm -rf $(BUILDDIR)/cross-ln
+	mkdir -p $(BUILDDIR)/cross-ln
+	cd $(ROOT)/ln && PATH="$(PREFIX_CROSS)/bin:$(PREFIX_BUILDTOOL_BINUTILS)/bin:$(PATH)" autoreconf -f --install
+	cd $(BUILDDIR)/cross-ln && PATH="$(PREFIX_CROSS)/bin:$(PREFIX_BUILDTOOL_BINUTILS)/bin:$(PATH)" $(ROOT)/ln/configure --prefix=$(PREFIX_CROSS) --target=$(TARGET)
+	cd $(BUILDDIR)/cross-ln && PATH="$(PREFIX_CROSS)/bin:$(PREFIX_BUILDTOOL_BINUTILS)/bin:$(PATH)" make install
+	@# mkresfs
+	-rm -rf $(BUILDDIR)/cross-mkresfs
+	mkdir -p $(BUILDDIR)/cross-mkresfs
+	cd $(ROOT)/mkresfs && PATH="$(PREFIX_CROSS)/bin:$(PREFIX_BUILDTOOL_BINUTILS)/bin:$(PATH)" autoreconf -f --install
+	cd $(BUILDDIR)/cross-mkresfs && PATH="$(PREFIX_CROSS)/bin:$(PREFIX_BUILDTOOL_BINUTILS)/bin:$(PATH)" $(ROOT)/mkresfs/configure --prefix=$(PREFIX_CROSS) --target=$(TARGET)
+	cd $(BUILDDIR)/cross-mkresfs && PATH="$(PREFIX_CROSS)/bin:$(PREFIX_BUILDTOOL_BINUTILS)/bin:$(PATH)" make install
 	touch $(BUILDSTEPSDIR)/$@
 
 # -- Source unpacking.
