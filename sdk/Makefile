@@ -7,6 +7,7 @@
 # GCCSDK_INSTALL_CROSSBIN -- /path/to/toolchain/bin
 #
 # supported targets are:
+#                       arm-riscos-gnueabihf
 #                       arm-unknown-riscos  
 #                       m68k-atari-mint
 #			m5475-atari-mint
@@ -117,6 +118,13 @@ FREETYPE_ENV := LIBPNG_CFLAGS=$$($(GCCSDK_INSTALL_ENV)/bin/libpng-config --cflag
 LIBJPEG_TURBO_BUILDDIR:=$(BUILDDIR)/libjpegturbo
 
 # Target Specific setup
+ifeq ($(TARGET),arm-riscos-gnueabihf)
+  SDK_ITEMS := $(addprefix $(BUILDSTEPS)/, $(COMMON_SDK_ITEMS) libjpeg-turbo.d libwebp.d)
+  EXTRAARGS_LIBCARES := --disable-shared
+  EXTRAARGS_LIBCURL := --enable-nonblocking --enable-ares --with-random="/dev/urandom" $(LIBCURL_DISABLES)
+  EXTRAARGS_OPENSSL := no-asm
+endif
+
 ifeq ($(TARGET),arm-unknown-riscos)
   SDK_ITEMS := $(addprefix $(BUILDSTEPS)/, $(COMMON_SDK_ITEMS) libjpeg-turbo.d libwebp.d)
   EXTRAARGS_LIBCARES := --disable-shared
