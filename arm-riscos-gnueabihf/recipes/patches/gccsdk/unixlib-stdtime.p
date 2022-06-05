@@ -15,12 +15,3 @@ Index: libunixlib/time/stdtime.c
  		    : "r" (territory), "r" (ro_time), "r" (buf), "r" (size), "r" (str),
  		      [SWI_Territory_ConvertDateAndTime] "i" (Territory_ConvertDateAndTime | (1<<17))
  		    : "r14", "cc", "memory");
-@@ -48,7 +50,7 @@
- #ifdef __TARGET_SCL__
- 					       -1,
- #else
--					       __locale_territory[LC_TIME],
-+					       __locale_global.locale_territory[LC_TIME],
- #endif
- 					       riscos_time,
- 					       result,
