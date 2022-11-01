@@ -77,6 +77,10 @@ pkg_config_libdir__ := $(GCCSDK_INSTALL_ENV)/lib/pkgconfig
 # Target
 TARGET := $(shell $(cc__) -dumpmachine)
 
+ifeq ($(findstring -riscos,$(TARGET)),-riscos)
+  cflags__ := $(cflags__) -mpoke-function-name
+endif
+
 # Environment
 # Newer autotools objects to -I appearing in CFLAGS
 cleanenv := PATH="$(path__)" CC="$(cc__)" CXX="$(cxx__)" AR="$(ar__)" RANLIB="$(ranlib__)" CPPFLAGS="$(cppflags__)" LDFLAGS="$(ldflags__)" PKG_CONFIG_LIBDIR="$(pkg_config_libdir__)"
