@@ -100,10 +100,10 @@ Index: Source/Makefile.setup.CROSSGCC_ELFEABI
 +
 +export PATH := $(GCCSDK_INSTALL_CROSSBIN):$(PATH)
 +
-+export CC := arm-riscos-gnueabihf-gcc $(CCFLAGS)
-+export CXX := arm-riscos-gnueabihf-g++ $(CCFLAGS)
-+export AS := arm-riscos-gnueabihf-gcc -c -xassembler-with-cpp $(CCFLAGS) -I.. -I$(SOURCEDIR)/Types
-+export LIBFILE := arm-riscos-gnueabihf-ar rs
++export CC := arm-riscos-gnueabi-gcc $(CCFLAGS)
++export CXX := arm-riscos-gnueabi-g++ $(CCFLAGS)
++export AS := arm-riscos-gnueabi-gcc -c -xassembler-with-cpp $(CCFLAGS) -I.. -I$(SOURCEDIR)/Types
++export LIBFILE := arm-riscos-gnueabi-ar rs
 +export MKDIR := mkdir -p
 +export RM := rm -rf
 +export CP := cp -r

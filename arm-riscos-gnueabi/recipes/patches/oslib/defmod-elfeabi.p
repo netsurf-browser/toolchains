@@ -15,7 +15,7 @@ Index: Tools/DefMod2/assembler.c
 +                         goto finish;
 +                       }
 +                     if ((rc = sprintf (cmd,
-+				"arm-riscos-gnueabihf-gcc -c -xassembler -mfloat-abi=%s -o %s %s",
++				"arm-riscos-gnueabi-gcc -c -xassembler -mfloat-abi=%s -o %s %s",
 +				floatABI,
 +				name2, name1)) < 0)
 +		       goto finish;

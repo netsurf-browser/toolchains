@@ -47,7 +47,7 @@ Index: gcc/libgcc.config.host.p
 +++ gcc/libgcc.config.host.p	(working copy)
 @@ -20,7 +20,7 @@
   	;;
- +arm*-riscos-gnueabihf)
+ +arm*-riscos-gnueabi*)
  +	tmake_file="${tmake_file} arm/t-arm t-fixedpoint-gnu-prefix t-crtfm"
 -+	tmake_file="${tmake_file} arm/t-elf arm/t-bpabi arm/t-linux-eabi t-slibgcc-libgcc t-slibgcc-nolc-override"
 ++	tmake_file="${tmake_file} arm/t-elf arm/t-bpabi arm/t-riscos-gnueabihf t-slibgcc-libgcc t-slibgcc-nolc-override"

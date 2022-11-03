@@ -11,8 +11,8 @@
 #   - gcc 10.2 needs at least GMP 6.1.0, ISL 0.18, MPFR 3.1.4 and MPC 1.0.3 (MPFR needs GMP, MPC needs GMP & MPFR)
 #     For MPFR/GMP/ISL/MPC version numbers, a good set can be found mentioned at gcc/contrib/download_prerequisites.
 
-# TARGET can have following values: arm-riscos-gnueabihf
-TARGET=arm-riscos-gnueabihf
+# TARGET can have following values: arm-riscos-gnueabi
+TARGET=arm-riscos-gnueabi
 GCC_LANGUAGES="c,c++"
 # Enable shared library support in the cross compiler ?
 CROSS_ENABLE_SHARED=yes

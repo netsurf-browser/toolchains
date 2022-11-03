@@ -44,7 +44,7 @@ SOURCESDIR := $(TOP)/sources
 BUILDDIR := $(TOP)/builddir
 BUILDSTEPS := $(BUILDDIR)/build-steps
 
-TARGET_NAME := arm-riscos-gnueabihf
+TARGET_NAME := arm-riscos-gnueabi
 
 PREFIX ?= /opt/netsurf/$(TARGET_NAME)
 
