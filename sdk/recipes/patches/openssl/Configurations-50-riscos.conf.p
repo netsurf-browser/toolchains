@@ -15,9 +15,9 @@
 +        bn_ops           => "BN_LLONG",
 +    },
 +
-+    "arm-riscos-gnueabihf" => {
++    "arm-riscos-gnueabi" => {
 +        inherit_from     => [ "BASE_unix" ],
-+        cc               => "arm-riscos-gnueabihf-gcc",
++        cc               => "arm-riscos-gnueabi-gcc",
 +        cflags           => picker(default => "-DL_ENDIAN -DTERMIOS -DNO_SYS_UN_H",
 +                                   debug   => "-O0 -g",
 +                                   release => "-O3 ",
