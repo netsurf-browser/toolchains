@@ -28,7 +28,7 @@ UPSTREAM_MAKERUN_TARBALL := makerun$(UPSTREAM_MAKERUN_VERSION).tar.gz
 UPSTREAM_MAKERUN_URI := git://git.netsurf-browser.org/makerun.git
 
 # Squeeze
-UPSTREAM_SQUEEZE_VERSION := f26ccd6
+UPSTREAM_SQUEEZE_VERSION := d54d441
 UPSTREAM_SQUEEZE_TARBALL := squeeze$(UPSTREAM_SQUEEZE_VERSION).tar.gz
 UPSTREAM_SQUEEZE_URI := git://git.netsurf-browser.org/squeeze.git
 
