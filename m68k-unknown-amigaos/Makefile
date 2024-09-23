@@ -50,6 +50,9 @@ UPSTREAM_CODESETS_VERSION := 6.20
 UPSTREAM_CODESETS_TARBALL := codesets-$(UPSTREAM_CODESETS_VERSION).lha
 UPSTREAM_CODESETS_URI := https://github.com/jens-maus/libcodesets/releases/download/$(UPSTREAM_CODESETS_VERSION)/$(UPSTREAM_CODESETS_TARBALL)
 
+UPSTREAM_PTHREADS_TARBALL := main.tar.gz
+UPSTREAM_PTHREADS_URI := https://github.com/chris-y/pthreads/archive/refs/heads/$(UPSTREAM_PTHREADS_TARBALL)
+
 # need to build a suitable version of bison or compiler build fails
 UPSTREAM_BISON_VERSION := 2.7.1
 UPSTREAM_BISON_TARBALL := bison-$(UPSTREAM_BISON_VERSION).tar.gz
@@ -79,7 +82,7 @@ PREFIX ?= /opt/netsurf/$(TARGET_NAME)/cross
 GCC_ENV_PARAMS := AUTOCONF=$(GCC_AUTOCONF) AUTOHEADER=$(GCC_AUTOHEADER) AUTOM4TE=$(GCC_AUTOM4TE) PATH="$(PREFIX)/bin:$(PATH)"
 
 .PHONY: all clean distclean
-all: $(BUILDSTEPS)/stage2.d
+all: $(BUILDSTEPS)/pthreads.d
 
 clean:
 	rm -fr $(BUILDDIR)
@@ -230,6 +233,20 @@ $(BUILDSTEPS)/binutils.d: $(BUILDSTEPS)/binutils-srcdir.d
 $(BUILDSTEPS)/binutils-srcdir.d: $(SOURCESDIR)/$(UPSTREAM_BINUTILS_TARBALL)
 	cp -r $(SOURCESDIR)/$(UPSTREAM_BINUTILS_TARBALL) $(BINUTILS_SRCDIR)
 	for p in `ls $(RECIPES)/patches/binutils/*.p` ; do patch -d $(BINUTILS_SRCDIR) -p0 <$$p ; done
+	touch $@
+
+#
+#
+#
+
+$(BUILDSTEPS)/pthreads.d: $(BUILDSTEPS)/stage2.d
+	mkdir -p $(BUILDDIR)/pthreads
+	wget -q -O $(SOURCESDIR)/$(UPSTREAM_PTHREADS_TARBALL) $(UPSTREAM_PTHREADS_URI)
+	cd $(SOURCESDIR) && tar xaf $(SOURCESDIR)/$(UPSTREAM_PTHREADS_TARBALL)
+	mv $(SOURCESDIR)/pthreads-main/* $(BUILDDIR)/pthreads
+	cd $(BUILDDIR)/pthreads && CC="$(PREFIX)/bin/$(TARGET_NAME)-gcc" AR="$(PREFIX)/bin/$(TARGET_NAME)-ar" make
+	cd $(BUILDDIR)/pthreads && cp ./pthread.h $(PREFIX)/$(TARGET_NAME)/include/
+	cd $(BUILDDIR)/pthreads && cp ./libpthread.a $(PREFIX)/$(TARGET_NAME)/lib/
 	touch $@
 
 ###
