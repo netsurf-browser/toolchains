@@ -215,7 +215,7 @@ ifeq ($(TARGET),m68k-unknown-amigaos)
   EXTRAARGS_LIBCARES := --disable-shared --without-random
   LIBCARES_ENV := LIBS="-lm"
   LIBCURL_SSL := amissl
-  EXTRAARGS_LIBCURL := --disable-ntlm-wb --without-random --disable-threaded-resolver --with-zlib --disable-rt --disable-ipv6
+  EXTRAARGS_LIBCURL := --disable-ntlm-wb --without-random --enable-threaded-resolver --with-zlib --enable-pthreads --disable-ipv6 LIBS="-lpthread -lamiga -lm"
   LIBICONV_ENV := CFLAGS="-DPATH_MAX=1024 -DRLIMIT_NOFILE=6"
   LIBJPEG_ENV := LDFLAGS="-lm"
   LIBJPEG_TURBO_ENV := LDFLAGS="-lm"

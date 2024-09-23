@@ -245,7 +245,7 @@ $(BUILDSTEPS)/pthreads.d: $(BUILDSTEPS)/stage2.d
 	cd $(SOURCESDIR) && tar xaf $(SOURCESDIR)/$(UPSTREAM_PTHREADS_TARBALL)
 	mv $(SOURCESDIR)/pthreads-main/* $(BUILDDIR)/pthreads
 	cd $(BUILDDIR)/pthreads && CC="$(PREFIX)/bin/$(TARGET_NAME)-gcc" AR="$(PREFIX)/bin/$(TARGET_NAME)-ar" make
-	cd $(BUILDDIR)/pthreads && cp ./pthread.h $(PREFIX)/$(TARGET_NAME)/include/
+	cd $(BUILDDIR)/pthreads && cp ./*.h $(PREFIX)/$(TARGET_NAME)/include/
 	cd $(BUILDDIR)/pthreads && cp ./libpthread.a $(PREFIX)/$(TARGET_NAME)/lib/
 	touch $@
 
