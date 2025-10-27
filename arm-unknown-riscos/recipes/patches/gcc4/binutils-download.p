@@ -4,9 +4,9 @@
  # Download binutils source:
  $(SRCORIGDIR)/binutils-$(BINUTILS_VERSION).tar.bz2:
  	-mkdir -p $(SRCORIGDIR)
--	cd $(SRCORIGDIR) && wget -c http://ftpmirror.gnu.org/binutils/binutils-$(BINUTILS_VERSION).tar.bz2
+-	cd $(SRCORIGDIR) && wget -c https://ftpmirror.gnu.org/binutils/binutils-$(BINUTILS_VERSION).tar.bz2
 -	touch $@
-+	wget -O $@ -c http://ci.netsurf-browser.org/toolchain/arm-unknown-riscos/binutils-$(BINUTILS_VERSION).tar.bz2
++	wget -O $@ -c https://ci.netsurf-browser.org/toolchain/arm-unknown-riscos/binutils-$(BINUTILS_VERSION).tar.bz2
  
  ifeq "$(GCC_USE_SCM)" "yes"
  # Checkout gcc source:

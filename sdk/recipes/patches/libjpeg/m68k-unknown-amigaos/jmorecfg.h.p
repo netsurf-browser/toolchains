@@ -1,11 +1,14 @@
---- jmorecfg.h	2016-07-10 00:36:02.965024562 +0100
-+++ jmorecfg.h	2016-07-10 00:37:55.525024349 +0100
-@@ -346,7 +346,7 @@ typedef int boolean;
+--- ./builddir-m68k-unknown-amigaos/libjpeg/jpeg-8d/jmorecfg.h	2025-09-05 11:25:10.036000000 +0100
++++ ./jmorecfg.h	2025-09-05 11:28:12.836000000 +0100
+@@ -317,9 +317,9 @@ typedef int boolean;
+  *    can't use color quantization if you change that value.
   */
  
- #ifndef MULTIPLIER
--#define MULTIPLIER  int		/* type for fastest integer multiply */
-+#define MULTIPLIER  short		/* type for fastest integer multiply */
- #endif
+-#define RGB_RED		0	/* Offset of Red in an RGB scanline element */
++#define RGB_RED		2	/* Offset of Red in an RGB scanline element */
+ #define RGB_GREEN	1	/* Offset of Green */
+-#define RGB_BLUE	2	/* Offset of Blue */
++#define RGB_BLUE	0	/* Offset of Blue */
+ #define RGB_PIXELSIZE	4	/* JSAMPLEs per RGB scanline element */
  
  

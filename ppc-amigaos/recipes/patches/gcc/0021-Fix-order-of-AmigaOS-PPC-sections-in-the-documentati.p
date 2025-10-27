@@ -1,0 +1,88 @@
+From 4257f6d9961b0a9e583bf71f8cabcceb92ca44d3 Mon Sep 17 00:00:00 2001
+From: Sebastian Bauer <mail@sebastianbauer.info>
+Date: Sat, 28 Apr 2018 08:09:58 +0200
+Subject: [PATCH 21/41] Fix order of AmigaOS PPC sections in the documentation.
+
+---
+ gcc/doc/extend.texi |  4 ++--
+ gcc/doc/invoke.texi | 10 +++++-----
+ 2 files changed, 7 insertions(+), 7 deletions(-)
+
+diff --git a/gcc/doc/extend.texi b/gcc/doc/extend.texi
+index b3118f5b01bf9eb1f3c69fa2bcaca0b49c568219..1cd6f26fd93e06e9c2ba4176c64daa6cdaf0048a 100644
+--- gcc/doc/extend.texi
++++ gcc/doc/extend.texi
+@@ -8225,15 +8225,15 @@ For full documentation of the struct attributes please see the
+ documentation in @ref{x86 Variable Attributes}.
+ 
+ @cindex @code{altivec} variable attribute, PowerPC
+ For documentation of @code{altivec} attribute please see the
+ documentation in @ref{PowerPC Type Attributes}.
+ 
+-@subsection AmigaOS PPC Variable Attributes
++@subsection AmigaOS PowerPC Variable Attributes
+ 
+-One attribute is currently defined for AmigaOS PPC.
++One attribute is currently defined for AmigaOS PowerPC.
+ 
+ @table @code
+ @item force_no_baserel
+ @cindex forcing a variable not to be addressed base relative
+ 
+ This attribute forces access to a variable in code compiled with
+diff --git a/gcc/doc/invoke.texi b/gcc/doc/invoke.texi
+index 7c39fc25397cc82a7c42672fdb4f320ffa4930bb..f38461ee463a15f3406df3bb451136869f8354af 100644
+--- gcc/doc/invoke.texi
++++ gcc/doc/invoke.texi
+@@ -1431,13 +1431,13 @@ See RS/6000 and PowerPC Options.
+ -mlongcalls  -mno-longcalls @gol
+ -mabi=@var{abi-type}}
+ 
+ @emph{zSeries Options}
+ See S/390 and zSeries Options.
+ 
+-@emph{AmigaOS PPC options}
++@emph{AmigaOS PowerPC options}
+ @gccoptlist{-mcrt=@var{crt}  -mbaserel  -mno-baserel @gol
+ -mcheck68kfuncptr}
+ 
+ @item Code Generation Options
+ @xref{Code Gen Options,,Options for Code Generation Conventions}.
+ @gccoptlist{-fcall-saved-@var{reg}  -fcall-used-@var{reg} @gol
+@@ -18036,13 +18036,13 @@ platform.
+ * VMS Options::
+ * VxWorks Options::
+ * x86 Options::
+ * x86 Windows Options::
+ * Xstormy16 Options::
+ * Xtensa Options::
+-* AmigaOS PPC options::
++* AmigaOS PowerPC options::
+ * zSeries Options::
+ @end menu
+ 
+ @node AArch64 Options
+ @subsection AArch64 Options
+ @cindex AArch64 Options
+@@ -31941,15 +31941,15 @@ These options are defined for Xstormy16:
+ @table @gcctabopt
+ @item -msim
+ @opindex msim
+ Choose startup files and linker script suitable for the simulator.
+ @end table
+ 
+-@node AmigaOS PPC options
+-@subsection AmigaOS PPC options
+-@cindex AmigaOS PPC options
++@node AmigaOS PowerPC options
++@subsection AmigaOS PowerPC options
++@cindex AmigaOS PowerPC options
+ 
+ @table @gcctabopt
+ 
+ @item -mcrt=@var{crt}
+ @opindex mcrt
+ 
+-- 
+2.34.1
+

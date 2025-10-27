@@ -1,6 +1,6 @@
 --- crypto/bn/bn_div.c	2017-01-26 13:22:03.000000000 +0000
 +++ crypto/bn/bn_div.c	2017-02-11 16:06:29.437010335 +0000
-@@ -175,6 +175,22 @@ int BN_div(BIGNUM *dv, BIGNUM *rem, cons
+@@ -194,6 +194,22 @@ int BN_div(BIGNUM *dv, BIGNUM *rem, cons
              q;                                  \
          })
  #    define REMAINDER_IS_ALREADY_CALCULATED

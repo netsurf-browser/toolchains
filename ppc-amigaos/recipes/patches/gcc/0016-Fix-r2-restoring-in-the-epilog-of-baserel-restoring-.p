@@ -1,0 +1,32 @@
+From a5b8eb192677e48f84822bc15c20ba8975b5fad5 Mon Sep 17 00:00:00 2001
+From: Sebastian Bauer <mail@sebastianbauer.info>
+Date: Tue, 17 Apr 2018 22:02:09 +0200
+Subject: [PATCH 16/41] Fix r2 restoring in the epilog of baserel-restoring
+ functions.
+
+---
+ gcc/config/rs6000/rs6000-logue.c | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/gcc/config/rs6000/rs6000-logue.c b/gcc/config/rs6000/rs6000-logue.c
+index e1097afdbeea232fb9746a4d872482b54fb412bf..3bfe4699728a6cc25726dc8a193e8b8e4469bcf9 100644
+--- gcc/config/rs6000/rs6000-logue.c
++++ gcc/config/rs6000/rs6000-logue.c
+@@ -4924,13 +4924,13 @@ rs6000_emit_epilogue (enum epilogue_type epilogue_type)
+ #ifdef TARGET_BASEREL
+   if (info->baserel_save_p && TARGET_BASEREL)
+     {
+       rtx addr, mem, reg;
+ 
+       /* Restore r2 */
+-      addr = gen_rtx_PLUS (Pmode, gen_rtx_REG (Pmode, 12),
++      addr = gen_rtx_PLUS (Pmode, frame_reg_rtx,
+ 			   GEN_INT (info->baserel_save_offset + frame_off)); /* or sp_off? */
+       mem = gen_frame_mem (reg_mode, addr);
+ 
+       reg = gen_rtx_REG (reg_mode, 2);
+       emit_move_insn (reg, mem);
+ 
+-- 
+2.34.1
+

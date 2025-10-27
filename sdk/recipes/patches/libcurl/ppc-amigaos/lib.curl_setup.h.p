@@ -1,12 +1,14 @@
---- lib/curl_setup.h	2019-03-30 13:44:08.576270700 +0000
-+++ lib/curl_setup.h	2019-03-30 13:44:33.011975643 +0000
-@@ -314,7 +314,8 @@
- #  include <exec/execbase.h>
- #  include <proto/exec.h>
- #  include <proto/dos.h>
--#  ifdef HAVE_PROTO_BSDSOCKET_H
-+#  define HAVE_SELECT 1
-+#  if 0
- #    include <proto/bsdsocket.h> /* ensure bsdsocket.library use */
- #    define select(a,b,c,d,e) WaitSelect(a,b,c,d,e,0)
+--- lib/curl_setup.h	2024-11-06 07:09:19.000000000 +0000
++++ lib/curl_setup.h	2024-11-08 15:18:49.324610861 +0000
+@@ -408,6 +408,11 @@
+        /* disable threaded resolver with clib2 - requires newlib or clib-ts */
+ #      undef USE_THREADS_POSIX
+ #    endif
++#    if defined(USE_AMISSL)
++#      undef HAVE_IOCTL
++#      undef HAVE_IOCTL_FIONBIO
++#      undef HAVE_IOCTL_SIOCGIFADDR
++#    endif
  #  endif
+ #  include <exec/types.h>
+ #  include <exec/execbase.h>

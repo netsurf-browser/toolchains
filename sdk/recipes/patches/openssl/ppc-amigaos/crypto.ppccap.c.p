@@ -1,15 +1,15 @@
 --- crypto/ppccap.c.orig	2017-11-22 13:14:44.655536374 +0000
 +++ crypto/ppccap.c	2017-11-22 13:16:03.666387174 +0000
-@@ -135,6 +135,8 @@
- }
- #endif
+@@ -34,6 +34,8 @@
+ 
+ static sigset_t all_masked;
  
 +#ifndef OPENSSL_SYS_AMIGAOS4
 +
  static sigjmp_buf ill_jmp;
  static void ill_handler(int sig)
  {
-@@ -341,3 +343,24 @@
+@@ -309,3 +311,29 @@
      sigaction(SIGILL, &ill_oact, NULL);
      sigprocmask(SIG_SETMASK, &oset, NULL);
  }
@@ -32,5 +32,10 @@
 +    {
 +        OPENSSL_ppccap_P |= PPC_ALTIVEC;
 +    }
++}
++
++uint32_t OPENSSL_rdtsc(void)
++{
++    return 0;
 +}
 +#endif

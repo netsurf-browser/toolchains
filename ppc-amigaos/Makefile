@@ -1,8 +1,10 @@
-UPSTREAM_GCC_VERSION := 6.1.0
-UPSTREAM_GCC_TARBALL := gcc-$(UPSTREAM_GCC_VERSION).tar.bz2
+# NetSurf build script for Amigaos 4 PPC cross compliation toolchain.
+
+UPSTREAM_GCC_VERSION := 11.3.0
+UPSTREAM_GCC_TARBALL := gcc-$(UPSTREAM_GCC_VERSION).tar.xz
 UPSTREAM_GCC_URI := http://ftp.gnu.org/gnu/gcc/gcc-$(UPSTREAM_GCC_VERSION)/$(UPSTREAM_GCC_TARBALL)
 
-UPSTREAM_BINUTILS_VERSION := 2.23.2
+UPSTREAM_BINUTILS_VERSION := 2.40
 UPSTREAM_BINUTILS_TARBALL := binutils-$(UPSTREAM_BINUTILS_VERSION).tar.bz2
 UPSTREAM_BINUTILS_URI := ftp://ftp.gnu.org/gnu/binutils/$(UPSTREAM_BINUTILS_TARBALL)
 
@@ -14,19 +16,31 @@ UPSTREAM_MPFR_VERSION := 3.1.6
 UPSTREAM_MPFR_TARBALL := mpfr-$(UPSTREAM_MPFR_VERSION).tar.bz2
 UPSTREAM_MPFR_URI := http://www.mpfr.org/mpfr-$(UPSTREAM_MPFR_VERSION)/$(UPSTREAM_MPFR_TARBALL)
 
-UPSTREAM_MPC_VERSION := 1.0.2
+UPSTREAM_MPC_VERSION := 1.0.3
 UPSTREAM_MPC_TARBALL := mpc-$(UPSTREAM_MPC_VERSION).tar.gz
 UPSTREAM_MPC_URI := http://ftp.gnu.org/gnu/mpc/$(UPSTREAM_MPC_TARBALL)
 
-UPSTREAM_NDK_TARBALL := SDK_53.29.lha
-UPSTREAM_NDK_URI := "http://hyperion-entertainment.biz/index.php/downloads?view=download&format=raw&file=82"
+UPSTREAM_LHASA_VERSION := 887d68ebca0cbad392af3709203745d202a2020b
+UPSTREAM_LHASA_TARBALL := lhasa-$(UPSTREAM_LHASA_VERSION).zip
+UPSTREAM_LHASA_URI := https://github.com/fragglet/lhasa/archive/$(UPSTREAM_LHASA_VERSION).zip
+
+UPSTREAM_NDK_TARBALL := SDK_54.16.lha
+UPSTREAM_NDK_URI := "http://hyperion-entertainment.biz/index.php/downloads?view=download&format=raw&file=127"
 
 UPSTREAM_NDK_UPDATE_TARBALL := SDK_addon_final_edition_update2.zip
 UPSTREAM_NDK_UPDATE_URI := http://kas1e.mikendezign.com/aos4/SDK_addon_final_edition_update2.zip
 
+UPSTREAM_CLIB4_VERSION := 1.6.0
+UPSTREAM_CLIB4_TARBALL := clib4-v$(UPSTREAM_CLIB4_VERSION).lha
+UPSTREAM_CLIB4_URI := https://github.com/AmigaLabs/clib4/releases/download/v$(UPSTREAM_CLIB4_VERSION)/$(UPSTREAM_CLIB4_TARBALL)
+
 UPSTREAM_OPENURL_VERSION := 7.16
 UPSTREAM_OPENURL_TARBALL := openurl-$(UPSTREAM_OPENURL_VERSION).tar.gz
 UPSTREAM_OPENURL_URI := https://github.com/jens-maus/libopenurl/archive/$(UPSTREAM_OPENURL_VERSION).tar.gz
+
+UPSTREAM_AMISSL_VERSION := 5.17
+UPSTREAM_AMISSL_TARBALL := AmiSSL-$(UPSTREAM_AMISSL_VERSION)-SDK.lha
+UPSTREAM_AMISSL_URI := https://github.com/jens-maus/amissl/releases/download/$(UPSTREAM_AMISSL_VERSION)/$(UPSTREAM_AMISSL_TARBALL)
 
 UPSTREAM_ONCHIPMEM_VERSION := 53.1
 UPSTREAM_ONCHIPMEM_TARBALL := onchipmem_res-$(UPSTREAM_ONCHIPMEM_VERSION).lha
@@ -43,10 +57,10 @@ UPSTREAM_CODESETS_TARBALL := codesets-$(UPSTREAM_CODESETS_VERSION).lha
 UPSTREAM_CODESETS_URI := https://github.com/jens-maus/libcodesets/releases/download/$(UPSTREAM_CODESETS_VERSION)/$(UPSTREAM_CODESETS_TARBALL)
 
 # need to force the auto* version in use
-GCC_AUTOCONF := autoconf2.64
-GCC_AUTOHEADER := autoheader2.64
-GCC_AUTORECONF := autoreconf2.64
-GCC_AUTOM4TE := autom4te2.64
+GCC_AUTOCONF := autoconf2.69
+GCC_AUTOHEADER := autoheader2.69
+GCC_AUTORECONF := autoreconf2.69
+GCC_AUTOM4TE := autom4te2.69
 
 TOP := $(CURDIR)
 RECIPES := $(TOP)/recipes
@@ -83,7 +97,7 @@ $(BUILDSTEPS)/stage2.d: $(BUILDSTEPS)/srcdir-step3.d $(BUILDSTEPS)/binutils.d $(
 			--enable-checking=no --enable-c99 --with-cross-host \
 			--without-x --enable-maintainer-mode --enable-haifa \
 			--enable-sjlj-exceptions --disable-libstdcxx-pch \
-			--disable-tls --disable-libssp
+			--disable-tls --disable-libssp --enable-lto
 	cd $(BUILDDIR) && $(GCC_ENV_PARAMS) make all
 	cd $(BUILDDIR) && $(GCC_ENV_PARAMS) make install
 	touch $@
@@ -92,14 +106,15 @@ $(BUILDSTEPS)/stage2.d: $(BUILDSTEPS)/srcdir-step3.d $(BUILDSTEPS)/binutils.d $(
 # Rules to install the NDK
 ###
 
-$(BUILDSTEPS)/ndk.d: $(SOURCESDIR)/$(UPSTREAM_NDK_TARBALL) $(SOURCESDIR)/$(UPSTREAM_NDK_UPDATE_TARBALL) $(SOURCESDIR)/$(UPSTREAM_OPENURL_TARBALL) $(SOURCESDIR)/$(UPSTREAM_ONCHIPMEM_TARBALL) $(SOURCESDIR)/$(UPSTREAM_GUIGFX_TARBALL) $(SOURCESDIR)/$(UPSTREAM_RENDER_TARBALL) $(SOURCESDIR)/$(UPSTREAM_CODESETS_TARBALL)
+$(BUILDSTEPS)/ndk.d: $(BUILDSTEPS)/lhasa.d $(SOURCESDIR)/$(UPSTREAM_NDK_TARBALL) $(SOURCESDIR)/$(UPSTREAM_NDK_UPDATE_TARBALL) $(SOURCESDIR)/$(UPSTREAM_OPENURL_TARBALL) $(SOURCESDIR)/$(UPSTREAM_ONCHIPMEM_TARBALL) $(SOURCESDIR)/$(UPSTREAM_GUIGFX_TARBALL) $(SOURCESDIR)/$(UPSTREAM_RENDER_TARBALL) $(SOURCESDIR)/$(UPSTREAM_CODESETS_TARBALL) $(SOURCESDIR)/$(UPSTREAM_AMISSL_TARBALL) $(SOURCESDIR)/$(UPSTREAM_CLIB4_TARBALL)
 	mkdir -p $(BUILDDIR)/ndk/tmp/
-	lha xw=$(BUILDDIR)/ndk $(SOURCESDIR)/$(UPSTREAM_NDK_TARBALL)
-	lha xw=$(BUILDDIR)/ndk/tmp $(BUILDDIR)/ndk/SDK_Install/base.lha
-	lha xw=$(BUILDDIR)/ndk/tmp $(BUILDDIR)/ndk/SDK_Install/newlib-53.30.lha
-	lha xw=$(BUILDDIR)/ndk/tmp $(BUILDDIR)/ndk/SDK_Install/clib2-1.206.lha
-	lha xw=$(BUILDDIR)/ndk/tmp $(BUILDDIR)/ndk/SDK_Install/pthreads-53.11.lha
-	lha xw=$(BUILDDIR)/ndk/tmp $(SOURCESDIR)/$(UPSTREAM_ONCHIPMEM_TARBALL)
+	$(BUILDDIR)/prefix/bin/lha xw=$(BUILDDIR)/ndk $(SOURCESDIR)/$(UPSTREAM_NDK_TARBALL)
+	$(BUILDDIR)/prefix/bin/lha xw=$(BUILDDIR)/ndk/tmp $(BUILDDIR)/ndk/SDK_Install/base.lha
+	$(BUILDDIR)/prefix/bin/lha xw=$(BUILDDIR)/ndk/tmp $(BUILDDIR)/ndk/SDK_Install/execsg_sdk-54.31.lha
+	$(BUILDDIR)/prefix/bin/lha xw=$(BUILDDIR)/ndk/tmp $(BUILDDIR)/ndk/SDK_Install/newlib-53.80.lha
+	$(BUILDDIR)/prefix/bin/lha xw=$(BUILDDIR)/ndk/tmp $(BUILDDIR)/ndk/SDK_Install/clib2.lha
+	$(BUILDDIR)/prefix/bin/lha xw=$(BUILDDIR)/ndk/tmp $(BUILDDIR)/ndk/SDK_Install/pthreads-53.12.lha
+	$(BUILDDIR)/prefix/bin/lha xw=$(BUILDDIR)/ndk/tmp $(SOURCESDIR)/$(UPSTREAM_ONCHIPMEM_TARBALL)
 	mkdir -p $(PREFIX)/$(TARGET_NAME)/SDK
 	unzip -o $(SOURCESDIR)/$(UPSTREAM_NDK_UPDATE_TARBALL) -d $(BUILDDIR)/ndk/tmp
 	cp -r $(BUILDDIR)/ndk/tmp/Include $(PREFIX)/$(TARGET_NAME)/SDK/include
@@ -116,14 +131,38 @@ $(BUILDSTEPS)/ndk.d: $(SOURCESDIR)/$(UPSTREAM_NDK_TARBALL) $(SOURCESDIR)/$(UPSTR
 	cd $(BUILDDIR)/openurl && tar xaf $(SOURCESDIR)/$(UPSTREAM_OPENURL_TARBALL)
 	cp -r $(BUILDDIR)/openurl/libopenurl-$(UPSTREAM_OPENURL_VERSION)/include/* $(PREFIX)/$(TARGET_NAME)/SDK/include/include_h/
 	mkdir -p $(BUILDDIR)/guigfxlib
-	lha xw=$(BUILDDIR)/guigfxlib $(SOURCESDIR)/$(UPSTREAM_GUIGFX_TARBALL)
+	$(BUILDDIR)/prefix/bin/lha xw=$(BUILDDIR)/guigfxlib $(SOURCESDIR)/$(UPSTREAM_GUIGFX_TARBALL)
 	cp -r $(BUILDDIR)/guigfxlib/include_os4/* $(PREFIX)/$(TARGET_NAME)/SDK/include/include_h/
 	mkdir -p $(BUILDDIR)/renderlib
-	lha xw=$(BUILDDIR)/renderlib $(SOURCESDIR)/$(UPSTREAM_RENDER_TARBALL)
+	$(BUILDDIR)/prefix/bin/lha xw=$(BUILDDIR)/renderlib $(SOURCESDIR)/$(UPSTREAM_RENDER_TARBALL)
 	cp -r $(BUILDDIR)/renderlib/renderlib/include_os4/* $(PREFIX)/$(TARGET_NAME)/SDK/include/include_h/
 	mkdir -p $(BUILDDIR)/codesets
-	lha xw=$(BUILDDIR)/codesets $(SOURCESDIR)/$(UPSTREAM_CODESETS_TARBALL)
+	$(BUILDDIR)/prefix/bin/lha xw=$(BUILDDIR)/codesets $(SOURCESDIR)/$(UPSTREAM_CODESETS_TARBALL)
 	cp -r $(BUILDDIR)/codesets/codesets/Developer/include/* $(PREFIX)/$(TARGET_NAME)/SDK/include/include_h/
+	mkdir -p $(BUILDDIR)/AmiSSL
+	lha xw=$(BUILDDIR)/AmiSSL $(SOURCESDIR)/$(UPSTREAM_AMISSL_TARBALL)
+	cp -r $(BUILDDIR)/AmiSSL/AmiSSL/Developer/include/* $(PREFIX)/$(TARGET_NAME)/SDK/include/include_h/
+	cp -r $(BUILDDIR)/AmiSSL/AmiSSL/Developer/lib/AmigaOS4/newlib/* $(PREFIX)/$(TARGET_NAME)/SDK/newlib/lib/
+	cp -r $(BUILDDIR)/AmiSSL/AmiSSL/Developer/lib/AmigaOS4/libamisslstubs.a $(PREFIX)/$(TARGET_NAME)/SDK/newlib/lib/
+	lha xfw=$(PREFIX)/$(TARGET_NAME)/SDK/ $(SOURCESDIR)/$(UPSTREAM_CLIB4_TARBALL)
+	touch $@
+
+###
+# Rules to build and install lhasa
+###
+
+$(BUILDSTEPS)/lhasa.d: $(BUILDSTEPS)/lhasa-srcdir.d
+	mkdir -p $(BUILDDIR)/lhasa
+	mkdir -p $(BUILDDIR)/prefix
+	cd $(BUILDDIR)/lhasa && $(SRCDIR)/lhasa/configure --prefix=$(BUILDDIR)/prefix
+	cd $(BUILDDIR)/lhasa && make
+	cd $(BUILDDIR)/lhasa && make install
+	touch $@
+
+$(BUILDSTEPS)/lhasa-srcdir.d: $(SOURCESDIR)/$(UPSTREAM_LHASA_TARBALL)
+	unzip $(SOURCESDIR)/$(UPSTREAM_LHASA_TARBALL)
+	mv lhasa-$(UPSTREAM_LHASA_VERSION) $(SRCDIR)/lhasa
+	cd $(SRCDIR)/lhasa && autoreconf -i
 	touch $@
 
 ###
@@ -149,7 +188,7 @@ $(BUILDSTEPS)/srcdir-step2.d: $(BUILDSTEPS)/srcdir-step1.d $(SOURCESDIR)/$(UPSTR
 	touch $@
 
 $(BUILDSTEPS)/srcdir-step1.d: $(BUILDSTEPS)/$(UPSTREAM_GCC_TARBALL).d
-	tar xjf $(SOURCESDIR)/$(UPSTREAM_GCC_TARBALL)
+	tar xJf $(SOURCESDIR)/$(UPSTREAM_GCC_TARBALL)
 	mv gcc-$(UPSTREAM_GCC_VERSION) $(GCC_SRCDIR)
 	touch $@
 
@@ -192,11 +231,17 @@ $(SOURCESDIR)/$(UPSTREAM_MPC_TARBALL):
 $(SOURCESDIR)/$(UPSTREAM_BINUTILS_TARBALL):
 	wget -q -O $@ $(UPSTREAM_BINUTILS_URI)
 
+$(SOURCESDIR)/$(UPSTREAM_LHASA_TARBALL):
+	wget -q -O $@ $(UPSTREAM_LHASA_URI)
+
 $(SOURCESDIR)/$(UPSTREAM_NDK_TARBALL):
 	wget -q -O $@ $(UPSTREAM_NDK_URI)
 
 $(SOURCESDIR)/$(UPSTREAM_NDK_UPDATE_TARBALL):
 	wget -q -O $@ $(UPSTREAM_NDK_UPDATE_URI)
+
+$(SOURCESDIR)/$(UPSTREAM_CLIB4_TARBALL):
+	wget -q -O $@ $(UPSTREAM_CLIB4_URI)
 
 $(SOURCESDIR)/$(UPSTREAM_OPENURL_TARBALL):
 	wget -q -O $@ $(UPSTREAM_OPENURL_URI)
@@ -213,13 +258,18 @@ $(SOURCESDIR)/$(UPSTREAM_RENDER_TARBALL):
 $(SOURCESDIR)/$(UPSTREAM_CODESETS_TARBALL):
 	wget -q -O $@ $(UPSTREAM_CODESETS_URI)
 
+$(SOURCESDIR)/$(UPSTREAM_AMISSL_TARBALL):
+	wget -q -O $@ $(UPSTREAM_AMISSL_URI)
+
 ###
-# Rule to create buildsteps dir
+# Rule to create directories for building
 ###
 
-$(BUILDSTEPS)/buildsteps.d: $(SOURCESDIR) $(SRCDIR)
-	mkdir -p $(BUILDSTEPS)
+$(BUILDSTEPS)/buildsteps.d: | $(BUILDSTEPS) $(SOURCESDIR) $(SRCDIR)
 	touch $@
+
+$(BUILDSTEPS):
+	mkdir -p $@
 
 $(SOURCESDIR):
 	mkdir -p $@

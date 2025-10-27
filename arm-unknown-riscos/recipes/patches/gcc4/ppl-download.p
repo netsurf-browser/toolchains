@@ -19,9 +19,9 @@
 -$(SRCORIGDIR)/ppl-$(PPL_VERSION).tar.gz:
 +$(SRCORIGDIR)/ppl-$(PPL_VERSION).tar.xz:
  	-mkdir -p $(SRCORIGDIR)
--	cd $(SRCORIGDIR) && wget -c http://www.cs.unipr.it/ppl/download/ftp/releases/$(PPL_VERSION)/ppl-$(PPL_VERSION).tar.gz
+-	cd $(SRCORIGDIR) && wget -c https://www.bugseng.com/external/ppl/download/ftp/releases/$(PPL_VERSION)/ppl-$(PPL_VERSION).tar.gz
 -	touch $@
-+	wget -O $@ -c http://ci.netsurf-browser.org/toolchain/arm-unknown-riscos/ppl-$(PPL_VERSION).tar.xz
++	wget -O $@ -c https://ci.netsurf-browser.org/toolchain/arm-unknown-riscos/ppl-$(PPL_VERSION).tar.xz
  
  # Download CLooG source:
  $(SRCORIGDIR)/cloog-ppl-$(CLOOG_VERSION).tar.gz:

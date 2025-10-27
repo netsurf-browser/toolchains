@@ -6,7 +6,7 @@
  	-mkdir -p $(SRCORIGDIR)
 -	cd $(SRCORIGDIR) && wget -c ftp://gcc.gnu.org/pub/gcc/infrastructure/cloog-ppl-$(CLOOG_VERSION).tar.gz
 -	touch $@
-+	wget -O $@ -c http://ci.netsurf-browser.org/toolchain/arm-unknown-riscos/cloog-ppl-$(CLOOG_VERSION).tar.gz
++	wget -O $@ -c https://ci.netsurf-browser.org/toolchain/arm-unknown-riscos/cloog-ppl-$(CLOOG_VERSION).tar.gz
  
  # Download newlib source:
  $(SRCORIGDIR)/newlib-$(NEWLIB_VERSION).tar.gz:

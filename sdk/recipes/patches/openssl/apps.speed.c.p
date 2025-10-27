@@ -1,7 +1,7 @@
---- apps/speed.c.orig	2017-11-22 08:07:53.851790744 +0000
-+++ apps/speed.c	2017-11-22 08:15:49.608768064 +0000
-@@ -111,6 +111,12 @@
- #endif
+--- apps/speed.c.orig	2017-11-21 22:49:00.185608040 +0000
++++ apps/speed.c	2017-11-21 22:49:21.488219518 +0000
+@@ -62,6 +62,12 @@
+ #include "./testdsa.h"
  #include <openssl/modes.h>
  
 +
@@ -11,18 +11,24 @@
 +#endif
 +
  #ifndef HAVE_FORK
- # if defined(OPENSSL_SYS_VMS) || defined(OPENSSL_SYS_WINDOWS)
+ # if defined(OPENSSL_SYS_VMS) || defined(OPENSSL_SYS_WINDOWS) || defined(OPENSSL_SYS_VXWORKS)
  #  define HAVE_FORK 0
---- apps/speed.c.orig	2017-11-22 08:33:02.137445746 +0000
-+++ apps/speed.c	2017-11-22 08:36:00.833790589 +0000
-@@ -345,8 +345,10 @@
- static double Time_F(int s)
- {
-     double ret = app_tminterval(s, usertime);
-+    #ifdef SIGALRM
-     if (s == STOP)
-         alarm(0);
-+    #endif
+@@ -186,6 +192,18 @@
+ 
      return ret;
  }
++#elif defined(OPENSSL_SYS_AMIGAOS3) || defined(OPENSSL_SYS_AMIGAOS4)
++static void alarm_aos(unsigned int secs)
++{
++    (void) secs;
++}
++#define alarm alarm_aos
++
++static double Time_F(int s)
++{
++    double ret = app_tminterval(s, usertime);
++    return ret;
++}
+ #else
+ # error "SIGALRM not defined and the platform is not Windows"
  #endif

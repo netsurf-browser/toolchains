@@ -1,7 +1,7 @@
-From cf7a9bcb04858a3a694cc64ccd440dd560bfc7a9 Mon Sep 17 00:00:00 2001
+From 5901f8aec0e2f6a0f826903cd483cc1b10f63aeb Mon Sep 17 00:00:00 2001
 From: Sebastian Bauer <mail@sebastianbauer.info>
 Date: Fri, 14 Nov 2014 20:03:56 +0100
-Subject: [PATCH 2/9] Added new function attribute "lineartags" and pragma
+Subject: [PATCH 02/41] Added new function attribute "lineartags" and pragma
  "amigaos tagtype".
 
 Functions that have the lineartags attribute are assumed to be functions
@@ -10,18 +10,15 @@ that follow a specific tag is assumed to be a certain type. If this is
 not the case, the compiler will warn.
 
 The compiler can be taught about that types via the new pragma
-#pragma amigaos tagtype(TYPE)
 which is written before an "enum" or a "static const int" that defines
 the number of the tag.
 
 For instance:
 
-#pragma amigaos tagtype(struct Screen *)
 static const int WA_CustomScreen = WA_Dummy + 0x0D;
 
  or
 
-#pragma amigaos tagtype(struct Screen *)
 enum {WA_CustomScreen = WA_Dummy + 0x0D};
 
 is possible now.
@@ -31,21 +28,21 @@ For instance, no check is done that the attribute is applied to varargs
 functions.
 ---
  gcc/c-family/c-pragma.c            |  10 +++
- gcc/c/c-parser.c                   | 129 +++++++++++++++++++++++++++++++++++++
- gcc/c/c-typeck.c                   |  24 +++++++
+ gcc/c/c-parser.c                   | 129 +++++++++++++++++++++++++++++
+ gcc/c/c-typeck.c                   |  26 +++++-
  gcc/config/rs6000/amigaos-protos.h |   1 +
- gcc/config/rs6000/amigaos.c        |   7 ++
- 5 files changed, 171 insertions(+)
+ gcc/config/rs6000/amigaos.c        |  33 ++++++++
+ 5 files changed, 198 insertions(+), 1 deletion(-)
 
 diff --git a/gcc/c-family/c-pragma.c b/gcc/c-family/c-pragma.c
-index c73aa8221049b85949b0b62e88f58120e43aa39d..6cda91994f9140398841610063c297735b797863 100644
+index 4f8e8e0128c3ddb77450a0d4976d00ad03c6a4c6..71c6d0856f49fe90e2933ebc40e673d05b6b8217 100644
 --- gcc/c-family/c-pragma.c
 +++ gcc/c-family/c-pragma.c
-@@ -1124,12 +1124,21 @@ handle_pragma_message (cpp_reader *ARG_UNUSED(dummy))
-     warning (OPT_Wpragmas, "junk at end of %<#pragma message%>");
+@@ -1165,12 +1165,21 @@ handle_pragma_message (cpp_reader *ARG_UNUSED(dummy))
  
    if (TREE_STRING_LENGTH (message) > 1)
-     inform (input_location, "#pragma message: %s", TREE_STRING_POINTER (message));
+     inform (input_location, "%<#pragma message: %s%>",
+ 	    TREE_STRING_POINTER (message));
  }
  
 +/* This is queried by the invoker of the handler */
@@ -63,7 +60,7 @@ index c73aa8221049b85949b0b62e88f58120e43aa39d..6cda91994f9140398841610063c29773
  
  void
  mark_valid_location_for_stdc_pragma (bool flag)
-@@ -1555,12 +1564,13 @@ init_pragma (void)
+@@ -1584,12 +1593,13 @@ init_pragma (void)
  
    c_register_pragma_with_expansion (0, "redefine_extname",
  				    handle_pragma_redefine_extname);
@@ -78,10 +75,10 @@ index c73aa8221049b85949b0b62e88f58120e43aa39d..6cda91994f9140398841610063c29773
    global_sso = default_sso;
    c_register_pragma (0, "scalar_storage_order", 
 diff --git a/gcc/c/c-parser.c b/gcc/c/c-parser.c
-index 1b6bacd7498fb8ec37dc4b76bcfa26eacc1c8e1b..60eecd4854780322205cee5d47727d3376a6c9eb 100644
+index 7690977f6b8590599e54bb0e3b49afe21c322092..aa760c7f9410d67fcaa74e2a0c3d3d354867b0b3 100644
 --- gcc/c/c-parser.c
 +++ gcc/c/c-parser.c
-@@ -84,12 +84,74 @@ set_c_expr_source_range (c_expr *expr,
+@@ -97,12 +97,74 @@ set_c_expr_source_range (c_expr *expr,
  {
    expr->src_range = src_range;
    if (expr->value)
@@ -156,7 +153,7 @@ index 1b6bacd7498fb8ec37dc4b76bcfa26eacc1c8e1b..60eecd4854780322205cee5d47727d33
  void
  c_parse_init (void)
  {
-@@ -2514,12 +2576,15 @@ c_parser_declspecs (c_parser *parser, struct c_declspecs *specs,
+@@ -2982,12 +3044,15 @@ c_parser_declspecs (c_parser *parser, struct c_declspecs *specs,
  	    goto out;
  	  attrs_ok = true;
  	  seen_type = true;
@@ -172,13 +169,13 @@ index 1b6bacd7498fb8ec37dc4b76bcfa26eacc1c8e1b..60eecd4854780322205cee5d47727d33
  	  if (!typespec_ok)
  	    goto out;
  	  attrs_ok = true;
-@@ -10011,12 +10076,32 @@ c_parser_objc_at_dynamic_declaration (c_parser *parser)
+@@ -12275,12 +12340,32 @@ c_parser_pragma_unroll (c_parser *parser)
      }
-   c_parser_skip_until_found (parser, CPP_SEMICOLON, "expected %<;%>");
-   objc_add_dynamic_declaration (loc, list);
+ 
+   c_parser_skip_to_pragma_eol (parser);
+   return unroll;
  }
  
- 
 +/**
 + * This function is called whenever a declaration was finished that was preceded
 + * by a tagtype pragma.
@@ -205,7 +202,7 @@ index 1b6bacd7498fb8ec37dc4b76bcfa26eacc1c8e1b..60eecd4854780322205cee5d47727d33
     true if we actually parsed such a pragma.  */
  
  static bool
-@@ -10210,12 +10295,56 @@ c_parser_pragma (c_parser *parser, enum pragma_context context, bool *if_p)
+@@ -12523,12 +12608,56 @@ c_parser_pragma (c_parser *parser, enum pragma_context context, bool *if_p)
        break;
      }
  
@@ -263,15 +260,15 @@ index 1b6bacd7498fb8ec37dc4b76bcfa26eacc1c8e1b..60eecd4854780322205cee5d47727d33
    c_parser_skip_to_pragma_eol (parser);
  
 diff --git a/gcc/c/c-typeck.c b/gcc/c/c-typeck.c
-index b1c5cd6d3db3bd6d21185bcb49af14d9bfc83d12..ebb7f5741007c6769e4af94c3c6b856af305132c 100644
+index 9a150b910f117a86cf29b5bbb6b3f1fe213c29cc..3b1418c7eb9c479df997f1e4ff758b55ad837075 100644
 --- gcc/c/c-typeck.c
 +++ gcc/c/c-typeck.c
-@@ -3169,12 +3169,14 @@ convert_arguments (location_t loc, vec<location_t> arg_loc, tree typelist,
-   unsigned int parmnum;
+@@ -3506,12 +3506,14 @@ convert_arguments (location_t loc, vec<location_t> arg_loc, tree typelist,
    bool error_args = false;
    const bool type_generic = fundecl
      && lookup_attribute ("type generic", TYPE_ATTRIBUTES (TREE_TYPE (fundecl)));
    bool type_generic_remove_excess_precision = false;
+   bool type_generic_overflow_p = false;
    tree selector;
 +  const bool lineartags = fundecl
 +    && lookup_attribute ("lineartags", TYPE_ATTRIBUTES (TREE_TYPE (fundecl)));
@@ -281,32 +278,34 @@ index b1c5cd6d3db3bd6d21185bcb49af14d9bfc83d12..ebb7f5741007c6769e4af94c3c6b856a
    if (TREE_CODE (function) == ADDR_EXPR
        && TREE_CODE (TREE_OPERAND (function, 0)) == FUNCTION_DECL)
      function = TREE_OPERAND (function, 0);
-@@ -3208,12 +3210,14 @@ convert_arguments (location_t loc, vec<location_t> arg_loc, tree typelist,
-   if (flag_cilkplus && fundecl && is_cilkplus_reduce_builtin (fundecl))
-     return vec_safe_length (values);
+@@ -3567,13 +3569,13 @@ convert_arguments (location_t loc, vec<location_t> arg_loc, tree typelist,
+ 	  }
+     }
  
-   /* Scan the given expressions and types, producing individual
-      converted arguments.  */
+   /* Scan the given expressions (VALUES) and types (TYPELIST), producing
+      individual converted arguments.  */
  
-+  tree prev_tagtype = NULL_TREE;
-+
-   for (typetail = typelist, parmnum = 0;
+-  tree typetail, builtin_typetail, val;
++  tree typetail, builtin_typetail, val, prev_tagtype = NULL_TREE;
+   for (typetail = typelist,
+ 	 builtin_typetail = builtin_typelist,
+ 	 parmnum = 0;
         values && values->iterate (parmnum, &val);
         ++parmnum)
      {
-       tree type = typetail ? TREE_VALUE (typetail) : 0;
-       tree valtype = TREE_TYPE (val);
-@@ -3262,12 +3266,32 @@ convert_arguments (location_t loc, vec<location_t> arg_loc, tree typelist,
+@@ -3668,12 +3670,34 @@ convert_arguments (location_t loc, vec<location_t> arg_loc, tree typelist,
+ 	      {
+ 		promote_float_arg = false;
+ 		break;
+ 	      }
  	}
-       val = c_fully_fold (val, false, NULL);
-       STRIP_TYPE_NOPS (val);
- 
-       val = require_complete_type (val);
  
 +      /* If this is a function call with linear tags try to improve the expected
-+       * type on base of recorded tag <-> type mapping.
++       * type on base of recorded tag <-> type mapping, but only if we don't know
++       * the expected type (e.g. on a var) or if the expected type is an integer.
++       * The latter case usually happens on the first tag item.
 +       */
-+      if (lineartags && type == 0)
++      if (lineartags && (type == NULL_TREE || TREE_CODE(type) == INTEGER_TYPE))
 +        {
 +          extern tree amigaos_get_type_associated_tagtype(tree type);
 +
@@ -323,12 +322,12 @@ index b1c5cd6d3db3bd6d21185bcb49af14d9bfc83d12..ebb7f5741007c6769e4af94c3c6b856a
 +            }
 +        }
 +
-       if (type != 0)
+       if (type != NULL_TREE)
  	{
- 	  /* Formal parm type is specified by a function prototype.  */
- 
- 	  if (type == error_mark_node || !COMPLETE_TYPE_P (type))
- 	    {
+ 	  tree origtype = (!origtypes) ? NULL_TREE : (*origtypes)[parmnum];
+ 	  parmval = convert_argument (ploc, function, fundecl, type, origtype,
+ 				      val, valtype, npc, rname, parmnum, argnum,
+ 				      excess_precision, 0);
 diff --git a/gcc/config/rs6000/amigaos-protos.h b/gcc/config/rs6000/amigaos-protos.h
 index eb5f8fc5f3d546b8d8e1cdd8118a3085079df50e..3b8c994cdbd192eaf7112c780f0106a4d96cbb90 100644
 --- gcc/config/rs6000/amigaos-protos.h
@@ -348,20 +347,46 @@ index eb5f8fc5f3d546b8d8e1cdd8118a3085079df50e..3b8c994cdbd192eaf7112c780f0106a4
  extern int amigaos_baserel_operand(rtx x);
  extern int amigaos_not_baserel_tree_p(tree decl);
 diff --git a/gcc/config/rs6000/amigaos.c b/gcc/config/rs6000/amigaos.c
-index a6da7d543241e2fc8cf51a952633c62e19d7d875..797261177e46a34ac0aba97f2b9c2b8af8df2e72 100644
+index ad8c0e64c056129afcd8bfa2a656749a2febfaaa..85c03f28e37d64865360692a14fcc8a197b55395 100644
 --- gcc/config/rs6000/amigaos.c
 +++ gcc/config/rs6000/amigaos.c
-@@ -342,12 +342,19 @@ amigaos_handle_linearvarargs_attribute (tree *node, tree name,
+@@ -346,12 +346,45 @@ amigaos_handle_linearvarargs_attribute (tree *node, tree name,
        *no_add_attrs = true;
      }
  
    return NULL_TREE;
  }
  
++/* Handle a lineartags attribute. This enables tag verifications */
 +tree
-+amigaos_handle_lineartags_attribute (tree *node, tree name, tree args, int flags, bool *no_add_attrs)
++amigaos_handle_lineartags_attribute (tree *node, tree name, tree args, int flags ATTRIBUTE_UNUSED, bool *no_add_attrs)
 +{
-+  /* TODO: This function should applied only to functions or methods */
++  if (TREE_CODE (*node) != FUNCTION_TYPE)
++    {
++      warning (0, "%s attribute only applies to functions",
++	       IDENTIFIER_POINTER (name));
++      *no_add_attrs = true;
++    }
++  tree fn = *node;
++  tree arglist = TYPE_ARG_TYPES(fn);
++  int arg = 0;
++  bool is_varargs = true;
++
++  while (arglist != NULL_TREE)
++    {
++      /* The void_type marks the end of a non-varargs function */
++      if (TREE_VALUE(arglist) == void_type_node)
++        is_varargs = false;
++
++      arglist = TREE_CHAIN (arglist);
++      arg++;
++    }
++
++  if (!is_varargs && arg == 2)
++    {
++      warning (0, "%s attribute only applies to varargs functions or functions with at least two arguments",
++	       IDENTIFIER_POINTER (name));
++    }
 +  return NULL_TREE;
 +}
 +
@@ -372,5 +397,5 @@ index a6da7d543241e2fc8cf51a952633c62e19d7d875..797261177e46a34ac0aba97f2b9c2b8a
  amigaos_legitimize_baserel_address (rtx addr)
  {
 -- 
-1.9.1
+2.34.1
 
