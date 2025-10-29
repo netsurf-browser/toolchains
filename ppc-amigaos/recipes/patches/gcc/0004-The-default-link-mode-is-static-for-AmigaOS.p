@@ -1,7 +1,7 @@
-From 0a073e9854a2f5b558631929467837cec073d624 Mon Sep 17 00:00:00 2001
+From f7398a949dd5201e983c7d8188d497e548112123 Mon Sep 17 00:00:00 2001
 From: Sebastian Bauer <mail@sebastianbauer.info>
 Date: Wed, 2 Dec 2015 20:56:33 +0100
-Subject: [PATCH 4/9] The default link mode is static for AmigaOS.
+Subject: [PATCH 04/41] The default link mode is static for AmigaOS.
 
 Changed the g++ driver to reflect this.
 ---
@@ -9,15 +9,15 @@ Changed the g++ driver to reflect this.
  1 file changed, 6 insertions(+), 2 deletions(-)
 
 diff --git a/gcc/cp/g++spec.c b/gcc/cp/g++spec.c
-index 03cbde090cb361f7f6244c97a91c8ad567d9a092..c8dec4b7a0ad1d95811dd9a50a7916e3b4c76336 100644
+index 3c9bd1490b4ae14462f628a84f5207f1f9cf345f..8039884af0ca0aa105acee03864d0e2ff1687941 100644
 --- gcc/cp/g++spec.c
 +++ gcc/cp/g++spec.c
-@@ -101,14 +101,14 @@ lang_specific_driver (struct cl_decoded_option **in_decoded_options,
+@@ -123,14 +123,14 @@ lang_specific_driver (struct cl_decoded_option **in_decoded_options,
+      LANGSPEC, MATHLIB, or WITHLIBC.  */
+   int *args;
+ 
    /* By default, we throw on the math library if we have one.  */
    int need_math = (MATH_LIBRARY[0] != '\0');
- 
-   /* By default, we throw on the time library if we have one.  */
-   int need_time = (TIME_LIBRARY[0] != '\0');
  
 -  /* True if we saw -static.  */
 -  int static_link = 0;
@@ -29,7 +29,7 @@ index 03cbde090cb361f7f6244c97a91c8ad567d9a092..c8dec4b7a0ad1d95811dd9a50a7916e3
  
    /* The total number of arguments with the new stuff.  */
    unsigned int argc;
-@@ -195,12 +195,16 @@ lang_specific_driver (struct cl_decoded_option **in_decoded_options,
+@@ -213,12 +213,16 @@ lang_specific_driver (struct cl_decoded_option **in_decoded_options,
  	  break;
  
  	case OPT_static:
@@ -47,5 +47,5 @@ index 03cbde090cb361f7f6244c97a91c8ad567d9a092..c8dec4b7a0ad1d95811dd9a50a7916e3
  	case OPT_static_libstdc__:
  	  library = library >= 0 ? 2 : library;
 -- 
-1.9.1
+2.34.1
 

@@ -36,8 +36,8 @@ UPSTREAM_OPENURL_VERSION := 7.16
 UPSTREAM_OPENURL_TARBALL := openurl-$(UPSTREAM_OPENURL_VERSION)
 UPSTREAM_OPENURL_URI := https://github.com/jens-maus/libopenurl/archive/$(UPSTREAM_OPENURL_VERSION).tar.gz
 
-UPSTREAM_AMISSL_VERSION := 4.9
-UPSTREAM_AMISSL_TARBALL := AmiSSL-$(UPSTREAM_AMISSL_VERSION).lha
+UPSTREAM_AMISSL_VERSION := 5.17
+UPSTREAM_AMISSL_TARBALL := AmiSSL-$(UPSTREAM_AMISSL_VERSION)-SDK.lha
 UPSTREAM_AMISSL_URI := https://github.com/jens-maus/amissl/releases/download/$(UPSTREAM_AMISSL_VERSION)/$(UPSTREAM_AMISSL_TARBALL)
 
 UPSTREAM_GUIGFX_TARBALL := guigfxlib.lha
@@ -277,13 +277,16 @@ $(SOURCESDIR)/$(UPSTREAM_CODESETS_TARBALL):
 $(SOURCESDIR)/$(UPSTREAM_AMISSL_TARBALL):
 	wget -q -O $@ $(UPSTREAM_AMISSL_URI)
 
+
 ###
-# Rule to create buildsteps dir
+# Rule to create directories for building
 ###
 
-$(BUILDSTEPS)/buildsteps.d: $(SOURCESDIR) $(SRCDIR)
-	mkdir -p $(BUILDSTEPS)
+$(BUILDSTEPS)/buildsteps.d: | $(BUILDSTEPS) $(SOURCESDIR) $(SRCDIR)
 	touch $@
+
+$(BUILDSTEPS):
+	mkdir -p $@
 
 $(SOURCESDIR):
 	mkdir -p $@

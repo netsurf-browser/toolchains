@@ -1,6 +1,6 @@
 --- srclib/signal.in.h	2017-01-01 23:02:22.000000000 +0000
 +++ srclib/signal.in.h	2017-03-26 22:56:18.360017409 +0100
-@@ -211,69 +211,6 @@ typedef int verify_NSIG_constraint[NSIG
+@@ -223,69 +223,6 @@ typedef int verify_NSIG_constraint[NSIG
  # undef sigismember
  #endif
  

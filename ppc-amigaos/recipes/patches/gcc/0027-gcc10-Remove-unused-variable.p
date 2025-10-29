@@ -1,0 +1,45 @@
+From afab86a678caaa9ac9a9c3c3c20f403d751acebf Mon Sep 17 00:00:00 2001
+From: "ola.soder@axis.com" <ola.soder@axis.com>
+Date: Sat, 2 Jan 2021 17:25:51 +0100
+Subject: [PATCH 27/41] gcc10: Remove unused variable.
+
+---
+ gcc/c/c-parser.c | 3 ---
+ 1 file changed, 3 deletions(-)
+
+diff --git a/gcc/c/c-parser.c b/gcc/c/c-parser.c
+index 7e644cf341991336d9a11369f9910c0acd8550ab..f284811b59c3574509aa2dbc5edd123f7cc40b31 100644
+--- gcc/c/c-parser.c
++++ gcc/c/c-parser.c
+@@ -12624,28 +12624,25 @@ c_parser_pragma (c_parser *parser, enum pragma_context context, bool *if_p)
+    * file.
+    */
+   extern int was_tagtypepragma;
+   if (was_tagtypepragma)
+   {
+     c_token *tok = c_parser_peek_token (the_parser);
+-    enum cpp_ttype ret = tok->type;
+     c_parser_consume_token(parser);
+ 
+     c_type_name *ctype = c_parser_type_name(parser);
+     tree ctypetree = groktypename (ctype, NULL, NULL);
+ 
+     /* Make the parsed type available to all functions called from here on */
+     amigaos_current_tagtype = ctypetree;
+ 
+     tok = c_parser_peek_token (the_parser);
+-    ret = tok->type;
+     c_parser_consume_token(parser);
+     c_parser_skip_to_pragma_eol(parser);
+ 
+     tok = c_parser_peek_token (the_parser);
+-    ret = tok->type;
+ 
+     /* Parse the line that follows. We will register for a PLUGIN_FINISH_DECL event
+      * to minimize contermination
+      */
+     bool old_flag_plugin_added = flag_plugin_added;
+     register_callback ("amigaos-tagtype", PLUGIN_FINISH_DECL,
+-- 
+2.34.1
+

@@ -5,7 +5,7 @@
 UPSTREAM_GCC_VERSION := 4.6.4
 UPSTREAM_GCC_TARBALL := gcc-$(UPSTREAM_GCC_VERSION).tar.bz2
 UPSTREAM_GCC_URI := http://ftp.gnu.org/gnu/gcc/gcc-$(UPSTREAM_GCC_VERSION)/$(UPSTREAM_GCC_TARBALL)
-UPSTREAM_GCC_PATCH := gcc-4.6.4-mint-20130415.patch.bz2
+UPSTREAM_GCC_PATCH := gcc-4.6.4-mint-20200504.patch.bz2
 UPSTREAM_GCC_PATCH_URI := http://vincent.riviere.free.fr/soft/m68k-atari-mint/archives/$(UPSTREAM_GCC_PATCH)
 
 UPSTREAM_BINUTILS_VERSION := 2.30
@@ -27,21 +27,21 @@ UPSTREAM_MPC_VERSION := 0.8.2
 UPSTREAM_MPC_TARBALL := mpc-$(UPSTREAM_MPC_VERSION).tar.gz
 UPSTREAM_MPC_URI := http://www.multiprecision.org/mpc/download/$(UPSTREAM_MPC_TARBALL)
 
-UPSTREAM_MINTBIN_VERSION := CVS-20110527
+UPSTREAM_MINTBIN_VERSION := Git-20201129
 UPSTREAM_MINTBIN_TARBALL := mintbin-$(UPSTREAM_MINTBIN_VERSION).tar.gz
 UPSTREAM_MINTBIN_URI := http://vincent.riviere.free.fr/soft/m68k-atari-mint/archives/$(UPSTREAM_MINTBIN_TARBALL)
 
-UPSTREAM_MINTLIB_VERSION := Git-20170304
+UPSTREAM_MINTLIB_VERSION := Git-20220821
 UPSTREAM_MINTLIB_TARBALL := mintlib-$(UPSTREAM_MINTLIB_VERSION).tar.gz
 UPSTREAM_MINTLIB_URI := http://vincent.riviere.free.fr/soft/m68k-atari-mint/archives/$(UPSTREAM_MINTLIB_TARBALL)
 
 UPSTREAM_PML_VERSION := 2.03
 UPSTREAM_PML_TARBALL := pml-$(UPSTREAM_PML_VERSION).tar.bz2
 UPSTREAM_PML_URI := http://vincent.riviere.free.fr/soft/m68k-atari-mint/archives/$(UPSTREAM_PML_TARBALL)
-UPSTREAM_PML_PATCH := pml-2.03-mint-20110207.patch.bz2
+UPSTREAM_PML_PATCH := pml-2.03-mint-20191013.patch.bz2
 UPSTREAM_PML_PATCH_URI := http://vincent.riviere.free.fr/soft/m68k-atari-mint/archives/$(UPSTREAM_PML_PATCH)
 
-UPSTREAM_GEMLIB_VERSION := CVS-20130415
+UPSTREAM_GEMLIB_VERSION := Git-20230112
 UPSTREAM_GEMLIB_TARBALL := gemlib-$(UPSTREAM_GEMLIB_VERSION).tar.bz2
 UPSTREAM_GEMLIB_URI := http://vincent.riviere.free.fr/soft/m68k-atari-mint/archives/$(UPSTREAM_GEMLIB_TARBALL)
 
@@ -86,8 +86,8 @@ $(BUILDSTEPS)/gemlib.d: $(BUILDSTEPS)/stage2.d $(SOURCESDIR)/$(UPSTREAM_GEMLIB_T
 	tar xjf $(SOURCESDIR)/$(UPSTREAM_GEMLIB_TARBALL)
 	mv gemlib-$(UPSTREAM_GEMLIB_VERSION) $(BUILDDIR)/gemlib
 	for p in `ls $(RECIPES)/patches/gemlib/*.p` ; do patch -d $(BUILDDIR)/gemlib -p0 <$$p ; done
-	cd $(BUILDDIR)/gemlib/gemlib && PATH="$(PREFIX)/bin:$(PATH)" make
-	cd $(BUILDDIR)/gemlib/gemlib && PATH="$(PREFIX)/bin:$(PATH)" make install
+	cd $(BUILDDIR)/gemlib && PATH="$(PREFIX)/bin:$(PATH)" make
+	cd $(BUILDDIR)/gemlib && PATH="$(PREFIX)/bin:$(PATH)" make install
 	touch $@
 
 ###
@@ -191,9 +191,6 @@ $(BUILDSTEPS)/mintbin.d: $(BUILDSTEPS)/mintbin-srcdir.d
 	cd $(BUILDDIR)/mintbin && $(MINTBIN_SRCDIR)/configure --prefix=$(PREFIX) --target=$(TARGET_NAME) --disable-nls
 	cd $(BUILDDIR)/mintbin && make
 	cd $(BUILDDIR)/mintbin && make install
-	#mv $(PREFIX)/{$(TARGET_NAME)/bin/$(TARGET_NAME)-* $(PREFIX)/bin/
-	#HACK: mintbin install traget looks broken
-	mv $(PREFIX)/*-atari-mint/bin/$(TARGET_NAME)-* $(PREFIX)/bin/
 	touch $@
 
 $(BUILDSTEPS)/mintbin-srcdir.d: $(SOURCESDIR)/$(UPSTREAM_MINTBIN_TARBALL) 

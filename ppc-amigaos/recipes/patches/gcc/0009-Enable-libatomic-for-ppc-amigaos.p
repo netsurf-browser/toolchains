@@ -1,0 +1,183 @@
+From c9fb3357d886c3e9561e008b9087c9b75caef37d Mon Sep 17 00:00:00 2001
+From: Sebastian Bauer <mail@sebastianbauer.info>
+Date: Fri, 3 Mar 2017 08:52:48 +0100
+Subject: [PATCH 09/41] Enable libatomic for ppc-amigaos.
+
+It is not really finished yet.
+---
+ .../config/{posix => amigaos}/host-config.h   |  2 +-
+ libatomic/config/{posix => amigaos}/lock.c    | 64 ++++++++-----------
+ libatomic/configure.tgt                       |  4 ++
+ 3 files changed, 30 insertions(+), 40 deletions(-)
+ copy libatomic/config/{posix => amigaos}/host-config.h (96%)
+ copy libatomic/config/{posix => amigaos}/lock.c (68%)
+
+diff --git a/libatomic/config/posix/host-config.h b/libatomic/config/amigaos/host-config.h
+similarity index 96%
+copy from libatomic/config/posix/host-config.h
+copy to libatomic/config/amigaos/host-config.h
+index 62be4cb0c52e489bef2a2cd71d1bc47d2980784c..879758e4eb5594a79b8ee2d25564b19a6f51cd31 100644
+--- libatomic/config/posix/host-config.h
++++ libatomic/config/amigaos/host-config.h
+@@ -1,7 +1,7 @@
+-/* Copyright (C) 2012-2021 Free Software Foundation, Inc.
++/* Copyright (C) 2012-2015 Free Software Foundation, Inc.
+    Contributed by Richard Henderson <rth@redhat.com>.
+ 
+    This file is part of the GNU Atomic Library (libatomic).
+ 
+    Libatomic is free software; you can redistribute it and/or modify it
+    under the terms of the GNU General Public License as published by
+diff --git a/libatomic/config/posix/lock.c b/libatomic/config/amigaos/lock.c
+similarity index 68%
+copy from libatomic/config/posix/lock.c
+copy to libatomic/config/amigaos/lock.c
+index 54766dfd9911ee293f597275ff1d7189d8e55345..ffd09f50095429f844bfe6bf7bec8741f56f1a28 100644
+--- libatomic/config/posix/lock.c
++++ libatomic/config/amigaos/lock.c
+@@ -1,7 +1,7 @@
+-/* Copyright (C) 2012-2021 Free Software Foundation, Inc.
++/* Copyright (C) 2012-2015 Free Software Foundation, Inc.
+    Contributed by Richard Henderson <rth@redhat.com>.
+ 
+    This file is part of the GNU Atomic Library (libatomic).
+ 
+    Libatomic is free software; you can redistribute it and/or modify it
+    under the terms of the GNU General Public License as published by
+@@ -20,14 +20,15 @@
+    You should have received a copy of the GNU General Public License and
+    a copy of the GCC Runtime Library Exception along with this program;
+    see the files COPYING3 and COPYING.RUNTIME respectively.  If not, see
+    <http://www.gnu.org/licenses/>.  */
+ 
+ #include "libatomic_i.h"
+-#include <pthread.h>
+ 
++#define UWORD UWORD_
++#include <proto/exec.h>
+ 
+ /* The target page size.  Must be no larger than the runtime page size,
+    lest locking fail with virtual address aliasing (i.e. a page mmaped
+    at two locations).  */
+ #ifndef PAGE_SIZE
+ #define PAGE_SIZE	4096
+@@ -44,73 +45,58 @@
+ #ifndef WATCH_SIZE
+ #define WATCH_SIZE	CACHLINE_SIZE
+ #endif
+ 
+ struct lock
+ {
+-  pthread_mutex_t mutex;
+-  char pad[sizeof(pthread_mutex_t) < CACHLINE_SIZE
+-	   ? CACHLINE_SIZE - sizeof(pthread_mutex_t)
++  struct SignalSemaphore sem;
++  char initialized;
++  char pad[sizeof(struct SignalSemaphore) + 1 < CACHLINE_SIZE
++	   ? CACHLINE_SIZE - sizeof(struct SignalSemaphore) - 1
+ 	   : 0];
+ };
+ 
++/* TODO: Use a constructor to initialize the semaphore */
+ #define NLOCKS		(PAGE_SIZE / WATCH_SIZE)
+-static struct lock locks[NLOCKS] = {
+-  [0 ... NLOCKS-1].mutex = PTHREAD_MUTEX_INITIALIZER
+-};
++static struct lock locks[NLOCKS];
+ 
+ static inline uintptr_t 
+ addr_hash (void *ptr)
+ {
+   return ((uintptr_t)ptr / WATCH_SIZE) % NLOCKS;
+ }
+ 
+ void
+ libat_lock_1 (void *ptr)
+ {
+-  pthread_mutex_lock (&locks[addr_hash (ptr)].mutex);
++  struct lock *l = &locks[addr_hash (ptr)];
++  IExec->Forbid();
++  if (!l->initialized)
++  {
++    IExec->InitSemaphore(&l->sem);
++    l->initialized = 1;
++  }
++  IExec->Permit();
++  IExec->ObtainSemaphore(&l->sem);
+ }
+ 
+ void
+ libat_unlock_1 (void *ptr)
+ {
+-  pthread_mutex_unlock (&locks[addr_hash (ptr)].mutex);
++  struct lock *l = &locks[addr_hash (ptr)];
++  IExec->ReleaseSemaphore(&l->sem);
+ }
+ 
++#if 0
++
++/* TODO: Implement me when needed */
+ void
+ libat_lock_n (void *ptr, size_t n)
+ {
+-  uintptr_t h = addr_hash (ptr);
+-  size_t i = 0;
+-
+-  /* Don't lock more than all the locks we have.  */
+-  if (n > PAGE_SIZE)
+-    n = PAGE_SIZE;
+-
+-  do
+-    {
+-      pthread_mutex_lock (&locks[h].mutex);
+-      if (++h == NLOCKS)
+-	h = 0;
+-      i += WATCH_SIZE;
+-    }
+-  while (i < n);
+ }
+ 
+ void
+ libat_unlock_n (void *ptr, size_t n)
+ {
+-  uintptr_t h = addr_hash (ptr);
+-  size_t i = 0;
+-
+-  if (n > PAGE_SIZE)
+-    n = PAGE_SIZE;
+-
+-  do
+-    {
+-      pthread_mutex_unlock (&locks[h].mutex);
+-      if (++h == NLOCKS)
+-	h = 0;
+-      i += WATCH_SIZE;
+-    }
+-  while (i < n);
+ }
++
++#endif
+diff --git a/libatomic/configure.tgt b/libatomic/configure.tgt
+index 670b0d72cfec2027a02347eb5b62521054f264c4..f78d93afba8849adac23d24b152cf400bab400cd 100644
+--- libatomic/configure.tgt
++++ libatomic/configure.tgt
+@@ -170,12 +170,16 @@ case "${target}" in
+ 
+   *-*-rtems*)
+ 	XCFLAGS="${configure_tgt_pre_target_cpu_XCFLAGS}"
+ 	config_path="rtems"
+ 	;;
+ 
++  *-*-amigaos*)
++	config_path="${config_path} amigaos"
++	;;
++
+   *-*-elf*)
+ 	# ??? No target OS.  We could be targeting bare-metal kernel-mode,
+ 	# or user-mode for some custom OS.  If the target supports TAS,
+ 	# we can build our own spinlocks, given there are no signals.
+ 	# If the target supports disabling interrupts, we can work in
+ 	# kernel-mode, given the system is not multi-processor.
+-- 
+2.34.1
+

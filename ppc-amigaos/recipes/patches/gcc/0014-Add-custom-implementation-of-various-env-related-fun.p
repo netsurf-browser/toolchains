@@ -1,0 +1,208 @@
+From 6a98220e936165ce6238e071fcfda1277ef80392 Mon Sep 17 00:00:00 2001
+From: Sebastian Bauer <mail@sebastianbauer.info>
+Date: Wed, 4 Apr 2018 23:50:48 +0200
+Subject: [PATCH 14/41] Add custom implementation of various env-related
+ functions.
+
+No official clib does support unsetenv() but this is required by newer gcc.
+While there are custom implementation of setenv() and unsetenv(), it is
+unclear how their implementation interacts with the other ones that are
+part of the clib like putenv().
+---
+ libiberty/Makefile.in      | 13 +++++--
+ libiberty/configure        | 11 ++++++
+ libiberty/configure.ac     |  6 ++++
+ libiberty/setenv-amigaos.c | 74 ++++++++++++++++++++++++++++++++++++++
+ 4 files changed, 102 insertions(+), 2 deletions(-)
+ create mode 100644 libiberty/setenv-amigaos.c
+
+diff --git a/libiberty/Makefile.in b/libiberty/Makefile.in
+index 8f7a5e14cb6e8b59a5a53ecde2f7593329c20fa4..f8aed54a79d8a2d16ce79cfe73a0648bb03cd7cc 100644
+--- libiberty/Makefile.in
++++ libiberty/Makefile.in
+@@ -144,13 +144,13 @@ CFILES = alloca.c argv.c asprintf.c atexit.c				\
+ 	 pex-common.c pex-djgpp.c pex-msdos.c pex-one.c			\
+ 	 pex-unix.c pex-win32.c						\
+ 	 pex-amigaos.c		\
+          physmem.c putenv.c						\
+ 	random.c regex.c rename.c rindex.c				\
+ 	rust-demangle.c							\
+-	safe-ctype.c setenv.c setproctitle.c sha1.c sigsetmask.c        \
++	safe-ctype.c setenv.c setenv-amigaos.c setproctitle.c sha1.c sigsetmask.c        \
+ 	 simple-object.c simple-object-coff.c simple-object-elf.c	\
+ 	 simple-object-mach-o.c simple-object-xcoff.c			\
+          snprintf.c sort.c						\
+ 	 spaces.c splay-tree.c stack-limit.c stpcpy.c stpncpy.c		\
+ 	 strcasecmp.c strchr.c strdup.c strerror.c strncasecmp.c	\
+ 	 strncmp.c strrchr.c strsignal.c strstr.c strtod.c strtol.c	\
+@@ -217,13 +217,13 @@ CONFIGURED_OFILES = ./asprintf.$(objext) ./atexit.$(objext)		\
+ 	 ./mempcpy.$(objext) ./memset.$(objext) ./mkstemps.$(objext)	\
+ 	./pex-amigaos.$(objext)						\
+ 	./pex-djgpp.$(objext) ./pex-msdos.$(objext)			\
+ 	 ./pex-unix.$(objext) ./pex-win32.$(objext)			\
+ 	 ./putenv.$(objext)						\
+ 	./random.$(objext) ./rename.$(objext) ./rindex.$(objext)	\
+-	./setenv.$(objext) 						\
++	./setenv.$(objext) ./setenv-amigaos.$(objext)           \
+ 	 ./setproctitle.$(objext)					\
+ 	 ./sigsetmask.$(objext) ./snprintf.$(objext)			\
+ 	 ./stpcpy.$(objext) ./stpncpy.$(objext) ./strcasecmp.$(objext)	\
+ 	 ./strchr.$(objext) ./strdup.$(objext) ./strncasecmp.$(objext)	\
+ 	 ./strncmp.$(objext) ./strndup.$(objext) ./strnlen.$(objext)	\
+ 	 ./strrchr.$(objext) ./strstr.$(objext) ./strtod.$(objext)	\
+@@ -1254,12 +1254,21 @@ $(CONFIGURED_OFILES): stamp-picdir stamp-noasandir
+ 	else true; fi
+ 	if [ x"$(NOASANFLAG)" != x ]; then \
+ 	  $(COMPILE.c) $(PICFLAG) $(NOASANFLAG) $(srcdir)/safe-ctype.c -o noasan/$@; \
+ 	else true; fi
+ 	$(COMPILE.c) $(srcdir)/safe-ctype.c $(OUTPUT_OPTION)
+ 
++./setenv-amigaos.$(objext): $(srcdir)/setenv-amigaos.c
++	if [ x"$(PICFLAG)" != x ]; then \
++	  $(COMPILE.c) $(PICFLAG) $(srcdir)/setenv-amigaos.c -o pic/$@; \
++	else true; fi
++	if [ x"$(NOASANFLAG)" != x ]; then \
++	  $(COMPILE.c) $(PICFLAG) $(NOASANFLAG) $(srcdir)/setenv-amigaos.c -o noasan/$@; \
++	else true; fi
++	$(COMPILE.c) $(srcdir)/setenv-amigaos.c $(OUTPUT_OPTION)
++
+ ./setenv.$(objext): $(srcdir)/setenv.c config.h $(INCDIR)/ansidecl.h \
+ 	$(INCDIR)/environ.h
+ 	if [ x"$(PICFLAG)" != x ]; then \
+ 	  $(COMPILE.c) $(PICFLAG) $(srcdir)/setenv.c -o pic/$@; \
+ 	else true; fi
+ 	if [ x"$(NOASANFLAG)" != x ]; then \
+diff --git a/libiberty/configure b/libiberty/configure
+index 9e43c9ae0d66795f2dafb4b6d192579261c1a9ab..99b1a3e12d69c105edb9b1de260275b2c321c04c 100755
+--- libiberty/configure
++++ libiberty/configure
+@@ -6563,12 +6563,23 @@ if test -z "${setobjs}"; then
+   *-*-android*)
+     # On android, getpagesize is defined in unistd.h as a static inline
+     # function, which AC_CHECK_FUNCS does not handle properly.
+     ac_cv_func_getpagesize=yes
+     ;;
+ 
++   *-*-amigaos*)
++     # current newlib lacks unsetenv(), so we custom versions
++     # of setenv() and unsetenv().
++     case " $LIBOBJS " in
++   *" setenv-amigaos.$ac_objext "* ) ;;
++   *) LIBOBJS="$LIBOBJS setenv-amigaos.$ac_objext"
++  ;;
++ esac
++
++     ;;
++
+   hppa*-*-hpux*)
+     # Replace system snprintf and vsnprintf with libiberty implementations.
+     case " $LIBOBJS " in
+   *" snprintf.$ac_objext "* ) ;;
+   *) LIBOBJS="$LIBOBJS snprintf.$ac_objext"
+  ;;
+diff --git a/libiberty/configure.ac b/libiberty/configure.ac
+index 0f9b97cb457b68249dfe1e5424ce312bab705949..d57c6fb4682e21b0bc2094173eab0991bd180bcb 100644
+--- libiberty/configure.ac
++++ libiberty/configure.ac
+@@ -615,12 +615,18 @@ if test -z "${setobjs}"; then
+   *-*-android*)
+     # On android, getpagesize is defined in unistd.h as a static inline
+     # function, which AC_CHECK_FUNCS does not handle properly.
+     ac_cv_func_getpagesize=yes
+     ;;
+ 
++  *-*-amigaos*)
++    # current newlib lacks unsetenv(), so we custom versions
++    # of setenv() and unsetenv().
++    AC_LIBOBJ([setenv-amigaos])
++    ;;
++
+   hppa*-*-hpux*)
+     # Replace system snprintf and vsnprintf with libiberty implementations.
+     AC_LIBOBJ([snprintf])
+     AC_LIBOBJ([vsnprintf])
+     ;;
+ 
+diff --git a/libiberty/setenv-amigaos.c b/libiberty/setenv-amigaos.c
+new file mode 100644
+index 0000000000000000000000000000000000000000..6ec12b89c740874d0b7a83f322f80d5cd6f7a05e
+--- /dev/null
++++ libiberty/setenv-amigaos.c
+@@ -0,0 +1,74 @@
++/* A custom implementation of various env functions
++ *
++ * This is necessary as no official clib supports unsetenv()
++ * but setenv().
++ */
++#define __USE_INLINE__
++
++#include <proto/dos.h>
++#include <proto/exec.h>
++
++#include <string.h>
++
++
++#pragma GCC diagnostic ignored "-Wdeprecated-declarations"
++
++int
++setenv (const char *name, const char *value, int replace)
++{
++   if (!replace)
++   {
++       if (FindVar(name, GVF_LOCAL_ONLY))
++       {
++           return 0;
++       }
++   }
++
++   return !SetVar(name, value, -1, GVF_LOCAL_ONLY);
++}
++
++void
++unsetenv (const char *name)
++{
++   DeleteVar(name, GVF_LOCAL_ONLY);
++}
++
++void
++putenv (char *str)
++{
++   int i;
++
++   if (str[0] == '=')
++   {
++       return;
++   }
++
++   for (i=0; str[i]; i++)
++   {
++       if (str[i] == '=')
++       {
++           char *name = (char*)AllocVec(i + 1, MEMF_ANY);
++           if (name)
++           {
++               strncpy(name, str, i);
++               name[i] = 0;
++
++               setenv(name, &str[i] + 1, 1);
++               FreeVec(name);
++               return;
++           }
++       }
++   }
++}
++
++char *
++getenv (const char *name)
++{
++   struct LocalVar *lvar;
++
++   if (!(lvar = FindVar(name, GVF_LOCAL_ONLY)))
++   {
++       return NULL;
++   }
++   return lvar->lv_Value;
++}
+-- 
+2.34.1
+

@@ -2,28 +2,27 @@
 
 # mingw toolchain
 
-UPSTREAM_GCC_VERSION := 4.8.4
-UPSTREAM_GCC_TARBALL := gcc-$(UPSTREAM_GCC_VERSION).tar.bz2
+UPSTREAM_GCC_VERSION := 12.2.0
+UPSTREAM_GCC_TARBALL := gcc-$(UPSTREAM_GCC_VERSION).tar.xz
 UPSTREAM_GCC_URI := http://ftpmirror.gnu.org/gcc/gcc-$(UPSTREAM_GCC_VERSION)/$(UPSTREAM_GCC_TARBALL)
 
-UPSTREAM_BINUTILS_VERSION := 2.25
+UPSTREAM_BINUTILS_VERSION := 2.39
 UPSTREAM_BINUTILS_TARBALL := binutils-$(UPSTREAM_BINUTILS_VERSION).tar.bz2
 UPSTREAM_BINUTILS_URI := http://ftpmirror.gnu.org/binutils/$(UPSTREAM_BINUTILS_TARBALL)
 
-UPSTREAM_GMP_VERSION := 4.3.2
+UPSTREAM_GMP_VERSION := 6.2.1
 UPSTREAM_GMP_TARBALL := gmp-$(UPSTREAM_GMP_VERSION).tar.bz2
 UPSTREAM_GMP_URI := http://ftp.gnu.org/gnu/gmp/$(UPSTREAM_GMP_TARBALL)
 
-# Would use 3.0.0, but that dislikes in-tree gmp sources
-UPSTREAM_MPFR_VERSION := 2.4.2
-UPSTREAM_MPFR_TARBALL := mpfr-$(UPSTREAM_MPFR_VERSION).tar.bz2
+UPSTREAM_MPFR_VERSION := 4.2.0
+UPSTREAM_MPFR_TARBALL := mpfr-$(UPSTREAM_MPFR_VERSION).tar.xz
 UPSTREAM_MPFR_URI := http://www.mpfr.org/mpfr-$(UPSTREAM_MPFR_VERSION)/$(UPSTREAM_MPFR_TARBALL)
 
-UPSTREAM_MPC_VERSION := 0.8.2
+UPSTREAM_MPC_VERSION := 1.3.0
 UPSTREAM_MPC_TARBALL := mpc-$(UPSTREAM_MPC_VERSION).tar.gz
 UPSTREAM_MPC_URI := http://www.multiprecision.org/downloads/$(UPSTREAM_MPC_TARBALL)
 
-UPSTREAM_MINGW_VERSION := 3.3.0
+UPSTREAM_MINGW_VERSION := 10.0.0
 UPSTREAM_MINGW_TARBALL := mingw-w64-v$(UPSTREAM_MINGW_VERSION).tar.bz2
 UPSTREAM_MINGW_URI := "http://downloads.sourceforge.net/project/mingw-w64/mingw-w64/mingw-w64-release/$(UPSTREAM_MINGW_TARBALL)?r=http%3A%2F%2Fmingw-w64.sourceforge.net%2Fdownload.php&ts=1426088797&use_mirror=cznic"
 
@@ -62,7 +61,7 @@ $(BUILDSTEPS)/gcc-core.d: $(BUILDSTEPS)/srcdir-step3.d $(BUILDSTEPS)/binutils.d 
 		--prefix=$(PREFIX) --target=$(TARGET_NAME) \
 		--enable-languages=c,c++ --with-system-zlib --disable-multilib \
 		--enable-shared --enable-fully-dynamic-string
-	cd $(BUILDDIR)/gcc && PATH="$(PREFIX)/bin:$(PATH)" make all-gcc -j 4
+	cd $(BUILDDIR)/gcc && PATH="$(PREFIX)/bin:$(PATH)" make all-gcc -j 8
 	cd $(BUILDDIR)/gcc && PATH="$(PREFIX)/bin:$(PATH)" make install-gcc
 	touch $@
 

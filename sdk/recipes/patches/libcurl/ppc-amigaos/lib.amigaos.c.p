@@ -1,20 +1,20 @@
---- lib/amigaos.c	2019-03-25 08:42:50.000000000 +0000
-+++ lib/amigaos.c	2019-03-30 12:49:06.680985341 +0000
-@@ -24,7 +24,7 @@
+--- lib/amigaos.c	2024-09-18 06:56:40.000000000 +0100
++++ lib/amigaos.c	2024-10-01 10:00:47.428000000 +0100
+@@ -83,16 +83,6 @@ CURLcode Curl_amiga_init(void)
+   if(base) {
+     ISocket = (struct SocketIFace *)GetInterface(base, "main", 1, NULL);
+     if(ISocket) {
+-      ULONG enabled = 0;
+-
+-      SocketBaseTags(SBTM_SETVAL(SBTC_CAN_SHARE_LIBRARY_BASES), TRUE,
+-                     SBTM_GETREF(SBTC_HAVE_GETHOSTADDR_R_API), (ULONG)&enabled,
+-                     TAG_DONE);
+-
+-      if(enabled) {
+-        SocketFeatures |= HAVE_BSDSOCKET_GETHOSTBYNAME_R;
+-      }
+-
+       __CurlISocket = ISocket;
  
- #ifdef __AMIGA__
- #  include "amigaos.h"
--#  if defined(HAVE_PROTO_BSDSOCKET_H) && !defined(USE_AMISSL)
-+#  if 0
- #    include <amitcp/socketbasetags.h>
- #  endif
- #  ifdef __libnix__
-@@ -37,7 +37,7 @@
- #include "memdebug.h"
- 
- #ifdef __AMIGA__
--#if defined(HAVE_PROTO_BSDSOCKET_H) && !defined(USE_AMISSL)
-+#if 0
- struct Library *SocketBase = NULL;
- extern int errno, h_errno;
- 
+       atexit(Curl_amiga_cleanup);
+

@@ -1,5 +1,7 @@
+# NetSurf build script for RISCOS cross compilation toolchain.
+
 # Use a tested trunk version of GCCSDK
-UPSTREAM_GCCSDK_VERSION := release_4_7_4_v2
+UPSTREAM_GCCSDK_VERSION := release_4_7_4_v6
 UPSTREAM_GCCSDK_TARBALL := gcc4$(UPSTREAM_GCCSDK_VERSION).tar.gz
 UPSTREAM_GCCSDK_URI := svn://svn.riscos.info/gccsdk/tags/$(UPSTREAM_GCCSDK_VERSION)
 
@@ -14,7 +16,7 @@ UPSTREAM_CCRES_TARBALL := ccres$(UPSTREAM_CCRES_VERSION).tar.gz
 UPSTREAM_CCRES_URI := svn://svn.riscos.info/ccres/trunk@$(UPSTREAM_CCRES_VERSION)
 
 # Makerun
-UPSTREAM_MAKERUN_VERSION := abdbd16
+UPSTREAM_MAKERUN_VERSION := fe55b6bf
 UPSTREAM_MAKERUN_TARBALL := makerun$(UPSTREAM_MAKERUN_VERSION).tar.gz
 UPSTREAM_MAKERUN_URI := git://git.netsurf-browser.org/makerun.git
 
@@ -26,7 +28,7 @@ UPSTREAM_SQUEEZE_URI := git://git.netsurf-browser.org/squeeze.git
 # Infozip
 UPSTREAM_INFOZIP_VERSION := 30
 UPSTREAM_INFOZIP_TARBALL := zip$(UPSTREAM_INFOZIP_VERSION).tar.gz
-UPSTREAM_INFOZIP_URI := http://downloads.sourceforge.net/project/infozip/Zip%203.x%20%28latest%29/3.0/$(UPSTREAM_INFOZIP_TARBALL)
+UPSTREAM_INFOZIP_URI := https://downloads.sourceforge.net/project/infozip/Zip%203.x%20%28latest%29/3.0/$(UPSTREAM_INFOZIP_TARBALL)
 
 TOP := $(CURDIR)
 RECIPES := $(TOP)/recipes
@@ -159,13 +161,14 @@ $(SOURCESDIR)/$(UPSTREAM_INFOZIP_TARBALL):
 	$(FETCHSRC) arm-unknown-riscos $(subst $(SOURCESDIR)/,,$@) $(UPSTREAM_INFOZIP_URI) $@
 
 ###
-# Rule to create buildsteps dir
+# Rule to create directories for building
 ###
 
-$(BUILDSTEPS)/buildsteps.d: $(SOURCESDIR)
-	mkdir -p $(BUILDSTEPS)
+$(BUILDSTEPS)/buildsteps.d: | $(BUILDSTEPS) $(SOURCESDIR)
 	touch $@
+
+$(BUILDSTEPS):
+	mkdir -p $@
 
 $(SOURCESDIR):
 	mkdir -p $@
-

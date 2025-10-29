@@ -1,0 +1,34 @@
+From 57cdd99bfe45740a2021212005227a089eb5921c Mon Sep 17 00:00:00 2001
+From: "ola.soder@axis.com" <ola.soder@axis.com>
+Date: Fri, 28 May 2021 16:27:59 +0200
+Subject: [PATCH 35/41] gcc11: Use include_next to circumvent fenv.h include
+ guard.
+
+Include guards will prevent the correct fenv.h to be included
+unless we use a wrapper header by means of include_next.
+---
+ libstdc++-v3/include/c_global/cfenv | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/libstdc++-v3/include/c_global/cfenv b/libstdc++-v3/include/c_global/cfenv
+index 0b0ec35a8377d8af928e97dbffd7e52a6ef9e3b3..3a6381577e0b3e34842759dba06e3ee83673050c 100644
+--- libstdc++-v3/include/c_global/cfenv
++++ libstdc++-v3/include/c_global/cfenv
+@@ -35,13 +35,13 @@
+ # include <bits/c++0x_warning.h>
+ #else
+ 
+ #include <bits/c++config.h>
+ 
+ #if _GLIBCXX_HAVE_FENV_H
+-# include <fenv.h>
++# include_next <fenv.h>
+ #endif
+ 
+ #ifdef _GLIBCXX_USE_C99_FENV_TR1
+ 
+ #undef feclearexcept
+ #undef fegetexceptflag
+-- 
+2.34.1
+

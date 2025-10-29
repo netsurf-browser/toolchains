@@ -9,21 +9,21 @@
  
  # Silent build or verbose
  AM_DEFAULT_VERBOSITY = 1
-@@ -47,7 +47,7 @@
+@@ -64,7 +64,7 @@
+ # This variable is used for various others.  Change its value if 
  # need be.  When cross-compiling you will usually want to set this
  # to "/usr/m68k-atari-mint".
- ifeq ($(CROSS),yes)
-- prefix=/usr/m68k-atari-mint
-+ prefix=/opt/netsurf/m68k-atari-mint/cross/m68k-atari-mint
- else
-  prefix=/usr
- endif
-@@ -124,7 +124,7 @@
- CFLAGS=-O2 -fomit-frame-pointer
+-prefix=/usr
++prefix=/opt/netsurf/m68k-atari-mint/cross/m68k-atari-mint
+ 
+ # This is where include files get installed.
+ includedir=${prefix}/include
+@@ -141,7 +141,7 @@
+ LDFLAGS=
  
  # Additional defines.
 -DEFS=
 +DEFS=-DREGEX_MALLOC
  
  # Define this to the warning level you want.
- WARN=-Wall
+ WARN=-Wall -Werror -Wstrict-prototypes -Wmissing-prototypes -Wold-style-declaration -Wold-style-definition

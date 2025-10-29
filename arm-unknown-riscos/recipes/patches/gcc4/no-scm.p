@@ -1,0 +1,11 @@
+--- gcc4/Makefile       (old)
++++ gcc4/Makefile       (new)
+@@ -36,7 +36,7 @@
+ AUTOMAKE_FOR_GCC_VERSION=1.11.1
+ LIBTOOL_FOR_GCC_VERSION=2.4.2
+ GCC_VERSION=$(GCCSDK_SUPPORTED_GCC_RELEASE)
+-GCC_USE_SCM=yes
++GCC_USE_SCM=no
+ GCC_SCM_PATH=branches/gcc-4_7-branch
+ NEWLIB_VERSION=1.19.0
+ NEWLIB_USE_SCM=no

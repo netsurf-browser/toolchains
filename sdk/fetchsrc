@@ -4,15 +4,18 @@ set -x
 
 # script to fetch toolchain source tar using ci.netsurf-browser.org as a cache
 
-# Usage fetchsrc <target> <source> <upstream> <output>
+# Usage fetchsrc <target> <source> <upstream> <sha256sum> <output>
 
-NSSRV="http://ci.netsurf-browser.org/toolchain/"
+NSSRV="https://ci.netsurf-browser.org/toolchain/"
 
-wget -q -O ${4} ${NSSRV}/${1}/${2}
+wget -q --no-use-server-timestamps -O ${5} ${NSSRV}/${1}/${2}
 if [ $? -ne 0 ];then
-    wget -q -O ${4} ${3}
+    wget -q --no-use-server-timestamps -O ${5} ${3}
     if [ $? -ne 0 ];then
-        rm ${4}
+        rm ${5}
 	exit 1
     fi
 fi
+
+echo "${4} *${5}" | sha256sum --strict -c -
+exit $?

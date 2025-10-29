@@ -1,7 +1,7 @@
 --- /dev/null	2018-06-01 10:46:49.956110101 +0200
 +++ Configurations/50-atari.conf	2018-06-03 03:10:55.000000000 +0200
 @@ -0,0 +1,42 @@
-+%targets = (
++my %targets = (
 +    "atari-common" => {
 +        inherit_from     => [ "BASE_unix" ],
 +        template         => 1,
