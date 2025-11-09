@@ -101,4 +101,4 @@ install-gcc-amigaos-doc: doc installdirs installdirs-guide \
 host-amigaos.o : $(srcdir)/config/m68k/host-amigaos.c $(CONFIG_H) $(SYSTEM_H) \
   coretypes.h hosthooks.h hosthooks-def.h toplev.h diagnostic.h
 	$(CC) -c $(ALL_CFLAGS) $(ALL_CPPFLAGS) $(INCLUDES) \
-		$(srcdir)/config/m68k/host-amigaos.c
+		$(srcdir)/config/m68k/host-amigaos.c 

@@ -3,27 +3,25 @@
 
 # sources
 
-UPSTREAM_GCC_VERSION := 3.4.6
-UPSTREAM_GCC_TARBALL := gcc-$(UPSTREAM_GCC_VERSION).tar.bz2
-UPSTREAM_GCC_URI := http://ftp.gnu.org/gnu/gcc/gcc-$(UPSTREAM_GCC_VERSION)/$(UPSTREAM_GCC_TARBALL)
+UPSTREAM_GCC_VERSION := 6.5.0
+UPSTREAM_GCC_TARBALL := gcc-$(UPSTREAM_GCC_VERSION).tar.xz
+UPSTREAM_GCC_URI := https://ftp.gnu.org/gnu/gcc/gcc-$(UPSTREAM_GCC_VERSION)/$(UPSTREAM_GCC_TARBALL)
 
-UPSTREAM_BINUTILS_VERSION := 2.14
-# Not a tarball; so sue me
-UPSTREAM_BINUTILS_TARBALL := binutils-$(UPSTREAM_BINUTILS_VERSION)
-UPSTREAM_BINUTILS_URI := http://svn.code.sf.net/p/adtools/code/branches/binutils/$(UPSTREAM_BINUTILS_VERSION)/
+UPSTREAM_BINUTILS_VERSION := 2.39
+UPSTREAM_BINUTILS_TARBALL := binutils-$(UPSTREAM_BINUTILS_VERSION).tar.bz2
+UPSTREAM_BINUTILS_URI := https://ftp.gnu.org/gnu/binutils/$(UPSTREAM_BINUTILS_TARBALL)
 
-UPSTREAM_GMP_VERSION := 4.3.2
+UPSTREAM_GMP_VERSION := 6.3.0
 UPSTREAM_GMP_TARBALL := gmp-$(UPSTREAM_GMP_VERSION).tar.bz2
 UPSTREAM_GMP_URI := http://ftp.gnu.org/gnu/gmp/$(UPSTREAM_GMP_TARBALL)
 
-# Would use 3.0.0, but that dislikes in-tree gmp sources
-UPSTREAM_MPFR_VERSION := 2.4.2
+UPSTREAM_MPFR_VERSION := 4.2.2
 UPSTREAM_MPFR_TARBALL := mpfr-$(UPSTREAM_MPFR_VERSION).tar.bz2
 UPSTREAM_MPFR_URI := http://www.mpfr.org/mpfr-$(UPSTREAM_MPFR_VERSION)/$(UPSTREAM_MPFR_TARBALL)
 
-UPSTREAM_MPC_VERSION := 0.8.2
+UPSTREAM_MPC_VERSION := 1.3.1
 UPSTREAM_MPC_TARBALL := mpc-$(UPSTREAM_MPC_VERSION).tar.gz
-UPSTREAM_MPC_URI := http://www.multiprecision.org/downloads/$(UPSTREAM_MPC_TARBALL)
+UPSTREAM_MPC_URI := https://ftp.gnu.org/gnu/mpc/$(UPSTREAM_MPC_TARBALL)
 
 UPSTREAM_CLIB2_VERSION := 1_214
 UPSTREAM_CLIB2_TARBALL := V$(UPSTREAM_CLIB2_VERSION).tar.gz
@@ -76,7 +74,8 @@ TARGET_NAME := m68k-unknown-amigaos
 
 PREFIX ?= /opt/netsurf/$(TARGET_NAME)/cross
 
-GCC_ENV_PARAMS := AUTOCONF=$(GCC_AUTOCONF) AUTOHEADER=$(GCC_AUTOHEADER) AUTOM4TE=$(GCC_AUTOM4TE) PATH="$(PREFIX)/bin:$(PATH)"
+GCC_ENV_PARAMS := AUTOCONF=$(GCC_AUTOCONF) AUTOHEADER=$(GCC_AUTOHEADER) AUTOM4TE=$(GCC_AUTOM4TE) 
+GCC_ENV_PARAMS += PATH="$(PREFIX)/bin:$(PATH)"
 
 .PHONY: all clean distclean
 all: $(BUILDSTEPS)/stage2.d
@@ -130,23 +129,23 @@ $(BUILDSTEPS)/ndk.d: $(SOURCESDIR)/$(UPSTREAM_NDK_TARBALL) $(SOURCESDIR)/$(UPSTR
 	for p in `ls $(RECIPES)/patches/ndk/*.p` ; do patch -d $(BUILDDIR)/ndk -p0 <$$p || exit $0 ; done
 	for dir in `find $(RECIPES)/files/ndk/ -type d | grep -v '\.svn' | sed 's#$(RECIPES)/files/ndk##'` ; do mkdir -p $(BUILDDIR)/ndk/NDK3.2$$dir ; done
 	for file in `find $(RECIPES)/files/ndk/ -type f | grep -v '\.svn' | sed 's#$(RECIPES)/files/ndk##'` ; do cp -p $(RECIPES)/files/ndk$$file $(BUILDDIR)/ndk/NDK3.2$$file ; done
-	mkdir -p $(PREFIX)/$(TARGET_NAME)/sys-include
-	cp -r $(BUILDDIR)/ndk/NDK3.2/Include_H/* $(PREFIX)/$(TARGET_NAME)/sys-include
+	mkdir -p $(PREFIX)/$(TARGET_NAME)/ndk-include
+	cp -r $(BUILDDIR)/ndk/NDK3.2/Include_H/* $(PREFIX)/$(TARGET_NAME)/ndk-include
 	mkdir -p $(BUILDDIR)/openurl
 	cd $(BUILDDIR)/openurl && tar xaf $(SOURCESDIR)/$(UPSTREAM_OPENURL_TARBALL)
-	cp -r $(BUILDDIR)/openurl/libopenurl-$(UPSTREAM_OPENURL_VERSION)/include/* $(PREFIX)/$(TARGET_NAME)/sys-include/
+	cp -r $(BUILDDIR)/openurl/libopenurl-$(UPSTREAM_OPENURL_VERSION)/include/* $(PREFIX)/$(TARGET_NAME)/ndk-include/
 	mkdir -p $(BUILDDIR)/guigfxlib
 	lha xw=$(BUILDDIR)/guigfxlib $(SOURCESDIR)/$(UPSTREAM_GUIGFX_TARBALL)
-	cp -r $(BUILDDIR)/guigfxlib/include/* $(PREFIX)/$(TARGET_NAME)/sys-include/
+	cp -r $(BUILDDIR)/guigfxlib/include/* $(PREFIX)/$(TARGET_NAME)/ndk-include/
 	mkdir -p $(BUILDDIR)/renderlib
 	lha xw=$(BUILDDIR)/renderlib $(SOURCESDIR)/$(UPSTREAM_RENDER_TARBALL)
-	cp -r $(BUILDDIR)/renderlib/renderlib/include/* $(PREFIX)/$(TARGET_NAME)/sys-include/
+	cp -r $(BUILDDIR)/renderlib/renderlib/include/* $(PREFIX)/$(TARGET_NAME)/ndk-include/
 	mkdir -p $(BUILDDIR)/codesets
 	lha xw=$(BUILDDIR)/codesets $(SOURCESDIR)/$(UPSTREAM_CODESETS_TARBALL)
-	cp -r $(BUILDDIR)/codesets/codesets/Developer/include/* $(PREFIX)/$(TARGET_NAME)/sys-include/
+	cp -r $(BUILDDIR)/codesets/codesets/Developer/include/* $(PREFIX)/$(TARGET_NAME)/ndk-include/
 	mkdir -p $(BUILDDIR)/AmiSSL
 	lha xw=$(BUILDDIR)/AmiSSL $(SOURCESDIR)/$(UPSTREAM_AMISSL_TARBALL)
-	cp -r $(BUILDDIR)/AmiSSL/AmiSSL/Developer/include/* $(PREFIX)/$(TARGET_NAME)/sys-include/
+	cp -r $(BUILDDIR)/AmiSSL/AmiSSL/Developer/include/* $(PREFIX)/$(TARGET_NAME)/ndk-include/
 	cp -r $(BUILDDIR)/AmiSSL/AmiSSL/Developer/lib/AmigaOS3/* $(PREFIX)/$(TARGET_NAME)/lib/
 	touch $@
 
@@ -189,7 +188,7 @@ $(BUILDSTEPS)/srcdir-step2.d: $(BUILDSTEPS)/srcdir-step1.d $(SOURCESDIR)/$(UPSTR
 	touch $@
 
 $(BUILDSTEPS)/srcdir-step1.d: $(BUILDSTEPS)/$(UPSTREAM_GCC_TARBALL).d
-	tar xjf $(SOURCESDIR)/$(UPSTREAM_GCC_TARBALL)
+	tar xJf $(SOURCESDIR)/$(UPSTREAM_GCC_TARBALL)
 	mv gcc-$(UPSTREAM_GCC_VERSION) $(GCC_SRCDIR)
 	touch $@
 
@@ -230,8 +229,11 @@ $(BUILDSTEPS)/binutils.d: $(BUILDSTEPS)/binutils-srcdir.d
 	touch $@
 
 $(BUILDSTEPS)/binutils-srcdir.d: $(SOURCESDIR)/$(UPSTREAM_BINUTILS_TARBALL)
-	cp -r $(SOURCESDIR)/$(UPSTREAM_BINUTILS_TARBALL) $(BINUTILS_SRCDIR)
+	tar xjf $(SOURCESDIR)/$(UPSTREAM_BINUTILS_TARBALL)
+	mv binutils-$(UPSTREAM_BINUTILS_VERSION) $(BINUTILS_SRCDIR)
 	for p in `ls $(RECIPES)/patches/binutils/*.p` ; do patch -d $(BINUTILS_SRCDIR) -p0 <$$p ; done
+	for dir in `find $(RECIPES)/files/binutils/ -type d | grep -v '\.svn' | sed 's#$(RECIPES)/files/binutils##'` ; do mkdir -p $(BINUTILS_SRCDIR)$$dir ; done
+	for file in `find $(RECIPES)/files/binutils/ -type f | grep -v '\.svn' | sed 's#$(RECIPES)/files/binutils##'` ; do cp -p $(RECIPES)/files/binutils$$file $(BINUTILS_SRCDIR)$$file ; done
 	touch $@
 
 ###
@@ -251,7 +253,7 @@ $(SOURCESDIR)/$(UPSTREAM_MPC_TARBALL):
 	wget -q -O $@ $(UPSTREAM_MPC_URI)
 
 $(SOURCESDIR)/$(UPSTREAM_BINUTILS_TARBALL):
-	svn co $(UPSTREAM_BINUTILS_URI) $@
+	wget -q -O $@ $(UPSTREAM_BINUTILS_URI)
 
 $(SOURCESDIR)/$(UPSTREAM_CLIB2_TARBALL):
 	wget -q -O $@ $(UPSTREAM_CLIB2_URI)

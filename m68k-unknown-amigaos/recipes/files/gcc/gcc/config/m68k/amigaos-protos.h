@@ -21,7 +21,9 @@ along with GCC; see the file COPYING.  If not, write to
 the Free Software Foundation, 59 Temple Place - Suite 330,
 Boston, MA 02111-1307, USA.  */
 
-extern int amigaos_restore_a4 (void);
+#undef TARGET_AMIGAOS
+#define TARGET_AMIGAOS 1
+
 #ifdef RTX_CODE
 extern int read_only_operand (rtx);
 extern void amigaos_select_section (tree, int, unsigned HOST_WIDE_INT);
@@ -33,13 +35,11 @@ extern void amigaos_alternate_frame_setup (FILE *, int);
 extern struct rtx_def* gen_stack_cleanup_call (rtx, rtx);
 extern void amigaos_alternate_allocate_stack (rtx *);
 #ifdef TREE_CODE
-extern void amigaos_init_cumulative_args (CUMULATIVE_ARGS *, tree);
-extern void amigaos_function_arg_advance (CUMULATIVE_ARGS *);
-extern struct rtx_def *amigaos_function_arg (CUMULATIVE_ARGS *, enum machine_mode, tree);
+//extern void m68k_function_arg_advance (CUMULATIVE_ARGS *);
+extern struct rtx_def *m68k_function_arg (CUMULATIVE_ARGS *, enum machine_mode, tree);
 #endif
 #endif
 #ifdef TREE_CODE
 extern tree amigaos_handle_decl_attribute (tree *, tree, tree, int, bool *);
-extern tree amigaos_handle_type_attribute (tree *, tree, tree, int, bool *);
-extern int amigaos_comp_type_attributes (tree, tree);
-#endif
+extern tree m68k_handle_type_attribute (tree *, tree, tree, int, bool *);
+#endif 

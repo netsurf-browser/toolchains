@@ -39,4 +39,4 @@ amigaos_m68k_gt_pch_get_address (size_t sz ATTRIBUTE_UNUSED)
 #undef HOST_HOOKS_GT_PCH_GET_ADDRESS
 #define HOST_HOOKS_GT_PCH_GET_ADDRESS amigaos_m68k_gt_pch_get_address
 
-const struct host_hooks host_hooks = HOST_HOOKS_INITIALIZER;
+const struct host_hooks host_hooks = HOST_HOOKS_INITIALIZER; 

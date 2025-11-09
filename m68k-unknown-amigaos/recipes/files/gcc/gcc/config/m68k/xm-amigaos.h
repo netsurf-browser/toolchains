@@ -61,4 +61,4 @@ Boston, MA 02111-1307, USA.  */
 /* Zap PREFIX_INCLUDE_DIR, since with the AmigaOS port it is the same as
    STANDARD_INCLUDE_DIR.  */
 
-#undef PREFIX_INCLUDE_DIR
+#undef PREFIX_INCLUDE_DIR 

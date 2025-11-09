@@ -28,9 +28,8 @@ Boston, MA 02111-1307, USA.  */
 /* From collect2.c:  */
 
 void maybe_unlink(const char *);
-void fatal_perror(const char *, ...);
-void fork_execute(const char *, char **);
-void fatal(const char *, ...);
+void fatal_error(location_t, const char *, ...);
+void fork_execute(const char *, char **, bool);
 
 extern char *c_file_name;
 extern int debug;
@@ -189,7 +188,7 @@ cat (const char *fname, FILE *x)
   
   in = fopen(fname, "r");
   if (in == NULL)
-    fatal_perror("%s", fname);
+    fatal_error (input_location, "%s", fname);
   while (!feof(in) && (bytes = fread(buf, 1, BUFSIZE, in)))
     fwrite(buf, 1, bytes, x);
   fclose(in);
@@ -240,7 +239,7 @@ amigaos_prelink_hook (const char **ld1_argv, int *strip_flag)
 	      for (lib=head; lib; lib=lib->next)
 		if (strcmp(*ld1+strlen("-l"), lib->name)==0)
 		  {
-		    char *newname=
+		    char *newname=(char*)
 			    xmalloc(strlen(*ld1)+strlen(DYNAMIC_LIB_SUFFIX)+1);
 		    strcpy(newname, *ld1);
 		    strcat(newname, DYNAMIC_LIB_SUFFIX);
@@ -263,7 +262,7 @@ amigaos_prelink_hook (const char **ld1_argv, int *strip_flag)
 		for (lib=head; lib; lib=lib->next)
 		  if (strcmp(libname+4, lib->name)==0)
 		    {
-		      char *newname=xmalloc(strlen(*ld1)+
+		      char *newname=(char*)xmalloc(strlen(*ld1)+
 					    strlen(DYNAMIC_LIB_SUFFIX)+3);
 		      strcpy(newname, *ld1);
 		      strcat(newname, DYNAMIC_LIB_SUFFIX);
@@ -285,10 +284,10 @@ amigaos_prelink_hook (const char **ld1_argv, int *strip_flag)
 
       out = fopen(XLIBS_C_NAME, "w");
       if (out == NULL)
-	fatal_perror("%s", XLIBS_C_NAME);
+	fatal_error (input_location, "%s", XLIBS_C_NAME);
       x = fopen(SHARED_X_NAME, "w");
       if (x == NULL)
-	fatal_perror("%s", SHARED_X_NAME);
+	fatal_error (input_location, "%s", SHARED_X_NAME);
 
       cat((flag_baserel ? A2IXDIR_PREFIX "/amiga_exe_baserel_script.x"
 			: A2IXDIR_PREFIX "/amiga_exe_script.x"), x);
@@ -304,7 +303,7 @@ amigaos_prelink_hook (const char **ld1_argv, int *strip_flag)
       fclose(out);
       fclose(x);
       argv[0]=c_file_name;
-      fork_execute("gcc", (char **)argv);
+      fork_execute("gcc", (char **)argv, false);
 
       /* Unfortunately, unlike "-s", "-T" cannot be specified as the last
 	 argument. We put it after "-L" args.  */
@@ -318,7 +317,7 @@ amigaos_prelink_hook (const char **ld1_argv, int *strip_flag)
       while (ld1>ld1_argv && strncmp(*ld1, "-L", strlen("-L")))
 	ld1--;
       if (ld1==ld1_argv)
-	fatal("no -L arguments");
+	fatal_error (input_location, "no -L arguments");
       ld1++;
       /* "ld1" now points after "-L".  */
 
@@ -345,5 +344,5 @@ amigaos_postlink_hook (const char *output_file)
     }
   else
     argv[1]=output_file;
-  fork_execute("postlink", (char **)argv);
+  fork_execute("postlink", (char **)argv, false);
 }
