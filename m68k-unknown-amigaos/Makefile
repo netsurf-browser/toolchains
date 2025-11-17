@@ -3,7 +3,7 @@
 
 # sources
 
-UPSTREAM_GCC_VERSION := 6.5.0
+UPSTREAM_GCC_VERSION := 15.2.0
 UPSTREAM_GCC_TARBALL := gcc-$(UPSTREAM_GCC_VERSION).tar.xz
 UPSTREAM_GCC_URI := https://ftp.gnu.org/gnu/gcc/gcc-$(UPSTREAM_GCC_VERSION)/$(UPSTREAM_GCC_TARBALL)
 
@@ -23,9 +23,13 @@ UPSTREAM_MPC_VERSION := 1.3.1
 UPSTREAM_MPC_TARBALL := mpc-$(UPSTREAM_MPC_VERSION).tar.gz
 UPSTREAM_MPC_URI := https://ftp.gnu.org/gnu/mpc/$(UPSTREAM_MPC_TARBALL)
 
-UPSTREAM_CLIB2_VERSION := 1_214
+UPSTREAM_CLIB2_VERSION := 1_215
 UPSTREAM_CLIB2_TARBALL := V$(UPSTREAM_CLIB2_VERSION).tar.gz
 UPSTREAM_CLIB2_URI := https://github.com/adtools/clib2/archive/$(UPSTREAM_CLIB2_TARBALL)
+
+UPSTREAM_NEWLIB_VERSION := 4c8cbd88df31cd06c89b258585ea5cd86cc9dc45
+UPSTREAM_NEWLIB_TARBALL := $(UPSTREAM_NEWLIB_VERSION).tar.gz
+UPSTREAM_NEWLIB_URI := https://github.com/AmigaPorts/newlib-cygwin/archive/$(UPSTREAM_NEWLIB_TARBALL)
 
 UPSTREAM_NDK_TARBALL := NDK3.2R4.lha
 UPSTREAM_NDK_URI := "http://hyperion-entertainment.biz/index.php/downloads?view=download&format=raw&file=126"
@@ -54,10 +58,10 @@ UPSTREAM_BISON_TARBALL := bison-$(UPSTREAM_BISON_VERSION).tar.gz
 UPSTREAM_BISON_URI := https://ftp.gnu.org/gnu/bison/$(UPSTREAM_BISON_TARBALL)
 
 # need to force the auto* version in use
-GCC_AUTOCONF := autoconf2.64
-GCC_AUTOHEADER := autoheader2.64
-GCC_AUTORECONF := autoreconf2.64
-GCC_AUTOM4TE := autom4te2.64
+GCC_AUTOCONF := autoconf2.69
+GCC_AUTOHEADER := autoheader2.69
+GCC_AUTORECONF := autoreconf2.69
+GCC_AUTOM4TE := autom4te2.69
 
 TOP := $(CURDIR)
 RECIPES := $(TOP)/recipes
@@ -74,8 +78,7 @@ TARGET_NAME := m68k-unknown-amigaos
 
 PREFIX ?= /opt/netsurf/$(TARGET_NAME)/cross
 
-GCC_ENV_PARAMS := AUTOCONF=$(GCC_AUTOCONF) AUTOHEADER=$(GCC_AUTOHEADER) AUTOM4TE=$(GCC_AUTOM4TE) 
-GCC_ENV_PARAMS += PATH="$(PREFIX)/bin:$(PATH)"
+GCC_ENV_PARAMS := AUTOCONF=$(GCC_AUTOCONF) AUTOHEADER=$(GCC_AUTOHEADER) AUTOM4TE=$(GCC_AUTOM4TE) PATH="$(PREFIX)/bin:$(PATH)"
 
 .PHONY: all clean distclean
 all: $(BUILDSTEPS)/stage2.d
@@ -90,7 +93,7 @@ distclean: clean
 # Rules to build the full compiler
 ###
 
-$(BUILDSTEPS)/stage2.d: $(BUILDSTEPS)/clib2.d
+$(BUILDSTEPS)/stage2.d: $(BUILDSTEPS)/newlib.d
 	cd $(BUILDDIR) && $(GCC_ENV_PARAMS) make all
 	cd $(BUILDDIR) && $(GCC_ENV_PARAMS) make install
 	touch $@
@@ -116,6 +119,31 @@ $(BUILDSTEPS)/clib2-src.d: $(SOURCESDIR)/$(UPSTREAM_CLIB2_TARBALL)
 	for p in `ls $(RECIPES)/patches/clib2/*.p` ; do patch -d $(BUILDDIR)/clib2 -p0 <$$p || exit $0 ; done
 	for dir in `find $(RECIPES)/files/clib2/ -type d | grep -v '\.svn' | sed 's#$(RECIPES)/files/clib2##'` ; do mkdir -p $(BUILDDIR)/clib2$$dir ; done
 	for file in `find $(RECIPES)/files/clib2/ -type f | grep -v '\.svn' | sed 's#$(RECIPES)/files/clib2##'` ; do cp -p $(RECIPES)/files/clib2$$file $(BUILDDIR)/clib2$$file ; done
+	touch $@
+
+
+###
+# Rules to build and install newlib
+###
+
+$(BUILDSTEPS)/newlib.d: $(BUILDSTEPS)/bootstrap-compiler.d $(BUILDSTEPS)/ndk.d $(BUILDSTEPS)/newlib-src.d
+	cp -r $(BUILDDIR)/newlib/newlib/libc/include $(PREFIX)/$(TARGET_NAME)
+	cp $(BUILDDIR)/newlib/newlib/libc/sys/amigaos/include/stabs.h $(PREFIX)/$(TARGET_NAME)/include
+	cd $(BUILDDIR)/newlib/newlib && PATH="$(PREFIX)/bin:$(PATH)" CC="$(PREFIX)/bin/$(TARGET_NAME)-gcc" ./configure --host=$(TARGET_NAME) --prefix=$(PREFIX) --enable-newlib-io-long-long --enable-newlib-io-c99-formats --enable-newlib-reent-small --enable-newlib-mb --enable-newlib-long-time_t
+	cd $(BUILDDIR)/newlib/newlib && PATH="$(PREFIX)/bin:$(PATH)" make
+	cd $(BUILDDIR)/newlib/newlib && PATH="$(PREFIX)/bin:$(PATH)" make install
+	touch $@
+
+
+$(BUILDSTEPS)/newlib-src.d: $(SOURCESDIR)/$(UPSTREAM_NEWLIB_TARBALL)
+	$(RM) -rf $(SOURCESDIR)/newlib-cygwin-$(UPSTREAM_NEWLIB_VERSION)
+	$(RM) -rf $(BUILDDIR)/newlib
+	cd $(SOURCESDIR) && tar xaf $(SOURCESDIR)/$(UPSTREAM_NEWLIB_TARBALL)
+	mv $(SOURCESDIR)/newlib-cygwin-$(UPSTREAM_NEWLIB_VERSION) $(BUILDDIR)/newlib
+	$(RM) -rf $(SOURCESDIR)/newlib-cygwin-$(UPSTREAM_NEWLIB_VERSION)
+	for p in `ls $(RECIPES)/patches/newlib/*.p` ; do patch -d $(BUILDDIR)/newlib -p0 <$$p || exit $0 ; done
+	for dir in `find $(RECIPES)/files/newlib/ -type d | grep -v '\.svn' | sed 's#$(RECIPES)/files/newlib##'` ; do mkdir -p $(BUILDDIR)/newlib$$dir ; done
+	for file in `find $(RECIPES)/files/newlib/ -type f | grep -v '\.svn' | sed 's#$(RECIPES)/files/newlib##'` ; do cp -p $(RECIPES)/files/newlib$$file $(BUILDDIR)/newlib$$file ; done
 	touch $@
 
 
@@ -158,12 +186,14 @@ $(BUILDSTEPS)/bootstrap-compiler.d: $(BUILDSTEPS)/bison.d $(BUILDSTEPS)/srcdir-s
 				--prefix=$(PREFIX) \
 				--target=$(TARGET_NAME) \
 				--disable-threads \
+				--disable-libssp \
 				--disable-nls --disable-c-mbchar \
 				--enable-languages=c --enable-checking=no \
 				--enable-c99 --with-cross-host \
 				--disable-multilib --without-x \
 				--enable-maintainer-mode --disable-shared \
-				--without-headers
+				--without-headers \
+				--disable-libatomic
 	cd $(BUILDDIR) && $(GCC_ENV_PARAMS) make all-gcc
 	cd $(BUILDDIR) && $(GCC_ENV_PARAMS) make install-gcc
 	touch $@
@@ -223,7 +253,7 @@ $(BUILDSTEPS)/$(UPSTREAM_BISON_TARBALL).d: $(BUILDSTEPS)/buildsteps.d $(SOURCESD
 # Build a 32bit binary until this gets fixed
 $(BUILDSTEPS)/binutils.d: $(BUILDSTEPS)/binutils-srcdir.d
 	mkdir -p $(BUILDDIR)/binutils
-	cd $(BUILDDIR)/binutils && CFLAGS="-m32" LDFLAGS="-m32" $(BINUTILS_SRCDIR)/configure --prefix=$(PREFIX) --target=$(TARGET_NAME) --disable-nls --disable-werror
+	cd $(BUILDDIR)/binutils && CFLAGS="-m32" LDFLAGS="-m32" $(BINUTILS_SRCDIR)/configure --prefix=$(PREFIX) --target=$(TARGET_NAME) --disable-nls --disable-werror --enable-plugins
 	cd $(BUILDDIR)/binutils && make
 	cd $(BUILDDIR)/binutils && make install
 	touch $@
@@ -257,6 +287,9 @@ $(SOURCESDIR)/$(UPSTREAM_BINUTILS_TARBALL):
 
 $(SOURCESDIR)/$(UPSTREAM_CLIB2_TARBALL):
 	wget -q -O $@ $(UPSTREAM_CLIB2_URI)
+
+$(SOURCESDIR)/$(UPSTREAM_NEWLIB_TARBALL):
+	wget -q -O $@ $(UPSTREAM_NEWLIB_URI)
 
 $(SOURCESDIR)/$(UPSTREAM_NDK_TARBALL):
 	wget -q -O $@ $(UPSTREAM_NDK_URI)

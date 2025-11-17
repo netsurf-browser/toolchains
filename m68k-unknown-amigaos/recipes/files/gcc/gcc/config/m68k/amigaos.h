@@ -25,40 +25,7 @@ along with GCC; see the file COPYING.  If not, write to
 the Free Software Foundation, 59 Temple Place - Suite 330,
 Boston, MA 02111-1307, USA.  */
 
-#if 0
-/*  The function name __transfer_from_trampoline is not actually used.
-   The function definition just permits use of asm with operands"
-   (though the operand list is empty).  */
-   
-#undef TRANSFER_FROM_TRAMPOLINE				 
-
-/* Call __flush_cache() after building the trampoline: it will call
-   an appropriate OS cache-clearing routine.  */
-
-#undef FINALIZE_TRAMPOLINE
-#define FINALIZE_TRAMPOLINE(TRAMP)					\
-  emit_library_call (gen_rtx_SYMBOL_REF (Pmode, "__flush_cache"),	\
-		     0, VOIDmode, 2, (TRAMP), Pmode,			\
-		     GEN_INT (TRAMPOLINE_SIZE), SImode)
-
-#endif
-
-/* Compile using the first 'm68k_regparm' data, address and float
-   registers for arguments passing.  */      
-/*#define SUBTARGET_OPTIONS     { "regparm=",		&m68k_regparm_string,				\
-    N_("Use this register count to pass arguments"), 0},*/	
-
-
-/* Nonzero if we need to generate special stack-allocating insns.
-   On most systems they are not needed.
-   When they are needed, also define ALTERNATE_ALLOCATE_STACK (see m68k.md)
-   to perform the necessary actions.  */
-//#undef TARGET_ALTERNATE_ALLOCATE_STACK
-//#define TARGET_ALTERNATE_ALLOCATE_STACK 0  
-
-
 /* Compile with stack extension.  */
-
 #define MASK_STACKEXTEND 0x40000000 /* 1 << 30 */
 #define TARGET_STACKEXTEND (((target_flags & MASK_STACKEXTEND)		\
   && !lookup_attribute ("interrupt",					\
@@ -112,24 +79,19 @@ amiga_named_section (const char *name, unsigned int flags, tree decl);
 #undef TARGET_ASM_NAMED_SECTION
 #define TARGET_ASM_NAMED_SECTION amiga_named_section
 
+extern section *
+amiga_select_section (tree decl, int reloc ATTRIBUTE_UNUSED,
+		    unsigned HOST_WIDE_INT align ATTRIBUTE_UNUSED);
+
+#undef  TARGET_ASM_SELECT_SECTION
+#define TARGET_ASM_SELECT_SECTION	amiga_select_section
+
+
 /* Various ABI issues.  */
-
-/* This is (almost;-) BSD, so it wants DBX format.  */
-#undef DBX_DEBUGGING_INFO
-#define DBX_DEBUGGING_INFO
-
-/* GDB goes mad if it sees the function end marker.  */
-
-#define NO_DBX_FUNCTION_END 1
 
 /* Allow folding division by zero.  */
 
 #define REAL_INFINITY
-
-/* Don't try using XFmode since we don't have appropriate runtime software
-   support.  */
-#undef LONG_DOUBLE_TYPE_SIZE
-#define LONG_DOUBLE_TYPE_SIZE 64
 
 /* We use A4 for the PIC pointer, not A5, which is the framepointer.  */
 
@@ -154,7 +116,7 @@ amiga_named_section (const char *name, unsigned int flags, tree decl);
    (inspite of ANSI-C) declare main() to be void (or even VOID...) and thus
    cause the shell to randomly caugh upon executing such programs (contrary
    to Unix, AmigaOS scripts are terminated with an error if a program returns
-   with an error code above the `error' or even `failure' level
+   with an error code above the 'error' or even 'failure' level
    (which is configurable with the FAILAT command)).  */
 
 //+2004-06-24  Ulrich Weigand  <uweigand@de.ibm.com>
@@ -169,22 +131,6 @@ amiga_named_section (const char *name, unsigned int flags, tree decl);
 
 #undef WCHAR_TYPE
 #define WCHAR_TYPE "unsigned int"
-
-/* XXX: section support */
-#if 0
-/* We define TARGET_ASM_NAMED_SECTION, but we don't support arbitrary sections,
-   including '.gcc_except_table', so we emulate the standard behaviour.  */
-#undef TARGET_ASM_EXCEPTION_SECTION
-#define TARGET_ASM_EXCEPTION_SECTION amiga_exception_section
-
-#undef TARGET_ASM_EH_FRAME_SECTION
-#define TARGET_ASM_EH_FRAME_SECTION amiga_eh_frame_section
-#endif
-
-/* Use sjlj exceptions because dwarf work only on elf targets */
-#undef DWARF2_UNWIND_INFO
-#define DWARF2_UNWIND_INFO	0
-
 
 /* This is how to output an assembler line that says to advance the
    location counter to a multiple of 2**LOG bytes.  */
@@ -205,156 +151,6 @@ do									\
   }									\
 while (0)
 
-#if 0
-
-/* Define this macro if references to a symbol must be treated
-   differently depending on something about the variable or
-   function named by the symbol (such as what section it is in).
-
-   The macro definition, if any, is executed immediately after the
-   rtl for DECL or other node is created.
-   The value of the rtl will be a `mem' whose address is a
-   `symbol_ref'.
-
-   The usual thing for this macro to do is to a flag in the
-   `symbol_ref' (such as `SYMBOL_REF_FLAG') or to store a modified
-   name string in the `symbol_ref' (if one bit is not enough
-   information).
-
-   On the Amiga we use this to indicate if references to a symbol should be
-   absolute or base relative.  */
-
-#undef TARGET_ENCODE_SECTION_INFO
-#define TARGET_ENCODE_SECTION_INFO amigaos_encode_section_info
-
-#define LIBCALL_ENCODE_SECTION_INFO(FUN)				\
-do									\
-  {									\
-    if (flag_pic >= 3)							\
-      SYMBOL_REF_FLAG (FUN) = 1;					\
-  }									\
-while (0)
-
-/* Select and switch to a section for EXP.  */
-
-//#undef TARGET_ASM_SELECT_SECTION
-//#define TARGET_ASM_SELECT_SECTION amigaos_select_section
-
-/* Preserve A4 for baserel code if necessary.  */
-
-#define EXTRA_SAVE_REG(REGNO)						\
-do {									\
-  if (flag_pic && flag_pic >= 3 && REGNO == PIC_OFFSET_TABLE_REGNUM	\
-      && amigaos_restore_a4())						\
-    return true;							\
-} while (0)
-
-/* Predicate for ALTERNATE_PIC_SETUP.  */
-
-#define HAVE_ALTERNATE_PIC_SETUP (flag_pic >= 3)
-
-/* Make a4 point at data hunk.  */
-
-#define ALTERNATE_PIC_SETUP(STREAM)					\
-  (amigaos_alternate_pic_setup (STREAM))
-
-/* Attribute support.  */
-
-/* Generate the test of d0 before return to set cc register in 'interrupt'
-   function.  */
-
-#define EPILOGUE_END_HOOK(STREAM)					\
-do									\
-  {									\
-    if (lookup_attribute ("interrupt",					\
-			  TYPE_ATTRIBUTES (TREE_TYPE (current_function_decl)))) \
-      asm_fprintf ((STREAM), "\ttstl %Rd0\n");				\
-  }									\
-while (0)
-
-
-/* Stack checking and automatic extension support.  */
-
-#define PROLOGUE_BEGIN_HOOK(STREAM, FSIZE)				\
-  (amigaos_prologue_begin_hook ((STREAM), (FSIZE)))
-
-#define HAVE_ALTERNATE_FRAME_DESTR_F(FSIZE)				\
-  (TARGET_STACKEXTEND && current_function_calls_alloca)
-
-#define ALTERNATE_FRAME_DESTR_F(STREAM, FSIZE)				\
-  (asm_fprintf ((STREAM), "\tjra %U__unlk_a5_rts\n"))
-
-#define HAVE_ALTERNATE_RETURN						\
-  (TARGET_STACKEXTEND && frame_pointer_needed &&			\
-   current_function_calls_alloca)
-
-#define ALTERNATE_RETURN(STREAM)
-
-#if 0
-#define HAVE_restore_stack_nonlocal TARGET_STACKEXTEND
-#define gen_restore_stack_nonlocal gen_stack_cleanup_call
-
-#define HAVE_restore_stack_function TARGET_STACKEXTEND
-#define gen_restore_stack_function gen_stack_cleanup_call
-
-#define HAVE_restore_stack_block TARGET_STACKEXTEND
-#define gen_restore_stack_block gen_stack_cleanup_call
-
-#undef TARGET_ALTERNATE_ALLOCATE_STACK
-#define TARGET_ALTERNATE_ALLOCATE_STACK 1
-
-#define ALTERNATE_ALLOCATE_STACK(OPERANDS)				\
-do									\
-  {									\
-    amigaos_alternate_allocate_stack (OPERANDS);			\
-    DONE;								\
-  }									\
-while (0)
-#endif
-
-/* begin-GG-local: dynamic libraries */
-
-extern int amigaos_do_collecting (void);
-extern void amigaos_gccopts_hook (const char *);
-extern void amigaos_libname_hook (const char* arg);
-extern void amigaos_collect2_cleanup (void);
-extern void amigaos_prelink_hook (const char **, int *);
-extern void amigaos_postlink_hook (const char *);
-
-/* This macro is used to check if all collect2 facilities should be used.
-   We need a few special ones, like stripping after linking.  */
-
-#define DO_COLLECTING (do_collecting || amigaos_do_collecting())
-#define COLLECT2_POSTLINK_HOOK(OUTPUT_FILE) amigaos_postlink_hook(OUTPUT_FILE) //new
-
-/* This macro is called in collect2 for every GCC argument name.
-   ARG is a part of commandline (without '\0' at the end).  */
-
-#define COLLECT2_GCC_OPTIONS_HOOK(ARG) amigaos_gccopts_hook(ARG)
-
-/* This macro is called in collect2 for every ld's "-l" or "*.o" or "*.a"
-   argument.  ARG is a complete argument, with '\0' at the end.  */
-
-#define COLLECT2_LIBNAME_HOOK(ARG) amigaos_libname_hook(ARG)
-
-/* This macro is called at collect2 exit, to clean everything up.  */
-
-#define COLLECT2_EXTRA_CLEANUP amigaos_collect2_cleanup
-
-/* This macro is called just before the first linker invocation.
-   LD1_ARGV is "char** argv", which will be passed to "ld".  STRIP is an
-   *address* of "strip_flag" variable.  */
-
-#define COLLECT2_PRELINK_HOOK(LD1_ARGV, STRIP) \
-amigaos_prelink_hook((const char **)(LD1_ARGV), (STRIP))
-
-/* This macro is called just after the first linker invocation, in place of
-   "nm" and "ldd".  OUTPUT_FILE is the executable's filename.  */
-
-#define COLLECT2_POSTLINK_HOOK(OUTPUT_FILE) amigaos_postlink_hook(OUTPUT_FILE)
-/* end-GG-local */ 
-
-#endif
 
 /* begin-GG-local: explicit register specification for parameters */
 
@@ -376,38 +172,25 @@ do									\
     if (flag_resident)							\
       {									\
         if (flag_pic)							\
-	  error ("-fbaserel and -resident are mutual exclusiv\n");	\
+	  error ("%'-fbaserel%' and %'-resident%' are mutual exclusiv");	\
         flag_pic = flag_resident;					\
       }									\
     if (!TARGET_68020 && flag_pic==4)					\
-      error ("-fbaserel32 is not supported on the 68000 or 68010\n");	\
+      error ("%'-fbaserel32%' is not supported on the 68000 or 68010");	\
   }									\
 while (0)
 
-/* { name, min_len, max_len, decl_req, type_req, fn_type_req, handler,
-     affects_type_identity } */
+/* { name, min_len, max_len, decl_req, type_req, fn_type_req, affects_type_identity, handler, exclude
+     } */
 #define SUBTARGET_ATTRIBUTES                                            \
-  { "chip", 0, 0, false, true, false, amigaos_handle_type_attribute, false }, \
-  { "fast", 0, 0, false, true, false, amigaos_handle_type_attribute, false }, \
-  { "far",  0, 0, false, true, false, amigaos_handle_type_attribute, false }, \
-  { "saveds", 0, 0, false, true, true, amigaos_handle_type_attribute, false }, \
-  { "entrypoint", 0, 0, false, true, true, amigaos_handle_type_attribute, false }, \
-  { "saveallregs", 0, 0, false, true, true, amigaos_handle_type_attribute, false },
+  { "chip", 0, 0, false, true, false, false, amigaos_handle_type_attribute, NULL }, \
+  { "fast", 0, 0, false, true, false, false, amigaos_handle_type_attribute, NULL }, \
+  { "far",  0, 0, false, true, false, false, amigaos_handle_type_attribute, NULL }, \
+  { "saveds", 0, 0, false, true, true, false, amigaos_handle_type_attribute, NULL }, \
+  { "entrypoint", 0, 0, false, true, true, false, amigaos_handle_type_attribute, NULL }, \
+  { "saveallregs", 0, 0, false, true, true, false, amigaos_handle_type_attribute, NULL },
 
 #define GOT_SYMBOL_NAME ""
-
-
-extern bool
-amigaos_legitimate_src (rtx src);
-
-extern void
-amigaos_restore_a4 (void);
-
-extern void
-amigaos_alternate_frame_setup_f (int fsize);
-
-extern void
-amigaos_alternate_frame_setup (int fsize);
 
 
 #define HAVE_ALTERNATE_FRAME_SETUP_F(FSIZE) TARGET_STACKEXTEND
@@ -422,11 +205,4 @@ amigaos_alternate_frame_setup (int fsize);
 
 #undef TARGET_INSERT_ATTRIBUTES
 #define TARGET_INSERT_ATTRIBUTES amigaos_insert_attribute
-
-void
-amigaos_insert_attribute (tree decl, tree * attr);
-
-extern tree
-amigaos_handle_type_attribute (tree *node, tree name, tree args, int flags ATTRIBUTE_UNUSED, bool *no_add_attrs);
-
 

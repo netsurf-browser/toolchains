@@ -28,6 +28,7 @@
 #include "insn-config.h"
 #include "recog.h"
 #include "cfgrtl.h"
+#include "memmodel.h"
 #include "emit-rtl.h"
 #include "tree.h"
 #include "tree-pass.h"
@@ -148,7 +149,7 @@ namespace
 					    UNSPEC_RELOC16);
 	s = gen_rtx_CONST (Pmode, s);
 	s = gen_rtx_PLUS (Pmode, picreg, s);
-	s = gen_rtx_CONST (Pmode, s);
+//	s = gen_rtx_CONST (Pmode, s);
 
 	// try to use it directly.
 	if (!use_tmp)
@@ -195,6 +196,11 @@ namespace
 
     switch (code)
     {
+      // skip double replacement
+      case PLUS:
+	  if (XEXP (*x, 0) == picreg)
+	    return 1;
+	break;
       /*
        * Handle set: SRC and DEST may each have different symbols, so reset the use_tmp flag.
        */
@@ -377,7 +383,7 @@ namespace
       {
 	next = NEXT_INSN (insn);
 
-	if (NONJUMP_INSN_P(insn))
+	if (NONDEBUG_INSN_P(insn))
 	  {
 
 	    rtx set = single_set (insn);

@@ -1,3 +1,5 @@
+#define IN_TARGET_CODE 1
+
 #include "config.h"
 #include "system.h"
 #include "coretypes.h"
@@ -35,8 +37,8 @@ const_int_cost (HOST_WIDE_INT i)
 
 
 bool
-m68k_68000_10_costs (rtx x, machine_mode mode, int outer_code,
-		int opno,
+m68k_68000_10_costs (rtx x, machine_mode mode, int outer_code ATTRIBUTE_UNUSED,
+		int opno ATTRIBUTE_UNUSED,
 		int *total, bool speed )
 {
   int code = GET_CODE (x);
@@ -71,7 +73,7 @@ m68k_68000_10_costs (rtx x, machine_mode mode, int outer_code,
 	      }
 	    else if (SYMBOL_REF_P(b) || GET_CODE(b) == CONST_INT)
 	      {
-		tree decl = SYMBOL_REF_DECL (b);
+//		tree decl = SYMBOL_REF_DECL (b);
 
 		*total = 20;
 		return true;
@@ -87,14 +89,7 @@ m68k_68000_10_costs (rtx x, machine_mode mode, int outer_code,
     case GTU:
     case LE:
     case LT:
-    case CC0:
-      return false;
     case ZERO_EXTRACT:
-      if (outer_code == COMPARE && GET_CODE (XEXP (x, 1)) == CONST_INT && INTVAL (XEXP (x, 1)) == 1)
-      {
-    	*total = 2;
-    	return true;
-      }
       return false;
     case POST_INC:
     case TRUNCATE:
@@ -153,7 +148,7 @@ m68k_68000_10_costs (rtx x, machine_mode mode, int outer_code,
 	    int n = INTVAL(b);
 	    if (n < 0) n = -n;
 	    int x = 0;
-	    unsigned y = 1;
+	    int y = 1;
 	    for (; y < n; y += y, ++x)
 	      ;
 	    if (y == n)
@@ -180,7 +175,7 @@ m68k_68000_10_costs (rtx x, machine_mode mode, int outer_code,
 	    int f = GET_MODE_SIZE(mode) > 2 ? 150 : 50;
 	    if (GET_CODE(b) == CONST_INT && GET_MODE_SIZE(mode) == 2)
 	      {
-		unsigned i = INTVAL(b);
+		int i = INTVAL(b);
 		int bits = 0, l = 0;
 		if (i > 0)
 		  {

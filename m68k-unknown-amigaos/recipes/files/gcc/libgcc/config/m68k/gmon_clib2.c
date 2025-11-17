@@ -39,12 +39,12 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include <sys/fcntl.h>
+#include <fcntl.h>
 
 #include "gmon.h"
 
-#define __libnix__ 1
-#include "stabs.h"
+//#define __libnix__ 1
+//#include "stabs.h"
 
 #include <exec/memory.h>
 #include <exec/interrupts.h>
@@ -57,8 +57,9 @@
 void _monstartup(void);
 void _moncleanup(void);
 __saveallregs void mcount(void);
-int profil(char *buf, size_t bufsiz,
-                  size_t offset, unsigned int scale);
+int profil(unsigned short *buffer, size_t bufSize, size_t offset, unsigned int scale);
+//int profil(char *buf, size_t bufsiz,
+//                  size_t offset, unsigned int scale);
 
 struct profile_data {
   unsigned short *data;
@@ -368,20 +369,20 @@ void moncontrol(int mode)
 {
     if (mode) {
 	/* start */
-	store_last_pc = (unsigned *)profil(sbuf + sizeof(struct phdr),
+	store_last_pc = (unsigned *)profil((unsigned short *)(sbuf + sizeof(struct phdr)),
 			       ssiz - sizeof(struct phdr), (int)s_lowpc, s_scale);
         if (store_last_pc == NULL)
             store_last_pc = &dummy;
 	profiling = 0;
     } else {
 	/* stop */
-	profil((char *)0, 0, 0, 0);
+	profil((unsigned short *)0, 0, 0, 0);
 	profiling = 3;
     }
 }
 
-ADD2INIT(_monstartup,-4);
-ADD2EXIT(_moncleanup,-4);
+//ADD2INIT(_monstartup,-4);
+//ADD2EXIT(_moncleanup,-4);
 
 struct profile_data vbdata;
 
@@ -399,15 +400,16 @@ int VertBServer(struct profile_data * p __asm("a1")) {
   return 0;
 }
 
-int profil(char *buf, size_t bufsiz,
-                  size_t offset, unsigned int scale) {
-  if (buf) {
+int profil(unsigned short *buffer, size_t bufSize, size_t offset, unsigned int scale) {
+//int profil(char *buf, size_t bufsiz,
+//                  size_t offset, unsigned int scale) {
+  if (buffer) {
       // install interrupt if not running
       if (vbdata.data)
 	return -1;
 
-      vbdata.data = (unsigned short *)buf;
-      vbdata.count = bufsiz>>1;
+      vbdata.data = (unsigned short *)buffer;
+      vbdata.count = bufSize>>1;
       vbdata.offset = offset;
 
       vbint.is_Node.ln_Type = NT_INTERRUPT;         /* Initialize the node. */

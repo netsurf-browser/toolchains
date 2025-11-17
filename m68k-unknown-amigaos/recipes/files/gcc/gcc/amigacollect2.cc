@@ -29,7 +29,8 @@ Boston, MA 02111-1307, USA.  */
 
 void maybe_unlink(const char *);
 void fatal_error(location_t, const char *, ...);
-void fork_execute(const char *, char **, bool);
+void fork_execute (const char *prog, char **argv, bool use_atfile,
+	      const char *atsuffix);
 
 extern char *c_file_name;
 extern int debug;
@@ -303,7 +304,7 @@ amigaos_prelink_hook (const char **ld1_argv, int *strip_flag)
       fclose(out);
       fclose(x);
       argv[0]=c_file_name;
-      fork_execute("gcc", (char **)argv, false);
+      fork_execute("gcc", (char **)argv, false, NULL);
 
       /* Unfortunately, unlike "-s", "-T" cannot be specified as the last
 	 argument. We put it after "-L" args.  */
@@ -344,5 +345,5 @@ amigaos_postlink_hook (const char *output_file)
     }
   else
     argv[1]=output_file;
-  fork_execute("postlink", (char **)argv, false);
+  fork_execute("postlink", (char **)argv, false, NULL);
 }

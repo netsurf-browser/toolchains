@@ -1,3 +1,5 @@
+#define IN_TARGET_CODE 1
+
 #include "config.h"
 #include "system.h"
 #include "coretypes.h"
@@ -66,6 +68,7 @@ static int thecosts0[cost_max] = {
     16, // bcc
 };
 
+#if 0
 static int thecosts2[cost_max] = {
     2, // set
     1, // reg
@@ -119,10 +122,11 @@ static int thecosts4[cost_max] = {
     16, // if then else
     16, // bcc
 };
+#endif
 
 static int * thecosts = thecosts0;
 
-#if 1
+#if 0
 static int ttotal;
 #define TEST(a,r) {ttotal = 0; m68k_68080_costs(a, SImode, 0, 0, &ttotal, 1); if (ttotal != r) {debug(a);printf("%d <> %d: %s\n", ttotal, r, #a);}}
 
@@ -174,7 +178,7 @@ static int run;
  * opno == 0: calculate difference to register assignment
  */
 bool
-m68k_68080_costs (rtx x, machine_mode mode, int outer_code, int opno,
+m68k_68080_costs (rtx x, machine_mode mode, int outer_code ATTRIBUTE_UNUSED, int opno ATTRIBUTE_UNUSED,
 		  int *total, bool speed)
 {
 //  if (!run)
@@ -281,7 +285,6 @@ m68k_68080_costs (rtx x, machine_mode mode, int outer_code, int opno,
 
   switch (code)
     {
-    case CC0:
     case PC:
     case REG:
       *total = thecosts[cost_reg];
@@ -394,7 +397,7 @@ Defconst:
       {
 	bool r = m68k_68080_costs (XEXP(x, 0), mode, code, 0, total, speed);
 	*total += thecosts[cost_call];
-	return true;
+	return r;
       }
 
     case MEM:
@@ -445,14 +448,16 @@ Defconst:
 	      }
 	    bool r = m68k_68080_costs (src, mode, ADDRESS, 0, total, speed);
 	    *total += total2;
-	    return true;
+	    return r;
 	  }
+/*
 	if (GET_CODE(dst) == CC0)
 	  {
 	    bool r = m68k_68080_costs (src, mode, code, 0, total, speed);
 	    *total += total2;
 	    return r;
 	  }
+*/
 	// big penalty for 32x32->64 mul/div
 	if (m68k_tune == u68060 || m68k_tune == u68020_60)
 	  {
@@ -483,7 +488,7 @@ Defconst:
 		  {
 		    bool r = m68k_68080_costs (src, mode, ADDRESS, 0, total, speed);
 		    *total += total2;
-		    return true;
+		    return r;
 		  }
 	      }
 	    // modify dst with dst

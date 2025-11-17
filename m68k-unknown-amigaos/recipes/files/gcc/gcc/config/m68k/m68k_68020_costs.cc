@@ -1,3 +1,5 @@
+#define IN_TARGET_CODE 1
+
 #include "config.h"
 #include "system.h"
 #include "coretypes.h"
@@ -12,7 +14,7 @@
  * opno == 0: calculate difference to register assignment
  */
 bool
-m68k_68020_costs (rtx x, machine_mode mode, int outer_code, int opno,
+m68k_68020_costs (rtx x, machine_mode mode, int outer_code ATTRIBUTE_UNUSED, int opno,
 		  int *total, bool speed)
 {
   int code = GET_CODE(x);
@@ -41,7 +43,7 @@ m68k_68020_costs (rtx x, machine_mode mode, int outer_code, int opno,
 	      }
 	    else if (SYMBOL_REF_P(b) || GET_CODE(b) == CONST_INT)
 	      {
-		tree decl = SYMBOL_REF_DECL(b);
+//		tree decl = SYMBOL_REF_DECL(b);
 
 		*total = 13;
 		return true;
@@ -51,7 +53,6 @@ m68k_68020_costs (rtx x, machine_mode mode, int outer_code, int opno,
 	return true;
       }
     case NE:
-    case EQ:
     case GE:
     case GT:
     case LE:
@@ -98,22 +99,23 @@ m68k_68020_costs (rtx x, machine_mode mode, int outer_code, int opno,
       return true;
     case REG:
     case PC:
+      *total = 3;
+      return true;
     case SUBREG:
     case STRICT_LOW_PART:
-    case NOT:
-    case NEG:
-      *total = 3;
+      *total = 0;
       return true;
     case SIGN_EXTRACT:
     case ZERO_EXTRACT:
-      if (outer_code == COMPARE && GET_CODE (XEXP (x, 1)) == CONST_INT && INTVAL (XEXP (x, 1)) == 1)
-    	*total = 2;
-      else;
-        *total = 8;
+      *total = 8;
       return true;
     case TRUNCATE:
     case ZERO_EXTEND:
       *total = GET_MODE_SIZE(mode) > 2 ? 5 : 3;
+      return true;
+    case NOT:
+    case NEG:
+      *total = 3;
       return true;
     case SIGN_EXTEND:
       *total = 4;
@@ -176,7 +178,8 @@ m68k_68020_costs (rtx x, machine_mode mode, int outer_code, int opno,
       {
 	rtx dst = XEXP(x, 0);
 	rtx src = XEXP(x, 1);
-	if (REG_P(dst) || GET_CODE(dst) == CC0)
+	if (REG_P(dst) // || GET_CODE(dst) == CC0
+			)
 	  {
 	    if (m68k_68020_costs (src, mode, code, 1, total, speed))
 	      return true;
@@ -185,6 +188,8 @@ m68k_68020_costs (rtx x, machine_mode mode, int outer_code, int opno,
 	    && m68k_68020_costs (src, mode, code, 1, &total2, speed))
 	  {
 	    *total += total2;
+	    if (!REG_P(dst))
+	      *total -= 3;
 	    return true;
 	  }
       }
@@ -239,7 +244,7 @@ m68k_68020_costs (rtx x, machine_mode mode, int outer_code, int opno,
 
 	if (GET_CODE(src) == CONST_INT)
 	  {
-	    unsigned i = INTVAL(src);
+	    int i = INTVAL(src);
 	    int bits = 0, l = 0;
 	    if (i > 0)
 	      {

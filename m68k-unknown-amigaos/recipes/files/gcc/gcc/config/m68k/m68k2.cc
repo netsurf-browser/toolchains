@@ -23,6 +23,7 @@
 
 //work without flag_writable_strings which is not in GCC4
 #define REGPARMS_68K 1
+#define IN_TARGET_CODE 1
 
 #include "config.h"
 #include "system.h"
@@ -31,6 +32,7 @@
 #include "rtl.h"
 #include "output.h"
 #include "tree.h"
+#include "stringpool.h"
 #include "attribs.h"
 #include "flags.h"
 #include "expr.h"
@@ -41,6 +43,7 @@
 #include "langhooks.h"
 #include "function.h"
 #include "stor-layout.h"
+#include "calls.h"
 
 //#define MYDEBUG 1
 #ifdef MYDEBUG
@@ -113,24 +116,19 @@ m68k_init_cumulative_args (CUMULATIVE_ARGS *cump, tree fntype, tree decl)
 
   if (!fntype && decl)
     fntype = TREE_TYPE(decl);
-/* SBF: see expr.c:init_block_clear_fn
-   memset uses the stack!
-      DECL_EXTERNAL (fn) = 1;
-      TREE_PUBLIC (fn) = 1;
-      DECL_ARTIFICIAL (fn) = 1;
-      TREE_NOTHROW (fn) = 1;
-      DECL_VISIBILITY (fn) = VISIBILITY_DEFAULT;
-      DECL_VISIBILITY_SPECIFIED (fn) = 1;
-*/
-  if (decl && DECL_EXTERNAL(decl) && TREE_PUBLIC(decl) && DECL_ARTIFICIAL(decl)
-      && TREE_NOTHROW(decl) && DECL_VISIBILITY(decl) == VISIBILITY_DEFAULT
-      && DECL_VISIBILITY_SPECIFIED(decl)
-      && DECL_NAME(decl) && IDENTIFIER_POINTER (DECL_NAME (decl))
-      && 0 == strcmp("memset", IDENTIFIER_POINTER (DECL_NAME (decl))))
-    fntype = 0;
 
-  if (decl && DECL_BUILT_IN(decl))
-    fntype = 0;
+  /* SBF: see expr.c:init_block_clear_fn
+     memset uses the stack!
+        DECL_EXTERNAL (fn) = 1;
+        TREE_PUBLIC (fn) = 1;
+  */
+    if (decl && DECL_EXTERNAL(decl) && TREE_PUBLIC(decl)
+        && DECL_NAME(decl) && IDENTIFIER_POINTER (DECL_NAME (decl))
+        && 0 == strcmp("memset", IDENTIFIER_POINTER (DECL_NAME (decl))))
+      fntype = 0;
+
+  if (decl && fndecl_built_in_p(decl))
+    fntype = NULL;
 
   tree attrs = NULL;
   if (fntype)
@@ -176,13 +174,13 @@ m68k_init_cumulative_args (CUMULATIVE_ARGS *cump, tree fntype, tree decl)
 
 #if ! defined (PCC_STATIC_STRUCT_RETURN) && defined (M68K_STRUCT_VALUE_REGNUM)
   /* If return value is a structure, and we pass the buffer address in a
-   register, we can't use this register for our own purposes.
+   register, we cannot use this register for our own purposes.
    FIXME: Something similar would be useful for static chain.  */
   if (fntype && aggregate_value_p (TREE_TYPE(fntype), fntype))
     cum->regs_already_used |= (1 << M68K_STRUCT_VALUE_REGNUM);
 #endif
 
-  if (decl && DECL_STATIC_CHAIN(decl))
+  if (fntype && fntype->base.code == FUNCTION_DECL && DECL_STATIC_CHAIN(fntype))
     {
       rtx reg = m68k_static_chain_rtx (decl, 0);
       if (reg)
@@ -224,8 +222,8 @@ m68k_function_value_regno_p(unsigned regno) {
 
 /* Update the data in CUM to advance over an argument.  */
 
-void
-m68k_function_arg_advance (cumulative_args_t cum_v, machine_mode, const_tree, bool)
+void m68k_function_arg_advance (cumulative_args_t cum_v,
+				       const function_arg_info & ai)
 {
   struct m68k_args *cum = *get_cumulative_args (cum_v) ? &mycum : &othercum;
   /* Update the data in CUM to advance over an argument.  */
@@ -326,20 +324,19 @@ _m68k_function_arg (struct m68k_args * cum, machine_mode mode, const_tree type)
 /* A C expression that controls whether a function argument is passed
  in a register, and which register. */
 
-struct rtx_def *
-m68k_function_arg (cumulative_args_t cum_v, machine_mode mode, const_tree type, bool)
+rtx m68k_function_arg (cumulative_args_t cum_v, const function_arg_info & ai)
 {
   DPRINTF((stderr, "m68k_function_arg %p\r\n", cum_v.p));
 
   struct m68k_args *cum = *get_cumulative_args (cum_v) ? &mycum : &othercum;
 
-  tree asmtree = type && cum->current_param_type ? lookup_attribute("asmreg", TYPE_ATTRIBUTES(TREE_VALUE(cum->current_param_type))) : NULL_TREE;
+  tree asmtree = ai.type && cum->current_param_type ? lookup_attribute("asmreg", TYPE_ATTRIBUTES(TREE_VALUE(cum->current_param_type))) : NULL_TREE;
 
   if (asmtree)
     {
       int i;
       cum->last_arg_reg = TREE_INT_CST_LOW(TREE_VALUE(TREE_VALUE(asmtree)));
-      cum->last_arg_len = HARD_REGNO_NREGS(cum->last_arg_reg, mode);
+      cum->last_arg_len = ai.mode == DImode ? 2 : 1;
 
       for (i = 0; i < cum->last_arg_len; i++)
 	{
@@ -350,9 +347,9 @@ m68k_function_arg (cumulative_args_t cum_v, machine_mode mode, const_tree type, 
 	    }
 	  cum->regs_already_used |= (1 << (cum->last_arg_reg + i));
 	}
-      return gen_rtx_REG (mode, cum->last_arg_reg);
+      return gen_rtx_REG (ai.mode, cum->last_arg_reg);
     }
-  return _m68k_function_arg (cum, mode, type);
+  return _m68k_function_arg (cum, ai.mode, ai.type);
 }
 
 void
@@ -449,7 +446,7 @@ m68k_handle_type_attribute (tree *node, tree name, tree args, int flags ATTRIBUT
 
 	      if (lookup_attribute ("stkparm", TYPE_ATTRIBUTES(nnn)))
 		{
-		  error ("`regparm' and `stkparm' (__stdargs) are mutually exclusive");
+		  error ("%'regparm%' and %'stkparm%' aka %'__stdargs%' are mutually exclusive");
 		  break;
 		}
 	      if (args && TREE_CODE (args) == TREE_LIST)
@@ -461,14 +458,14 @@ m68k_handle_type_attribute (tree *node, tree name, tree args, int flags ATTRIBUT
 		      unsigned no = TREE_INT_CST_LOW(val);
 		      if (no > M68K_MAX_REGPARM)
 			{
-			  error ("`regparm' attribute: value %d not in [0 - %d]", no,
+			  error ("%'regparm%' attribute: value %d not in [0 - %d]", no,
 			  M68K_MAX_REGPARM);
 			  break;
 			}
 		    }
 		  else
 		    {
-		      error ("invalid argument(s) to `regparm' attribute");
+		      error ("invalid argument(s) to %'regparm%' attribute");
 		      break;
 		    }
 		}
@@ -477,13 +474,13 @@ m68k_handle_type_attribute (tree *node, tree name, tree args, int flags ATTRIBUT
 	    {
 	      if (lookup_attribute ("regparm", TYPE_ATTRIBUTES(nnn)))
 		{
-		  error ("`regparm' and `stkparm' (__stdargs) are mutually exclusive");
+		  error ("%'regparm%' and %'stkparm%' aka %'__stdargs%' are mutually exclusive");
 		  break;
 		}
 	    }
 	  else
 	    {
-	      warning (OPT_Wattributes, "`%s' attribute only applies to data", IDENTIFIER_POINTER(name));
+	      warning (OPT_Wattributes, "%'%s%' attribute only applies to data", IDENTIFIER_POINTER(name));
 	    }
 	}
       else
@@ -498,20 +495,20 @@ m68k_handle_type_attribute (tree *node, tree name, tree args, int flags ATTRIBUT
 		      unsigned no = TREE_INT_CST_LOW(val);
 		      if (no >= 23)
 			{
-			  error ("`asmreg' attribute: value %d not in [0 - 23]", no);
+			  error ("%'asmreg%' attribute: value %d not in [0 - 23]", no);
 			  break;
 			}
 		    }
 		  else
 		    {
-		      error ("invalid argument(s) to `asmreg' attribute");
+		      error ("invalid argument(s) to %'asmreg%' attribute");
 		      break;
 		    }
 		}
 	    }
 	  else
 	    {
-	      warning (OPT_Wattributes, "`%s' attribute only applies to functions", IDENTIFIER_POINTER(name));
+	      warning (OPT_Wattributes, "%'%s%' attribute only applies to functions", IDENTIFIER_POINTER(name));
 	    }
 	}
       return NULL_TREE ;

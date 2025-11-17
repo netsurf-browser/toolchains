@@ -1,3 +1,5 @@
+#define IN_TARGET_CODE 1
+
 #include "config.h"
 #include "system.h"
 #include "coretypes.h"
@@ -12,7 +14,7 @@
  * opno == 0: calculate difference to register assignment
  */
 bool
-__m68k_68040_costs (rtx x, machine_mode mode, int outer_code, int opno,
+__m68k_68040_costs (rtx x, machine_mode mode, int outer_code ATTRIBUTE_UNUSED, int opno ATTRIBUTE_UNUSED,
 		  int *total, bool speed)
 {
   int code = GET_CODE(x);
@@ -41,7 +43,7 @@ __m68k_68040_costs (rtx x, machine_mode mode, int outer_code, int opno,
 	      }
 	    else if (SYMBOL_REF_P(b) || GET_CODE(b) == CONST_INT)
 	      {
-		tree decl = SYMBOL_REF_DECL(b);
+//		tree decl = SYMBOL_REF_DECL(b);
 
 		*total = 6;
       return true;
@@ -62,20 +64,8 @@ __m68k_68040_costs (rtx x, machine_mode mode, int outer_code, int opno,
     case LTU:
       return __m68k_68040_costs (XEXP(x, 0), mode, code, 0, total, speed);
     case CONST:
-      {
-	rtx a = XEXP(x, 0);
-	if (GET_CODE(a) == PLUS)
-	  {
-	    rtx b = XEXP(a, 0);
-	    if (GET_CODE(b) == SYMBOL_REF || GET_CODE(b) == LABEL_REF)
-	      {
-		*total = GET_MODE_SIZE(mode) > 2 ? 4 : 3;
+		*total = 1;
 		return true;
-	      }
-	    *total = 5;
-	    return true;
-	  }
-      }
 	  break;
     case LABEL_REF:
     case SYMBOL_REF:
@@ -94,19 +84,14 @@ __m68k_68040_costs (rtx x, machine_mode mode, int outer_code, int opno,
       *total = 0;
       return true;
     case REG:
-    case PC:
-      *total = 2;
-      return true;
     case SUBREG:
     case STRICT_LOW_PART:
+    case PC:
       *total = 0;
       return true;
     case SIGN_EXTRACT:
     case ZERO_EXTRACT:
-      if (outer_code == COMPARE && GET_CODE (XEXP (x, 1)) == CONST_INT && INTVAL (XEXP (x, 1)) == 1)
-      	*total = 2;
-      else;
-        *total = 4;
+      *total = 4;
       return true;
     case TRUNCATE:
     case ZERO_EXTEND:
@@ -129,45 +114,35 @@ __m68k_68040_costs (rtx x, machine_mode mode, int outer_code, int opno,
 	rtx a = XEXP(x, 0);
 	if (REG_P(a))
 	  {
-	    *total = opno ? 3 : 2;
-	    if (REGNO(a) < 8)
-	      *total += 4;
+	    *total = 1;
 	    return true;
 	  }
 	if (GET_CODE(a) == POST_INC)
 	  {
-	    *total = opno ? 3 : 2;
+	    *total = 1;
 	    return true;
 	  }
 	if (GET_CODE(a) == PRE_DEC)
 	  {
-	    *total = 3;
-	    return true;
-	  }
-	if (GET_CODE(a) == SYMBOL_REF || GET_CODE(a) == LABEL_REF)
-	  {
-	    *total = opno ? 7 : 6;
+	    *total = 1;
 	    return true;
 	  }
 	if (GET_CODE(a) == PLUS)
 	  {
 	    rtx b = XEXP(a, 0);
 	    rtx c = XEXP(a, 1);
-	    if (REG_P(b)
-		&& (GET_CODE(c) == CONST_INT || GET_CODE(c) == SYMBOL_REF))
+	    if (REG_P(b) && (GET_CODE(c) == CONST_INT || GET_CODE(c) == SYMBOL_REF))
 	      {
-		*total = opno ? 5 : 4;
-		if (REGNO(b) < 8)
-		  *total += 4;
+		*total = 2 + ((GET_CODE(c) == CONST_INT && IN_RANGE(INTVAL(c), -32786, 32767)) ? 0 : 1);
 		return true;
 	      }
 	    if (REG_P(b) && REG_P(c))
 	      {
-		*total = opno ? 9 : 7;
+		*total = 3;
 		return true;
 	      }
 	  }
-	*total = opno ? 12 : 10;
+	*total = 4;
 	return true;
       }
       break;
@@ -175,7 +150,8 @@ __m68k_68040_costs (rtx x, machine_mode mode, int outer_code, int opno,
       {
 	rtx dst = XEXP(x, 0);
 	rtx src = XEXP(x, 1);
-	if (REG_P(dst) || GET_CODE(dst) == CC0)
+	if (REG_P(dst) //|| GET_CODE(dst) == CC0
+			)
 		  {
 	    if (__m68k_68040_costs (src, mode, code, 1, total, speed))
 		    return true;
@@ -241,7 +217,7 @@ __m68k_68040_costs (rtx x, machine_mode mode, int outer_code, int opno,
 
 	if (GET_CODE(src) == CONST_INT)
 	  {
-	    unsigned i = INTVAL(src);
+	    int i = INTVAL(src);
 	    int bits = 0, l = 0;
 	    if (i > 0)
 	      {
@@ -289,11 +265,10 @@ __m68k_68040_costs (rtx x, machine_mode mode, int outer_code, int opno,
 	  {
 	    if (GET_CODE(b) == CONST_INT)
 	      {
-		*total = INTVAL(b) == 0 ? 0 : 1;
+		*total = 0;
 		return true;
 	      }
 	    __m68k_68040_costs (b, mode, code, 1, total, speed);
-	    *total += 2;
 	    return true;
 	  }
 	if (__m68k_68040_costs (a, mode, code, 0, total, speed))
@@ -303,7 +278,7 @@ __m68k_68040_costs (rtx x, machine_mode mode, int outer_code, int opno,
 
 	    if (__m68k_68040_costs (b, mode, code, 1, &total2, speed))
 	      {
-	    *total += total2 + 2;
+	    *total += total2;
 	    return true;
 	  }
       }
@@ -333,7 +308,7 @@ m68k_68040_costs (rtx x, machine_mode mode, int outer_code, int opno,
 		  int *total, bool speed) {
   bool r = __m68k_68040_costs(x, mode, outer_code, opno, total, speed);
 
-//  if (r) *total = COSTS_N_INSNS(*total ? *total : 1);
+  if (r) *total = COSTS_N_INSNS(*total ? *total : 1);
 
   return r;
 }
