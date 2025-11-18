@@ -46,6 +46,7 @@ Boston, MA 02111-1307, USA.  */
       builtin_define_std ("amigaos");					\
       builtin_define_std ("AMIGA");					\
       builtin_define_std ("MCH_AMIGA");					\
+      builtin_define_std ("mc68000");					\
       builtin_assert ("system=amigaos");				\
     }									\
   while (0)

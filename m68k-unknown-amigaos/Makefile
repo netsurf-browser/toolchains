@@ -32,6 +32,11 @@ UPSTREAM_CLIB2_URI := https://github.com/adtools/clib2/archive/$(UPSTREAM_CLIB2_
 UPSTREAM_NDK_TARBALL := NDK3.2R4.lha
 UPSTREAM_NDK_URI := "http://hyperion-entertainment.biz/index.php/downloads?view=download&format=raw&file=126"
 
+# This is a conversion of amiga.lib in NDK3.2r4
+# Hopefully in future this will be included with the NDK
+UPSTREAM_LIBAMIGA_TARBALL := libamiga_a.lha
+UPSTREAM_LIBAMIGA_URI := https://github.com/chris-y/hunk2gcc/releases/download/v2.0/$(UPSTREAM_LIBAMIGA_TARBALL)
+
 UPSTREAM_OPENURL_VERSION := 7.16
 UPSTREAM_OPENURL_TARBALL := openurl-$(UPSTREAM_OPENURL_VERSION)
 UPSTREAM_OPENURL_URI := https://github.com/jens-maus/libopenurl/archive/$(UPSTREAM_OPENURL_VERSION).tar.gz
@@ -100,11 +105,16 @@ $(BUILDSTEPS)/stage2.d: $(BUILDSTEPS)/clib2.d
 # Rules to build and install Clib2
 ###
 
-$(BUILDSTEPS)/clib2.d: $(BUILDSTEPS)/bootstrap-compiler.d $(BUILDSTEPS)/ndk.d $(BUILDSTEPS)/clib2-src.d
+$(BUILDSTEPS)/clib2.d: $(BUILDSTEPS)/bootstrap-compiler.d $(BUILDSTEPS)/ndk.d $(BUILDSTEPS)/clib2-src.d $(SOURCESDIR)/$(UPSTREAM_LIBAMIGA_TARBALL)
 	cd $(BUILDDIR)/clib2 && PATH="$(PREFIX)/bin:$(PATH)" make -f GNUmakefile.68k
 	cp -r $(BUILDDIR)/clib2/include $(PREFIX)/$(TARGET_NAME)
 	cp -r $(BUILDDIR)/clib2/lib $(PREFIX)/$(TARGET_NAME)
 	ln -sf $(PREFIX)/$(TARGET_NAME)/lib/ncrt0.o $(PREFIX)/$(TARGET_NAME)/lib/crt0.o
+	# Replace clib2's small amiga.lib with the full one from the NDK
+	# Would convert this locally but hunk2aout is not endian safe so the resulting file doesn't work
+	mkdir -p $(BUILDDIR)/libamiga
+	lha xw=$(BUILDDIR)/libamiga $(SOURCESDIR)/$(UPSTREAM_LIBAMIGA_TARBALL)
+	cp -r $(BUILDDIR)/libamiga/libamiga.a $(PREFIX)/$(TARGET_NAME)/lib/
 	touch $@
 
 
@@ -137,6 +147,7 @@ $(BUILDSTEPS)/ndk.d: $(SOURCESDIR)/$(UPSTREAM_NDK_TARBALL) $(SOURCESDIR)/$(UPSTR
 	cp -r $(BUILDDIR)/openurl/libopenurl-$(UPSTREAM_OPENURL_VERSION)/include/* $(PREFIX)/$(TARGET_NAME)/sys-include/
 	mkdir -p $(BUILDDIR)/guigfxlib
 	lha xw=$(BUILDDIR)/guigfxlib $(SOURCESDIR)/$(UPSTREAM_GUIGFX_TARBALL)
+	for p in `ls $(RECIPES)/patches/guigfx/*.p` ; do patch -d $(BUILDDIR)/guigfxlib -p0 <$$p || exit $0 ; done
 	cp -r $(BUILDDIR)/guigfxlib/include/* $(PREFIX)/$(TARGET_NAME)/sys-include/
 	mkdir -p $(BUILDDIR)/renderlib
 	lha xw=$(BUILDDIR)/renderlib $(SOURCESDIR)/$(UPSTREAM_RENDER_TARBALL)
@@ -148,6 +159,7 @@ $(BUILDSTEPS)/ndk.d: $(SOURCESDIR)/$(UPSTREAM_NDK_TARBALL) $(SOURCESDIR)/$(UPSTR
 	lha xw=$(BUILDDIR)/AmiSSL $(SOURCESDIR)/$(UPSTREAM_AMISSL_TARBALL)
 	cp -r $(BUILDDIR)/AmiSSL/AmiSSL/Developer/include/* $(PREFIX)/$(TARGET_NAME)/sys-include/
 	cp -r $(BUILDDIR)/AmiSSL/AmiSSL/Developer/lib/AmigaOS3/* $(PREFIX)/$(TARGET_NAME)/lib/
+
 	touch $@
 
 ###
@@ -258,6 +270,9 @@ $(SOURCESDIR)/$(UPSTREAM_CLIB2_TARBALL):
 
 $(SOURCESDIR)/$(UPSTREAM_NDK_TARBALL):
 	wget -q -O $@ $(UPSTREAM_NDK_URI)
+
+$(SOURCESDIR)/$(UPSTREAM_LIBAMIGA_TARBALL):
+	wget -q -O $@ $(UPSTREAM_LIBAMIGA_URI)
 
 $(SOURCESDIR)/$(UPSTREAM_OPENURL_TARBALL):
 	wget -q -O $@ $(UPSTREAM_OPENURL_URI)
