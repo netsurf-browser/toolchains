@@ -1,0 +1,215 @@
+name: "Build"
+
+on:
+  push:
+
+jobs:
+  toolchain:
+    name: '${{ matrix.toolchain }}'
+    runs-on: ubuntu-24.04
+    strategy:
+      fail-fast: false
+      matrix:
+        toolchain:
+          - arm-riscos-gnueabi
+          - arm-unknown-riscos
+          - i686-w64-mingw32
+          - m5475-atari-mint
+          - m68k-atari-mint
+          - m68k-unknown-amigaos
+          - ppc-amigaos
+          - x86_64-w64-mingw32
+
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v5
+      with:
+        fetch-depth: 0
+
+    - name: Install packages
+      run: sudo apt-get update -qq &&
+           sudo apt-get install --no-install-recommends -y
+               autoconf
+               autoconf2.64
+               autoconf2.69
+               autogen
+               automake
+               automake1.11
+               bison
+               build-essential
+               cvs
+               flex
+               gcc-multilib
+               git
+               gperf
+               help2man
+               lhasa
+               libfl-dev
+               libtool
+               pristine-tar
+               subversion
+               texinfo
+               unzip
+
+    - name: Create output dir
+      run: mkdir -p /opt/netsurf
+
+    - name: Build toolchain
+      run: make -C ${{ matrix.toolchain }}
+
+    - name: Build SDK
+      env:
+        GCCSDK_INSTALL_CROSSBIN: /opt/netsurf/${{ matrix.toolchain }}/cross/bin
+        GCCSDK_INSTALL_ENV: /opt/netsurf/${{ matrix.toolchain }}/env
+      run: make -C sdk
+
+    # Have to tar first to retain permissions
+    - name: Make tarball
+      run: tar -czf ${{ matrix.toolchain }}.tar.gz -C / opt/netsurf
+
+    # Can't avoid `upload-artifact` zipping the tarball
+    # https://github.com/actions/upload-artifact/issues/426
+    - name: Upload artifact
+      uses: actions/upload-artifact@v4
+      with:
+        name: ${{ matrix.toolchain }}
+        path: ${{ matrix.toolchain }}.tar.gz
+        compression-level: 0 # Avoid pointless recompression
+
+  release:
+    name: 'Release'
+    needs: toolchain
+    runs-on: ubuntu-24.04
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v5
+
+    - name: Download all artifacts
+      uses: actions/download-artifact@v4
+      with:
+        path: artifacts/
+
+    - name: Generate release tag
+      id: tag
+      run: |
+        if [[ "${{ github.ref }}" == refs/tags/* ]]; then
+          # Use existing tag if this was triggered by a tag push
+          echo "tag=${GITHUB_REF#refs/tags/}" >> $GITHUB_OUTPUT
+          echo "tag_exists=true" >> $GITHUB_OUTPUT
+        else
+          # Generate new tag name
+          branch_name="${{ github.ref_name }}"
+          # Replace invalid characters in branch name for tag
+          safe_branch=$(echo "$branch_name" | sed 's/[^a-zA-Z0-9._-]/-/g')
+          new_tag="gh-${safe_branch}-unstable"
+          
+          # Check if tag already exists
+          if git ls-remote --tags origin | grep -q "refs/tags/$new_tag$"; then
+            echo "Tag $new_tag already exists"
+            echo "tag=$new_tag" >> $GITHUB_OUTPUT
+            echo "tag_exists=true" >> $GITHUB_OUTPUT
+          else
+            echo "Tag $new_tag does not exist, will create new release"
+            echo "tag=$new_tag" >> $GITHUB_OUTPUT
+            echo "tag_exists=false" >> $GITHUB_OUTPUT
+          fi
+        fi
+
+    - name: Get or create release
+      id: release
+      run: |
+        tag="${{ steps.tag.outputs.tag }}"
+        
+        if [[ "${{ steps.tag.outputs.tag_exists }}" == "true" ]]; then
+          echo "Getting existing release for tag $tag"
+          release_data=$(curl -s -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" \
+            "https://api.github.com/repos/${{ github.repository }}/releases/tags/$tag")
+          release_id=$(echo "$release_data" | jq -r '.id')
+          upload_url=$(echo "$release_data" | jq -r '.upload_url')
+          
+          echo "release_id=$release_id" >> $GITHUB_OUTPUT
+          echo "upload_url=$upload_url" >> $GITHUB_OUTPUT
+          echo "release_data<<EOF" >> $GITHUB_OUTPUT
+          echo "$release_data" >> $GITHUB_OUTPUT
+          echo "EOF" >> $GITHUB_OUTPUT
+        else
+          echo "Creating new release for tag $tag"
+          release_data=$(curl -s -X POST \
+            -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" \
+            -H "Accept: application/vnd.github+json" \
+            "https://api.github.com/repos/${{ github.repository }}/releases" \
+            -d "$(jq -n \
+              --arg tag "$tag" \
+              --arg name "NetSurf Toolchains $tag" \
+              --arg body "NetSurf cross-compilation toolchains built from $tag." \
+              --argjson prerelease ${{ !startsWith(github.ref, 'refs/tags/') }} \
+              '{tag_name: $tag, name: $name, body: $body, draft: false, prerelease: $prerelease}')")
+          
+          release_id=$(echo "$release_data" | jq -r '.id')
+          upload_url=$(echo "$release_data" | jq -r '.upload_url')
+          
+          echo "release_id=$release_id" >> $GITHUB_OUTPUT
+          echo "upload_url=$upload_url" >> $GITHUB_OUTPUT
+        fi
+
+    - name: Delete existing assets
+      if: steps.tag.outputs.tag_exists == 'true'
+      run: |
+        tag="${{ steps.tag.outputs.tag }}"
+        echo "Deleting existing assets for tag $tag"
+        
+        # Use release data from previous step
+        release_data='${{ steps.release.outputs.release_data }}'
+        
+        # Get list of artifacts we actually built this run
+        built_artifacts=()
+        for toolchain_dir in artifacts/*/; do
+          if [ -d "$toolchain_dir" ]; then
+            toolchain_name=$(basename "$toolchain_dir")
+            if [ -f "$toolchain_dir/$toolchain_name.tar.gz" ]; then
+              built_artifacts+=("$toolchain_name.tar.gz")
+            fi
+          fi
+        done
+        
+        # Delete assets that match our built artifacts
+        if [ ${#built_artifacts[@]} -gt 0 ]; then
+          echo "Deleting assets for rebuilt toolchains: ${built_artifacts[*]}"
+          for asset_name in "${built_artifacts[@]}"; do
+            asset_id=$(echo "$release_data" | jq -r --arg name "$asset_name" '.assets[] | select(.name==$name) | .id')
+            if [ -n "$asset_id" ] && [ "$asset_id" != "null" ]; then
+              echo "Deleting existing asset: $asset_name (id: $asset_id)"
+              curl -s -X DELETE \
+                -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" \
+                "https://api.github.com/repos/${{ github.repository }}/releases/assets/$asset_id"
+            else
+              echo "Asset $asset_name not found in existing release"
+            fi
+          done
+        else
+          echo "No built artifacts found to replace"
+        fi
+
+    - name: Upload toolchain assets
+      run: |
+        set -e
+        upload_url="${{ steps.release.outputs.upload_url }}"
+        upload_url_base="${upload_url%\{*}"
+        
+        for toolchain_dir in artifacts/*/; do
+          if [ -d "$toolchain_dir" ]; then
+            toolchain_name=$(basename "$toolchain_dir")
+            asset_file="$toolchain_dir/$toolchain_name.tar.gz"
+            
+            if [ -f "$asset_file" ]; then
+              echo "Uploading $toolchain_name.tar.gz..."
+              curl -s -X POST \
+                -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" \
+                -H "Content-Type: application/gzip" \
+                --data-binary @"$asset_file" \
+                "$upload_url_base?name=$toolchain_name.tar.gz"
+            else
+              echo "Warning: Asset file not found: $asset_file"
+            fi
+          fi
+        done
