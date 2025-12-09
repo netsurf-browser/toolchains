@@ -55,6 +55,9 @@ jobs:
       run: mkdir -p /opt/netsurf
 
     - name: Build toolchain
+      env:
+        # Avoid building GCC docs
+        gcc_cv_prog_makeinfo_modern: no
       run: make -C ${{ matrix.toolchain }}
 
     - name: Build SDK
