@@ -6,7 +6,7 @@
 --                                                                          --
 --                                 B o d y                                  --
 --                                                                          --
---            Copyright (C) 2001-2002 Ada Core Technologies, Inc.           --
+--                     Copyright (C) 2001-2007, AdaCore                     --
 --                                                                          --
 -- GNAT is free software;  you can  redistribute it  and/or modify it under --
 -- terms of the  GNU General Public License as published  by the Free Soft- --
@@ -16,8 +16,8 @@
 -- or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU General Public License --
 -- for  more details.  You should have  received  a copy of the GNU General --
 -- Public License  distributed with GNAT;  see file COPYING.  If not, write --
--- to  the Free Software Foundation,  59 Temple Place - Suite 330,  Boston, --
--- MA 02111-1307, USA.                                                      --
+-- to  the  Free Software Foundation,  51  Franklin  Street,  Fifth  Floor, --
+-- Boston, MA 02110-1301, USA.                                              --
 --                                                                          --
 -- As a special exception,  if other files  instantiate  generics from this --
 -- unit, or you link  this unit with other files  to produce an executable, --
@@ -31,7 +31,7 @@
 --                                                                          --
 ------------------------------------------------------------------------------
 
-with Unchecked_Conversion;
+with Ada.Unchecked_Conversion;
 
 package body GNAT.CRC32 is
 
@@ -47,11 +47,9 @@ package body GNAT.CRC32 is
    end Update;
 
    procedure Update (C : in out CRC32; Value : Ada.Streams.Stream_Element) is
-      function To_Char is new Unchecked_Conversion
+      function To_Char is new Ada.Unchecked_Conversion
         (Ada.Streams.Stream_Element, Character);
-
       V : constant Character := To_Char (Value);
-
    begin
       Update (C, V);
    end Update;
@@ -72,10 +70,8 @@ package body GNAT.CRC32 is
 
    procedure Wide_Update (C : in out CRC32; Value : Wide_Character) is
       subtype S2 is String (1 .. 2);
-      function To_S2 is new Unchecked_Conversion (Wide_Character, S2);
-
+      function To_S2 is new Ada.Unchecked_Conversion (Wide_Character, S2);
       VS : constant S2 := To_S2 (Value);
-
    begin
       Update (C, VS (1));
       Update (C, VS (2));

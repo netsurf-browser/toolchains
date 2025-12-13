@@ -1,6 +1,6 @@
 // natReference.cc - Native code for References
 
-/* Copyright (C) 2001, 2002, 2003  Free Software Foundation
+/* Copyright (C) 2001, 2002, 2003, 2005, 2006  Free Software Foundation
 
    This file is part of libgcj.
 
@@ -78,7 +78,7 @@ find_slot (jobject key)
   int start_index = hcode & (hash_size - 1);
   int index = start_index;
   int deleted_index = -1;
-  for (;;)
+  do
     {
       object_list *ptr = &hash[index];
       if (ptr->reference == key)
@@ -96,8 +96,12 @@ find_slot (jobject key)
 	  JvAssert (ptr->reference == DELETED_REFERENCE);
 	}
       index = (index + step) & (hash_size - 1);
-      JvAssert (index != start_index);
     }
+  while (index != start_index);
+  // Note that we can have INDEX == START_INDEX if the table has no
+  // NULL entries but does have DELETED entries.
+  JvAssert (deleted_index >= 0);
+  return &hash[deleted_index];
 }
 
 static void
@@ -359,8 +363,15 @@ void
       // finalizer for ourselves as well.
       _Jv_RegisterFinalizer (this, finalize_reference);
       _Jv_RegisterFinalizer (referent, finalize_referred_to_object);
-      jobject *objp = reinterpret_cast<jobject *> (&referent);
-      _Jv_GCRegisterDisappearingLink (objp);
+      gnu::gcj::RawData **p = &referent;
+     _Jv_GCRegisterDisappearingLink ((jobject *) p);
       add_to_hash (this);
     }
+}
+
+::java::lang::Object *
+::java::lang::ref::Reference::get()
+{
+  JvSynchronize sync (lock);
+  return referent;
 }

@@ -1,12 +1,12 @@
 /* Definitions of target machine for GNU compiler, for MIPS NetBSD systems.
-   Copyright (C) 1993, 1995, 1996, 1997, 1999, 2000, 2001, 2002, 2003, 2004
-   Free Software Foundation, Inc.
+   Copyright (C) 1993, 1995, 1996, 1997, 1999, 2000, 2001, 2002, 2003, 2004,
+   2007, 2010, 2011 Free Software Foundation, Inc.
 
 This file is part of GCC.
 
 GCC is free software; you can redistribute it and/or modify
 it under the terms of the GNU General Public License as published by
-the Free Software Foundation; either version 2, or (at your option)
+the Free Software Foundation; either version 3, or (at your option)
 any later version.
 
 GCC is distributed in the hope that it will be useful,
@@ -15,9 +15,8 @@ MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
 GNU General Public License for more details.
 
 You should have received a copy of the GNU General Public License
-along with GCC; see the file COPYING.  If not, write to
-the Free Software Foundation, 59 Temple Place - Suite 330,
-Boston, MA 02111-1307, USA.  */
+along with GCC; see the file COPYING3.  If not see
+<http://www.gnu.org/licenses/>.  */
 
 
 /* Define default target values.  */
@@ -35,7 +34,6 @@ Boston, MA 02111-1307, USA.  */
       NETBSD_OS_CPP_BUILTINS_ELF();			\
       builtin_define ("__NO_LEADING_UNDERSCORES__");	\
       builtin_define ("__GP_SUPPORT__");		\
-      builtin_assert ("machine=mips");			\
       if (TARGET_LONG64)				\
 	builtin_define ("__LONG64");			\
 							\
@@ -128,10 +126,6 @@ Boston, MA 02111-1307, USA.  */
   while (0)
 
 
-/* Clean up after the generic MIPS/ELF configuration.  */
-#undef MD_EXEC_PREFIX
-#undef MD_STARTFILE_PREFIX
-
 /* Extra specs we need.  */
 #undef SUBTARGET_EXTRA_SPECS
 #define SUBTARGET_EXTRA_SPECS						\
@@ -154,7 +148,6 @@ Boston, MA 02111-1307, USA.  */
    %{EB:-m elf32bmip} \
    %(endian_spec) \
    %{G*} %{mips1} %{mips2} %{mips3} %{mips4} %{mips32} %{mips32r2} %{mips64} \
-   %{bestGnum} %{call_shared} %{no_archive} %{exact_version} \
    %(netbsd_link_spec)"
 
 #define NETBSD_ENTRY_POINT "__start"
@@ -170,16 +163,6 @@ Boston, MA 02111-1307, USA.  */
 
 #undef MIPS_DEFAULT_GVALUE
 #define MIPS_DEFAULT_GVALUE 0
-
-
-/* This defines which switch letters take arguments.  -G is a MIPS
-   special.  */
-
-#undef SWITCH_TAKES_ARG
-#define SWITCH_TAKES_ARG(CHAR)						\
-  (DEFAULT_SWITCH_TAKES_ARG (CHAR)					\
-   || (CHAR) == 'R'							\
-   || (CHAR) == 'G')
 
 
 #undef ASM_FINAL_SPEC

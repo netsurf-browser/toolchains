@@ -6,25 +6,23 @@
 --                                                                          --
 --                                 B o d y                                  --
 --                                                                          --
---          Copyright (C) 1992-2003 Free Software Foundation, Inc.          --
+--          Copyright (C) 1992-2010, Free Software Foundation, Inc.         --
 --                                                                          --
 -- GNAT is free software;  you can  redistribute it  and/or modify it under --
 -- terms of the  GNU General Public License as published  by the Free Soft- --
--- ware  Foundation;  either version 2,  or (at your option) any later ver- --
+-- ware  Foundation;  either version 3,  or (at your option) any later ver- --
 -- sion.  GNAT is distributed in the hope that it will be useful, but WITH- --
 -- OUT ANY WARRANTY;  without even the  implied warranty of MERCHANTABILITY --
--- or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU General Public License --
--- for  more details.  You should have  received  a copy of the GNU General --
--- Public License  distributed with GNAT;  see file COPYING.  If not, write --
--- to  the Free Software Foundation,  59 Temple Place - Suite 330,  Boston, --
--- MA 02111-1307, USA.                                                      --
+-- or FITNESS FOR A PARTICULAR PURPOSE.                                     --
 --                                                                          --
--- As a special exception,  if other files  instantiate  generics from this --
--- unit, or you link  this unit with other files  to produce an executable, --
--- this  unit  does not  by itself cause  the resulting  executable  to  be --
--- covered  by the  GNU  General  Public  License.  This exception does not --
--- however invalidate  any other reasons why  the executable file  might be --
--- covered by the  GNU Public License.                                      --
+-- As a special exception under Section 7 of GPL version 3, you are granted --
+-- additional permissions described in the GCC Runtime Library Exception,   --
+-- version 3.1, as published by the Free Software Foundation.               --
+--                                                                          --
+-- You should have received a copy of the GNU General Public License and    --
+-- a copy of the GCC Runtime Library Exception along with this program;     --
+-- see the files COPYING3 and COPYING.RUNTIME respectively.  If not, see    --
+-- <http://www.gnu.org/licenses/>.                                          --
 --                                                                          --
 -- GNAT was originally developed  by the GNAT team at  New York University. --
 -- Extensive contributions were provided by Ada Core Technologies Inc.      --
@@ -71,14 +69,14 @@ package body Debug is
    --  dC   Output debugging information on check suppression
    --  dD   Delete elaboration checks in inner level routines
    --  dE   Apply elaboration checks to predefined units
-   --  dF   Front end data layout enabled.
+   --  dF   Front end data layout enabled
    --  dG   Generate all warnings including those normally suppressed
    --  dH   Hold (kill) call to gigi
    --  dI   Inhibit internal name numbering in gnatG listing
    --  dJ   Output debugging trace info for JGNAT (Java VM version of GNAT)
    --  dK   Kill all error messages
    --  dL   Output trace information on elaboration checking
-   --  dM   Asssume all variables are modified (no current values)
+   --  dM   Assume all variables are modified (no current values)
    --  dN   No file name information in exception messages
    --  dO   Output immediate error messages
    --  dP   Do not check for controlled objects in preelaborable packages
@@ -89,38 +87,63 @@ package body Debug is
    --  dU   Enable garbage collection of unreachable entities
    --  dV   Enable viewing of all symbols in debugger
    --  dW   Disable warnings on calls for IN OUT parameters
-   --  dX   Enable Frontend ZCX even when it is not supported
+   --  dX   Display messages on reads of potentially uninitialized scalars
    --  dY   Enable configurable run-time mode
-   --  dZ
+   --  dZ   Generate listing showing the contents of the dispatch tables
 
-   --  d.a
+   --  d.a  Force Target_Strict_Alignment mode to True
    --  d.b
-   --  d.c
+   --  d.c  Generate inline concatenation, do not call procedure
    --  d.d
    --  d.e
-   --  d.f
-   --  d.g
+   --  d.f  Inhibit folding of static expressions
+   --  d.g  Enable conversion of raise into goto
    --  d.h
-   --  d.i
+   --  d.i  Ignore Warnings pragmas
    --  d.j
    --  d.k
-   --  d.l
-   --  d.m
-   --  d.n
-   --  d.o
-   --  d.p
+   --  d.l  Use Ada 95 semantics for limited function returns
+   --  d.m  For -gnatl, print full source only for main unit
+   --  d.n  Print source file names
+   --  d.o  Generate .NET listing of CIL code
+   --  d.p  Enable the .NET CIL verifier
    --  d.q
-   --  d.r
-   --  d.s
-   --  d.t
+   --  d.r  Enable OK_To_Reorder_Components in non-variant records
+   --  d.s  Disable expansion of slice move, use memmove
+   --  d.t  Disable static allocation of library level dispatch tables
    --  d.u
-   --  d.v
-   --  d.w
+   --  d.v  Enable OK_To_Reorder_Components in variant records
+   --  d.w  Do not check for infinite loops
    --  d.x  No exception handlers
    --  d.y
    --  d.z
 
-
+   --  d.A  Read/write Aspect_Specifications hash table to tree
+   --  d.B
+   --  d.C  Generate concatenation call, do not generate inline code
+   --  d.D
+   --  d.E
+   --  d.F
+   --  d.G
+   --  d.H
+   --  d.I  SCIL generation mode
+   --  d.J  Disable parallel SCIL generation mode
+   --  d.K
+   --  d.L  Depend on back end for limited types in conditional expressions
+   --  d.M
+   --  d.N
+   --  d.O  Dump internal SCO tables
+   --  d.P
+   --  d.Q
+   --  d.R
+   --  d.S  Force Optimize_Alignment (Space)
+   --  d.T  Force Optimize_Alignment (Time)
+   --  d.U
+   --  d.V
+   --  d.W  Print out debugging information for Walk_Library_Items
+   --  d.X  Use Expression_With_Actions
+   --  d.Y  Do not use Expression_With_Actions
+   --  d.Z
 
    --  d1   Error msgs have node numbers where possible
    --  d2   Eliminate error flags in verbose form error messages
@@ -134,21 +157,21 @@ package body Debug is
 
    --  Debug flags for binder (GNATBIND)
 
-   --  da
-   --  db
+   --  da  All links (including internal units) listed if there is a cycle
+   --  db  Output information from Better_Choice
    --  dc  List units as they are chosen
    --  dd
    --  de  Elaboration dependencies including system units
    --  df
    --  dg
    --  dh
-   --  di
+   --  di  Ignore_Errors mode for reading ali files
    --  dj
    --  dk
    --  dl
    --  dm
    --  dn  List details of manipulation of Num_Pred values
-   --  do
+   --  do  Use old preference for elaboration order
    --  dp
    --  dq
    --  dr
@@ -161,16 +184,6 @@ package body Debug is
    --  dy
    --  dz
 
-   --  d1
-   --  d2
-   --  d3
-   --  d4
-   --  d5
-   --  d6
-   --  d7
-   --  d8
-   --  d9
-
    --  Debug flags used in package Make and its clients (e.g. GNATMAKE)
 
    --  da
@@ -178,14 +191,14 @@ package body Debug is
    --  dc
    --  dd
    --  de
-   --  df
+   --  df  Only output file names, not path names, in log
    --  dg
    --  dh
    --  di
    --  dj
    --  dk
    --  dl
-   --  dm
+   --  dm  Display the number of maximum simultaneous compilations
    --  dn  Do not delete temp files created by gnatmake
    --  do
    --  dp  Prints the contents of the Q used by Make.Compile_Sources
@@ -199,16 +212,6 @@ package body Debug is
    --  dx
    --  dy
    --  dz
-
-   --  d1
-   --  d2
-   --  d3
-   --  d4
-   --  d5
-   --  d6
-   --  d7
-   --  d8
-   --  d9
 
    --------------------------------------------
    -- Documentation for Compiler Debug Flags --
@@ -280,7 +283,7 @@ package body Debug is
    --       list header is allocated, a line of output is generated. Certain
    --       other basic tree operations also cause a line of output to be
    --       generated. This option is useful in seeing where the parser is
-   --       blowing up.;
+   --       blowing up.
 
    --  do   Print the source recreated from the generated tree. In the case
    --       where the tree has been rewritten, this output includes only the
@@ -321,7 +324,7 @@ package body Debug is
    --       an interepretation is incompatible with the context.
 
    --  dw   Write semantic scope stack messages. Each time a scope is created
-   --       or removed, a message is output (see the Sem_Ch8.New_Scope and
+   --       or removed, a message is output (see the Sem_Ch8.Push_Scope and
    --       Sem_Ch8.Pop_Scope subprograms).
 
    --  dx   Force expansion on, even if no code being generated. Normally the
@@ -345,7 +348,8 @@ package body Debug is
    --  dA   Forces output of representation information, including full
    --       information for all internal type and object entities, as well
    --       as all user defined type and object entities including private
-   --       and incomplete types.
+   --       and incomplete types. This debug switch also automatically sets
+   --       the equivalent of -gnatR3m.
 
    --  dB   Output debug encodings for types and variants. See Exp_Dbug for
    --       exact form of the generated output.
@@ -387,11 +391,11 @@ package body Debug is
    --       layout, and may be useful in other debugging situations where
    --       you do not want gigi to intefere with the testing.
 
-   --  dI   Inhibit internal name numbering in gnatDG listing. For internal
-   --       names of the form <uppercase-letters><digits><suffix>, the output
-   --       will be modified to <uppercase-letters>...<suffix>. This is used
-   --       in the fixed bugs run to minimize system and version dependency
-   --       in filed -gnatDG output.
+   --  dI   Inhibit internal name numbering in gnatDG listing. Any sequence of
+   --       the form <uppercase-letter><digits><lowercase-letter> appearing in
+   --       a name is replaced by <uppercase-letter>...<lowercase-letter>. This
+   --       is used in the fixed bugs run to minimize system and version
+   --       dependency in filed -gnatD or -gnatG output.
 
    --  dJ   Generate debugging trace output for the JGNAT back end. This
    --       consists of symbolic Java Byte Code sequences for all generated
@@ -411,7 +415,7 @@ package body Debug is
    --       indications. This debug flag disconnects the tracking of constant
    --       values (see Exp_Ch2.Expand_Current_Value).
 
-   --  dN   Do not generate file name information in exception messages.
+   --  dN   Do not generate file name information in exception messages
 
    --  dO   Output immediate error messages. This causes error messages to
    --       be output as soon as they are generated (disconnecting several
@@ -458,22 +462,151 @@ package body Debug is
    --       task of transitioning incorrect legacy code, we provide this
    --       undocumented feature for suppressing these warnings.
 
-   --  dX   Enable frontend ZCX even when it is not supported. Equivalent to
-   --       -gnatZ but without verifying that System.Front_End_ZCX_Support
-   --       is set. This causes the front end to generate suitable tables
-   --       for ZCX handling even when the runtime cannot handle ZCX. This
-   --       is used for testing the front end for correct ZCX operation, and
-   --       in particular is useful for multi-target testing.
-
    --  dY   Enable configurable run-time mode, just as though the System file
    --       had Configurable_Run_Time_Mode set to True. This is useful in
    --       testing high integrity mode.
 
+   --  dZ   Generate listing showing the contents of the dispatch tables. Each
+   --       line has an internally generated number used for references between
+   --       tagged types and primitives. For each primitive the output has the
+   --       following fields:
+   --
+   --         - Letter 'P' or letter 's': The former indicates that this
+   --           primitive will be located in a primary dispatch table. The
+   --           latter indicates that it will be located in a secondary
+   --           dispatch table.
+   --
+   --         - Name of the primitive. In case of predefined Ada primitives
+   --           the text "(predefined)" is added before the name, and these
+   --           acronyms are used: SR (Stream_Read), SW (Stream_Write), SI
+   --           (Stream_Input), SO (Stream_Output), DA (Deep_Adjust), DF
+   --           (Deep_Finalize). In addition Oeq identifies the equality
+   --           operator, and "_assign" the assignment.
+   --
+   --         - If the primitive covers interface types, two extra fields
+   --           referencing other primitives are generated: "Alias" references
+   --           the primitive of the tagged type that covers an interface
+   --           primitive, and "AI_Alias" references the covered interface
+   --           primitive.
+   --
+   --         - The expression "at #xx" indicates the slot of the dispatch
+   --           table occupied by such primitive in its corresponding primary
+   --           or secondary dispatch table.
+   --
+   --         - In case of abstract subprograms the text "is abstract" is
+   --           added at the end of the line.
+
+   --  d.a  Force Target_Strict_Alignment to True, even on targets where it
+   --       would normally be false. Can be used for testing strict alignment
+   --       circuitry in the compiler.
+
+   --  d.c  Generate inline concatenation, instead of calling one of the
+   --       System.Concat_n.Str_Concat_n routines in cases where the latter
+   --       routines would normally be called.
+
+   --  d.f  Suppress folding of static expressions. This of course results
+   --       in seriously non-conforming behavior, but is useful sometimes
+   --       when tracking down handling of complex expressions.
+
+   --  d.g  Enables conversion of a raise statement into a goto when the
+   --       relevant handler is statically determinable. For now we only try
+   --       this if this debug flag is set. Later we will enable this more
+   --       generally by default.
+
+   --  d.i  Ignore all occurrences of pragma Warnings in the sources. This can
+   --       be used in particular to disable Warnings (Off) to check if any of
+   --       these statements are inappropriate.
+
+   --  d.l  Use Ada 95 semantics for limited function returns. This may be
+   --       used to work around the incompatibility introduced by AI-318-2.
+   --       It is useful only in -gnat05 mode.
+
+   --  d.m  When -gnatl is used, the normal output includes full listings of
+   --       all files in the extended main source (body/spec/subunits). If this
+   --       debug switch is used, then the full listing is given only for the
+   --       main source (this corresponds to a previous behavior of -gnatl and
+   --       is used for running the ACATS tests).
+
+   --  d.n  Print source file names as they are loaded. This is useful if the
+   --       compiler has a bug -- these are the files that need to be included
+   --       in a bug report.
+
+   --  d.o  Generate listing showing the IL instructions generated by the .NET
+   --       compiler for each subprogram.
+
+   --  d.p  Enable the .NET CIL verifier. During development the verifier is
+   --       disabled by default and this flag is used to enable it. In the
+   --       future we will reverse this functionality.
+
+   --  d.r  Forces the flag OK_To_Reorder_Components to be set in all record
+   --       base types that have no discriminants.
+
+   --  d.s  Normally the compiler expands slice moves into loops if overlap
+   --       might be possible. This debug flag inhibits that expansion, and
+   --       the back end is expected to use an appropriate routine to handle
+   --       overlap, based on Forward_OK and Backwards_OK flags.
+
+   --  d.t  The compiler has been modified (a fairly extensive modification)
+   --       to generate static dispatch tables for library level tagged types.
+   --       This debug switch disables this modification and reverts to the
+   --       previous dynamic construction of tables. It is there as a possible
+   --       work around if we run into trouble with the new implementation.
+
+   --  d.v  Forces the flag OK_To_Reorder_Components to be set in all record
+   --       base types that have at least one discriminant (v = variant).
+
+   --  d.w  This flag turns off the scanning of loops to detect possible
+   --       infinite loops.
+
+   --  d.A  There seems to be a problem with ASIS if we activate the circuit
+   --       for reading and writing the aspect specification hash table, so
+   --       for now, this is controlled by the debug flag d.A. The hash table
+   --       is only written and read if this flag is set.
+
    --  d.x  No exception handlers in generated code. This causes exception
-   --       handles to be eliminated from the generated code. They are still
+   --       handlers to be eliminated from the generated code. They are still
    --       fully compiled and analyzed, they just get eliminated from the
    --       code generation step.
 
+   --  d.C  Generate call to System.Concat_n.Str_Concat_n routines in cases
+   --       where we would normally generate inline concatenation code.
+
+   --  d.I  Generate SCIL mode. Generate intermediate code for the sake of
+   --       of static analysis tools, and ensure additional tree consistency
+   --       between different compilations of specs.
+
+   --  d.J  Disable parallel SCIL generation. Normally SCIL file generation is
+   --       done in parallel to speed processing. This switch disables this
+   --       behavior.
+
+   --  d.L  Normally the front end generates special expansion for conditional
+   --       expressions of a limited type. This debug flag removes this special
+   --       case expansion, leaving it up to the back end to handle conditional
+   --       expressions correctly.
+
+   --  d.O  Dump internal SCO tables. Before outputting the SCO information to
+   --       the ALI file, the internal SCO tables (SCO_Table/SCO_Unit_Table)
+   --       are dumped for debugging purposes.
+
+   --  d.S  Force Optimize_Alignment (Space) mode as the default
+
+   --  d.T  Force Optimize_Alignment (Time) mode as the default
+
+   --  d.W  Print out debugging information for Walk_Library_Items, including
+   --       the order in which units are walked. This is primarily for use in
+   --       debugging CodePeer mode.
+
+   --  d.X  By default, the compiler uses an elaborate rewriting framework for
+   --       short-circuited forms where the right hand condition generates
+   --       actions to be inserted. With the gcc backend, we now use the new
+   --       N_Expression_With_Actions node for this expansion, but we still use
+   --       the old method for other backends and in SCIL mode. This debug flag
+   --       forces use of the new N_Expression_With_Actions node in these other
+   --       cases and is intended for transitional use.
+
+   --  d.Y  Prevents the use of the N_Expression_With_Actions node even in the
+   --       case of the gcc back end. Provided as a back up in case the new
+   --       scheme has problems.
 
    --  d1   Error messages have node numbers where possible. Normally error
    --       messages have only source locations. This option is useful when
@@ -520,6 +653,16 @@ package body Debug is
    -- Documentation for Binder Debug Flags --
    ------------------------------------------
 
+   --  da  Normally if there is an elaboration circularity, then in describing
+   --      the cycle, links involving internal units are omitted, since they
+   --      are irrelevant and confusing. This debug flag causes all links to
+   --      be listed, and is useful when diagnosing circularities introduced
+   --      by incorrect changes to the run-time library itself.
+
+   --  db  Output debug information from Better_Choice in Binde, which uses
+   --      various heuristics to determine elaboration order in cases where
+   --      multiple orders are valid.
+
    --  dc  List units as they are chosen. As units are selected for addition to
    --      the elaboration order, a line of output is generated showing which
    --      unit has been selected.
@@ -528,23 +671,37 @@ package body Debug is
    --      dependencies) except that internal units are included in the
    --      listing.
 
+   --  di  Normally gnatbind calls Read_Ali with Ignore_Errors set to
+   --      False, since the binder really needs correct version ALI
+   --      files to do its job. This debug flag causes Ignore_Errors
+   --      mode to be set for the binder (and is particularly useful
+   --      for testing ignore errors mode).
+
    --  dn  List details of manipulation of Num_Pred values during execution of
    --      the algorithm used to determine a correct order of elaboration. This
    --      is useful in diagnosing any problems in its behavior.
+
+   --  do  Use old elaboration order preference. The new preference rules
+   --      prefer specs with no bodies to specs with bodies, and between two
+   --      specs with bodies, prefers the one whose body is closer to being
+   --      able to be elaborated. This is a clear improvement, but we provide
+   --      this debug flag in case of regressions.
 
    --  du  List unit name and file name for each unit as it is read in
 
    --  dx  Force the binder to read (and then ignore) the xref information
    --      in ali files (used to check that read circuit is working OK).
 
-   ------------------------------------------------------------
-   -- Documentation for the Debug Flags used in package Make --
-   ------------------------------------------------------------
+   --------------------------------------------
+   -- Documentation for gnatmake Debug Flags --
+   --------------------------------------------
 
-   --  Please note that such flags apply to all of Make clients,
-   --  such as gnatmake.
+   --  df  Only output file names, not path names, in log
 
-   --  dn  Do not delete temporary files creates by Make at the end
+   --  dm  Issue a message indicating the maximum number of simultaneous
+   --      compilations.
+
+   --  dn  Do not delete temporary files created by gnatmake at the end
    --      of execution, such as temporary config pragma files, mapping
    --      files or project path files.
 
@@ -564,14 +721,17 @@ package body Debug is
    --  dw  Prints the list of units withed by the unit currently explored
    --      during the main loop of Make.Compile_Sources.
 
-   ----------------------
-   -- Get_Debug_Flag_K --
-   ----------------------
+   ---------------------------------------------
+   -- Documentation for gprbuild Debug Flags  --
+   ---------------------------------------------
 
-   function Get_Debug_Flag_K return Boolean is
-   begin
-      return Debug_Flag_K;
-   end Get_Debug_Flag_K;
+   --  dn  Do not delete temporary files createed by gprbuild at the end
+   --      of execution, such as temporary config pragma files, mapping
+   --      files or project path files.
+
+   --  dt  When a time stamp mismatch has been found for an ALI file,
+   --      display the source file name, the time stamp expected and
+   --      the time stamp found.
 
    --------------------
    -- Set_Debug_Flag --

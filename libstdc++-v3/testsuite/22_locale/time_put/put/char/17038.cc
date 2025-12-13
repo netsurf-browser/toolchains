@@ -1,11 +1,13 @@
+// { dg-require-namedlocale "ta_IN" }
+
 // 2004-08-25  Paolo Carlini  <pcarlini@suse.de>
 
-// Copyright (C) 2004 Free Software Foundation
+// Copyright (C) 2004, 2005, 2006, 2009, 2010 Free Software Foundation
 //
 // This file is part of the GNU ISO C++ Library.  This library is free
 // software; you can redistribute it and/or modify it under the
 // terms of the GNU General Public License as published by the
-// Free Software Foundation; either version 2, or (at your option)
+// Free Software Foundation; either version 3, or (at your option)
 // any later version.
 
 // This library is distributed in the hope that it will be useful,
@@ -14,9 +16,8 @@
 // GNU General Public License for more details.
 
 // You should have received a copy of the GNU General Public License along
-// with this library; see the file COPYING.  If not, write to the Free
-// Software Foundation, 59 Temple Place - Suite 330, Boston, MA 02111-1307,
-// USA.
+// with this library; see the file COPYING3.  If not see
+// <http://www.gnu.org/licenses/>.
 
 // 22.2.5.3.1 time_put members
 
@@ -33,12 +34,12 @@ void test01()
   bool test __attribute__((unused)) = true;
 
   // create "C" time objects
-  tm time1 = { 0, 0, 12, 4, 3, 71, 0, 93, 0 };
+  const tm time1 = __gnu_test::test_tm(0, 0, 12, 4, 3, 71, 0, 93, 0);
 
   // basic construction
   locale loc_c = locale::classic();
-  locale loc_in = __gnu_test::try_named_locale("ta_IN");
-  assert( loc_in != loc_c );
+  locale loc_in = locale("ta_IN");
+  VERIFY( loc_in != loc_c );
 
   // create an ostream-derived object, cache the time_put facet
   ostringstream oss;
@@ -46,7 +47,7 @@ void test01()
   const time_put<char>& tim_put =
     use_facet<time_put<char> >(oss.getloc()); 
 
-  iterator_type os_it01 = tim_put.put(oss.rdbuf(), oss, '*', &time1, 'c');
+  tim_put.put(oss.rdbuf(), oss, '*', &time1, 'c');
   string result1 = oss.str();
 
   char time_buffer[128];

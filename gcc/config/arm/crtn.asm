@@ -1,35 +1,40 @@
-#   Copyright (C) 2001 Free Software Foundation, Inc.
+#   Copyright (C) 2001, 2004, 2008, 2009, 2010 Free Software Foundation, Inc.
 #   Written By Nick Clifton
 # 
 # This file is free software; you can redistribute it and/or modify it
 # under the terms of the GNU General Public License as published by the
-# Free Software Foundation; either version 2, or (at your option) any
+# Free Software Foundation; either version 3, or (at your option) any
 # later version.
-# 
-# In addition to the permissions in the GNU General Public License, the
-# Free Software Foundation gives you unlimited permission to link the
-# compiled version of this file with other programs, and to distribute
-# those programs without any restriction coming from the use of this
-# file.  (The General Public License restrictions do apply in other
-# respects; for example, they cover modification of the file, and
-# distribution when not linked into another program.)
 # 
 # This file is distributed in the hope that it will be useful, but
 # WITHOUT ANY WARRANTY; without even the implied warranty of
 # MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
 # General Public License for more details.
 # 
-# You should have received a copy of the GNU General Public License
-# along with this program; see the file COPYING.  If not, write to
-# the Free Software Foundation, 59 Temple Place - Suite 330,
-# Boston, MA 02111-1307, USA.
+# Under Section 7 of GPL version 3, you are granted additional
+# permissions described in the GCC Runtime Library Exception, version
+# 3.1, as published by the Free Software Foundation.
 # 
-#    As a special exception, if you link this library with files
-#    compiled with GCC to produce an executable, this does not cause
-#    the resulting executable to be covered by the GNU General Public License.
-#    This exception does not however invalidate any other reasons why
-#    the executable file might be covered by the GNU General Public License.
-# 
+# You should have received a copy of the GNU General Public License and
+# a copy of the GCC Runtime Library Exception along with this program;
+# see the files COPYING3 and COPYING.RUNTIME respectively.  If not, see
+# <http://www.gnu.org/licenses/>.
+
+/* An executable stack is *not* required for these functions.  */
+#if defined(__ELF__) && defined(__linux__)
+.section .note.GNU-stack,"",%progbits
+.previous
+#endif
+
+#ifdef __ARM_EABI__
+/* Some attributes that are common to all routines in this file.  */
+	/* Tag_ABI_align_needed: This code does not require 8-byte
+	   alignment from the caller.  */
+	/* .eabi_attribute 24, 0  -- default setting.  */
+	/* Tag_ABI_align_preserved: This code preserves 8-byte
+	   alignment in any callee.  */
+	.eabi_attribute 25, 1
+#endif /* __ARM_EABI__ */
 
 # This file just makes sure that the .fini and .init sections do in
 # fact return.  Users may put any desired instructions in those sections.
@@ -43,33 +48,29 @@
 	# sequences here, it is just not worth it.  Instead keep things
 	# simple.  Restore all the save resgisters, including the link
 	# register and then perform the correct function return instruction.
+	# We also save/restore r3 to ensure stack alignment.
 .macro FUNC_END
 #ifdef __thumb__
 	.thumb
 	
-	pop	{r4, r5, r6, r7}
+	pop	{r3, r4, r5, r6, r7}
 	pop	{r3}
 	mov	lr, r3
 #else
 	.arm
 	
-	ldmdb	fp, {r4, r5, r6, r7, r8, r9, sl, fp, sp, lr}
+	sub	sp, fp, #40
+	ldmfd	sp, {r4, r5, r6, r7, r8, r9, sl, fp, sp, lr}
 #endif
 	
 #if defined __THUMB_INTERWORK__ || defined __thumb__
 	bx	lr
 #else
-#ifdef __APCS_26__
-	movs	pc, lr
-#else
 	mov	pc, lr
-#endif
 #endif
 .endm
 		
 	
-	.file		"crtn.asm"
-
 	.section	".init"
 	;;
 	FUNC_END

@@ -6,26 +6,33 @@
 --                                                                          --
 --                                 S p e c                                  --
 --                                                                          --
---          Copyright (C) 1999-2003 Free Software Foundation, Inc.          --
+--          Copyright (C) 1999-2009, Free Software Foundation, Inc.         --
 --                                                                          --
 -- GNAT is free software;  you can  redistribute it  and/or modify it under --
 -- terms of the  GNU General Public License as published  by the Free Soft- --
--- ware  Foundation;  either version 2,  or (at your option) any later ver- --
+-- ware  Foundation;  either version 3,  or (at your option) any later ver- --
 -- sion.  GNAT is distributed in the hope that it will be useful, but WITH- --
 -- OUT ANY WARRANTY;  without even the  implied warranty of MERCHANTABILITY --
--- or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU General Public License --
--- for  more details.  You should have  received  a copy of the GNU General --
--- Public License  distributed with GNAT;  see file COPYING.  If not, write --
--- to  the Free Software Foundation,  59 Temple Place - Suite 330,  Boston, --
--- MA 02111-1307, USA.                                                      --
+-- or FITNESS FOR A PARTICULAR PURPOSE.                                     --
+--                                                                          --
+-- As a special exception under Section 7 of GPL version 3, you are granted --
+-- additional permissions described in the GCC Runtime Library Exception,   --
+-- version 3.1, as published by the Free Software Foundation.               --
+--                                                                          --
+-- You should have received a copy of the GNU General Public License and    --
+-- a copy of the GCC Runtime Library Exception along with this program;     --
+-- see the files COPYING3 and COPYING.RUNTIME respectively.  If not, see    --
+-- <http://www.gnu.org/licenses/>.                                          --
 --                                                                          --
 -- GNAT was originally developed  by the GNAT team at  New York University. --
 -- Extensive contributions were provided by Ada Core Technologies Inc.      --
 --                                                                          --
 ------------------------------------------------------------------------------
 
---  This package obtains parameters from the target runtime version of
---  System, to indicate parameters relevant to the target environment.
+--  This package obtains parameters from the target runtime version of System,
+--  to indicate parameters relevant to the target environment.
+
+--  Is it right for this to be modified GPL???
 
 --  Conceptually, these parameters could be obtained using rtsfind, but
 --  we do not do this for four reasons:
@@ -48,7 +55,7 @@
 --  computed and set in the ali file. This partially negates points 1 and 2
 --  above although just parsing is quick and does not impact debugging much.
 
---  The parameters acquired by this routine from system.ads fall into three
+--  The parameters acquired by this routine from system.ads fall into four
 --  categories:
 
 --     1. Configuration pragmas, that must appear at the start of the file.
@@ -63,12 +70,15 @@
 
 --     3. Identification information. This is an optional string constant
 --        that gives the name of the run-time library configuration. This
---        line may be ommitted for a version of system.ads to be used with
+--        line may be omitted for a version of system.ads to be used with
 --        the full Ada 95 run time.
 
+--     4. Other characteristics of package System. At the current time the
+--        only item in this category is whether type Address is private.
+
 with Rident; use Rident;
+with Namet;  use Namet;
 with Types;  use Types;
-with Uintp;  use Uintp;
 
 package Targparm is
 
@@ -102,24 +112,29 @@ package Targparm is
    --  If a pragma Polling (On) appears, then the flag Opt.Polling_Required
    --  is set to True.
 
+   --  If a pragma Detect_Blocking appears, then the flag Opt.Detect_Blocking
+   --  is set to True.
+
    --  if a pragma Suppress_Exception_Locations appears, then the flag
    --  Opt.Exception_Locations_Suppressed is set to True.
 
-   --  The only other pragma allowed is a pragma Restrictions that gives the
-   --  simple name of a restriction for which partition consistency is always
-   --  required (see definition of Rident.Partition_Restrictions).
+   --  If a pragma Profile with a valid profile argument appears, then
+   --  the appropriate restrictions and policy flags are set.
 
-   Restrictions_On_Target :
-     array (Partition_Restrictions) of Boolean := (others => False);
-   --  Element is set True if a pragma Restrictions for the corresponding
-   --  identifier appears in system.ads. Note that only partition restriction
-   --  identifiers are permitted as arguments for pragma Restrictions for
-   --  pragmas appearing at the start of system.ads.
+   --  The only other pragma allowed is a pragma Restrictions that specifies
+   --  a restriction that will be imposed on all units in the partition. Note
+   --  that in this context, only one restriction can be specified in a single
+   --  pragma, and the pragma must appear on its own on a single source line.
 
-   Restriction_Parameters_On_Target :
-     array (Restriction_Parameter_Id) of Uint := (others => No_Uint);
-   --  Element is set to specified value if a pragma Restrictions for the
-   --  corresponding restriction parameter value is set.
+   --  If package System contains exactly the line "type Address is private;"
+   --  then the flag Opt.Address_Is_Private is set True, otherwise this flag
+   --  is set False.
+
+   Restrictions_On_Target : Restrictions_Info := No_Restrictions;
+   --  Records restrictions specified by system.ads. Only the Set and Value
+   --  members are modified. The Violated and Count fields are never modified.
+   --  Note that entries can be set either by a pragma Restrictions or by
+   --  a pragma Profile.
 
    -------------------
    -- Run Time Name --
@@ -142,10 +157,21 @@ package Targparm is
    Run_Time_Name_On_Target : Name_Id := No_Name;
    --  Set to appropriate names table entry Id value if a Run_Time_Name
    --  string constant is defined in system.ads. This name is used only
-   --  for the configurable run-time case, and is used to parametrize
+   --  for the configurable run-time case, and is used to parameterize
    --  messages that complain about non-supported run-time features.
    --  The name should contain only letters A-Z, digits 1-9, spaces,
    --  and underscores.
+
+   --------------------------
+   -- Executable Extension --
+   --------------------------
+
+   Executable_Extension_On_Target : Name_Id := No_Name;
+   --  Executable extension on the target. This name is useful for setting
+   --  the executable extension in a dynamic way, e.g. depending on the
+   --  run time used, rather than using a configure-time macro as done by
+   --  Get_Target_Executable_Suffix. If not set (No_Name), instead use
+   --  System.OS_Lib.Get_Target_Executable_Suffix.
 
    -----------------------
    -- Target Parameters --
@@ -154,7 +180,20 @@ package Targparm is
    --  The following parameters correspond to the variables defined in the
    --  private part of System (without the terminating _On_Target). Note
    --  that it is required that all parameters defined here be specified
-   --  in the target specific version of system.ads (there are no defaults).
+   --  in the target specific version of system.ads. Thus, to add a new
+   --  parameter, add it to all system*.ads files. (There is a defaulting
+   --  mechanism, but we don't normally take advantage of it, as explained
+   --  below.)
+
+   --  The default values here are used if no value is found in system.ads.
+   --  This should normally happen if the special version of system.ads used
+   --  by the compiler itself is in use or if the value is only relevant to
+   --  a particular target (e.g. OpenVMS, AAMP). The default values are
+   --  suitable for use in normal environments. This approach allows the
+   --  possibility of new versions of the compiler (possibly with new system
+   --  parameters added) being used to compile older versions of the compiler
+   --  sources, as well as avoiding duplicating values in all system-*.ads
+   --  files for flags that are used on a few platforms only.
 
    --  All these parameters should be regarded as read only by all clients
    --  of the package. The only way they get modified is by calling the
@@ -166,10 +205,24 @@ package Targparm is
    ----------------------------
 
    --  The great majority of GNAT ports are based on GCC. The switches in
-   --  This section indicate the use of some non-standard target back end.
+   --  This section indicate the use of some non-standard target back end
+   --  or other special targetting requirements.
 
-   AAMP_On_Target : Boolean;
-   --  Set to True if target is AAMP.
+   AAMP_On_Target : Boolean := False;
+   --  Set to True if target is AAMP
+
+   OpenVMS_On_Target : Boolean := False;
+   --  Set to True if target is OpenVMS
+
+   RTX_RTSS_Kernel_Module_On_Target : Boolean := False;
+   --  Set to True if target is RTSS module for RTX
+
+   type Virtual_Machine_Kind is (No_VM, JVM_Target, CLI_Target);
+   VM_Target : Virtual_Machine_Kind := No_VM;
+   --  Kind of virtual machine targetted
+   --  No_VM: no virtual machine, default case of a standard processor
+   --  JVM_Target: Java Virtual Machine
+   --  CLI_Target: CLI/.NET Virtual Machine
 
    -------------------------------
    -- Backend Arithmetic Checks --
@@ -181,12 +234,12 @@ package Targparm is
    --  end will generate the required checks (or that the checks are
    --  automatically performed by the hardware in an appropriate form).
 
-   Backend_Divide_Checks_On_Target : Boolean;
+   Backend_Divide_Checks_On_Target : Boolean := False;
    --  Set True if the back end generates divide checks, or if the hardware
    --  checks automatically. Set False if the front end must generate the
    --  required tests using explicit expanded code.
 
-   Backend_Overflow_Checks_On_Target : Boolean;
+   Backend_Overflow_Checks_On_Target : Boolean := False;
    --  Set True if the back end generates arithmetic overflow checks, or if
    --  the hardware checks automatically. Set False if the front end must
    --  generate the required tests using explicit expanded code.
@@ -208,7 +261,7 @@ package Targparm is
    --      The generation of the setjmp and longjmp calls is handled by
    --      the front end of the compiler (this includes gigi in the case
    --      of the standard GCC back end). It does not use any back end
-   --      suport (such as the GCC3 exception handling mechanism). When
+   --      support (such as the GCC3 exception handling mechanism). When
    --      this approach is used, the compiler generates special exception
    --      handlers for handling cleanups when an exception is raised.
 
@@ -247,54 +300,28 @@ package Targparm is
 
    --    Controlling the selection of methods
 
-   --      The Front-End Longjmp/Setjmp approach is always available in
-   --      all implementations. If it is not the default method, then it
-   --      may be explicitly specified by the use of -gnatL. Note however
-   --      that there is a requirement that all Ada units in a partition
-   --      be compiled with this overriding option if it is not the default.
-
-   --      On some, but not all, implementations of GNAT, one of the two
-   --      ZCX approaches (but not both) is implemented. If this is the
-   --      case, and ZCX is not the default mechanism, then ZCX handling
-   --      (front-end or back-end according to the implementation) may be
-   --      specified by use of the -gnatZ switch. Again, this switch must
-   --      be used to compile all Ada units in a partition. The use of
-   --      the -gnatZ switch will cause termination with a fatal error.
-
-   --      Finally the debug option -gnatdX can be used to force the
-   --      compiler to operate in front-end ZCX exception mode and force
-   --      the front end to generate exception tables. This is only useful
-   --      for debugging purposes for implementations which do not provide
-   --      the possibility of front-end ZCX mode. The resulting object file
-   --      is unusable, but this debug switch may still be useful (e.g. in
-   --      conjunction with -gnatG) for front-end debugging purposes.
+   --      On most implementations, back-end zero-cost exceptions are used.
+   --      Otherwise, Front-End Longjmp/Setjmp approach is used.
+   --      Note that there is a requirement that all Ada units in a partition
+   --      be compiled with the same exception model.
 
    --    Control of Available Methods and Defaults
 
-   --      The following switches specify which of the two ZCX methods
-   --      (if any) is available in an implementation, and which method
-   --      is the default method.
+   --      The following switches specify whether ZCX is available, and
+   --      whether it is enabled by default.
 
-   ZCX_By_Default_On_Target : Boolean;
+   ZCX_By_Default_On_Target : Boolean := False;
    --  Indicates if zero cost exceptions are active by default. If this
    --  variable is False, then the only possible exception method is the
    --  front-end setjmp/longjmp approach, and this is the default. If
-   --  this variable is True, then one of the following two flags must
-   --  be True, and represents the method to be used by default.
+   --  this variable is True, then GCC ZCX is used.
 
-   GCC_ZCX_Support_On_Target  : Boolean;
-   --  Indicates that when ZCX is active, the mechanism to be used is the
-   --  back-end ZCX exception approach. If this variable is set to True,
-   --  then Front_End_ZCX_Support_On_Target must be False.
+   GCC_ZCX_Support_On_Target  : Boolean := False;
+   --  Indicates that the target supports GCC Exceptions
 
-   Front_End_ZCX_Support_On_Target : Boolean;
-   --  Indicates that when ZCX is active, the mechanism to be used is the
-   --  front-end ZCX exception approach. If this variable is set to True,
-   --  then GCC_ZCX_Support_On_Target must be False.
-
-   --------------------------------
-   -- Configurable Run-Time Mode --
-   --------------------------------
+   ------------------------------------
+   -- Run-Time Library Configuration --
+   ------------------------------------
 
    --  In configurable run-time mode, the system run-time may not support
    --  the full Ada language. The effect of setting this switch is to let
@@ -302,7 +329,7 @@ package Targparm is
    --  misconfigured) if run-time library units or entities within units are
    --  not present in the run-time.
 
-   Configurable_Run_Time_On_Target : Boolean;
+   Configurable_Run_Time_On_Target : Boolean := False;
    --  Indicates that the system.ads file is for a configurable run-time
    --
    --  This has some specific effects as follows
@@ -323,7 +350,7 @@ package Targparm is
    --    The variable __gnat_exit_status is generated within the binder file
    --    instead of being imported from the run-time library.
 
-   Suppress_Standard_Library_On_Target : Boolean;
+   Suppress_Standard_Library_On_Target : Boolean := False;
    --  If this flag is True, then the standard library is not included by
    --  default in the executable (see unit System.Standard_Library in file
    --  s-stalib.ads for details of what this includes). This is for example
@@ -336,14 +363,18 @@ package Targparm is
    --    with the exception of the priority of the environment task, which
    --    is needed by the Ravenscar run-time.
    --
-   --    The generation of exception tables is suppressed for front end
-   --    ZCX exception handling (since we assume no exception handling).
-   --
    --    The calls to __gnat_initialize and __gnat_finalize are omitted
    --
    --    All finalization and initialization (controlled types) is omitted
    --
    --    The routine __gnat_handler_installed is not imported
+
+   Preallocated_Stacks_On_Target : Boolean := False;
+   --  If this flag is True, then the expander preallocates all task stacks
+   --  at compile time. If the flag is False, then task stacks are not pre-
+   --  allocated, and task stack allocation is the responsibility of the
+   --  run-time (which typically delegates the task to the underlying
+   --  operating system environment).
 
    ---------------------
    -- Duration Format --
@@ -353,7 +384,7 @@ package Targparm is
    --  and small of 10**(-9) (i.e. it is a count in nanoseconds. This flag
    --  allows that standard format to be modified.
 
-   Duration_32_Bits_On_Target : Boolean;
+   Duration_32_Bits_On_Target : Boolean := False;
    --  If True, then Duration is represented in 32 bits and the delta and
    --  small values are set to 20.0*(10**(-3)) (i.e. it is a count in units
    --  of 20 milliseconds.
@@ -368,7 +399,7 @@ package Targparm is
    --  used at the source level, and the corresponding flag is false, then an
    --  error message will be issued saying the feature is not supported.
 
-   Support_64_Bit_Divides_On_Target : Boolean;
+   Support_64_Bit_Divides_On_Target : Boolean := True;
    --  If True, the back end supports 64-bit divide operations. If False, then
    --  the source program may not contain 64-bit divide operations. This is
    --  specifically useful in the zero foot-print case, where the issue is
@@ -376,14 +407,14 @@ package Targparm is
    --  no run-time support is required. It should always be set True if the
    --  necessary run-time support is present.
 
-   Support_Aggregates_On_Target : Boolean;
+   Support_Aggregates_On_Target : Boolean := True;
    --  In the general case, the use of aggregates may generate calls
    --  to run-time routines in the C library, including memset, memcpy,
    --  memmove, and bcopy. This flag is set to True if these routines
    --  are available. If any of these routines is not available, then
    --  this flag is False, and the use of aggregates is not permitted.
 
-   Support_Composite_Assign_On_Target : Boolean;
+   Support_Composite_Assign_On_Target : Boolean := True;
    --  The assignment of composite objects other than small records and
    --  arrays whose size is 64-bits or less and is set by an explicit
    --  size clause may generate calls to memcpy, memmove, and bcopy.
@@ -391,23 +422,33 @@ package Targparm is
    --  is set to True. If any of these routines is not available, then
    --  the flag is set False, and composite assignments are not allowed.
 
-   Support_Composite_Compare_On_Target : Boolean;
+   Support_Composite_Compare_On_Target : Boolean := True;
    --  If this flag is True, then the back end supports bit-wise comparison
    --  of composite objects for equality, either generating inline code or
    --  calling appropriate (and available) run-time routines. If this flag
    --  is False, then the back end does not provide this support, and the
    --  front end uses component by component comparison for composites.
 
-   Support_Long_Shifts_On_Target : Boolean;
+   Support_Long_Shifts_On_Target : Boolean := True;
    --  If True, the back end supports 64-bit shift operations. If False, then
    --  the source program may not contain explicit 64-bit shifts. In addition,
    --  the code generated for packed arrays will avoid the use of long shifts.
+
+   --------------------
+   -- Indirect Calls --
+   --------------------
+
+   Always_Compatible_Rep_On_Target : Boolean := True;
+   --  If True, the Can_Use_Internal_Rep flag (see Einfo) is set to False in
+   --  all cases. This corresponds to the traditional code generation
+   --  strategy. False allows the front end to choose a policy that partly or
+   --  entirely eliminates dynamically generated trampolines.
 
    -------------------------------
    -- Control of Stack Checking --
    -------------------------------
 
-   --  GNAT provides two methods of implementing exceptions:
+   --  GNAT provides three methods of implementing exceptions:
 
    --    GCC Probing Mechanism
 
@@ -422,6 +463,18 @@ package Targparm is
    --      size for the environment task depends on the operating
    --      system and cannot be set in a system-independent way.
 
+   --   GCC Stack-limit Mechanism
+
+   --      This approach uses the GCC stack limits mechanism.
+   --      It relies on comparing the stack pointer with the
+   --      values of a global symbol. If the check fails, a
+   --      trap is explicitly generated. The advantage is
+   --      that the mechanism requires no memory protection,
+   --      but operating system and run-time support are
+   --      needed to manage the per-task values of the symbol.
+   --      This is the default method after probing where it
+   --      is available.
+
    --   GNAT Stack-limit Checking
 
    --      This method relies on comparing the stack pointer
@@ -430,15 +483,19 @@ package Targparm is
    --      that the method requires no extra system dependent
    --      runtime support and can be used on systems without
    --      memory protection as well, but at the cost of more
-   --      overhead for doing the check. This method is the
-   --      default on systems that lack complete support for
-   --      probing.
+   --      overhead for doing the check. This is the fallback
+   --      method if the above two are not supported.
 
-   Stack_Check_Probes_On_Target : Boolean;
-   --  Indicates if stack check probes are used, as opposed to the standard
-   --  target independent comparison method.
+   Stack_Check_Probes_On_Target : Boolean := False;
+   --  Indicates if the GCC probing mechanism is used
 
-   Stack_Check_Default_On_Target : Boolean;
+   Stack_Check_Limits_On_Target : Boolean := False;
+   --  Indicates if the GCC stack-limit mechanism is used
+
+   --  Both flags cannot be simultaneously set to True. If neither
+   --  is, the target independent fallback method is used.
+
+   Stack_Check_Default_On_Target : Boolean := False;
    --  Indicates if stack checking is on by default
 
    ----------------------------
@@ -450,7 +507,7 @@ package Targparm is
    --  command line arguments (VxWorks and AAMP). Note that support of
    --  command line arguments is not required on such targets (RM A.15(13)).
 
-   Command_Line_Args_On_Target : Boolean;
+   Command_Line_Args_On_Target : Boolean := True;
    --  Set False if no command line arguments on target. Note that if this
    --  is False in with Configurable_Run_Time_On_Target set to True, then
    --  this causes suppression of generation of the argv/argc variables
@@ -459,11 +516,11 @@ package Targparm is
    --  Similarly, most ports support the use of an exit status, but AAMP
    --  is an exception (as allowed by RM A.15(18-20))
 
-   Exit_Status_Supported_On_Target : Boolean;
+   Exit_Status_Supported_On_Target : Boolean := True;
    --  Set False if returning of an exit status is not supported on target.
    --  Note that if this False in with Configurable_Run_Time_On_Target
    --  set to True, then this causes suppression of the gnat_exit_status
-   --  variable used to recod the exit status.
+   --  variable used to record the exit status.
 
    -----------------------
    -- Main Program Name --
@@ -476,7 +533,7 @@ package Targparm is
    --  name (just the name of the child if the main program is a child unit).
    --  In either case, this value can be overridden using -M name.
 
-   Use_Ada_Main_Program_Name_On_Target : Boolean;
+   Use_Ada_Main_Program_Name_On_Target : Boolean := False;
    --  Set True to use the Ada main program name as the main name
 
    ----------------------------------------------
@@ -497,73 +554,34 @@ package Targparm is
    --  the partition. We probably should add such consistency checks in future,
    --  but for now we don't do this.
 
-   Denorm_On_Target : Boolean;
-   --  Set to False on targets that do not reliably support denormals.
-   --  Reliably here means for all settings of the relevant -m flag, so
-   --  for example, this is False on the Alpha where denormals are not
-   --  supported unless -mieee is used.
+   --  Note: the compiler itself does not use floating-point, so the
+   --  settings of the defaults here are not really relevant.
 
-   Machine_Rounds_On_Target : Boolean;
+   --  Note: in some cases, proper support of some of these floating point
+   --  features may require a specific switch (e.g. -mieee on the Alpha)
+   --  to be used to obtain full RM compliant support.
+
+   Denorm_On_Target : Boolean := False;
+   --  Set to False on targets that do not reliably support denormals
+
+   Machine_Rounds_On_Target : Boolean := True;
    --  Set to False for targets where S'Machine_Rounds is False
 
-   Machine_Overflows_On_Target : Boolean;
+   Machine_Overflows_On_Target : Boolean := False;
    --  Set to True for targets where S'Machine_Overflows is True
 
-   Signed_Zeros_On_Target : Boolean;
-   --  Set to False on targets that do not reliably support signed zeros.
-
-   OpenVMS_On_Target : Boolean;
-   --  Set to True if target is OpenVMS.
+   Signed_Zeros_On_Target : Boolean := True;
+   --  Set to False on targets that do not reliably support signed zeros
 
    -------------------------------------------
    -- Boolean-Valued Fixed-Point Attributes --
    -------------------------------------------
 
-   Fractional_Fixed_Ops_On_Target : Boolean;
+   Fractional_Fixed_Ops_On_Target : Boolean := False;
    --  Set to True for targets that support fixed-by-fixed multiplication
    --  and division for fixed-point types with a small value equal to
    --  2 ** (-(T'Object_Size - 1)) and whose values have an absolute
    --  value less than 1.0.
-
-   --------------------------------------------------------------
-   -- Handling of Unconstrained Values Returned from Functions --
-   --------------------------------------------------------------
-
-   --  Functions that return variable length objects, notably unconstrained
-   --  arrays are a special case, because there is no simple obvious way of
-   --  implementing this feature. Furthermore, this capability is not present
-   --  in C++ or C, so typically the system ABI does not handle this case.
-
-   --  GNAT uses two different approaches
-
-   --    The Secondary Stack
-
-   --      The secondary stack is a special storage pool that is used for
-   --      this purpose. The called function places the result on the
-   --      secondary stack, and the caller uses or copies the value from
-   --      the secondary stack, and pops the secondary stack after the
-   --      value is consumed. The secondary stack is outside the system
-   --      ABI, and the important point is that although generally it is
-   --      handled in a stack like manner corresponding to the subprogram
-   --      call structure, a return from a function does NOT pop the stack.
-
-   --    DSP (Depressed Stack Pointer)
-
-   --      Some targets permit the implementation of a function call/return
-   --      protocol in which the function does not pop the main stack pointer
-   --      on return, but rather returns with the stack pointer depressed.
-   --      This is not generally permitted by any ABI, but for at least some
-   --      targets, the implementation of alloca provides a model for this
-   --      approach. If return-with-DSP is implemented, then functions that
-   --      return variable length objects do it by returning with the stack
-   --      pointer depressed, and the returned object is a pointer to the
-   --      area within the stack frame of the called procedure that contains
-   --      the returned value. The caller must then pop the main stack when
-   --      this value is consumed.
-
-   Functions_Return_By_DSP_On_Target : Boolean;
-   --  Set to True if target permits functions to return with using the
-   --  DSP (depressed stack pointer) approach.
 
    -----------------
    -- Data Layout --
@@ -574,7 +592,7 @@ package Targparm is
    --  parameter Backend_Layout is set to False, then the front end must
    --  perform all data layout. For further details see the package Layout.
 
-   Frontend_Layout_On_Target : Boolean;
+   Frontend_Layout_On_Target : Boolean := False;
    --  Set True if front end does layout
 
    -----------------

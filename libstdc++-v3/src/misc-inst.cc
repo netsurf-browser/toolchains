@@ -1,12 +1,12 @@
 // Explicit instantiation file.
 
-// Copyright (C) 1997, 1998, 1999, 2000, 2001, 2002, 2003, 2004
+// Copyright (C) 1997, 1998, 1999, 2000, 2001, 2002, 2003, 2004, 2005, 2009
 // Free Software Foundation, Inc.
 //
 // This file is part of the GNU ISO C++ Library.  This library is free
 // software; you can redistribute it and/or modify it under the
 // terms of the GNU General Public License as published by the
-// Free Software Foundation; either version 2, or (at your option)
+// Free Software Foundation; either version 3, or (at your option)
 // any later version.
 
 // This library is distributed in the hope that it will be useful,
@@ -14,19 +14,14 @@
 // MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
 // GNU General Public License for more details.
 
-// You should have received a copy of the GNU General Public License along
-// with this library; see the file COPYING.  If not, write to the Free
-// Software Foundation, 59 Temple Place - Suite 330, Boston, MA 02111-1307,
-// USA.
+// Under Section 7 of GPL version 3, you are granted additional
+// permissions described in the GCC Runtime Library Exception, version
+// 3.1, as published by the Free Software Foundation.
 
-// As a special exception, you may use this file as part of a free software
-// library without restriction.  Specifically, if other files instantiate
-// templates or use macros or inline functions from this file, or you compile
-// this file and link it with other files to produce an executable, this
-// file does not by itself cause the resulting executable to be covered by
-// the GNU General Public License.  This exception does not however
-// invalidate any other reasons why the executable file might be covered by
-// the GNU General Public License.
+// You should have received a copy of the GNU General Public License and
+// a copy of the GCC Runtime Library Exception along with this program;
+// see the files COPYING3 and COPYING.RUNTIME respectively.  If not, see
+// <http://www.gnu.org/licenses/>.
 
 //
 // ISO C++ 14882:
@@ -35,13 +30,12 @@
 #include <string>
 #include <istream>
 #include <ostream>
-#include <algorithm>
-#include <vector>
-#include <bits/atomicity.h>
 #include <ext/stdio_sync_filebuf.h>
 
-namespace std
+namespace std _GLIBCXX_VISIBILITY(default)
 {
+_GLIBCXX_BEGIN_NAMESPACE_VERSION
+
   // string related to iostreams
   template 
     basic_istream<char>& 
@@ -69,14 +63,20 @@ namespace std
     basic_istream<wchar_t>& 
     getline(basic_istream<wchar_t>&, wstring&);
 #endif
-} // namespace std
 
-namespace __gnu_cxx
+_GLIBCXX_END_NAMESPACE_VERSION
+} // namespace
+
+namespace __gnu_cxx _GLIBCXX_VISIBILITY(default)
 {
+_GLIBCXX_BEGIN_NAMESPACE_VERSION
+
   template class stdio_sync_filebuf<char>;
 #ifdef _GLIBCXX_USE_WCHAR_T
   template class stdio_sync_filebuf<wchar_t>;
 #endif
-} // namespace __gnu_cxx
+
+_GLIBCXX_END_NAMESPACE_VERSION
+} // namespace
 
 

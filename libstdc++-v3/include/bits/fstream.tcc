@@ -1,12 +1,13 @@
 // File based streams -*- C++ -*-
 
-// Copyright (C) 1997, 1998, 1999, 2000, 2001, 2002, 2003, 2004
+// Copyright (C) 1997, 1998, 1999, 2000, 2001, 2002, 2003, 2004, 2005, 2006,
+// 2007, 2008, 2009, 2010, 2011
 // Free Software Foundation, Inc.
 //
 // This file is part of the GNU ISO C++ Library.  This library is free
 // software; you can redistribute it and/or modify it under the
 // terms of the GNU General Public License as published by the
-// Free Software Foundation; either version 2, or (at your option)
+// Free Software Foundation; either version 3, or (at your option)
 // any later version.
 
 // This library is distributed in the hope that it will be useful,
@@ -14,19 +15,19 @@
 // MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
 // GNU General Public License for more details.
 
-// You should have received a copy of the GNU General Public License along
-// with this library; see the file COPYING.  If not, write to the Free
-// Software Foundation, 59 Temple Place - Suite 330, Boston, MA 02111-1307,
-// USA.
+// Under Section 7 of GPL version 3, you are granted additional
+// permissions described in the GCC Runtime Library Exception, version
+// 3.1, as published by the Free Software Foundation.
 
-// As a special exception, you may use this file as part of a free software
-// library without restriction.  Specifically, if other files instantiate
-// templates or use macros or inline functions from this file, or you compile
-// this file and link it with other files to produce an executable, this
-// file does not by itself cause the resulting executable to be covered by
-// the GNU General Public License.  This exception does not however
-// invalidate any other reasons why the executable file might be covered by
-// the GNU General Public License.
+// You should have received a copy of the GNU General Public License and
+// a copy of the GCC Runtime Library Exception along with this program;
+// see the files COPYING3 and COPYING.RUNTIME respectively.  If not, see
+// <http://www.gnu.org/licenses/>.
+
+/** @file bits/fstream.tcc
+ *  This is an internal header file, included by other library headers.
+ *  Do not attempt to use it directly. @headername{fstream}
+ */
 
 //
 // ISO C++ 14882: 27.8  File-based streams
@@ -37,8 +38,12 @@
 
 #pragma GCC system_header
 
-namespace std
+#include <bits/cxxabi_forced.h>
+
+namespace std _GLIBCXX_VISIBILITY(default)
 {
+_GLIBCXX_BEGIN_NAMESPACE_VERSION
+
   template<typename _CharT, typename _Traits>
     void
     basic_filebuf<_CharT, _Traits>::
@@ -46,9 +51,9 @@ namespace std
     {
       // Allocate internal buffer only if one doesn't already exist
       // (either allocated or provided by the user via setbuf).
-      if (!_M_buf_allocated && !this->_M_buf)
+      if (!_M_buf_allocated && !_M_buf)
 	{
-	  this->_M_buf = new char_type[this->_M_buf_size];
+	  _M_buf = new char_type[_M_buf_size];
 	  _M_buf_allocated = true;
 	}
     }
@@ -60,22 +65,22 @@ namespace std
     {
       if (_M_buf_allocated)
 	{
-	  delete [] this->_M_buf;
-	  this->_M_buf = NULL;
+	  delete [] _M_buf;
+	  _M_buf = 0;
 	  _M_buf_allocated = false;
 	}
       delete [] _M_ext_buf;
-      _M_ext_buf = NULL;
+      _M_ext_buf = 0;
       _M_ext_buf_size = 0;
-      _M_ext_next = NULL;
-      _M_ext_end = NULL;
+      _M_ext_next = 0;
+      _M_ext_end = 0;
     }
 
   template<typename _CharT, typename _Traits>
     basic_filebuf<_CharT, _Traits>::
     basic_filebuf() : __streambuf_type(), _M_lock(), _M_file(&_M_lock),
     _M_mode(ios_base::openmode(0)), _M_state_beg(), _M_state_cur(),
-    _M_state_last(), _M_buf(NULL), _M_buf_size(BUFSIZ),
+    _M_state_last(), _M_buf(0), _M_buf_size(BUFSIZ),
     _M_buf_allocated(false), _M_reading(false), _M_writing(false), _M_pback(), 
     _M_pback_cur_save(0), _M_pback_end_save(0), _M_pback_init(false),
     _M_codecvt(0), _M_ext_buf(0), _M_ext_buf_size(0), _M_ext_next(0),
@@ -90,14 +95,14 @@ namespace std
     basic_filebuf<_CharT, _Traits>::
     open(const char* __s, ios_base::openmode __mode)
     {
-      __filebuf_type *__ret = NULL;
+      __filebuf_type *__ret = 0;
       if (!this->is_open())
 	{
 	  _M_file.open(__s, __mode);
 	  if (this->is_open())
 	    {
 	      _M_allocate_internal_buffer();
-	      this->_M_mode = __mode;
+	      _M_mode = __mode;
 
 	      // Setup initial buffer to 'uncommitted' mode.
 	      _M_reading = false;
@@ -122,36 +127,51 @@ namespace std
   template<typename _CharT, typename _Traits>
     typename basic_filebuf<_CharT, _Traits>::__filebuf_type*
     basic_filebuf<_CharT, _Traits>::
-    close() throw()
+    close()
     {
-      __filebuf_type* __ret = NULL;
-      if (this->is_open())
+      if (!this->is_open())
+	return 0;
+
+      bool __testfail = false;
+      {
+	// NB: Do this here so that re-opened filebufs will be cool...
+	struct __close_sentry
 	{
-	  bool __testfail = false;
-	  try
-	    {
-	      if (!_M_terminate_output())
-		__testfail = true;
-	    }
-	  catch(...)
-	    { __testfail = true; }
+	  basic_filebuf *__fb;
+	  __close_sentry (basic_filebuf *__fbi): __fb(__fbi) { }
+	  ~__close_sentry ()
+	  {
+	    __fb->_M_mode = ios_base::openmode(0);
+	    __fb->_M_pback_init = false;
+	    __fb->_M_destroy_internal_buffer();
+	    __fb->_M_reading = false;
+	    __fb->_M_writing = false;
+	    __fb->_M_set_buffer(-1);
+	    __fb->_M_state_last = __fb->_M_state_cur = __fb->_M_state_beg;
+	  }
+	} __cs (this);
 
-	  // NB: Do this here so that re-opened filebufs will be cool...
-	  this->_M_mode = ios_base::openmode(0);
-	  this->_M_pback_init = false;
-	  _M_destroy_internal_buffer();
-	  _M_reading = false;
-	  _M_writing = false;
-	  _M_set_buffer(-1);
-	  _M_state_last = _M_state_cur = _M_state_beg;
+	__try
+	  {
+	    if (!_M_terminate_output())
+	      __testfail = true;
+	  }
+	__catch(__cxxabiv1::__forced_unwind&)
+	  {
+	    _M_file.close();
+	    __throw_exception_again;
+	  }
+	__catch(...)
+	  { __testfail = true; }
+      }
 
-	  if (!_M_file.close())
-	    __testfail = true;
+      if (!_M_file.close())
+	__testfail = true;
 
-	  if (!__testfail)
-	    __ret = this;
-	}
-      return __ret;
+      if (__testfail)
+	return 0;
+      else
+	return this;
     }
 
   template<typename _CharT, typename _Traits>
@@ -160,13 +180,21 @@ namespace std
     showmanyc()
     {
       streamsize __ret = -1;
-      const bool __testin = this->_M_mode & ios_base::in;
+      const bool __testin = _M_mode & ios_base::in;
       if (__testin && this->is_open())
 	{
 	  // For a stateful encoding (-1) the pending sequence might be just
 	  // shift and unshift prefixes with no actual character.
 	  __ret = this->egptr() - this->gptr();
+
+#if _GLIBCXX_HAVE_DOS_BASED_FILESYSTEM
+	  // About this workaround, see libstdc++/20806.
+	  const bool __testbinary = _M_mode & ios_base::binary;
+	  if (__check_facet(_M_codecvt).encoding() >= 0
+	      && __testbinary)
+#else
 	  if (__check_facet(_M_codecvt).encoding() >= 0)
+#endif
 	    __ret += _M_file.showmanyc() / _M_codecvt->max_length();
 	}
       return __ret;
@@ -178,10 +206,17 @@ namespace std
     underflow()
     {
       int_type __ret = traits_type::eof();
-      const bool __testin = this->_M_mode & ios_base::in;
-      if (__testin && !_M_writing)
+      const bool __testin = _M_mode & ios_base::in;
+      if (__testin)
 	{
-	  // Check for pback madness, and if so swich back to the
+	  if (_M_writing)
+	    {
+	      if (overflow() == traits_type::eof())
+		return __ret;
+	      _M_set_buffer(-1);
+	      _M_writing = false;
+	    }
+	  // Check for pback madness, and if so switch back to the
 	  // normal buffers and jet outta here before expensive
 	  // fileops happen...
 	  _M_destroy_pback();
@@ -190,8 +225,7 @@ namespace std
 	    return traits_type::to_int_type(*this->gptr());
 
 	  // Get and convert input sequence.
-	  const size_t __buflen = this->_M_buf_size > 1
-	                          ? this->_M_buf_size - 1 : 1;
+	  const size_t __buflen = _M_buf_size > 1 ? _M_buf_size - 1 : 1;
 
 	  // Will be set to true if ::read() returns 0 indicating EOF.
 	  bool __got_eof = false;
@@ -233,14 +267,14 @@ namespace std
 		{
 		  char* __buf = new char[__blen];
 		  if (__remainder)
-		    std::memcpy(__buf, _M_ext_next, __remainder);
+		    __builtin_memcpy(__buf, _M_ext_next, __remainder);
 
 		  delete [] _M_ext_buf;
 		  _M_ext_buf = __buf;
 		  _M_ext_buf_size = __blen;
 		}
 	      else if (__remainder)
-		std::memmove(_M_ext_buf, _M_ext_next, __remainder);
+		__builtin_memmove(_M_ext_buf, _M_ext_next, __remainder);
 
 	      _M_ext_next = _M_ext_buf;
 	      _M_ext_end = _M_ext_buf + __remainder;
@@ -267,16 +301,19 @@ namespace std
 		      _M_ext_end += __elen;
 		    }
 
-		  char_type* __iend;
-		  __r = _M_codecvt->in(_M_state_cur, _M_ext_next,
-				       _M_ext_end, _M_ext_next, this->eback(),
-				       this->eback() + __buflen, __iend);
+		  char_type* __iend = this->eback();
+		  if (_M_ext_next < _M_ext_end)
+		    __r = _M_codecvt->in(_M_state_cur, _M_ext_next,
+					 _M_ext_end, _M_ext_next,
+					 this->eback(),
+					 this->eback() + __buflen, __iend);
 		  if (__r == codecvt_base::noconv)
 		    {
 		      size_t __avail = _M_ext_end - _M_ext_buf;
 		      __ilen = std::min(__avail, __buflen);
 		      traits_type::copy(this->eback(),
-					reinterpret_cast<char_type*>(_M_ext_buf), __ilen);
+					reinterpret_cast<char_type*>
+					(_M_ext_buf), __ilen);
 		      _M_ext_next = _M_ext_buf + __ilen;
 		    }
 		  else
@@ -328,12 +365,19 @@ namespace std
     pbackfail(int_type __i)
     {
       int_type __ret = traits_type::eof();
-      const bool __testin = this->_M_mode & ios_base::in;
-      if (__testin && !_M_writing)
+      const bool __testin = _M_mode & ios_base::in;
+      if (__testin)
 	{
+	  if (_M_writing)
+	    {
+	      if (overflow() == traits_type::eof())
+		return __ret;
+	      _M_set_buffer(-1);
+	      _M_writing = false;
+	    }
 	  // Remember whether the pback buffer is active, otherwise below
 	  // we may try to store in it a second char (libstdc++/9761).
-	  const bool __testpb = this->_M_pback_init;
+	  const bool __testpb = _M_pback_init;
 	  const bool __testeof = traits_type::eq_int_type(__i, __ret);
 	  int_type __tmp;
 	  if (this->eback() < this->gptr())
@@ -381,9 +425,17 @@ namespace std
     {
       int_type __ret = traits_type::eof();
       const bool __testeof = traits_type::eq_int_type(__c, __ret);
-      const bool __testout = this->_M_mode & ios_base::out;
-      if (__testout && !_M_reading)
+      const bool __testout = _M_mode & ios_base::out;
+      if (__testout)
 	{
+          if (_M_reading)
+            {
+              _M_destroy_pback();
+              const int __gptr_off = _M_get_ext_pos(_M_state_last);
+              if (_M_seek(__gptr_off, ios_base::cur, _M_state_last)
+                  == pos_type(off_type(-1)))
+                return __ret;
+            }
 	  if (this->pbase() < this->pptr())
 	    {
 	      // If appropriate, append the overflow char.
@@ -402,7 +454,7 @@ namespace std
 		  __ret = traits_type::not_eof(__c);
 		}
 	    }
-	  else if (this->_M_buf_size > 1)
+	  else if (_M_buf_size > 1)
 	    {
 	      // Overflow in 'uncommitted' mode: set _M_writing, set
 	      // the buffer to the initial 'write' mode, and put __c
@@ -493,109 +545,114 @@ namespace std
       return __elen == __plen;
     }
 
-   template<typename _CharT, typename _Traits>
-     streamsize
-     basic_filebuf<_CharT, _Traits>::
-     xsgetn(_CharT* __s, streamsize __n)
-     {
-       // Clear out pback buffer before going on to the real deal...
-       streamsize __ret = 0;
-       if (this->_M_pback_init)
-	 {
-	   if (__n > 0 && this->gptr() == this->eback())
-	     {
-	       *__s++ = *this->gptr();
-	       this->gbump(1);
-	       __ret = 1;
-	       --__n;
-	     }
-	   _M_destroy_pback();
-	 }
-       
-       // Optimization in the always_noconv() case, to be generalized in the
-       // future: when __n > __buflen we read directly instead of using the
-       // buffer repeatedly.
-       const bool __testin = this->_M_mode & ios_base::in;
-       const streamsize __buflen = this->_M_buf_size > 1 ? this->_M_buf_size - 1
-	                                                 : 1;
-       if (__n > __buflen && __check_facet(_M_codecvt).always_noconv()
-	   && __testin && !_M_writing)
-	 {
-	   // First, copy the chars already present in the buffer.
-	   const streamsize __avail = this->egptr() - this->gptr();
-	   if (__avail != 0)
-	     {
-	       if (__avail == 1)
-		 *__s = *this->gptr();
-	       else
-		 traits_type::copy(__s, this->gptr(), __avail);
-	       __s += __avail;
-	       this->gbump(__avail);
+  template<typename _CharT, typename _Traits>
+    streamsize
+    basic_filebuf<_CharT, _Traits>::
+    xsgetn(_CharT* __s, streamsize __n)
+    {
+      // Clear out pback buffer before going on to the real deal...
+      streamsize __ret = 0;
+      if (_M_pback_init)
+	{
+	  if (__n > 0 && this->gptr() == this->eback())
+	    {
+	      *__s++ = *this->gptr(); // emulate non-underflowing sbumpc
+	      this->gbump(1);
+	      __ret = 1;
+	      --__n;
+	    }
+	  _M_destroy_pback();
+	}
+      else if (_M_writing)
+	{
+ 	  if (overflow() == traits_type::eof())
+ 	    return __ret;
+ 	  _M_set_buffer(-1);
+ 	  _M_writing = false;
+ 	}
+ 
+      // Optimization in the always_noconv() case, to be generalized in the
+      // future: when __n > __buflen we read directly instead of using the
+      // buffer repeatedly.
+      const bool __testin = _M_mode & ios_base::in;
+      const streamsize __buflen = _M_buf_size > 1 ? _M_buf_size - 1 : 1;
+ 
+      if (__n > __buflen && __check_facet(_M_codecvt).always_noconv()
+ 	   && __testin)
+ 	 {
+ 	   // First, copy the chars already present in the buffer.
+ 	   const streamsize __avail = this->egptr() - this->gptr();
+ 	   if (__avail != 0)
+ 	     {
+	       traits_type::copy(__s, this->gptr(), __avail);
+ 	       __s += __avail;
+	       this->setg(this->eback(), this->gptr() + __avail,
+			  this->egptr());
 	       __ret += __avail;
 	       __n -= __avail;
-	     }
+ 	     }
+ 
+ 	   // Need to loop in case of short reads (relatively common
+ 	   // with pipes).
+ 	   streamsize __len;
+ 	   for (;;)
+ 	     {
+ 	       __len = _M_file.xsgetn(reinterpret_cast<char*>(__s),
+ 				      __n);
+ 	       if (__len == -1)
+ 		 __throw_ios_failure(__N("basic_filebuf::xsgetn "
+ 					 "error reading the file"));
+ 	       if (__len == 0)
+ 		 break;
+ 
+ 	       __n -= __len;
+ 	       __ret += __len;
+ 	       if (__n == 0)
+ 		 break;
+ 
+ 	       __s += __len;
+ 	     }
+ 
+ 	   if (__n == 0)
+ 	     {
+ 	       _M_set_buffer(0);
+ 	       _M_reading = true;
+ 	     }
+ 	   else if (__len == 0)
+ 	     {
+ 	       // If end of file is reached, set 'uncommitted'
+ 	       // mode, thus allowing an immediate write without
+ 	       // an intervening seek.
+ 	       _M_set_buffer(-1);
+ 	       _M_reading = false;
+ 	     }
+ 	 }
+      else
+ 	 __ret += __streambuf_type::xsgetn(__s, __n);
+ 
+      return __ret;
+    }
 
-	   // Need to loop in case of short reads (relatively common
-	   // with pipes).
-	   streamsize __len;
-	   for (;;)
-	     {
-	       __len = _M_file.xsgetn(reinterpret_cast<char*>(__s),
-				      __n);
-	       if (__len == -1)
-		 __throw_ios_failure(__N("basic_filebuf::xsgetn "
-					 "error reading the file"));
-	       if (__len == 0)
-		 break;
-
-	       __n -= __len;
-	       __ret += __len;
-	       if (__n == 0)
-		 break;
-
-	       __s += __len;
-	     }
-
-	   if (__n == 0)
-	     {
-	       _M_set_buffer(0);
-	       _M_reading = true;
-	     }
-	   else if (__len == 0)
-	     {
-	       // If end of file is reached, set 'uncommitted'
-	       // mode, thus allowing an immediate write without
-	       // an intervening seek.
-	       _M_set_buffer(-1);
-	       _M_reading = false;
-	     }
-	 }
-       else
-	 __ret += __streambuf_type::xsgetn(__s, __n);
-
-       return __ret;
-     }
-
-   template<typename _CharT, typename _Traits>
-     streamsize
-     basic_filebuf<_CharT, _Traits>::
-     xsputn(const _CharT* __s, streamsize __n)
-     {
-       // Optimization in the always_noconv() case, to be generalized in the
-       // future: when __n is sufficiently large we write directly instead of
-       // using the buffer.
-       streamsize __ret = 0;
-       const bool __testout = this->_M_mode & ios_base::out;
-       if (__check_facet(_M_codecvt).always_noconv()
-	   && __testout && !_M_reading)
+  template<typename _CharT, typename _Traits>
+    streamsize
+    basic_filebuf<_CharT, _Traits>::
+    xsputn(const _CharT* __s, streamsize __n)
+    {
+      streamsize __ret = 0;
+      // Optimization in the always_noconv() case, to be generalized in the
+      // future: when __n is sufficiently large we write directly instead of
+      // using the buffer.
+      const bool __testout = _M_mode & ios_base::out;
+      if (__check_facet(_M_codecvt).always_noconv()
+ 	   && __testout && !_M_reading)
 	{
 	  // Measurement would reveal the best choice.
 	  const streamsize __chunk = 1ul << 10;
 	  streamsize __bufavail = this->epptr() - this->pptr();
 
 	  // Don't mistake 'uncommitted' mode buffered with unbuffered.
-	  if (!_M_writing && this->_M_buf_size > 1)
-	    __bufavail = this->_M_buf_size - 1;
+	  if (!_M_writing && _M_buf_size > 1)
+	    __bufavail = _M_buf_size - 1;
 
 	  const streamsize __limit = std::min(__chunk, __bufavail);
 	  if (__n >= __limit)
@@ -629,21 +686,23 @@ namespace std
     setbuf(char_type* __s, streamsize __n)
     {
       if (!this->is_open())
-	if (__s == 0 && __n == 0)
-	  this->_M_buf_size = 1;
-	else if (__s && __n > 0)
-	  {
-	    // This is implementation-defined behavior, and assumes that
-	    // an external char_type array of length __n exists and has
-	    // been pre-allocated. If this is not the case, things will
-	    // quickly blow up. When __n > 1, __n - 1 positions will be
-	    // used for the get area, __n - 1 for the put area and 1
-	    // position to host the overflow char of a full put area.
-	    // When __n == 1, 1 position will be used for the get area
-	    // and 0 for the put area, as in the unbuffered case above.
-	    this->_M_buf = __s;
-	    this->_M_buf_size = __n;
-	  }
+	{
+	  if (__s == 0 && __n == 0)
+	    _M_buf_size = 1;
+	  else if (__s && __n > 0)
+	    {
+	      // This is implementation-defined behavior, and assumes that
+	      // an external char_type array of length __n exists and has
+	      // been pre-allocated. If this is not the case, things will
+	      // quickly blow up. When __n > 1, __n - 1 positions will be
+	      // used for the get area, __n - 1 for the put area and 1
+	      // position to host the overflow char of a full put area.
+	      // When __n == 1, 1 position will be used for the get area
+	      // and 0 for the put area, as in the unbuffered case above.
+	      _M_buf = __s;
+	      _M_buf_size = __n;
+	    }
+	}
       return this;
     }
 
@@ -661,12 +720,20 @@ namespace std
       if (__width < 0)
 	__width = 0;
 
-      pos_type __ret =  pos_type(off_type(-1));
+      pos_type __ret = pos_type(off_type(-1));
       const bool __testfail = __off != 0 && __width <= 0;
       if (this->is_open() && !__testfail)
 	{
+	  // tellg and tellp queries do not affect any state, unless
+	  // ! always_noconv and the put sequence is not empty.
+	  // In that case, determining the position requires converting the
+	  // put sequence. That doesn't use ext_buf, so requires a flush.
+	  bool __no_movement = __way == ios_base::cur && __off == 0
+	    && (!_M_writing || _M_codecvt->always_noconv());
+
 	  // Ditch any pback buffers to avoid confusion.
-	  _M_destroy_pback();
+	  if (!__no_movement)
+	    _M_destroy_pback();
 
 	  // Correct state at destination. Note that this is the correct
 	  // state for the current position during output, because
@@ -677,24 +744,23 @@ namespace std
 	  off_type __computed_off = __off * __width;
 	  if (_M_reading && __way == ios_base::cur)
 	    {
-	      if (_M_codecvt->always_noconv())
-		__computed_off += this->gptr() - this->egptr();
-	      else
+	      __state = _M_state_last;
+	      __computed_off += _M_get_ext_pos(__state);
+	    }
+	  if (!__no_movement)
+	    __ret = _M_seek(__computed_off, __way, __state);
+	  else
+	    {
+	      if (_M_writing)
+		__computed_off = this->pptr() - this->pbase();
+	      
+ 	      off_type __file_off = _M_file.seekoff(0, ios_base::cur);
+ 	      if (__file_off != off_type(-1))
 		{
-		  // Calculate offset from _M_ext_buf that corresponds
-		  // to gptr(). Note: uses _M_state_last, which
-		  // corresponds to eback().
-		  const int __gptr_off =
-		    _M_codecvt->length(_M_state_last, _M_ext_buf, _M_ext_next,
-				       this->gptr() - this->eback());
-		  __computed_off += _M_ext_buf + __gptr_off - _M_ext_end;
-
-		  // _M_state_last is modified by codecvt::length() so
-		  // it now corresponds to gptr().
-		  __state = _M_state_last;
+		  __ret = __file_off + __computed_off;
+		  __ret.state(__state);
 		}
 	    }
-	  __ret = _M_seek(__computed_off, __way, __state);
 	}
       return __ret;
     }
@@ -726,18 +792,42 @@ namespace std
       pos_type __ret = pos_type(off_type(-1));
       if (_M_terminate_output())
 	{
-	  // Returns pos_type(off_type(-1)) in case of failure.
-	  __ret = pos_type(_M_file.seekoff(__off, __way));
-	  _M_reading = false;
-	  _M_writing = false;
-	  _M_ext_next = _M_ext_end = _M_ext_buf;
-	  _M_set_buffer(-1);
-	  _M_state_cur = __state;
-	  __ret.state(_M_state_cur);
+	  off_type __file_off = _M_file.seekoff(__off, __way);
+	  if (__file_off != off_type(-1))
+	    {
+	      _M_reading = false;
+	      _M_writing = false;
+	      _M_ext_next = _M_ext_end = _M_ext_buf;
+	      _M_set_buffer(-1);
+	      _M_state_cur = __state;
+	      __ret = __file_off;
+	      __ret.state(_M_state_cur);
+	    }
 	}
       return __ret;
     }
 
+  // Returns the distance from the end of the ext buffer to the point
+  // corresponding to gptr(). This is a negative value. Updates __state
+  // from eback() correspondence to gptr().
+  template<typename _CharT, typename _Traits>
+    int basic_filebuf<_CharT, _Traits>::
+    _M_get_ext_pos(__state_type& __state)
+    {
+      if (_M_codecvt->always_noconv())
+        return this->gptr() - this->egptr();
+      else
+        {
+          // Calculate offset from _M_ext_buf that corresponds to
+          // gptr(). Precondition: __state == _M_state_last, which
+          // corresponds to eback().
+          const int __gptr_off =
+            _M_codecvt->length(__state, _M_ext_buf, _M_ext_next,
+                               this->gptr() - this->eback());
+          return _M_ext_buf + __gptr_off - _M_ext_end;
+        }
+    }
+    
   template<typename _CharT, typename _Traits>
     bool
     basic_filebuf<_CharT, _Traits>::
@@ -841,18 +931,19 @@ namespace std
 		    {
 		      if (_M_codecvt_tmp
 			  && !__check_facet(_M_codecvt_tmp).always_noconv())
-			__testvalid = this->seekoff(0, ios_base::cur, this->_M_mode)
+			__testvalid = this->seekoff(0, ios_base::cur, _M_mode)
 			              != pos_type(off_type(-1));
 		    }
 		  else
 		    {
 		      // External position corresponding to gptr().
 		      _M_ext_next = _M_ext_buf
-			+ _M_codecvt->length(_M_state_last, _M_ext_buf, _M_ext_next,
+			+ _M_codecvt->length(_M_state_last, _M_ext_buf,
+					     _M_ext_next,
 					     this->gptr() - this->eback());
 		      const streamsize __remainder = _M_ext_end - _M_ext_next;
 		      if (__remainder)
-			std::memmove(_M_ext_buf, _M_ext_next, __remainder);
+			__builtin_memmove(_M_ext_buf, _M_ext_next, __remainder);
 
 		      _M_ext_next = _M_ext_buf;
 		      _M_ext_end = _M_ext_buf + __remainder;
@@ -873,7 +964,6 @@ namespace std
 
   // Inhibit implicit instantiations for required instantiations,
   // which are defined via explicit instantiations elsewhere.
-  // NB:  This syntax is a GNU extension.
 #if _GLIBCXX_EXTERN_TEMPLATE
   extern template class basic_filebuf<char>;
   extern template class basic_ifstream<char>;
@@ -887,6 +977,8 @@ namespace std
   extern template class basic_fstream<wchar_t>;
 #endif
 #endif
+
+_GLIBCXX_END_NAMESPACE_VERSION
 } // namespace std
 
 #endif

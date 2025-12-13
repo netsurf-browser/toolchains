@@ -6,18 +6,17 @@
 --                                                                          --
 --                                 S p e c                                  --
 --                                                                          --
---          Copyright (C) 2000-2001 Free Software Foundation, Inc.          --
+--          Copyright (C) 2000-2007, Free Software Foundation, Inc.         --
 --                                                                          --
 -- GNAT is free software;  you can  redistribute it  and/or modify it under --
 -- terms of the  GNU General Public License as published  by the Free Soft- --
--- ware  Foundation;  either version 2,  or (at your option) any later ver- --
+-- ware  Foundation;  either version 3,  or (at your option) any later ver- --
 -- sion.  GNAT is distributed in the hope that it will be useful, but WITH- --
 -- OUT ANY WARRANTY;  without even the  implied warranty of MERCHANTABILITY --
 -- or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU General Public License --
 -- for  more details.  You should have  received  a copy of the GNU General --
--- Public License  distributed with GNAT;  see file COPYING.  If not, write --
--- to  the Free Software Foundation,  59 Temple Place - Suite 330,  Boston, --
--- MA 02111-1307, USA.                                                      --
+-- Public License  distributed with GNAT; see file COPYING3.  If not, go to --
+-- http://www.gnu.org/licenses for a complete copy of the license.          --
 --                                                                          --
 -- GNAT was originally developed  by the GNAT team at  New York University. --
 -- Extensive contributions were provided by Ada Core Technologies Inc.      --
@@ -60,6 +59,13 @@ package Layout is
    --  it means that the object must be allocated dynamically, since
    --  its length is not known at compile time.
 
+   --  The following are utility routines, called from various places
+
+   procedure Adjust_Esize_Alignment (E : Entity_Id);
+   --  E is the entity for a type or object. This procedure checks that the
+   --  size and alignment are compatible, and if not either gives an error
+   --  message if they cannot be adjusted or else adjusts them appropriately.
+
    procedure Set_Discrete_RM_Size (Def_Id : Entity_Id);
    --  Set proper RM_Size for discrete size, this is normally the minimum
    --  number of bits to accommodate the range given, except in the case
@@ -68,10 +74,10 @@ package Layout is
    --  types, the RM_Size is simply set to zero. This routine also sets
    --  the Is_Constrained flag in Def_Id.
 
-   procedure Set_Prim_Alignment (E : Entity_Id);
-   --  The front end always sets alignments for primitive types by calling this
-   --  procedure. Note that we have to do this for discrete types (since the
-   --  Alignment attribute is static), so we might as well do it for all
-   --  scalar types, since the processing is the same.
+   procedure Set_Elem_Alignment (E : Entity_Id);
+   --  The front end always sets alignments for elementary types by calling
+   --  this procedure. Note that we have to do this for discrete types (since
+   --  the Alignment attribute is static), so we might as well do it for all
+   --  elementary types, since the processing is the same.
 
 end Layout;

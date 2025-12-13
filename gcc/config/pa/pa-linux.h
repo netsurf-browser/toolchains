@@ -1,11 +1,13 @@
 /* Definitions for PA_RISC with ELF format
-   Copyright 1999, 2000, 2001, 2002, 2003 Free Software Foundation, Inc.
+   Copyright 1999, 2000, 2001, 2002, 2003, 2004, 2005, 2006, 2007, 2009, 2010,
+   2011
+   Free Software Foundation, Inc.
 
 This file is part of GCC.
 
 GCC is free software; you can redistribute it and/or modify
 it under the terms of the GNU General Public License as published by
-the Free Software Foundation; either version 2, or (at your option)
+the Free Software Foundation; either version 3, or (at your option)
 any later version.
 
 GCC is distributed in the hope that it will be useful,
@@ -14,43 +16,9 @@ MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
 GNU General Public License for more details.
 
 You should have received a copy of the GNU General Public License
-along with GCC; see the file COPYING.  If not, write to
-the Free Software Foundation, 59 Temple Place - Suite 330,
-Boston, MA 02111-1307, USA.  */
+along with GCC; see the file COPYING3.  If not see
+<http://www.gnu.org/licenses/>.  */
 
-
-/* A C expression whose value is RTL representing the location of the
-   incoming return address at the beginning of any function, before the
-   prologue.  You only need to define this macro if you want to support
-   call frame debugging information like that provided by DWARF 2.  */
-#define INCOMING_RETURN_ADDR_RTX (gen_rtx_REG (word_mode, 2))
-#define DWARF_FRAME_RETURN_COLUMN (DWARF_FRAME_REGNUM (2))
-
-/* This macro chooses the encoding of pointers embedded in the exception
-   handling sections.  If at all possible, this should be defined such
-   that the exception handling section will not require dynamic relocations,
-   and so may be read-only.
-
-   FIXME: We use DW_EH_PE_aligned to output a PLABEL constructor for
-   global function pointers.  */
-#define ASM_PREFERRED_EH_DATA_FORMAT(CODE,GLOBAL)			\
-  (CODE == 2 && GLOBAL ? DW_EH_PE_aligned : DW_EH_PE_absptr)
-
-/* Handle special EH pointer encodings.  Absolute, pc-relative, and
-   indirect are handled automatically.  Since pc-relative encoding is
-   not possible on the PA and we don't have the infrastructure for
-   data relative encoding, we use aligned plabels for global function
-   pointers.  */
-#define ASM_MAYBE_OUTPUT_ENCODED_ADDR_RTX(FILE, ENCODING, SIZE, ADDR, DONE) \
-  do {									\
-    if (((ENCODING) & 0x0F) == DW_EH_PE_aligned)			\
-      {									\
-	fputs (integer_asm_op (SIZE, FALSE), FILE);			\
-	fputs ("P%", FILE);						\
-	assemble_name (FILE, XSTR (ADDR, 0));				\
-	goto DONE;							\
-      }									\
-    } while (0)
 
 #undef TARGET_OS_CPP_BUILTINS
 #define TARGET_OS_CPP_BUILTINS()		\
@@ -62,20 +30,16 @@ Boston, MA 02111-1307, USA.  */
   while (0)
 
 #undef CPP_SPEC
-#define CPP_SPEC "%{fPIC|fpic|fPIE|fpie:-D__PIC__ -D__pic__} %{posix:-D_POSIX_SOURCE}"
-
-#undef	LIB_SPEC
-#define LIB_SPEC \
-  "%{pthread:-lpthread} \
-   %{shared:-lgcc -lc} \
-   %{!shared:%{mieee-fp:-lieee} %{shared-libgcc:-lgcc} %{profile:-lc_p}%{!profile:-lc}}"
+#define CPP_SPEC "%{posix:-D_POSIX_SOURCE}"
 
 #undef ASM_SPEC
 #define ASM_SPEC \
-  "%{v:-V} %{n} %{T} %{Ym,*} %{Yd,*} %{Wa,*:%*}"
+  ""
 
 /* Define this for shared library support because it isn't in the main
    linux.h file.  */
+
+#define GLIBC_DYNAMIC_LINKER "/lib/ld.so.1"
 
 #undef LINK_SPEC
 #define LINK_SPEC "\
@@ -83,11 +47,11 @@ Boston, MA 02111-1307, USA.  */
   %{!shared: \
     %{!static: \
       %{rdynamic:-export-dynamic} \
-      %{!dynamic-linker:-dynamic-linker /lib/ld.so.1}} \
+      -dynamic-linker " LINUX_DYNAMIC_LINKER "} \
       %{static:-static}}"
 
 /* glibc's profiling functions don't need gcc to allocate counters.  */
-#define NO_PROFILE_COUNTERS 1
+#define NO_DEFERRED_PROFILE_COUNTERS 1
 
 /* Define the strings used for the special svr4 .type and .size directives.
    These strings generally do not vary from one system running svr4 to
@@ -96,7 +60,7 @@ Boston, MA 02111-1307, USA.  */
    file which includes this one.  */
 
 #undef STRING_ASM_OP
-#define STRING_ASM_OP   ".stringz"
+#define STRING_ASM_OP   "\t.stringz\t"
 
 #define TEXT_SECTION_ASM_OP "\t.text"
 #define DATA_SECTION_ASM_OP "\t.data"
@@ -134,6 +98,9 @@ Boston, MA 02111-1307, USA.  */
 /* NOTE: (*targetm.asm_out.internal_label)() is defined for us by elfos.h, and
    does what we want (i.e. uses colons).  It must be compatible with
    ASM_GENERATE_INTERNAL_LABEL(), so do not define it here.  */
+
+/* Use the default.  */
+#undef ASM_OUTPUT_INTERNAL_LABEL
 
 /* Use the default.  */
 #undef TARGET_ASM_GLOBALIZE_LABEL

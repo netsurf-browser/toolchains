@@ -11,7 +11,7 @@ struct Dummy
   template<bool B>
   void tester()
   {
-    bar<evil>()(); // { dg-error "argument" }
+    bar<evil>()(); // { dg-error "constant" }
   }
   template<bool B>
   struct bar
@@ -24,6 +24,6 @@ struct Dummy
 int main()
 {
   Dummy<int> d;
-  d.tester<true> (); // { dg-error "instantiated" }
+  d.tester<true> (); // { dg-message "instantiated" }
 }
 

@@ -4,7 +4,7 @@
    PR:		PR13221.
    Originator:	<hos@tamanegi.org> 20031129  */
 
-/* { dg-do run { xfail mips*-*-* arm*-*-* strongarm*-*-* xscale*-*-* } } */
+/* { dg-do run } */
 #include "ffitest.h"
 
 signed char test_func_fn(signed char a1, signed char a2)
@@ -19,7 +19,8 @@ signed char test_func_fn(signed char a1, signed char a2)
 
 }
 
-static void test_func_gn(ffi_cif *cif, void *rval, void **avals, void *data)
+static void test_func_gn(ffi_cif *cif __UNUSED__, void *rval, void **avals,
+			 void *data __UNUSED__)
 {
   signed char a1, a2;
 
@@ -35,27 +36,19 @@ typedef signed char (*test_type)(signed char, signed char);
 int main (void)
 {
   ffi_cif cif;
-#ifndef USING_MMAP
-  static ffi_closure cl;
-#endif
-  ffi_closure *pcl;
+  void *code;
+  ffi_closure *pcl = ffi_closure_alloc(sizeof(ffi_closure), &code);
   void * args_dbl[3];
   ffi_type * cl_arg_types[3];
   ffi_arg res_call;
   signed char a, b, res_closure;
-
-#ifdef USING_MMAP
-  pcl = allocate_mmap (sizeof(ffi_closure));
-#else
-  pcl = &cl;
-#endif
 
   a = 2;
   b = 125;
 
   args_dbl[0] = &a;
   args_dbl[1] = &b;
-  args_dbl[3] = NULL;
+  args_dbl[2] = NULL;
 
   cl_arg_types[0] = &ffi_type_schar;
   cl_arg_types[1] = &ffi_type_schar;
@@ -67,12 +60,12 @@ int main (void)
 
   ffi_call(&cif, FFI_FN(test_func_fn), &res_call, args_dbl);
   /* { dg-output "2 125: 127" } */
-  printf("res: %d\n", res_call);
+  printf("res: %d\n", (signed char)res_call);
   /* { dg-output "\nres: 127" } */
 
-  CHECK(ffi_prep_closure(pcl, &cif, test_func_gn, NULL)  == FFI_OK);
+  CHECK(ffi_prep_closure_loc(pcl, &cif, test_func_gn, NULL, code)  == FFI_OK);
 
-  res_closure = (*((test_type)pcl))(2, 125);
+  res_closure = (*((test_type)code))(2, 125);
   /* { dg-output "\n2 125: 127" } */
   printf("res: %d\n", res_closure);
   /* { dg-output "\nres: 127" } */

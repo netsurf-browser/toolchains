@@ -7,7 +7,7 @@
 --                                 S p e c                                  --
 --                             (ASCII Version)                              --
 --                                                                          --
---          Copyright (C) 1993-2000 Free Software Foundation, Inc.          --
+--          Copyright (C) 1993-2009, Free Software Foundation, Inc.         --
 --                                                                          --
 -- This specification is derived from the Ada Reference Manual for use with --
 -- GNAT. The copyright notice above, and the license provisions that follow --
@@ -15,21 +15,19 @@
 --                                                                          --
 -- GNAT is free software;  you can  redistribute it  and/or modify it under --
 -- terms of the  GNU General Public License as published  by the Free Soft- --
--- ware  Foundation;  either version 2,  or (at your option) any later ver- --
+-- ware  Foundation;  either version 3,  or (at your option) any later ver- --
 -- sion.  GNAT is distributed in the hope that it will be useful, but WITH- --
 -- OUT ANY WARRANTY;  without even the  implied warranty of MERCHANTABILITY --
--- or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU General Public License --
--- for  more details.  You should have  received  a copy of the GNU General --
--- Public License  distributed with GNAT;  see file COPYING.  If not, write --
--- to  the Free Software Foundation,  59 Temple Place - Suite 330,  Boston, --
--- MA 02111-1307, USA.                                                      --
+-- or FITNESS FOR A PARTICULAR PURPOSE.                                     --
 --                                                                          --
--- As a special exception,  if other files  instantiate  generics from this --
--- unit, or you link  this unit with other files  to produce an executable, --
--- this  unit  does not  by itself cause  the resulting  executable  to  be --
--- covered  by the  GNU  General  Public  License.  This exception does not --
--- however invalidate  any other reasons why  the executable file  might be --
--- covered by the  GNU Public License.                                      --
+-- As a special exception under Section 7 of GPL version 3, you are granted --
+-- additional permissions described in the GCC Runtime Library Exception,   --
+-- version 3.1, as published by the Free Software Foundation.               --
+--                                                                          --
+-- You should have received a copy of the GNU General Public License and    --
+-- a copy of the GCC Runtime Library Exception along with this program;     --
+-- see the files COPYING3 and COPYING.RUNTIME respectively.  If not, see    --
+-- <http://www.gnu.org/licenses/>.                                          --
 --                                                                          --
 -- GNAT was originally developed  by the GNAT team at  New York University. --
 -- Extensive contributions were provided by Ada Core Technologies Inc.      --
@@ -42,6 +40,7 @@
 --  type Standard.Character.
 
 package Interfaces.COBOL is
+   pragma Preelaborate (COBOL);
 
    ------------------------------------------------------------
    -- Types And Operations For Internal Data Representations --
@@ -56,7 +55,7 @@ package Interfaces.COBOL is
    Max_Digits_Binary      : constant := 9;
    Max_Digits_Long_Binary : constant := 18;
 
-   type Decimal_Element is mod 16;
+   type Decimal_Element is mod 2**4;
    type Packed_Decimal is array (Positive range <>) of Decimal_Element;
    pragma Pack (Packed_Decimal);
 
@@ -386,12 +385,10 @@ package Interfaces.COBOL is
 
       function Valid
         (Item   : Numeric;
-         Format : Display_Format)
-         return   Boolean;
+         Format : Display_Format) return Boolean;
 
       function Length
-        (Format : Display_Format)
-         return   Natural;
+        (Format : Display_Format) return Natural;
 
       function To_Decimal
         (Item   : Numeric;
@@ -400,36 +397,30 @@ package Interfaces.COBOL is
 
       function To_Display
         (Item   : Num;
-         Format : Display_Format)
-         return   Numeric;
+         Format : Display_Format) return Numeric;
 
       --  Packed Formats: data values are represented as Packed_Decimal
 
       function Valid
         (Item   : Packed_Decimal;
-         Format : Packed_Format)
-         return   Boolean;
+         Format : Packed_Format) return Boolean;
 
       function Length
-        (Format : Packed_Format)
-         return   Natural;
+        (Format : Packed_Format) return Natural;
 
       function To_Decimal
         (Item   : Packed_Decimal;
-         Format : Packed_Format)
-         return   Num;
+         Format : Packed_Format) return Num;
 
       function To_Packed
         (Item   : Num;
-         Format : Packed_Format)
-         return   Packed_Decimal;
+         Format : Packed_Format) return Packed_Decimal;
 
       --  Binary Formats: external data values are represented as Byte_Array
 
       function Valid
         (Item   : Byte_Array;
-         Format : Binary_Format)
-         return   Boolean;
+         Format : Binary_Format) return Boolean;
 
       function Length
         (Format : Binary_Format)
@@ -441,8 +432,7 @@ package Interfaces.COBOL is
 
       function To_Binary
         (Item   : Num;
-         Format : Binary_Format)
-         return   Byte_Array;
+         Format : Binary_Format) return Byte_Array;
 
       --  Internal Binary formats: data values are of type Binary/Long_Binary
 
@@ -457,7 +447,6 @@ package Interfaces.COBOL is
       pragma Inline (To_Binary);
       pragma Inline (To_Decimal);
       pragma Inline (To_Display);
-      pragma Inline (To_Decimal);
       pragma Inline (To_Long_Binary);
       pragma Inline (Valid);
 
@@ -518,14 +507,14 @@ private
 
    type Packed_Format is (U, S);
 
-   Packed_Unsigned   : constant Packed_Format := U;
-   Packed_Signed     : constant Packed_Format := S;
+   Packed_Unsigned : constant Packed_Format := U;
+   Packed_Signed   : constant Packed_Format := S;
 
    type Packed_Representation_Type is (IBM);
    --  Indicator for format used for packed decimal
 
    Packed_Representation : constant Packed_Representation_Type := IBM;
-   --  This version of the spec uses IBM internal format, as described above.
+   --  This version of the spec uses IBM internal format, as described above
 
    -----------------------------
    -- Display Decimal Formats --

@@ -6,18 +6,17 @@
 --                                                                          --
 --                                 B o d y                                  --
 --                                                                          --
---          Copyright (C) 1992-2003 Free Software Foundation, Inc.          --
+--          Copyright (C) 1992-2010, Free Software Foundation, Inc.         --
 --                                                                          --
 -- GNAT is free software;  you can  redistribute it  and/or modify it under --
 -- terms of the  GNU General Public License as published  by the Free Soft- --
--- ware  Foundation;  either version 2,  or (at your option) any later ver- --
+-- ware  Foundation;  either version 3,  or (at your option) any later ver- --
 -- sion.  GNAT is distributed in the hope that it will be useful, but WITH- --
 -- OUT ANY WARRANTY;  without even the  implied warranty of MERCHANTABILITY --
 -- or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU General Public License --
 -- for  more details.  You should have  received  a copy of the GNU General --
--- Public License  distributed with GNAT;  see file COPYING.  If not, write --
--- to  the Free Software Foundation,  59 Temple Place - Suite 330,  Boston, --
--- MA 02111-1307, USA.                                                      --
+-- Public License  distributed with GNAT; see file COPYING3.  If not, go to --
+-- http://www.gnu.org/licenses for a complete copy of the license.          --
 --                                                                          --
 -- GNAT was originally developed  by the GNAT team at  New York University. --
 -- Extensive contributions were provided by Ada Core Technologies Inc.      --
@@ -32,6 +31,7 @@ with Errout;   use Errout;
 with Fname;    use Fname;
 with Lib;      use Lib;
 with Namet;    use Namet;
+with Sem_Aux;  use Sem_Aux;
 with Sem_Eval; use Sem_Eval;
 with Sem_Util; use Sem_Util;
 with Sinfo;    use Sinfo;
@@ -54,8 +54,8 @@ package body Sem_Intr is
    --  returns type String.
 
    procedure Check_Intrinsic_Operator (E : Entity_Id; N : Node_Id);
-   --  Check that operator is one of the binary arithmetic operators, and
-   --  that the types involved have the same size.
+   --  Check that operator is one of the binary arithmetic operators, and that
+   --  the types involved both have underlying integer types.
 
    procedure Check_Shift (E : Entity_Id; N : Node_Id);
    --  Check intrinsic shift subprogram, the two arguments are the same
@@ -74,9 +74,7 @@ package body Sem_Intr is
 
    procedure Check_Exception_Function (E : Entity_Id; N : Node_Id) is
    begin
-      if Ekind (E) /= E_Function
-        and then Ekind (E) /= E_Generic_Function
-      then
+      if not Ekind_In (E, E_Function, E_Generic_Function) then
          Errint
            ("intrinsic exception subprogram must be a function", E, N);
 
@@ -99,11 +97,35 @@ package body Sem_Intr is
 
    procedure Check_Intrinsic_Call (N : Node_Id) is
       Nam  : constant Entity_Id := Entity (Name (N));
-      Cnam : constant Name_Id   := Chars (Nam);
       Arg1 : constant Node_Id   := First_Actual (N);
+      Typ  : Entity_Id;
+      Rtyp : Entity_Id;
+      Cnam : Name_Id;
+      Unam : Node_Id;
 
    begin
-      --  For Import_xxx calls, argument must be static string
+      --  Set argument type if argument present
+
+      if Present (Arg1) then
+         Typ := Etype (Arg1);
+         Rtyp := Underlying_Type (Root_Type (Typ));
+      end if;
+
+      --  Set intrinsic name (getting original name in the generic case)
+
+      Unam := Ultimate_Alias (Nam);
+
+      if Present (Parent (Unam))
+        and then Present (Generic_Parent (Parent (Unam)))
+      then
+         Cnam := Chars (Generic_Parent (Parent (Unam)));
+      else
+         Cnam := Chars (Nam);
+      end if;
+
+      --  For Import_xxx calls, argument must be static string. A string
+      --  literal is legal even in Ada83 mode, where such literals are
+      --  not static.
 
       if Cnam = Name_Import_Address
            or else
@@ -116,7 +138,9 @@ package body Sem_Intr is
          then
             null;
 
-         elsif not Is_Static_Expression (Arg1) then
+         elsif Nkind (Arg1) /= N_String_Literal
+           and then not Is_Static_Expression (Arg1)
+         then
             Error_Msg_FE
               ("call to & requires static string argument!", N, Nam);
             Why_Not_Static (Arg1);
@@ -131,6 +155,26 @@ package body Sem_Intr is
             Error_Msg_NE
               ("argument in call to & must be 31 characters or less", N, Nam);
          end if;
+
+      --  Check for the case of freeing a non-null object which will raise
+      --  Constraint_Error. Issue warning here, do the expansion in Exp_Intr.
+
+      elsif Cnam = Name_Unchecked_Deallocation
+        and then Can_Never_Be_Null (Etype (Arg1))
+      then
+         Error_Msg_N
+           ("freeing `NOT NULL` object will raise Constraint_Error?", N);
+
+      --  For unchecked deallocation, error to deallocate from empty pool.
+      --  Note: this test used to be in Exp_Intr as a warning, but AI 157
+      --  issues a binding interpretation that this should be an error, and
+      --  consequently it needs to be done in the semantic analysis so that
+      --  the error is issued even in semantics only mode.
+
+      elsif Cnam = Name_Unchecked_Deallocation
+        and then No_Pool_Assigned (Rtyp)
+      then
+         Error_Msg_N ("deallocation from empty storage pool!", N);
 
       --  For now, no other special checks are required
 
@@ -150,7 +194,7 @@ package body Sem_Intr is
       T2  : Entity_Id;
 
    begin
-      --  Aritnmetic operators
+      --  Arithmetic operators
 
       if Nam = Name_Op_Add
            or else
@@ -178,9 +222,9 @@ package body Sem_Intr is
             then
                T2 := T1;
 
-            else
-               --  Previous error in declaration
+            --  Previous error in declaration
 
+            else
                return;
             end if;
 
@@ -188,11 +232,24 @@ package body Sem_Intr is
             T2 := Etype (Next_Formal (First_Formal (E)));
          end if;
 
-         if Root_Type (T1) /= Root_Type (T2)
-           or else Root_Type (T1) /= Root_Type (Ret)
+         --  Same types, predefined operator will apply
+
+         if Root_Type (T1) = Root_Type (T2)
+           or else Root_Type (T1) = Root_Type (Ret)
          then
+            null;
+
+         --  Expansion will introduce conversions if sizes are not equal
+
+         elsif Is_Integer_Type (Underlying_Type (T1))
+           and then Is_Integer_Type (Underlying_Type (T2))
+           and then Is_Integer_Type (Underlying_Type (Ret))
+         then
+            null;
+
+         else
             Errint
-              ("types of intrinsic operator must have the same size", E, N);
+              ("types of intrinsic operator operands do not match", E, N);
          end if;
 
       --  Comparison operators
@@ -211,12 +268,10 @@ package body Sem_Intr is
       then
          T1 := Etype (First_Formal (E));
 
+         --  Return if previous error in declaration, otherwise get T2 type
+
          if No (Next_Formal (First_Formal (E))) then
-
-            --  Previous error in declaration
-
             return;
-
          else
             T2 := Etype (Next_Formal (First_Formal (E)));
          end if;
@@ -262,7 +317,7 @@ package body Sem_Intr is
          return;
       end if;
 
-      if not Is_Numeric_Type (T1) then
+      if not Is_Numeric_Type (Underlying_Type (T1)) then
          Errint ("intrinsic operator can only apply to numeric types", E, N);
       end if;
    end Check_Intrinsic_Operator;
@@ -296,7 +351,7 @@ package body Sem_Intr is
          Errint ("unrecognized intrinsic subprogram", E, N);
 
       --  We always allow intrinsic specifications in language defined units
-      --  and in expanded code. We assume that the GNAT implemetors know what
+      --  and in expanded code. We assume that the GNAT implementors know what
       --  they are doing, and do not write or generate junk use of intrinsic!
 
       elsif not Comes_From_Source (E)
@@ -362,9 +417,7 @@ package body Sem_Intr is
       Ptyp2 : Node_Id;
 
    begin
-      if Ekind (E) /= E_Function
-        and then Ekind (E) /= E_Generic_Function
-      then
+      if not Ekind_In (E, E_Function, E_Generic_Function) then
          Errint ("intrinsic shift subprogram must be a function", E, N);
          return;
       end if;
@@ -410,9 +463,7 @@ package body Sem_Intr is
              Ptyp1, N);
          return;
 
-      elsif Is_Modular_Integer_Type (Typ1)
-        and then Non_Binary_Modulus (Typ1)
-      then
+      elsif Non_Binary_Modulus (Typ1) then
          Errint
            ("shifts not allowed for non-binary modular types",
             Ptyp1, N);

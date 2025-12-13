@@ -6,25 +6,23 @@
 --                                                                          --
 --                                 S p e c                                  --
 --                                                                          --
---          Copyright (C) 1992-2003 Free Software Foundation, Inc.          --
+--          Copyright (C) 1992-2009, Free Software Foundation, Inc.         --
 --                                                                          --
 -- GNAT is free software;  you can  redistribute it  and/or modify it under --
 -- terms of the  GNU General Public License as published  by the Free Soft- --
--- ware  Foundation;  either version 2,  or (at your option) any later ver- --
+-- ware  Foundation;  either version 3,  or (at your option) any later ver- --
 -- sion.  GNAT is distributed in the hope that it will be useful, but WITH- --
 -- OUT ANY WARRANTY;  without even the  implied warranty of MERCHANTABILITY --
--- or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU General Public License --
--- for  more details.  You should have  received  a copy of the GNU General --
--- Public License  distributed with GNAT;  see file COPYING.  If not, write --
--- to  the Free Software Foundation,  59 Temple Place - Suite 330,  Boston, --
--- MA 02111-1307, USA.                                                      --
+-- or FITNESS FOR A PARTICULAR PURPOSE.                                     --
 --                                                                          --
--- As a special exception,  if other files  instantiate  generics from this --
--- unit, or you link  this unit with other files  to produce an executable, --
--- this  unit  does not  by itself cause  the resulting  executable  to  be --
--- covered  by the  GNU  General  Public  License.  This exception does not --
--- however invalidate  any other reasons why  the executable file  might be --
--- covered by the  GNU Public License.                                      --
+-- As a special exception under Section 7 of GPL version 3, you are granted --
+-- additional permissions described in the GCC Runtime Library Exception,   --
+-- version 3.1, as published by the Free Software Foundation.               --
+--                                                                          --
+-- You should have received a copy of the GNU General Public License and    --
+-- a copy of the GCC Runtime Library Exception along with this program;     --
+-- see the files COPYING3 and COPYING.RUNTIME respectively.  If not, see    --
+-- <http://www.gnu.org/licenses/>.                                          --
 --                                                                          --
 -- GNAT was originally developed  by the GNAT team at  New York University. --
 -- Extensive contributions were provided by Ada Core Technologies Inc.      --
@@ -75,7 +73,7 @@ package Stringt is
    --  new string is initialized to be a copy of the given string. A test is
    --  made to see if S is the last created string, and if so it is shared,
    --  rather than copied, this can be particularly helpful for the case of
-   --  a continued concatenaion of string constants.
+   --  a continued concatenation of string constants.
 
    procedure Store_String_Char (C : Char_Code);
    procedure Store_String_Char (C : Character);
@@ -128,12 +126,13 @@ package Stringt is
    --  Return address of Strings table (used by Back_End call to Gigi)
 
    procedure Tree_Read;
-   --  Initializes internal tables from current tree file using Tree_Read.
-   --  Note that Initialize should not be called if Tree_Read is used.
-   --  Tree_Read includes all necessary initialization.
+   --  Initializes internal tables from current tree file using the relevant
+   --  Table.Tree_Read routines. Note that Initialize should not be called if
+   --  Tree_Read is used. Tree_Read includes all necessary initialization.
 
    procedure Tree_Write;
-   --  Writes out internal tables to current tree file using Tree_Write
+   --  Writes out internal tables to current tree file using the relevant
+   --  Table.Tree_Write routines.
 
    procedure Write_Char_Code (Code : Char_Code);
    --  Procedure to write a character code value, used for debugging purposes
@@ -153,8 +152,8 @@ package Stringt is
    --  ASCII graphics (except for double quote) are output literally.
    --  The double quote appears as two successive double quotes.
    --  All other codes, are output as described for Write_Char_Code. For
-   --  example, the string created by folding "A" & ASCII.LF & "Hello" will
-   --  print as "A["0a"]Hello". A No_String value prints simply as "no string"
+   --  example, the string created by folding "A" & ASCII.HT & "Hello" will
+   --  print as "A["09"]Hello". A No_String value prints simply as "no string"
    --  without surrounding quote marks.
 
 private

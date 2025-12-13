@@ -1,4 +1,4 @@
-/* { dg-do run { target i?86-*-linux* x86_64-*-linux* ia64-*-linux* alpha*-*-linux* powerpc*-*-linux* s390*-*-linux* sparc*-*-linux* mips*-*-linux* } } */
+/* { dg-do run { target hppa*-*-hpux* *-*-linux* powerpc*-*-darwin* *-*-darwin[912]* } } */
 /* { dg-options "-fexceptions -fnon-call-exceptions -O2" } */
 /* Verify that cleanups work with exception handling through signal frames
    on alternate stack.  */
@@ -7,6 +7,7 @@
 #include <stdlib.h>
 #include <signal.h>
 #include <unistd.h>
+#include <string.h>
 
 static _Unwind_Reason_Code
 force_unwind_stop (int version, _Unwind_Action actions,
@@ -23,7 +24,7 @@ force_unwind_stop (int version, _Unwind_Action actions,
 static void force_unwind ()
 {
   struct _Unwind_Exception *exc = malloc (sizeof (*exc));
-  exc->exception_class = 0;
+  memset (&exc->exception_class, 0, sizeof (exc->exception_class));
   exc->exception_cleanup = 0;
                    
 #ifndef __USING_SJLJ_EXCEPTIONS__
@@ -93,8 +94,9 @@ static int __attribute__((noinline)) fn1 ()
 
   sigemptyset (&s.sa_mask);
   s.sa_sigaction = fn4;
-  s.sa_flags = SA_ONESHOT | SA_ONSTACK;
+  s.sa_flags = SA_RESETHAND | SA_ONSTACK;
   sigaction (SIGSEGV, &s, NULL);
+  sigaction (SIGBUS, &s, NULL);
   fn2 ();
   return 0;
 }

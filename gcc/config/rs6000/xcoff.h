@@ -1,12 +1,13 @@
 /* Definitions of target machine for GNU compiler,
    for some generic XCOFF file format
-   Copyright (C) 2001, 2002, 2003, 2004 Free Software Foundation, Inc.
+   Copyright (C) 2001, 2002, 2003, 2004, 2007, 2008
+   Free Software Foundation, Inc.
 
    This file is part of GCC.
 
    GCC is free software; you can redistribute it and/or modify it
    under the terms of the GNU General Public License as published
-   by the Free Software Foundation; either version 2, or (at your
+   by the Free Software Foundation; either version 3, or (at your
    option) any later version.
 
    GCC is distributed in the hope that it will be useful, but WITHOUT
@@ -15,9 +16,8 @@
    License for more details.
 
    You should have received a copy of the GNU General Public License
-   along with GCC; see the file COPYING.  If not, write to the
-   Free Software Foundation, 59 Temple Place - Suite 330, Boston,
-   MA 02111-1307, USA.  */
+   along with GCC; see the file COPYING3.  If not see
+   <http://www.gnu.org/licenses/>.  */
 
 #define TARGET_OBJECT_FORMAT OBJECT_XCOFF
 
@@ -56,102 +56,23 @@
 
 #define DOLLARS_IN_IDENTIFIERS 0
 
-/* Define the extra sections we need.  We define three: one is the read-only
-   data section which is used for constants.  This is a csect whose name is
-   derived from the name of the input file.  The second is for initialized
-   global variables.  This is a csect whose name is that of the variable.
-   The third is the TOC.  */
+/* AIX .align pseudo-op accept value from 0 to 12, corresponding to
+   log base 2 of the alignment in bytes; 12 = 4096 bytes = 32768 bits.  */
 
-#define EXTRA_SECTIONS \
-   read_only_data, private_data, read_only_private_data, toc, bss
+#define MAX_OFILE_ALIGNMENT 32768
 
-/* Define the routines to implement these extra sections.
-   BIGGEST_ALIGNMENT is 64, so align the sections that much.  */
-
-#define EXTRA_SECTION_FUNCTIONS				\
-  READ_ONLY_DATA_SECTION_FUNCTION			\
-  PRIVATE_DATA_SECTION_FUNCTION				\
-  READ_ONLY_PRIVATE_DATA_SECTION_FUNCTION		\
-  TOC_SECTION_FUNCTION
-
-#define READ_ONLY_DATA_SECTION_FUNCTION			\
-void							\
-read_only_data_section (void)				\
-{							\
-  if (in_section != read_only_data)			\
-    {							\
-      fprintf (asm_out_file, "\t.csect %s[RO],3\n",	\
-	       xcoff_read_only_section_name);		\
-      in_section = read_only_data;			\
-    }							\
-}
-
-#define PRIVATE_DATA_SECTION_FUNCTION			\
-void							\
-private_data_section (void)				\
-{							\
-  if (in_section != private_data)			\
-    {							\
-      fprintf (asm_out_file, "\t.csect %s[RW],3\n",	\
-	       xcoff_private_data_section_name);	\
-      in_section = private_data;			\
-    }							\
-}
-
-#define READ_ONLY_PRIVATE_DATA_SECTION_FUNCTION		\
-void							\
-read_only_private_data_section (void)			\
-{							\
-  if (in_section != read_only_private_data)		\
-    {							\
-      fprintf (asm_out_file, "\t.csect %s[RO],3\n",	\
-	       xcoff_private_data_section_name);	\
-      in_section = read_only_private_data;		\
-    }							\
-}
-
-#define TOC_SECTION_FUNCTION				\
-void							\
-toc_section (void)					\
-{							\
-  if (TARGET_MINIMAL_TOC)				\
-    {							\
-      /* toc_section is always called at least once	\
-         from rs6000_xcoff_file_start, so this is	\
-	 guaranteed to always be defined once and	\
-	 only once in each file.  */			\
-      if (! toc_initialized)				\
-	{						\
-	  fputs ("\t.toc\nLCTOC..1:\n", asm_out_file);	\
-	  fputs ("\t.tc toc_table[TC],toc_table[RW]\n", asm_out_file); \
-	  toc_initialized = 1;				\
-	}						\
-							\
-      if (in_section != toc)				\
-	fprintf (asm_out_file, "\t.csect toc_table[RW]%s\n",	\
-		 (TARGET_32BIT ? "" : ",3"));		\
-    }							\
-  else							\
-    {							\
-      if (in_section != toc)				\
-        fputs ("\t.toc\n", asm_out_file);		\
-    }							\
-  in_section = toc;					\
-}
-
-/* Define the name of our readonly data section.  */
-
-#define READONLY_DATA_SECTION read_only_data_section
+/* Default alignment factor for csect directives, chosen to honor
+   BIGGEST_ALIGNMENT.  */
+#define XCOFF_CSECT_DEFAULT_ALIGNMENT_STR "4"
 
 /* Return nonzero if this entry is to be written into the constant
    pool in a special way.  We do so if this is a SYMBOL_REF, LABEL_REF
    or a CONST containing one of them.  If -mfp-in-toc (the default),
    we also do this for floating-point constants.  We actually can only
    do this if the FP formats of the target and host machines are the
-   same, but we can't check that since not every file that uses
-   GO_IF_LEGITIMATE_ADDRESS_P includes real.h.  We also do this when
-   we can write the entry into the TOC and the entry is not larger
-   than a TOC entry.  */
+   same, but we can't check that since not every file that uses these
+   target macros includes real.h.  We also do this when we can write the
+   entry into the TOC and the entry is not larger than a TOC entry.  */
 
 #define ASM_OUTPUT_SPECIAL_POOL_ENTRY_P(X, MODE)			\
   (TARGET_TOC								\
@@ -162,16 +83,19 @@ toc_section (void)					\
        || (GET_CODE (X) == CONST_INT 					\
 	   && GET_MODE_BITSIZE (MODE) <= GET_MODE_BITSIZE (Pmode))	\
        || (GET_CODE (X) == CONST_DOUBLE					\
-	   && (TARGET_POWERPC64						\
-	       || TARGET_MINIMAL_TOC					\
-	       || (GET_MODE_CLASS (GET_MODE (X)) == MODE_FLOAT		\
+	   && (TARGET_MINIMAL_TOC					\
+	       || (SCALAR_FLOAT_MODE_P (GET_MODE (X))			\
 		   && ! TARGET_NO_FP_IN_TOC)))))
 
+#define TARGET_ASM_OUTPUT_ANCHOR  rs6000_xcoff_asm_output_anchor
 #define TARGET_ASM_GLOBALIZE_LABEL  rs6000_xcoff_asm_globalize_label
+#define TARGET_ASM_INIT_SECTIONS  rs6000_xcoff_asm_init_sections
+#define TARGET_ASM_RELOC_RW_MASK  rs6000_xcoff_reloc_rw_mask
 #define TARGET_ASM_NAMED_SECTION  rs6000_xcoff_asm_named_section
 #define TARGET_ASM_SELECT_SECTION  rs6000_xcoff_select_section
 #define TARGET_ASM_SELECT_RTX_SECTION  rs6000_xcoff_select_rtx_section
 #define TARGET_ASM_UNIQUE_SECTION  rs6000_xcoff_unique_section
+#define TARGET_ASM_FUNCTION_RODATA_SECTION default_no_function_rodata_section
 #define TARGET_STRIP_NAME_ENCODING  rs6000_xcoff_strip_name_encoding
 #define TARGET_SECTION_TYPE_FLAGS  rs6000_xcoff_section_type_flags
 
@@ -211,45 +135,63 @@ toc_section (void)					\
 /* This macro produces the initial definition of a function name.
    On the RS/6000, we need to place an extra '.' in the function name and
    output the function descriptor.
+   Dollar signs are converted to underscores.
 
-   The csect for the function will have already been created by the
-   `text_section' call previously done.  We do have to go back to that
-   csect, however.
+   The csect for the function will have already been created when
+   text_section was selected.  We do have to go back to that csect, however.
 
    The third and fourth parameters to the .function pseudo-op (16 and 044)
    are placeholders which no longer have any use.  */
 
 #define ASM_DECLARE_FUNCTION_NAME(FILE,NAME,DECL)		\
-{ if (TREE_PUBLIC (DECL))					\
+{ char *buffer = (char *) alloca (strlen (NAME) + 1);		\
+  char *p;							\
+  int dollar_inside = 0;					\
+  strcpy (buffer, NAME);					\
+  p = strchr (buffer, '$');					\
+  while (p) {							\
+    *p = '_';							\
+    dollar_inside++;						\
+    p = strchr (p + 1, '$');					\
+  }								\
+  if (TREE_PUBLIC (DECL))					\
     {								\
       if (!RS6000_WEAK || !DECL_WEAK (decl))			\
 	{							\
+          if (dollar_inside) {					\
+              fprintf(FILE, "\t.rename .%s,\".%s\"\n", buffer, NAME);	\
+              fprintf(FILE, "\t.rename %s,\"%s\"\n", buffer, NAME);	\
+	    }							\
 	  fputs ("\t.globl .", FILE);				\
-	  RS6000_OUTPUT_BASENAME (FILE, NAME);			\
+	  RS6000_OUTPUT_BASENAME (FILE, buffer);		\
 	  putc ('\n', FILE);					\
 	}							\
     }								\
   else								\
     {								\
+      if (dollar_inside) {					\
+          fprintf(FILE, "\t.rename .%s,\".%s\"\n", buffer, NAME);	\
+          fprintf(FILE, "\t.rename %s,\"%s\"\n", buffer, NAME);	\
+	}							\
       fputs ("\t.lglobl .", FILE);				\
-      RS6000_OUTPUT_BASENAME (FILE, NAME);			\
+      RS6000_OUTPUT_BASENAME (FILE, buffer);			\
       putc ('\n', FILE);					\
     }								\
   fputs ("\t.csect ", FILE);					\
-  RS6000_OUTPUT_BASENAME (FILE, NAME);				\
+  RS6000_OUTPUT_BASENAME (FILE, buffer);			\
   fputs (TARGET_32BIT ? "[DS]\n" : "[DS],3\n", FILE);		\
-  RS6000_OUTPUT_BASENAME (FILE, NAME);				\
+  RS6000_OUTPUT_BASENAME (FILE, buffer);			\
   fputs (":\n", FILE);						\
   fputs (TARGET_32BIT ? "\t.long ." : "\t.llong .", FILE);	\
-  RS6000_OUTPUT_BASENAME (FILE, NAME);				\
+  RS6000_OUTPUT_BASENAME (FILE, buffer);			\
   fputs (", TOC[tc0], 0\n", FILE);				\
-  in_section = no_section;					\
-  function_section(DECL);					\
+  in_section = NULL;						\
+  switch_to_section (function_section (DECL));			\
   putc ('.', FILE);						\
-  RS6000_OUTPUT_BASENAME (FILE, NAME);				\
+  RS6000_OUTPUT_BASENAME (FILE, buffer);			\
   fputs (":\n", FILE);						\
-  if (write_symbols != NO_DEBUG)				\
-    xcoffout_declare_function (FILE, DECL, NAME);		\
+  if (write_symbols != NO_DEBUG && !DECL_IGNORED_P (DECL))	\
+    xcoffout_declare_function (FILE, DECL, buffer);		\
 }
 
 /* Output a reference to SYM on FILE.  */
@@ -257,11 +199,28 @@ toc_section (void)					\
 #define ASM_OUTPUT_SYMBOL_REF(FILE, SYM) \
   rs6000_output_symbol_ref (FILE, SYM)
 
-/* This says how to output an external.  */
+/* This says how to output an external.
+   Dollar signs are converted to underscores.  */
 
 #undef  ASM_OUTPUT_EXTERNAL
 #define ASM_OUTPUT_EXTERNAL(FILE, DECL, NAME)				\
-{ rtx _symref = XEXP (DECL_RTL (DECL), 0);				\
+{ char *buffer = (char *) alloca (strlen (NAME) + 1);			\
+  char *p;								\
+  rtx _symref = XEXP (DECL_RTL (DECL), 0);				\
+  int dollar_inside = 0;						\
+  strcpy (buffer, NAME);						\
+  p = strchr (buffer, '$');						\
+  while (p) {								\
+    *p = '_';								\
+    dollar_inside++;							\
+    p = strchr (p + 1, '$');						\
+  }									\
+  if (dollar_inside) {							\
+      fputs ("\t.extern .", FILE);					\
+      RS6000_OUTPUT_BASENAME (FILE, buffer);				\
+      putc ('\n', FILE);						\
+      fprintf(FILE, "\t.rename .%s,\".%s\"\n", buffer, NAME);		\
+    }									\
   if ((TREE_CODE (DECL) == VAR_DECL					\
        || TREE_CODE (DECL) == FUNCTION_DECL)				\
       && (NAME)[strlen (NAME) - 1] != ']')				\
@@ -272,6 +231,12 @@ toc_section (void)					\
 				  NULL);				\
     }									\
 }
+
+/* This is how to output a reference to a user-level label named NAME.
+   `assemble_name' uses this.  */
+
+#define ASM_OUTPUT_LABELREF(FILE,NAME)	\
+  asm_fprintf ((FILE), "%U%s", rs6000_xcoff_strip_dollar (NAME));
 
 /* This is how to output an internal label prefix.  rs6000.c uses this
    when generating traceback tables.  */
@@ -292,7 +257,7 @@ toc_section (void)					\
    This is suitable for output with `assemble_name'.  */
 
 #define ASM_GENERATE_INTERNAL_LABEL(LABEL,PREFIX,NUM)	\
-  sprintf (LABEL, "*%s..%u", (PREFIX), (unsigned) (NUM))
+  sprintf (LABEL, "*%s..%u", rs6000_xcoff_strip_dollar (PREFIX), (unsigned) (NUM))
 
 /* This is how to output an assembler line to define N characters starting
    at P to FILE.  */
@@ -357,13 +322,10 @@ toc_section (void)					\
 /* Output before instructions.  */
 #define TEXT_SECTION_ASM_OP "\t.csect .text[PR]"
 
-/* Output before writable data.
-   Align entire section to BIGGEST_ALIGNMENT.  */
-#define DATA_SECTION_ASM_OP "\t.csect .data[RW],3"
+/* Output before writable data.  */
+#define DATA_SECTION_ASM_OP \
+  "\t.csect .data[RW]," XCOFF_CSECT_DEFAULT_ALIGNMENT_STR
 
-/* Define the name of the section to use for the EH language specific
-   data areas (.gcc_except_table on most other systems).  */
-#define TARGET_ASM_EXCEPTION_SECTION data_section
 
 /* Define to prevent DWARF2 unwind info in the data section rather
    than in the .eh_frame section.  We do this because the AIX linker

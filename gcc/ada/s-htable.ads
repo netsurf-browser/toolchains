@@ -1,12 +1,12 @@
 ------------------------------------------------------------------------------
 --                                                                          --
---                         GNAT RUNTIME COMPONENTS                          --
+--                         GNAT RUN-TIME COMPONENTS                         --
 --                                                                          --
 --                        S Y S T E M . H T A B L E                         --
 --                                                                          --
 --                                 S p e c                                  --
 --                                                                          --
---           Copyright (C) 1995-2003 Ada Core Technologies, Inc.            --
+--                     Copyright (C) 1995-2010, AdaCore                     --
 --                                                                          --
 -- GNAT is free software;  you can  redistribute it  and/or modify it under --
 -- terms of the  GNU General Public License as published  by the Free Soft- --
@@ -16,8 +16,8 @@
 -- or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU General Public License --
 -- for  more details.  You should have  received  a copy of the GNU General --
 -- Public License  distributed with GNAT;  see file COPYING.  If not, write --
--- to  the Free Software Foundation,  59 Temple Place - Suite 330,  Boston, --
--- MA 02111-1307, USA.                                                      --
+-- to  the  Free Software Foundation,  51  Franklin  Street,  Fifth  Floor, --
+-- Boston, MA 02110-1301, USA.                                              --
 --                                                                          --
 -- As a special exception,  if other files  instantiate  generics from this --
 -- unit, or you link  this unit with other files  to produce an executable, --
@@ -39,8 +39,10 @@
 --  The Static_HTable package provides a more complex interface that allows
 --  complete control over allocation.
 
+pragma Compiler_Unit;
+
 package System.HTable is
-pragma Preelaborate (HTable);
+   pragma Preelaborate;
 
    -------------------
    -- Simple_HTable --
@@ -54,7 +56,7 @@ pragma Preelaborate (HTable);
 
    generic
       type Header_Num is range <>;
-      --  An integer type indicating the number and range of hash headers.
+      --  An integer type indicating the number and range of hash headers
 
       type Element is private;
       --  The type of element to be stored
@@ -78,7 +80,7 @@ pragma Preelaborate (HTable);
 
       function Get (K : Key) return Element;
       --  Returns the Element associated with a key or No_Element if the
-      --  given key has not associated element
+      --  given key has no associated element.
 
       procedure Remove (K : Key);
       --  Removes the latest inserted element pointer associated with the
@@ -86,14 +88,30 @@ pragma Preelaborate (HTable);
 
       function Get_First return Element;
       --  Returns No_Element if the HTable is empty, otherwise returns one
-      --  non specified element. There is no guarantee that 2 calls to this
+      --  non specified element. There is no guarantee that two calls to this
       --  function will return the same element.
 
       function Get_Next return Element;
       --  Returns a non-specified element that has not been returned by the
       --  same function since the last call to Get_First or No_Element if
-      --  there is no such element. If there is no call to 'Set' in between
+      --  there is no such element. If there is no call to Set in between
       --  Get_Next calls, all the elements of the HTable will be traversed.
+
+      procedure Get_First (K : in out Key; E : out Element);
+      --  This version of the iterator returns a key/element pair. A non-
+      --  specified entry is returned, and there is no guarantee that two
+      --  calls to this procedure will return the same element. If the table
+      --  is empty, E is set to No_Element, and K is unchanged, otherwise
+      --  K and E are set to the first returned entry.
+
+      procedure Get_Next (K : in out Key; E : out Element);
+      --  This version of the iterator returns a key/element pair. It returns
+      --  a non-specified element that has not been returned since the last
+      --  call to Get_First. If there is no remaining element, then E is set
+      --  to No_Element, and the value in K is unchanged, otherwise K and E
+      --  are set to the next entry. If there is no call to Set in between
+      --  Get_Next calls, all the elements of the HTable will be traversed.
+
    end Simple_HTable;
 
    -------------------
@@ -120,7 +138,7 @@ pragma Preelaborate (HTable);
 
    generic
       type Header_Num is range <>;
-      --  An integer type indicating the number and range of hash headers.
+      --  An integer type indicating the number and range of hash headers
 
       type Element (<>) is limited private;
       --  The type of element to be stored. This is historically part of the
@@ -137,7 +155,7 @@ pragma Preelaborate (HTable);
       --  type, but could be some other form of type such as an integer type).
 
       Null_Ptr : Elmt_Ptr;
-      --  The null value of the Elmt_Ptr type.
+      --  The null value of the Elmt_Ptr type
 
       with procedure Set_Next (E : Elmt_Ptr; Next : Elmt_Ptr);
       with function  Next     (E : Elmt_Ptr) return Elmt_Ptr;
@@ -173,13 +191,13 @@ pragma Preelaborate (HTable);
 
       function Get_First return Elmt_Ptr;
       --  Returns Null_Ptr if the HTable is empty, otherwise returns one
-      --  non specified element. There is no guarantee that 2 calls to this
+      --  non specified element. There is no guarantee that two calls to this
       --  function will return the same element.
 
       function Get_Next return Elmt_Ptr;
       --  Returns a non-specified element that has not been returned by the
       --  same function since the last call to Get_First or Null_Ptr if
-      --  there is no such element or Get_First has bever been called. If
+      --  there is no such element or Get_First has never been called. If
       --  there is no call to 'Set' in between Get_Next calls, all the
       --  elements of the HTable will be traversed.
 

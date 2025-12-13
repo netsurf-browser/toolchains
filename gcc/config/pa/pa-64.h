@@ -1,12 +1,12 @@
 /* Definitions of target machine for GNU compiler, for HPs using the
    64bit runtime model.
-   Copyright (C) 1999, 2000, 2003 Free Software Foundation, Inc.
+   Copyright (C) 1999, 2000, 2003, 2004, 2007 Free Software Foundation, Inc.
 
 This file is part of GCC.
 
 GCC is free software; you can redistribute it and/or modify
 it under the terms of the GNU General Public License as published by
-the Free Software Foundation; either version 2, or (at your option)
+the Free Software Foundation; either version 3, or (at your option)
 any later version.
 
 GCC is distributed in the hope that it will be useful,
@@ -15,9 +15,8 @@ MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
 GNU General Public License for more details.
 
 You should have received a copy of the GNU General Public License
-along with GCC; see the file COPYING.  If not, write to
-the Free Software Foundation, 59 Temple Place - Suite 330,
-Boston, MA 02111-1307, USA.  */
+along with GCC; see the file COPYING3.  If not see
+<http://www.gnu.org/licenses/>.  */
 
 /* The default sizes for basic datatypes provided by GCC are not
    correct for the PA64 runtime architecture.
@@ -55,8 +54,6 @@ Boston, MA 02111-1307, USA.  */
 #define SHORT_TYPE_SIZE 16
 #undef INT_TYPE_SIZE
 #define INT_TYPE_SIZE 32
-#undef MAX_LONG_TYPE_SIZE
-#define MAX_LONG_TYPE_SIZE 64
 #undef LONG_TYPE_SIZE
 #define LONG_TYPE_SIZE 64
 #undef LONG_LONG_TYPE_SIZE
@@ -72,21 +69,12 @@ Boston, MA 02111-1307, USA.  */
    relocs which appear in stabs.  */
 #undef DBX_DEBUGGING_INFO
 
-/* We want the compiler to select a suitable secondary memory location.
-   ?!? This may not work reliably.  Keep an eye out for problems.  */
-#undef SECONDARY_MEMORY_NEEDED_RTX
-
-
 /* ?!? This needs to be made compile-time selectable.
 
    The PA64 runtime model has arguments that grow to higher addresses
    (like most other targets).  The older runtime model has arguments
    that grow to lower addresses.  What fun.  */
 #undef ARGS_GROW_DOWNWARD
-#undef ARG_POINTER_REGNUM
-#define ARG_POINTER_REGNUM 29
-#undef STATIC_CHAIN_REGNUM
-#define STATIC_CHAIN_REGNUM 31
 
 /* If defined, a C expression which determines whether the default
    implementation of va_arg will attempt to pad down before reading the
@@ -96,3 +84,17 @@ Boston, MA 02111-1307, USA.  */
    want aggregates padded down.  */
 
 #define PAD_VARARGS_DOWN (!AGGREGATE_TYPE_P (type))
+
+/* In the PA architecture, it is not possible to directly move data
+   between GENERAL_REGS and FP_REGS.  On the 32-bit port, we use the
+   location at SP-16 because PA 1.X only supports 5-bit immediates for
+   floating-point loads and stores.  We don't expose this location in
+   the RTL to avoid scheduling related problems.  For example, the
+   store and load could be separated by a call to a pure or const
+   function which has no frame and this function might also use SP-16.
+   We have 14-bit immediates on the 64-bit port, so we use secondary
+   memory for the copies.  */
+#define SECONDARY_MEMORY_NEEDED(CLASS1, CLASS2, MODE) \
+  (MAYBE_FP_REG_CLASS_P (CLASS1) != FP_REG_CLASS_P (CLASS2)		\
+   || MAYBE_FP_REG_CLASS_P (CLASS2) != FP_REG_CLASS_P (CLASS1))
+

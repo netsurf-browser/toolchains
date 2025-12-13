@@ -1,5 +1,5 @@
 /* Output routines for graphical representation.
-   Copyright (C) 1998, 1999, 2000, 2001, 2003, 2004
+   Copyright (C) 1998, 1999, 2000, 2001, 2003, 2004, 2007, 2008, 2010
    Free Software Foundation, Inc.
    Contributed by Ulrich Drepper <drepper@cygnus.com>, 1998.
 
@@ -7,7 +7,7 @@ This file is part of GCC.
 
 GCC is free software; you can redistribute it and/or modify it under
 the terms of the GNU General Public License as published by the Free
-Software Foundation; either version 2, or (at your option) any later
+Software Foundation; either version 3, or (at your option) any later
 version.
 
 GCC is distributed in the hope that it will be useful, but WITHOUT ANY
@@ -16,29 +16,32 @@ FITNESS FOR A PARTICULAR PURPOSE.  See the GNU General Public License
 for more details.
 
 You should have received a copy of the GNU General Public License
-along with GCC; see the file COPYING.  If not, write to the Free
-Software Foundation, 59 Temple Place - Suite 330, Boston, MA
-02111-1307, USA.  */
+along with GCC; see the file COPYING3.  If not see
+<http://www.gnu.org/licenses/>.  */
 
-#include <config.h>
+#include "config.h"
 #include "system.h"
 #include "coretypes.h"
 #include "tm.h"
-
 #include "rtl.h"
 #include "flags.h"
 #include "output.h"
 #include "function.h"
 #include "hard-reg-set.h"
+#include "obstack.h"
 #include "basic-block.h"
-#include "toplev.h"
+#include "diagnostic-core.h"
 #include "graph.h"
+#include "emit-rtl.h"
 
 static const char *const graph_ext[] =
 {
   /* no_graph */ "",
   /* vcg */      ".vcg",
 };
+
+/* The flag to indicate if output is inside of a building block.  */
+static int inbb = 0;
 
 static void start_fct (FILE *);
 static void start_bb (FILE *, int);
@@ -66,6 +69,10 @@ graph: { title: \"%s\"\nfolding: 1\nhidden: 2\nnode: { title: \"%s.0\" }\n",
 static void
 start_bb (FILE *fp, int bb)
 {
+#if 0
+  reg_set_iterator rsi;
+#endif
+
   switch (graph_dump_format)
     {
     case vcg:
@@ -73,6 +80,7 @@ start_bb (FILE *fp, int bb)
 graph: {\ntitle: \"%s.BB%d\"\nfolding: 1\ncolor: lightblue\n\
 label: \"basic block %d",
 	       current_function_name (), bb, bb);
+      inbb = 1; /* Now We are inside of a building block.  */
       break;
     case no_graph:
       break;
@@ -83,13 +91,12 @@ label: \"basic block %d",
 
   /* Print the live-at-start register list.  */
   fputc ('\n', fp);
-  EXECUTE_IF_SET_IN_REG_SET (basic_block_live_at_start[bb], 0, i,
-			     {
-			       fprintf (fp, " %d", i);
-			       if (i < FIRST_PSEUDO_REGISTER)
-				 fprintf (fp, " [%s]",
-					  reg_names[i]);
-			     });
+  EXECUTE_IF_SET_IN_REG_SET (basic_block_live_at_start[bb], 0, i, rsi)
+    {
+      fprintf (fp, " %d", i);
+      if (i < FIRST_PSEUDO_REGISTER)
+	fprintf (fp, " [%s]", reg_names[i]);
+    }
 #endif
 
   switch (graph_dump_format)
@@ -128,11 +135,11 @@ edge: { sourcename: \"%s.0\" targetname: \"%s.%d\" }\n",
       fprintf (fp, "node: {\n  title: \"%s.%d\"\n  color: %s\n  \
 label: \"%s %d\n",
 	       current_function_name (), XINT (tmp_rtx, 0),
-	       GET_CODE (tmp_rtx) == NOTE ? "lightgrey"
-	       : GET_CODE (tmp_rtx) == INSN ? "green"
-	       : GET_CODE (tmp_rtx) == JUMP_INSN ? "darkgreen"
-	       : GET_CODE (tmp_rtx) == CALL_INSN ? "darkgreen"
-	       : GET_CODE (tmp_rtx) == CODE_LABEL ?  "\
+	       NOTE_P (tmp_rtx) ? "lightgrey"
+	       : NONJUMP_INSN_P (tmp_rtx) ? "green"
+	       : JUMP_P (tmp_rtx) ? "darkgreen"
+	       : CALL_P (tmp_rtx) ? "darkgreen"
+	       : LABEL_P (tmp_rtx) ?  "\
 darkgrey\n  shape: ellipse" : "white",
 	       GET_RTX_NAME (GET_CODE (tmp_rtx)), XINT (tmp_rtx, 0));
       break;
@@ -141,11 +148,10 @@ darkgrey\n  shape: ellipse" : "white",
     }
 
   /* Print the RTL.  */
-  if (GET_CODE (tmp_rtx) == NOTE)
+  if (NOTE_P (tmp_rtx))
     {
-      const char *name = "";
-      if (NOTE_LINE_NUMBER (tmp_rtx) < 0)
-	name =  GET_NOTE_INSN_NAME (NOTE_LINE_NUMBER (tmp_rtx));
+      const char *name;
+      name =  GET_NOTE_INSN_NAME (NOTE_KIND (tmp_rtx));
       fprintf (fp, " %s", name);
     }
   else if (INSN_P (tmp_rtx))
@@ -164,25 +170,25 @@ darkgrey\n  shape: ellipse" : "white",
 }
 
 static void
-draw_edge (FILE *fp, int from, int to, int bb_edge, int class)
+draw_edge (FILE *fp, int from, int to, int bb_edge, int color_class)
 {
   const char * color;
   switch (graph_dump_format)
     {
     case vcg:
       color = "";
-      if (class == 2)
+      if (color_class == 2)
 	color = "color: red ";
       else if (bb_edge)
 	color = "color: blue ";
-      else if (class == 3)
+      else if (color_class == 3)
 	color = "color: green ";
       fprintf (fp,
 	       "edge: { sourcename: \"%s.%d\" targetname: \"%s.%d\" %s",
 	       current_function_name (), from,
 	       current_function_name (), to, color);
-      if (class)
-	fprintf (fp, "class: %d ", class);
+      if (color_class)
+	fprintf (fp, "class: %d ", color_class);
       fputs ("}\n", fp);
       break;
     case no_graph:
@@ -196,7 +202,12 @@ end_bb (FILE *fp)
   switch (graph_dump_format)
     {
     case vcg:
-      fputs ("}\n", fp);
+      /* Check if we are inside of a building block.  */
+      if (inbb != 0)
+        {
+          fputs ("}\n", fp);
+          inbb = 0; /* Now we are outside of a building block.  */
+        }
       break;
     case no_graph:
       break;
@@ -220,21 +231,19 @@ end_fct (FILE *fp)
 /* Like print_rtl, but also print out live information for the start of each
    basic block.  */
 void
-print_rtl_graph_with_bb (const char *base, const char *suffix, rtx rtx_first)
+print_rtl_graph_with_bb (const char *base, rtx rtx_first)
 {
   rtx tmp_rtx;
   size_t namelen = strlen (base);
-  size_t suffixlen = strlen (suffix);
   size_t extlen = strlen (graph_ext[graph_dump_format]) + 1;
-  char *buf = alloca (namelen + suffixlen + extlen);
+  char *buf = XALLOCAVEC (char, namelen + extlen);
   FILE *fp;
 
   if (basic_block_info == NULL)
     return;
 
   memcpy (buf, base, namelen);
-  memcpy (buf + namelen, suffix, suffixlen);
-  memcpy (buf + namelen + suffixlen, graph_ext[graph_dump_format], extlen);
+  memcpy (buf + namelen, graph_ext[graph_dump_format], extlen);
 
   fp = fopen (buf, "a");
   if (fp == NULL)
@@ -246,9 +255,9 @@ print_rtl_graph_with_bb (const char *base, const char *suffix, rtx rtx_first)
     {
       enum bb_state { NOT_IN_BB, IN_ONE_BB, IN_MULTIPLE_BB };
       int max_uid = get_max_uid ();
-      int *start = xmalloc (max_uid * sizeof (int));
-      int *end = xmalloc (max_uid * sizeof (int));
-      enum bb_state *in_bb_p = xmalloc (max_uid * sizeof (enum bb_state));
+      int *start = XNEWVEC (int, max_uid);
+      int *end = XNEWVEC (int, max_uid);
+      enum bb_state *in_bb_p = XNEWVEC (enum bb_state, max_uid);
       basic_block bb;
       int i;
 
@@ -287,9 +296,9 @@ print_rtl_graph_with_bb (const char *base, const char *suffix, rtx rtx_first)
 
 	  if (start[INSN_UID (tmp_rtx)] < 0 && end[INSN_UID (tmp_rtx)] < 0)
 	    {
-	      if (GET_CODE (tmp_rtx) == BARRIER)
+	      if (BARRIER_P (tmp_rtx))
 		continue;
-	      if (GET_CODE (tmp_rtx) == NOTE
+	      if (NOTE_P (tmp_rtx)
 		  && (1 || in_bb_p[INSN_UID (tmp_rtx)] == NOT_IN_BB))
 		continue;
 	    }
@@ -310,6 +319,7 @@ print_rtl_graph_with_bb (const char *base, const char *suffix, rtx rtx_first)
 	  if ((i = end[INSN_UID (tmp_rtx)]) >= 0)
 	    {
 	      edge e;
+	      edge_iterator ei;
 
 	      bb = BASIC_BLOCK (i);
 
@@ -318,7 +328,7 @@ print_rtl_graph_with_bb (const char *base, const char *suffix, rtx rtx_first)
 
 	      /* Now specify the edges to all the successors of this
 		 basic block.  */
-	      for (e = bb->succ; e ; e = e->succ_next)
+	      FOR_EACH_EDGE (e, ei, bb->succs)
 		{
 		  if (e->dest != EXIT_BLOCK_PTR)
 		    {
@@ -348,7 +358,7 @@ print_rtl_graph_with_bb (const char *base, const char *suffix, rtx rtx_first)
 	    {
 	      /* Don't print edges to barriers.  */
 	      if (next_insn == 0
-		  || GET_CODE (next_insn) != BARRIER)
+		  || !BARRIER_P (next_insn))
 		draw_edge (fp, XINT (tmp_rtx, 0),
 			   next_insn ? INSN_UID (next_insn) : 999999, 0, 0);
 	      else
@@ -359,8 +369,8 @@ print_rtl_graph_with_bb (const char *base, const char *suffix, rtx rtx_first)
 		  do
 		    next_insn = NEXT_INSN (next_insn);
 		  while (next_insn
-			 && (GET_CODE (next_insn) == NOTE
-			     || GET_CODE (next_insn) == BARRIER));
+			 && (NOTE_P (next_insn)
+			     || BARRIER_P (next_insn)));
 
 		  draw_edge (fp, XINT (tmp_rtx, 0),
 			     next_insn ? INSN_UID (next_insn) : 999999, 0, 3);
@@ -385,31 +395,23 @@ print_rtl_graph_with_bb (const char *base, const char *suffix, rtx rtx_first)
 /* Similar as clean_dump_file, but this time for graph output files.  */
 
 void
-clean_graph_dump_file (const char *base, const char *suffix)
+clean_graph_dump_file (const char *base)
 {
   size_t namelen = strlen (base);
-  size_t suffixlen = strlen (suffix);
   size_t extlen = strlen (graph_ext[graph_dump_format]) + 1;
-  char *buf = alloca (namelen + extlen + suffixlen);
+  char *buf = XALLOCAVEC (char, namelen + extlen);
   FILE *fp;
 
   memcpy (buf, base, namelen);
-  memcpy (buf + namelen, suffix, suffixlen);
-  memcpy (buf + namelen + suffixlen, graph_ext[graph_dump_format], extlen);
+  memcpy (buf + namelen, graph_ext[graph_dump_format], extlen);
 
   fp = fopen (buf, "w");
 
   if (fp == NULL)
-    fatal_error ("can't open %s: %m", buf);
+    fatal_error ("can%'t open %s: %m", buf);
 
-  switch (graph_dump_format)
-    {
-    case vcg:
-      fputs ("graph: {\nport_sharing: no\n", fp);
-      break;
-    case no_graph:
-      abort ();
-    }
+  gcc_assert (graph_dump_format == vcg);
+  fputs ("graph: {\nport_sharing: no\n", fp);
 
   fclose (fp);
 }
@@ -417,30 +419,21 @@ clean_graph_dump_file (const char *base, const char *suffix)
 
 /* Do final work on the graph output file.  */
 void
-finish_graph_dump_file (const char *base, const char *suffix)
+finish_graph_dump_file (const char *base)
 {
   size_t namelen = strlen (base);
-  size_t suffixlen = strlen (suffix);
   size_t extlen = strlen (graph_ext[graph_dump_format]) + 1;
-  char *buf = alloca (namelen + suffixlen + extlen);
+  char *buf = XALLOCAVEC (char, namelen + extlen);
   FILE *fp;
 
   memcpy (buf, base, namelen);
-  memcpy (buf + namelen, suffix, suffixlen);
-  memcpy (buf + namelen + suffixlen, graph_ext[graph_dump_format], extlen);
+  memcpy (buf + namelen, graph_ext[graph_dump_format], extlen);
 
   fp = fopen (buf, "a");
   if (fp != NULL)
     {
-      switch (graph_dump_format)
-	{
-	case vcg:
-	  fputs ("}\n", fp);
-	  break;
-	case no_graph:
-	  abort ();
-	}
-
+      gcc_assert (graph_dump_format == vcg);
+      fputs ("}\n", fp);
       fclose (fp);
     }
 }

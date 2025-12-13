@@ -1,37 +1,35 @@
 ------------------------------------------------------------------------------
 --                                                                          --
---                         GNAT RUNTIME COMPONENTS                          --
+--                         GNAT RUN-TIME COMPONENTS                         --
 --                                                                          --
 --                A D A . S T R I N G S . W I D E _ M A P S                 --
 --                                                                          --
 --                                 B o d y                                  --
 --                                                                          --
---          Copyright (C) 1992-2002 Free Software Foundation, Inc.          --
+--          Copyright (C) 1992-2009, Free Software Foundation, Inc.         --
 --                                                                          --
 -- GNAT is free software;  you can  redistribute it  and/or modify it under --
 -- terms of the  GNU General Public License as published  by the Free Soft- --
--- ware  Foundation;  either version 2,  or (at your option) any later ver- --
+-- ware  Foundation;  either version 3,  or (at your option) any later ver- --
 -- sion.  GNAT is distributed in the hope that it will be useful, but WITH- --
 -- OUT ANY WARRANTY;  without even the  implied warranty of MERCHANTABILITY --
--- or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU General Public License --
--- for  more details.  You should have  received  a copy of the GNU General --
--- Public License  distributed with GNAT;  see file COPYING.  If not, write --
--- to  the Free Software Foundation,  59 Temple Place - Suite 330,  Boston, --
--- MA 02111-1307, USA.                                                      --
+-- or FITNESS FOR A PARTICULAR PURPOSE.                                     --
 --                                                                          --
--- As a special exception,  if other files  instantiate  generics from this --
--- unit, or you link  this unit with other files  to produce an executable, --
--- this  unit  does not  by itself cause  the resulting  executable  to  be --
--- covered  by the  GNU  General  Public  License.  This exception does not --
--- however invalidate  any other reasons why  the executable file  might be --
--- covered by the  GNU Public License.                                      --
+-- As a special exception under Section 7 of GPL version 3, you are granted --
+-- additional permissions described in the GCC Runtime Library Exception,   --
+-- version 3.1, as published by the Free Software Foundation.               --
+--                                                                          --
+-- You should have received a copy of the GNU General Public License and    --
+-- a copy of the GCC Runtime Library Exception along with this program;     --
+-- see the files COPYING3 and COPYING.RUNTIME respectively.  If not, see    --
+-- <http://www.gnu.org/licenses/>.                                          --
 --                                                                          --
 -- GNAT was originally developed  by the GNAT team at  New York University. --
 -- Extensive contributions were provided by Ada Core Technologies Inc.      --
 --                                                                          --
 ------------------------------------------------------------------------------
 
-with Unchecked_Deallocation;
+with Ada.Unchecked_Deallocation;
 
 package body Ada.Strings.Wide_Maps is
 
@@ -40,8 +38,7 @@ package body Ada.Strings.Wide_Maps is
    ---------
 
    function "-"
-     (Left, Right : in Wide_Character_Set)
-      return        Wide_Character_Set
+     (Left, Right : Wide_Character_Set) return Wide_Character_Set
    is
       LS : constant Wide_Character_Ranges_Access := Left.Set;
       RS : constant Wide_Character_Ranges_Access := Right.Set;
@@ -149,7 +146,7 @@ package body Ada.Strings.Wide_Maps is
 
    --  The sorted, discontiguous form is canonical, so equality can be used
 
-   function "=" (Left, Right : in Wide_Character_Set) return Boolean is
+   function "=" (Left, Right : Wide_Character_Set) return Boolean is
    begin
       return Left.Set.all = Right.Set.all;
    end "=";
@@ -159,8 +156,7 @@ package body Ada.Strings.Wide_Maps is
    -----------
 
    function "and"
-     (Left, Right : in Wide_Character_Set)
-      return        Wide_Character_Set
+     (Left, Right : Wide_Character_Set) return Wide_Character_Set
    is
       LS : constant Wide_Character_Ranges_Access := Left.Set;
       RS : constant Wide_Character_Ranges_Access := Right.Set;
@@ -210,8 +206,7 @@ package body Ada.Strings.Wide_Maps is
    -----------
 
    function "not"
-     (Right  : in Wide_Character_Set)
-      return Wide_Character_Set
+     (Right : Wide_Character_Set) return Wide_Character_Set
    is
       RS : constant Wide_Character_Ranges_Access := Right.Set;
 
@@ -253,8 +248,7 @@ package body Ada.Strings.Wide_Maps is
    ----------
 
    function "or"
-     (Left, Right : in Wide_Character_Set)
-      return        Wide_Character_Set
+     (Left, Right : Wide_Character_Set) return Wide_Character_Set
    is
       LS : constant Wide_Character_Ranges_Access := Left.Set;
       RS : constant Wide_Character_Ranges_Access := Right.Set;
@@ -341,8 +335,7 @@ package body Ada.Strings.Wide_Maps is
    -----------
 
    function "xor"
-     (Left, Right : in Wide_Character_Set)
-      return        Wide_Character_Set
+     (Left, Right : Wide_Character_Set) return Wide_Character_Set
    is
    begin
       return (Left or Right) - (Left and Right);
@@ -368,7 +361,7 @@ package body Ada.Strings.Wide_Maps is
 
    procedure Finalize (Object : in out Wide_Character_Mapping) is
 
-      procedure Free is new Unchecked_Deallocation
+      procedure Free is new Ada.Unchecked_Deallocation
         (Wide_Character_Mapping_Values,
          Wide_Character_Mapping_Values_Access);
 
@@ -380,7 +373,7 @@ package body Ada.Strings.Wide_Maps is
 
    procedure Finalize (Object : in out Wide_Character_Set) is
 
-      procedure Free is new Unchecked_Deallocation
+      procedure Free is new Ada.Unchecked_Deallocation
         (Wide_Character_Ranges,
          Wide_Character_Ranges_Access);
 
@@ -409,9 +402,8 @@ package body Ada.Strings.Wide_Maps is
    -----------
 
    function Is_In
-     (Element : in Wide_Character;
-      Set     : in Wide_Character_Set)
-      return    Boolean
+     (Element : Wide_Character;
+      Set     : Wide_Character_Set) return Boolean
    is
       L, R, M : Natural;
       SS      : constant Wide_Character_Ranges_Access := Set.Set;
@@ -446,9 +438,8 @@ package body Ada.Strings.Wide_Maps is
    ---------------
 
    function Is_Subset
-     (Elements : in Wide_Character_Set;
-      Set      : in Wide_Character_Set)
-      return     Boolean
+     (Elements : Wide_Character_Set;
+      Set      : Wide_Character_Set) return Boolean
    is
       ES : constant Wide_Character_Ranges_Access := Elements.Set;
       SS : constant Wide_Character_Ranges_Access := Set.Set;
@@ -493,8 +484,7 @@ package body Ada.Strings.Wide_Maps is
    ---------------
 
    function To_Domain
-     (Map  : in Wide_Character_Mapping)
-      return Wide_Character_Sequence
+     (Map : Wide_Character_Mapping) return Wide_Character_Sequence
    is
    begin
       return Map.Map.Domain;
@@ -505,8 +495,7 @@ package body Ada.Strings.Wide_Maps is
    ----------------
 
    function To_Mapping
-     (From, To : in Wide_Character_Sequence)
-      return     Wide_Character_Mapping
+     (From, To : Wide_Character_Sequence) return Wide_Character_Mapping
    is
       Domain : Wide_Character_Sequence (1 .. From'Length);
       Rangev : Wide_Character_Sequence (1 .. To'Length);
@@ -554,8 +543,7 @@ package body Ada.Strings.Wide_Maps is
    --------------
 
    function To_Range
-     (Map  : in Wide_Character_Mapping)
-      return Wide_Character_Sequence
+     (Map : Wide_Character_Mapping) return Wide_Character_Sequence
    is
    begin
       return Map.Map.Rangev;
@@ -566,8 +554,7 @@ package body Ada.Strings.Wide_Maps is
    ---------------
 
    function To_Ranges
-     (Set :  in Wide_Character_Set)
-      return Wide_Character_Ranges
+     (Set : Wide_Character_Set) return Wide_Character_Ranges
    is
    begin
       return Set.Set.all;
@@ -578,8 +565,7 @@ package body Ada.Strings.Wide_Maps is
    -----------------
 
    function To_Sequence
-     (Set  : in Wide_Character_Set)
-      return Wide_Character_Sequence
+     (Set : Wide_Character_Set) return Wide_Character_Sequence
    is
       SS : constant Wide_Character_Ranges_Access := Set.Set;
 
@@ -604,8 +590,7 @@ package body Ada.Strings.Wide_Maps is
    --  Case of multiple range input
 
    function To_Set
-     (Ranges : in Wide_Character_Ranges)
-      return   Wide_Character_Set
+     (Ranges : Wide_Character_Ranges) return Wide_Character_Set
    is
       Result : Wide_Character_Ranges (Ranges'Range);
       N      : Natural := 0;
@@ -656,7 +641,7 @@ package body Ada.Strings.Wide_Maps is
          end if;
       end loop;
 
-      if Result (N).High < Result (N).Low then
+      if N > 0 and then Result (N).High < Result (N).Low then
          N := N - 1;
       end if;
 
@@ -667,8 +652,7 @@ package body Ada.Strings.Wide_Maps is
    --  Case of single range input
 
    function To_Set
-     (Span : in Wide_Character_Range)
-      return Wide_Character_Set
+     (Span : Wide_Character_Range) return Wide_Character_Set
    is
    begin
       if Span.Low > Span.High then
@@ -685,8 +669,7 @@ package body Ada.Strings.Wide_Maps is
    --  Case of wide string input
 
    function To_Set
-     (Sequence : in Wide_Character_Sequence)
-      return     Wide_Character_Set
+     (Sequence : Wide_Character_Sequence) return Wide_Character_Set
    is
       R : Wide_Character_Ranges (1 .. Sequence'Length);
 
@@ -701,8 +684,7 @@ package body Ada.Strings.Wide_Maps is
    --  Case of single wide character input
 
    function To_Set
-     (Singleton : in Wide_Character)
-      return      Wide_Character_Set
+     (Singleton : Wide_Character) return Wide_Character_Set
    is
    begin
       return
@@ -715,9 +697,8 @@ package body Ada.Strings.Wide_Maps is
    -----------
 
    function Value
-     (Map     : in Wide_Character_Mapping;
-      Element : in Wide_Character)
-      return    Wide_Character
+     (Map     : Wide_Character_Mapping;
+      Element : Wide_Character) return Wide_Character
    is
       L, R, M : Natural;
 

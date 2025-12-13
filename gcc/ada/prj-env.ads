@@ -6,72 +6,86 @@
 --                                                                          --
 --                                 S p e c                                  --
 --                                                                          --
---             Copyright (C) 2001-2003 Free Software Foundation, Inc        --
+--          Copyright (C) 2001-2010, Free Software Foundation, Inc.         --
 --                                                                          --
 -- GNAT is free software;  you can  redistribute it  and/or modify it under --
 -- terms of the  GNU General Public License as published  by the Free Soft- --
--- ware  Foundation;  either version 2,  or (at your option) any later ver- --
+-- ware  Foundation;  either version 3,  or (at your option) any later ver- --
 -- sion.  GNAT is distributed in the hope that it will be useful, but WITH- --
 -- OUT ANY WARRANTY;  without even the  implied warranty of MERCHANTABILITY --
 -- or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU General Public License --
 -- for  more details.  You should have  received  a copy of the GNU General --
--- Public License  distributed with GNAT;  see file COPYING.  If not, write --
--- to  the Free Software Foundation,  59 Temple Place - Suite 330,  Boston, --
--- MA 02111-1307, USA.                                                      --
+-- Public License  distributed with GNAT; see file COPYING3.  If not, go to --
+-- http://www.gnu.org/licenses for a complete copy of the license.          --
 --                                                                          --
 -- GNAT was originally developed  by the GNAT team at  New York University. --
 -- Extensive contributions were provided by Ada Core Technologies Inc.      --
 --                                                                          --
 ------------------------------------------------------------------------------
 
---  This package implements services for Project-aware tools, related
---  to the environment (gnat.adc, ADA_INCLUDE_PATH, ADA_OBJECTS_PATH)
+--  This package implements services for Project-aware tools, mostly related
+--  to the environment (configuration pragma files, path files, mapping files).
 
-with GNAT.OS_Lib; use GNAT.OS_Lib;
+with GNAT.Dynamic_HTables;
+with GNAT.OS_Lib;
 
 package Prj.Env is
 
-   procedure Initialize;
-   --  Put Standard_Naming_Data into Namings table (called by Prj.Initialize)
+   procedure Initialize (In_Tree : Project_Tree_Ref);
+   --  Initialize global components relative to environment variables
 
-   procedure Print_Sources;
+   procedure Print_Sources (In_Tree : Project_Tree_Ref);
    --  Output the list of sources, after Project files have been scanned
 
-   procedure Create_Mapping_File
-     (Project : Project_Id;
-      Name    : out Name_Id);
-   --  Create a temporary mapping file for project Project. For each unit
-   --  in the closure of immediate sources of Project, put the mapping of
-   --  its spec and or body to its file name and path name in this file.
+   procedure Create_Mapping (In_Tree : Project_Tree_Ref);
+   --  Create in memory mapping from the sources of all the projects (in body
+   --  of package Fmap), so that Osint.Find_File will find the correct path
+   --  corresponding to a source.
 
-   procedure Set_Mapping_File_Initial_State_To_Empty;
-   --  When creating a mapping file, create an empty map. This case occurs
-   --  when run time source files are found in the project files.
+   procedure Create_Temp_File
+     (In_Tree   : Project_Tree_Ref;
+      Path_FD   : out File_Descriptor;
+      Path_Name : out Path_Name_Type;
+      File_Use  : String);
+   --  Create temporary file, and fail with an error if it could not be created
+
+   procedure Create_Mapping_File
+     (Project  : Project_Id;
+      Language : Name_Id;
+      In_Tree  : Project_Tree_Ref;
+      Name     : out Path_Name_Type);
+   --  Create a temporary mapping file for project Project. For each source or
+   --  template of Language in the Project, put the mapping of its file
+   --  name and path name in this file.
+   --
+   --  Implementation note: we pass a language name, not a language_index here,
+   --  since the latter would have to match exactly the index of that language
+   --  for the specified project, and that is not information available in
+   --  buildgpr.adb.
+   --
+   --  See fmap for a description of the format of the mapping file
 
    procedure Create_Config_Pragmas_File
-     (For_Project          : Project_Id;
-      Main_Project         : Project_Id;
-      Include_Config_Files : Boolean := True);
+     (For_Project : Project_Id;
+      In_Tree     : Project_Tree_Ref);
    --  If there needs to have SFN pragmas, either for non standard naming
-   --  schemes or for individual units, or (when Include_Config_Files is True)
-   --  if Global_Configuration_Pragmas has been specified in package gnatmake
-   --  of the main project, or if Local_Configuration_Pragmas has been
-   --  specified in package Compiler of the main project, build (if needed)
-   --  a temporary file that contains all configuration pragmas, and specify
-   --  the configuration pragmas file in the project data.
+   --  schemes or for individual units.
 
-   function Ada_Include_Path (Project : Project_Id) return String_Access;
-   --  Get the ADA_INCLUDE_PATH of a Project file. For the first call, compute
-   --  it and cache it.
+   procedure Create_New_Path_File
+     (In_Tree   : Project_Tree_Ref;
+      Path_FD   : out File_Descriptor;
+      Path_Name : out Path_Name_Type);
+   --  Create a new temporary path file. Get the file name in Path_Name.
 
    function Ada_Include_Path
      (Project   : Project_Id;
-      Recursive : Boolean) return String;
-   --  Get the ADA_INCLUDE_PATH of a Project file. If Recursive it True,
-   --  get all the source directories of the imported and modified project
-   --  files (recursively). If Recursive is False, just get the path for the
-   --  source directories of Project. Note: the resulting String may be empty
-   --  if there is no source directory in the project file.
+      In_Tree   : Project_Tree_Ref;
+      Recursive : Boolean := False) return String;
+   --  Get the source search path of a Project file. If Recursive it True, get
+   --  all the source directories of the imported and modified project files
+   --  (recursively). If Recursive is False, just get the path for the source
+   --  directories of Project. Note: the resulting String may be empty if there
+   --  is no source directory in the project file.
 
    function Ada_Objects_Path
      (Project             : Project_Id;
@@ -82,22 +96,17 @@ package Prj.Env is
 
    procedure Set_Ada_Paths
      (Project             : Project_Id;
-      Including_Libraries : Boolean);
-   --  Set the env vars for additional project path files, after
+      In_Tree             : Project_Tree_Ref;
+      Including_Libraries : Boolean;
+      Include_Path        : Boolean := True;
+      Objects_Path        : Boolean := True);
+   --  Set the environment variables for additional project path files, after
    --  creating the path files if necessary.
-
-   procedure Delete_All_Path_Files;
-   --  Delete all temporary path files that have been created by
-   --  calls to Set_Ada_Paths.
-
-   function Path_Name_Of_Library_Unit_Body
-     (Name    : String;
-      Project : Project_Id) return String;
-   --  Returns the Path of a library unit
 
    function File_Name_Of_Library_Unit_Body
      (Name              : String;
       Project           : Project_Id;
+      In_Tree           : Project_Tree_Ref;
       Main_Project_Only : Boolean := True;
       Full_Path         : Boolean := False) return String;
    --  Returns the file name of a library unit, in canonical case. Name may or
@@ -116,7 +125,8 @@ package Prj.Env is
 
    function Project_Of
      (Name         : String;
-      Main_Project : Project_Id) return Project_Id;
+      Main_Project : Project_Id;
+      In_Tree      : Project_Tree_Ref) return Project_Id;
    --  Get the project of a source. The source file name may be truncated
    --  (".adb" or ".ads" may be missing). If the source is in a project being
    --  extended, return the ultimate extending project. If it is not a source
@@ -124,20 +134,94 @@ package Prj.Env is
 
    procedure Get_Reference
      (Source_File_Name : String;
+      In_Tree          : Project_Tree_Ref;
       Project          : out Project_Id;
-      Path             : out Name_Id);
+      Path             : out Path_Name_Type);
    --  Returns the project of a source and its path in displayable form
 
    generic
       with procedure Action (Path : String);
-   procedure For_All_Source_Dirs (Project : Project_Id);
-   --  Iterate through all the source directories of a project,
-   --  including those of imported or modified projects.
+   procedure For_All_Source_Dirs
+     (Project : Project_Id;
+      In_Tree : Project_Tree_Ref);
+   --  Iterate through all the source directories of a project, including those
+   --  of imported or modified projects. Only returns those directories that
+   --  potentially contain Ada sources (ie ignore projects that have no Ada
+   --  sources
 
    generic
       with procedure Action (Path : String);
    procedure For_All_Object_Dirs (Project : Project_Id);
-   --  Iterate through all the object directories of a project,
-   --  including those of imported or modified projects.
+   --  Iterate through all the object directories of a project, including
+   --  those of imported or modified projects.
 
+   ------------------
+   -- Project Path --
+   ------------------
+
+   type Project_Search_Path is private;
+   --  An abstraction of the project path. This object provides subprograms to
+   --  search for projects on the path (and caches the results for more
+   --  efficiency).
+
+   procedure Free (Self : in out Project_Search_Path);
+   --  Free the memory used by Self
+
+   procedure Add_Directories
+     (Self : in out Project_Search_Path;
+      Path : String);
+   --  Add one or more directories to the path. Directories added with this
+   --  procedure are added in order after the current directory and before the
+   --  path given by the environment variable GPR_PROJECT_PATH. A value of "-"
+   --  will remove the default project directory from the project path.
+   --
+   --  Calls to this subprogram must be performed before the first call to
+   --  Find_Project below, or PATH will be added at the end of the search
+   --  path.
+
+   procedure Get_Path
+     (Self : in out Project_Search_Path;
+      Path : out String_Access);
+   --  Return the current value of the project path, either the value set
+   --  during elaboration of the package or, if procedure Set_Project_Path has
+   --  been called, the value set by the last call to Set_Project_Path.
+   --  The returned value must not be modified.
+
+   procedure Set_Path
+     (Self : in out Project_Search_Path; Path : String);
+   --  Override the value of the project path.
+   --  This also removes the implicit default search directories
+
+   procedure Find_Project
+     (Self               : in out Project_Search_Path;
+      Project_File_Name  : String;
+      Directory          : String;
+      Path               : out Namet.Path_Name_Type);
+   --  Search for a project with the given name either in Directory (which
+   --  often will be the directory contain the project we are currently parsing
+   --  and which we found a reference to another project), or in the project
+   --  path. Extra_Project_Path contains additional directories to search.
+   --
+   --  Project_File_Name can optionally contain directories, and the extension
+   --  (.gpr) for the file name is optional.
+   --
+   --  Returns No_Name if no such project was found
+
+private
+   package Projects_Paths is new GNAT.Dynamic_HTables.Simple_HTable
+     (Header_Num => Header_Num,
+      Element    => Path_Name_Type,
+      No_Element => No_Path,
+      Key        => Name_Id,
+      Hash       => Hash,
+      Equal      => "=");
+
+   type Project_Search_Path is record
+      Path : GNAT.OS_Lib.String_Access;
+      --  As a special case, if the first character is '#:" or this variable is
+      --  unset, this means that the PATH has not been fully initialized yet
+      --  (although subprograms above will properly take care of that).
+
+      Cache : Projects_Paths.Instance;
+   end record;
 end Prj.Env;

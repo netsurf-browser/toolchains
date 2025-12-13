@@ -6,25 +6,23 @@
 --                                                                          --
 --                                 S p e c                                  --
 --                                                                          --
---          Copyright (C) 1999-2001 Free Software Foundation, Inc.          --
+--          Copyright (C) 1999-2009, Free Software Foundation, Inc.         --
 --                                                                          --
 -- GNAT is free software;  you can  redistribute it  and/or modify it under --
 -- terms of the  GNU General Public License as published  by the Free Soft- --
--- ware  Foundation;  either version 2,  or (at your option) any later ver- --
+-- ware  Foundation;  either version 3,  or (at your option) any later ver- --
 -- sion.  GNAT is distributed in the hope that it will be useful, but WITH- --
 -- OUT ANY WARRANTY;  without even the  implied warranty of MERCHANTABILITY --
--- or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU General Public License --
--- for  more details.  You should have  received  a copy of the GNU General --
--- Public License  distributed with GNAT;  see file COPYING.  If not, write --
--- to  the Free Software Foundation,  59 Temple Place - Suite 330,  Boston, --
--- MA 02111-1307, USA.                                                      --
+-- or FITNESS FOR A PARTICULAR PURPOSE.                                     --
 --                                                                          --
--- As a special exception,  if other files  instantiate  generics from this --
--- unit, or you link  this unit with other files  to produce an executable, --
--- this  unit  does not  by itself cause  the resulting  executable  to  be --
--- covered  by the  GNU  General  Public  License.  This exception does not --
--- however invalidate  any other reasons why  the executable file  might be --
--- covered by the  GNU Public License.                                      --
+-- As a special exception under Section 7 of GPL version 3, you are granted --
+-- additional permissions described in the GCC Runtime Library Exception,   --
+-- version 3.1, as published by the Free Software Foundation.               --
+--                                                                          --
+-- You should have received a copy of the GNU General Public License and    --
+-- a copy of the GCC Runtime Library Exception along with this program;     --
+-- see the files COPYING3 and COPYING.RUNTIME respectively.  If not, see    --
+-- <http://www.gnu.org/licenses/>.                                          --
 --                                                                          --
 -- GNAT was originally developed  by the GNAT team at  New York University. --
 -- Extensive contributions were provided by Ada Core Technologies Inc.      --
@@ -35,7 +33,7 @@
 --  tree to fill in representation information, and also the routine used
 --  by -gnatR to print this information. This unit is used both in the
 --  compiler and in ASIS (it is used in ASIS as part of the implementation
---  of the data decomposition annex.
+--  of the data decomposition annex).
 
 with Types; use Types;
 with Uintp; use Uintp;
@@ -55,7 +53,7 @@ package Repinfo is
    --  For composite types, there are three cases:
 
    --    1. In some cases the front end knows the values statically,
-   --       for example in the ase where representation clauses or
+   --       for example in the case where representation clauses or
    --       pragmas specify the values.
 
    --    2. If Backend_Layout is True, then the backend is responsible
@@ -73,7 +71,7 @@ package Repinfo is
    -- Back-Annotation by Gigi --
    -----------------------------
 
-   --  The following interface is used by gigi if Backend_Layout is True.
+   --  The following interface is used by gigi if Backend_Layout is True
 
    --  As part of the processing in gigi, the types are laid out and
    --  appropriate values computed for the sizes and component positions
@@ -88,7 +86,7 @@ package Repinfo is
    --    which contains the Size (more accurately the Object_SIze) value
    --    for the type or subtype.
 
-   --    For E_Component and E_Distriminant entities, the Esize (size
+   --    For E_Component and E_Discriminant entities, the Esize (size
    --    of component) and Component_Bit_Offset fields. Note that gigi
    --    does not (yet ???) back annotate Normalized_Position/First_Bit.
 
@@ -128,7 +126,7 @@ package Repinfo is
    --  Subtype used for values that can either be a Node_Ref (negative)
    --  or a value (non-negative)
 
-   type TCode is range 0 .. 27;
+   type TCode is range 0 .. 28;
    --  Type used on Ada side to represent DEFTREECODE values defined in
    --  tree.def. Only a subset of these tree codes can actually appear.
    --  The names are the names from tree.def in Ada casing.
@@ -156,12 +154,13 @@ package Repinfo is
    Truth_Or_Expr    : constant TCode := 19; -- Boolean or               2
    Truth_Xor_Expr   : constant TCode := 20; -- Boolean xor              2
    Truth_Not_Expr   : constant TCode := 21; -- Boolean not              1
-   Lt_Expr          : constant TCode := 22; -- comparision <            2
-   Le_Expr          : constant TCode := 23; -- comparision <=           2
-   Gt_Expr          : constant TCode := 24; -- comparision >            2
-   Ge_Expr          : constant TCode := 25; -- comparision >=           2
-   Eq_Expr          : constant TCode := 26; -- comparision =            2
-   Ne_Expr          : constant TCode := 27; -- comparision /=           2
+   Lt_Expr          : constant TCode := 22; -- comparison <             2
+   Le_Expr          : constant TCode := 23; -- comparison <=            2
+   Gt_Expr          : constant TCode := 24; -- comparison >             2
+   Ge_Expr          : constant TCode := 25; -- comparison >=            2
+   Eq_Expr          : constant TCode := 26; -- comparison =             2
+   Ne_Expr          : constant TCode := 27; -- comparison /=            2
+   Bit_And_Expr     : constant TCode := 28; -- Binary and               2
 
    --  The following entry is used to represent a discriminant value in
    --  the tree. It has a special tree code that does not correspond
@@ -177,20 +176,17 @@ package Repinfo is
    --  The following declarations are for use by gigi for back annotation
 
    function Create_Node
-     (Expr  : TCode;
-      Op1   : Node_Ref_Or_Val;
-      Op2   : Node_Ref_Or_Val := No_Uint;
-      Op3   : Node_Ref_Or_Val := No_Uint)
-      return  Node_Ref;
-   --  Creates a node with using the tree code defined by Expr and from
-   --  1-3 operands as required (unused operands set as shown to No_Uint)
-   --  Note that this call can be used to create a discriminant reference
-   --  by using (Expr => Discrim_Val, Op1 => discriminant_number).
+     (Expr : TCode;
+      Op1  : Node_Ref_Or_Val;
+      Op2  : Node_Ref_Or_Val := No_Uint;
+      Op3  : Node_Ref_Or_Val := No_Uint) return Node_Ref;
+   --  Creates a node using the tree code defined by Expr and from one to three
+   --  operands as required (unused operands set as shown to No_Uint) Note that
+   --  this call can be used to create a discriminant reference by using (Expr
+   --  => Discrim_Val, Op1 => discriminant_number).
 
-   function Create_Discrim_Ref
-     (Discr : Entity_Id)
-      return  Node_Ref;
-   --  Creates a refrerence to the discriminant whose entity is Discr.
+   function Create_Discrim_Ref (Discr : Entity_Id) return Node_Ref;
+   --  Creates a reference to the discriminant whose entity is Discr
 
    --------------------------------------------------------
    -- Front-End Interface for Dynamic Size/Offset Values --
@@ -225,7 +221,7 @@ package Repinfo is
 
    --  In the case of components, if the location of the component is static,
    --  then all four fields (Component_Bit_Offset, Normalized_Position, Esize,
-   --  and Normalized_First_Bit) are set to appropraite values. In the case of
+   --  and Normalized_First_Bit) are set to appropriate values. In the case of
    --  a non-static component location, Component_Bit_Offset is not used and
    --  is left set to Unknown. Normalized_Position and Normalized_First_Bit
    --  are set appropriately.
@@ -249,22 +245,18 @@ package Repinfo is
    --  Given a SO_Ref (Uint) value, returns True iff the SO_Ref value
    --  represents a static Size/Offset value (i.e. it is non-negative).
 
-   function Create_Dynamic_SO_Ref
-     (E    : Entity_Id)
-      return Dynamic_SO_Ref;
+   function Create_Dynamic_SO_Ref (E : Entity_Id) return Dynamic_SO_Ref;
    --  Given the Entity_Id for a constant (case 1), the Node_Id for an
    --  expression (case 2), or the Entity_Id for a function (case 3),
    --  this function returns a (negative) Uint value that can be used
    --  to retrieve the entity or expression for later use.
 
-   function Get_Dynamic_SO_Entity
-     (U    : Dynamic_SO_Ref)
-      return Entity_Id;
+   function Get_Dynamic_SO_Entity (U : Dynamic_SO_Ref) return Entity_Id;
    --  Retrieve the Node_Id or Entity_Id stored by a previous call to
    --  Create_Dynamic_SO_Ref. The approach is that the front end makes
    --  the necessary Create_Dynamic_SO_Ref calls to associate the node
    --  and entity id values and the back end makes Get_Dynamic_SO_Ref
-   --  calls to retrive them.
+   --  calls to retrieve them.
 
    --------------------
    -- ASIS_Interface --
@@ -274,9 +266,8 @@ package Repinfo is
    --  Type used to represent list of discriminant values
 
    function Rep_Value
-     (Val  : Node_Ref_Or_Val;
-      D    : Discrim_List)
-      return Uint;
+     (Val : Node_Ref_Or_Val;
+      D   : Discrim_List) return Uint;
    --  Given the contents of a First_Bit_Position or Esize field containing
    --  a node reference (i.e. a negative Uint value) and D, the list of
    --  discriminant values, returns the interpreted value of this field.
@@ -285,7 +276,8 @@ package Repinfo is
    --  also returned unmodified.
 
    procedure Tree_Read;
-   --  Read in the value of the Rep_Table
+   --  Initializes internal tables from current tree file using the relevant
+   --  Table.Tree_Read routines.
 
    ------------------------
    -- Compiler Interface --
@@ -295,7 +287,8 @@ package Repinfo is
    --  Procedure to list representation information
 
    procedure Tree_Write;
-   --  Write out the value of the Rep_Table
+   --  Writes out internal tables to current tree file using the relevant
+   --  Table.Tree_Write routines.
 
    --------------------------
    -- Debugging Procedures --

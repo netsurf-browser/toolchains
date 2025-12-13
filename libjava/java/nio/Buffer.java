@@ -1,5 +1,5 @@
 /* Buffer.java -- 
-   Copyright (C) 2002, 2003 Free Software Foundation, Inc.
+   Copyright (C) 2002, 2003, 2004  Free Software Foundation, Inc.
 
 This file is part of GNU Classpath.
 
@@ -15,8 +15,8 @@ General Public License for more details.
 
 You should have received a copy of the GNU General Public License
 along with GNU Classpath; see the file COPYING.  If not, write to the
-Free Software Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA
-02111-1307 USA.
+Free Software Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA
+02110-1301 USA.
 
 Linking this library statically or dynamically with other modules is
 making a combined work based on this library.  Thus, the terms and
@@ -38,22 +38,31 @@ exception statement from your version. */
 
 package java.nio;
 
+import gnu.gcj.RawData;
+
+/**
+ * @since 1.4
+ */
 public abstract class Buffer
 {
-  int cap = 0;
-  int limit = 0;
-  int pos = 0;
-  int mark = -1;
+  private final int cap;
+  int limit;
+  int pos;
+  int mark;
+  final RawData address;
 
-  // Creates a new Buffer.
-  //
-  // Should be package private.
-  //
-  Buffer (int capacity, int limit, int position, int mark)
+  /**
+   * Creates a new Buffer.
+   *
+   * Should be package private.
+   */
+  Buffer (int capacity, int limit, int position, int mark,
+	  RawData address)
   {
     if (capacity < 0)
       throw new IllegalArgumentException ();
     
+    this.address = address;
     cap = capacity;
     limit (limit);
     position (position);
@@ -65,10 +74,16 @@ public abstract class Buffer
       
       this.mark = mark;
     }
+    else
+    {
+      this.mark = -1;
+    }
   }
   
   /**
    * Retrieves the capacity of the buffer.
+   *
+   * @return the capacity of the buffer
    */
   public final int capacity ()
   {
@@ -77,6 +92,8 @@ public abstract class Buffer
 
   /**
    * Clears the buffer.
+   *
+   * @return this buffer
    */
   public final Buffer clear ()
   {
@@ -88,6 +105,8 @@ public abstract class Buffer
     
   /**
    * Flips the buffer.
+   *
+   * @return this buffer
    */
   public final Buffer flip ()
   {
@@ -99,6 +118,9 @@ public abstract class Buffer
     
   /**
    * Tells whether the buffer has remaining data to read or not.
+   *
+   * @return true if the buffer contains remaining data to read,
+   * false otherwise
    */
   public final boolean hasRemaining ()
   {
@@ -107,11 +129,15 @@ public abstract class Buffer
 
   /**
    * Tells whether this buffer is read only or not.
+   *
+   * @return true if the buffer is read only, false otherwise
    */
   public abstract boolean isReadOnly ();
 
   /**
    * Retrieves the current limit of the buffer.
+   *
+   * @return the limit of the buffer
    */
   public final int limit ()
   {
@@ -124,6 +150,8 @@ public abstract class Buffer
    * @param newLimit The new limit value; must be non-negative and no larger
    * than this buffer's capacity.
    *
+   * @return this buffer
+   *
    * @exception IllegalArgumentException If the preconditions on newLimit
    * do not hold.
    */
@@ -132,11 +160,11 @@ public abstract class Buffer
     if ((newLimit < 0) || (newLimit > cap))
       throw new IllegalArgumentException ();
 
-    if (newLimit <= mark)
+    if (newLimit < mark)
         mark = -1;
 
     if (pos > newLimit)
-        pos = newLimit - 1;
+        pos = newLimit;
 
     limit = newLimit;
     return this;
@@ -144,6 +172,8 @@ public abstract class Buffer
 
   /**
    * Sets this buffer's mark at its position.
+   *
+   * @return this buffer
    */
   public final Buffer mark ()
   {
@@ -153,6 +183,8 @@ public abstract class Buffer
 
   /**
    * Retrieves the current position of this buffer.
+   *
+   * @return the current position of this buffer
    */
   public final int position ()
   {
@@ -165,7 +197,9 @@ public abstract class Buffer
    * 
    * @param newPosition The new position value; must be non-negative and no
    * larger than the current limit.
-   * 
+   *
+   * @return this buffer
+   *
    * @exception IllegalArgumentException If the preconditions on newPosition
    * do not hold
    */
@@ -183,6 +217,8 @@ public abstract class Buffer
 
   /**
    * Returns the number of elements between the current position and the limit.
+   *
+   * @return the number of remaining elements
    */
   public final int remaining()
   {
@@ -191,7 +227,9 @@ public abstract class Buffer
 
   /**
    * Resets this buffer's position to the previously-marked position.
-   * 
+   *
+   * @return this buffer
+   *
    * @exception InvalidMarkException If the mark has not been set.
    */
   public final Buffer reset()
@@ -206,11 +244,124 @@ public abstract class Buffer
   /**
    * Rewinds this buffer. The position is set to zero and the mark
    * is discarded.
+   *
+   * @return this buffer
    */
   public final Buffer rewind()
   {
     pos = 0;
     mark = -1;
     return this;
+  }
+
+  /**
+   * Checks for underflow. This method is used internally to check
+   * whether a buffer has enough elements left to satisfy a read 
+   * request.
+   *
+   * @exception BufferUnderflowException If there are no remaining
+   * elements in this buffer.
+   */
+  final void checkForUnderflow()
+  {
+    if (!hasRemaining())
+      throw new BufferUnderflowException();
+  }
+
+  /**
+   * Checks for underflow. This method is used internally to check
+   * whether a buffer has enough elements left to satisfy a read 
+   * request for a given number of elements.
+   *
+   * @param length The length of a sequence of elements.
+   *
+   * @exception BufferUnderflowException If there are not enough 
+   * remaining elements in this buffer.
+   */
+  final void checkForUnderflow(int length)
+  {
+    if (remaining() < length)
+      throw new BufferUnderflowException();
+  }
+
+  /**
+   * Checks for overflow. This method is used internally to check
+   * whether a buffer has enough space left to satisfy a write 
+   * request.
+   *
+   * @exception BufferOverflowException If there is no remaining
+   * space in this buffer.
+   */
+  final void checkForOverflow()
+  {
+    if (!hasRemaining())
+      throw new BufferOverflowException();
+  }
+
+  /**
+   * Checks for overflow. This method is used internally to check
+   * whether a buffer has enough space left to satisfy a write 
+   * request for a given number of elements.
+   *
+   * @param length The length of a sequence of elements.
+   *
+   * @exception BufferUnderflowException If there is not enough 
+   * remaining space in this buffer.
+   */
+  final void checkForOverflow(int length)
+  {
+    if (remaining() < length)
+      throw new BufferOverflowException();
+  }
+
+  /**
+   * Checks if index is negative or not smaller than the buffer's 
+   * limit. This method is used internally to check whether
+   * an indexed request can be fulfilled.
+   *
+   * @param index The requested position in the buffer.
+   *
+   * @exception IndexOutOfBoundsException If index is negative or not smaller
+   * than the buffer's limit.
+   */
+  final void checkIndex(int index)
+  {
+    if (index < 0
+        || index >= limit ())
+      throw new IndexOutOfBoundsException ();
+  }
+
+  /**
+   * Checks if buffer is read-only. This method is used internally to
+   * check if elements can be put into a buffer.
+   *
+   * @exception ReadOnlyBufferException If this buffer is read-only.
+   */
+  final void checkIfReadOnly() 
+  {
+    if (isReadOnly())
+      throw new ReadOnlyBufferException ();
+  }
+
+  /**
+   * Checks whether an array is large enough to hold the given number of
+   * elements at the given offset. This method is used internally to
+   * check if an array is big enough.
+   *
+   * @param arraylength The length of the array.
+   * @param offset The offset within the array of the first byte to be read;
+   * must be non-negative and no larger than arraylength.
+   * @param length The number of bytes to be read from the given array;
+   * must be non-negative and no larger than arraylength - offset.
+   *
+   * @exception IndexOutOfBoundsException If the preconditions on the offset
+   * and length parameters do not hold
+   */
+  static final void checkArraySize(int arraylength, int offset, int length)
+  {
+    if ((offset < 0) ||
+        (length < 0) ||
+        (arraylength < length + offset))
+      throw new IndexOutOfBoundsException ();
   }
 }

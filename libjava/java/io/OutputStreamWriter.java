@@ -1,5 +1,5 @@
 /* OutputStreamWriter.java -- Writer that converts chars to bytes
-   Copyright (C) 1998, 1999, 2000, 2001, 2003 Free Software Foundation, Inc.
+   Copyright (C) 1998, 1999, 2000, 2001, 2003, 2005, 2006  Free Software Foundation, Inc.
 
 This file is part of GNU Classpath.
 
@@ -15,8 +15,8 @@ General Public License for more details.
 
 You should have received a copy of the GNU General Public License
 along with GNU Classpath; see the file COPYING.  If not, write to the
-Free Software Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA
-02111-1307 USA.
+Free Software Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA
+02110-1301 USA.
 
 Linking this library statically or dynamically with other modules is
 making a combined work based on this library.  Thus, the terms and
@@ -39,6 +39,9 @@ exception statement from your version. */
 package java.io;
 
 import gnu.gcj.convert.UnicodeToBytes;
+import gnu.gcj.convert.CharsetToBytesAdaptor;
+import java.nio.charset.Charset;
+import java.nio.charset.CharsetEncoder;
 
 /**
  * This class writes characters to an output stream that is byte oriented
@@ -70,7 +73,7 @@ import gnu.gcj.convert.UnicodeToBytes;
  * </ul>
  *
  * @author Aaron M. Renn (arenn@urbanophile.com)
- * @author Per Bothner <bothner@cygnus.com>
+ * @author Per Bothner (bothner@cygnus.com)
  * @date April 17, 1998.  
  */
 public class OutputStreamWriter extends Writer
@@ -129,6 +132,31 @@ public class OutputStreamWriter extends Writer
   }
 
   /**
+   * This method initializes a new instance of <code>OutputStreamWriter</code>
+   * to write to the specified stream using a given <code>Charset</code>.
+   *
+   * @param out The <code>OutputStream</code> to write to
+   * @param cs The <code>Charset</code> of the encoding to use
+   */
+  public OutputStreamWriter(OutputStream out, Charset cs)
+  {
+    this(out, new CharsetToBytesAdaptor(cs));
+  }
+
+  /**
+   * This method initializes a new instance of <code>OutputStreamWriter</code>
+   * to write to the specified stream using a given
+   * <code>CharsetEncoder</code>.
+   *
+   * @param out The <code>OutputStream</code> to write to
+   * @param enc The <code>CharsetEncoder</code> to encode the output with
+   */
+  public OutputStreamWriter(OutputStream out, CharsetEncoder enc)
+  {
+    this(out, new CharsetToBytesAdaptor(enc));
+  }
+
+  /**
    * This method closes this stream, and the underlying 
    * <code>OutputStream</code>
    *
@@ -140,6 +168,7 @@ public class OutputStreamWriter extends Writer
       {
 	if (out != null)
 	  {
+	    converter.setFinished();
 	    flush();
 	    out.close();
 	    out = null;
@@ -172,11 +201,13 @@ public class OutputStreamWriter extends Writer
 	if (out == null)
 	  throw new IOException("Stream closed");
 
-	if (wcount > 0)
-	  {
-	    writeChars(work, 0, wcount);
-	    wcount = 0;
-	  }
+	// Always write -- if we are close()ing then we want to make
+	// sure the converter is flushed.
+	if (work == null)
+	  work = new char[100];
+	writeChars(work, 0, wcount);
+	wcount = 0;
+
 	out.flush();
       }
   }
@@ -215,7 +246,7 @@ public class OutputStreamWriter extends Writer
   private void writeChars(char[] buf, int offset, int count)
     throws IOException
   {
-    while (count > 0 || converter.havePendingBytes())
+    do
       {
 	// We must flush if out.count == out.buf.length.
 	// It is probably a good idea to flush if out.buf is almost full.
@@ -228,6 +259,9 @@ public class OutputStreamWriter extends Writer
 	  }
 	converter.setOutput(out.buf, out.count);
 	int converted = converter.write(buf, offset, count);
+	// Must set this before we flush the output stream, because
+	// flushing will reset 'out.count'.
+	out.count = converter.count;
 	// Flush if we cannot make progress.
 	if (converted == 0 && out.count == converter.count)
 	  {
@@ -237,8 +271,8 @@ public class OutputStreamWriter extends Writer
 	  }
 	offset += converted;
 	count -= converted;
-	out.count = converter.count;
       }
+    while (count > 0 || converter.havePendingBytes());
   }
 
   /**
@@ -287,7 +321,7 @@ public class OutputStreamWriter extends Writer
   /**
    * This method writes a single character to the output stream.
    *
-   * @param c The char to write, passed as an int.
+   * @param ch The char to write, passed as an int.
    *
    * @exception IOException If an error occurs
    */

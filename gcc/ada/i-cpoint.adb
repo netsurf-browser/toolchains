@@ -6,25 +6,23 @@
 --                                                                          --
 --                                 B o d y                                  --
 --                                                                          --
---          Copyright (C) 1992-2001 Free Software Foundation, Inc.          --
+--          Copyright (C) 1992-2009, Free Software Foundation, Inc.         --
 --                                                                          --
 -- GNAT is free software;  you can  redistribute it  and/or modify it under --
 -- terms of the  GNU General Public License as published  by the Free Soft- --
--- ware  Foundation;  either version 2,  or (at your option) any later ver- --
+-- ware  Foundation;  either version 3,  or (at your option) any later ver- --
 -- sion.  GNAT is distributed in the hope that it will be useful, but WITH- --
 -- OUT ANY WARRANTY;  without even the  implied warranty of MERCHANTABILITY --
--- or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU General Public License --
--- for  more details.  You should have  received  a copy of the GNU General --
--- Public License  distributed with GNAT;  see file COPYING.  If not, write --
--- to  the Free Software Foundation,  59 Temple Place - Suite 330,  Boston, --
--- MA 02111-1307, USA.                                                      --
+-- or FITNESS FOR A PARTICULAR PURPOSE.                                     --
 --                                                                          --
--- As a special exception,  if other files  instantiate  generics from this --
--- unit, or you link  this unit with other files  to produce an executable, --
--- this  unit  does not  by itself cause  the resulting  executable  to  be --
--- covered  by the  GNU  General  Public  License.  This exception does not --
--- however invalidate  any other reasons why  the executable file  might be --
--- covered by the  GNU Public License.                                      --
+-- As a special exception under Section 7 of GPL version 3, you are granted --
+-- additional permissions described in the GCC Runtime Library Exception,   --
+-- version 3.1, as published by the Free Software Foundation.               --
+--                                                                          --
+-- You should have received a copy of the GNU General Public License and    --
+-- a copy of the GCC Runtime Library Exception along with this program;     --
+-- see the files COPYING3 and COPYING.RUNTIME respectively.  If not, see    --
+-- <http://www.gnu.org/licenses/>.                                          --
 --                                                                          --
 -- GNAT was originally developed  by the GNAT team at  New York University. --
 -- Extensive contributions were provided by Ada Core Technologies Inc.      --
@@ -34,16 +32,16 @@
 with Interfaces.C.Strings; use Interfaces.C.Strings;
 with System;               use System;
 
-with Unchecked_Conversion;
+with Ada.Unchecked_Conversion;
 
 package body Interfaces.C.Pointers is
 
    type Addr is mod Memory_Size;
 
-   function To_Pointer is new Unchecked_Conversion (Addr,      Pointer);
-   function To_Addr    is new Unchecked_Conversion (Pointer,   Addr);
-   function To_Addr    is new Unchecked_Conversion (ptrdiff_t, Addr);
-   function To_Ptrdiff is new Unchecked_Conversion (Addr,      ptrdiff_t);
+   function To_Pointer is new Ada.Unchecked_Conversion (Addr,      Pointer);
+   function To_Addr    is new Ada.Unchecked_Conversion (Pointer,   Addr);
+   function To_Addr    is new Ada.Unchecked_Conversion (ptrdiff_t, Addr);
+   function To_Ptrdiff is new Ada.Unchecked_Conversion (Addr,      ptrdiff_t);
 
    Elmt_Size : constant ptrdiff_t :=
                  (Element_Array'Component_Size
@@ -55,7 +53,7 @@ package body Interfaces.C.Pointers is
    -- "+" --
    ---------
 
-   function "+" (Left : in Pointer;   Right : in ptrdiff_t) return Pointer is
+   function "+" (Left : Pointer; Right : ptrdiff_t) return Pointer is
    begin
       if Left = null then
          raise Pointer_Error;
@@ -64,7 +62,7 @@ package body Interfaces.C.Pointers is
       return To_Pointer (To_Addr (Left) + To_Addr (Elmt_Size * Right));
    end "+";
 
-   function "+" (Left : in ptrdiff_t; Right : in Pointer) return Pointer is
+   function "+" (Left : ptrdiff_t; Right : Pointer) return Pointer is
    begin
       if Right = null then
          raise Pointer_Error;
@@ -77,7 +75,7 @@ package body Interfaces.C.Pointers is
    -- "-" --
    ---------
 
-   function "-" (Left : in Pointer; Right : in ptrdiff_t) return Pointer is
+   function "-" (Left : Pointer; Right : ptrdiff_t) return Pointer is
    begin
       if Left = null then
          raise Pointer_Error;
@@ -86,7 +84,7 @@ package body Interfaces.C.Pointers is
       return To_Pointer (To_Addr (Left) - To_Addr (Right * Elmt_Size));
    end "-";
 
-   function "-" (Left : in Pointer; Right : in Pointer) return ptrdiff_t is
+   function "-" (Left : Pointer; Right : Pointer) return ptrdiff_t is
    begin
       if Left = null or else Right = null then
          raise Pointer_Error;
@@ -100,9 +98,9 @@ package body Interfaces.C.Pointers is
    ----------------
 
    procedure Copy_Array
-     (Source  : in Pointer;
-      Target  : in Pointer;
-      Length  : in ptrdiff_t)
+     (Source  : Pointer;
+      Target  : Pointer;
+      Length  : ptrdiff_t)
    is
       T : Pointer := Target;
       S : Pointer := Source;
@@ -125,10 +123,10 @@ package body Interfaces.C.Pointers is
    ---------------------------
 
    procedure Copy_Terminated_Array
-     (Source     : in Pointer;
-      Target     : in Pointer;
-      Limit      : in ptrdiff_t := ptrdiff_t'Last;
-      Terminator : in Element := Default_Terminator)
+     (Source     : Pointer;
+      Target     : Pointer;
+      Limit      : ptrdiff_t := ptrdiff_t'Last;
+      Terminator : Element := Default_Terminator)
    is
       S : Pointer   := Source;
       T : Pointer   := Target;
@@ -172,9 +170,8 @@ package body Interfaces.C.Pointers is
    -----------
 
    function Value
-     (Ref        : in Pointer;
-      Terminator : in Element := Default_Terminator)
-      return       Element_Array
+     (Ref        : Pointer;
+      Terminator : Element := Default_Terminator) return Element_Array
    is
       P : Pointer;
       L : constant Index_Base := Index'First;
@@ -198,7 +195,7 @@ package body Interfaces.C.Pointers is
             subtype A is Element_Array (L .. H);
 
             type PA is access A;
-            function To_PA is new Unchecked_Conversion (Pointer, PA);
+            function To_PA is new Ada.Unchecked_Conversion (Pointer, PA);
 
          begin
             return To_PA (Ref).all;
@@ -207,9 +204,8 @@ package body Interfaces.C.Pointers is
    end Value;
 
    function Value
-     (Ref    : in Pointer;
-      Length : in ptrdiff_t)
-      return   Element_Array
+     (Ref    : Pointer;
+      Length : ptrdiff_t) return Element_Array
    is
       L : Index_Base;
       H : Index_Base;
@@ -242,7 +238,7 @@ package body Interfaces.C.Pointers is
             subtype A is Element_Array (L .. H);
 
             type PA is access A;
-            function To_PA is new Unchecked_Conversion (Pointer, PA);
+            function To_PA is new Ada.Unchecked_Conversion (Pointer, PA);
 
          begin
             return To_PA (Ref).all;
@@ -255,9 +251,8 @@ package body Interfaces.C.Pointers is
    --------------------
 
    function Virtual_Length
-     (Ref        : in Pointer;
-      Terminator : in Element := Default_Terminator)
-      return       ptrdiff_t
+     (Ref        : Pointer;
+      Terminator : Element := Default_Terminator) return ptrdiff_t
    is
       P : Pointer;
       C : ptrdiff_t;

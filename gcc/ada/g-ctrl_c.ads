@@ -6,7 +6,7 @@
 --                                                                          --
 --                                 S p e c                                  --
 --                                                                          --
---               Copyright (C) 2002 Ada Core Technologies, Inc.             --
+--                      Copyright (C) 2002-2007, AdaCore                    --
 --                                                                          --
 -- GNAT is free software;  you can  redistribute it  and/or modify it under --
 -- terms of the  GNU General Public License as published  by the Free Soft- --
@@ -16,8 +16,8 @@
 -- or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU General Public License --
 -- for  more details.  You should have  received  a copy of the GNU General --
 -- Public License  distributed with GNAT;  see file COPYING.  If not, write --
--- to  the Free Software Foundation,  59 Temple Place - Suite 330,  Boston, --
--- MA 02111-1307, USA.                                                      --
+-- to  the  Free Software Foundation,  51  Franklin  Street,  Fifth  Floor, --
+-- Boston, MA 02110-1301, USA.                                              --
 --                                                                          --
 -- As a special exception,  if other files  instantiate  generics from this --
 -- unit, or you link  this unit with other files  to produce an executable, --
@@ -34,19 +34,13 @@
 --  This package may be used to intercept the interruption of a running
 --  program by the operator typing Control-C, without having to use an Ada
 --  interrupt handler protected object.
---
---  This package is currently implemented under Windows and Unix platforms.
---
+
+--  This package is currently implemented under Windows and Unix platforms
+
 --  Note concerning Unix systems:
 
 --  The behavior of this package when using tasking depends on the interaction
 --  between sigaction() and the thread library.
-
---  On most implementations, the interaction will be no different whether
---  tasking is involved or not. An exception is GNU/Linux systems where
---  each task/thread is considered as a separate process by the kernel,
---  meaning in particular that a Ctrl-C from the keyboard will be sent to
---  all tasks instead of only one, resulting in multiple calls to the handler.
 
 package GNAT.Ctrl_C is
 
@@ -55,13 +49,13 @@ package GNAT.Ctrl_C is
    --  Handler_Type should not propagate exceptions.
 
    procedure Install_Handler (Handler : Handler_Type);
-   --  Set up Handler to be called if the operator hits Ctrl-C.
+   --  Set up Handler to be called if the operator hits Ctrl-C, instead of the
+   --  standard Control-C handler.
 
    procedure Uninstall_Handler;
    --  Reinstall the standard Control-C handler.
    --  If Install_Handler has never been called, this procedure has no effect.
 
 private
-   pragma Import (C, Install_Handler, "__gnat_install_int_handler");
    pragma Import (C, Uninstall_Handler, "__gnat_uninstall_int_handler");
 end GNAT.Ctrl_C;

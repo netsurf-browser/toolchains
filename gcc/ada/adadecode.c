@@ -6,37 +6,49 @@
  *                                                                          *
  *                          C Implementation File                           *
  *                                                                          *
- *           Copyright (C) 2001-2003, Free Software Foundation, Inc.        *
+ *           Copyright (C) 2001-2009, Free Software Foundation, Inc.        *
  *                                                                          *
  * GNAT is free software;  you can  redistribute it  and/or modify it under *
  * terms of the  GNU General Public License as published  by the Free Soft- *
- * ware  Foundation;  either version 2,  or (at your option) any later ver- *
+ * ware  Foundation;  either version 3,  or (at your option) any later ver- *
  * sion.  GNAT is distributed in the hope that it will be useful, but WITH- *
  * OUT ANY WARRANTY;  without even the  implied warranty of MERCHANTABILITY *
- * or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU General Public License *
- * for  more details.  You should have  received  a copy of the GNU General *
- * Public License  distributed with GNAT;  see file COPYING.  If not, write *
- * to  the Free Software Foundation,  59 Temple Place - Suite 330,  Boston, *
- * MA 02111-1307, USA.                                                      *
+ * or FITNESS FOR A PARTICULAR PURPOSE.                                     *
  *                                                                          *
- * As a  special  exception,  if you  link  this file  with other  files to *
- * produce an executable,  this file does not by itself cause the resulting *
- * executable to be covered by the GNU General Public License. This except- *
- * ion does not  however invalidate  any other reasons  why the  executable *
- * file might be covered by the  GNU Public License.                        *
+ * As a special exception under Section 7 of GPL version 3, you are granted *
+ * additional permissions described in the GCC Runtime Library Exception,   *
+ * version 3.1, as published by the Free Software Foundation.               *
+ *                                                                          *
+ * You should have received a copy of the GNU General Public License and    *
+ * a copy of the GCC Runtime Library Exception along with this program;     *
+ * see the files COPYING3 and COPYING.RUNTIME respectively.  If not, see    *
+ * <http://www.gnu.org/licenses/>.                                          *
  *                                                                          *
  * GNAT was originally developed  by the GNAT team at  New York University. *
  * Extensive contributions were provided by Ada Core Technologies Inc.      *
  *                                                                          *
  ****************************************************************************/
 
-#ifdef IN_GCC
+
+#if defined(IN_RTS)
+#include "tconfig.h"
+#include "tsystem.h"
+#elif defined(IN_GCC)
 #include "config.h"
 #include "system.h"
-#else
+#endif
+
+#include <string.h>
 #include <stdio.h>
 #include <ctype.h>
+
+#include "adaint.h"
+
+#ifndef ISDIGIT
 #define ISDIGIT(c) isdigit(c)
+#endif
+
+#ifndef PARMS
 #define PARMS(ARGS) ARGS
 #endif
 
@@ -98,8 +110,8 @@ ostrcpy (char *s1, char *s2)
 /* This function will return the Ada name from the encoded form.
    The Ada coding is done in exp_dbug.ads and this is the inverse function.
    see exp_dbug.ads for full encoding rules, a short description is added
-   below. Right now only objects and routines are handled. There is no support
-   for Ada types.
+   below. Right now only objects and routines are handled. Ada types are
+   stripped of their encodings.
 
    CODED_NAME is the encoded entity name.
 
@@ -158,6 +170,18 @@ __gnat_decode (const char *coded_name, char *ada_name, int verbose)
     }
   else
     strcpy (ada_name, coded_name);
+
+  /* Check for the first triple underscore in the name. This indicates
+     that the name represents a type with encodings; in this case, we
+     need to strip the encodings.  */
+  {
+    char *encodings;
+
+    if ((encodings = (char *) strstr (ada_name, "___")) != NULL)
+      {
+	*encodings = '\0';
+      }
+  }
 
   /* Check for task body.  */
   if (has_suffix (ada_name, "TKB"))
@@ -222,6 +246,21 @@ __gnat_decode (const char *coded_name, char *ada_name, int verbose)
       {
 	ada_name[len - 1 - n_digits - 1] = '\0';
 	overloaded = 1;
+      }
+  }
+
+  /* Check for nested subprogram ending in .nnnn and strip suffix. */
+  {
+    int last = strlen (ada_name) - 1;
+
+    while (ISDIGIT (ada_name[last]) && last > 0)
+      {
+        last--;
+      }
+
+    if (ada_name[last] == '.')
+      {
+        ada_name[last] = (char) 0;
       }
   }
 
@@ -313,6 +352,7 @@ __gnat_decode (const char *coded_name, char *ada_name, int verbose)
     }
 }
 
+#ifdef IN_GCC
 char *
 ada_demangle (const char *coded_name)
 {
@@ -320,4 +360,45 @@ ada_demangle (const char *coded_name)
 
   __gnat_decode (coded_name, ada_name, 0);
   return xstrdup (ada_name);
+}
+#endif
+
+void
+get_encoding (const char *coded_name, char *encoding)
+{
+  char * dest_index = encoding;
+  const char *p;
+  int found = 0;
+  int count = 0;
+
+  /* The heuristics is the following: we assume that the first triple
+     underscore in an encoded name indicates the beginning of the
+     first encoding, and that subsequent triple underscores indicate
+     the next encodings. We assume that the encodings are always at the
+     end of encoded names.  */
+
+  for (p = coded_name; *p != '\0'; p++)
+    {
+      if (*p != '_')
+	count = 0;
+      else
+	if (++count == 3)
+	  {
+	    count = 0;
+
+	    if (found)
+	      {
+		dest_index = dest_index - 2;
+		*dest_index++ = ':';
+	      }
+
+	    p++;
+	    found = 1;
+	  }
+
+      if (found)
+	*dest_index++ = *p;
+    }
+
+  *dest_index = '\0';
 }

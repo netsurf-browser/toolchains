@@ -1,11 +1,16 @@
+// { dg-require-namedlocale "en_US" }
+// { dg-require-namedlocale "fr_FR" }
+// { dg-require-fork "" }
+// { dg-require-mkfifo "" }
+
 // 2004-01-11  Petur Runolfsson  <peturr02@ru.is>
 
-// Copyright (C) 2004 Free Software Foundation, Inc.
+// Copyright (C) 2004, 2005, 2006, 2007, 2009 Free Software Foundation, Inc.
 //
 // This file is part of the GNU ISO C++ Library.  This library is free
 // software; you can redistribute it and/or modify it under the
 // terms of the GNU General Public License as published by the
-// Free Software Foundation; either version 2, or (at your option)
+// Free Software Foundation; either version 3, or (at your option)
 // any later version.
 
 // This library is distributed in the hope that it will be useful,
@@ -14,14 +19,14 @@
 // GNU General Public License for more details.
 
 // You should have received a copy of the GNU General Public License along
-// with this library; see the file COPYING.  If not, write to the Free
-// Software Foundation, 59 Temple Place - Suite 330, Boston, MA 02111-1307,
-// USA.
+// with this library; see the file COPYING3.  If not see
+// <http://www.gnu.org/licenses/>.
 
 // 27.8.1.4 Overridden virtual functions
 
 #include <fstream>
 #include <locale>
+#include <cstdlib>
 
 #include <unistd.h>
 #include <sys/types.h>
@@ -36,13 +41,13 @@ void test01()
   using namespace std; 
   using namespace __gnu_test;
 
-  locale loc_en(__gnu_test::try_named_locale("en_US"));
-  locale loc_fr(__gnu_test::try_named_locale("fr_FR"));
+  locale loc_en(locale("en_US"));
+  locale loc_fr(locale("fr_FR"));
 
   const char* name = "tmp_fifo_13582-2";
   unlink(name);
-  try_mkfifo(name, S_IRWXU);
-  
+  mkfifo(name, S_IRWXU);
+
   int child = fork();
   if (child == 0)
     {
@@ -50,14 +55,12 @@ void test01()
       fbout.open(name, ios_base::out);
       fbout.sputn("12345", 5);
       fbout.pubsync();
-      sleep(2);
       fbout.close();
       exit(0);
     }
 
   filebuf fbin;
   fbin.open(name, ios_base::in);
-  sleep(1);
   filebuf::int_type n = fbin.sbumpc();
   VERIFY( n == '1' );
   fbin.pubimbue(loc_en);

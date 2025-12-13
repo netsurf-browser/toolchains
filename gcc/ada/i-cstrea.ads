@@ -6,25 +6,23 @@
 --                                                                          --
 --                                 S p e c                                  --
 --                                                                          --
---          Copyright (C) 1995-2003 Free Software Foundation, Inc.          --
+--          Copyright (C) 1995-2010, Free Software Foundation, Inc.         --
 --                                                                          --
 -- GNAT is free software;  you can  redistribute it  and/or modify it under --
 -- terms of the  GNU General Public License as published  by the Free Soft- --
--- ware  Foundation;  either version 2,  or (at your option) any later ver- --
+-- ware  Foundation;  either version 3,  or (at your option) any later ver- --
 -- sion.  GNAT is distributed in the hope that it will be useful, but WITH- --
 -- OUT ANY WARRANTY;  without even the  implied warranty of MERCHANTABILITY --
--- or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU General Public License --
--- for  more details.  You should have  received  a copy of the GNU General --
--- Public License  distributed with GNAT;  see file COPYING.  If not, write --
--- to  the Free Software Foundation,  59 Temple Place - Suite 330,  Boston, --
--- MA 02111-1307, USA.                                                      --
+-- or FITNESS FOR A PARTICULAR PURPOSE.                                     --
 --                                                                          --
--- As a special exception,  if other files  instantiate  generics from this --
--- unit, or you link  this unit with other files  to produce an executable, --
--- this  unit  does not  by itself cause  the resulting  executable  to  be --
--- covered  by the  GNU  General  Public  License.  This exception does not --
--- however invalidate  any other reasons why  the executable file  might be --
--- covered by the  GNU Public License.                                      --
+-- As a special exception under Section 7 of GPL version 3, you are granted --
+-- additional permissions described in the GCC Runtime Library Exception,   --
+-- version 3.1, as published by the Free Software Foundation.               --
+--                                                                          --
+-- You should have received a copy of the GNU General Public License and    --
+-- a copy of the GCC Runtime Library Exception along with this program;     --
+-- see the files COPYING3 and COPYING.RUNTIME respectively.  If not, see    --
+-- <http://www.gnu.org/licenses/>.                                          --
 --                                                                          --
 -- GNAT was originally developed  by the GNAT team at  New York University. --
 -- Extensive contributions were provided by Ada Core Technologies Inc.      --
@@ -78,9 +76,9 @@ package Interfaces.C_Streams is
    -- Standard C functions --
    --------------------------
 
-   --  The functions selected below are ones that are available in DOS,
-   --  OS/2, UNIX and Xenix (but not necessarily in ANSI C). These are
-   --  very thin interfaces which copy exactly the C headers. For more
+   --  The functions selected below are ones that are available in
+   --  UNIX (but not necessarily in ANSI C). These are very thin
+   --  interfaces which copy exactly the C headers. For more
    --  documentation on these functions, see the Microsoft C "Run-Time
    --  Library Reference" (Microsoft Press, 1990, ISBN 1-55615-225-6),
    --  which includes useful information on system compatibility.
@@ -105,10 +103,14 @@ package Interfaces.C_Streams is
 
    function fileno (stream : FILEs) return int;
 
-   function fopen (filename : chars; Mode : chars) return FILEs
+   function fopen
+     (filename : chars;
+      mode     : chars;
+      encoding : System.CRTL.Filename_Encoding := System.CRTL.UTF8)
+      return FILEs
      renames System.CRTL.fopen;
    --  Note: to maintain target independence, use text_translation_required,
-   --  a boolean variable defined in a-sysdep.c to deal with the target
+   --  a boolean variable defined in sysdep.c to deal with the target
    --  dependent text translation requirement. If this variable is set,
    --  then b/t should be appended to the standard mode argument to set
    --  the text translation mode off or on as required.
@@ -123,16 +125,14 @@ package Interfaces.C_Streams is
      (buffer : voids;
       size   : size_t;
       count  : size_t;
-      stream : FILEs)
-      return   size_t;
+      stream : FILEs) return size_t;
 
    function fread
      (buffer : voids;
       index  : size_t;
       size   : size_t;
       count  : size_t;
-      stream : FILEs)
-      return   size_t;
+      stream : FILEs) return size_t;
    --  Same as normal fread, but has a parameter 'index' that indicates
    --  the starting index for the read within 'buffer' (which must be the
    --  address of the beginning of a whole array object with an assumed
@@ -142,14 +142,16 @@ package Interfaces.C_Streams is
    function freopen
      (filename : chars;
       mode     : chars;
-      stream   : FILEs)
-      return     FILEs renames System.CRTL.freopen;
+      stream   : FILEs;
+      encoding : System.CRTL.Filename_Encoding := System.CRTL.UTF8)
+      return FILEs
+     renames System.CRTL.freopen;
 
    function fseek
      (stream : FILEs;
       offset : long;
-      origin : int)
-      return   int renames System.CRTL.fseek;
+      origin : int) return int
+     renames System.CRTL.fseek;
 
    function ftell (stream : FILEs) return long
      renames System.CRTL.ftell;
@@ -158,8 +160,7 @@ package Interfaces.C_Streams is
      (buffer : voids;
       size   : size_t;
       count  : size_t;
-      stream : FILEs)
-      return   size_t;
+      stream : FILEs) return size_t;
 
    function isatty (handle : int) return int renames System.CRTL.isatty;
 
@@ -172,8 +173,7 @@ package Interfaces.C_Streams is
      (stream : FILEs;
       buffer : chars;
       mode   : int;
-      size   : size_t)
-      return   int;
+      size   : size_t) return int;
 
    procedure tmpnam (string : chars) renames System.CRTL.tmpnam;
    --  The parameter must be a pointer to a string buffer of at least L_tmpnam
@@ -198,11 +198,11 @@ package Interfaces.C_Streams is
    --  functions.
 
    function file_exists (name : chars) return int;
-   --  Tests if given name corresponds to an existing file.
+   --  Tests if given name corresponds to an existing file
 
    function is_regular_file (handle : int) return int;
-   --  Tests if given handle is for a regular file (result 1) or for
-   --  a non-regular file (pipe or device, result 0).
+   --  Tests if given handle is for a regular file (result 1) or for a
+   --  non-regular file (pipe or device, result 0).
 
    ---------------------------------
    -- Control of Text/Binary Mode --

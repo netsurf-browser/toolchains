@@ -1,12 +1,13 @@
 // Iostreams base classes -*- C++ -*-
 
-// Copyright (C) 1997, 1998, 1999, 2000, 2001, 2002, 2003, 2004
+// Copyright (C) 1997, 1998, 1999, 2000, 2001, 2002, 2003, 2004, 2005,
+// 2006, 2007, 2008, 2009, 2010, 2011
 // Free Software Foundation, Inc.
 //
 // This file is part of the GNU ISO C++ Library.  This library is free
 // software; you can redistribute it and/or modify it under the
 // terms of the GNU General Public License as published by the
-// Free Software Foundation; either version 2, or (at your option)
+// Free Software Foundation; either version 3, or (at your option)
 // any later version.
 
 // This library is distributed in the hope that it will be useful,
@@ -14,19 +15,14 @@
 // MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
 // GNU General Public License for more details.
 
-// You should have received a copy of the GNU General Public License along
-// with this library; see the file COPYING.  If not, write to the Free
-// Software Foundation, 59 Temple Place - Suite 330, Boston, MA 02111-1307,
-// USA.
+// Under Section 7 of GPL version 3, you are granted additional
+// permissions described in the GCC Runtime Library Exception, version
+// 3.1, as published by the Free Software Foundation.
 
-// As a special exception, you may use this file as part of a free software
-// library without restriction.  Specifically, if other files instantiate
-// templates or use macros or inline functions from this file, or you compile
-// this file and link it with other files to produce an executable, this
-// file does not by itself cause the resulting executable to be covered by
-// the GNU General Public License.  This exception does not however
-// invalidate any other reasons why the executable file might be covered by
-// the GNU General Public License.
+// You should have received a copy of the GNU General Public License and
+// a copy of the GCC Runtime Library Exception along with this program;
+// see the files COPYING3 and COPYING.RUNTIME respectively.  If not, see
+// <http://www.gnu.org/licenses/>.
 
 //
 // ISO C++ 14882: 27.4  Iostreams base classes
@@ -36,11 +32,10 @@
 #include <ostream>
 #include <istream>
 #include <fstream>
-#include <bits/atomicity.h>
 #include <ext/stdio_filebuf.h>
 #include <ext/stdio_sync_filebuf.h>
 
-namespace __gnu_internal
+namespace __gnu_internal _GLIBCXX_VISIBILITY(hidden)
 {
   using namespace __gnu_cxx;
 
@@ -64,8 +59,10 @@ namespace __gnu_internal
 #endif
 } // namespace __gnu_internal
 
-namespace std 
+namespace std _GLIBCXX_VISIBILITY(default)
 {
+_GLIBCXX_BEGIN_NAMESPACE_VERSION
+
   using namespace __gnu_internal;
   
   extern istream cin;
@@ -82,7 +79,7 @@ namespace std
 
   ios_base::Init::Init()
   {
-    if (__gnu_cxx::__exchange_and_add(&_S_refcount, 1) == 0)
+    if (__gnu_cxx::__exchange_and_add_dispatch(&_S_refcount, 1) == 0)
       {
 	// Standard streams default to synced with "C" operations.
 	_S_synced_with_stdio = true;
@@ -98,8 +95,11 @@ namespace std
 	new (&cerr) ostream(&buf_cerr_sync);
 	new (&clog) ostream(&buf_cerr_sync);
 	cin.tie(&cout);
-	cerr.flags(ios_base::unitbuf);
-	
+	cerr.setf(ios_base::unitbuf);
+	// _GLIBCXX_RESOLVE_LIB_DEFECTS
+	// 455. cerr::tie() and wcerr::tie() are overspecified.
+	cerr.tie(&cout);
+
 #ifdef _GLIBCXX_USE_WCHAR_T
 	new (&buf_wcout_sync) stdio_sync_filebuf<wchar_t>(stdout);
 	new (&buf_wcin_sync) stdio_sync_filebuf<wchar_t>(stdin);
@@ -110,23 +110,27 @@ namespace std
 	new (&wcerr) wostream(&buf_wcerr_sync);
 	new (&wclog) wostream(&buf_wcerr_sync);
 	wcin.tie(&wcout);
-	wcerr.flags(ios_base::unitbuf);
+	wcerr.setf(ios_base::unitbuf);
+	wcerr.tie(&wcout);	
 #endif
 	
 	// NB: Have to set refcount above one, so that standard
 	// streams are not re-initialized with uses of ios_base::Init
 	// besides <iostream> static object, ie just using <ios> with
 	// ios_base::Init objects.
-	__gnu_cxx::__atomic_add(&_S_refcount, 1);
+	__gnu_cxx::__atomic_add_dispatch(&_S_refcount, 1);
       }
   }
 
   ios_base::Init::~Init()
   {
-    if (__gnu_cxx::__exchange_and_add(&_S_refcount, -1) == 2)
+    // Be race-detector-friendly.  For more info see bits/c++config.
+    _GLIBCXX_SYNCHRONIZATION_HAPPENS_BEFORE(&_S_refcount);
+    if (__gnu_cxx::__exchange_and_add_dispatch(&_S_refcount, -1) == 2)
       {
+        _GLIBCXX_SYNCHRONIZATION_HAPPENS_AFTER(&_S_refcount);
 	// Catch any exceptions thrown by basic_ostream::flush()
-	try
+	__try
 	  { 
 	    // Flush standard output streams as required by 27.4.2.1.6
 	    cout.flush();
@@ -139,7 +143,7 @@ namespace std
 	    wclog.flush();    
 #endif
 	  }
-	catch (...)
+	__catch(...)
 	  { }
       }
   } 
@@ -196,4 +200,6 @@ namespace std
       }
     return __ret; 
   }
-} // namespace std
+
+_GLIBCXX_END_NAMESPACE_VERSION
+} // namespace

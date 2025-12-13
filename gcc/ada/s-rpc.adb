@@ -6,25 +6,23 @@
 --                                                                          --
 --                                 B o d y                                  --
 --                                                                          --
---          Copyright (C) 1992-2002 Free Software Foundation, Inc.          --
+--          Copyright (C) 1992-2009, Free Software Foundation, Inc.         --
 --                                                                          --
 -- GNAT is free software;  you can  redistribute it  and/or modify it under --
 -- terms of the  GNU General Public License as published  by the Free Soft- --
--- ware  Foundation;  either version 2,  or (at your option) any later ver- --
+-- ware  Foundation;  either version 3,  or (at your option) any later ver- --
 -- sion.  GNAT is distributed in the hope that it will be useful, but WITH- --
 -- OUT ANY WARRANTY;  without even the  implied warranty of MERCHANTABILITY --
--- or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU General Public License --
--- for  more details.  You should have  received  a copy of the GNU General --
--- Public License  distributed with GNAT;  see file COPYING.  If not, write --
--- to  the Free Software Foundation,  59 Temple Place - Suite 330,  Boston, --
--- MA 02111-1307, USA.                                                      --
+-- or FITNESS FOR A PARTICULAR PURPOSE.                                     --
 --                                                                          --
--- As a special exception,  if other files  instantiate  generics from this --
--- unit, or you link  this unit with other files  to produce an executable, --
--- this  unit  does not  by itself cause  the resulting  executable  to  be --
--- covered  by the  GNU  General  Public  License.  This exception does not --
--- however invalidate  any other reasons why  the executable file  might be --
--- covered by the  GNU Public License.                                      --
+-- As a special exception under Section 7 of GPL version 3, you are granted --
+-- additional permissions described in the GCC Runtime Library Exception,   --
+-- version 3.1, as published by the Free Software Foundation.               --
+--                                                                          --
+-- You should have received a copy of the GNU General Public License and    --
+-- a copy of the GCC Runtime Library Exception along with this program;     --
+-- see the files COPYING3 and COPYING.RUNTIME respectively.  If not, see    --
+-- <http://www.gnu.org/licenses/>.                                          --
 --                                                                          --
 -- GNAT was originally developed  by the GNAT team at  New York University. --
 -- Extensive contributions were provided by Ada Core Technologies Inc.      --
@@ -37,27 +35,15 @@
 --  the presence of a master partition to run a test which is otherwise not
 --  distributed.
 
---  The GLADE distribution package includes a replacement for this file.
-
-with Ada.Exceptions; use Ada.Exceptions;
+--  The GLADE distribution package includes a replacement for this file
 
 package body System.RPC is
-
-   GNAT : constant Boolean := True;
-   pragma Unreferenced (GNAT);
-   --  This dummy entity allows the compiler to recognize that this is the
-   --  version of this package that is supplied by GNAT, not by the user.
-   --  This is used to cause a compile time error if an attempt is made to
-   --  use features in System.RPC that are only available from a true PCS.
 
    CRLF : constant String := ASCII.CR & ASCII.LF;
 
    Msg : constant String :=
            CRLF & "Distribution support not installed in your environment" &
            CRLF & "For information on GLADE, contact Ada Core Technologies";
-
-   pragma Warnings (Off);
-   --  Kill messages about out parameters not set
 
    ----------
    -- Read --
@@ -69,7 +55,7 @@ package body System.RPC is
       Last   : out Ada.Streams.Stream_Element_Offset)
    is
    begin
-      Raise_Exception (Program_Error'Identity, Msg);
+      raise Program_Error with Msg;
    end Read;
 
    -----------
@@ -78,10 +64,10 @@ package body System.RPC is
 
    procedure Write
      (Stream : in out Params_Stream_Type;
-      Item   : in Ada.Streams.Stream_Element_Array)
+      Item   : Ada.Streams.Stream_Element_Array)
    is
    begin
-      Raise_Exception (Program_Error'Identity, Msg);
+      raise Program_Error with Msg;
    end Write;
 
    ------------
@@ -89,12 +75,12 @@ package body System.RPC is
    ------------
 
    procedure Do_RPC
-     (Partition : in Partition_ID;
+     (Partition : Partition_ID;
       Params    : access Params_Stream_Type;
       Result    : access Params_Stream_Type)
    is
    begin
-      Raise_Exception (Program_Error'Identity, Msg);
+      raise Program_Error with Msg;
    end Do_RPC;
 
    ------------
@@ -102,11 +88,11 @@ package body System.RPC is
    ------------
 
    procedure Do_APC
-     (Partition : in Partition_ID;
+     (Partition : Partition_ID;
       Params    : access Params_Stream_Type)
    is
    begin
-      Raise_Exception (Program_Error'Identity, Msg);
+      raise Program_Error with Msg;
    end Do_APC;
 
    ----------------------------
@@ -114,9 +100,10 @@ package body System.RPC is
    ----------------------------
 
    procedure Establish_RPC_Receiver
-     (Partition : in Partition_ID;
-      Receiver  : in RPC_Receiver)
+     (Partition : Partition_ID;
+      Receiver  : RPC_Receiver)
    is
+      pragma Unreferenced (Partition, Receiver);
    begin
       null;
    end Establish_RPC_Receiver;

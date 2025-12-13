@@ -6,18 +6,17 @@
 --                                                                          --
 --                                 B o d y                                  --
 --                                                                          --
---          Copyright (C) 1992-2003 Free Software Foundation, Inc.          --
+--          Copyright (C) 1992-2010, Free Software Foundation, Inc.         --
 --                                                                          --
 -- GNAT is free software;  you can  redistribute it  and/or modify it under --
 -- terms of the  GNU General Public License as published  by the Free Soft- --
--- ware  Foundation;  either version 2,  or (at your option) any later ver- --
+-- ware  Foundation;  either version 3,  or (at your option) any later ver- --
 -- sion.  GNAT is distributed in the hope that it will be useful, but WITH- --
 -- OUT ANY WARRANTY;  without even the  implied warranty of MERCHANTABILITY --
 -- or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU General Public License --
 -- for  more details.  You should have  received  a copy of the GNU General --
--- Public License  distributed with GNAT;  see file COPYING.  If not, write --
--- to  the Free Software Foundation,  59 Temple Place - Suite 330,  Boston, --
--- MA 02111-1307, USA.                                                      --
+-- Public License  distributed with GNAT; see file COPYING3.  If not, go to --
+-- http://www.gnu.org/licenses for a complete copy of the license.          --
 --                                                                          --
 -- GNAT was originally developed  by the GNAT team at  New York University. --
 -- Extensive contributions were provided by Ada Core Technologies Inc.      --
@@ -28,9 +27,7 @@ pragma Style_Checks (All_Checks);
 --  Turn off subprogram body ordering check. Subprograms are in order
 --  by RM section rather than alphabetical
 
-with Fname;    use Fname;
 with Fname.UF; use Fname.UF;
-with Hostparm; use Hostparm;
 with Uname;    use Uname;
 
 separate (Par)
@@ -50,7 +47,7 @@ package body Ch10 is
      (Cunit      : Node_Id;
       Loc        : Source_Ptr;
       SR_Present : Boolean);
-   --  This procedure is used to generate a line of output for the a unit in
+   --  This procedure is used to generate a line of output for a unit in
    --  the source program. Cunit is the node for the compilation unit, and
    --  Loc is the source location for the start of the unit in the source
    --  file (which is not necessarily the Sloc of the Cunit node). This
@@ -118,10 +115,10 @@ package body Ch10 is
       P                  : Node_Id;
       SR_Present         : Boolean;
 
-      Cunit_Error_Flag   : Boolean := False;
+      Cunit_Error_Flag : Boolean := False;
       --  This flag is set True if we have to scan for a compilation unit
       --  token. It is used to ensure clean termination in such cases by
-      --  not insisting on being at the end of file, and, in the sytax only
+      --  not insisting on being at the end of file, and, in the syntax only
       --  case by not scanning for additional compilation units.
 
       Cunit_Location : Source_Ptr;
@@ -143,8 +140,8 @@ package body Ch10 is
 
       Config_Pragmas := No_List;
 
-      --  If we have an initial Source_Reference pragma, then remember
-      --  the fact to generate an NR parameter in the output line.
+      --  If we have an initial Source_Reference pragma, then remember the fact
+      --  to generate an NR parameter in the output line.
 
       SR_Present := False;
 
@@ -153,7 +150,7 @@ package body Ch10 is
          Item := P_Pragma;
 
          if Item = Error
-           or else Chars (Item) /= Name_Source_Reference
+           or else Pragma_Name (Item) /= Name_Source_Reference
          then
             Restore_Scan_State (Scan_State);
 
@@ -183,7 +180,7 @@ package body Ch10 is
          Item := P_Pragma;
 
          if Item = Error
-           or else Chars (Item) > Last_Configuration_Pragma_Name
+           or else not Is_Configuration_Pragma_Name (Pragma_Name (Item))
          then
             Restore_Scan_State (Scan_State);
             exit;
@@ -224,9 +221,9 @@ package body Ch10 is
             else
                Item := First (Config_Pragmas);
                Error_Msg_N
-                 ("cannot compile configuration pragmas with gcc", Item);
+                 ("cannot compile configuration pragmas with gcc!", Item);
                Error_Msg_N
-                 ("use gnatchop -c to process configuration pragmas!", Item);
+                 ("\use gnatchop -c to process configuration pragmas!", Item);
                raise Unrecoverable_Error;
             end if;
 
@@ -246,7 +243,10 @@ package body Ch10 is
       if Token = Tok_Private then
          Private_Sloc := Token_Ptr;
          Set_Keyword_Casing (Current_Source_File, Determine_Token_Casing);
-         if Style_Check then Style.Check_Indentation; end if;
+
+         if Style_Check then
+            Style.Check_Indentation;
+         end if;
 
          Save_Scan_State (Scan_State); -- at PRIVATE
          Scan; -- past PRIVATE
@@ -302,7 +302,6 @@ package body Ch10 is
          else
             if Operating_Mode = Check_Syntax and then Token = Tok_EOF then
                Error_Msg_SC ("?file contains no compilation units");
-
             else
                Error_Msg_SC ("compilation unit expected");
                Cunit_Error_Flag := True;
@@ -323,7 +322,10 @@ package body Ch10 is
       --  it hasn't already been done on seeing a WITH or PRIVATE.
 
       Set_Keyword_Casing (Current_Source_File, Determine_Token_Casing);
-      if Style_Check then Style.Check_Indentation; end if;
+
+      if Style_Check then
+         Style.Check_Indentation;
+      end if;
 
       --  Remaining processing depends on particular type of compilation unit
 
@@ -331,28 +333,24 @@ package body Ch10 is
 
          --  A common error is to omit the body keyword after package. We can
          --  often diagnose this early on (before getting loads of errors from
-         --  contained subprogram bodies), by knowing that that the file we
+         --  contained subprogram bodies), by knowing that the file we
          --  are compiling has a name that requires a body to be found.
-
-         --  However, we do not do this check if we are operating in syntax
-         --  checking only mode, because in that case there may be multiple
-         --  units in the same file, and the file name is not a reliable guide.
 
          Save_Scan_State (Scan_State);
          Scan; -- past Package keyword
 
          if Token /= Tok_Body
-           and then Operating_Mode /= Check_Syntax
            and then
              Get_Expected_Unit_Type
                (File_Name (Current_Source_File)) = Expect_Body
          then
-            Error_Msg_BC ("keyword BODY expected here [see file name]");
+            Error_Msg_BC -- CODEFIX
+              ("keyword BODY expected here [see file name]");
             Restore_Scan_State (Scan_State);
-            Set_Unit (Comp_Unit_Node, P_Package (Pf_Pbod));
+            Set_Unit (Comp_Unit_Node, P_Package (Pf_Pbod_Pexp));
          else
             Restore_Scan_State (Scan_State);
-            Set_Unit (Comp_Unit_Node, P_Package (Pf_Decl_Gins_Pbod_Rnam));
+            Set_Unit (Comp_Unit_Node, P_Package (Pf_Decl_Gins_Pbod_Rnam_Pexp));
          end if;
 
       elsif Token = Tok_Generic then
@@ -361,10 +359,12 @@ package body Ch10 is
       elsif Token = Tok_Separate then
          Set_Unit (Comp_Unit_Node, P_Subunit);
 
-      elsif Token = Tok_Procedure
-        or else Token = Tok_Function
+      elsif Token = Tok_Function
+        or else Token = Tok_Not
+        or else Token = Tok_Overriding
+        or else Token = Tok_Procedure
       then
-         Set_Unit (Comp_Unit_Node, P_Subprogram (Pf_Decl_Gins_Pbod_Rnam));
+         Set_Unit (Comp_Unit_Node, P_Subprogram (Pf_Decl_Gins_Pbod_Rnam_Pexp));
 
          --  A little bit of an error recovery check here. If we just scanned
          --  a subprogram declaration (as indicated by an SIS entry being
@@ -396,7 +396,8 @@ package body Ch10 is
                --  Otherwise we saved the semicolon position, so complain
 
                else
-                  Error_Msg (""";"" should be IS", SIS_Semicolon_Sloc);
+                  Error_Msg -- CODEFIX
+                    (""";"" should be IS", SIS_Semicolon_Sloc);
                end if;
 
                Body_Node := Unit (Comp_Unit_Node);
@@ -411,9 +412,7 @@ package body Ch10 is
 
          elsif Private_Sloc /= No_Location
            and then
-             Nkind (Unit (Comp_Unit_Node)) /= N_Function_Instantiation
-           and then
-             Nkind (Unit (Comp_Unit_Node)) /= N_Procedure_Instantiation
+             Nkind (Unit (Comp_Unit_Node)) not in N_Subprogram_Instantiation
            and then
              Nkind (Unit (Comp_Unit_Node)) /= N_Subprogram_Renaming_Declaration
          then
@@ -521,7 +520,7 @@ package body Ch10 is
             Unit_Node := Specification (Unit_Node);
 
          elsif Nkind (Unit_Node) = N_Subprogram_Renaming_Declaration then
-            if Ada_83 then
+            if Ada_Version = Ada_83 then
                Error_Msg_N
                  ("(Ada 83) library unit renaming not allowed", Unit_Node);
             end if;
@@ -535,8 +534,25 @@ package body Ch10 is
            or else Nkind (Unit_Node) = N_Single_Protected_Declaration
          then
             Name_Node := Defining_Identifier (Unit_Node);
-         else
+
+         elsif Nkind (Unit_Node) = N_Function_Instantiation
+           or else Nkind (Unit_Node) = N_Function_Specification
+           or else Nkind (Unit_Node) = N_Generic_Function_Renaming_Declaration
+           or else Nkind (Unit_Node) = N_Generic_Package_Renaming_Declaration
+           or else Nkind (Unit_Node) = N_Generic_Procedure_Renaming_Declaration
+           or else Nkind (Unit_Node) = N_Package_Body
+           or else Nkind (Unit_Node) = N_Package_Instantiation
+           or else Nkind (Unit_Node) = N_Package_Renaming_Declaration
+           or else Nkind (Unit_Node) = N_Package_Specification
+           or else Nkind (Unit_Node) = N_Procedure_Instantiation
+           or else Nkind (Unit_Node) = N_Procedure_Specification
+         then
             Name_Node := Defining_Unit_Name (Unit_Node);
+
+         --  Anything else is a serious error, abandon scan
+
+         else
+            raise Error_Resync;
          end if;
 
          Set_Sloc (Comp_Unit_Node, Sloc (Name_Node));
@@ -575,19 +591,17 @@ package body Ch10 is
       while Token = Tok_Pragma loop
          Save_Scan_State (Scan_State);
 
-         --  If we are in syntax scan mode allowing multiple units, then
-         --  start the next unit if we encounter a configuration pragma,
-         --  or a source reference pragma. We take care not to actually
-         --  scan the pragma in this case since we don't want it to take
-         --  effect for the current unit.
+         --  If we are in syntax scan mode allowing multiple units, then start
+         --  the next unit if we encounter a configuration pragma, or a source
+         --  reference pragma. We take care not to actually scan the pragma in
+         --  this case (we don't want it to take effect for the current unit).
 
          if Operating_Mode = Check_Syntax then
             Scan;  -- past Pragma
 
             if Token = Tok_Identifier
               and then
-                (Token_Name in
-                         First_Pragma_Name .. Last_Configuration_Pragma_Name
+                (Is_Configuration_Pragma_Name (Token_Name)
                    or else Token_Name = Name_Source_Reference)
             then
                Restore_Scan_State (Scan_State); -- to Pragma
@@ -615,12 +629,11 @@ package body Ch10 is
 
       --  Ada 83 error checks
 
-      if Ada_83 then
+      if Ada_Version = Ada_83 then
 
          --  Check we did not with any child units
 
          Item := First (Context_Items (Comp_Unit_Node));
-
          while Present (Item) loop
             if Nkind (Item) = N_With_Clause
               and then Nkind (Name (Item)) /= N_Identifier
@@ -654,7 +667,7 @@ package body Ch10 is
       if Token /= Tok_EOF then
 
          --  If we already had to scan for a compilation unit, then don't
-         --  give any further error message, since it just sems to make
+         --  give any further error message, since it just seems to make
          --  things worse, and we already gave a serious error message.
 
          if Cunit_Error_Flag then
@@ -666,18 +679,39 @@ package body Ch10 is
          elsif Operating_Mode = Check_Syntax then
             return Comp_Unit_Node;
 
+         --  We also allow multiple units if we are in multiple unit mode
+
+         elsif Multiple_Unit_Index /= 0 then
+
+            --  Skip tokens to end of file, so that the -gnatl listing
+            --  will be complete in this situation, but no need to parse
+            --  the remaining units; no style checking either.
+
+            declare
+               Save_Style_Check : constant Boolean := Style_Check;
+
+            begin
+               Style_Check := False;
+
+               while Token /= Tok_EOF loop
+                  Scan;
+               end loop;
+
+               Style_Check := Save_Style_Check;
+            end;
+
+            return Comp_Unit_Node;
+
          --  Otherwise we have an error. We suppress the error message
          --  if we already had a fatal error, since this stops junk
          --  cascaded messages in some situations.
 
          else
             if not Fatal_Error (Current_Source_Unit) then
-
                if Token in Token_Class_Cunit then
                   Error_Msg_SC
                     ("end of file expected, " &
                      "file can have only one compilation unit");
-
                else
                   Error_Msg_SC ("end of file expected");
                end if;
@@ -707,7 +741,6 @@ package body Ch10 is
       when Error_Resync =>
          Set_Fatal_Error (Current_Source_Unit);
          return Error;
-
    end P_Compilation_Unit;
 
    --------------------------
@@ -749,16 +782,20 @@ package body Ch10 is
    --  CONTEXT_ITEM ::= WITH_CLAUSE | USE_CLAUSE | WITH_TYPE_CLAUSE
 
    --  WITH_CLAUSE ::=
-   --    with library_unit_NAME {,library_unit_NAME};
+   --  [LIMITED] [PRIVATE]  with library_unit_NAME {,library_unit_NAME};
+   --  Note: the two qualifiers are Ada 2005 extensions.
 
    --  WITH_TYPE_CLAUSE ::=
    --    with type type_NAME is access; | with type type_NAME is tagged;
+   --  Note: this form is obsolete (old GNAT extension).
 
    --  Error recovery: Cannot raise Error_Resync
 
    function P_Context_Clause return List_Id is
       Item_List   : List_Id;
       Has_Limited : Boolean := False;
+      Has_Private : Boolean := False;
+      Scan_State  : Saved_Scan_State;
       With_Node   : Node_Id;
       First_Flag  : Boolean;
 
@@ -774,7 +811,9 @@ package body Ch10 is
       --  Loop through context items
 
       loop
-         if Style_Check then Style.Check_Indentation; end if;
+         if Style_Check then
+            Style.Check_Indentation;
+         end if;
 
          --  Gather any pragmas appearing in the context clause
 
@@ -782,32 +821,54 @@ package body Ch10 is
 
          --  Processing for WITH clause
 
-         --  Ada0Y (AI-50217): First check for LIMITED WITH
+         --  Ada 2005 (AI-50217, AI-262): First check for LIMITED WITH,
+         --  PRIVATE WITH, or both.
 
          if Token = Tok_Limited then
             Has_Limited := True;
+            Has_Private := False;
             Scan; -- past LIMITED
 
             --  In the context, LIMITED can only appear in a with_clause
 
+            if Token = Tok_Private then
+               Has_Private := True;
+               Scan;  -- past PRIVATE
+            end if;
+
             if Token /= Tok_With then
-               Error_Msg_SC ("unexpected LIMITED ignored");
+               Error_Msg_SC -- CODEFIX
+                 ("unexpected LIMITED ignored");
             end if;
 
-            if not Extensions_Allowed then
-               Error_Msg_SP ("`LIMITED WITH` is an Ada0X extension");
-
-               if OpenVMS then
-                  Error_Msg_SP
-                    ("\unit must be compiled with " &
-                     "'/'E'X'T'E'N'S'I'O'N'S'_'A'L'L'O'W'E'D qualifier");
-               else
-                  Error_Msg_SP
-                    ("\unit must be compiled with -gnatX switch");
-               end if;
+            if Ada_Version < Ada_2005 then
+               Error_Msg_SP ("LIMITED WITH is an Ada 2005 extension");
+               Error_Msg_SP
+                 ("\unit must be compiled with -gnat05 switch");
             end if;
+
+         elsif Token = Tok_Private then
+            Has_Limited := False;
+            Has_Private := True;
+            Save_Scan_State (Scan_State);
+            Scan;  -- past PRIVATE
+
+            if Token /= Tok_With then
+
+               --  Keyword is beginning of private child unit
+
+               Restore_Scan_State (Scan_State); -- to PRIVATE
+               return Item_List;
+
+            elsif Ada_Version < Ada_2005 then
+               Error_Msg_SP ("`PRIVATE WITH` is an Ada 2005 extension");
+               Error_Msg_SP
+                 ("\unit must be compiled with -gnat05 switch");
+            end if;
+
          else
             Has_Limited := False;
+            Has_Private := False;
          end if;
 
          if Token = Tok_With then
@@ -815,30 +876,16 @@ package body Ch10 is
 
             if Token = Tok_Type then
 
-               --  WITH TYPE is an extension
+               --  WITH TYPE is an obsolete GNAT specific extension
 
-               if not Extensions_Allowed then
-                  Error_Msg_SP ("`WITH TYPE` is a non-standard extension");
-
-                  if OpenVMS then
-                     Error_Msg_SP
-                       ("\unit must be compiled with " &
-                        "'/'E'X'T'E'N'S'I'O'N'S'_'A'L'L'O'W'E'D qualifier");
-                  else
-                     Error_Msg_SP
-                       ("\unit must be compiled with -gnatX switch");
-                  end if;
-               end if;
+               Error_Msg_SP ("`WITH TYPE` is an obsolete 'G'N'A'T extension");
+               Error_Msg_SP ("\use Ada 2005 `LIMITED WITH` clause instead");
 
                Scan;  -- past TYPE
-               With_Node := New_Node (N_With_Type_Clause, Token_Ptr);
-               Append (With_Node, Item_List);
-               Set_Name (With_Node, P_Qualified_Simple_Name);
 
                T_Is;
 
                if Token = Tok_Tagged then
-                  Set_Tagged_Present (With_Node);
                   Scan;
 
                elsif Token = Tok_Access then
@@ -854,7 +901,7 @@ package body Ch10 is
                First_Flag := True;
 
                --  Loop through names in one with clause, generating a separate
-               --  N_With_Clause node for each nam encountered.
+               --  N_With_Clause node for each name encountered.
 
                loop
                   With_Node := New_Node (N_With_Clause, Token_Ptr);
@@ -866,11 +913,33 @@ package body Ch10 is
                   --  place where such an "error" should be caught.
 
                   Set_Name (With_Node, P_Qualified_Simple_Name);
+                  if Name (With_Node) = Error then
+                     Remove (With_Node);
+                  end if;
+
                   Set_First_Name (With_Node, First_Flag);
                   Set_Limited_Present (With_Node, Has_Limited);
+                  Set_Private_Present (With_Node, Has_Private);
                   First_Flag := False;
+
+                  --  All done if no comma
+
                   exit when Token /= Tok_Comma;
+
+                  --  If comma is followed by compilation unit token
+                  --  or by USE, or PRAGMA, then it should have been a
+                  --  semicolon after all
+
+                  Save_Scan_State (Scan_State);
                   Scan; -- past comma
+
+                  if Token in Token_Class_Cunit
+                    or else Token = Tok_Use
+                    or else Token = Tok_Pragma
+                  then
+                     Restore_Scan_State (Scan_State);
+                     exit;
+                  end if;
                end loop;
 
                Set_Last_Name (With_Node, True);
@@ -958,20 +1027,21 @@ package body Ch10 is
       Body_Node := Error; -- in case no good body found
       Scan; -- past SEPARATE;
 
-      T_Left_Paren;
+      U_Left_Paren;
       Set_Name (Subunit_Node, P_Qualified_Simple_Name);
-      T_Right_Paren;
+      U_Right_Paren;
 
-      if Token = Tok_Semicolon then
-         Error_Msg_SC ("unexpected semicolon ignored");
-         Scan;
-      end if;
+      Ignore (Tok_Semicolon);
 
-      if Token = Tok_Function or else Token = Tok_Procedure then
-         Body_Node := P_Subprogram (Pf_Pbod);
+      if Token = Tok_Function
+        or else Token = Tok_Not
+        or else Token = Tok_Overriding
+        or else Token = Tok_Procedure
+      then
+         Body_Node := P_Subprogram (Pf_Pbod_Pexp);
 
       elsif Token = Tok_Package then
-         Body_Node := P_Package (Pf_Pbod);
+         Body_Node := P_Package (Pf_Pbod_Pexp);
 
       elsif Token = Tok_Protected then
          Scan; -- past PROTECTED
@@ -1000,7 +1070,6 @@ package body Ch10 is
 
       Set_Proper_Body  (Subunit_Node, Body_Node);
       return Subunit_Node;
-
    end P_Subunit;
 
    ------------------
@@ -1041,6 +1110,8 @@ package body Ch10 is
          Loc := Prev_Token_Ptr;
          loop
             exit when Loc = Token_Ptr;
+
+            --  Should we worry about UTF_32 line terminators here
 
             if Source (Loc) in Line_Terminator then
                Skip_Line_Terminators (Loc, Physical);

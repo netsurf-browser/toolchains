@@ -1,17 +1,10 @@
-/* Check if casting 'self' or 'super' affects message lookup in the
-   correct way.  */
+/* Check if casting 'self' or 'super' affects message lookup in the correct way.  */
 /* Contributed by Ziemowit Laski <zlaski@apple.com>.  */
 /* { dg-do compile } */
 
+#include "../objc-obj-c++-shared/Object1.h"
+#include "../objc-obj-c++-shared/next-mapping.h"
 #include <stddef.h>
-#include <objc/objc.h>
-#include <objc/Object.h>
-
-#ifdef __NEXT_RUNTIME__
-#define OBJC_GETCLASS objc_getClass
-#else
-#define OBJC_GETCLASS objc_get_class
-#endif
 
 @protocol Func
 + (int) class_func0;
@@ -46,15 +39,14 @@
 + (int) class_func1
 {
    int i = (size_t)[self class_func0];       /* { dg-warning ".Derived. may not respond to .\\+class_func0." } */
-       /* { dg-warning "Messages without a matching method signature" "" { target *-*-* } 48 } */
-       /* { dg-warning "will be assumed to return .id. and accept" "" { target *-*-* } 48 } */
-       /* { dg-warning ".\.\.\.. as arguments" "" { target *-*-* } 48 } */
    return i + (size_t)[super class_func0];   /* { dg-warning ".Object. may not respond to .\\+class_func0." } */
 }
 + (int) class_func2
 {
-   int i = [(id <Func>)self class_func0];
-   return i + [(id <Func>)super class_func0];
+   int i = [(id <Func>)self class_func0];  /* { dg-warning ".\\-class_func0. not found in protocol" } */
+   i += [(id <Func>)super class_func0];    /* { dg-warning ".\\-class_func0. not found in protocol" } */
+   i += [(Class <Func>)self class_func0];
+   return i + [(Class <Func>)super class_func0];
 }
 + (int) class_func3
 {
@@ -71,11 +63,11 @@
 }
 + (int) class_func6
 {
-   return (size_t)[OBJC_GETCLASS("Object") class_func1];  /* { dg-warning ".Object. may not respond to .\\+class_func1." } */
+   return (size_t)[objc_get_class("Object") class_func1];  /* { dg-warning ".Object. may not respond to .\\+class_func1." } */
 }
 + (int) class_func7
 {
-   return [OBJC_GETCLASS("Derived") class_func1];
+   return [objc_get_class("Derived") class_func1];
 }
 - (int) instance_func1
 {
@@ -101,11 +93,11 @@
 }
 - (int) instance_func6
 {
-   return (size_t)[OBJC_GETCLASS("Object") class_func1]; /* { dg-warning ".Object. may not respond to .\\+class_func1." } */
+   return (size_t)[objc_get_class("Object") class_func1]; /* { dg-warning ".Object. may not respond to .\\+class_func1." } */
 }
 - (int) instance_func7
 {
-   return [OBJC_GETCLASS("Derived") class_func1];
+   return [objc_get_class("Derived") class_func1];
 }
 @end
 
@@ -120,16 +112,18 @@
 }
 + (int) categ_class_func2
 {
-   int i = [(id <Func>)self class_func0];
-   return i + [(id <Func>)super class_func0];
+   int i = [(id <Func>)self class_func0];  /* { dg-warning ".\\-class_func0. not found in protocol" } */
+   i += [(id <Func>)super class_func0];    /* { dg-warning ".\\-class_func0. not found in protocol" } */
+   i += [(Class <Func>)self class_func0];
+   return i + [(Class <Func>)super class_func0];
 }
 - (int) categ_instance_func1
 {
    int i = (size_t)[self instance_func0];    /* { dg-warning ".Derived. may not respond to .\\-instance_func0." } */
    i += [(Derived <Func> *)self categ_instance_func2];
    i += (size_t)[(Object <Func> *)self categ_instance_func2]; /* { dg-warning ".Object. may not respond to .\\-categ_instance_func2." } */
-   /* { dg-warning ".\\-categ_instance_func2. not implemented by protocol" "" { target *-*-* } 130 } */
-   i += (size_t)[(id <Func>)self categ_instance_func2];  /* { dg-warning ".\\-categ_instance_func2. not implemented by protocol" } */
+   /* { dg-warning ".\\-categ_instance_func2. not found in protocol" "" { target *-*-* } 124 } */
+   i += (size_t)[(id <Func>)self categ_instance_func2];  /* { dg-warning ".\\-categ_instance_func2. not found in protocol" } */
    i += [(id)self categ_instance_func2];
    return i + (size_t)[super instance_func0];   /* { dg-warning ".Object. may not respond to .\\-instance_func0." } */
 }
@@ -138,3 +132,7 @@
    return [(id <Func>)super instance_func0];
 }
 @end
+
+/* { dg-warning "Messages without a matching method signature" "" { target *-*-* } 0 } */
+/* { dg-warning "will be assumed to return .id. and accept" "" { target *-*-* } 0 } */
+/* { dg-warning ".\.\.\.. as arguments" "" { target *-*-* } 0 } */

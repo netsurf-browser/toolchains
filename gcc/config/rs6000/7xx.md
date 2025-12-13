@@ -1,11 +1,11 @@
 ;; Scheduling description for Motorola PowerPC 750 and PowerPC 7400 processors.
-;;   Copyright (C) 2003 Free Software Foundation, Inc.
+;;   Copyright (C) 2003, 2004, 2007, 2009 Free Software Foundation, Inc.
 ;;
 ;; This file is part of GCC.
 
 ;; GCC is free software; you can redistribute it and/or modify it
 ;; under the terms of the GNU General Public License as published
-;; by the Free Software Foundation; either version 2, or (at your
+;; by the Free Software Foundation; either version 3, or (at your
 ;; option) any later version.
 
 ;; GCC is distributed in the hope that it will be useful, but WITHOUT
@@ -14,9 +14,8 @@
 ;; License for more details.
 
 ;; You should have received a copy of the GNU General Public License
-;; along with GCC; see the file COPYING.  If not, write to the
-;; Free Software Foundation, 59 Temple Place - Suite 330, Boston,
-;; MA 02111-1307, USA.
+;; along with GCC; see the file COPYING3.  If not see
+;; <http://www.gnu.org/licenses/>.
 
 (define_automaton "ppc7xx,ppc7xxfp")
 (define_cpu_unit "iu1_7xx,iu2_7xx" "ppc7xx")
@@ -48,20 +47,37 @@
 
 (define_insn_reservation "ppc750-load" 2
   (and (eq_attr "type" "load,load_ext,load_ext_u,load_ext_ux,\
-		        load_ux,load_u,fpload,fpload_ux,fpload_u,vecload")
+		        load_ux,load_u,fpload,fpload_ux,fpload_u,\
+			vecload,load_l")
        (eq_attr "cpu" "ppc750,ppc7400"))
   "ppc750_du,lsu_7xx")
 
-(define_insn_reservation "ppc750-store" 1
+(define_insn_reservation "ppc750-store" 2
   (and (eq_attr "type" "store,store_ux,store_u,\
 		        fpstore,fpstore_ux,fpstore_u,vecstore")
        (eq_attr "cpu" "ppc750,ppc7400"))
   "ppc750_du,lsu_7xx")
 
-(define_insn_reservation "ppc750-integer" 1
-  (and (eq_attr "type" "integer,insert_word")
+(define_insn_reservation "ppc750-storec" 8
+  (and (eq_attr "type" "store_c")
        (eq_attr "cpu" "ppc750,ppc7400"))
-  "ppc750_du,(iu1_7xx|iu2_7xx)")
+  "ppc750_du,lsu_7xx")
+
+(define_insn_reservation "ppc750-integer" 1
+  (and (eq_attr "type" "integer,insert_word,insert_dword,shift,\
+                        trap,var_shift_rotate,cntlz,exts,isel")
+       (eq_attr "cpu" "ppc750,ppc7400"))
+  "ppc750_du,iu1_7xx|iu2_7xx")
+
+(define_insn_reservation "ppc750-two" 1
+  (and (eq_attr "type" "two")
+       (eq_attr "cpu" "ppc750,ppc7400"))
+  "ppc750_du,iu1_7xx|iu2_7xx,iu1_7xx|iu2_7xx")
+
+(define_insn_reservation "ppc750-three" 1
+  (and (eq_attr "type" "three")
+       (eq_attr "cpu" "ppc750,ppc7400"))
+  "ppc750_du,iu1_7xx|iu2_7xx,iu1_7xx|iu2_7xx,iu1_7xx|iu2_7xx")
 
 (define_insn_reservation "ppc750-imul" 4
   (and (eq_attr "type" "imul,imul_compare")
@@ -84,7 +100,8 @@
   "ppc750_du,iu1_7xx*19")
 
 (define_insn_reservation "ppc750-compare" 2
-  (and (eq_attr "type" "cmp,fast_compare,compare,delayed_compare")
+  (and (eq_attr "type" "cmp,fast_compare,compare,delayed_compare,\
+                        var_delayed_compare")
        (eq_attr "cpu" "ppc750,ppc7400"))
   "ppc750_du,(iu1_7xx|iu2_7xx)")
 
@@ -127,10 +144,10 @@
 (define_insn_reservation "ppc750-crlogical" 3
   (and (eq_attr "type" "cr_logical,delayed_cr")
        (eq_attr "cpu" "ppc750,ppc7400"))
-  "ppc750_du,sru_7xx*2")
+  "nothing,sru_7xx*2")
 
 (define_insn_reservation "ppc750-mtjmpr" 2
-  (and (eq_attr "type" "mtjmpr")
+  (and (eq_attr "type" "mtjmpr,isync,sync")
        (eq_attr "cpu" "ppc750,ppc7400"))
   "nothing,sru_7xx*2")
 
@@ -140,7 +157,7 @@
   "nothing,sru_7xx*2")
 
 (define_insn_reservation "ppc750-jmpreg" 1
-  (and (eq_attr "type" "jmpreg,branch")
+  (and (eq_attr "type" "jmpreg,branch,isync")
        (eq_attr "cpu" "ppc750,ppc7400"))
   "nothing,bpu_7xx")
 

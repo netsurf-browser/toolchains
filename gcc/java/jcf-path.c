@@ -1,12 +1,12 @@
 /* Handle CLASSPATH, -classpath, and path searching.
-   Copyright (C) 1998, 1999, 2000, 2001, 2002, 2003
-   Free Software Foundation, Inc.
+   Copyright (C) 1998, 1999, 2000, 2001, 2002, 2003, 2004, 2006,
+   2007, 2008, 2010 Free Software Foundation, Inc.
 
 This file is part of GCC.
 
 GCC is free software; you can redistribute it and/or modify
 it under the terms of the GNU General Public License as published by
-the Free Software Foundation; either version 2, or (at your option)
+the Free Software Foundation; either version 3, or (at your option)
 any later version.
 
 GCC is distributed in the hope that it will be useful,
@@ -15,9 +15,8 @@ MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
 GNU General Public License for more details.
 
 You should have received a copy of the GNU General Public License
-along with GCC; see the file COPYING.  If not, write to
-the Free Software Foundation, 59 Temple Place - Suite 330,
-Boston, MA 02111-1307, USA.  
+along with GCC; see the file COPYING3.  If not see
+<http://www.gnu.org/licenses/>.  
 
 Java and all Java-based marks are trademarks or registered trademarks
 of Sun Microsystems, Inc. in the United States and other countries.
@@ -28,7 +27,6 @@ The Free Software Foundation is independent of Sun Microsystems, Inc.  */
 #include "config.h"
 #include "system.h"
 #include "coretypes.h"
-#include "tm.h"
 
 #include <dirent.h>
 
@@ -132,7 +130,7 @@ add_entry (struct entry **entp, const char *filename, int is_system)
   int len;
   struct entry *n;
 
-  n = ALLOC (sizeof (struct entry));
+  n = XNEW (struct entry);
   n->flags = is_system ? FLAG_SYSTEM : 0;
   n->next = NULL;
 
@@ -155,7 +153,7 @@ add_entry (struct entry **entp, const char *filename, int is_system)
      work more easily.  Eww.  */
   if (! IS_DIR_SEPARATOR (filename[len - 1]))
     {
-      char *f2 = alloca (len + 2);
+      char *f2 = (char *) alloca (len + 2);
       strcpy (f2, filename);
       f2[len] = DIR_SEPARATOR;
       f2[len + 1] = '\0';
@@ -178,7 +176,7 @@ add_path (struct entry **entp, const char *cp, int is_system)
 
   if (cp)
     {
-      char *buf = alloca (strlen (cp) + 3);
+      char *buf = (char *) alloca (strlen (cp) + 3);
       startp = endp = cp;
       while (1)
 	{
@@ -214,7 +212,7 @@ void
 jcf_path_init (void)
 {
   char *cp;
-  char *try, sep[2];
+  char *attempt, sep[2];
   struct stat stat_b;
   int found = 0, len;
 
@@ -225,59 +223,59 @@ jcf_path_init (void)
   sep[0] = DIR_SEPARATOR;
   sep[1] = '\0';
 
-  GET_ENVIRONMENT (cp, "GCC_EXEC_PREFIX");
+  cp = getenv ("GCC_EXEC_PREFIX");
   if (cp)
     {
-      try = alloca (strlen (cp) + 50);
+      attempt = (char *) alloca (strlen (cp) + 50);
       /* The exec prefix can be something like
 	 /usr/local/bin/../lib/gcc-lib/.  We want to change this
 	 into a pointer to the share/java directory.  We support two
 	 configurations: one where prefix and exec-prefix are the
 	 same, and one where exec-prefix is `prefix/SOMETHING'.  */
-      strcpy (try, cp);
-      strcat (try, DIR_UP);
-      strcat (try, sep);
-      strcat (try, DIR_UP);
-      strcat (try, sep);
-      len = strlen (try);
+      strcpy (attempt, cp);
+      strcat (attempt, DIR_UP);
+      strcat (attempt, sep);
+      strcat (attempt, DIR_UP);
+      strcat (attempt, sep);
+      len = strlen (attempt);
 
-      strcpy (try + len, "share");
-      strcat (try, sep);
-      strcat (try, "java");
-      strcat (try, sep);
-      strcat (try, "libgcj-" DEFAULT_TARGET_VERSION ".jar");
-      if (! stat (try, &stat_b))
+      strcpy (attempt + len, "share");
+      strcat (attempt, sep);
+      strcat (attempt, "java");
+      strcat (attempt, sep);
+      strcat (attempt, "libgcj-" DEFAULT_TARGET_VERSION ".jar");
+      if (! stat (attempt, &stat_b))
 	{
-	  add_entry (&sys_dirs, try, 1);
+	  add_entry (&sys_dirs, attempt, 1);
 	  found = 1;
-	  strcpy (&try[strlen (try)
-		      - strlen ("libgcj-" DEFAULT_TARGET_VERSION ".jar")],
+	  strcpy (&attempt[strlen (attempt)
+			   - strlen ("libgcj-" DEFAULT_TARGET_VERSION ".jar")],
 		  sep);
-	  strcat (try, "ext");
-	  strcat (try, sep);
-	  if (! stat (try, &stat_b))
-	    jcf_path_extdirs_arg (try);
+	  strcat (attempt, "ext");
+	  strcat (attempt, sep);
+	  if (! stat (attempt, &stat_b))
+	    jcf_path_extdirs_arg (attempt);
 	}
       else
 	{
-	  strcpy (try + len, DIR_UP);
-	  strcat (try, sep);
-	  strcat (try, "share");
-	  strcat (try, sep);
-	  strcat (try, "java");
-	  strcat (try, sep);
-	  strcat (try, "libgcj-" DEFAULT_TARGET_VERSION ".jar");
-	  if (! stat (try, &stat_b))
+	  strcpy (attempt + len, DIR_UP);
+	  strcat (attempt, sep);
+	  strcat (attempt, "share");
+	  strcat (attempt, sep);
+	  strcat (attempt, "java");
+	  strcat (attempt, sep);
+	  strcat (attempt, "libgcj-" DEFAULT_TARGET_VERSION ".jar");
+	  if (! stat (attempt, &stat_b))
 	    {
-	      add_entry (&sys_dirs, try, 1);
+	      add_entry (&sys_dirs, attempt, 1);
 	      found = 1;
-	      strcpy (&try[strlen (try)
-			  - strlen ("libgcj-" DEFAULT_TARGET_VERSION ".jar")],
+	      strcpy (&attempt[strlen (attempt)
+			       - strlen ("libgcj-" DEFAULT_TARGET_VERSION ".jar")],
 		      sep);
-	      strcat (try, "ext");
-	      strcat (try, sep);
-	      if (! stat (try, &stat_b))
-		jcf_path_extdirs_arg (try);
+	      strcat (attempt, "ext");
+	      strcat (attempt, sep);
+	      if (! stat (attempt, &stat_b))
+		jcf_path_extdirs_arg (attempt);
 	    }
 	}
     }
@@ -286,7 +284,7 @@ jcf_path_init (void)
       /* Desperation: use the installed one.  */
       char *extdirs;
       add_entry (&sys_dirs, LIBGCJ_ZIP_FILE, 1);
-      extdirs = alloca (strlen (LIBGCJ_ZIP_FILE) + 1);
+      extdirs = (char *) alloca (strlen (LIBGCJ_ZIP_FILE) + 1);
       strcpy (extdirs, LIBGCJ_ZIP_FILE);
       strcpy (&extdirs[strlen (LIBGCJ_ZIP_FILE)
 		      - strlen ("libgcj-" DEFAULT_TARGET_VERSION ".jar")],
@@ -296,7 +294,7 @@ jcf_path_init (void)
 	jcf_path_extdirs_arg (extdirs);
     }
 
-  GET_ENVIRONMENT (cp, "CLASSPATH");
+  cp = getenv ("CLASSPATH");
   add_path (&classpath_env, cp, 0);
 }
 
@@ -330,7 +328,7 @@ jcf_path_extdirs_arg (const char *cp)
 
   if (cp)
     {
-      char *buf = alloca (strlen (cp) + 3);
+      char *buf = (char *) alloca (strlen (cp) + 3);
       startp = endp = cp;
       while (1)
 	{
@@ -359,7 +357,7 @@ jcf_path_extdirs_arg (const char *cp)
 		    
 		    if (direntp->d_name[0] != '.')
 		      {
-			char *name = alloca (dirname_length
+			char *name = (char *) alloca (dirname_length
 					     + strlen (direntp->d_name) + 2);
 			strcpy (name, buf);
 			if (! IS_DIR_SEPARATOR (name[dirname_length-1]))
@@ -371,6 +369,8 @@ jcf_path_extdirs_arg (const char *cp)
 			add_entry (&extensions, name, 0);
 		      }
 		  }
+		if (dirp)
+		  closedir (dirp);
 	      }
 
 	      if (! *endp)
@@ -453,6 +453,38 @@ jcf_path_next (void *x)
 {
   struct entry *ent = (struct entry *) x;
   return (void *) ent->next;
+}
+
+static const char
+PATH_SEPARATOR_STR[] = {PATH_SEPARATOR, '\0'};
+
+char *
+jcf_path_compute (const char *prefix)
+{
+  struct entry *iter;
+  char *result;
+  int length = strlen (prefix) + 1;
+  int first;
+
+  for (iter = sealed; iter != NULL; iter = iter->next)
+    length += strlen (iter->name) + 1;
+
+  result = (char *) xmalloc (length);
+  strcpy (result, prefix);
+  first = 1;
+  for (iter = sealed; iter != NULL; iter = iter->next)
+    {
+      if (! first)
+	strcat (result, PATH_SEPARATOR_STR);
+      first = 0;
+      strcat (result, iter->name);
+      /* Ugly: we want to strip the '/' from zip entries when
+	 computing a string classpath.  */
+      if ((iter->flags & FLAG_ZIP) != 0)
+	result[strlen (result) - 1] = '\0';
+    }
+
+  return result;
 }
 
 /* We guarantee that the return path will either be a zip file, or it

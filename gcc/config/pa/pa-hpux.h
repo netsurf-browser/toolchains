@@ -1,11 +1,12 @@
 /* Definitions of target machine for GNU compiler, for HP-UX.
-   Copyright (C) 1991, 1995, 1996, 2002, 2003 Free Software Foundation, Inc.
+   Copyright (C) 1991, 1995, 1996, 2002, 2003, 2004, 2007, 2008, 2009, 2010
+   Free Software Foundation, Inc.
 
 This file is part of GCC.
 
 GCC is free software; you can redistribute it and/or modify
 it under the terms of the GNU General Public License as published by
-the Free Software Foundation; either version 2, or (at your option)
+the Free Software Foundation; either version 3, or (at your option)
 any later version.
 
 GCC is distributed in the hope that it will be useful,
@@ -14,12 +15,18 @@ MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
 GNU General Public License for more details.
 
 You should have received a copy of the GNU General Public License
-along with GCC; see the file COPYING.  If not, write to
-the Free Software Foundation, 59 Temple Place - Suite 330,
-Boston, MA 02111-1307, USA.  */
+along with GCC; see the file COPYING3.  If not see
+<http://www.gnu.org/licenses/>.  */
+
+/* HP-UX UNIX features.  */
+#undef TARGET_HPUX
+#define TARGET_HPUX 1
+
+#undef HPUX_LONG_DOUBLE_LIBRARY
+#define HPUX_LONG_DOUBLE_LIBRARY 1
 
 #undef TARGET_DEFAULT
-#define TARGET_DEFAULT 0
+#define TARGET_DEFAULT MASK_BIG_SWITCH
 
 /* Make GCC agree with types.h.  */
 #undef SIZE_TYPE
@@ -29,7 +36,6 @@ Boston, MA 02111-1307, USA.  */
 #define PTRDIFF_TYPE "int"
 
 #define LONG_DOUBLE_TYPE_SIZE 128
-#define HPUX_LONG_DOUBLE_LIBRARY
 #define FLOAT_LIB_COMPARE_RETURNS_BOOL(MODE, COMPARISON) ((MODE) == TFmode)
 
 /* GCC always defines __STDC__.  HP C++ compilers don't define it.  This
@@ -52,11 +58,11 @@ Boston, MA 02111-1307, USA.  */
 	builtin_define ("__hpux__");				\
 	builtin_define ("__unix");				\
 	builtin_define ("__unix__");				\
+	builtin_define ("__STDC_EXT__");			\
 	if (c_dialect_cxx ())					\
 	  {							\
 	    builtin_define ("_HPUX_SOURCE");			\
 	    builtin_define ("_INCLUDE_LONGLONG");		\
-	    builtin_define ("__STDC_EXT__");			\
 	  }							\
 	else if (!flag_iso)					\
 	  {							\
@@ -72,8 +78,6 @@ Boston, MA 02111-1307, USA.  */
 		builtin_define ("_PWB");			\
 		builtin_define ("PWB");				\
 	      }							\
-	    else						\
-	      builtin_define ("__STDC_EXT__");			\
 	  }							\
 	if (TARGET_SIO)						\
 	  builtin_define ("_SIO");				\
@@ -86,11 +90,6 @@ Boston, MA 02111-1307, USA.  */
     }								\
   while (0)
 
-#undef SUBTARGET_SWITCHES
-#define SUBTARGET_SWITCHES \
-  { "sio",	 MASK_SIO,	N_("Generate cpp defines for server IO") }, \
-  { "wsio",	-MASK_SIO,	N_("Generate cpp defines for workstation IO") },
-
 /* Like the default, except no -lg.  */
 #undef LIB_SPEC
 #define LIB_SPEC "%{!shared:%{!p:%{!pg:-lc}}%{p: -L/lib/libp/ -lc}%{pg: -L/lib/libp/ -lc}}"
@@ -98,7 +97,7 @@ Boston, MA 02111-1307, USA.  */
 #undef LINK_SPEC
 #if ((TARGET_DEFAULT | TARGET_CPU_DEFAULT) & MASK_PA_11)
 #define LINK_SPEC \
-  "%{!mpa-risc-1-0:%{!shared:-L/lib/pa1.1 -L/usr/lib/pa1.1 }}%{mlinker-opt:-O} %{!shared:-u main} %{static:-a archive} %{g*:-a archive} %{shared:-b}"
+  "%{!mpa-risc-1-0:%{!march=1.0:%{static:-L/lib/pa1.1 -L/usr/lib/pa1.1 }}}%{mlinker-opt:-O} %{!shared:-u main} %{static:-a archive} %{g*:-a archive} %{shared:-b}"
 #else
 #define LINK_SPEC \
   "%{mlinker-opt:-O} %{!shared:-u main} %{static:-a archive} %{g*:-a archive} %{shared:-b}"
@@ -116,3 +115,5 @@ Boston, MA 02111-1307, USA.  */
    compatibility with the HP-UX unwind library.  */
 #undef TARGET_HPUX_UNWIND_LIBRARY
 #define TARGET_HPUX_UNWIND_LIBRARY 1
+
+#define MD_UNWIND_SUPPORT "config/pa/hpux-unwind.h"

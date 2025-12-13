@@ -7,8 +7,7 @@
 /* { dg-options "-fprofile-arcs" } */
 /* { dg-do run { target native } } */
 
-int rand (void);
-void srand (unsigned int seed);
+#include <stdlib.h>
 
 int globvar;
 
@@ -35,3 +34,5 @@ main ()
 {
   doit ();
 }
+
+/* { dg-final { cleanup-coverage-files } } */

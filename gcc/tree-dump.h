@@ -1,12 +1,13 @@
 /* Tree-dumping functionality for intermediate representation.
-   Copyright (C) 1999, 2000, 2003 Free Software Foundation, Inc.
+   Copyright (C) 1999, 2000, 2003, 2004, 2005, 2007, 2008, 2009, 2010
+   Free Software Foundation, Inc.
    Written by Mark Mitchell <mark@codesourcery.com>
 
 This file is part of GCC.
 
 GCC is free software; you can redistribute it and/or modify it under
 the terms of the GNU General Public License as published by the Free
-Software Foundation; either version 2, or (at your option) any later
+Software Foundation; either version 3, or (at your option) any later
 version.
 
 GCC is distributed in the hope that it will be useful, but WITHOUT ANY
@@ -15,12 +16,16 @@ FITNESS FOR A PARTICULAR PURPOSE.  See the GNU General Public License
 for more details.
 
 You should have received a copy of the GNU General Public License
-along with GCC; see the file COPYING.  If not, write to the Free
-Software Foundation, 59 Temple Place - Suite 330, Boston, MA
-02111-1307, USA.  */
+along with GCC; see the file COPYING3.  If not see
+<http://www.gnu.org/licenses/>.  */
 
 #ifndef GCC_TREE_DUMP_H
 #define GCC_TREE_DUMP_H
+
+#include "splay-tree.h"
+#include "tree-pass.h"
+
+typedef struct dump_info *dump_info_p;
 
 /* Flags used with queue functions.  */
 #define DUMP_NONE     0
@@ -54,7 +59,7 @@ struct dump_info
   /* The stream on which to dump the information.  */
   FILE *stream;
   /* The original node.  */
-  tree node;
+  const_tree node;
   /* User flags.  */
   int flags;
   /* The next unused node index.  */
@@ -80,9 +85,18 @@ struct dump_info
 extern void dump_pointer (dump_info_p, const char *, void *);
 extern void dump_int (dump_info_p, const char *, int);
 extern void dump_string (dump_info_p, const char *);
-extern void dump_stmt (dump_info_p, tree);
-extern void dump_next_stmt (dump_info_p, tree);
-extern void queue_and_dump_index (dump_info_p, const char *, tree, int);
-extern void queue_and_dump_type (dump_info_p, tree);
+extern void dump_string_field (dump_info_p, const char *, const char *);
+extern void dump_stmt (dump_info_p, const_tree);
+extern void queue_and_dump_index (dump_info_p, const char *, const_tree, int);
+extern void queue_and_dump_type (dump_info_p, const_tree);
+extern void dump_function (int, tree);
+extern void dump_function_to_file (tree, FILE *, int);
+extern void dump_enumerated_decls (FILE *, int);
+extern void debug_function (tree, int);
+extern int dump_flag (dump_info_p, int, const_tree);
+
+extern unsigned int dump_register (const char *, const char *, const char *,
+				   int);
+
 
 #endif /* ! GCC_TREE_DUMP_H */

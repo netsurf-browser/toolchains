@@ -1,11 +1,11 @@
-// filebuf with __enc_traits state type -*- C++ -*-
+// filebuf with encoding state type -*- C++ -*-
 
-// Copyright (C) 2002, 2003 Free Software Foundation, Inc.
+// Copyright (C) 2002, 2003, 2004, 2007, 2009 Free Software Foundation, Inc.
 //
 // This file is part of the GNU ISO C++ Library.  This library is free
 // software; you can redistribute it and/or modify it under the
 // terms of the GNU General Public License as published by the
-// Free Software Foundation; either version 2, or (at your option)
+// Free Software Foundation; either version 3, or (at your option)
 // any later version.
 
 // This library is distributed in the hope that it will be useful,
@@ -13,50 +13,43 @@
 // MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
 // GNU General Public License for more details.
 
-// You should have received a copy of the GNU General Public License along
-// with this library; see the file COPYING.  If not, write to the Free
-// Software Foundation, 59 Temple Place - Suite 330, Boston, MA 02111-1307,
-// USA.
+// Under Section 7 of GPL version 3, you are granted additional
+// permissions described in the GCC Runtime Library Exception, version
+// 3.1, as published by the Free Software Foundation.
 
-// As a special exception, you may use this file as part of a free software
-// library without restriction.  Specifically, if other files instantiate
-// templates or use macros or inline functions from this file, or you compile
-// this file and link it with other files to produce an executable, this
-// file does not by itself cause the resulting executable to be covered by
-// the GNU General Public License.  This exception does not however
-// invalidate any other reasons why the executable file might be covered by
-// the GNU General Public License.
+// You should have received a copy of the GNU General Public License and
+// a copy of the GCC Runtime Library Exception along with this program;
+// see the files COPYING3 and COPYING.RUNTIME respectively.  If not, see
+// <http://www.gnu.org/licenses/>.
+
+/** @file ext/enc_filebuf.h
+ *  This file is a GNU extension to the Standard C++ Library.
+ */
+
+#ifndef _EXT_ENC_FILEBUF_H
+#define _EXT_ENC_FILEBUF_H 1
 
 #include <fstream>
 #include <locale>
+#include <ext/codecvt_specializations.h>
 
-namespace __gnu_cxx
+namespace __gnu_cxx _GLIBCXX_VISIBILITY(default)
 {
-  // Custom traits type with __enc_traits for the state type, and the
-  // associated fpos<__enc_traits> for the position type, all other
-  // bits equivalent to the required char_traits instantiations.
-  template<typename _CharT>
-    struct enc_char_traits: public std::char_traits<_CharT>
-    {
-      typedef std::__enc_traits			state_type;
-      typedef typename std::fpos<state_type>	pos_type;
-    };
+_GLIBCXX_BEGIN_NAMESPACE_VERSION
 
+  /// class enc_filebuf.
   template<typename _CharT>
     class enc_filebuf
-    : public std::basic_filebuf<_CharT, enc_char_traits<_CharT> >
+    : public std::basic_filebuf<_CharT, encoding_char_traits<_CharT> >
     {
     public:
-      typedef enc_char_traits<_CharT>		traits_type;
+      typedef encoding_char_traits<_CharT>     	traits_type;
       typedef typename traits_type::state_type	state_type;
       typedef typename traits_type::pos_type	pos_type;
 
       enc_filebuf(state_type& __state)
-      : std::basic_filebuf<_CharT, enc_char_traits<_CharT> >()
-      {
-	this->_M_state_beg = __state;
-	this->_M_state_beg._M_init();
-      }
+      : std::basic_filebuf<_CharT, encoding_char_traits<_CharT> >()
+      { this->_M_state_beg = __state; }
 
     private:
       // concept requirements:
@@ -65,4 +58,8 @@ namespace __gnu_cxx
       // require default and copy constructible + assignment operator.
       __glibcxx_class_requires(state_type, _SGIAssignableConcept)
     };
-} // namespace __gnu_cxx
+
+_GLIBCXX_END_NAMESPACE_VERSION
+} // namespace
+
+#endif

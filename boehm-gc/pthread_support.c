@@ -2,7 +2,7 @@
  * Copyright (c) 1994 by Xerox Corporation.  All rights reserved.
  * Copyright (c) 1996 by Silicon Graphics.  All rights reserved.
  * Copyright (c) 1998 by Fergus Henderson.  All rights reserved.
- * Copyright (c) 2000-2001 by Hewlett-Packard Company.  All rights reserved.
+ * Copyright (c) 2000-2004 by Hewlett-Packard Company.  All rights reserved.
  *
  * THIS MATERIAL IS PROVIDED AS IS, WITH ABSOLUTELY NO WARRANTY EXPRESSED
  * OR IMPLIED.  ANY USE IS AT YOUR OWN RISK.
@@ -47,19 +47,36 @@
 /*#define DEBUG_THREADS 1*/
 /*#define GC_ASSERTIONS*/
 
+#include "gc_config.h"
+
+#ifdef GC_PTHREAD_SYM_VERSION
+#define _GNU_SOURCE
+#include <dlfcn.h>
+#endif
+
+# include "gc.h"
 # include "private/pthread_support.h"
 
 # if defined(GC_PTHREADS) && !defined(GC_SOLARIS_THREADS) \
-     && !defined(GC_IRIX_THREADS) && !defined(GC_WIN32_THREADS) \
-     && !defined(GC_AIX_THREADS)
+     && !defined(GC_WIN32_THREADS)
 
 # if defined(GC_HPUX_THREADS) && !defined(USE_PTHREAD_SPECIFIC) \
-     && !defined(USE_HPUX_TLS)
-#   define USE_HPUX_TLS
+     && !defined(USE_COMPILER_TLS)
+#   ifdef __GNUC__
+#     define USE_PTHREAD_SPECIFIC
+      /* Empirically, as of gcc 3.3, USE_COMPILER_TLS doesn't work.	*/
+#   else
+#     define USE_COMPILER_TLS
+#   endif
+# endif
+
+# if defined USE_HPUX_TLS
+    --> Macro replaced by USE_COMPILER_TLS
 # endif
 
 # if (defined(GC_DGUX386_THREADS) || defined(GC_OSF1_THREADS) || \
-      defined(GC_DARWIN_THREADS)) && !defined(USE_PTHREAD_SPECIFIC)
+      defined(GC_DARWIN_THREADS) || defined(GC_AIX_THREADS)) \
+      && !defined(USE_PTHREAD_SPECIFIC)
 #   define USE_PTHREAD_SPECIFIC
 # endif
 
@@ -72,7 +89,7 @@
 # endif
 
 # ifdef THREAD_LOCAL_ALLOC
-#   if !defined(USE_PTHREAD_SPECIFIC) && !defined(USE_HPUX_TLS)
+#   if !defined(USE_PTHREAD_SPECIFIC) && !defined(USE_COMPILER_TLS)
 #     include "private/specific.h"
 #   endif
 #   if defined(USE_PTHREAD_SPECIFIC)
@@ -81,7 +98,7 @@
 #     define GC_key_create pthread_key_create
       typedef pthread_key_t GC_key_t;
 #   endif
-#   if defined(USE_HPUX_TLS)
+#   if defined(USE_COMPILER_TLS)
 #     define GC_getspecific(x) (x)
 #     define GC_setspecific(key, v) ((key) = (v), 0)
 #     define GC_key_create(key, d) 0
@@ -99,6 +116,7 @@
 # include <sys/types.h>
 # include <sys/stat.h>
 # include <fcntl.h>
+# include <signal.h>
 
 #if defined(GC_DARWIN_THREADS)
 # include "private/darwin_semaphore.h"
@@ -106,7 +124,7 @@
 # include <semaphore.h>
 #endif /* !GC_DARWIN_THREADS */
 
-#if defined(GC_DARWIN_THREADS)
+#if defined(GC_DARWIN_THREADS) || defined(GC_FREEBSD_THREADS)
 # include <sys/sysctl.h>
 #endif /* GC_DARWIN_THREADS */
 
@@ -158,7 +176,7 @@ void GC_init_parallel();
 
 /* We don't really support thread-local allocation with DBG_HDRS_ALL */
 
-#ifdef USE_HPUX_TLS
+#ifdef USE_COMPILER_TLS
   __thread
 #endif
 GC_key_t GC_thread_key;
@@ -500,19 +518,6 @@ static __inline__ void start_mark_threads()
 
 #endif /* !PARALLEL_MARK */
 
-/* Defining INSTALL_LOOPING_SEGV_HANDLER causes SIGSEGV and SIGBUS to 	*/
-/* result in an infinite loop in a signal handler.  This can be very	*/
-/* useful for debugging, since (as of RH7) gdb still seems to have	*/
-/* serious problems with threads.					*/
-#ifdef INSTALL_LOOPING_SEGV_HANDLER
-void GC_looping_handler(int sig)
-{
-    GC_printf3("Signal %ld in thread %lx, pid %ld\n",
-	       sig, pthread_self(), getpid());
-    for (;;);
-}
-#endif
-
 GC_bool GC_thr_initialized = FALSE;
 
 volatile GC_thread GC_threads[THREAD_TABLE_SZ];
@@ -597,7 +602,9 @@ void GC_delete_thread(pthread_t id)
     } else {
         prev -> next = p -> next;
     }
-    GC_INTERNAL_FREE(p);
+
+    if (p != &first_thread)
+      GC_INTERNAL_FREE(p);
 }
 
 /* If a thread has been joined, but we have not yet		*/
@@ -622,7 +629,7 @@ void GC_delete_gc_thread(pthread_t id, GC_thread gc_id)
     GC_INTERNAL_FREE(p);
 }
 
-/* Return a GC_thread corresponding to a given thread_t.	*/
+/* Return a GC_thread corresponding to a given pthread_t.	*/
 /* Returns 0 if it's not there.					*/
 /* Caller holds  allocation lock or otherwise inhibits 		*/
 /* updates.							*/
@@ -747,7 +754,9 @@ void GC_wait_for_gc_completion(GC_bool wait_for_all)
 	while (GC_incremental && GC_collection_in_progress()
 	       && (wait_for_all || old_gc_no == GC_gc_no)) {
 	    ENTER_GC();
+	    GC_in_thread_creation = TRUE;
             GC_collect_a_little_inner(1);
+	    GC_in_thread_creation = FALSE;
 	    EXIT_GC();
 	    UNLOCK();
 	    sched_yield();
@@ -840,9 +849,9 @@ int GC_get_nprocs()
 /* We hold the allocation lock.	*/
 void GC_thr_init()
 {
-#	ifndef GC_DARWIN_THREADS
-        int dummy;
-#	endif
+#   ifndef GC_DARWIN_THREADS
+      int dummy;
+#   endif
     GC_thread t;
 
     if (GC_thr_initialized) return;
@@ -874,14 +883,16 @@ void GC_thr_init()
 #       if defined(GC_HPUX_THREADS)
 	  GC_nprocs = pthread_num_processors_np();
 #       endif
-#	if defined(GC_OSF1_THREADS)
+#	if defined(GC_OSF1_THREADS) || defined(GC_AIX_THREADS) \
+	   || defined(GC_SOLARIS_PTHREADS)
 	  GC_nprocs = sysconf(_SC_NPROCESSORS_ONLN);
 	  if (GC_nprocs <= 0) GC_nprocs = 1;
 #	endif
-#       if defined(GC_FREEBSD_THREADS)
-          GC_nprocs = 1;
+#       if defined(GC_IRIX_THREADS)
+	  GC_nprocs = sysconf(_SC_NPROC_ONLN);
+	  if (GC_nprocs <= 0) GC_nprocs = 1;
 #       endif
-#       if defined(GC_DARWIN_THREADS)
+#       if defined(GC_DARWIN_THREADS) || defined(GC_FREEBSD_THREADS)
 	  int ncpus = 1;
 	  size_t len = sizeof(ncpus);
 	  sysctl((int[2]) {CTL_HW, HW_NCPU}, 2, &ncpus, &len, NULL, 0);
@@ -928,6 +939,8 @@ void GC_thr_init()
 	/* Disable true incremental collection, but generational is OK.	*/
 	GC_time_limit = GC_TIME_UNLIMITED;
       }
+      /* If we are using a parallel marker, actually start helper threads.  */
+        if (GC_parallel) start_mark_threads();
 #   endif
 }
 
@@ -944,10 +957,6 @@ void GC_init_parallel()
 
     /* GC_init() calls us back, so set flag first.	*/
     if (!GC_is_initialized) GC_init();
-    /* If we are using a parallel marker, start the helper threads.  */
-#     ifdef PARALLEL_MARK
-        if (GC_parallel) start_mark_threads();
-#     endif
     /* Initialize thread local free lists if used.	*/
 #   if defined(THREAD_LOCAL_ALLOC) && !defined(DBG_HDRS_ALL)
       LOCK();
@@ -1055,9 +1064,10 @@ void GC_thread_exit_proc(void *arg)
 	me -> flags |= FINISHED;
     }
 #   if defined(THREAD_LOCAL_ALLOC) && !defined(USE_PTHREAD_SPECIFIC) \
-       && !defined(USE_HPUX_TLS) && !defined(DBG_HDRS_ALL)
+       && !defined(USE_COMPILER_TLS) && !defined(DBG_HDRS_ALL)
       GC_remove_specific(GC_thread_key);
 #   endif
+    /* The following may run the GC from "nonexistent" thread.	*/
     GC_wait_for_gc_completion(FALSE);
     UNLOCK();
 }
@@ -1115,6 +1125,115 @@ WRAP_FUNC(pthread_detach)(pthread_t thread)
     return result;
 }
 
+GC_bool GC_in_thread_creation = FALSE;
+
+GC_PTR GC_get_thread_stack_base()
+{  
+# ifdef HAVE_PTHREAD_GETATTR_NP
+  pthread_t my_pthread;
+  pthread_attr_t attr;
+  ptr_t stack_addr;
+  size_t stack_size;
+  
+  my_pthread = pthread_self();  
+  if (pthread_getattr_np (my_pthread, &attr) != 0)
+    {
+#   ifdef DEBUG_THREADS
+      GC_printf0("Can not determine stack base for attached thread");
+#   endif
+      return 0;
+    }
+  pthread_attr_getstack (&attr, (void **) &stack_addr, &stack_size);
+  pthread_attr_destroy (&attr);
+  
+#   ifdef DEBUG_THREADS
+	GC_printf1("attached thread stack address: 0x%x\n", stack_addr);
+#   endif
+
+#   ifdef STACK_GROWS_DOWN
+      return stack_addr + stack_size;
+#   else
+      return stack_addr;
+#   endif
+
+# else
+#   ifdef DEBUG_THREADS
+	GC_printf0("Can not determine stack base for attached thread");
+#   endif
+  return 0;
+# endif
+}
+
+void GC_register_my_thread()
+{
+  GC_thread me;
+  pthread_t my_pthread;
+
+  my_pthread = pthread_self();
+#   ifdef DEBUG_THREADS
+      GC_printf1("Attaching thread 0x%lx\n", my_pthread);
+      GC_printf1("pid = %ld\n", (long) getpid());
+#   endif
+  
+  /* Check to ensure this thread isn't attached already. */
+  LOCK();
+  me = GC_lookup_thread (my_pthread);
+  UNLOCK();
+  if (me != 0)
+    {
+#   ifdef DEBUG_THREADS
+      GC_printf1("Attempt to re-attach known thread 0x%lx\n", my_pthread);
+#   endif
+      return;
+    }
+
+  LOCK();
+  GC_in_thread_creation = TRUE;
+  me = GC_new_thread(my_pthread);
+  GC_in_thread_creation = FALSE;
+
+  me -> flags |= DETACHED;  
+
+#ifdef GC_DARWIN_THREADS
+    me -> stop_info.mach_thread = mach_thread_self();
+#else
+    me -> stack_end = GC_get_thread_stack_base();    
+    if (me -> stack_end == 0)
+      GC_abort("Can not determine stack base for attached thread");
+    
+#   ifdef STACK_GROWS_DOWN
+      me -> stop_info.stack_ptr = me -> stack_end - 0x10;
+#   else
+      me -> stop_info.stack_ptr = me -> stack_end + 0x10;
+#   endif
+#endif
+
+#   ifdef IA64
+      me -> backing_store_end = (ptr_t)
+			(GC_save_regs_in_stack() & ~(GC_page_size - 1));
+      /* This is also < 100% convincing.  We should also read this 	*/
+      /* from /proc, but the hook to do so isn't there yet.		*/
+#   endif /* IA64 */
+
+#   if defined(THREAD_LOCAL_ALLOC) && !defined(DBG_HDRS_ALL)
+        GC_init_thread_local(me);
+#   endif
+  UNLOCK();
+}
+
+void GC_unregister_my_thread()
+{
+  pthread_t my_pthread;
+
+  my_pthread = pthread_self();
+
+#   ifdef DEBUG_THREADS
+      GC_printf1("Detaching thread 0x%lx\n", my_pthread);
+#   endif
+
+  GC_thread_exit_proc (0);
+}
+
 void * GC_start_routine(void * arg)
 {
     int dummy;
@@ -1132,7 +1251,9 @@ void * GC_start_routine(void * arg)
         GC_printf1("sp = 0x%lx\n", (long) &arg);
 #   endif
     LOCK();
+    GC_in_thread_creation = TRUE;
     me = GC_new_thread(my_pthread);
+    GC_in_thread_creation = FALSE;
 #ifdef GC_DARWIN_THREADS
     me -> stop_info.mach_thread = mach_thread_self();
 #else
@@ -1218,7 +1339,7 @@ WRAP_FUNC(pthread_create)(pthread_t *new_thread,
     if (!GC_thr_initialized) GC_thr_init();
 #   ifdef GC_ASSERTIONS
       {
-	int stack_size;
+	size_t stack_size;
 	if (NULL == attr) {
 	   pthread_attr_t my_attr;
 	   pthread_attr_init(&my_attr);
@@ -1226,7 +1347,13 @@ WRAP_FUNC(pthread_create)(pthread_t *new_thread,
 	} else {
 	   pthread_attr_getstacksize(attr, &stack_size);
 	}
-	GC_ASSERT(stack_size >= (8*HBLKSIZE*sizeof(word)));
+#       ifdef PARALLEL_MARK
+	  GC_ASSERT(stack_size >= (8*HBLKSIZE*sizeof(word)));
+#       else
+          /* FreeBSD-5.3/Alpha: default pthread stack is 64K, 	*/
+	  /* HBLKSIZE=8192, sizeof(word)=8			*/
+	  GC_ASSERT(stack_size >= 65536);
+#       endif
 	/* Our threads may need to do some work for the GC.	*/
 	/* Ridiculously small threads won't work, and they	*/
 	/* probably wouldn't work anyway.			*/
@@ -1301,12 +1428,12 @@ WRAP_FUNC(pthread_create)(pthread_t *new_thread,
 void GC_pause()
 {
     int i;
-#	ifndef __GNUC__
-        volatile word dummy = 0;
-#	endif
+#   if !defined(__GNUC__) || defined(__INTEL_COMPILER)
+      volatile word dummy = 0;
+#   endif
 
     for (i = 0; i < 10; ++i) { 
-#     ifdef __GNUC__
+#     if defined(__GNUC__) && !defined(__INTEL_COMPILER)
         __asm__ __volatile__ (" " : : : "memory");
 #     else
 	/* Something that's unlikely to be optimized away. */
@@ -1315,7 +1442,7 @@ void GC_pause()
     }
 }
     
-#define SPIN_MAX 1024	/* Maximum number of calls to GC_pause before	*/
+#define SPIN_MAX 128	/* Maximum number of calls to GC_pause before	*/
 			/* give up.					*/
 
 VOLATILE GC_bool GC_collecting = 0;
@@ -1340,19 +1467,34 @@ VOLATILE GC_bool GC_collecting = 0;
 /* yield by calling pthread_mutex_lock(); it never makes sense to	*/
 /* explicitly sleep.							*/
 
+#define LOCK_STATS
+#ifdef LOCK_STATS
+  unsigned long GC_spin_count = 0;
+  unsigned long GC_block_count = 0;
+  unsigned long GC_unlocked_count = 0;
+#endif
+
 void GC_generic_lock(pthread_mutex_t * lock)
 {
 #ifndef NO_PTHREAD_TRYLOCK
     unsigned pause_length = 1;
     unsigned i;
     
-    if (0 == pthread_mutex_trylock(lock)) return;
+    if (0 == pthread_mutex_trylock(lock)) {
+#       ifdef LOCK_STATS
+	    ++GC_unlocked_count;
+#       endif
+	return;
+    }
     for (; pause_length <= SPIN_MAX; pause_length <<= 1) {
 	for (i = 0; i < pause_length; ++i) {
 	    GC_pause();
 	}
         switch(pthread_mutex_trylock(lock)) {
 	    case 0:
+#		ifdef LOCK_STATS
+		    ++GC_spin_count;
+#		endif
 		return;
 	    case EBUSY:
 		break;
@@ -1361,6 +1503,9 @@ void GC_generic_lock(pthread_mutex_t * lock)
         }
     }
 #endif /* !NO_PTHREAD_TRYLOCK */
+#   ifdef LOCK_STATS
+	++GC_block_count;
+#   endif
     pthread_mutex_lock(lock);
 }
 

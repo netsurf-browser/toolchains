@@ -1,12 +1,13 @@
 #!/bin/sh 
 # Generates multilib.h.
-#   Copyright (C) 1994, 1995, 1996, 1997, 1999, 2002 Free Software Foundation, Inc.
+#   Copyright (C) 1994, 1995, 1996, 1997, 1999, 2002, 2007
+#   Free Software Foundation, Inc.
 
 #This file is part of GCC.
 
 #GCC is free software; you can redistribute it and/or modify it under
 #the terms of the GNU General Public License as published by the Free
-#Software Foundation; either version 2, or (at your option) any later
+#Software Foundation; either version 3, or (at your option) any later
 #version.
 
 #GCC is distributed in the hope that it will be useful, but WITHOUT
@@ -15,9 +16,8 @@
 #for more details.
 
 #You should have received a copy of the GNU General Public License
-#along with GCC; see the file COPYING.  If not, write to the Free
-#Software Foundation, 59 Temple Place - Suite 330, Boston, MA
-#02111-1307, USA.
+#along with GCC; see the file COPYING3.  If not see
+#<http://www.gnu.org/licenses/>.  
 
 # This shell script produces a header file which the gcc driver
 # program uses to pick which library to use based on the machine
@@ -73,6 +73,8 @@
 # the os directory names are used exclusively.  Use the mapping when
 # there is no one-to-one equivalence between GCC levels and the OS.
 
+# The optional eighth argument is the multiarch name.
+
 # The last option should be "yes" if multilibs are enabled.  If it is not
 # "yes", all GCC multilib dir names will be ".".
 
@@ -121,7 +123,8 @@ exceptions=$4
 extra=$5
 exclusions=$6
 osdirnames=$7
-enable_multilib=$8
+multiarch=$8
+enable_multilib=$9
 
 echo "static const char *const multilib_raw[] = {"
 
@@ -222,6 +225,9 @@ fi
 # names.
 toosdirnames=
 defaultosdirname=
+if [ -n "${multiarch}" ]; then
+  defaultosdirname=::${multiarch}
+fi
 if [ -n "${osdirnames}" ]; then
   set x ${osdirnames}
   shift
@@ -229,6 +235,9 @@ if [ -n "${osdirnames}" ]; then
     case "$1" in
       .=*)
         defaultosdirname=`echo $1 | sed 's|^.=|:|'`
+	if [ -n "${multiarch}" ]; then
+	  defaultosdirname=${defaultosdirname}:${multiarch}
+	fi
 	shift
 	;;
       *=*)
@@ -311,16 +320,16 @@ for combo in ${combinations}; do
   if [ -n "${todirnames}" ]; then
     dirout=`echo ${combo} | sed ${todirnames}`
   else
-    dirout=${combo}
+    dirout=`echo ${combo} | sed -e 's/=/-/g'`
   fi
   # Remove the leading and trailing slashes.
-  dirout=`echo ${dirout} | sed -e 's|^/||' -e 's|/$||g'`
+  dirout=`echo ${dirout} | sed -e 's|^/||' -e 's|/*:/*|:|' -e 's|/$||g'`
 
   # Use the OS directory names rather than the option names.
   if [ -n "${toosdirnames}" ]; then
     osdirout=`echo ${combo} | sed ${toosdirnames}`
     # Remove the leading and trailing slashes.
-    osdirout=`echo ${osdirout} | sed -e 's|^/||' -e 's|/$||g'`
+    osdirout=`echo ${osdirout} | sed -e 's|^/||' -e 's|/*:/*|:|' -e 's|/$||g'`
     if [ "x${enable_multilib}" != xyes ]; then
       dirout=".:${osdirout}"
       disable_multilib=yes

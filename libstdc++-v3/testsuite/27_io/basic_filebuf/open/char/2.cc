@@ -1,9 +1,9 @@
-// Copyright (C) 2001, 2002, 2003 Free Software Foundation, Inc.
+// Copyright (C) 2001, 2002, 2003, 2009, 2010 Free Software Foundation, Inc.
 //
 // This file is part of the GNU ISO C++ Library.  This library is free
 // software; you can redistribute it and/or modify it under the
 // terms of the GNU General Public License as published by the
-// Free Software Foundation; either version 2, or (at your option)
+// Free Software Foundation; either version 3, or (at your option)
 // any later version.
 
 // This library is distributed in the hope that it will be useful,
@@ -12,9 +12,8 @@
 // GNU General Public License for more details.
 
 // You should have received a copy of the GNU General Public License along
-// with this library; see the file COPYING.  If not, write to the Free
-// Software Foundation, 59 Temple Place - Suite 330, Boston, MA 02111-1307,
-// USA.
+// with this library; see the file COPYING3.  If not see
+// <http://www.gnu.org/licenses/>.
 
 // 27.8.1.3 filebuf member functions
 // @require@ %-*.tst %-*.txt
@@ -22,6 +21,8 @@
 
 // various tests for filebuf::open() and filebuf::close() including
 // the non-portable functionality in the libstdc++-v3 IO library
+
+// { dg-require-fileio "" }
 
 #include <fstream>
 #include <unistd.h>
@@ -40,7 +41,7 @@ void test_03()
   int first_fd = ::open(name_01, O_RDONLY);
   VERIFY( first_fd != -1 );
   FILE* first_file = ::fdopen(first_fd, "r");
-  VERIFY( first_file != NULL );
+  VERIFY( first_file );
   __gnu_cxx::stdio_filebuf<char> fb(first_file, std::ios_base::in);
 
   int second_fd = fb.fd();

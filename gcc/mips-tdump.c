@@ -1,6 +1,6 @@
 /* Read and manage MIPS symbol tables from object modules.
-   Copyright (C) 1991, 1994, 1995, 1997, 1998, 1999, 2000, 2001, 2003, 2006
-   Free Software Foundation, Inc.
+   Copyright (C) 1991, 1994, 1995, 1997, 1998, 1999, 2000, 2001, 2003, 2004,
+   2006, 2007, 2008, 2009, 2010, 2011 Free Software Foundation, Inc.
    Contributed by hartzell@boulder.colorado.edu,
    Rewritten by meissner@osf.org.
 
@@ -8,7 +8,7 @@ This file is part of GCC.
 
 GCC is free software; you can redistribute it and/or modify it under
 the terms of the GNU General Public License as published by the Free
-Software Foundation; either version 2, or (at your option) any later
+Software Foundation; either version 3, or (at your option) any later
 version.
 
 GCC is distributed in the hope that it will be useful, but WITHOUT ANY
@@ -17,9 +17,8 @@ FITNESS FOR A PARTICULAR PURPOSE.  See the GNU General Public License
 for more details.
 
 You should have received a copy of the GNU General Public License
-along with GCC; see the file COPYING.  If not, write to the Free
-Software Foundation, 59 Temple Place - Suite 330, Boston, MA
-02111-1307, USA.  */
+along with GCC; see the file COPYING3.  If not see
+<http://www.gnu.org/licenses/>.  */
 
 #include "config.h"
 #include "system.h"
@@ -29,11 +28,11 @@ Software Foundation, 59 Temple Place - Suite 330, Boston, MA
 #ifdef index
 #undef index
 #endif
-#ifndef CROSS_COMPILE
+#ifndef CROSS_DIRECTORY_STRUCTURE
 #include <a.out.h>
 #else
 #include "mips/a.out.h"
-#endif /* CROSS_COMPILE */
+#endif /* CROSS_DIRECTORY_STRUCTURE */
 
 /* Include getopt.h for the sake of getopt_long.  */
 #include "getopt.h"
@@ -122,7 +121,7 @@ typedef enum st {
   st_Enum	= stEnum,	/* enum */
 #endif
   st_Str	= stStr,	/* string */
-  st_Number	= stNumber,	/* pure number (ie. 4 NOR 2+2) */
+  st_Number	= stNumber,	/* pure number (i.e. 4 NOR 2+2) */
   st_Expr	= stExpr,	/* 2+2 vs. 4 */
   st_Type	= stType,	/* post-coercion SER */
   st_Max	= stMax		/* max type+1 */
@@ -631,7 +630,7 @@ type_to_string (AUXU *aux_ptr, int index, FDR *fdp)
       /*
        * Snarf up any array bounds in the correct order.  Arrays
        * store 5 successive words in the aux. table:
-       *	word 0	RNDXR to type of the bounds (ie, int)
+       *	word 0	RNDXR to type of the bounds (i.e., int)
        *	word 1	Current file descriptor index
        *	word 2	low bound
        *	word 3	high bound (or -1 if [])
@@ -689,7 +688,7 @@ type_to_string (AUXU *aux_ptr, int index, FDR *fdp)
 		int first_array = i;
 		int j;
 
-		/* Print array bounds reversed (ie, in the order the C
+		/* Print array bounds reversed (i.e., in the order the C
 		   programmer writes them).  C is such a fun language....  */
 
 		while (i < 5 && qualifiers[i+1].type == tq_Array)
@@ -884,7 +883,7 @@ print_symbol (SYMR *sym_ptr, int number, const char *strbase, AUXU *aux_base,
 	if (want_scope)
 	  {
 	    if (free_scope == (scope_t *) 0)
-	      scope_ptr = xmalloc (sizeof (scope_t));
+	      scope_ptr = (scope_t *) xmalloc (sizeof (scope_t));
 	    else
 	      {
 		scope_ptr = free_scope;
@@ -938,7 +937,7 @@ print_symbol (SYMR *sym_ptr, int number, const char *strbase, AUXU *aux_base,
 	if (want_scope)
 	  {
 	    if (free_scope == (scope_t *) 0)
-	      scope_ptr = xmalloc (sizeof (scope_t));
+	      scope_ptr = (scope_t *) xmalloc (sizeof (scope_t));
 	    else
 	      {
 		scope_ptr = free_scope;
@@ -981,19 +980,19 @@ print_symbol (SYMR *sym_ptr, int number, const char *strbase, AUXU *aux_base,
 	       scope_ptr != (scope_t *) 0;
 	       scope_ptr = scope_ptr->prev)
 	    {
-	      const char *class;
+	      const char *sclass;
 	      if (scope_ptr->st == st_Proc || scope_ptr->st == st_StaticProc)
-		class = "func.";
+		sclass = "func.";
 	      else if (scope_ptr->st == st_File)
-		class = "file";
+		sclass = "file";
 	      else if (scope_ptr->st == st_Block && scope_ptr->sc == sc_Text)
-		class = "block";
+		sclass = "block";
 	      else if (scope_ptr->st == st_Block && scope_ptr->sc == sc_Info)
-		class = "type";
+		sclass = "type";
 	      else
-		class = "???";
+		sclass = "???";
 
-	      printf (" %ld [%s]", scope_ptr->open_sym, class);
+	      printf (" %ld [%s]", scope_ptr->open_sym, sclass);
 	    }
 	  printf ("\n");
 	}
@@ -1117,7 +1116,7 @@ print_file_desc (FDR *fdp, int number)
 	  (fdp->fBigendian) ? "BIG" : "LITTLE");
 
   printf ("    Debug level = %-10s Language    = %s\n",
-	  glevel_to_string (fdp->glevel),
+	  glevel_to_string ((glevel_t) fdp->glevel),
 	  lang_to_string((lang_t) fdp->lang));
 
   printf ("    Adr         = 0x%08lx\n\n", (long) fdp->adr);
@@ -1346,41 +1345,44 @@ read_tfile (void)
 
   print_sym_hdr (&sym_hdr);
 
-  lines = read_seek (NULL, sym_hdr.cbLine, sym_hdr.cbLineOffset,
-		     "Line numbers");
+  lines = (LINER *) read_seek (NULL, sym_hdr.cbLine, sym_hdr.cbLineOffset,
+			       "Line numbers");
 
-  dense_nums = read_seek (NULL, sym_hdr.idnMax * sizeof (DNR),
-			  sym_hdr.cbDnOffset, "Dense numbers");
+  dense_nums = (DNR *) read_seek (NULL, sym_hdr.idnMax * sizeof (DNR),
+				  sym_hdr.cbDnOffset, "Dense numbers");
 
-  proc_desc = read_seek (NULL, sym_hdr.ipdMax * sizeof (PDR),
-			 sym_hdr.cbPdOffset, "Procedure tables");
+  proc_desc = (PDR *) read_seek (NULL, sym_hdr.ipdMax * sizeof (PDR),
+				 sym_hdr.cbPdOffset, "Procedure tables");
 
-  l_symbols = read_seek (NULL, sym_hdr.isymMax * sizeof (SYMR),
-			 sym_hdr.cbSymOffset, "Local symbols");
+  l_symbols = (SYMR *) read_seek (NULL, sym_hdr.isymMax * sizeof (SYMR),
+				  sym_hdr.cbSymOffset, "Local symbols");
 
-  opt_symbols = read_seek (NULL, sym_hdr.ioptMax * sizeof (OPTR),
-			   sym_hdr.cbOptOffset, "Optimization symbols");
+  opt_symbols = (OPTR *) read_seek (NULL, sym_hdr.ioptMax * sizeof (OPTR),
+				    sym_hdr.cbOptOffset,
+				    "Optimization symbols");
 
-  aux_symbols = read_seek (NULL, sym_hdr.iauxMax * sizeof (AUXU),
-			   sym_hdr.cbAuxOffset, "Auxiliary symbols");
+  aux_symbols = (AUXU *) read_seek (NULL, sym_hdr.iauxMax * sizeof (AUXU),
+				    sym_hdr.cbAuxOffset, "Auxiliary symbols");
 
   if (sym_hdr.iauxMax > 0)
-    aux_used = xcalloc (sym_hdr.iauxMax, 1);
+    aux_used = (char *) xcalloc (sym_hdr.iauxMax, 1);
 
-  l_strings = read_seek (NULL, sym_hdr.issMax,
-			 sym_hdr.cbSsOffset, "Local string table");
+  l_strings = (char *) read_seek (NULL, sym_hdr.issMax,
+				  sym_hdr.cbSsOffset, "Local string table");
 
-  e_strings = read_seek (NULL, sym_hdr.issExtMax,
-			 sym_hdr.cbSsExtOffset, "External string table");
+  e_strings = (char *) read_seek (NULL, sym_hdr.issExtMax,
+				  sym_hdr.cbSsExtOffset,
+				  "External string table");
 
-  file_desc = read_seek (NULL, sym_hdr.ifdMax * sizeof (FDR),
-			 sym_hdr.cbFdOffset, "File tables");
+  file_desc = (FDR *) read_seek (NULL, sym_hdr.ifdMax * sizeof (FDR),
+				 sym_hdr.cbFdOffset, "File tables");
 
-  rfile_desc = read_seek (NULL, sym_hdr.crfd * sizeof (ulong),
-			  sym_hdr.cbRfdOffset, "Relative file tables");
+  rfile_desc = (ulong *) read_seek (NULL, sym_hdr.crfd * sizeof (ulong),
+				    sym_hdr.cbRfdOffset,
+				    "Relative file tables");
 
-  e_symbols = read_seek (NULL, sym_hdr.iextMax * sizeof (EXTR),
-			 sym_hdr.cbExtOffset, "External symbols");
+  e_symbols = (EXTR *) read_seek (NULL, sym_hdr.iextMax * sizeof (EXTR),
+				  sym_hdr.cbExtOffset, "External symbols");
 }
 
 
@@ -1411,8 +1413,8 @@ main (int argc, char **argv)
 
   if (version)
     {
-      printf ("mips-tdump (GCC) %s\n", version_string);
-      fputs ("Copyright (C) 2006 Free Software Foundation, Inc.\n", stdout);
+      printf ("mips-tdump %s%s\n", pkgversion_string, version_string);
+      fputs ("Copyright (C) 2011 Free Software Foundation, Inc.\n", stdout);
       fputs ("This is free software; see the source for copying conditions.  There is NO\n\
 warranty; not even for MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.\n\n",
              stdout);

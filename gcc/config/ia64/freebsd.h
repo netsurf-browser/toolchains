@@ -1,12 +1,12 @@
 /* Definitions for Intel IA-64 running FreeBSD using the ELF format
-   Copyright (C) 2001, 2004 Free Software Foundation, Inc.
+   Copyright (C) 2001, 2004, 2007, 2010 Free Software Foundation, Inc.
    Contributed by David E. O'Brien <obrien@FreeBSD.org> and BSDi.
 
 This file is part of GCC.
 
 GCC is free software; you can redistribute it and/or modify
 it under the terms of the GNU General Public License as published by
-the Free Software Foundation; either version 2, or (at your option)
+the Free Software Foundation; either version 3, or (at your option)
 any later version.
 
 GCC is distributed in the hope that it will be useful,
@@ -15,23 +15,22 @@ MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
 GNU General Public License for more details.
 
 You should have received a copy of the GNU General Public License
-along with GCC; see the file COPYING.  If not, write to
-the Free Software Foundation, 675 Mass Ave, Cambridge, MA 02139, USA.  */
+along with GCC; see the file COPYING3.  If not see
+<http://www.gnu.org/licenses/>.  */
 
 #undef  SUBTARGET_EXTRA_SPECS
 #define SUBTARGET_EXTRA_SPECS \
   { "fbsd_dynamic_linker", FBSD_DYNAMIC_LINKER }
 
 #define LINK_SPEC "							\
-  %{p:%nconsider using `-pg' instead of `-p' with gprof(1)}		\
-  %{Wl,*:%*}								\
+  %{p:%nconsider using '-pg' instead of '-p' with gprof(1)}		\
   %{assert*} %{R*} %{rpath*} %{defsym*}					\
   %{shared:-Bshareable %{h*} %{soname*}}				\
   %{symbolic:-Bsymbolic}						\
   %{!shared:								\
     %{!static:								\
       %{rdynamic:-export-dynamic}					\
-      %{!dynamic-linker:-dynamic-linker %(fbsd_dynamic_linker) }}	\
+      -dynamic-linker %(fbsd_dynamic_linker) }	\
     %{static:-Bstatic}}"
 
 

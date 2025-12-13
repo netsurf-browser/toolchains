@@ -1,12 +1,14 @@
-// { dg-do assemble { xfail *-*-* } }
+// { dg-do compile }
+// { dg-options "-fshow-column" }
 // GROUPS passed old-abort
-class Graph {
+
+class Graph { // { dg-error "1:new types|1: note: \\(perhaps" }
 public:
       unsigned         char N;
-      Graph(void) {}; // { dg-error "" } previously defined here
+      Graph(void) {} // { dg-error "7:'Graph" }
 }
 
-Graph::Graph(void)
-{    N = 10;// { dg-error "" }  return type.*
+Graph::Graph(void) // { dg-error "18:return type|1: error: redefinition" }
+{    N = 10;
 }
 

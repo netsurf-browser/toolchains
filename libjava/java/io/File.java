@@ -1,5 +1,6 @@
 /* File.java -- Class representing a file on disk
-   Copyright (C) 1998, 1999, 2000, 2001, 2003 Free Software Foundation, Inc.
+   Copyright (C) 1998, 1999, 2000, 2001, 2003, 2004, 2005, 2006, 2007
+   Free Software Foundation, Inc.
 
 This file is part of GNU Classpath.
 
@@ -15,8 +16,8 @@ General Public License for more details.
 
 You should have received a copy of the GNU General Public License
 along with GNU Classpath; see the file COPYING.  If not, write to the
-Free Software Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA
-02111-1307 USA.
+Free Software Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA
+02110-1301 USA.
 
 Linking this library statically or dynamically with other modules is
 making a combined work based on this library.  Thus, the terms and
@@ -39,9 +40,10 @@ exception statement from your version. */
 package java.io;
 
 import java.net.MalformedURLException;
+import java.net.URI;
+import java.net.URISyntaxException;
 import java.net.URL;
 import gnu.classpath.Configuration;
-import gnu.gcj.runtime.FileDeleter;
 
 /* Written using "Java Class Libraries", 2nd edition, ISBN 0-201-31002-3
  * "The Java Language Specification", ISBN 0-201-63451-1
@@ -54,10 +56,10 @@ import gnu.gcj.runtime.FileDeleter;
  * types of path separators ("/" versus "\", for example).  It also
  * contains method useful for creating and deleting files and directories.
  *
- * @author Aaron M. Renn <arenn@urbanophile.com>
- * @author Tom Tromey <tromey@cygnus.com>
+ * @author Aaron M. Renn (arenn@urbanophile.com)
+ * @author Tom Tromey (tromey@cygnus.com)
  */
-public class File implements Serializable, Comparable
+public class File implements Serializable, Comparable<File>
 {
   private static final long serialVersionUID = 301077366599181567L;
 	
@@ -65,6 +67,7 @@ public class File implements Serializable, Comparable
   private final static int READ = 0;
   private final static int WRITE = 1;
   private final static int EXISTS = 2;
+  private final static int EXEC = 3;
 
   // QUERY arguments to stat function.
   private final static int DIRECTORY = 0;
@@ -88,6 +91,7 @@ public class File implements Serializable, Comparable
    * An example separator string would be "/" on the GNU system.
    */
   public static final String separator = System.getProperty("file.separator");
+  private static final String dupSeparator = separator + separator;
 
   /**
    * This is the first character of the file separator string.  On many
@@ -99,7 +103,7 @@ public class File implements Serializable, Comparable
   
   /**
    * This is the string that is used to separate the host name from the
-   * path name in paths than include the host name.  It is the value of
+   * path name in paths that include the host name.  It is the value of
    * the <code>path.separator</code> system property.
    */
   public static final String pathSeparator
@@ -113,15 +117,15 @@ public class File implements Serializable, Comparable
   public static final char pathSeparatorChar = pathSeparator.charAt(0);
 
   static final String tmpdir = System.getProperty("java.io.tmpdir");
+  /* If 0, then the system doesn't have a file name length limit.  */
   static int maxPathLen;
   static boolean caseSensitive;
-  static String dupSeparator = separator + separator;
   
   static
   {
     if (Configuration.INIT_LOAD_LIBRARY)
       {
-        System.loadLibrary ("javaio");
+        System.loadLibrary("javaio");
       }
     
     init_native();
@@ -180,6 +184,27 @@ public class File implements Serializable, Comparable
     return _access (WRITE);
   }
   
+  /**
+   * This method tests whether or not the current thread is allowed to
+   * to execute the file pointed to by this object. This will be true if and
+   * and only if 1) the file exists and 2) the <code>SecurityManager</code>
+   * (if any) allows access to the file via it's <code>checkExec</code>
+   * method 3) the file is executable.
+   *
+   * @return <code>true</code> if execution is allowed, 
+   * <code>false</code> otherwise
+   *
+   * @exception SecurityException If the <code>SecurityManager</code> 
+   * does not allow access to the file
+   */
+  public boolean canExecute()
+  {
+    if (!exists())
+      return false;
+    checkExec();
+    return _access (EXEC);
+  }
+
   private native boolean performCreate() throws IOException;
 
   /**
@@ -187,7 +212,7 @@ public class File implements Serializable, Comparable
    * the path of this <code>File</code> object if an only if that file
    * does not already exist.
    * <p>
-   * A <code>SecurityManager</code>checkWrite</code> check is done prior
+   * A <code>SecurityManager.checkWrite</code> check is done prior
    * to performing this action.
    *
    * @return <code>true</code> if the file was created, <code>false</code> if
@@ -224,7 +249,7 @@ public class File implements Serializable, Comparable
     SecurityManager s = System.getSecurityManager();
     
     if (s != null)
-      s.checkDelete (path);
+      s.checkDelete(path);
     
     return performDelete();
   }
@@ -244,7 +269,7 @@ public class File implements Serializable, Comparable
    * @return <code>true</code> if the two objects are equal, 
    * <code>false</code> otherwise.
    */
-  public boolean equals (Object obj)
+  public boolean equals(Object obj)
   {
     if (! (obj instanceof File))
       return false;
@@ -252,11 +277,20 @@ public class File implements Serializable, Comparable
     File other = (File) obj;
 
     if (caseSensitive)
-      return path.equals (other.path);
+      return path.equals(other.path);
     else
-      return path.equalsIgnoreCase (other.path);
+      return path.equalsIgnoreCase(other.path);
   }
 
+  /*
+   * This method tests whether or not the file represented by the
+   * object actually exists on the filesystem.
+   */
+  private boolean internalExists()
+  {
+    return _access (EXISTS);
+  }
+  
   /**
    * This method tests whether or not the file represented by the object
    * actually exists on the filesystem.
@@ -268,7 +302,7 @@ public class File implements Serializable, Comparable
   public boolean exists()
   {
     checkRead();
-    return _access (EXISTS);
+    return internalExists();
   }
 
   /**
@@ -277,7 +311,7 @@ public class File implements Serializable, Comparable
    *
    * @param name The path name of the file
    */
-  public File (String name)
+  public File(String name)
   {
     path = normalizePath (name);
   }
@@ -288,7 +322,15 @@ public class File implements Serializable, Comparable
     // On Windows, convert any '/' to '\'.  This appears to be the same logic
     // that Sun's Win32 Java performs.
     if (separatorChar == '\\')
-      p = p.replace ('/', '\\');
+      {
+        p = p.replace ('/', '\\');
+	// We have to special case the "\c:" prefix.
+	if (p.length() > 2 && p.charAt(0) == '\\' &&
+	    ((p.charAt(1) >= 'a' && p.charAt(1) <= 'z') ||
+	    (p.charAt(1) >= 'A' && p.charAt(1) <= 'Z')) &&
+	    p.charAt(2) == ':')
+	  p = p.substring(1);
+      }
 
     int dupIndex = p.indexOf(dupSeparator);
     int plen = p.length();
@@ -354,18 +396,41 @@ public class File implements Serializable, Comparable
    * @param dirPath The path to the directory the file resides in
    * @param name The name of the file
    */
-  public File (String dirPath, String name)
+  public File(String dirPath, String name)
   {
     if (name == null)
       throw new NullPointerException();
-    if (dirPath != null && dirPath.length() > 0)
+    if (dirPath != null)
       {
-	// Try to be smart about the number of separator characters.
-	if (dirPath.charAt(dirPath.length() - 1) == separatorChar
-	    || name.length() == 0)
-	  path = normalizePath(dirPath + name);
+	if (dirPath.length() > 0)
+	  {
+	    // Try to be smart about the number of separator characters.
+	    if (dirPath.charAt(dirPath.length() - 1) == separatorChar
+		|| name.length() == 0)
+	      path = normalizePath(dirPath + name);
+	    else
+	      path = normalizePath(dirPath + separatorChar + name);
+	  }
 	else
-	  path = normalizePath(dirPath + separatorChar + name);
+	  {
+	    // If dirPath is empty, use a system dependant
+	    // default prefix.
+	    // Note that the leading separators in name have
+	    // to be chopped off, to prevent them forming
+	    // a UNC prefix on Windows.
+	    if (separatorChar == '\\' /* TODO use ON_WINDOWS */)
+	      {
+		int skip = 0;
+		while(name.length() > skip
+		    && (name.charAt(skip) == separatorChar
+		    || name.charAt(skip) == '/'))
+		  {
+		    skip++;
+		  }
+		name = name.substring(skip);
+	      }
+	    path = normalizePath(separatorChar + name);
+	  }
       }
     else
       path = normalizePath(name);
@@ -381,9 +446,31 @@ public class File implements Serializable, Comparable
    * @param directory The directory this file resides in
    * @param name The name of the file
    */
-  public File (File directory, String name)
+  public File(File directory, String name)
   {
     this (directory == null ? null : directory.path, name);
+  }
+
+  /**
+   * This method initializes a new <code>File</code> object to represent
+   * a file corresponding to the specified <code>file:</code> protocol URI.
+   *
+   * @param uri The URI
+   * @throws IllegalArgumentException if the URI is not hierarchical
+   */
+  public File(URI uri)
+  {
+    if (uri == null)
+	throw new NullPointerException("uri is null");
+
+    if (!uri.getScheme().equals("file"))
+	throw new IllegalArgumentException("invalid uri protocol");
+
+    String name = uri.getPath();
+    if (name == null)
+      throw new IllegalArgumentException("URI \"" + uri
+                     + "\" is not hierarchical");
+    path = normalizePath(name);
   }
 
   /**
@@ -448,15 +535,15 @@ public class File implements Serializable, Comparable
    */
   public File getAbsoluteFile()
   {
-    return new File (getAbsolutePath());
+    return new File(getAbsolutePath());
   }
 
   /**
    * This method returns a canonical representation of the pathname of
    * this file.  The actual form of the canonical representation is
-   * different.  On the GNU system, the canonical form differs from the
-   * absolute form in that all relative file references to "." and ".."
-   * are resolved and removed.
+   * system-dependent.  On the GNU system, conversion to canonical
+   * form involves the removal of redundant separators, references to
+   * "." and "..", and symbolic links.
    * <p>
    * Note that this method, unlike the other methods which return path
    * names, can throw an IOException.  This is because native method 
@@ -479,7 +566,7 @@ public class File implements Serializable, Comparable
    */
   public File getCanonicalFile() throws IOException
   {
-    return new File (getCanonicalPath());
+    return new File(getCanonicalPath());
   }
 
   /**
@@ -520,7 +607,8 @@ public class File implements Serializable, Comparable
   /**
    * This method returns a <code>String</code> the represents this file's
    * parent.  <code>null</code> is returned if the file has no parent.  The
-   * parent is determined via a simple operation which removes the
+   * parent is determined via a simple operation which removes the name
+   * after the last file separator character, as determined by the platform.
    *
    * @return The parent directory of this file
    */
@@ -582,7 +670,7 @@ public class File implements Serializable, Comparable
    * This method returns a <code>File</code> object representing the parent
    * file of this one.
    *
-   * @param A <code>File</code> for the parent of this object.  
+   * @return a <code>File</code> for the parent of this object.  
    * <code>null</code>
    * will be returned if this object does not have a parent.
    *
@@ -591,7 +679,7 @@ public class File implements Serializable, Comparable
   public File getParentFile()
   {
     String parent = getParent();
-    return parent != null ? new File (parent) : null;
+    return parent != null ? new File(parent) : null;
   }
 
   /**
@@ -631,6 +719,15 @@ public class File implements Serializable, Comparable
    */
   public native boolean isAbsolute();
 
+  /*
+   * This method tests whether or not the file represented by this
+   * object is a directory.
+   */
+  private boolean internalIsDirectory()
+  {
+    return _stat (DIRECTORY);
+  }
+  
   /**
    * This method tests whether or not the file represented by this object
    * is a directory.  In order for this method to return <code>true</code>,
@@ -644,7 +741,7 @@ public class File implements Serializable, Comparable
   public boolean isDirectory()
   {
     checkRead();
-    return _stat (DIRECTORY);
+    return internalIsDirectory();
   }
 
   /**
@@ -748,7 +845,7 @@ public class File implements Serializable, Comparable
    * @exception SecurityException If read access is not allowed to the 
    * directory by the <code>SecurityManager</code>
    */
-  public String[] list (FilenameFilter filter)
+  public String[] list(FilenameFilter filter)
   {
     checkRead();
     return (String[]) performList (filter, null, String.class);
@@ -826,7 +923,7 @@ public class File implements Serializable, Comparable
    *
    * @since 1.2
    */
-  public File[] listFiles (FilenameFilter filter)
+  public File[] listFiles(FilenameFilter filter)
   {
     checkRead();
     return (File[]) performList (filter, null, File.class);
@@ -856,7 +953,7 @@ public class File implements Serializable, Comparable
    *
    * @since 1.2
    */
-  public File[] listFiles (FileFilter filter)
+  public File[] listFiles(FileFilter filter)
   {
     checkRead();
     return (File[]) performList (null, filter, File.class);
@@ -871,6 +968,27 @@ public class File implements Serializable, Comparable
   public String toString()
   {
     return path;
+  }
+
+  /**
+   * @return A <code>URI</code> for this object.
+   */
+  public URI toURI()
+  {
+    String abspath = getAbsolutePath();
+
+    if (isDirectory())
+      abspath = abspath + separator;
+        
+    try
+      {
+	return new URI("file", abspath.replace(separatorChar, '/'), null);
+      }
+    catch (URISyntaxException use)
+      {
+        // Can't happen.
+	throw new RuntimeException(use);
+      }
   }
 
   /**
@@ -982,8 +1100,8 @@ public class File implements Serializable, Comparable
    *
    * @since 1.2
    */
-  public static File createTempFile (String prefix, String suffix,
-				     File directory)
+  public static File createTempFile(String prefix, String suffix,
+				    File directory)
     throws IOException
   {
     // Grab the system temp directory if necessary
@@ -991,21 +1109,21 @@ public class File implements Serializable, Comparable
       {
         String dirname = tmpdir;
         if (dirname == null)
-          throw new IOException ("Cannot determine system temporary directory"); 
+          throw new IOException("Cannot determine system temporary directory"); 
 	
-        directory = new File (dirname);
-        if (!directory.exists())
-          throw new IOException ("System temporary directory "
-                                 + directory.getName() + " does not exist.");
-        if (!directory.isDirectory())
-          throw new IOException ("System temporary directory "
-                                 + directory.getName()
-                                 + " is not really a directory.");
+        directory = new File(dirname);
+        if (!directory.internalExists())
+          throw new IOException("System temporary directory "
+                                + directory.getName() + " does not exist.");
+        if (!directory.internalIsDirectory())
+          throw new IOException("System temporary directory "
+                                + directory.getName()
+                                + " is not really a directory.");
       }
 
     // Check if prefix is at least 3 characters long
     if (prefix.length() < 3)
-      throw new IllegalArgumentException ("Prefix too short: " + prefix);
+      throw new IllegalArgumentException("Prefix too short: " + prefix);
 
     // Set default value of suffix
     if (suffix == null)
@@ -1013,7 +1131,9 @@ public class File implements Serializable, Comparable
 
     // Truncation rules.
     // `6' is the number of characters we generate.
-    if (prefix.length() + 6 + suffix.length() > maxPathLen)
+    // If maxPathLen equals zero, then the system doesn't have a limit
+    // on the file name, so there is nothing to truncate.
+    if (maxPathLen > 0 && prefix.length() + 6 + suffix.length() > maxPathLen)
       {
 	int suf_len = 0;
 	if (suffix.charAt(0) == '.')
@@ -1046,6 +1166,159 @@ public class File implements Serializable, Comparable
   }
 
   /*
+   * This native method sets file permissions.
+   */
+  private native boolean setFilePermissions(boolean enable, boolean ownerOnly,
+					    int permissions);
+
+  /**
+   * This method sets the owner's read permission for the File represented by
+   * this object.
+   * 
+   * It is the same as calling <code>setReadable(readable, true)</code>.
+   * 
+   * @param <code>readable</code> <code>true</code> to set read permission,
+   * <code>false</code> to unset the read permission.
+   * @return <code>true</code> if the file permissions are changed,
+   * <code>false</code> otherwise.
+   * @exception SecurityException If write access of the file is not permitted.
+   * @see #setReadable(boolean, boolean)
+   * @since 1.6
+   */
+  public boolean setReadable(boolean readable)
+  {
+    return setReadable(readable, true);
+  }
+  
+  /**
+   * This method sets the read permissions for the File represented by
+   * this object.
+   * 
+   * If <code>ownerOnly</code> is set to <code>true</code> then only the
+   * read permission bit for the owner of the file is changed.
+   * 
+   * If <code>ownerOnly</code> is set to <code>false</code>, the file
+   * permissions are changed so that the file can be read by everyone.
+   * 
+   * On unix like systems this sets the <code>user</code>, <code>group</code>
+   * and <code>other</code> read bits and is equal to call
+   * <code>chmod a+r</code> on the file.
+   * 
+   * @param <code>readable</code> <code>true</code> to set read permission,
+   * <code>false</code> to unset the read permission.
+   * @param <code>ownerOnly</code> <code>true</code> to set read permission
+   * for owner only, <code>false</code> for all.
+   * @return <code>true</code> if the file permissions are changed,
+   * <code>false</code> otherwise.
+   * @exception SecurityException If write access of the file is not permitted.
+   * @see #setReadable(boolean)
+   * @since 1.6
+   */
+  public boolean setReadable(boolean readable, boolean ownerOnly)
+  {
+    checkWrite();
+    return setFilePermissions(readable, ownerOnly, READ);
+  }
+  
+  /**
+   * This method sets the owner's write permission for the File represented by
+   * this object.
+   * 
+   * It is the same as calling <code>setWritable(readable, true)</code>. 
+   * 
+   * @param <code>writable</code> <code>true</code> to set write permission,
+   * <code>false</code> to unset write permission.
+   * @return <code>true</code> if the file permissions are changed,
+   * <code>false</code> otherwise.
+   * @exception SecurityException If write access of the file is not permitted.
+   * @see #setWritable(boolean, boolean)
+   * @since 1.6
+   */
+  public boolean setWritable(boolean writable)
+  {
+    return setWritable(writable, true);
+  }
+  
+  /**
+   * This method sets the write permissions for the File represented by
+   * this object.
+   * 
+   * If <code>ownerOnly</code> is set to <code>true</code> then only the
+   * write permission bit for the owner of the file is changed.
+   * 
+   * If <code>ownerOnly</code> is set to <code>false</code>, the file
+   * permissions are changed so that the file can be written by everyone.
+   * 
+   * On unix like systems this set the <code>user</code>, <code>group</code>
+   * and <code>other</code> write bits and is equal to call
+   * <code>chmod a+w</code> on the file.
+   * 
+   * @param <code>writable</code> <code>true</code> to set write permission,
+   * <code>false</code> to unset write permission.
+   * @param <code>ownerOnly</code> <code>true</code> to set write permission
+   * for owner only, <code>false</code> for all. 
+   * @return <code>true</code> if the file permissions are changed,
+   * <code>false</code> otherwise.
+   * @exception SecurityException If write access of the file is not permitted.
+   * @see #setWritable(boolean)
+   * @since 1.6
+   */
+  public boolean setWritable(boolean writable, boolean ownerOnly)
+  {
+    checkWrite();
+    return setFilePermissions(writable, ownerOnly, WRITE);
+  }
+  
+  /**
+   * This method sets the owner's execute permission for the File represented
+   * by this object.
+   * 
+   * It is the same as calling <code>setExecutable(readable, true)</code>. 
+   * 
+   * @param <code>executable</code> <code>true</code> to set execute permission,
+   * <code>false</code> to unset execute permission.
+   * @return <code>true</code> if the file permissions are changed,
+   * <code>false</code> otherwise.
+   * @exception SecurityException If write access of the file is not permitted.
+   * @see #setExecutable(boolean, boolean)
+   * @since 1.6
+   */
+  public boolean setExecutable(boolean executable) 
+  {
+    return setExecutable(executable, true);
+  }
+  
+  /**
+   * This method sets the execute permissions for the File represented by
+   * this object.
+   * 
+   * If <code>ownerOnly</code> is set to <code>true</code> then only the
+   * execute permission bit for the owner of the file is changed.
+   * 
+   * If <code>ownerOnly</code> is set to <code>false</code>, the file
+   * permissions are changed so that the file can be executed by everyone.
+   * 
+   * On unix like systems this set the <code>user</code>, <code>group</code>
+   * and <code>other</code> write bits and is equal to call
+   * <code>chmod a+x</code> on the file.
+   * 
+   * @param <code>executable</code> <code>true</code> to set write permission,
+   * <code>false</code> to unset write permission.
+   * @param <code>ownerOnly</code> <code>true</code> to set write permission
+   * for owner only, <code>false</code> for all. 
+   * @return <code>true</code> if the file permissions are changed,
+   * <code>false</code> otherwise.
+   * @exception SecurityException If write access of the file is not permitted.
+   * @see #setExecutable(boolean)
+   * @since 1.6
+   */
+  public boolean setExecutable(boolean executable, boolean ownerOnly)
+  {
+    checkWrite();
+    return setFilePermissions(executable, ownerOnly, EXEC);
+  }
+
+  /*
    * This native method sets the permissions to make the file read only.
    */
   private native boolean performSetReadOnly();
@@ -1066,6 +1339,7 @@ public class File implements Serializable, Comparable
    */
   public boolean setReadOnly()
   {
+    // Do a security check before trying to do anything else.
     checkWrite();
     return performSetReadOnly();
   }
@@ -1146,10 +1420,10 @@ public class File implements Serializable, Comparable
    * this operation
    * @exception IOException If an error occurs
    */
-  public static File createTempFile (String prefix, String suffix)
+  public static File createTempFile(String prefix, String suffix)
     throws IOException
   {
-    return createTempFile (prefix, suffix, null);
+    return createTempFile(prefix, suffix, null);
   }
 
   /**
@@ -1168,38 +1442,12 @@ public class File implements Serializable, Comparable
    *
    * @since 1.2
    */
-  public int compareTo (File other)
+  public int compareTo(File other)
   {
     if (caseSensitive)
       return path.compareTo (other.path);
     else
       return path.compareToIgnoreCase (other.path);
-  }
-
-  /**
-   * This method compares the specified <code>Object</code> to this one
-   * to test for equality.  It does this by comparing the canonical path names
-   * of the files.  This method is identical to <code>compareTo(File)</code>
-   * except that if the <code>Object</code> passed to it is not a 
-   * <code>File</code>, it throws a <code>ClassCastException</code>
-   * <p>
-   * The canonical paths of the files are determined by calling the
-   * <code>getCanonicalPath</code> method on each object.
-   * <p>
-   * This method returns a 0 if the specified <code>Object</code> is equal
-   * to this one, a negative value if it is less than this one 
-   * a positive value if it is greater than this one.
-   *
-   * @return An integer as described above
-   *
-   * @exception ClassCastException If the passed <code>Object</code> is 
-   * not a <code>File</code>
-   *
-   * @since 1.2
-   */
-  public int compareTo (Object obj)
-  {
-    return compareTo ((File) obj);
   }
 
   /*
@@ -1219,15 +1467,13 @@ public class File implements Serializable, Comparable
    * @exception SecurityException If write access is not allowed to the 
    * file by the <code>SecurityMananger</code>.
    */
-  public synchronized boolean renameTo (File dest)
+  public synchronized boolean renameTo(File dest)
   {
     SecurityManager s = System.getSecurityManager();
-    String sname = getName();
-    String dname = dest.getName();
     if (s != null)
       {
-	s.checkWrite (sname);
-	s.checkWrite (dname);
+	s.checkWrite (getPath());
+	s.checkWrite (dest.getPath());
       }
     return performRenameTo (dest);
   }
@@ -1253,7 +1499,7 @@ public class File implements Serializable, Comparable
    *
    * @since 1.2
    */
-  public boolean setLastModified (long time) 
+  public boolean setLastModified(long time) 
   {
     if (time < 0)
       throw new IllegalArgumentException("Negative modification time: " + time);
@@ -1268,7 +1514,7 @@ public class File implements Serializable, Comparable
     SecurityManager s = System.getSecurityManager();
     
     if (s != null)
-      s.checkWrite (path);
+      s.checkWrite(path);
   }
 
   private void checkRead()
@@ -1277,12 +1523,23 @@ public class File implements Serializable, Comparable
     SecurityManager s = System.getSecurityManager();
     
     if (s != null)
-      s.checkRead (path);
+      s.checkRead(path);
+  }
+
+  private void checkExec()
+  {
+    // Check the SecurityManager
+    SecurityManager s = System.getSecurityManager();
+    
+    if (s != null)
+      s.checkExec(path);
   }
 
   /** 
-   * Add this File to the set of files to be deleted upon normal
-   * termination.
+   * Calling this method requests that the file represented by this object
+   * be deleted when the virtual machine exits.  Note that this request cannot
+   * be cancelled.  Also, it will only be carried out if the virtual machine
+   * exits normally.
    *
    * @exception SecurityException If deleting of the file is not allowed
    *
@@ -1294,18 +1551,18 @@ public class File implements Serializable, Comparable
     // Check the SecurityManager
     SecurityManager sm = System.getSecurityManager();
     if (sm != null)
-      sm.checkDelete (getName());
+      sm.checkDelete (getPath());
 
-    FileDeleter.add (this);
+    DeleteFileHelper.add(this);
   }
 
-  private void writeObject (ObjectOutputStream oos) throws IOException
+  private void writeObject(ObjectOutputStream oos) throws IOException
   {
     oos.defaultWriteObject();
-    oos.writeChar (separatorChar);
+    oos.writeChar(separatorChar);
   }
 
-  private void readObject (ObjectInputStream ois)
+  private void readObject(ObjectInputStream ois)
     throws ClassNotFoundException, IOException
   {
     ois.defaultReadObject();
@@ -1315,7 +1572,7 @@ public class File implements Serializable, Comparable
     char oldSeparatorChar = ois.readChar();
     
     if (oldSeparatorChar != separatorChar)
-      path = path.replace (oldSeparatorChar, separatorChar);
+      path = path.replace(oldSeparatorChar, separatorChar);
   }
   
 } // class File

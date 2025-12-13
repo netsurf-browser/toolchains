@@ -6,25 +6,23 @@
 --                                                                          --
 --                                 B o d y                                  --
 --                                                                          --
---          Copyright (C) 1992-2003 Free Software Foundation, Inc.          --
+--          Copyright (C) 1992-2010, Free Software Foundation, Inc.         --
 --                                                                          --
 -- GNAT is free software;  you can  redistribute it  and/or modify it under --
 -- terms of the  GNU General Public License as published  by the Free Soft- --
--- ware  Foundation;  either version 2,  or (at your option) any later ver- --
+-- ware  Foundation;  either version 3,  or (at your option) any later ver- --
 -- sion.  GNAT is distributed in the hope that it will be useful, but WITH- --
 -- OUT ANY WARRANTY;  without even the  implied warranty of MERCHANTABILITY --
--- or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU General Public License --
--- for  more details.  You should have  received  a copy of the GNU General --
--- Public License  distributed with GNAT;  see file COPYING.  If not, write --
--- to  the Free Software Foundation,  59 Temple Place - Suite 330,  Boston, --
--- MA 02111-1307, USA.                                                      --
+-- or FITNESS FOR A PARTICULAR PURPOSE.                                     --
 --                                                                          --
--- As a special exception,  if other files  instantiate  generics from this --
--- unit, or you link  this unit with other files  to produce an executable, --
--- this  unit  does not  by itself cause  the resulting  executable  to  be --
--- covered  by the  GNU  General  Public  License.  This exception does not --
--- however invalidate  any other reasons why  the executable file  might be --
--- covered by the  GNU Public License.                                      --
+-- As a special exception under Section 7 of GPL version 3, you are granted --
+-- additional permissions described in the GCC Runtime Library Exception,   --
+-- version 3.1, as published by the Free Software Foundation.               --
+--                                                                          --
+-- You should have received a copy of the GNU General Public License and    --
+-- a copy of the GCC Runtime Library Exception along with this program;     --
+-- see the files COPYING3 and COPYING.RUNTIME respectively.  If not, see    --
+-- <http://www.gnu.org/licenses/>.                                          --
 --                                                                          --
 -- GNAT was originally developed  by the GNAT team at  New York University. --
 -- Extensive contributions were provided by Ada Core Technologies Inc.      --
@@ -38,8 +36,6 @@ pragma Style_Checks (All_Checks);
 with Atree;   use Atree;
 with Einfo;   use Einfo;
 with Fname;   use Fname;
-with Namet;   use Namet;
-with Namet;   use Namet;
 with Output;  use Output;
 with Sinfo;   use Sinfo;
 with Sinput;  use Sinput;
@@ -49,6 +45,9 @@ with Tree_IO; use Tree_IO;
 with Uname;   use Uname;
 
 package body Lib is
+
+   Switch_Storing_Enabled : Boolean := True;
+   --  Controlled by Enable_Switch_Storing/Disable_Switch_Storing
 
    -----------------------
    -- Local Subprograms --
@@ -63,6 +62,12 @@ package body Lib is
    function Check_Same_Extended_Unit (S1, S2 : Source_Ptr) return SEU_Result;
    --  Used by In_Same_Extended_Unit and Earlier_In_Extended_Unit. Returns
    --  value as described above.
+
+   function Get_Code_Or_Source_Unit
+     (S                : Source_Ptr;
+      Unwind_Instances : Boolean) return Unit_Number_Type;
+   --  Common code for Get_Code_Unit (get unit of instantiation for location)
+   --  and Get_Source_Unit (get unit of template for location).
 
    --------------------------------------------
    -- Access Functions for Unit Table Fields --
@@ -82,11 +87,6 @@ package body Lib is
    begin
       return Units.Table (U).Dependency_Num;
    end Dependency_Num;
-
-   function Dependent_Unit (U : Unit_Number_Type) return Boolean is
-   begin
-      return Units.Table (U).Dependent_Unit;
-   end Dependent_Unit;
 
    function Dynamic_Elab (U : Unit_Number_Type) return Boolean is
    begin
@@ -113,10 +113,20 @@ package body Lib is
       return Units.Table (U).Generate_Code;
    end Generate_Code;
 
+   function Has_Allocator (U : Unit_Number_Type) return Boolean is
+   begin
+      return Units.Table (U).Has_Allocator;
+   end Has_Allocator;
+
    function Has_RACW (U : Unit_Number_Type) return Boolean is
    begin
       return Units.Table (U).Has_RACW;
    end Has_RACW;
+
+   function Is_Compiler_Unit (U : Unit_Number_Type) return Boolean is
+   begin
+      return Units.Table (U).Is_Compiler_Unit;
+   end Is_Compiler_Unit;
 
    function Ident_String (U : Unit_Number_Type) return Node_Id is
    begin
@@ -128,10 +138,25 @@ package body Lib is
       return Units.Table (U).Loading;
    end Loading;
 
+   function Main_CPU (U : Unit_Number_Type) return Int is
+   begin
+      return Units.Table (U).Main_CPU;
+   end Main_CPU;
+
    function Main_Priority (U : Unit_Number_Type) return Int is
    begin
       return Units.Table (U).Main_Priority;
    end Main_Priority;
+
+   function Munit_Index (U : Unit_Number_Type) return Nat is
+   begin
+      return Units.Table (U).Munit_Index;
+   end Munit_Index;
+
+   function OA_Setting (U : Unit_Number_Type) return Character is
+   begin
+      return Units.Table (U).OA_Setting;
+   end OA_Setting;
 
    function Source_Index (U : Unit_Number_Type) return Source_File_Index is
    begin
@@ -183,10 +208,23 @@ package body Lib is
       Units.Table (U).Generate_Code := B;
    end Set_Generate_Code;
 
+   procedure Set_Has_Allocator (U : Unit_Number_Type; B : Boolean := True) is
+   begin
+      Units.Table (U).Has_Allocator := B;
+   end Set_Has_Allocator;
+
    procedure Set_Has_RACW (U : Unit_Number_Type; B : Boolean := True) is
    begin
       Units.Table (U).Has_RACW := B;
    end Set_Has_RACW;
+
+   procedure Set_Is_Compiler_Unit
+     (U : Unit_Number_Type;
+      B : Boolean := True)
+   is
+   begin
+      Units.Table (U).Is_Compiler_Unit := B;
+   end Set_Is_Compiler_Unit;
 
    procedure Set_Ident_String (U : Unit_Number_Type; N : Node_Id) is
    begin
@@ -198,10 +236,20 @@ package body Lib is
       Units.Table (U).Loading := B;
    end Set_Loading;
 
+   procedure Set_Main_CPU (U : Unit_Number_Type; P : Int) is
+   begin
+      Units.Table (U).Main_CPU := P;
+   end Set_Main_CPU;
+
    procedure Set_Main_Priority (U : Unit_Number_Type; P : Int) is
    begin
       Units.Table (U).Main_Priority := P;
    end Set_Main_Priority;
+
+   procedure Set_OA_Setting (U : Unit_Number_Type; C : Character) is
+   begin
+      Units.Table (U).OA_Setting := C;
+   end Set_OA_Setting;
 
    procedure Set_Unit_Name (U : Unit_Number_Type; N : Unit_Name_Type) is
    begin
@@ -314,7 +362,7 @@ package body Lib is
          end if;
 
          --  At this stage we know that neither is a subunit, so we deal
-         --  with instantiations, since we culd have a common ancestor
+         --  with instantiations, since we could have a common ancestor
 
          Inst1 := Instantiation (Sind1);
          Inst2 := Instantiation (Sind2);
@@ -403,6 +451,24 @@ package body Lib is
       return Compilation_Switches.Last;
    end Compilation_Switches_Last;
 
+   ---------------------------
+   -- Enable_Switch_Storing --
+   ---------------------------
+
+   procedure Enable_Switch_Storing is
+   begin
+      Switch_Storing_Enabled := True;
+   end Enable_Switch_Storing;
+
+   ----------------------------
+   -- Disable_Switch_Storing --
+   ----------------------------
+
+   procedure Disable_Switch_Storing is
+   begin
+      Switch_Storing_Enabled := False;
+   end Disable_Switch_Storing;
+
    ------------------------------
    -- Earlier_In_Extended_Unit --
    ------------------------------
@@ -435,55 +501,32 @@ package body Lib is
       return False;
    end Entity_Is_In_Main_Unit;
 
-   ---------------------------------
-   -- Generic_Separately_Compiled --
-   ---------------------------------
+   --------------------------
+   -- Generic_May_Lack_ALI --
+   --------------------------
 
-   function Generic_Separately_Compiled (E : Entity_Id) return Boolean is
+   function Generic_May_Lack_ALI (Sfile : File_Name_Type) return Boolean is
    begin
-      --  We do not generate object files for internal generics, because
-      --  the only thing they would contain is the elaboration boolean, and
-      --  we are careful to elaborate all predefined units first anyway, so
-      --  this boolean is not needed.
+      --  We allow internal generic units to be used without having a
+      --  corresponding ALI files to help bootstrapping with older compilers
+      --  that did not support generating ALIs for such generics. It is safe
+      --  to do so because the only thing the generated code would contain
+      --  is the elaboration boolean, and we are careful to elaborate all
+      --  predefined units first anyway.
 
-      if Is_Internal_File_Name
-          (Fname => Unit_File_Name (Get_Source_Unit (E)),
-           Renamings_Included => True)
-      then
-         return False;
+      return Is_Internal_File_Name
+               (Fname              => Sfile,
+                Renamings_Included => True);
+   end Generic_May_Lack_ALI;
 
-      --  All other generic units do generate object files
+   -----------------------------
+   -- Get_Code_Or_Source_Unit --
+   -----------------------------
 
-      else
-         return True;
-      end if;
-   end Generic_Separately_Compiled;
-
-   function Generic_Separately_Compiled
-     (Sfile : File_Name_Type) return Boolean
+   function Get_Code_Or_Source_Unit
+     (S                : Source_Ptr;
+      Unwind_Instances : Boolean) return Unit_Number_Type
    is
-   begin
-      --  Exactly the same as previous function, but works directly on a file
-      --  name.
-
-      if Is_Internal_File_Name
-          (Fname              => Sfile,
-           Renamings_Included => True)
-      then
-         return False;
-
-      --  All other generic units do generate object files
-
-      else
-         return True;
-      end if;
-   end Generic_Separately_Compiled;
-
-   -------------------
-   -- Get_Code_Unit --
-   -------------------
-
-   function Get_Code_Unit (S : Source_Ptr) return Unit_Number_Type is
    begin
       --  Search table unless we have No_Location, which can happen if the
       --  relevant location has not been set yet. Happens for example when
@@ -491,22 +534,41 @@ package body Lib is
 
       if S /= No_Location then
          declare
-            Source_File : constant Source_File_Index :=
-                            Get_Source_File_Index (Top_Level_Location (S));
+            Source_File : Source_File_Index;
+            Source_Unit : Unit_Number_Type;
 
          begin
-            for U in Units.First .. Units.Last loop
-               if Source_Index (U) = Source_File then
-                  return U;
-               end if;
-            end loop;
+            Source_File := Get_Source_File_Index (S);
+
+            if Unwind_Instances then
+               while Template (Source_File) /= No_Source_File loop
+                  Source_File := Template (Source_File);
+               end loop;
+            end if;
+
+            Source_Unit := Unit (Source_File);
+
+            if Source_Unit /= No_Unit then
+               return Source_Unit;
+            end if;
          end;
       end if;
 
-      --  If S was No_Location, or was not in the table, we must be in the
-      --  main source unit (and the value has not been placed in the table yet)
+      --  If S was No_Location, or was not in the table, we must be in the main
+      --  source unit (and the value has not been placed in the table yet),
+      --  or in one of the configuration pragma files.
 
       return Main_Unit;
+   end Get_Code_Or_Source_Unit;
+
+   -------------------
+   -- Get_Code_Unit --
+   -------------------
+
+   function Get_Code_Unit (S : Source_Ptr) return Unit_Number_Type is
+   begin
+      return Get_Code_Or_Source_Unit (Top_Level_Location (S),
+        Unwind_Instances => False);
    end Get_Code_Unit;
 
    function Get_Code_Unit (N : Node_Or_Entity_Id) return Unit_Number_Type is
@@ -560,10 +622,19 @@ package body Lib is
          end if;
       end loop;
 
-      --  If not in the table, must be the main source unit, and we just
-      --  have not got it put into the table yet.
+      --  If not in the table, must be a spec created for a main unit that is a
+      --  child subprogram body which we have not inserted into the table yet.
 
-      return Main_Unit;
+      if N = Library_Unit (Cunit (Main_Unit)) then
+         return Main_Unit;
+
+      --  If it is anything else, something is seriously wrong, and we really
+      --  don't want to proceed, even if assertions are off, so we explicitly
+      --  raise an exception in this case to terminate compilation.
+
+      else
+         raise Program_Error;
+      end if;
    end Get_Cunit_Unit_Number;
 
    ---------------------
@@ -572,33 +643,7 @@ package body Lib is
 
    function Get_Source_Unit (S : Source_Ptr) return Unit_Number_Type is
    begin
-      --  Search table unless we have No_Location, which can happen if the
-      --  relevant location has not been set yet. Happens for example when
-      --  we obtain Sloc (Cunit (Main_Unit)) before it is set.
-
-      if S /= No_Location then
-         declare
-            Source_File : Source_File_Index :=
-                            Get_Source_File_Index (Top_Level_Location (S));
-
-         begin
-            Source_File := Get_Source_File_Index (S);
-            while Template (Source_File) /= No_Source_File loop
-               Source_File := Template (Source_File);
-            end loop;
-
-            for U in Units.First .. Units.Last loop
-               if Source_Index (U) = Source_File then
-                  return U;
-               end if;
-            end loop;
-         end;
-      end if;
-
-      --  If S was No_Location, or was not in the table, we must be in the
-      --  main source unit (and the value is not got put into the table yet)
-
-      return Main_Unit;
+      return Get_Code_Or_Source_Unit (S, Unwind_Instances => True);
    end Get_Source_Unit;
 
    function Get_Source_Unit (N : Node_Or_Entity_Id) return Unit_Number_Type is
@@ -640,7 +685,7 @@ package body Lib is
 
       else
          return
-           In_Same_Extended_Unit (Sloc (N), Sloc (Cunit (Main_Unit)));
+           In_Same_Extended_Unit (N, Cunit (Main_Unit));
       end if;
    end In_Extended_Main_Code_Unit;
 
@@ -676,11 +721,10 @@ package body Lib is
       Mloc : constant Source_Ptr := Sloc (Cunit (Main_Unit));
 
    begin
-      --  If Mloc is not set, it means we are still parsing the main unit,
-      --  so everything so far is in the extended main source unit.
+      --  If parsing, then use the global flag to indicate result
 
-      if Mloc = No_Location then
-         return True;
+      if Compiler_State = Parsing then
+         return Parsing_Main_Extended_Source;
 
       --  Special value cases
 
@@ -716,11 +760,10 @@ package body Lib is
       Mloc : constant Source_Ptr := Sloc (Cunit (Main_Unit));
 
    begin
-      --  If Mloc is not set, it means we are still parsing the main unit,
-      --  so everything so far is in the extended main source unit.
+      --  If parsing, then use the global flag to indicate result
 
-      if Mloc = No_Location then
-         return True;
+      if Compiler_State = Parsing then
+         return Parsing_Main_Extended_Source;
 
       --  Special value cases
 
@@ -738,6 +781,22 @@ package body Lib is
              (Original_Location (Loc), Original_Location (Mloc));
       end if;
    end In_Extended_Main_Source_Unit;
+
+   ------------------------
+   -- In_Predefined_Unit --
+   ------------------------
+
+   function In_Predefined_Unit (N : Node_Or_Entity_Id) return Boolean is
+   begin
+      return In_Predefined_Unit (Sloc (N));
+   end In_Predefined_Unit;
+
+   function In_Predefined_Unit (S : Source_Ptr) return Boolean is
+      Unit : constant Unit_Number_Type := Get_Source_Unit (S);
+      File : constant File_Name_Type   := Unit_File_Name (Unit);
+   begin
+      return Is_Predefined_File_Name (File);
+   end In_Predefined_Unit;
 
    -----------------------
    -- In_Same_Code_Unit --
@@ -764,6 +823,13 @@ package body Lib is
    ---------------------------
    -- In_Same_Extended_Unit --
    ---------------------------
+
+   function In_Same_Extended_Unit
+     (N1, N2 : Node_Or_Entity_Id) return Boolean
+   is
+   begin
+      return Check_Same_Extended_Unit (Sloc (N1), Sloc (N2)) /= No;
+   end In_Same_Extended_Unit;
 
    function In_Same_Extended_Unit (S1, S2 : Source_Ptr) return Boolean is
    begin
@@ -798,7 +864,6 @@ package body Lib is
 
    function Increment_Serial_Number return Nat is
       TSN : Int renames Units.Table (Current_Sem_Unit).Serial_Number;
-
    begin
       TSN := TSN + 1;
       return TSN;
@@ -811,9 +876,9 @@ package body Lib is
    procedure Initialize is
    begin
       Linker_Option_Lines.Init;
+      Notes.Init;
       Load_Stack.Init;
       Units.Init;
-      Unit_Exception_Table_Present := False;
       Compilation_Switches.Init;
    end Initialize;
 
@@ -915,18 +980,20 @@ package body Lib is
 
    procedure Store_Compilation_Switch (Switch : String) is
    begin
-      Compilation_Switches.Increment_Last;
-      Compilation_Switches.Table (Compilation_Switches.Last) :=
-        new String'(Switch);
+      if Switch_Storing_Enabled then
+         Compilation_Switches.Increment_Last;
+         Compilation_Switches.Table (Compilation_Switches.Last) :=
+           new String'(Switch);
 
-      --  Fix up --RTS flag which has been transformed by the gcc driver
-      --  into -fRTS
+         --  Fix up --RTS flag which has been transformed by the gcc driver
+         --  into -fRTS
 
-      if Switch'Last >= Switch'First + 4
-        and then Switch (Switch'First .. Switch'First + 4) = "-fRTS"
-      then
-         Compilation_Switches.Table
-           (Compilation_Switches.Last) (Switch'First + 1) := '-';
+         if Switch'Last >= Switch'First + 4
+           and then Switch (Switch'First .. Switch'First + 4) = "-fRTS"
+         then
+            Compilation_Switches.Table
+              (Compilation_Switches.Last) (Switch'First + 1) := '-';
+         end if;
       end if;
    end Store_Compilation_Switch;
 
@@ -936,10 +1003,27 @@ package body Lib is
 
    procedure Store_Linker_Option_String (S : String_Id) is
    begin
-      Linker_Option_Lines.Increment_Last;
-      Linker_Option_Lines.Table (Linker_Option_Lines.Last) :=
-        (Option => S, Unit => Current_Sem_Unit);
+      Linker_Option_Lines.Append ((Option => S, Unit => Current_Sem_Unit));
    end Store_Linker_Option_String;
+
+   ----------------
+   -- Store_Note --
+   ----------------
+
+   procedure Store_Note (N : Node_Id) is
+   begin
+      Notes.Append ((Pragma_Node => N, Unit => Current_Sem_Unit));
+   end Store_Note;
+
+   -------------------------------
+   -- Synchronize_Serial_Number --
+   -------------------------------
+
+   procedure Synchronize_Serial_Number is
+      TSN : Int renames Units.Table (Current_Sem_Unit).Serial_Number;
+   begin
+      TSN := TSN + 1;
+   end Synchronize_Serial_Number;
 
    ---------------
    -- Tree_Read --
@@ -952,7 +1036,12 @@ package body Lib is
    begin
       Units.Tree_Read;
 
-      --  Read Compilation_Switches table
+      --  Read Compilation_Switches table. First release the memory occupied
+      --  by the previously loaded switches.
+
+      for J in Compilation_Switches.First .. Compilation_Switches.Last loop
+         Free (Compilation_Switches.Table (J));
+      end loop;
 
       Tree_Read_Int (N);
       Compilation_Switches.Set_Last (N);
@@ -979,6 +1068,17 @@ package body Lib is
          Tree_Write_Str (Compilation_Switches.Table (J));
       end loop;
    end Tree_Write;
+
+   ------------
+   -- Unlock --
+   ------------
+
+   procedure Unlock is
+   begin
+      Linker_Option_Lines.Locked := False;
+      Load_Stack.Locked := False;
+      Units.Locked := False;
+   end Unlock;
 
    -----------------
    -- Version_Get --

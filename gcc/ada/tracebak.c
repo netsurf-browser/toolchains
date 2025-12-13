@@ -6,7 +6,7 @@
  *                                                                          *
  *                          C Implementation File                           *
  *                                                                          *
- *           Copyright (C) 2000-2003 Ada Core Technologies, Inc.            *
+ *                     Copyright (C) 2000-2010, AdaCore                     *
  *                                                                          *
  * GNAT is free software;  you can  redistribute it  and/or modify it under *
  * terms of the  GNU General Public License as published  by the Free Soft- *
@@ -16,8 +16,8 @@
  * or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU General Public License *
  * for  more details.  You should have  received  a copy of the GNU General *
  * Public License  distributed with GNAT;  see file COPYING.  If not, write *
- * to  the Free Software Foundation,  59 Temple Place - Suite 330,  Boston, *
- * MA 02111-1307, USA.                                                      *
+ * to  the  Free Software Foundation,  51  Franklin  Street,  Fifth  Floor, *
+ * Boston, MA 02110-1301, USA.                                              *
  *                                                                          *
  * As a  special  exception,  if you  link  this file  with other  files to *
  * produce an executable,  this file does not by itself cause the resulting *
@@ -34,8 +34,9 @@
    functions.
    It has been tested on the following configurations:
    PowerPC/AiX
+   PowerPC/Darwin
    PowerPC/VxWorks
-   Sparc/Solaris
+   SPARC/Solaris
    i386/GNU/Linux
    i386/Solaris
    i386/NT
@@ -56,21 +57,25 @@
 #else
 #include "config.h"
 #include "system.h"
+/* We don't want fancy_abort here.  */
+#undef abort
 #endif
 
 extern int __gnat_backtrace (void **, int, void *, void *, int);
 
-/* The point is to provide an implementation of the __gnat_bactrace function
-   above, called by the default implementation of the System.Traceback
-   package.
+/* The point is to provide an implementation of the __gnat_backtrace function
+   above, called by the default implementation of the System.Traceback package.
 
    We first have a series of target specific implementations, each included
    from a separate C file for readability purposes.
 
-   Then comes a somewhat generic implementation based on a set of macro and
-   structure definitions which may be tailored on a per target basis. The
-   presence of a definition for one of these macros (PC_ADJUST) controls
-   wether or not the generic implementation is included.
+   Then come two flavors of a generic implementation: one relying on static
+   assumptions about the frame layout, and the other one using the GCC EH
+   infrastructure.  The former uses a whole set of macros and structures which
+   may be tailored on a per target basis, and is activated as soon as
+   USE_GENERIC_UNWINDER is defined.  The latter uses a small subset of the
+   macro definitions and is activated when USE_GCC_UNWINDER is defined. It is
+   only available post GCC 3.3.
 
    Finally, there is a default dummy implementation, necessary to make the
    linker happy on platforms where the feature is not supported, but where the
@@ -94,7 +99,12 @@ extern void (*Unlock_Task) (void);
 
 #include "tb-alvms.c"
 
+#elif defined (__ia64__) && defined (__VMS__)
+
+#include "tb-ivms.c"
+
 #else
+
 /* No target specific implementation.  */
 
 /*----------------------------------------------------------------*
@@ -113,7 +123,7 @@ extern void (*Unlock_Task) (void);
    we store in the tracebacks array. The latter allows us to loop over the
    successive frames in the chain.
 
-   To initiate the process, we retrieve an initial frame pointer using the
+   To initiate the process, we retrieve an initial frame address using the
    appropriate GCC builtin (__builtin_frame_address).
 
    This scheme is unfortunately not applicable on every target because the
@@ -123,8 +133,8 @@ extern void (*Unlock_Task) (void);
    o struct layout, describing the expected stack data layout relevant to the
      information we are interested in,
 
-   o FRAME_OFFSET, the offset, from a given frame pointer, at which this
-     layout will be found,
+   o FRAME_OFFSET, the offset, from a given frame address or frame pointer
+     value, at which this layout will be found,
 
    o FRAME_LEVEL, controls how many frames up we get at to start with,
      from the initial frame pointer we compute by way of the GCC builtin,
@@ -137,7 +147,7 @@ extern void (*Unlock_Task) (void);
      of a call instruction), which is what we want in the output array, and
      the associated return address, which is what we retrieve from the stack.
 
-   o STOP_FRAME, to decide wether we reached the top of the call chain, and
+   o STOP_FRAME, to decide whether we reached the top of the call chain, and
      thus if the process shall stop.
 
 	   :
@@ -185,13 +195,31 @@ extern void (*Unlock_Task) (void);
 
    o FETCH_UP_FRAME, to force an invocation of __builtin_frame_address with a
      positive argument right after a possibly forced call even if FRAME_LEVEL
-     is 0. See the Sparc Solaris case for an example where this is useful.
+     is 0. See the SPARC Solaris case for an example where this is useful.
 
   */
 
-/*------------------------------ PPC AIX -------------------------------*/
+/*--------------------------- Darwin 8 or newer ----------------------------*/
+#if defined (__APPLE__) \
+    && defined (__ENVIRONMENT_MAC_OS_X_VERSION_MIN_REQUIRED__) \
+    && __ENVIRONMENT_MAC_OS_X_VERSION_MIN_REQUIRED__ >= 1040
+ 
+#define USE_GCC_UNWINDER
 
-#if defined (_AIX)
+#if defined (__i386__) || defined (__x86_64__)
+#define PC_ADJUST -2
+#elif defined (__ppc__) || defined (__ppc64__)
+#define PC_ADJUST -4
+#else
+#error Unhandled darwin architecture.
+#endif
+
+/*------------------------ PPC AIX/Older Darwin -------------------------*/
+#elif ((defined (_POWER) && defined (_AIX)) \
+       || (defined (__APPLE__)  && defined (__ppc__)))
+
+#define USE_GENERIC_UNWINDER
+
 struct layout
 {
   struct layout *next;
@@ -199,7 +227,7 @@ struct layout
   void *return_address;
 };
 
-#define FRAME_OFFSET 0
+#define FRAME_OFFSET(FP) 0
 #define PC_ADJUST -4
 #define STOP_FRAME(CURRENT, TOP_STACK) ((void *) (CURRENT) < (TOP_STACK))
 
@@ -207,36 +235,42 @@ struct layout
    function is located in it's caller's frame, and the save operation only
    takes place if the function performs a call.
 
-   To have __gnat_backtrace retrieve it's own return address, we then
+   To have __gnat_backtrace retrieve its own return address, we then
    define ... */
 
-#define FORCE_CALL
+#define FORCE_CALL 1
 #define FRAME_LEVEL 1
 
 #define BASE_SKIP 1
 
-/*---------------------------- PPC VxWorks------------------------------*/
+/*-------------------- PPC ELF (GNU/Linux & VxWorks) ---------------------*/
 
-#elif defined (_ARCH_PPC) && defined (__vxworks)
+#elif (defined (_ARCH_PPC) && defined (__vxworks)) ||  \
+  (defined (linux) && defined (__powerpc__))
+
+#define USE_GENERIC_UNWINDER
+
 struct layout
 {
   struct layout *next;
   void *return_address;
 };
 
-#define FORCE_CALL
+#define FORCE_CALL 1
 #define FRAME_LEVEL 1
 /* See the PPC AIX case for an explanation of these values.  */
 
-#define FRAME_OFFSET 0
+#define FRAME_OFFSET(FP) 0
 #define PC_ADJUST -4
-#define STOP_FRAME(CURRENT, TOP_STACK) ((CURRENT)->return_address == 0)
+#define STOP_FRAME(CURRENT, TOP_STACK) ((CURRENT)->next == 0)
 
 #define BASE_SKIP 1
 
-/*-------------------------- Sparc Solaris -----------------------------*/
+/*-------------------------- SPARC Solaris -----------------------------*/
 
 #elif defined (sun) && defined (sparc)
+
+#define USE_GENERIC_UNWINDER
 
 /* These definitions are inspired from the Appendix D (Software
    Considerations) of the SPARC V8 architecture manual.  */
@@ -247,14 +281,20 @@ struct layout
   void *return_address;
 };
 
+#ifdef __arch64__
+#define STACK_BIAS 2047 /* V9 ABI */
+#else
+#define STACK_BIAS 0    /* V8 ABI */
+#endif
+
 #define FRAME_LEVEL 0
-#define FRAME_OFFSET (14 * (sizeof (void*)))
+#define FRAME_OFFSET(FP) (14 * sizeof (void*) + (FP ? STACK_BIAS : 0))
 #define PC_ADJUST 0
 #define STOP_FRAME(CURRENT, TOP_STACK) \
   ((CURRENT)->return_address == 0|| (CURRENT)->next == 0 \
    || (void *) (CURRENT) < (TOP_STACK))
 
-/* The sparc register windows need to be flushed before we may access them
+/* The SPARC register windows need to be flushed before we may access them
    from the stack. This is achieved by way of builtin_frame_address only
    when the "count" argument is positive, so force at least one such call.  */
 #define FETCH_UP_FRAME_ADDRESS
@@ -267,30 +307,45 @@ struct layout
 /*------------------------------- x86 ----------------------------------*/
 
 #elif defined (i386)
+
+#if defined (__WIN32)
+#include <windows.h>
+#define IS_BAD_PTR(ptr) (IsBadCodePtr((void *)ptr))
+#elif defined (sun)
+#define IS_BAD_PTR(ptr) ((unsigned long)ptr == -1UL)
+#else
+#define IS_BAD_PTR(ptr) 0
+#endif
+
+/* Starting with GCC 4.6, -fomit-frame-pointer is turned on by default for
+   32-bit x86/Linux as well and DWARF 2 unwind tables are emitted instead.
+   See the x86-64 case below for the drawbacks with this approach.  */
+#if defined (linux) && (__GNUC__ * 10 + __GNUC_MINOR__ > 45)
+#define USE_GCC_UNWINDER
+#else
+#define USE_GENERIC_UNWINDER
+#endif
+
 struct layout
 {
   struct layout *next;
   void *return_address;
 };
 
-#ifdef _WIN32
-/* _image_base__ is the image starting address, no stack addresses should be
-   under this value */
-extern unsigned int _image_base__;
-#define LOWEST_ADDR ((unsigned int) (&_image_base__))
-#else
-#define LOWEST_ADDR 0
-#endif
+#define FRAME_LEVEL 1
+/* builtin_frame_address (1) is expected to work on this target, and (0) might
+   return the soft stack pointer, which does not designate a location where a
+   backchain and a return address might be found.  */
 
-#define FRAME_LEVEL 0
-#define FRAME_OFFSET 0
+#define FRAME_OFFSET(FP) 0
 #define PC_ADJUST -2
 #define STOP_FRAME(CURRENT, TOP_STACK) \
-  ((unsigned int)(CURRENT)->return_address < LOWEST_ADDR \
+  (IS_BAD_PTR((long)(CURRENT)) \
+   || IS_BAD_PTR((long)(CURRENT)->return_address) \
    || (CURRENT)->return_address == 0|| (CURRENT)->next == 0  \
    || (void *) (CURRENT) < (TOP_STACK))
 
-#define BASE_SKIP 1
+#define BASE_SKIP (1+FRAME_LEVEL)
 
 /* On i386 architecture we check that at the call point we really have a call
    insn. Possible call instructions are:
@@ -305,23 +360,71 @@ extern unsigned int _image_base__;
 */
 
 #define VALID_STACK_FRAME(ptr) \
-   (((*((ptr) - 3) & 0xff) == 0xe8) \
-    || ((*((ptr) - 5) & 0xff) == 0x9a) \
-    || ((*((ptr) - 1) & 0xff) == 0xff) \
-    || (((*(ptr) & 0xd0ff) == 0xd0ff)))
+   (!IS_BAD_PTR(ptr) \
+    && (((*((ptr) - 3) & 0xff) == 0xe8) \
+        || ((*((ptr) - 5) & 0xff) == 0x9a) \
+        || ((*((ptr) - 1) & 0xff) == 0xff) \
+        || (((*(ptr) & 0xd0ff) == 0xd0ff))))
+
+/*----------------------------- x86_64 ---------------------------------*/
+
+#elif defined (__x86_64__)
+
+#define USE_GCC_UNWINDER
+/* The generic unwinder is not used for this target because it is based
+   on frame layout assumptions that are not reliable on this target (the
+   rbp register is very likely used for something else than storing the
+   frame pointer in optimized code). Hence, we use the GCC unwinder
+   based on DWARF 2 call frame information, although it has the drawback
+   of not being able to unwind through frames compiled without DWARF 2
+   information.
+*/
+
+#define PC_ADJUST -2
+/* The minimum size of call instructions on this architecture is 2 bytes */
+
+/*----------------------------- ia64 ---------------------------------*/
+
+#elif defined (__ia64__) && (defined (linux) || defined (__hpux__))
+
+#define USE_GCC_UNWINDER
+/* Use _Unwind_Backtrace driven exceptions on ia64 HP-UX and ia64
+   GNU/Linux, where _Unwind_Backtrace is provided by the system unwind
+   library. On HP-UX 11.23 this requires patch PHSS_33352, which adds
+   _Unwind_Backtrace to the system unwind library. */
+
+#define PC_ADJUST -4
+
 
 #endif
 
-/*---------------------------------------*
- *-- The generic implementation per se --*
- *---------------------------------------*/
+/*---------------------------------------------------------------------*
+ *--      The post GCC 3.3 infrastructure based implementation       --*
+ *---------------------------------------------------------------------*/
 
-#if defined (PC_ADJUST)
+#if defined (USE_GCC_UNWINDER) && (__GNUC__ * 10 + __GNUC_MINOR__ > 33)
+
+/* Conditioning the inclusion on the GCC version is useful to avoid bootstrap
+   path problems, since the included file refers to post 3.3 functions in
+   libgcc, and the stage1 compiler is unlikely to be linked against a post 3.3
+   library.  It actually disables the support for backtraces in this compiler
+   for targets defining USE_GCC_UNWINDER, which is OK since we don't use the
+   traceback capability in the compiler anyway.
+
+   The condition is expressed the way above because we cannot reliably rely on
+   any other macro from the base compiler when compiling stage1.  */
+
+#include "tb-gcc.c"
+
+/*------------------------------------------------------------------*
+ *-- The generic implementation based on frame layout assumptions --*
+ *------------------------------------------------------------------*/
+
+#elif defined (USE_GENERIC_UNWINDER)
 
 #ifndef CURRENT_STACK_FRAME
 # define CURRENT_STACK_FRAME  ({ char __csf; &__csf; })
 #endif
-
 
 #ifndef VALID_STACK_FRAME
 #define VALID_STACK_FRAME(ptr) 1
@@ -331,12 +434,18 @@ extern unsigned int _image_base__;
 #define MAX(x,y) ((x) > (y) ? (x) : (y))
 #endif
 
-/* Define a dummy function to call if FORCE_CALL is defined.  Don't
-   define it otherwise, as this could lead to "defined but not used"
-   warnings.  */
-#if defined (FORCE_CALL)
-static void forced_callee () {}
+#ifndef FORCE_CALL
+#define FORCE_CALL 0
 #endif
+
+/* Make sure the function is not inlined.  */
+static void forced_callee (void) __attribute__ ((noinline));
+
+static void forced_callee (void)
+{
+  /* Make sure the function is not pure.  */
+  volatile int i __attribute__ ((unused)) = 0;
+}
 
 int
 __gnat_backtrace (void **array,
@@ -347,16 +456,14 @@ __gnat_backtrace (void **array,
 {
   struct layout *current;
   void *top_frame;
-  void *top_stack;
+  void *top_stack ATTRIBUTE_UNUSED;
   int cnt = 0;
 
-  /* Honor FORCE_CALL when defined.  */
-#if defined (FORCE_CALL)
-  forced_callee ();
-#endif
+  if (FORCE_CALL)
+    forced_callee ();
 
   /* Force a call to builtin_frame_address with a positive argument
-     if required. This is necessary e.g. on sparc to have the register
+     if required. This is necessary e.g. on SPARC to have the register
      windows flushed before we attempt to access them on the stack.  */
 #if defined (FETCH_UP_FRAME_ADDRESS) && (FRAME_LEVEL == 0)
   __builtin_frame_address (1);
@@ -364,7 +471,7 @@ __gnat_backtrace (void **array,
 
   top_frame = __builtin_frame_address (FRAME_LEVEL);
   top_stack = CURRENT_STACK_FRAME;
-  current = (struct layout *) ((size_t) top_frame + FRAME_OFFSET);
+  current = (struct layout *) ((size_t) top_frame + FRAME_OFFSET (0));
 
   /* Skip the number of calls we have been requested to skip, accounting for
      the BASE_SKIP parameter.
@@ -377,7 +484,7 @@ __gnat_backtrace (void **array,
 
   while (cnt < skip_frames)
     {
-      current = (struct layout *) ((size_t) current->next + FRAME_OFFSET);
+      current = (struct layout *) ((size_t) current->next + FRAME_OFFSET (1));
       cnt++;
     }
 
@@ -392,26 +499,27 @@ __gnat_backtrace (void **array,
 	  || current->return_address > exclude_max)
         array[cnt++] = current->return_address + PC_ADJUST;
 
-      current = (struct layout *) ((size_t) current->next + FRAME_OFFSET);
+      current = (struct layout *) ((size_t) current->next + FRAME_OFFSET (1));
     }
 
   return cnt;
 }
 
 #else
-/* No target specific implementation and PC_ADJUST not defined.  */
+
+/* No target specific implementation and neither USE_GCC_UNWINDER nor
+   USE_GENERIC_UNWINDER defined.  */
 
 /*------------------------------*
  *-- The dummy implementation --*
  *------------------------------*/
 
 int
-__gnat_backtrace (array, size, exclude_min, exclude_max, skip_frames)
-     void **array ATTRIBUTE_UNUSED;
-     int size ATTRIBUTE_UNUSED;
-     void *exclude_min ATTRIBUTE_UNUSED;
-     void *exclude_max ATTRIBUTE_UNUSED;
-     int skip_frames ATTRIBUTE_UNUSED;
+__gnat_backtrace (void **array ATTRIBUTE_UNUSED,
+                  int size ATTRIBUTE_UNUSED,
+                  void *exclude_min ATTRIBUTE_UNUSED,
+                  void *exclude_max ATTRIBUTE_UNUSED,
+                  int skip_frames ATTRIBUTE_UNUSED)
 {
   return 0;
 }

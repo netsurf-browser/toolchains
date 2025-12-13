@@ -6,25 +6,23 @@
 --                                                                          --
 --                                 S p e c                                  --
 --                                                                          --
---          Copyright (C) 1992-1999 Free Software Foundation, Inc.          --
+--          Copyright (C) 1992-2010, Free Software Foundation, Inc.         --
 --                                                                          --
 -- GNAT is free software;  you can  redistribute it  and/or modify it under --
 -- terms of the  GNU General Public License as published  by the Free Soft- --
--- ware  Foundation;  either version 2,  or (at your option) any later ver- --
+-- ware  Foundation;  either version 3,  or (at your option) any later ver- --
 -- sion.  GNAT is distributed in the hope that it will be useful, but WITH- --
 -- OUT ANY WARRANTY;  without even the  implied warranty of MERCHANTABILITY --
--- or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU General Public License --
--- for  more details.  You should have  received  a copy of the GNU General --
--- Public License  distributed with GNAT;  see file COPYING.  If not, write --
--- to  the Free Software Foundation,  59 Temple Place - Suite 330,  Boston, --
--- MA 02111-1307, USA.                                                      --
+-- or FITNESS FOR A PARTICULAR PURPOSE.                                     --
 --                                                                          --
--- As a special exception,  if other files  instantiate  generics from this --
--- unit, or you link  this unit with other files  to produce an executable, --
--- this  unit  does not  by itself cause  the resulting  executable  to  be --
--- covered  by the  GNU  General  Public  License.  This exception does not --
--- however invalidate  any other reasons why  the executable file  might be --
--- covered by the  GNU Public License.                                      --
+-- As a special exception under Section 7 of GPL version 3, you are granted --
+-- additional permissions described in the GCC Runtime Library Exception,   --
+-- version 3.1, as published by the Free Software Foundation.               --
+--                                                                          --
+-- You should have received a copy of the GNU General Public License and    --
+-- a copy of the GCC Runtime Library Exception along with this program;     --
+-- see the files COPYING3 and COPYING.RUNTIME respectively.  If not, see    --
+-- <http://www.gnu.org/licenses/>.                                          --
 --                                                                          --
 -- GNAT was originally developed  by the GNAT team at  New York University. --
 -- Extensive contributions were provided by Ada Core Technologies Inc.      --
@@ -36,14 +34,25 @@
 --  create and close routines are elsewhere (in Osint in the compiler, and in
 --  the tree read driver for the tree read interface).
 
-with GNAT.OS_Lib; use GNAT.OS_Lib;
-with System;      use System;
-with Types;       use Types;
+with Types;  use Types;
+with System; use System;
+
+pragma Warnings (Off);
+--  This package is used also by gnatcoll
+with System.OS_Lib; use System.OS_Lib;
+pragma Warnings (On);
 
 package Tree_IO is
 
    Tree_Format_Error : exception;
    --  Raised if a format error is detected in the input file
+
+   ASIS_Version_Number : constant := 23;
+   --  ASIS Version. This is used to check for consistency between the compiler
+   --  used to generate trees and an ASIS application that is reading the
+   --  trees. It must be incremented whenever a change is made to the tree
+   --  format that would result in the compiler being incompatible with an
+   --  older version of ASIS.
 
    procedure Tree_Read_Initialize (Desc : File_Descriptor);
    --  Called to initialize reading of a tree file. This call must be made
@@ -96,7 +105,7 @@ package Tree_IO is
    --  Writes a single integer value to the current tree file
 
    procedure Tree_Write_Str (S : String_Ptr);
-   --  Write out string value referenced by S. Low bound must be 1.
+   --  Write out string value referenced by S (low bound of S must be 1)
 
    procedure Tree_Write_Terminate;
    --  Terminates writing of the file (flushing the buffer), but does not

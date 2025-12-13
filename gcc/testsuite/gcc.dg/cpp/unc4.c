@@ -1,5 +1,4 @@
 /* { dg-do preprocess } */
-/* { dg-options "-fno-show-column" } */
 
 /* Tests for un-terminated conditional diagnostics.
    Copyright (c) 1999 Free Software Foundation.
@@ -32,7 +31,7 @@ ignored
    message.  */
 #define FOO
 #ifdef FOO  /* { dg-bogus "unterminated" "nested unterm" } */
-#include "unc1.c"  /* { dg-error "" } */
+#include "unc1.c"  /* { dg-message "file included from" "" { target *-*-* } 0 } */
 #endif
 
 /* dg.exp doesn't read the included files for tags, so we have to

@@ -1,30 +1,28 @@
 ------------------------------------------------------------------------------
 --                                                                          --
---                         GNAT RUNTIME COMPONENTS                          --
+--                         GNAT RUN-TIME COMPONENTS                         --
 --                                                                          --
 --        A D A . S T R I N G S . W I D E _ S U P E R B O U N D E D         --
 --                                                                          --
 --                                 B o d y                                  --
 --                                                                          --
---          Copyright (C) 2003 Free Software Foundation, Inc.               --
+--          Copyright (C) 2003-2010, Free Software Foundation, Inc.         --
 --                                                                          --
 -- GNAT is free software;  you can  redistribute it  and/or modify it under --
 -- terms of the  GNU General Public License as published  by the Free Soft- --
--- ware  Foundation;  either version 2,  or (at your option) any later ver- --
+-- ware  Foundation;  either version 3,  or (at your option) any later ver- --
 -- sion.  GNAT is distributed in the hope that it will be useful, but WITH- --
 -- OUT ANY WARRANTY;  without even the  implied warranty of MERCHANTABILITY --
--- or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU General Public License --
--- for  more details.  You should have  received  a copy of the GNU General --
--- Public License  distributed with GNAT;  see file COPYING.  If not, write --
--- to  the Free Software Foundation,  59 Temple Place - Suite 330,  Boston, --
--- MA 02111-1307, USA.                                                      --
+-- or FITNESS FOR A PARTICULAR PURPOSE.                                     --
 --                                                                          --
--- As a special exception,  if other files  instantiate  generics from this --
--- unit, or you link  this unit with other files  to produce an executable, --
--- this  unit  does not  by itself cause  the resulting  executable  to  be --
--- covered  by the  GNU  General  Public  License.  This exception does not --
--- however invalidate  any other reasons why  the executable file  might be --
--- covered by the  GNU Public License.                                      --
+-- As a special exception under Section 7 of GPL version 3, you are granted --
+-- additional permissions described in the GCC Runtime Library Exception,   --
+-- version 3.1, as published by the Free Software Foundation.               --
+--                                                                          --
+-- You should have received a copy of the GNU General Public License and    --
+-- a copy of the GCC Runtime Library Exception along with this program;     --
+-- see the files COPYING3 and COPYING.RUNTIME respectively.  If not, see    --
+-- <http://www.gnu.org/licenses/>.                                          --
 --                                                                          --
 -- GNAT was originally developed  by the GNAT team at  New York University. --
 -- Extensive contributions were provided by Ada Core Technologies Inc.      --
@@ -42,8 +40,7 @@ package body Ada.Strings.Wide_Superbounded is
 
    function Concat
      (Left  : Super_String;
-      Right : Super_String)
-      return  Super_String
+      Right : Super_String) return Super_String
    is
       Result : Super_String (Left.Max_Length);
       Llen   : constant Natural := Left.Current_Length;
@@ -64,8 +61,7 @@ package body Ada.Strings.Wide_Superbounded is
 
    function Concat
      (Left  : Super_String;
-      Right : Wide_String)
-      return  Super_String
+      Right : Wide_String) return Super_String
    is
       Result : Super_String (Left.Max_Length);
       Llen   : constant Natural := Left.Current_Length;
@@ -85,8 +81,7 @@ package body Ada.Strings.Wide_Superbounded is
 
    function Concat
      (Left  : Wide_String;
-      Right : Super_String)
-      return  Super_String
+      Right : Super_String) return Super_String
    is
       Result : Super_String (Right.Max_Length);
       Llen   : constant Natural := Left'Length;
@@ -107,8 +102,7 @@ package body Ada.Strings.Wide_Superbounded is
 
    function Concat
      (Left  : Super_String;
-      Right : Wide_Character)
-      return  Super_String
+      Right : Wide_Character) return Super_String
    is
       Result : Super_String (Left.Max_Length);
       Llen   : constant Natural := Left.Current_Length;
@@ -127,8 +121,7 @@ package body Ada.Strings.Wide_Superbounded is
 
    function Concat
      (Left  : Wide_Character;
-      Right : Super_String)
-      return  Super_String
+      Right : Super_String) return Super_String
    is
       Result : Super_String (Right.Max_Length);
       Rlen   : constant Natural := Right.Current_Length;
@@ -149,22 +142,29 @@ package body Ada.Strings.Wide_Superbounded is
    -- Equal --
    -----------
 
-   function "=" (Left, Right : Super_String) return Boolean is
+   function "="
+     (Left  : Super_String;
+      Right : Super_String) return Boolean
+   is
    begin
       return Left.Current_Length = Right.Current_Length
         and then Left.Data (1 .. Left.Current_Length) =
                    Right.Data (1 .. Right.Current_Length);
    end "=";
 
-   function Equal (Left : Super_String; Right : Wide_String)
-                   return Boolean is
+   function Equal
+     (Left  : Super_String;
+      Right : Wide_String) return Boolean
+   is
    begin
       return Left.Current_Length = Right'Length
         and then Left.Data (1 .. Left.Current_Length) = Right;
    end Equal;
 
-   function Equal (Left : Wide_String; Right : Super_String)
-                   return Boolean is
+   function Equal
+     (Left  : Wide_String;
+      Right : Super_String) return Boolean
+   is
    begin
       return Left'Length = Right.Current_Length
         and then Left = Right.Data (1 .. Right.Current_Length);
@@ -174,7 +174,10 @@ package body Ada.Strings.Wide_Superbounded is
    -- Greater --
    -------------
 
-   function Greater (Left, Right : Super_String) return Boolean is
+   function Greater
+     (Left  : Super_String;
+      Right : Super_String) return Boolean
+   is
    begin
       return Left.Data (1 .. Left.Current_Length) >
                Right.Data (1 .. Right.Current_Length);
@@ -182,8 +185,7 @@ package body Ada.Strings.Wide_Superbounded is
 
    function Greater
      (Left  : Super_String;
-      Right : Wide_String)
-      return  Boolean
+      Right : Wide_String) return Boolean
    is
    begin
       return Left.Data (1 .. Left.Current_Length) > Right;
@@ -191,8 +193,7 @@ package body Ada.Strings.Wide_Superbounded is
 
    function Greater
      (Left  : Wide_String;
-      Right : Super_String)
-      return  Boolean
+      Right : Super_String) return Boolean
    is
    begin
       return Left > Right.Data (1 .. Right.Current_Length);
@@ -202,7 +203,10 @@ package body Ada.Strings.Wide_Superbounded is
    -- Greater_Or_Equal --
    ----------------------
 
-   function Greater_Or_Equal (Left, Right : Super_String) return Boolean is
+   function Greater_Or_Equal
+     (Left  : Super_String;
+      Right : Super_String) return Boolean
+   is
    begin
       return Left.Data (1 .. Left.Current_Length) >=
                Right.Data (1 .. Right.Current_Length);
@@ -210,8 +214,7 @@ package body Ada.Strings.Wide_Superbounded is
 
    function Greater_Or_Equal
      (Left  : Super_String;
-      Right : Wide_String)
-      return  Boolean
+      Right : Wide_String) return Boolean
    is
    begin
       return Left.Data (1 .. Left.Current_Length) >= Right;
@@ -219,8 +222,7 @@ package body Ada.Strings.Wide_Superbounded is
 
    function Greater_Or_Equal
      (Left  : Wide_String;
-      Right : Super_String)
-      return  Boolean
+      Right : Super_String) return Boolean
    is
    begin
       return Left >= Right.Data (1 .. Right.Current_Length);
@@ -230,7 +232,10 @@ package body Ada.Strings.Wide_Superbounded is
    -- Less --
    ----------
 
-   function Less (Left, Right : Super_String) return Boolean is
+   function Less
+     (Left  : Super_String;
+      Right : Super_String) return Boolean
+   is
    begin
       return Left.Data (1 .. Left.Current_Length) <
                Right.Data (1 .. Right.Current_Length);
@@ -238,8 +243,7 @@ package body Ada.Strings.Wide_Superbounded is
 
    function Less
      (Left  : Super_String;
-      Right : Wide_String)
-      return  Boolean
+      Right : Wide_String) return Boolean
    is
    begin
       return Left.Data (1 .. Left.Current_Length) < Right;
@@ -247,8 +251,7 @@ package body Ada.Strings.Wide_Superbounded is
 
    function Less
      (Left  : Wide_String;
-      Right : Super_String)
-      return  Boolean
+      Right : Super_String) return Boolean
    is
    begin
       return Left < Right.Data (1 .. Right.Current_Length);
@@ -258,7 +261,10 @@ package body Ada.Strings.Wide_Superbounded is
    -- Less_Or_Equal --
    -------------------
 
-   function Less_Or_Equal (Left, Right : Super_String) return Boolean is
+   function Less_Or_Equal
+     (Left  : Super_String;
+      Right : Super_String) return Boolean
+   is
    begin
       return Left.Data (1 .. Left.Current_Length) <=
                Right.Data (1 .. Right.Current_Length);
@@ -266,8 +272,7 @@ package body Ada.Strings.Wide_Superbounded is
 
    function Less_Or_Equal
      (Left  : Super_String;
-      Right : Wide_String)
-      return  Boolean
+      Right : Wide_String) return Boolean
    is
    begin
       return Left.Data (1 .. Left.Current_Length) <= Right;
@@ -275,12 +280,46 @@ package body Ada.Strings.Wide_Superbounded is
 
    function Less_Or_Equal
      (Left  : Wide_String;
-      Right : Super_String)
-      return  Boolean
+      Right : Super_String) return Boolean
    is
    begin
       return Left <= Right.Data (1 .. Right.Current_Length);
    end Less_Or_Equal;
+
+   ----------------------
+   -- Set_Super_String --
+   ----------------------
+
+   procedure Set_Super_String
+     (Target : out Super_String;
+      Source : Wide_String;
+      Drop   : Truncation := Error)
+   is
+      Slen       : constant Natural := Source'Length;
+      Max_Length : constant Positive := Target.Max_Length;
+
+   begin
+      if Slen <= Max_Length then
+         Target.Current_Length := Slen;
+         Target.Data (1 .. Slen) := Source;
+
+      else
+         case Drop is
+            when Strings.Right =>
+               Target.Current_Length := Max_Length;
+               Target.Data (1 .. Max_Length) :=
+                 Source (Source'First .. Source'First - 1 + Max_Length);
+
+            when Strings.Left =>
+               Target.Current_Length := Max_Length;
+               Target.Data (1 .. Max_Length) :=
+                 Source (Source'Last - (Max_Length - 1) .. Source'Last);
+
+            when Strings.Error =>
+               raise Ada.Strings.Length_Error;
+         end case;
+      end if;
+   end Set_Super_String;
 
    ------------------
    -- Super_Append --
@@ -289,9 +328,9 @@ package body Ada.Strings.Wide_Superbounded is
    --  Case of Super_String and Super_String
 
    function Super_Append
-     (Left, Right : Super_String;
-      Drop        : Strings.Truncation  := Strings.Error)
-      return        Super_String
+     (Left  : Super_String;
+      Right : Super_String;
+      Drop  : Strings.Truncation  := Strings.Error) return Super_String
    is
       Max_Length : constant Positive := Left.Max_Length;
       Result : Super_String (Max_Length);
@@ -386,8 +425,7 @@ package body Ada.Strings.Wide_Superbounded is
    function Super_Append
      (Left  : Super_String;
       Right : Wide_String;
-      Drop  : Strings.Truncation := Strings.Error)
-      return  Super_String
+      Drop  : Strings.Truncation := Strings.Error) return Super_String
    is
       Max_Length : constant Positive := Left.Max_Length;
       Result : Super_String (Max_Length);
@@ -488,8 +526,7 @@ package body Ada.Strings.Wide_Superbounded is
    function Super_Append
      (Left  : Wide_String;
       Right : Super_String;
-      Drop  : Strings.Truncation := Strings.Error)
-      return  Super_String
+      Drop  : Strings.Truncation := Strings.Error) return Super_String
    is
       Max_Length : constant Positive := Right.Max_Length;
       Result     : Super_String (Max_Length);
@@ -543,8 +580,7 @@ package body Ada.Strings.Wide_Superbounded is
    function Super_Append
      (Left  : Super_String;
       Right : Wide_Character;
-      Drop  : Strings.Truncation := Strings.Error)
-      return  Super_String
+      Drop  : Strings.Truncation := Strings.Error) return Super_String
    is
       Max_Length : constant Positive := Left.Max_Length;
       Result     : Super_String (Max_Length);
@@ -612,8 +648,7 @@ package body Ada.Strings.Wide_Superbounded is
    function Super_Append
      (Left  : Wide_Character;
       Right : Super_String;
-      Drop  : Strings.Truncation := Strings.Error)
-      return  Super_String
+      Drop  : Strings.Truncation := Strings.Error) return Super_String
    is
       Max_Length : constant Positive := Right.Max_Length;
       Result : Super_String (Max_Length);
@@ -649,10 +684,10 @@ package body Ada.Strings.Wide_Superbounded is
    -----------------
 
    function Super_Count
-     (Source   : Super_String;
-      Pattern  : Wide_String;
-      Mapping  : Wide_Maps.Wide_Character_Mapping := Wide_Maps.Identity)
-      return     Natural
+     (Source  : Super_String;
+      Pattern : Wide_String;
+      Mapping : Wide_Maps.Wide_Character_Mapping := Wide_Maps.Identity)
+      return Natural
    is
    begin
       return
@@ -661,10 +696,9 @@ package body Ada.Strings.Wide_Superbounded is
    end Super_Count;
 
    function Super_Count
-     (Source   : Super_String;
-      Pattern  : Wide_String;
-      Mapping  : Wide_Maps.Wide_Character_Mapping_Function)
-      return     Natural
+     (Source  : Super_String;
+      Pattern : Wide_String;
+      Mapping : Wide_Maps.Wide_Character_Mapping_Function) return Natural
    is
    begin
       return
@@ -674,8 +708,7 @@ package body Ada.Strings.Wide_Superbounded is
 
    function Super_Count
      (Source : Super_String;
-      Set    : Wide_Maps.Wide_Character_Set)
-      return   Natural
+      Set    : Wide_Maps.Wide_Character_Set) return Natural
    is
    begin
       return Wide_Search.Count (Source.Data (1 .. Source.Current_Length), Set);
@@ -688,8 +721,7 @@ package body Ada.Strings.Wide_Superbounded is
    function Super_Delete
      (Source  : Super_String;
       From    : Positive;
-      Through : Natural)
-      return    Super_String
+      Through : Natural) return Super_String
    is
       Result     : Super_String (Source.Max_Length);
       Slen       : constant Natural := Source.Current_Length;
@@ -747,11 +779,10 @@ package body Ada.Strings.Wide_Superbounded is
 
    function Super_Element
      (Source : Super_String;
-      Index  : Positive)
-      return   Wide_Character
+      Index  : Positive) return Wide_Character
    is
    begin
-      if Index in 1 .. Source.Current_Length then
+      if Index <= Source.Current_Length then
          return Source.Data (Index);
       else
          raise Strings.Index_Error;
@@ -761,6 +792,19 @@ package body Ada.Strings.Wide_Superbounded is
    ----------------------
    -- Super_Find_Token --
    ----------------------
+
+   procedure Super_Find_Token
+     (Source : Super_String;
+      Set    : Wide_Maps.Wide_Character_Set;
+      From   : Positive;
+      Test   : Strings.Membership;
+      First  : out Positive;
+      Last   : out Natural)
+   is
+   begin
+      Wide_Search.Find_Token
+        (Source.Data (From .. Source.Current_Length), Set, Test, First, Last);
+   end Super_Find_Token;
 
    procedure Super_Find_Token
      (Source : Super_String;
@@ -782,8 +826,7 @@ package body Ada.Strings.Wide_Superbounded is
      (Source : Super_String;
       Count  : Natural;
       Pad    : Wide_Character := Wide_Space;
-      Drop   : Strings.Truncation := Strings.Error)
-      return   Super_String
+      Drop   : Strings.Truncation := Strings.Error) return Super_String
    is
       Max_Length : constant Positive := Source.Max_Length;
       Result     : Super_String (Max_Length);
@@ -830,7 +873,7 @@ package body Ada.Strings.Wide_Superbounded is
    procedure Super_Head
      (Source : in out Super_String;
       Count  : Natural;
-      Pad    : Wide_Character  := Wide_Space;
+      Pad    : Wide_Character := Wide_Space;
       Drop   : Truncation := Error)
    is
       Max_Length : constant Positive := Source.Max_Length;
@@ -878,11 +921,11 @@ package body Ada.Strings.Wide_Superbounded is
    -----------------
 
    function Super_Index
-     (Source   : Super_String;
-      Pattern  : Wide_String;
-      Going    : Strings.Direction := Strings.Forward;
-      Mapping  : Wide_Maps.Wide_Character_Mapping := Wide_Maps.Identity)
-      return     Natural
+     (Source  : Super_String;
+      Pattern : Wide_String;
+      Going   : Strings.Direction := Strings.Forward;
+      Mapping : Wide_Maps.Wide_Character_Mapping := Wide_Maps.Identity)
+      return Natural
    is
    begin
       return Wide_Search.Index
@@ -890,11 +933,10 @@ package body Ada.Strings.Wide_Superbounded is
    end Super_Index;
 
    function Super_Index
-     (Source   : Super_String;
-      Pattern  : Wide_String;
-      Going    : Direction := Forward;
-      Mapping  : Wide_Maps.Wide_Character_Mapping_Function)
-      return     Natural
+     (Source  : Super_String;
+      Pattern : Wide_String;
+      Going   : Direction := Forward;
+      Mapping : Wide_Maps.Wide_Character_Mapping_Function) return Natural
    is
    begin
       return Wide_Search.Index
@@ -905,12 +947,50 @@ package body Ada.Strings.Wide_Superbounded is
      (Source : Super_String;
       Set    : Wide_Maps.Wide_Character_Set;
       Test   : Strings.Membership := Strings.Inside;
-      Going  : Strings.Direction  := Strings.Forward)
-      return   Natural
+      Going  : Strings.Direction  := Strings.Forward) return Natural
    is
    begin
       return Wide_Search.Index
         (Source.Data (1 .. Source.Current_Length), Set, Test, Going);
+   end Super_Index;
+
+   function Super_Index
+     (Source  : Super_String;
+      Pattern : Wide_String;
+      From    : Positive;
+      Going   : Direction := Forward;
+      Mapping : Wide_Maps.Wide_Character_Mapping := Wide_Maps.Identity)
+      return Natural
+   is
+   begin
+      return Wide_Search.Index
+        (Source.Data (1 .. Source.Current_Length),
+         Pattern, From, Going, Mapping);
+   end Super_Index;
+
+   function Super_Index
+     (Source  : Super_String;
+      Pattern : Wide_String;
+      From    : Positive;
+      Going   : Direction := Forward;
+      Mapping : Wide_Maps.Wide_Character_Mapping_Function) return Natural
+   is
+   begin
+      return Wide_Search.Index
+        (Source.Data (1 .. Source.Current_Length),
+         Pattern, From, Going, Mapping);
+   end Super_Index;
+
+   function Super_Index
+     (Source : Super_String;
+      Set    : Wide_Maps.Wide_Character_Set;
+      From   : Positive;
+      Test   : Membership := Inside;
+      Going  : Direction := Forward) return Natural
+   is
+   begin
+      return Wide_Search.Index
+        (Source.Data (1 .. Source.Current_Length), Set, From, Test, Going);
    end Super_Index;
 
    ---------------------------
@@ -919,13 +999,23 @@ package body Ada.Strings.Wide_Superbounded is
 
    function Super_Index_Non_Blank
      (Source : Super_String;
-      Going  : Strings.Direction := Strings.Forward)
-      return   Natural
+      Going  : Strings.Direction := Strings.Forward) return Natural
    is
    begin
       return
         Wide_Search.Index_Non_Blank
           (Source.Data (1 .. Source.Current_Length), Going);
+   end Super_Index_Non_Blank;
+
+   function Super_Index_Non_Blank
+     (Source : Super_String;
+      From   : Positive;
+      Going  : Direction := Forward) return Natural
+   is
+   begin
+      return
+        Wide_Search.Index_Non_Blank
+          (Source.Data (1 .. Source.Current_Length), From, Going);
    end Super_Index_Non_Blank;
 
    ------------------
@@ -936,8 +1026,7 @@ package body Ada.Strings.Wide_Superbounded is
      (Source   : Super_String;
       Before   : Positive;
       New_Item : Wide_String;
-      Drop     : Strings.Truncation := Strings.Error)
-      return     Super_String
+      Drop     : Strings.Truncation := Strings.Error) return Super_String
    is
       Max_Length : constant Positive := Source.Max_Length;
       Result     : Super_String (Max_Length);
@@ -948,9 +1037,9 @@ package body Ada.Strings.Wide_Superbounded is
       Alen       : constant Integer := Slen - Blen;
       Droplen    : constant Integer := Tlen - Max_Length;
 
-      --  Tlen is the length of the total Wide_String before possible
-      --  truncation. Blen, Alen are the lengths of the before and after
-      --  pieces of the source Wide_String.
+      --  Tlen is the length of the total string before possible truncation.
+      --  Blen, Alen are the lengths of the before and after pieces of the
+      --  source string.
 
    begin
       if Alen < 0 then
@@ -1032,11 +1121,10 @@ package body Ada.Strings.Wide_Superbounded is
    ---------------------
 
    function Super_Overwrite
-     (Source    : Super_String;
-      Position  : Positive;
-      New_Item  : Wide_String;
-      Drop      : Strings.Truncation := Strings.Error)
-      return      Super_String
+     (Source   : Super_String;
+      Position : Positive;
+      New_Item : Wide_String;
+      Drop     : Strings.Truncation := Strings.Error) return Super_String
    is
       Max_Length : constant Positive := Source.Max_Length;
       Result     : Super_String (Max_Length);
@@ -1172,12 +1260,11 @@ package body Ada.Strings.Wide_Superbounded is
    -------------------------
 
    function Super_Replace_Slice
-     (Source   : Super_String;
-      Low      : Positive;
-      High     : Natural;
-      By       : Wide_String;
-      Drop     : Strings.Truncation := Strings.Error)
-      return     Super_String
+     (Source : Super_String;
+      Low    : Positive;
+      High   : Natural;
+      By     : Wide_String;
+      Drop   : Strings.Truncation := Strings.Error) return Super_String
    is
       Max_Length : constant Positive := Source.Max_Length;
       Slen       : constant Natural  := Source.Current_Length;
@@ -1197,10 +1284,10 @@ package body Ada.Strings.Wide_Superbounded is
             Droplen : constant Integer := Tlen - Max_Length;
             Result  : Super_String (Max_Length);
 
-            --  Tlen is the total length of the result Wide_String before any
+            --  Tlen is the total length of the result string before any
             --  truncation. Blen and Alen are the lengths of the pieces
-            --  of the original Wide_String that end up in the result
-            --  Wide_String before and after the replaced slice.
+            --  of the original string that end up in the result string
+            --  before and after the replaced slice.
 
          begin
             if Droplen <= 0 then
@@ -1273,8 +1360,7 @@ package body Ada.Strings.Wide_Superbounded is
      (Count      : Natural;
       Item       : Wide_Character;
       Drop       : Truncation := Error;
-      Max_Length : Positive)
-      return       Super_String
+      Max_Length : Positive) return Super_String
    is
       Result : Super_String (Max_Length);
 
@@ -1297,8 +1383,7 @@ package body Ada.Strings.Wide_Superbounded is
      (Count      : Natural;
       Item       : Wide_String;
       Drop       : Truncation := Error;
-      Max_Length : Positive)
-      return       Super_String
+      Max_Length : Positive) return Super_String
    is
       Length : constant Integer := Count * Item'Length;
       Result : Super_String (Max_Length);
@@ -1354,8 +1439,7 @@ package body Ada.Strings.Wide_Superbounded is
    function Super_Replicate
      (Count : Natural;
       Item  : Super_String;
-      Drop  : Strings.Truncation := Strings.Error)
-      return  Super_String
+      Drop  : Strings.Truncation := Strings.Error) return Super_String
    is
    begin
       return
@@ -1373,8 +1457,7 @@ package body Ada.Strings.Wide_Superbounded is
    function Super_Slice
      (Source : Super_String;
       Low    : Positive;
-      High   : Natural)
-      return   Wide_String
+      High   : Natural) return Wide_String
    is
    begin
       --  Note: test of High > Length is in accordance with AI95-00128
@@ -1388,6 +1471,43 @@ package body Ada.Strings.Wide_Superbounded is
       end if;
    end Super_Slice;
 
+   function Super_Slice
+     (Source : Super_String;
+      Low    : Positive;
+      High   : Natural) return Super_String
+   is
+      Result : Super_String (Source.Max_Length);
+
+   begin
+      if Low > Source.Current_Length + 1
+        or else High > Source.Current_Length
+      then
+         raise Index_Error;
+      else
+         Result.Current_Length := High - Low + 1;
+         Result.Data (1 .. Result.Current_Length) := Source.Data (Low .. High);
+      end if;
+
+      return Result;
+   end Super_Slice;
+
+   procedure Super_Slice
+     (Source : Super_String;
+      Target : out Super_String;
+      Low    : Positive;
+      High   : Natural)
+   is
+   begin
+      if Low > Source.Current_Length + 1
+        or else High > Source.Current_Length
+      then
+         raise Index_Error;
+      else
+         Target.Current_Length := High - Low + 1;
+         Target.Data (1 .. Target.Current_Length) := Source.Data (Low .. High);
+      end if;
+   end Super_Slice;
+
    ----------------
    -- Super_Tail --
    ----------------
@@ -1396,8 +1516,7 @@ package body Ada.Strings.Wide_Superbounded is
      (Source : Super_String;
       Count  : Natural;
       Pad    : Wide_Character := Wide_Space;
-      Drop   : Strings.Truncation := Strings.Error)
-      return   Super_String
+      Drop   : Strings.Truncation := Strings.Error) return Super_String
    is
       Max_Length : constant Positive := Source.Max_Length;
       Result     : Super_String (Max_Length);
@@ -1445,7 +1564,7 @@ package body Ada.Strings.Wide_Superbounded is
    procedure Super_Tail
      (Source : in out Super_String;
       Count  : Natural;
-      Pad    : Wide_Character  := Wide_Space;
+      Pad    : Wide_Character := Wide_Space;
       Drop   : Truncation := Error)
    is
       Max_Length : constant Positive := Source.Max_Length;
@@ -1497,7 +1616,7 @@ package body Ada.Strings.Wide_Superbounded is
    -- Super_To_String --
    ---------------------
 
-   function Super_To_String (Source : in Super_String) return Wide_String is
+   function Super_To_String (Source : Super_String) return Wide_String is
    begin
       return Source.Data (1 .. Source.Current_Length);
    end Super_To_String;
@@ -1508,8 +1627,7 @@ package body Ada.Strings.Wide_Superbounded is
 
    function Super_Translate
      (Source  : Super_String;
-      Mapping : Wide_Maps.Wide_Character_Mapping)
-      return    Super_String
+      Mapping : Wide_Maps.Wide_Character_Mapping) return Super_String
    is
       Result : Super_String (Source.Max_Length);
 
@@ -1535,8 +1653,7 @@ package body Ada.Strings.Wide_Superbounded is
 
    function Super_Translate
      (Source  : Super_String;
-      Mapping : Wide_Maps.Wide_Character_Mapping_Function)
-      return    Super_String
+      Mapping : Wide_Maps.Wide_Character_Mapping_Function) return Super_String
    is
       Result : Super_String (Source.Max_Length);
 
@@ -1566,8 +1683,7 @@ package body Ada.Strings.Wide_Superbounded is
 
    function Super_Trim
      (Source : Super_String;
-      Side   : Trim_End)
-      return   Super_String
+      Side   : Trim_End) return Super_String
    is
       Result : Super_String (Source.Max_Length);
       Last   : Natural := Source.Current_Length;
@@ -1623,8 +1739,7 @@ package body Ada.Strings.Wide_Superbounded is
    function Super_Trim
      (Source : Super_String;
       Left   : Wide_Maps.Wide_Character_Set;
-      Right  : Wide_Maps.Wide_Character_Set)
-      return   Super_String
+      Right  : Wide_Maps.Wide_Character_Set) return Super_String
    is
       Result : Super_String (Source.Max_Length);
 
@@ -1690,8 +1805,7 @@ package body Ada.Strings.Wide_Superbounded is
    function Times
      (Left       : Natural;
       Right      : Wide_Character;
-      Max_Length : Positive)
-      return  Super_String
+      Max_Length : Positive) return Super_String
    is
       Result : Super_String (Max_Length);
 
@@ -1713,8 +1827,7 @@ package body Ada.Strings.Wide_Superbounded is
    function Times
      (Left       : Natural;
       Right      : Wide_String;
-      Max_Length : Positive)
-      return  Super_String
+      Max_Length : Positive) return Super_String
    is
       Result : Super_String (Max_Length);
       Pos    : Positive         := 1;
@@ -1741,8 +1854,7 @@ package body Ada.Strings.Wide_Superbounded is
 
    function Times
      (Left  : Natural;
-      Right : Super_String)
-      return  Super_String
+      Right : Super_String) return Super_String
    is
       Result : Super_String (Right.Max_Length);
       Pos    : Positive := 1;
@@ -1775,8 +1887,7 @@ package body Ada.Strings.Wide_Superbounded is
    function To_Super_String
      (Source     : Wide_String;
       Max_Length : Natural;
-      Drop       : Truncation := Error)
-      return       Super_String
+      Drop       : Truncation := Error) return Super_String
    is
       Result : Super_String (Max_Length);
       Slen   : constant Natural := Source'Length;

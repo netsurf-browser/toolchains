@@ -1,12 +1,12 @@
 // PR c++/13594 (secondary)
 
+// { dg-options "" }
 // { dg-do compile }
 
-namespace foo {
-  template <class T> void swap(T, T);
-}
 namespace fool {
-  using namespace foo __attribute__((strong));
+  inline namespace foo {
+    template <class T> void swap(T, T);
+  }
   template <class T> void swap(T);
 }
 

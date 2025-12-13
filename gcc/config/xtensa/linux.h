@@ -1,12 +1,13 @@
 /* Xtensa Linux configuration.
    Derived from the configuration for GCC for Intel i386 running Linux.
-   Copyright (C) 2001, 2002, 2003 Free Software Foundation, Inc.
+   Copyright (C) 2001, 2002, 2003, 2006, 2007, 2008, 2010, 2011
+   Free Software Foundation, Inc.
 
 This file is part of GCC.
 
 GCC is free software; you can redistribute it and/or modify it under
 the terms of the GNU General Public License as published by the Free
-Software Foundation; either version 2, or (at your option) any later
+Software Foundation; either version 3, or (at your option) any later
 version.
 
 GCC is distributed in the hope that it will be useful, but WITHOUT ANY
@@ -15,9 +16,8 @@ FITNESS FOR A PARTICULAR PURPOSE.  See the GNU General Public License
 for more details.
 
 You should have received a copy of the GNU General Public License
-along with GCC; see the file COPYING.  If not, write to the Free
-Software Foundation, 59 Temple Place - Suite 330, Boston, MA
-02111-1307, USA.  */
+along with GCC; see the file COPYING3.  If not see
+<http://www.gnu.org/licenses/>.  */
 
 #define TARGET_OS_CPP_BUILTINS() LINUX_TARGET_OS_CPP_BUILTINS()
 
@@ -27,6 +27,12 @@ Software Foundation, 59 Temple Place - Suite 330, Boston, MA
 #undef TARGET_VERSION
 #define TARGET_VERSION fputs (" (Xtensa GNU/Linux with ELF)", stderr);
 
+#undef SIZE_TYPE
+#define SIZE_TYPE "unsigned int"
+
+#undef PTRDIFF_TYPE
+#define PTRDIFF_TYPE "int"
+
 #undef WCHAR_TYPE
 #define WCHAR_TYPE "long int"
 
@@ -35,23 +41,23 @@ Software Foundation, 59 Temple Place - Suite 330, Boston, MA
 
 #undef ASM_SPEC
 #define ASM_SPEC \
- "%{v} \
-  %{mtext-section-literals:--text-section-literals} \
+ "%{mtext-section-literals:--text-section-literals} \
   %{mno-text-section-literals:--no-text-section-literals} \
   %{mtarget-align:--target-align} \
   %{mno-target-align:--no-target-align} \
   %{mlongcalls:--longcalls} \
   %{mno-longcalls:--no-longcalls}"
 
+#define GLIBC_DYNAMIC_LINKER "/lib/ld.so.1"
+
 #undef LINK_SPEC
 #define LINK_SPEC \
  "%{shared:-shared} \
   %{!shared: \
-    %{!ibcs: \
-      %{!static: \
-        %{rdynamic:-export-dynamic} \
-        %{!dynamic-linker:-dynamic-linker /lib/ld.so.1}} \
-      %{static:-static}}}"
+    %{!static: \
+      %{rdynamic:-export-dynamic} \
+      -dynamic-linker " LINUX_DYNAMIC_LINKER "} \
+    %{static:-static}}"
 
 #undef LOCAL_LABEL_PREFIX
 #define LOCAL_LABEL_PREFIX	"."
@@ -59,15 +65,7 @@ Software Foundation, 59 Temple Place - Suite 330, Boston, MA
 /* Always enable "-fpic" for Xtensa Linux.  */
 #define XTENSA_ALWAYS_PIC 1
 
-/* Redefine the standard ELF version of ASM_DECLARE_FUNCTION_SIZE to
-   allow adding the ".end literal_prefix" directive at the end of the
-   function.  */
-#undef ASM_DECLARE_FUNCTION_SIZE
-#define ASM_DECLARE_FUNCTION_SIZE(FILE, FNAME, DECL)		\
-  do								\
-    {								\
-      if (!flag_inhibit_size_directive)				\
-	ASM_OUTPUT_MEASURED_SIZE (FILE, FNAME);			\
-      XTENSA_DECLARE_FUNCTION_SIZE(FILE, FNAME, DECL);		\
-    }								\
-  while (0)
+#undef DBX_REGISTER_NUMBER
+
+#define MD_UNWIND_SUPPORT "config/xtensa/linux-unwind.h"
+

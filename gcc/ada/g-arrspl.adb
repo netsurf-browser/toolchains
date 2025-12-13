@@ -2,29 +2,27 @@
 --                                                                          --
 --                         GNAT COMPILER COMPONENTS                         --
 --                                                                          --
---                      G N A T . A R R A Y _ S P I T                       --
+--                     G N A T . A R R A Y _ S P L I T                      --
 --                                                                          --
 --                                 B o d y                                  --
 --                                                                          --
---          Copyright (C) 2002-2003 Free Software Foundation, Inc.          --
+--          Copyright (C) 2002-2009, Free Software Foundation, Inc.         --
 --                                                                          --
 -- GNAT is free software;  you can  redistribute it  and/or modify it under --
 -- terms of the  GNU General Public License as published  by the Free Soft- --
--- ware  Foundation;  either version 2,  or (at your option) any later ver- --
+-- ware  Foundation;  either version 3,  or (at your option) any later ver- --
 -- sion.  GNAT is distributed in the hope that it will be useful, but WITH- --
 -- OUT ANY WARRANTY;  without even the  implied warranty of MERCHANTABILITY --
--- or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU General Public License --
--- for  more details.  You should have  received  a copy of the GNU General --
--- Public License  distributed with GNAT;  see file COPYING.  If not, write --
--- to  the Free Software Foundation,  59 Temple Place - Suite 330,  Boston, --
--- MA 02111-1307, USA.                                                      --
+-- or FITNESS FOR A PARTICULAR PURPOSE.                                     --
 --                                                                          --
--- As a special exception,  if other files  instantiate  generics from this --
--- unit, or you link  this unit with other files  to produce an executable, --
--- this  unit  does not  by itself cause  the resulting  executable  to  be --
--- covered  by the  GNU  General  Public  License.  This exception does not --
--- however invalidate  any other reasons why  the executable file  might be --
--- covered by the  GNU Public License.                                      --
+-- As a special exception under Section 7 of GPL version 3, you are granted --
+-- additional permissions described in the GCC Runtime Library Exception,   --
+-- version 3.1, as published by the Free Software Foundation.               --
+--                                                                          --
+-- You should have received a copy of the GNU General Public License and    --
+-- a copy of the GCC Runtime Library Exception along with this program;     --
+-- see the files COPYING3 and COPYING.RUNTIME respectively.  If not, see    --
+-- <http://www.gnu.org/licenses/>.                                          --
 --                                                                          --
 -- GNAT was originally developed  by the GNAT team at  New York University. --
 -- Extensive contributions were provided by Ada Core Technologies Inc.      --
@@ -41,12 +39,14 @@ package body GNAT.Array_Split is
    procedure Free is
       new Ada.Unchecked_Deallocation (Separators_Indexes, Indexes_Access);
 
+   procedure Free is
+      new Ada.Unchecked_Deallocation (Element_Sequence, Element_Access);
+
    function Count
      (Source  : Element_Sequence;
-      Pattern : Element_Set)
-      return    Natural;
-   --  Returns the number of occurences of Pattern elements in Source, 0 is
-   --  returned if no occurence is found in Source.
+      Pattern : Element_Set) return Natural;
+   --  Returns the number of occurrences of Pattern elements in Source, 0 is
+   --  returned if no occurrence is found in Source.
 
    ------------
    -- Adjust --
@@ -82,6 +82,7 @@ package body GNAT.Array_Split is
       Mode       : Separator_Mode := Single)
    is
    begin
+      Free (S.Source);
       S.Source := new Element_Sequence'(From);
       Set (S, Separators, Mode);
    end Create;
@@ -92,8 +93,7 @@ package body GNAT.Array_Split is
 
    function Count
      (Source  : Element_Sequence;
-      Pattern : Element_Set)
-      return    Natural
+      Pattern : Element_Set) return Natural
    is
       C : Natural := 0;
    begin
@@ -144,8 +144,7 @@ package body GNAT.Array_Split is
 
    function Separators
      (S     : Slice_Set;
-      Index : Slice_Number)
-      return  Slice_Separators
+      Index : Slice_Number) return Slice_Separators
    is
    begin
       if Index > S.N_Slice then
@@ -154,7 +153,7 @@ package body GNAT.Array_Split is
       elsif Index = 0
         or else (Index = 1 and then S.N_Slice = 1)
       then
-         --  Whole string, or no separator used.
+         --  Whole string, or no separator used
 
          return (Before => Array_End,
                  After  => Array_End);
@@ -238,9 +237,11 @@ package body GNAT.Array_Split is
 
          loop
             if K > Count_Sep then
-               --  No more separator, last slice end at the end of the source
-               --  string.
+
+               --  No more separators, last slice ends at end of source string
+
                Stop := S.Source'Last;
+
             else
                Stop := S.Indexes (K) - 1;
             end if;
@@ -255,13 +256,17 @@ package body GNAT.Array_Split is
             case Mode is
 
                when Single =>
+
                   --  In this mode just set start to character next to the
                   --  current separator, advance the separator index.
+
                   Start := S.Indexes (K) + 1;
                   K := K + 1;
 
                when Multiple =>
-                  --  In this mode skip separators following each others
+
+                  --  In this mode skip separators following each other
+
                   loop
                      Start := S.Indexes (K) + 1;
                      K := K + 1;
@@ -282,8 +287,7 @@ package body GNAT.Array_Split is
 
    function Slice
      (S     : Slice_Set;
-      Index : Slice_Number)
-      return Element_Sequence
+      Index : Slice_Number) return Element_Sequence
    is
    begin
       if Index = 0 then

@@ -4,27 +4,25 @@
 --                                                                          --
 --                       S Y S T E M . V A L _ L L I                        --
 --                                                                          --
---                                 S p e c                                  --
+--                                 B o d y                                  --
 --                                                                          --
---   Copyright (C) 1992,1993,1994,1995,1996 Free Software Foundation, Inc.  --
+--          Copyright (C) 1992-2009, Free Software Foundation, Inc.         --
 --                                                                          --
 -- GNAT is free software;  you can  redistribute it  and/or modify it under --
 -- terms of the  GNU General Public License as published  by the Free Soft- --
--- ware  Foundation;  either version 2,  or (at your option) any later ver- --
+-- ware  Foundation;  either version 3,  or (at your option) any later ver- --
 -- sion.  GNAT is distributed in the hope that it will be useful, but WITH- --
 -- OUT ANY WARRANTY;  without even the  implied warranty of MERCHANTABILITY --
--- or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU General Public License --
--- for  more details.  You should have  received  a copy of the GNU General --
--- Public License  distributed with GNAT;  see file COPYING.  If not, write --
--- to  the Free Software Foundation,  59 Temple Place - Suite 330,  Boston, --
--- MA 02111-1307, USA.                                                      --
+-- or FITNESS FOR A PARTICULAR PURPOSE.                                     --
 --                                                                          --
--- As a special exception,  if other files  instantiate  generics from this --
--- unit, or you link  this unit with other files  to produce an executable, --
--- this  unit  does not  by itself cause  the resulting  executable  to  be --
--- covered  by the  GNU  General  Public  License.  This exception does not --
--- however invalidate  any other reasons why  the executable file  might be --
--- covered by the  GNU Public License.                                      --
+-- As a special exception under Section 7 of GPL version 3, you are granted --
+-- additional permissions described in the GCC Runtime Library Exception,   --
+-- version 3.1, as published by the Free Software Foundation.               --
+--                                                                          --
+-- You should have received a copy of the GNU General Public License and    --
+-- a copy of the GCC Runtime Library Exception along with this program;     --
+-- see the files COPYING3 and COPYING.RUNTIME respectively.  If not, see    --
+-- <http://www.gnu.org/licenses/>.                                          --
 --                                                                          --
 -- GNAT was originally developed  by the GNAT team at  New York University. --
 -- Extensive contributions were provided by Ada Core Technologies Inc.      --
@@ -37,15 +35,14 @@ with System.Val_Util;       use System.Val_Util;
 
 package body System.Val_LLI is
 
-   ---------------------------
-   -- Scn_Long_Long_Integer --
-   ---------------------------
+   ----------------------------
+   -- Scan_Long_Long_Integer --
+   ----------------------------
 
    function Scan_Long_Long_Integer
      (Str  : String;
-      Ptr  : access Integer;
-      Max  : Integer)
-      return Long_Long_Integer
+      Ptr  : not null access Integer;
+      Max  : Integer) return Long_Long_Integer
    is
       Uval : Long_Long_Unsigned;
       --  Unsigned result
@@ -58,13 +55,20 @@ package body System.Val_LLI is
 
    begin
       Scan_Sign (Str, Ptr, Max, Minus, Start);
-      Uval := Scan_Long_Long_Unsigned (Str, Ptr, Max);
+
+      if Str (Ptr.all) not in '0' .. '9' then
+         Ptr.all := Start;
+         raise Constraint_Error;
+      end if;
+
+      Uval := Scan_Raw_Long_Long_Unsigned (Str, Ptr, Max);
 
       --  Deal with overflow cases, and also with maximum negative number
 
       if Uval > Long_Long_Unsigned (Long_Long_Integer'Last) then
          if Minus
-           and then Uval = Long_Long_Unsigned (-(Long_Long_Integer'First)) then
+           and then Uval = Long_Long_Unsigned (-(Long_Long_Integer'First))
+         then
             return Long_Long_Integer'First;
          else
             raise Constraint_Error;
@@ -80,7 +84,6 @@ package body System.Val_LLI is
       else
          return Long_Long_Integer (Uval);
       end if;
-
    end Scan_Long_Long_Integer;
 
    -----------------------------
@@ -90,12 +93,10 @@ package body System.Val_LLI is
    function Value_Long_Long_Integer (Str : String) return Long_Long_Integer is
       V : Long_Long_Integer;
       P : aliased Integer := Str'First;
-
    begin
       V := Scan_Long_Long_Integer (Str, P'Access, Str'Last);
       Scan_Trailing_Blanks (Str, P);
       return V;
-
    end Value_Long_Long_Integer;
 
 end System.Val_LLI;

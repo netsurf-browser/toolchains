@@ -1,43 +1,44 @@
 ------------------------------------------------------------------------------
 --                                                                          --
---                         GNAT RUNTIME COMPONENTS                          --
+--                         GNAT RUN-TIME COMPONENTS                         --
 --                                                                          --
 --                A D A . S T R E A M S . S T R E A M _ I O                 --
 --                                                                          --
 --                                 B o d y                                  --
 --                                                                          --
---          Copyright (C) 1992-2003, Free Software Foundation, Inc.         --
+--          Copyright (C) 1992-2010, Free Software Foundation, Inc.         --
 --                                                                          --
 -- GNAT is free software;  you can  redistribute it  and/or modify it under --
 -- terms of the  GNU General Public License as published  by the Free Soft- --
--- ware  Foundation;  either version 2,  or (at your option) any later ver- --
+-- ware  Foundation;  either version 3,  or (at your option) any later ver- --
 -- sion.  GNAT is distributed in the hope that it will be useful, but WITH- --
 -- OUT ANY WARRANTY;  without even the  implied warranty of MERCHANTABILITY --
--- or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU General Public License --
--- for  more details.  You should have  received  a copy of the GNU General --
--- Public License  distributed with GNAT;  see file COPYING.  If not, write --
--- to  the Free Software Foundation,  59 Temple Place - Suite 330,  Boston, --
--- MA 02111-1307, USA.                                                      --
+-- or FITNESS FOR A PARTICULAR PURPOSE.                                     --
 --                                                                          --
--- As a special exception,  if other files  instantiate  generics from this --
--- unit, or you link  this unit with other files  to produce an executable, --
--- this  unit  does not  by itself cause  the resulting  executable  to  be --
--- covered  by the  GNU  General  Public  License.  This exception does not --
--- however invalidate  any other reasons why  the executable file  might be --
--- covered by the  GNU Public License.                                      --
+-- As a special exception under Section 7 of GPL version 3, you are granted --
+-- additional permissions described in the GCC Runtime Library Exception,   --
+-- version 3.1, as published by the Free Software Foundation.               --
+--                                                                          --
+-- You should have received a copy of the GNU General Public License and    --
+-- a copy of the GCC Runtime Library Exception along with this program;     --
+-- see the files COPYING3 and COPYING.RUNTIME respectively.  If not, see    --
+-- <http://www.gnu.org/licenses/>.                                          --
 --                                                                          --
 -- GNAT was originally developed  by the GNAT team at  New York University. --
 -- Extensive contributions were provided by Ada Core Technologies Inc.      --
 --                                                                          --
 ------------------------------------------------------------------------------
 
-with Interfaces.C_Streams;      use Interfaces.C_Streams;
-with System;                    use System;
+with Interfaces.C_Streams; use Interfaces.C_Streams;
+
+with System;               use System;
+with System.Communication; use System.Communication;
 with System.File_IO;
 with System.Soft_Links;
 with System.CRTL;
-with Unchecked_Conversion;
-with Unchecked_Deallocation;
+
+with Ada.Unchecked_Conversion;
+with Ada.Unchecked_Deallocation;
 
 package body Ada.Streams.Stream_IO is
 
@@ -46,8 +47,8 @@ package body Ada.Streams.Stream_IO is
 
    subtype AP is FCB.AFCB_Ptr;
 
-   function To_FCB is new Unchecked_Conversion (File_Mode, FCB.File_Mode);
-   function To_SIO is new Unchecked_Conversion (FCB.File_Mode, File_Mode);
+   function To_FCB is new Ada.Unchecked_Conversion (File_Mode, FCB.File_Mode);
+   function To_SIO is new Ada.Unchecked_Conversion (FCB.File_Mode, File_Mode);
    use type FCB.File_Mode;
    use type FCB.Shared_Status_Type;
 
@@ -55,7 +56,7 @@ package body Ada.Streams.Stream_IO is
    -- Local Subprograms --
    -----------------------
 
-   procedure Set_Position (File : in File_Type);
+   procedure Set_Position (File : File_Type);
    --  Sets file position pointer according to value of current index
 
    -------------------
@@ -64,7 +65,6 @@ package body Ada.Streams.Stream_IO is
 
    function AFCB_Allocate (Control_Block : Stream_AFCB) return FCB.AFCB_Ptr is
       pragma Warnings (Off, Control_Block);
-
    begin
       return new Stream_AFCB;
    end AFCB_Allocate;
@@ -75,9 +75,8 @@ package body Ada.Streams.Stream_IO is
 
    --  No special processing required for closing Stream_IO file
 
-   procedure AFCB_Close (File : access Stream_AFCB) is
+   procedure AFCB_Close (File : not null access Stream_AFCB) is
       pragma Warnings (Off, File);
-
    begin
       null;
    end AFCB_Close;
@@ -86,11 +85,11 @@ package body Ada.Streams.Stream_IO is
    -- AFCB_Free --
    ---------------
 
-   procedure AFCB_Free (File : access Stream_AFCB) is
+   procedure AFCB_Free (File : not null access Stream_AFCB) is
       type FCB_Ptr is access all Stream_AFCB;
       FT : FCB_Ptr := FCB_Ptr (File);
 
-      procedure Free is new Unchecked_Deallocation (Stream_AFCB, FCB_Ptr);
+      procedure Free is new Ada.Unchecked_Deallocation (Stream_AFCB, FCB_Ptr);
 
    begin
       Free (FT);
@@ -102,7 +101,7 @@ package body Ada.Streams.Stream_IO is
 
    procedure Close (File : in out File_Type) is
    begin
-      FIO.Close (AP (File));
+      FIO.Close (AP (File)'Unrestricted_Access);
    end Close;
 
    ------------
@@ -111,9 +110,9 @@ package body Ada.Streams.Stream_IO is
 
    procedure Create
      (File : in out File_Type;
-      Mode : in File_Mode := Out_File;
-      Name : in String := "";
-      Form : in String := "")
+      Mode : File_Mode := Out_File;
+      Name : String := "";
+      Form : String := "")
    is
       Dummy_File_Control_Block : Stream_AFCB;
       pragma Warnings (Off, Dummy_File_Control_Block);
@@ -138,17 +137,17 @@ package body Ada.Streams.Stream_IO is
 
    procedure Delete (File : in out File_Type) is
    begin
-      FIO.Delete (AP (File));
+      FIO.Delete (AP (File)'Unrestricted_Access);
    end Delete;
 
    -----------------
    -- End_Of_File --
    -----------------
 
-   function End_Of_File (File : in File_Type) return Boolean is
+   function End_Of_File (File : File_Type) return Boolean is
    begin
       FIO.Check_Read_Status (AP (File));
-      return Count (File.Index) > Size (File);
+      return File.Index > Size (File);
    end End_Of_File;
 
    -----------
@@ -164,7 +163,7 @@ package body Ada.Streams.Stream_IO is
    -- Form --
    ----------
 
-   function Form (File : in File_Type) return String is
+   function Form (File : File_Type) return String is
    begin
       return FIO.Form (AP (File));
    end Form;
@@ -173,17 +172,17 @@ package body Ada.Streams.Stream_IO is
    -- Index --
    -----------
 
-   function Index (File : in File_Type) return Positive_Count is
+   function Index (File : File_Type) return Positive_Count is
    begin
       FIO.Check_File_Open (AP (File));
-      return Count (File.Index);
+      return File.Index;
    end Index;
 
    -------------
    -- Is_Open --
    -------------
 
-   function Is_Open (File : in File_Type) return Boolean is
+   function Is_Open (File : File_Type) return Boolean is
    begin
       return FIO.Is_Open (AP (File));
    end Is_Open;
@@ -192,7 +191,7 @@ package body Ada.Streams.Stream_IO is
    -- Mode --
    ----------
 
-   function Mode (File : in File_Type) return File_Mode is
+   function Mode (File : File_Type) return File_Mode is
    begin
       return To_SIO (FIO.Mode (AP (File)));
    end Mode;
@@ -201,7 +200,7 @@ package body Ada.Streams.Stream_IO is
    -- Name --
    ----------
 
-   function Name (File : in File_Type) return String is
+   function Name (File : File_Type) return String is
    begin
       return FIO.Name (AP (File));
    end Name;
@@ -212,9 +211,9 @@ package body Ada.Streams.Stream_IO is
 
    procedure Open
      (File : in out File_Type;
-      Mode : in File_Mode;
-      Name : in String;
-      Form : in String := "")
+      Mode : File_Mode;
+      Name : String;
+      Form : String := "")
    is
       Dummy_File_Control_Block : Stream_AFCB;
       pragma Warnings (Off, Dummy_File_Control_Block);
@@ -243,11 +242,7 @@ package body Ada.Streams.Stream_IO is
       --  (and furthermore there are situations (such as the case of writing
       --  a sequential Posix FIFO file) where the lseek would cause problems.
 
-      if Mode = Out_File then
-         File.Last_Op := Op_Write;
-      else
-         File.Last_Op := Op_Read;
-      end if;
+      File.Last_Op := (if Mode = Out_File then Op_Write else Op_Read);
    end Open;
 
    ----------
@@ -255,10 +250,10 @@ package body Ada.Streams.Stream_IO is
    ----------
 
    procedure Read
-     (File : in File_Type;
+     (File : File_Type;
       Item : out Stream_Element_Array;
       Last : out Stream_Element_Offset;
-      From : in Positive_Count)
+      From : Positive_Count)
    is
    begin
       Set_Index (File, From);
@@ -266,7 +261,7 @@ package body Ada.Streams.Stream_IO is
    end Read;
 
    procedure Read
-     (File : in File_Type;
+     (File : File_Type;
       Item : out Stream_Element_Array;
       Last : out Stream_Element_Offset)
    is
@@ -299,8 +294,8 @@ package body Ada.Streams.Stream_IO is
       end if;
 
       File.Index := File.Index + Count (Nread);
-      Last := Item'First + Stream_Element_Offset (Nread) - 1;
       File.Last_Op := Op_Read;
+      Last := Last_Index (Item'First, Nread);
    end Read;
 
    --  This version of Read is the primitive operation on the underlying
@@ -319,7 +314,7 @@ package body Ada.Streams.Stream_IO is
    -- Reset --
    -----------
 
-   procedure Reset (File : in out File_Type; Mode : in File_Mode) is
+   procedure Reset (File : in out File_Type; Mode : File_Mode) is
    begin
       FIO.Check_File_Open (AP (File));
 
@@ -339,7 +334,7 @@ package body Ada.Streams.Stream_IO is
    -- Set_Index --
    ---------------
 
-   procedure Set_Index (File : in File_Type; To : in Positive_Count) is
+   procedure Set_Index (File : File_Type; To : Positive_Count) is
    begin
       FIO.Check_File_Open (AP (File));
       File.Index := Count (To);
@@ -350,7 +345,7 @@ package body Ada.Streams.Stream_IO is
    -- Set_Mode --
    --------------
 
-   procedure Set_Mode (File : in out File_Type; Mode : in File_Mode) is
+   procedure Set_Mode (File : in out File_Type; Mode : File_Mode) is
    begin
       FIO.Check_File_Open (AP (File));
 
@@ -362,7 +357,7 @@ package body Ada.Streams.Stream_IO is
       if ((File.Mode = FCB.In_File) /= (Mode = In_File))
         and then not File.Update_Mode
       then
-         FIO.Reset (AP (File), FCB.Inout_File);
+         FIO.Reset (AP (File)'Unrestricted_Access, FCB.Inout_File);
          File.Update_Mode := True;
       end if;
 
@@ -382,7 +377,7 @@ package body Ada.Streams.Stream_IO is
    -- Set_Position --
    ------------------
 
-   procedure Set_Position (File : in File_Type) is
+   procedure Set_Position (File : File_Type) is
       use type System.CRTL.long;
    begin
       if fseek (File.Stream,
@@ -396,7 +391,7 @@ package body Ada.Streams.Stream_IO is
    -- Size --
    ----------
 
-   function Size (File : in File_Type) return Count is
+   function Size (File : File_Type) return Count is
    begin
       FIO.Check_File_Open (AP (File));
 
@@ -417,7 +412,7 @@ package body Ada.Streams.Stream_IO is
    -- Stream --
    ------------
 
-   function Stream (File : in File_Type) return Stream_Access is
+   function Stream (File : File_Type) return Stream_Access is
    begin
       FIO.Check_File_Open (AP (File));
       return Stream_Access (File);
@@ -428,16 +423,19 @@ package body Ada.Streams.Stream_IO is
    -----------
 
    procedure Write
-     (File : in File_Type;
-      Item : in Stream_Element_Array;
-      To   : in Positive_Count)
+     (File : File_Type;
+      Item : Stream_Element_Array;
+      To   : Positive_Count)
    is
    begin
       Set_Index (File, To);
       Write (File, Item);
    end Write;
 
-   procedure Write (File : in File_Type; Item : in Stream_Element_Array) is
+   procedure Write
+     (File : File_Type;
+      Item : Stream_Element_Array)
+   is
    begin
       FIO.Check_Write_Status (AP (File));
 
@@ -474,7 +472,7 @@ package body Ada.Streams.Stream_IO is
 
    procedure Write
      (File : in out Stream_AFCB;
-      Item : in Ada.Streams.Stream_Element_Array)
+      Item : Ada.Streams.Stream_Element_Array)
    is
    begin
       Write (File'Unchecked_Access, Item);

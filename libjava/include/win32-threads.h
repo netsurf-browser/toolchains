@@ -1,7 +1,7 @@
 // -*- c++ -*-
 // win32-threads.h - Defines for using Win32 threads.
 
-/* Copyright (C) 1998, 1999, 2000, 2001, 2002, 2003 Free Software
+/* Copyright (C) 1998, 1999, 2000, 2001, 2002, 2003, 2006 Free Software
    Foundation
 
    This file is part of libgcj.
@@ -13,6 +13,7 @@ details.  */
 #ifndef __JV_WIN32_THREADS__
 #define __JV_WIN32_THREADS__
 
+#define WIN32_LEAN_AND_MEAN
 #include <windows.h>
 
 //
@@ -46,7 +47,7 @@ typedef struct
 
 } _Jv_Mutex_t;
 
-typedef struct
+typedef struct _Jv_Thread_t
 {
   int flags;            // Flags are defined in implementation.
   HANDLE handle;        // Actual handle to the thread
@@ -71,10 +72,20 @@ _Jv_ThreadSelf (void)
 
 typedef void _Jv_ThreadStartFunc (java::lang::Thread *);
 
+// Type identifying a win32 thread.
+typedef HANDLE _Jv_ThreadDesc_t;
+
+inline _Jv_ThreadDesc_t
+_Jv_GetPlatformThreadID(_Jv_Thread_t *t)
+{
+  return t->handle;
+}
+
 //
 // Condition variables.
 //
 
+#define _Jv_HaveCondDestroy
 int _Jv_CondWait (_Jv_ConditionVariable_t *cv, _Jv_Mutex_t *mu, jlong millis, jint nanos);
 void _Jv_CondInit (_Jv_ConditionVariable_t *cv);
 void _Jv_CondDestroy (_Jv_ConditionVariable_t *cv);
@@ -182,6 +193,28 @@ void _Jv_ThreadInterrupt (_Jv_Thread_t *data);
 // See java/lang/natWin32Process.cc (waitFor) for an example.
 HANDLE _Jv_Win32GetInterruptEvent (void);
 
+// park() / unpark() support
+
+struct ParkHelper
+{
+  // We use LONG instead of obj_addr_t to avoid pulling in locks.h,
+  // which depends on size_t, ...
+  volatile LONG permit;
+
+  // The critical section is used for lazy initialization of our event
+  CRITICAL_SECTION cs;
+  HANDLE event;
+  
+  void init ();
+  void deactivate ();
+  void destroy ();
+  void park (jboolean isAbsolute, jlong time);
+  void unpark ();
+  
+private:
+  void init_event();
+};
+
 // Remove defines from <windows.h> that conflict with various things in libgcj code
 
 #undef TRUE
@@ -193,5 +226,7 @@ HANDLE _Jv_Win32GetInterruptEvent (void);
 #undef interface
 #undef STRICT
 #undef VOID
+#undef TEXT
+#undef OUT
 
 #endif /* __JV_WIN32_THREADS__ */

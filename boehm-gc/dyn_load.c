@@ -26,7 +26,7 @@
  * None of this is safe with dlclose and incremental collection.
  * But then not much of anything is safe in the presence of dlclose.
  */
-#if defined(__linux__) && !defined(_GNU_SOURCE)
+#if (defined(__linux__) || defined(__GLIBC__)) && !defined(_GNU_SOURCE)
     /* Can't test LINUX, since this must be define before other includes */
 #   define _GNU_SOURCE
 #endif
@@ -49,10 +49,13 @@
 #   undef GC_must_restore_redefined_dlopen
 # endif
 
-#if (defined(DYNAMIC_LOADING) || defined(MSWIN32) || defined(MSWINCE)) \
+#if (defined(DYNAMIC_LOADING) \
+	|| defined(MSWIN32)   \
+	|| defined(MSWINCE)   \
+	|| defined(CYGWIN32)) \
     && !defined(PCR)
 #if !defined(SUNOS4) && !defined(SUNOS5DL) && !defined(IRIX5) && \
-    !defined(MSWIN32) && !defined(MSWINCE) && \
+    !defined(MSWIN32) && !defined(MSWINCE) && !defined(CYGWIN32) && \
     !(defined(ALPHA) && defined(OSF1)) && \
     !defined(HPUX) && !(defined(LINUX) && defined(__ELF__)) && \
     !defined(RS6000) && !defined(SCO_ELF) && !defined(DGUX) && \
@@ -80,6 +83,11 @@
 #   define l_name	lm_name
 #endif
 
+#if defined(NETBSD)
+#   include <machine/elf_machdep.h>
+#   define ELFSIZE ARCH_ELFSIZE
+#endif
+
 #if defined(LINUX) && defined(__ELF__) || defined(SCO_ELF) || \
     (defined(FREEBSD) && defined(__ELF__)) || defined(DGUX) || \
     (defined(NETBSD) && defined(__ELF__)) || defined(HURD)
@@ -91,12 +99,39 @@
 /* Newer versions of GNU/Linux define this macro.  We
  * define it similarly for any ELF systems that don't.  */
 #  ifndef ElfW
-#    if !defined(ELF_CLASS) || ELF_CLASS == ELFCLASS32
-#      define ElfW(type) Elf32_##type
+#    if defined(FREEBSD)
+#      if __ELF_WORD_SIZE == 32
+#        define ElfW(type) Elf32_##type
+#      else
+#        define ElfW(type) Elf64_##type
+#      endif
 #    else
-#      define ElfW(type) Elf64_##type
+#      ifdef NETBSD
+#        if ELFSIZE == 32
+#          define ElfW(type) Elf32_##type
+#        else
+#          define ElfW(type) Elf64_##type
+#        endif
+#      else
+#        if !defined(ELF_CLASS) || ELF_CLASS == ELFCLASS32
+#          define ElfW(type) Elf32_##type
+#        else
+#          define ElfW(type) Elf64_##type
+#	 endif
+#      endif
 #    endif
 #  endif
+
+/* An user-supplied routine that is called to determine if a DSO must
+   be scanned by the gc.  */
+static int (*GC_has_static_roots)(const char *, void *, size_t);
+/* Register the routine.  */
+void
+GC_register_has_static_roots_callback 
+  (int (*callback)(const char *, void *, size_t))
+{
+  GC_has_static_roots = callback;
+}
 
 #if defined(SUNOS5DL) && !defined(USE_PROC_FOR_LIBRARIES)
 
@@ -193,7 +228,7 @@ static ptr_t GC_first_common()
 
 # if defined(SUNOS4) || defined(SUNOS5DL)
 /* Add dynamic library data sections to the root set.		*/
-# if !defined(PCR) && !defined(GC_SOLARIS_THREADS) && defined(THREADS)
+# if !defined(PCR) && !defined(GC_SOLARIS_PTHREADS) && defined(THREADS)
 #   ifndef SRC_M3
 	--> fix mutual exclusion with dlopen
 #   endif  /* We assume M3 programs don't call dlopen for now */
@@ -350,7 +385,7 @@ GC_bool GC_register_main_static_data()
 {
   return FALSE;
 }
-  
+
 # define HAVE_REGISTER_MAIN_STATIC_DATA
 
 #endif /* USE_PROC_FOR_LIBRARIES */
@@ -360,7 +395,7 @@ GC_bool GC_register_main_static_data()
 /* For glibc 2.2.4+.  Unfortunately, it doesn't work for older	*/
 /* versions.  Thanks to Jakub Jelinek for most of the code.	*/
 
-# if defined(LINUX) /* Are others OK here, too? */ \
+# if (defined(LINUX) || defined (__GLIBC__)) /* Are others OK here, too? */ \
      && (__GLIBC__ > 2 || (__GLIBC__ == 2 && __GLIBC_MINOR__ > 2) \
          || (__GLIBC__ == 2 && __GLIBC_MINOR__ == 2 && defined(DT_CONFIG))) 
 
@@ -368,6 +403,16 @@ GC_bool GC_register_main_static_data()
 /* It may still not be available in the library on the target system.   */
 /* Thus we also treat it as a weak symbol.				*/
 #define HAVE_DL_ITERATE_PHDR
+#pragma weak dl_iterate_phdr
+#endif
+
+# if (defined(FREEBSD) && __FreeBSD__ >= 7)
+/* On the FreeBSD system, any target system at major version 7 shall    */
+/* have dl_iterate_phdr; therefore, we need not make it weak as above.  */
+#define HAVE_DL_ITERATE_PHDR
+#endif
+
+#if defined(HAVE_DL_ITERATE_PHDR)
 
 static int GC_register_dynlib_callback(info, size, ptr)
      struct dl_phdr_info * info;
@@ -390,6 +435,11 @@ static int GC_register_dynlib_callback(info, size, ptr)
 	{
 	  if( !(p->p_flags & PF_W) ) break;
 	  start = ((char *)(p->p_vaddr)) + info->dlpi_addr;
+
+	  if (GC_has_static_roots 
+	      && !GC_has_static_roots(info->dlpi_name, start, p->p_memsz))
+	    break;
+
 	  GC_add_roots_inner(start, start + p->p_memsz, TRUE);
 	}
       break;
@@ -403,8 +453,6 @@ static int GC_register_dynlib_callback(info, size, ptr)
 }     
 
 /* Return TRUE if we succeed, FALSE if dl_iterate_phdr wasn't there. */
-
-#pragma weak dl_iterate_phdr
 
 GC_bool GC_register_dynamic_libraries_dl_iterate_phdr()
 {
@@ -472,7 +520,6 @@ static struct link_map *
 GC_FirstDLOpenedLinkMap()
 {
     ElfW(Dyn) *dp;
-    struct r_debug *r;
     static struct link_map *cachedResult = 0;
 
     if( _DYNAMIC == 0) {
@@ -481,6 +528,12 @@ GC_FirstDLOpenedLinkMap()
     if( cachedResult == 0 ) {
         int tag;
         for( dp = _DYNAMIC; (tag = dp->d_tag) != 0; dp++ ) {
+	    /* FIXME: The DT_DEBUG header is not mandated by the	*/
+	    /* ELF spec.  This code appears to be dependent on		*/
+	    /* idiosynchracies of older GNU tool chains.  If this code	*/
+	    /* fails for you, the real problem is probably that it is	*/
+	    /* being used at all.  You should be getting the 		*/
+	    /* dl_iterate_phdr version.					*/
             if( tag == DT_DEBUG ) {
                 struct link_map *lm
                         = ((struct r_debug *)(dp->d_un.d_ptr))->r_map;
@@ -552,6 +605,7 @@ extern void * GC_roots_present();
 	/* The type is a lie, since the real type doesn't make sense here, */
 	/* and we only test for NULL.					   */
 
+
 /* We use /proc to track down all parts of the address space that are	*/
 /* mapped by the process, and throw out regions we know we shouldn't	*/
 /* worry about.  This may also work under other SVR4 variants.		*/
@@ -604,7 +658,8 @@ void GC_register_dynamic_libraries()
     }
     for (i = 0; i < needed_sz; i++) {
         flags = addr_map[i].pr_mflags;
-        if ((flags & (MA_BREAK | MA_STACK | MA_PHYS)) != 0) goto irrelevant;
+        if ((flags & (MA_BREAK | MA_STACK | MA_PHYS
+		      | MA_FETCHOP | MA_NOTCACHED)) != 0) goto irrelevant;
         if ((flags & (MA_READ | MA_WRITE)) != (MA_READ | MA_WRITE))
             goto irrelevant;
           /* The latter test is empirically useless in very old Irix	*/
@@ -665,7 +720,7 @@ void GC_register_dynamic_libraries()
 
 # endif /* USE_PROC || IRIX5 */
 
-# if defined(MSWIN32) || defined(MSWINCE)
+# if defined(MSWIN32) || defined(MSWINCE) || defined(CYGWIN32)
 
 # define WIN32_LEAN_AND_MEAN
 # define NOSERVICE
@@ -709,7 +764,7 @@ void GC_register_dynamic_libraries()
     }
 # endif
 
-# ifdef MSWINCE
+# if defined(MSWINCE) || defined(CYGWIN32)
   /* Do we need to separately register the main static data segment? */
   GC_bool GC_register_main_static_data()
   {
@@ -725,6 +780,103 @@ void GC_register_dynamic_libraries()
 # endif /* win32 */
   
 # define HAVE_REGISTER_MAIN_STATIC_DATA
+
+  /* The frame buffer testing code is dead in this version.	*/
+  /* We leave it here temporarily in case the switch to just 	*/
+  /* testing for MEM_IMAGE sections causes un expected 		*/
+  /* problems.							*/
+  GC_bool GC_warn_fb = TRUE;	/* Warn about traced likely 	*/
+  				/* graphics memory.		*/
+  GC_bool GC_disallow_ignore_fb = FALSE;
+  int GC_ignore_fb_mb;	/* Ignore mappings bigger than the 	*/
+  			/* specified number of MB.		*/
+  GC_bool GC_ignore_fb = FALSE; /* Enable frame buffer 	*/
+  				/* checking.		*/
+  
+  /* Issue warning if tracing apparent framebuffer. 		*/
+  /* This limits us to one warning, and it's a back door to	*/
+  /* disable that.						*/
+ 
+  /* Should [start, start+len) be treated as a frame buffer	*/
+  /* and ignored?						*/
+  /* Unfortunately, we currently are not quite sure how to tell	*/
+  /* this automatically, and rely largely on user input.	*/
+  /* We expect that any mapping with type MEM_MAPPED (which 	*/
+  /* apparently excludes library data sections) can be safely	*/
+  /* ignored.  But we're too chicken to do that in this 	*/
+  /* version.							*/
+  /* Based on a very limited sample, it appears that:		*/
+  /* 	- Frame buffer mappings appear as mappings of large	*/
+  /*	  length, usually a bit less than a power of two.	*/
+  /*	- The definition of "a bit less" in the above cannot	*/
+  /*	  be made more precise.					*/
+  /*	- Have a starting address at best 64K aligned.		*/
+  /*	- Have type == MEM_MAPPED.				*/
+  static GC_bool is_frame_buffer(ptr_t start, size_t len, DWORD tp)
+  {
+    static GC_bool initialized = FALSE;
+#   define MB (1024*1024)
+#   define DEFAULT_FB_MB 15
+#   define MIN_FB_MB 3
+
+    if (GC_disallow_ignore_fb || tp != MEM_MAPPED) return FALSE;
+    if (!initialized) {
+      char * ignore_fb_string =  GETENV("GC_IGNORE_FB");
+
+      if (0 != ignore_fb_string) {
+	while (*ignore_fb_string == ' ' || *ignore_fb_string == '\t')
+	  ++ignore_fb_string;
+	if (*ignore_fb_string == '\0') {
+	  GC_ignore_fb_mb = DEFAULT_FB_MB;
+	} else {
+	  GC_ignore_fb_mb = atoi(ignore_fb_string);
+	  if (GC_ignore_fb_mb < MIN_FB_MB) {
+	    WARN("Bad GC_IGNORE_FB value.  Using %ld\n", DEFAULT_FB_MB);
+	    GC_ignore_fb_mb = DEFAULT_FB_MB;
+	  }
+	}
+	GC_ignore_fb = TRUE;
+      } else {
+	GC_ignore_fb_mb = DEFAULT_FB_MB;  /* For warning */
+      }
+      initialized = TRUE;
+    }
+    if (len >= ((size_t)GC_ignore_fb_mb << 20)) {
+      if (GC_ignore_fb) {
+	return TRUE;
+      } else {
+	if (GC_warn_fb) {
+	  WARN("Possible frame buffer mapping at 0x%lx: \n"
+	       "\tConsider setting GC_IGNORE_FB to improve performance.\n",
+	       start);
+	  GC_warn_fb = FALSE;
+	}
+	return FALSE;
+      }
+    } else {
+      return FALSE;
+    }
+  }
+
+# ifdef DEBUG_VIRTUALQUERY
+  void GC_dump_meminfo(MEMORY_BASIC_INFORMATION *buf)
+  {
+    GC_printf4("BaseAddress = %lx, AllocationBase = %lx, RegionSize = %lx(%lu)\n",
+	       buf -> BaseAddress, buf -> AllocationBase, buf -> RegionSize,
+	       buf -> RegionSize);
+    GC_printf4("\tAllocationProtect = %lx, State = %lx, Protect = %lx, "
+	       "Type = %lx\n",
+	       buf -> AllocationProtect, buf -> State, buf -> Protect,
+	       buf -> Type);
+  }
+# endif /* DEBUG_VIRTUALQUERY */
+
+# ifdef CYGWIN32
+#   define GC_wnt (TRUE)
+# else
+    extern GC_bool GC_wnt;  /* Is Windows NT derivative.	*/
+  			    /* Defined and set in os_dep.c.	*/
+# endif
 
   void GC_register_dynamic_libraries()
   {
@@ -762,7 +914,20 @@ void GC_register_dynamic_libraries()
 	    if (buf.State == MEM_COMMIT
 		&& (protect == PAGE_EXECUTE_READWRITE
 		    || protect == PAGE_READWRITE)
-		&& !GC_is_heap_base(buf.AllocationBase)) {
+		&& !GC_is_heap_base(buf.AllocationBase)
+		/* This used to check for
+		 * !is_frame_buffer(p, buf.RegionSize, buf.Type)
+		 * instead of just checking for MEM_IMAGE.
+		 * If something breaks, change it back. */
+		/* There is some evidence that we cannot always
+		 * ignore MEM_PRIVATE sections under Windows ME
+		 * and predecessors.  Hence we now also check for
+		 * that case.	*/
+		&& (buf.Type == MEM_IMAGE ||
+		    !GC_wnt && buf.Type == MEM_PRIVATE)) {  
+#	        ifdef DEBUG_VIRTUALQUERY
+	          GC_dump_meminfo(&buf);
+#	        endif
 		if ((char *)p != limit) {
 		    GC_cond_add_roots(base, limit);
 		    base = p;
@@ -776,7 +941,7 @@ void GC_register_dynamic_libraries()
     GC_cond_add_roots(base, limit);
   }
 
-#endif /* MSWIN32 || MSWINCE */
+#endif /* MSWIN32 || MSWINCE || CYGWIN32 */
   
 #if defined(ALPHA) && defined(OSF1)
 
@@ -980,79 +1145,179 @@ void GC_register_dynamic_libraries()
 
 #ifdef DARWIN
 
+/* __private_extern__ hack required for pre-3.4 gcc versions.	*/
 #ifndef __private_extern__
-#define __private_extern__ extern
-#include <mach-o/dyld.h>
-#undef __private_extern__
+# define __private_extern__ extern
+# include <mach-o/dyld.h>
+# undef __private_extern__
 #else
-#include <mach-o/dyld.h>
+# include <mach-o/dyld.h>
 #endif
 #include <mach-o/getsect.h>
 
 /*#define DARWIN_DEBUG*/
 
+/* Writeable sections generally available on Darwin.  */
 const static struct { 
         const char *seg;
         const char *sect;
 } GC_dyld_sections[] = {
         { SEG_DATA, SECT_DATA },
+        /* Used by FSF GCC, but not by OSX system tools, so far.  */
+        { SEG_DATA, "__static_data" }, 
         { SEG_DATA, SECT_BSS },
-        { SEG_DATA, SECT_COMMON }
+        { SEG_DATA, SECT_COMMON },
+        /* FSF GCC - zero-sized object sections for targets supporting section
+           anchors.  */
+        { SEG_DATA, "__zobj_data" },
+        { SEG_DATA, "__zobj_bss" }
 };
-    
+
+/* Additional writeable sections:
+
+   GCC on Darwin constucts aligned sections "on demand", where the alignment
+   size is embedded in the section name.  Furthermore, there are distintions
+   between sections containing private vs. public symbols.
+
+   It also constructs sections specifically for zero-sized objects, when the
+   target supports section anchors.  */
+const char * GC_dyld_add_sect_fmts[] = 
+{
+  "__bss%u",
+  "__pu_bss%u",
+  "__zo_bss%u",
+  "__zo_pu_bss%u",
+  NULL
+} ;
+
+/* Currently, mach-o will allow up to a max of 2^15 alignment in an
+   object file.  */
+#define L2_MAX_OFILE_ALIGNMENT 15
+
+  
 #ifdef DARWIN_DEBUG
-static const char *GC_dyld_name_for_hdr(struct mach_header *hdr) {
-    unsigned long i,c;
-    c = _dyld_image_count();
-    for(i=0;i<c;i++) if(_dyld_get_image_header(i) == hdr)
-        return _dyld_get_image_name(i);
-    return NULL;
+static const char *
+GC_dyld_name_for_hdr (const struct GC_MACH_HEADER *hdr)
+{
+  unsigned long i,c;
+  c = _dyld_image_count();
+  for (i=0;i<c;i++) 
+    if(_dyld_get_image_header(i) == hdr)
+      return _dyld_get_image_name(i);
+  return NULL;
 }
 #endif
-        
-/* This should never be called by a thread holding the lock */
-static void GC_dyld_image_add(struct mach_header* hdr, unsigned long slide) {
-    unsigned long start,end,i;
-    const struct section *sec;
-    for(i=0;i<sizeof(GC_dyld_sections)/sizeof(GC_dyld_sections[0]);i++) {
-        sec = getsectbynamefromheader(
-            hdr,GC_dyld_sections[i].seg,GC_dyld_sections[i].sect);
-            if(sec == NULL || sec->size == 0) continue;
-            start = slide + sec->addr;
-            end = start + sec->size;
-#		ifdef DARWIN_DEBUG
-                GC_printf4("Adding section at %p-%p (%lu bytes) from image %s\n",
-                start,end,sec->size,GC_dyld_name_for_hdr(hdr));
-#			endif
-        GC_add_roots((char*)start,(char*)end);
-        }
-#	ifdef DARWIN_DEBUG
-    GC_print_static_roots();
-#	endif
-}
+
 
 /* This should never be called by a thread holding the lock */
-static void GC_dyld_image_remove(struct mach_header* hdr, unsigned long slide) {
-    unsigned long start,end,i;
-    const struct section *sec;
-    for(i=0;i<sizeof(GC_dyld_sections)/sizeof(GC_dyld_sections[0]);i++) {
-        sec = getsectbynamefromheader(
-            hdr,GC_dyld_sections[i].seg,GC_dyld_sections[i].sect);
-        if(sec == NULL || sec->size == 0) continue;
-        start = slide + sec->addr;
-        end = start + sec->size;
-#		ifdef DARWIN_DEBUG
-            GC_printf4("Removing section at %p-%p (%lu bytes) from image %s\n",
-                start,end,sec->size,GC_dyld_name_for_hdr(hdr));
-#		endif
-        GC_remove_roots((char*)start,(char*)end);
+static void 
+GC_dyld_image_add (const struct GC_MACH_HEADER *hdr, intptr_t slide)
+{
+  char secnam[16];
+  unsigned long start,end,i,j;
+  const struct GC_MACH_SECTION *sec;
+  const char *fmt;
+
+  if (GC_no_dls)
+    return;
+
+  for (i=0; i<sizeof(GC_dyld_sections)/sizeof(GC_dyld_sections[0]); i++)
+    {
+      sec = GC_GETSECTBYNAME (hdr, GC_dyld_sections[i].seg,
+			      GC_dyld_sections[i].sect);
+      if(sec == NULL || sec->size == 0)
+	continue;
+
+      start = slide + sec->addr;
+      end = start + sec->size;
+
+#     ifdef DARWIN_DEBUG
+      GC_printf5("Adding section __DATA,%s at %p-%p (%lu bytes) from image %s\n",
+                GC_dyld_sections[i].sect, start,end,sec->size,GC_dyld_name_for_hdr(hdr));
+#      endif
+      GC_add_roots((char*)start,(char*)end);
     }
-#	ifdef DARWIN_DEBUG
-    GC_print_static_roots();
-#	endif
+
+  /* Sections constructed on demand.  */
+  j=0;
+  while ((fmt = GC_dyld_add_sect_fmts[j]) != NULL)
+    {
+      /* Add our manufactured aligned BSS sections.  */
+      for (i=0; i<=L2_MAX_OFILE_ALIGNMENT; i++)
+	{
+	  snprintf (secnam, 16, fmt, (unsigned)i);
+	  sec = GC_GETSECTBYNAME (hdr, SEG_DATA, secnam);
+	  if (sec == NULL || sec->size == 0)
+	    continue;
+	  start = slide + sec->addr;
+	  end = start + sec->size;
+#	  ifdef DARWIN_DEBUG
+	  GC_printf5("Adding section __DATA,%s at %p-%p (%lu bytes) from image %s\n",
+		 secnam, start,end,sec->size,GC_dyld_name_for_hdr(hdr));
+#	  endif
+	  GC_add_roots((char*)start,(char*)end);
+	}
+      j++;
+    } 
+# ifdef DARWIN_DEBUG
+  GC_print_static_roots();
+# endif
 }
 
-void GC_register_dynamic_libraries() {
+/* This should never be called by a thread holding the lock */
+static void 
+GC_dyld_image_remove (const struct GC_MACH_HEADER *hdr, intptr_t slide)
+{
+  char secnam[16];
+  unsigned long start,end,i,j;
+  const struct GC_MACH_SECTION *sec;
+  const char *fmt;
+
+  for (i=0; i<sizeof(GC_dyld_sections)/sizeof(GC_dyld_sections[0]); i++)
+    {
+      sec = GC_GETSECTBYNAME (hdr, GC_dyld_sections[i].seg,
+			      GC_dyld_sections[i].sect);
+      if(sec == NULL || sec->size == 0)
+	continue;
+
+      start = slide + sec->addr;
+      end = start + sec->size;
+#     ifdef DARWIN_DEBUG
+      GC_printf5("Removing section __DATA,%s at %p-%p (%lu bytes) from image %s\n",
+                  GC_dyld_sections[i].sect, start,end,sec->size,GC_dyld_name_for_hdr(hdr));
+#      endif
+      GC_remove_roots((char*)start,(char*)end);
+    }
+
+  /* Remove our on-demand sections.  */
+  j=0;
+  while ((fmt = GC_dyld_add_sect_fmts[j]) != NULL)
+    {
+      for (i=0; i<=L2_MAX_OFILE_ALIGNMENT; i++)
+	{
+	  snprintf (secnam, 16, fmt, (unsigned)i);
+	  sec = GC_GETSECTBYNAME (hdr, SEG_DATA, secnam);
+	  if (sec == NULL || sec->size == 0)
+	    continue;
+	  start = slide + sec->addr;
+	  end = start + sec->size;
+#	  ifdef DARWIN_DEBUG
+	  GC_printf5("Removing section __DATA,%s at %p-%p (%lu bytes) from image %s\n",
+		      secnam, start,end,sec->size,GC_dyld_name_for_hdr(hdr));
+#	  endif
+	  GC_remove_roots((char*)start,(char*)end);
+	}
+      j++;
+    }
+
+# ifdef DARWIN_DEBUG
+  GC_print_static_roots();
+# endif
+}
+
+void 
+GC_register_dynamic_libraries() 
+{
     /* Currently does nothing. The callbacks are setup by GC_init_dyld() 
     The dyld library takes it from there. */
 }
@@ -1063,15 +1328,18 @@ void GC_register_dynamic_libraries() {
    This should be called BEFORE any thread in created and WITHOUT the
    allocation lock held. */
    
-void GC_init_dyld() {
+void 
+GC_init_dyld()
+{
   static GC_bool initialized = FALSE;
   char *bind_fully_env = NULL;
   
-  if(initialized) return;
+  if(initialized)
+    return;
   
-#   ifdef DARWIN_DEBUG
+# ifdef DARWIN_DEBUG
   GC_printf0("Registering dyld callbacks...\n");
-#   endif
+# endif
   
   /* Apple's Documentation:
      When you call _dyld_register_func_for_add_image, the dynamic linker runtime
@@ -1084,27 +1352,28 @@ void GC_init_dyld() {
      linked in the future
   */
   
-    _dyld_register_func_for_add_image(GC_dyld_image_add);
-    _dyld_register_func_for_remove_image(GC_dyld_image_remove);
+  _dyld_register_func_for_add_image(GC_dyld_image_add);
+  _dyld_register_func_for_remove_image(GC_dyld_image_remove);
 
-    /* Set this early to avoid reentrancy issues. */
-    initialized = TRUE;
+  /* Set this early to avoid reentrancy issues. */
+  initialized = TRUE;
 
-    bind_fully_env = getenv("DYLD_BIND_AT_LAUNCH");
+  bind_fully_env = getenv("DYLD_BIND_AT_LAUNCH");
     
-    if (bind_fully_env == NULL) {
-#   ifdef DARWIN_DEBUG
+  if (bind_fully_env == NULL)
+    {
+#     ifdef DARWIN_DEBUG
       GC_printf0("Forcing full bind of GC code...\n");
-#   endif
+#     endif
       
-      if(!_dyld_bind_fully_image_containing_address((unsigned long*)GC_malloc))
-        GC_abort("_dyld_bind_fully_image_containing_address failed");
+      if (!_dyld_bind_fully_image_containing_address((unsigned long*)GC_malloc))
+	GC_abort("_dyld_bind_fully_image_containing_address failed");
     }
-
 }
 
 #define HAVE_REGISTER_MAIN_STATIC_DATA
-GC_bool GC_register_main_static_data()
+GC_bool 
+GC_register_main_static_data (void)
 {
   /* Already done through dyld callbacks */
   return FALSE;

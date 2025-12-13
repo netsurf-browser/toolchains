@@ -6,25 +6,23 @@
 --                                                                          --
 --                                 B o d y                                  --
 --                                                                          --
---          Copyright (C) 1997-2001 Free Software Foundation, Inc.          --
+--          Copyright (C) 1997-2009, Free Software Foundation, Inc.         --
 --                                                                          --
 -- GNAT is free software;  you can  redistribute it  and/or modify it under --
 -- terms of the  GNU General Public License as published  by the Free Soft- --
--- ware  Foundation;  either version 2,  or (at your option) any later ver- --
+-- ware  Foundation;  either version 3,  or (at your option) any later ver- --
 -- sion.  GNAT is distributed in the hope that it will be useful, but WITH- --
 -- OUT ANY WARRANTY;  without even the  implied warranty of MERCHANTABILITY --
--- or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU General Public License --
--- for  more details.  You should have  received  a copy of the GNU General --
--- Public License  distributed with GNAT;  see file COPYING.  If not, write --
--- to  the Free Software Foundation,  59 Temple Place - Suite 330,  Boston, --
--- MA 02111-1307, USA.                                                      --
+-- or FITNESS FOR A PARTICULAR PURPOSE.                                     --
 --                                                                          --
--- As a special exception,  if other files  instantiate  generics from this --
--- unit, or you link  this unit with other files  to produce an executable, --
--- this  unit  does not  by itself cause  the resulting  executable  to  be --
--- covered  by the  GNU  General  Public  License.  This exception does not --
--- however invalidate  any other reasons why  the executable file  might be --
--- covered by the  GNU Public License.                                      --
+-- As a special exception under Section 7 of GPL version 3, you are granted --
+-- additional permissions described in the GCC Runtime Library Exception,   --
+-- version 3.1, as published by the Free Software Foundation.               --
+--                                                                          --
+-- You should have received a copy of the GNU General Public License and    --
+-- a copy of the GCC Runtime Library Exception along with this program;     --
+-- see the files COPYING3 and COPYING.RUNTIME respectively.  If not, see    --
+-- <http://www.gnu.org/licenses/>.                                          --
 --                                                                          --
 -- GNAT was originally developed  by the GNAT team at  New York University. --
 -- Extensive contributions were provided by Ada Core Technologies Inc.      --
@@ -33,13 +31,15 @@
 
 --  This is a dummy body for use on non-Alpha systems so that the library
 --  can compile. This dummy version uses ordinary conversions and other
---  arithmetic operations. it is used only for testing purposes in the
+--  arithmetic operations. It is used only for testing purposes in the
 --  case where the -gnatdm switch is used to force testing of VMS features
 --  on non-VMS systems.
 
-with System.IO; use System.IO;
+with System.IO;
 
 package body System.Vax_Float_Operations is
+   pragma Warnings (Off);
+   --  Warnings about infinite recursion when the -gnatdm switch is used
 
    -----------
    -- Abs_F --
@@ -92,7 +92,7 @@ package body System.Vax_Float_Operations is
 
    procedure Debug_Output_D (Arg : D) is
    begin
-      Put (D'Image (Arg));
+      System.IO.Put (D'Image (Arg));
    end Debug_Output_D;
 
    --------------------
@@ -101,7 +101,7 @@ package body System.Vax_Float_Operations is
 
    procedure Debug_Output_F (Arg : F) is
    begin
-      Put (F'Image (Arg));
+      System.IO.Put (F'Image (Arg));
    end Debug_Output_F;
 
    --------------------
@@ -110,7 +110,7 @@ package body System.Vax_Float_Operations is
 
    procedure Debug_Output_G (Arg : G) is
    begin
-      Put (G'Image (Arg));
+      System.IO.Put (G'Image (Arg));
    end Debug_Output_G;
 
    --------------------
@@ -308,6 +308,24 @@ package body System.Vax_Float_Operations is
       return X * Y;
    end Mul_G;
 
+   ----------
+   -- Ne_F --
+   ----------
+
+   function Ne_F (X, Y : F) return Boolean is
+   begin
+      return X /= Y;
+   end Ne_F;
+
+   ----------
+   -- Ne_G --
+   ----------
+
+   function Ne_G (X, Y : G) return Boolean is
+   begin
+      return X /= Y;
+   end Ne_G;
+
    -----------
    -- Neg_F --
    -----------
@@ -332,7 +350,7 @@ package body System.Vax_Float_Operations is
 
    procedure pd (Arg : D) is
    begin
-      Put_Line (D'Image (Arg));
+      System.IO.Put_Line (D'Image (Arg));
    end pd;
 
    --------
@@ -341,7 +359,7 @@ package body System.Vax_Float_Operations is
 
    procedure pf (Arg : F) is
    begin
-      Put_Line (F'Image (Arg));
+      System.IO.Put_Line (F'Image (Arg));
    end pf;
 
    --------
@@ -350,7 +368,7 @@ package body System.Vax_Float_Operations is
 
    procedure pg (Arg : G) is
    begin
-      Put_Line (G'Image (Arg));
+      System.IO.Put_Line (G'Image (Arg));
    end pg;
 
    ------------
@@ -379,6 +397,33 @@ package body System.Vax_Float_Operations is
    begin
       return F (X);
    end S_To_F;
+
+   --------------
+   -- Return_D --
+   --------------
+
+   function Return_D (X : D) return D is
+   begin
+      return X;
+   end Return_D;
+
+   --------------
+   -- Return_F --
+   --------------
+
+   function Return_F (X : F) return F is
+   begin
+      return X;
+   end Return_F;
+
+   --------------
+   -- Return_G --
+   --------------
+
+   function Return_G (X : G) return G is
+   begin
+      return X;
+   end Return_G;
 
    -----------
    -- Sub_F --
@@ -415,5 +460,44 @@ package body System.Vax_Float_Operations is
    begin
       return G (X);
    end T_To_G;
+
+   -------------
+   -- Valid_D --
+   -------------
+
+   --  For now, convert to IEEE and do Valid test on result. This is not quite
+   --  accurate, but is good enough in practice.
+
+   function Valid_D (Arg : D) return Boolean is
+      Val : constant T := G_To_T (D_To_G (Arg));
+   begin
+      return Val'Valid;
+   end Valid_D;
+
+   -------------
+   -- Valid_F --
+   -------------
+
+   --  For now, convert to IEEE and do Valid test on result. This is not quite
+   --  accurate, but is good enough in practice.
+
+   function Valid_F (Arg : F) return Boolean is
+      Val : constant S := F_To_S (Arg);
+   begin
+      return Val'Valid;
+   end Valid_F;
+
+   -------------
+   -- Valid_G --
+   -------------
+
+   --  For now, convert to IEEE and do Valid test on result. This is not quite
+   --  accurate, but is good enough in practice.
+
+   function Valid_G (Arg : G) return Boolean is
+      Val : constant T := G_To_T (Arg);
+   begin
+      return Val'Valid;
+   end Valid_G;
 
 end System.Vax_Float_Operations;

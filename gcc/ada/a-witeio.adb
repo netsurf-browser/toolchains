@@ -1,47 +1,44 @@
 ------------------------------------------------------------------------------
 --                                                                          --
---                         GNAT RUNTIME COMPONENTS                          --
+--                         GNAT RUN-TIME COMPONENTS                         --
 --                                                                          --
 --                     A D A . W I D E _ T E X T _ I O                      --
 --                                                                          --
 --                                 B o d y                                  --
 --                                                                          --
---          Copyright (C) 1992-2003 Free Software Foundation, Inc.          --
+--          Copyright (C) 1992-2009, Free Software Foundation, Inc.         --
 --                                                                          --
 -- GNAT is free software;  you can  redistribute it  and/or modify it under --
 -- terms of the  GNU General Public License as published  by the Free Soft- --
--- ware  Foundation;  either version 2,  or (at your option) any later ver- --
+-- ware  Foundation;  either version 3,  or (at your option) any later ver- --
 -- sion.  GNAT is distributed in the hope that it will be useful, but WITH- --
 -- OUT ANY WARRANTY;  without even the  implied warranty of MERCHANTABILITY --
--- or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU General Public License --
--- for  more details.  You should have  received  a copy of the GNU General --
--- Public License  distributed with GNAT;  see file COPYING.  If not, write --
--- to  the Free Software Foundation,  59 Temple Place - Suite 330,  Boston, --
--- MA 02111-1307, USA.                                                      --
+-- or FITNESS FOR A PARTICULAR PURPOSE.                                     --
 --                                                                          --
--- As a special exception,  if other files  instantiate  generics from this --
--- unit, or you link  this unit with other files  to produce an executable, --
--- this  unit  does not  by itself cause  the resulting  executable  to  be --
--- covered  by the  GNU  General  Public  License.  This exception does not --
--- however invalidate  any other reasons why  the executable file  might be --
--- covered by the  GNU Public License.                                      --
+-- As a special exception under Section 7 of GPL version 3, you are granted --
+-- additional permissions described in the GCC Runtime Library Exception,   --
+-- version 3.1, as published by the Free Software Foundation.               --
+--                                                                          --
+-- You should have received a copy of the GNU General Public License and    --
+-- a copy of the GCC Runtime Library Exception along with this program;     --
+-- see the files COPYING3 and COPYING.RUNTIME respectively.  If not, see    --
+-- <http://www.gnu.org/licenses/>.                                          --
 --                                                                          --
 -- GNAT was originally developed  by the GNAT team at  New York University. --
 -- Extensive contributions were provided by Ada Core Technologies Inc.      --
 --                                                                          --
 ------------------------------------------------------------------------------
 
-with Ada.Exceptions;       use Ada.Exceptions;
 with Ada.Streams;          use Ada.Streams;
 with Interfaces.C_Streams; use Interfaces.C_Streams;
 
-with System;
 with System.CRTL;
 with System.File_IO;
 with System.WCh_Cnv;       use System.WCh_Cnv;
 with System.WCh_Con;       use System.WCh_Con;
-with Unchecked_Conversion;
-with Unchecked_Deallocation;
+
+with Ada.Unchecked_Conversion;
+with Ada.Unchecked_Deallocation;
 
 pragma Elaborate_All (System.File_IO);
 --  Needed because of calls to Chain_File in package body elaboration
@@ -52,45 +49,78 @@ package body Ada.Wide_Text_IO is
 
    subtype AP is FCB.AFCB_Ptr;
 
-   function To_FCB is new Unchecked_Conversion (File_Mode, FCB.File_Mode);
-   function To_TIO is new Unchecked_Conversion (FCB.File_Mode, File_Mode);
+   function To_FCB is new Ada.Unchecked_Conversion (File_Mode, FCB.File_Mode);
+   function To_TIO is new Ada.Unchecked_Conversion (FCB.File_Mode, File_Mode);
    use type FCB.File_Mode;
 
    use type System.CRTL.size_t;
 
    WC_Encoding : Character;
    pragma Import (C, WC_Encoding, "__gl_wc_encoding");
+   --  Default wide character encoding
+
+   Err_Name : aliased String := "*stderr" & ASCII.NUL;
+   In_Name  : aliased String := "*stdin" & ASCII.NUL;
+   Out_Name : aliased String := "*stdout" & ASCII.NUL;
+   --  Names of standard files
+   --
+   --  Use "preallocated" strings to avoid calling "new" during the elaboration
+   --  of the run time. This is needed in the tasking case to avoid calling
+   --  Task_Lock too early. A filename is expected to end with a null character
+   --  in the runtime, here the null characters are added just to have a
+   --  correct filename length.
+   --
+   --  Note: the names for these files are bogus, and probably it would be
+   --  better for these files to have no names, but the ACVC tests insist!
+   --  We use names that are bound to fail in open etc.
+
+   Null_Str : aliased constant String := "";
+   --  Used as form string for standard files
 
    -----------------------
    -- Local Subprograms --
    -----------------------
 
-   function Getc_Immed (File : in File_Type) return int;
-   --  This routine is identical to Getc, except that the read is done in
-   --  Get_Immediate mode (i.e. without waiting for a line return).
-
    function Get_Wide_Char_Immed
      (C    : Character;
-      File : File_Type)
-      return Wide_Character;
+      File : File_Type) return Wide_Character;
    --  This routine is identical to Get_Wide_Char, except that the reads are
    --  done in Get_Immediate mode (i.e. without waiting for a line return).
 
+   function Getc_Immed (File : File_Type) return int;
+   --  This routine is identical to Getc, except that the read is done in
+   --  Get_Immediate mode (i.e. without waiting for a line return).
+
+   procedure Putc (ch : int; File : File_Type);
+   --  Outputs the given character to the file, which has already been checked
+   --  for being in output status. Device_Error is raised if the character
+   --  cannot be written.
+
    procedure Set_WCEM (File : in out File_Type);
-   --  Called by Open and Create to set the wide character encoding method
-   --  for the file, processing a WCEM form parameter if one is present.
-   --  File is IN OUT because it may be closed in case of an error.
+   --  Called by Open and Create to set the wide character encoding method for
+   --  the file, processing a WCEM form parameter if one is present. File is
+   --  IN OUT because it may be closed in case of an error.
+
+   procedure Terminate_Line (File : File_Type);
+   --  If the file is in Write_File or Append_File mode, and the current line
+   --  is not terminated, then a line terminator is written using New_Line.
+   --  Note that there is no Terminate_Page routine, because the page mark at
+   --  the end of the file is implied if necessary.
+
+   procedure Ungetc (ch : int; File : File_Type);
+   --  Pushes back character into stream, using ungetc. The caller has checked
+   --  that the file is in read status. Device_Error is raised if the character
+   --  cannot be pushed back. An attempt to push back and end of file character
+   --  (EOF) is ignored.
 
    -------------------
    -- AFCB_Allocate --
    -------------------
 
    function AFCB_Allocate
-     (Control_Block : Wide_Text_AFCB)
-      return          FCB.AFCB_Ptr
+     (Control_Block : Wide_Text_AFCB) return FCB.AFCB_Ptr
    is
       pragma Unreferenced (Control_Block);
-
    begin
       return new Wide_Text_AFCB;
    end AFCB_Allocate;
@@ -99,7 +129,7 @@ package body Ada.Wide_Text_IO is
    -- AFCB_Close --
    ----------------
 
-   procedure AFCB_Close (File : access Wide_Text_AFCB) is
+   procedure AFCB_Close (File : not null access Wide_Text_AFCB) is
    begin
       --  If the file being closed is one of the current files, then close
       --  the corresponding current file. It is not clear that this action
@@ -121,11 +151,12 @@ package body Ada.Wide_Text_IO is
    -- AFCB_Free --
    ---------------
 
-   procedure AFCB_Free (File : access Wide_Text_AFCB) is
+   procedure AFCB_Free (File : not null access Wide_Text_AFCB) is
       type FCB_Ptr is access all Wide_Text_AFCB;
       FT : FCB_Ptr := FCB_Ptr (File);
 
-      procedure Free is new Unchecked_Deallocation (Wide_Text_AFCB, FCB_Ptr);
+      procedure Free is
+        new Ada.Unchecked_Deallocation (Wide_Text_AFCB, FCB_Ptr);
 
    begin
       Free (FT);
@@ -137,7 +168,7 @@ package body Ada.Wide_Text_IO is
 
    procedure Close (File : in out File_Type) is
    begin
-      FIO.Close (AP (File));
+      FIO.Close (AP (File)'Unrestricted_Access);
    end Close;
 
    ---------
@@ -148,7 +179,7 @@ package body Ada.Wide_Text_IO is
    --  to exceed the value of Count'Last, i.e. no check is required for
    --  overflow raising layout error.
 
-   function Col (File : in File_Type) return Positive_Count is
+   function Col (File : File_Type) return Positive_Count is
    begin
       FIO.Check_File_Open (AP (File));
       return File.Col;
@@ -165,9 +196,9 @@ package body Ada.Wide_Text_IO is
 
    procedure Create
      (File : in out File_Type;
-      Mode : in File_Mode := Out_File;
-      Name : in String := "";
-      Form : in String := "")
+      Mode : File_Mode := Out_File;
+      Name : String := "";
+      Form : String := "")
    is
       Dummy_File_Control_Block : Wide_Text_AFCB;
       pragma Warnings (Off, Dummy_File_Control_Block);
@@ -183,6 +214,8 @@ package body Ada.Wide_Text_IO is
                 Amethod   => 'W',
                 Creat     => True,
                 Text      => True);
+
+      File.Self := File;
       Set_WCEM (File);
    end Create;
 
@@ -197,7 +230,7 @@ package body Ada.Wide_Text_IO is
 
    function Current_Error return File_Access is
    begin
-      return Current_Err'Access;
+      return Current_Err.Self'Access;
    end Current_Error;
 
    -------------------
@@ -211,7 +244,7 @@ package body Ada.Wide_Text_IO is
 
    function Current_Input return File_Access is
    begin
-      return Current_In'Access;
+      return Current_In.Self'Access;
    end Current_Input;
 
    --------------------
@@ -225,7 +258,7 @@ package body Ada.Wide_Text_IO is
 
    function Current_Output return File_Access is
    begin
-      return Current_Out'Access;
+      return Current_Out.Self'Access;
    end Current_Output;
 
    ------------
@@ -234,14 +267,14 @@ package body Ada.Wide_Text_IO is
 
    procedure Delete (File : in out File_Type) is
    begin
-      FIO.Delete (AP (File));
+      FIO.Delete (AP (File)'Unrestricted_Access);
    end Delete;
 
    -----------------
    -- End_Of_File --
    -----------------
 
-   function End_Of_File (File : in File_Type) return Boolean is
+   function End_Of_File (File : File_Type) return Boolean is
       ch  : int;
 
    begin
@@ -251,7 +284,6 @@ package body Ada.Wide_Text_IO is
          return False;
 
       elsif File.Before_LM then
-
          if File.Before_LM_PM then
             return Nextc (File) = EOF;
          end if;
@@ -302,7 +334,7 @@ package body Ada.Wide_Text_IO is
    -- End_Of_Line --
    -----------------
 
-   function End_Of_Line (File : in File_Type) return Boolean is
+   function End_Of_Line (File : File_Type) return Boolean is
       ch : int;
 
    begin
@@ -336,7 +368,7 @@ package body Ada.Wide_Text_IO is
    -- End_Of_Page --
    -----------------
 
-   function End_Of_Page (File : in File_Type) return Boolean is
+   function End_Of_Page (File : File_Type) return Boolean is
       ch  : int;
 
    begin
@@ -386,7 +418,7 @@ package body Ada.Wide_Text_IO is
    -- Flush --
    -----------
 
-   procedure Flush (File : in File_Type) is
+   procedure Flush (File : File_Type) is
    begin
       FIO.Flush (AP (File));
    end Flush;
@@ -400,7 +432,7 @@ package body Ada.Wide_Text_IO is
    -- Form --
    ----------
 
-   function Form (File : in File_Type) return String is
+   function Form (File : File_Type) return String is
    begin
       return FIO.Form (AP (File));
    end Form;
@@ -410,7 +442,7 @@ package body Ada.Wide_Text_IO is
    ---------
 
    procedure Get
-     (File : in File_Type;
+     (File : File_Type;
       Item : out Wide_Character)
    is
       C  : Character;
@@ -421,6 +453,8 @@ package body Ada.Wide_Text_IO is
       if File.Before_Wide_Character then
          File.Before_Wide_Character := False;
          Item := File.Saved_Wide_Character;
+
+      --  Ada.Text_IO checks Before_LM_PM here, shouldn't we do the same???
 
       else
          Get_Character (File, C);
@@ -434,7 +468,7 @@ package body Ada.Wide_Text_IO is
    end Get;
 
    procedure Get
-     (File : in File_Type;
+     (File : File_Type;
       Item : out Wide_String)
    is
    begin
@@ -453,7 +487,7 @@ package body Ada.Wide_Text_IO is
    -------------------
 
    procedure Get_Character
-     (File : in File_Type;
+     (File : File_Type;
       Item : out Character)
    is
       ch : int;
@@ -501,7 +535,7 @@ package body Ada.Wide_Text_IO is
    -------------------
 
    procedure Get_Immediate
-     (File : in File_Type;
+     (File : File_Type;
       Item : out Wide_Character)
    is
       ch : int;
@@ -537,7 +571,7 @@ package body Ada.Wide_Text_IO is
    end Get_Immediate;
 
    procedure Get_Immediate
-     (File      : in File_Type;
+     (File      : File_Type;
       Item      : out Wide_Character;
       Available : out Boolean)
    is
@@ -557,6 +591,8 @@ package body Ada.Wide_Text_IO is
          Item := Wide_Character'Val (LM);
 
       else
+         --  Shouldn't we use getc_immediate_nowait here, like Text_IO???
+
          ch := Getc_Immed (File);
 
          if ch = EOF then
@@ -580,7 +616,7 @@ package body Ada.Wide_Text_IO is
    --------------
 
    procedure Get_Line
-     (File : in File_Type;
+     (File : File_Type;
       Item : out Wide_String;
       Last : out Natural)
    is
@@ -671,22 +707,78 @@ package body Ada.Wide_Text_IO is
       Get_Line (Current_In, Item, Last);
    end Get_Line;
 
+   function Get_Line (File : File_Type) return Wide_String is
+      Buffer : Wide_String (1 .. 500);
+      Last   : Natural;
+
+      function Get_Rest (S : Wide_String) return Wide_String;
+      --  This is a recursive function that reads the rest of the line and
+      --  returns it. S is the part read so far.
+
+      --------------
+      -- Get_Rest --
+      --------------
+
+      function Get_Rest (S : Wide_String) return Wide_String is
+
+         --  Each time we allocate a buffer the same size as what we have
+         --  read so far. This limits us to a logarithmic number of calls
+         --  to Get_Rest and also ensures only a linear use of stack space.
+
+         Buffer : Wide_String (1 .. S'Length);
+         Last   : Natural;
+
+      begin
+         Get_Line (File, Buffer, Last);
+
+         declare
+            R : constant Wide_String := S & Buffer (1 .. Last);
+         begin
+            if Last < Buffer'Last then
+               return R;
+            else
+               return Get_Rest (R);
+            end if;
+         end;
+      end Get_Rest;
+
+   --  Start of processing for Get_Line
+
+   begin
+      Get_Line (File, Buffer, Last);
+
+      if Last < Buffer'Last then
+         return Buffer (1 .. Last);
+      else
+         return Get_Rest (Buffer (1 .. Last));
+      end if;
+   end Get_Line;
+
+   function Get_Line return Wide_String is
+   begin
+      return Get_Line (Current_In);
+   end Get_Line;
+
    -------------------
    -- Get_Wide_Char --
    -------------------
 
    function Get_Wide_Char
      (C    : Character;
-      File : File_Type)
-      return Wide_Character
+      File : File_Type) return Wide_Character
    is
       function In_Char return Character;
       --  Function used to obtain additional characters it the wide character
       --  sequence is more than one character long.
 
+      function WC_In is new Char_Sequence_To_Wide_Char (In_Char);
+
+      -------------
+      -- In_Char --
+      -------------
+
       function In_Char return Character is
          ch : constant Integer := Getc (File);
-
       begin
          if ch = EOF then
             raise End_Error;
@@ -695,9 +787,10 @@ package body Ada.Wide_Text_IO is
          end if;
       end In_Char;
 
-      function WC_In is new Char_Sequence_To_Wide_Char (In_Char);
+   --  Start of processing for Get_Wide_Char
 
    begin
+      FIO.Check_Read_Status (AP (File));
       return WC_In (C, File.WC_Method);
    end Get_Wide_Char;
 
@@ -707,16 +800,20 @@ package body Ada.Wide_Text_IO is
 
    function Get_Wide_Char_Immed
      (C    : Character;
-      File : File_Type)
-      return Wide_Character
+      File : File_Type) return Wide_Character
    is
       function In_Char return Character;
       --  Function used to obtain additional characters it the wide character
       --  sequence is more than one character long.
 
+      function WC_In is new Char_Sequence_To_Wide_Char (In_Char);
+
+      -------------
+      -- In_Char --
+      -------------
+
       function In_Char return Character is
          ch : constant Integer := Getc_Immed (File);
-
       begin
          if ch = EOF then
             raise End_Error;
@@ -725,9 +822,10 @@ package body Ada.Wide_Text_IO is
          end if;
       end In_Char;
 
-      function WC_In is new Char_Sequence_To_Wide_Char (In_Char);
+   --  Start of processing for Get_Wide_Char_Immed
 
    begin
+      FIO.Check_Read_Status (AP (File));
       return WC_In (C, File.WC_Method);
    end Get_Wide_Char_Immed;
 
@@ -752,7 +850,7 @@ package body Ada.Wide_Text_IO is
    -- Getc_Immed --
    ----------------
 
-   function Getc_Immed (File : in File_Type) return int is
+   function Getc_Immed (File : File_Type) return int is
       ch          : int;
       end_of_file : int;
 
@@ -781,11 +879,57 @@ package body Ada.Wide_Text_IO is
       return ch;
    end Getc_Immed;
 
+   -------------------------------
+   -- Initialize_Standard_Files --
+   -------------------------------
+
+   procedure Initialize_Standard_Files is
+   begin
+      Standard_Err.Stream            := stderr;
+      Standard_Err.Name              := Err_Name'Access;
+      Standard_Err.Form              := Null_Str'Unrestricted_Access;
+      Standard_Err.Mode              := FCB.Out_File;
+      Standard_Err.Is_Regular_File   := is_regular_file (fileno (stderr)) /= 0;
+      Standard_Err.Is_Temporary_File := False;
+      Standard_Err.Is_System_File    := True;
+      Standard_Err.Is_Text_File      := True;
+      Standard_Err.Access_Method     := 'T';
+      Standard_Err.Self              := Standard_Err;
+      Standard_Err.WC_Method         := Default_WCEM;
+
+      Standard_In.Stream             := stdin;
+      Standard_In.Name               := In_Name'Access;
+      Standard_In.Form               := Null_Str'Unrestricted_Access;
+      Standard_In.Mode               := FCB.In_File;
+      Standard_In.Is_Regular_File    := is_regular_file (fileno (stdin)) /= 0;
+      Standard_In.Is_Temporary_File  := False;
+      Standard_In.Is_System_File     := True;
+      Standard_In.Is_Text_File       := True;
+      Standard_In.Access_Method      := 'T';
+      Standard_In.Self               := Standard_In;
+      Standard_In.WC_Method          := Default_WCEM;
+
+      Standard_Out.Stream            := stdout;
+      Standard_Out.Name              := Out_Name'Access;
+      Standard_Out.Form              := Null_Str'Unrestricted_Access;
+      Standard_Out.Mode              := FCB.Out_File;
+      Standard_Out.Is_Regular_File   := is_regular_file (fileno (stdout)) /= 0;
+      Standard_Out.Is_Temporary_File := False;
+      Standard_Out.Is_System_File    := True;
+      Standard_Out.Is_Text_File      := True;
+      Standard_Out.Access_Method     := 'T';
+      Standard_Out.Self              := Standard_Out;
+      Standard_Out.WC_Method         := Default_WCEM;
+
+      FIO.Make_Unbuffered (AP (Standard_Out));
+      FIO.Make_Unbuffered (AP (Standard_Err));
+   end Initialize_Standard_Files;
+
    -------------
    -- Is_Open --
    -------------
 
-   function Is_Open (File : in File_Type) return Boolean is
+   function Is_Open (File : File_Type) return Boolean is
    begin
       return FIO.Is_Open (AP (File));
    end Is_Open;
@@ -794,11 +938,11 @@ package body Ada.Wide_Text_IO is
    -- Line --
    ----------
 
-   --  Note: we assume that it is impossible in practice for the line
-   --  to exceed the value of Count'Last, i.e. no check is required for
-   --  overflow raising layout error.
+   --  Note: we assume that it is impossible in practice for the line to exceed
+   --  the value of Count'Last, i.e. no check is required for overflow raising
+   --  layout error.
 
-   function Line (File : in File_Type) return Positive_Count is
+   function Line (File : File_Type) return Positive_Count is
    begin
       FIO.Check_File_Open (AP (File));
       return File.Line;
@@ -813,7 +957,7 @@ package body Ada.Wide_Text_IO is
    -- Line_Length --
    -----------------
 
-   function Line_Length (File : in File_Type) return Count is
+   function Line_Length (File : File_Type) return Count is
    begin
       FIO.Check_Write_Status (AP (File));
       return File.Line_Length;
@@ -829,7 +973,7 @@ package body Ada.Wide_Text_IO is
    ----------------
 
    procedure Look_Ahead
-     (File        : in File_Type;
+     (File        : File_Type;
       Item        : out Wide_Character;
       End_Of_Line : out Boolean)
    is
@@ -846,7 +990,7 @@ package body Ada.Wide_Text_IO is
          End_Of_Line := True;
          Item := Wide_Character'Val (0);
 
-      --  If we are before a wide character, just return it (this happens
+      --  If we are before a wide character, just return it (this can happen
       --  if there are two calls to Look_Ahead in a row).
 
       elsif File.Before_Wide_Character then
@@ -866,19 +1010,21 @@ package body Ada.Wide_Text_IO is
             Ungetc (ch, File);
             Item := Wide_Character'Val (0);
 
-         --  If the character is in the range 16#0000# to 16#007F# it stands
-         --  for itself and occupies a single byte, so we can unget it with
+         --  Case where character obtained does not represent the start of an
+         --  encoded sequence so it stands for itself and we can unget it with
          --  no difficulty.
 
-         elsif ch <= 16#0080# then
+         elsif not Is_Start_Of_Encoding
+                     (Character'Val (ch), File.WC_Method)
+         then
             End_Of_Line := False;
             Ungetc (ch, File);
             Item := Wide_Character'Val (ch);
 
-         --  For a character above this range, we read the character, using
-         --  the Get_Wide_Char routine. It may well occupy more than one byte
-         --  so we can't put it back with ungetc. Instead we save it in the
-         --  control block, setting a flag that everyone interested in reading
+         --  For the start of an encoding, we read the character using the
+         --  Get_Wide_Char routine. It will occupy more than one byte so we
+         --  can't put it back with ungetc. Instead we save it in the control
+         --  block, setting a flag that everyone interested in reading
          --  characters must test before reading the stream.
 
          else
@@ -902,7 +1048,7 @@ package body Ada.Wide_Text_IO is
    -- Mode --
    ----------
 
-   function Mode (File : in File_Type) return File_Mode is
+   function Mode (File : File_Type) return File_Mode is
    begin
       return To_TIO (FIO.Mode (AP (File)));
    end Mode;
@@ -911,7 +1057,7 @@ package body Ada.Wide_Text_IO is
    -- Name --
    ----------
 
-   function Name (File : in File_Type) return String is
+   function Name (File : File_Type) return String is
    begin
       return FIO.Name (AP (File));
    end Name;
@@ -921,15 +1067,15 @@ package body Ada.Wide_Text_IO is
    --------------
 
    procedure New_Line
-     (File    : in File_Type;
-      Spacing : in Positive_Count := 1)
+     (File    : File_Type;
+      Spacing : Positive_Count := 1)
    is
    begin
       --  Raise Constraint_Error if out of range value. The reason for this
       --  explicit test is that we don't want junk values around, even if
       --  checks are off in the caller.
 
-      if Spacing not in Positive_Count then
+      if not Spacing'Valid then
          raise Constraint_Error;
       end if;
 
@@ -951,7 +1097,7 @@ package body Ada.Wide_Text_IO is
       File.Col := 1;
    end New_Line;
 
-   procedure New_Line (Spacing : in Positive_Count := 1) is
+   procedure New_Line (Spacing : Positive_Count := 1) is
    begin
       New_Line (Current_Out, Spacing);
    end New_Line;
@@ -960,7 +1106,7 @@ package body Ada.Wide_Text_IO is
    -- New_Page --
    --------------
 
-   procedure New_Page (File : in File_Type) is
+   procedure New_Page (File : File_Type) is
    begin
       FIO.Check_Write_Status (AP (File));
 
@@ -1009,9 +1155,9 @@ package body Ada.Wide_Text_IO is
 
    procedure Open
      (File : in out File_Type;
-      Mode : in File_Mode;
-      Name : in String;
-      Form : in String := "")
+      Mode : File_Mode;
+      Name : String;
+      Form : String := "")
    is
       Dummy_File_Control_Block : Wide_Text_AFCB;
       pragma Warnings (Off, Dummy_File_Control_Block);
@@ -1027,6 +1173,8 @@ package body Ada.Wide_Text_IO is
                 Amethod   => 'W',
                 Creat     => False,
                 Text      => True);
+
+      File.Self := File;
       Set_WCEM (File);
    end Open;
 
@@ -1038,7 +1186,7 @@ package body Ada.Wide_Text_IO is
    --  to exceed the value of Count'Last, i.e. no check is required for
    --  overflow raising layout error.
 
-   function Page (File : in File_Type) return Positive_Count is
+   function Page (File : File_Type) return Positive_Count is
    begin
       FIO.Check_File_Open (AP (File));
       return File.Page;
@@ -1053,7 +1201,7 @@ package body Ada.Wide_Text_IO is
    -- Page_Length --
    -----------------
 
-   function Page_Length (File : in File_Type) return Count is
+   function Page_Length (File : File_Type) return Count is
    begin
       FIO.Check_Write_Status (AP (File));
       return File.Page_Length;
@@ -1069,25 +1217,32 @@ package body Ada.Wide_Text_IO is
    ---------
 
    procedure Put
-     (File : in File_Type;
-      Item : in Wide_Character)
+     (File : File_Type;
+      Item : Wide_Character)
    is
       procedure Out_Char (C : Character);
       --  Procedure to output one character of a wide character sequence
+
+      procedure WC_Out is new Wide_Char_To_Char_Sequence (Out_Char);
+
+      --------------
+      -- Out_Char --
+      --------------
 
       procedure Out_Char (C : Character) is
       begin
          Putc (Character'Pos (C), File);
       end Out_Char;
 
-      procedure WC_Out is new Wide_Char_To_Char_Sequence (Out_Char);
+   --  Start of processing for Put
 
    begin
+      FIO.Check_Write_Status (AP (File));
       WC_Out (Item, File.WC_Method);
       File.Col := File.Col + 1;
    end Put;
 
-   procedure Put (Item : in Wide_Character) is
+   procedure Put (Item : Wide_Character) is
    begin
       Put (Current_Out, Item);
    end Put;
@@ -1097,8 +1252,8 @@ package body Ada.Wide_Text_IO is
    ---------
 
    procedure Put
-     (File : in File_Type;
-      Item : in Wide_String)
+     (File : File_Type;
+      Item : Wide_String)
    is
    begin
       for J in Item'Range loop
@@ -1106,7 +1261,7 @@ package body Ada.Wide_Text_IO is
       end loop;
    end Put;
 
-   procedure Put (Item : in Wide_String) is
+   procedure Put (Item : Wide_String) is
    begin
       Put (Current_Out, Item);
    end Put;
@@ -1116,15 +1271,15 @@ package body Ada.Wide_Text_IO is
    --------------
 
    procedure Put_Line
-     (File : in File_Type;
-      Item : in Wide_String)
+     (File : File_Type;
+      Item : Wide_String)
    is
    begin
       Put (File, Item);
       New_Line (File);
    end Put_Line;
 
-   procedure Put_Line (Item : in Wide_String) is
+   procedure Put_Line (Item : Wide_String) is
    begin
       Put (Current_Out, Item);
       New_Line (Current_Out);
@@ -1231,7 +1386,7 @@ package body Ada.Wide_Text_IO is
 
    procedure Reset
      (File : in out File_Type;
-      Mode : in File_Mode)
+      Mode : File_Mode)
    is
    begin
       --  Don't allow change of mode for current file (RM A.10.2(5))
@@ -1245,7 +1400,7 @@ package body Ada.Wide_Text_IO is
       end if;
 
       Terminate_Line (File);
-      FIO.Reset (AP (File), To_FCB (Mode));
+      FIO.Reset (AP (File)'Unrestricted_Access, To_FCB (Mode));
       File.Page := 1;
       File.Line := 1;
       File.Col  := 1;
@@ -1258,7 +1413,7 @@ package body Ada.Wide_Text_IO is
    procedure Reset (File : in out File_Type) is
    begin
       Terminate_Line (File);
-      FIO.Reset (AP (File));
+      FIO.Reset (AP (File)'Unrestricted_Access);
       File.Page := 1;
       File.Line := 1;
       File.Col  := 1;
@@ -1273,8 +1428,8 @@ package body Ada.Wide_Text_IO is
    -------------
 
    procedure Set_Col
-     (File : in File_Type;
-      To   : in Positive_Count)
+     (File : File_Type;
+      To   : Positive_Count)
    is
       ch : int;
 
@@ -1283,7 +1438,7 @@ package body Ada.Wide_Text_IO is
       --  explicit test is that we don't want junk values around, even if
       --  checks are off in the caller.
 
-      if To not in Positive_Count then
+      if not To'Valid then
          raise Constraint_Error;
       end if;
 
@@ -1333,7 +1488,7 @@ package body Ada.Wide_Text_IO is
       end if;
    end Set_Col;
 
-   procedure Set_Col (To : in Positive_Count) is
+   procedure Set_Col (To : Positive_Count) is
    begin
       Set_Col (Current_Out, To);
    end Set_Col;
@@ -1342,7 +1497,7 @@ package body Ada.Wide_Text_IO is
    -- Set_Error --
    ---------------
 
-   procedure Set_Error (File : in File_Type) is
+   procedure Set_Error (File : File_Type) is
    begin
       FIO.Check_Write_Status (AP (File));
       Current_Err := File;
@@ -1352,7 +1507,7 @@ package body Ada.Wide_Text_IO is
    -- Set_Input --
    ---------------
 
-   procedure Set_Input (File : in File_Type) is
+   procedure Set_Input (File : File_Type) is
    begin
       FIO.Check_Read_Status (AP (File));
       Current_In := File;
@@ -1363,15 +1518,15 @@ package body Ada.Wide_Text_IO is
    --------------
 
    procedure Set_Line
-     (File : in File_Type;
-      To   : in Positive_Count)
+     (File : File_Type;
+      To   : Positive_Count)
    is
    begin
       --  Raise Constraint_Error if out of range value. The reason for this
       --  explicit test is that we don't want junk values around, even if
       --  checks are off in the caller.
 
-      if To not in Positive_Count then
+      if not To'Valid then
          raise Constraint_Error;
       end if;
 
@@ -1401,7 +1556,7 @@ package body Ada.Wide_Text_IO is
       end if;
    end Set_Line;
 
-   procedure Set_Line (To : in Positive_Count) is
+   procedure Set_Line (To : Positive_Count) is
    begin
       Set_Line (Current_Out, To);
    end Set_Line;
@@ -1410,13 +1565,13 @@ package body Ada.Wide_Text_IO is
    -- Set_Line_Length --
    ---------------------
 
-   procedure Set_Line_Length (File : in File_Type; To : in Count) is
+   procedure Set_Line_Length (File : File_Type; To : Count) is
    begin
       --  Raise Constraint_Error if out of range value. The reason for this
       --  explicit test is that we don't want junk values around, even if
       --  checks are off in the caller.
 
-      if To not in Count then
+      if not To'Valid then
          raise Constraint_Error;
       end if;
 
@@ -1424,7 +1579,7 @@ package body Ada.Wide_Text_IO is
       File.Line_Length := To;
    end Set_Line_Length;
 
-   procedure Set_Line_Length (To : in Count) is
+   procedure Set_Line_Length (To : Count) is
    begin
       Set_Line_Length (Current_Out, To);
    end Set_Line_Length;
@@ -1433,7 +1588,7 @@ package body Ada.Wide_Text_IO is
    -- Set_Output --
    ----------------
 
-   procedure Set_Output (File : in File_Type) is
+   procedure Set_Output (File : File_Type) is
    begin
       FIO.Check_Write_Status (AP (File));
       Current_Out := File;
@@ -1443,13 +1598,13 @@ package body Ada.Wide_Text_IO is
    -- Set_Page_Length --
    ---------------------
 
-   procedure Set_Page_Length (File : in File_Type; To : in Count) is
+   procedure Set_Page_Length (File : File_Type; To : Count) is
    begin
       --  Raise Constraint_Error if out of range value. The reason for this
       --  explicit test is that we don't want junk values around, even if
       --  checks are off in the caller.
 
-      if To not in Count then
+      if not To'Valid then
          raise Constraint_Error;
       end if;
 
@@ -1457,7 +1612,7 @@ package body Ada.Wide_Text_IO is
       File.Page_Length := To;
    end Set_Page_Length;
 
-   procedure Set_Page_Length (To : in Count) is
+   procedure Set_Page_Length (To : Count) is
    begin
       Set_Page_Length (Current_Out, To);
    end Set_Page_Length;
@@ -1477,7 +1632,7 @@ package body Ada.Wide_Text_IO is
       if Start = 0 then
          File.WC_Method := WCEM_Brackets;
 
-      elsif Start /= 0 then
+      else
          if Stop = Start then
             for J in WC_Encoding_Letters'Range loop
                if File.Form (Start) = WC_Encoding_Letters (J) then
@@ -1488,7 +1643,7 @@ package body Ada.Wide_Text_IO is
          end if;
 
          Close (File);
-         Raise_Exception (Use_Error'Identity, "invalid WCEM form parameter");
+         raise Use_Error with "invalid WCEM form parameter";
       end if;
    end Set_WCEM;
 
@@ -1497,8 +1652,8 @@ package body Ada.Wide_Text_IO is
    ---------------
 
    procedure Skip_Line
-     (File    : in File_Type;
-      Spacing : in Positive_Count := 1)
+     (File    : File_Type;
+      Spacing : Positive_Count := 1)
    is
       ch : int;
 
@@ -1507,7 +1662,7 @@ package body Ada.Wide_Text_IO is
       --  explicit test is that we don't want junk values around, even if
       --  checks are off in the caller.
 
-      if Spacing not in Positive_Count then
+      if not Spacing'Valid then
          raise Constraint_Error;
       end if;
 
@@ -1541,7 +1696,7 @@ package body Ada.Wide_Text_IO is
             --  up for such files, so we assume an implicit LM in this case.
 
             loop
-               exit when ch = LM or ch = EOF;
+               exit when ch = LM or else ch = EOF;
                ch := Getc (File);
             end loop;
          end if;
@@ -1574,13 +1729,12 @@ package body Ada.Wide_Text_IO is
                Ungetc (ch, File);
             end if;
          end if;
-
       end loop;
 
       File.Before_Wide_Character := False;
    end Skip_Line;
 
-   procedure Skip_Line (Spacing : in Positive_Count := 1) is
+   procedure Skip_Line (Spacing : Positive_Count := 1) is
    begin
       Skip_Line (Current_In, Spacing);
    end Skip_Line;
@@ -1589,7 +1743,7 @@ package body Ada.Wide_Text_IO is
    -- Skip_Page --
    ---------------
 
-   procedure Skip_Page (File : in File_Type) is
+   procedure Skip_Page (File : File_Type) is
       ch : int;
 
    begin
@@ -1741,8 +1895,11 @@ package body Ada.Wide_Text_IO is
 
    procedure Write
      (File : in out Wide_Text_AFCB;
-      Item : in Stream_Element_Array)
+      Item : Stream_Element_Array)
    is
+      pragma Warnings (Off, File);
+      --  Because in this implementation we don't need IN OUT, we only read
+
       Siz : constant size_t := Item'Length;
 
    begin
@@ -1765,20 +1922,8 @@ package body Ada.Wide_Text_IO is
       set_text_mode (fileno (File.Stream));
    end Write;
 
-   --  Use "preallocated" strings to avoid calling "new" during the
-   --  elaboration of the run time. This is needed in the tasking case to
-   --  avoid calling Task_Lock too early. A filename is expected to end with
-   --  a null character in the runtime, here the null characters are added
-   --  just to have a correct filename length.
-
-   Err_Name : aliased String := "*stderr" & ASCII.Nul;
-   In_Name  : aliased String := "*stdin" & ASCII.Nul;
-   Out_Name : aliased String := "*stdout" & ASCII.Nul;
-
 begin
-   -------------------------------
-   -- Initialize Standard Files --
-   -------------------------------
+   --  Initialize Standard Files
 
    for J in WC_Encoding_Method loop
       if WC_Encoding = WC_Encoding_Letters (J) then
@@ -1786,48 +1931,10 @@ begin
       end if;
    end loop;
 
-   --  Note: the names in these files are bogus, and probably it would be
-   --  better for these files to have no names, but the ACVC test insist!
-   --  We use names that are bound to fail in open etc.
-
-   Standard_Err.Stream            := stderr;
-   Standard_Err.Name              := Err_Name'Access;
-   Standard_Err.Form              := Null_Str'Unrestricted_Access;
-   Standard_Err.Mode              := FCB.Out_File;
-   Standard_Err.Is_Regular_File   := is_regular_file (fileno (stderr)) /= 0;
-   Standard_Err.Is_Temporary_File := False;
-   Standard_Err.Is_System_File    := True;
-   Standard_Err.Is_Text_File      := True;
-   Standard_Err.Access_Method     := 'T';
-   Standard_Err.WC_Method         := Default_WCEM;
-
-   Standard_In.Stream            := stdin;
-   Standard_In.Name              := In_Name'Access;
-   Standard_In.Form              := Null_Str'Unrestricted_Access;
-   Standard_In.Mode              := FCB.In_File;
-   Standard_In.Is_Regular_File   := is_regular_file (fileno (stdin)) /= 0;
-   Standard_In.Is_Temporary_File := False;
-   Standard_In.Is_System_File    := True;
-   Standard_In.Is_Text_File      := True;
-   Standard_In.Access_Method     := 'T';
-   Standard_In.WC_Method         := Default_WCEM;
-
-   Standard_Out.Stream            := stdout;
-   Standard_Out.Name              := Out_Name'Access;
-   Standard_Out.Form              := Null_Str'Unrestricted_Access;
-   Standard_Out.Mode              := FCB.Out_File;
-   Standard_Out.Is_Regular_File   := is_regular_file (fileno (stdout)) /= 0;
-   Standard_Out.Is_Temporary_File := False;
-   Standard_Out.Is_System_File    := True;
-   Standard_Out.Is_Text_File      := True;
-   Standard_Out.Access_Method     := 'T';
-   Standard_Out.WC_Method         := Default_WCEM;
+   Initialize_Standard_Files;
 
    FIO.Chain_File (AP (Standard_In));
    FIO.Chain_File (AP (Standard_Out));
    FIO.Chain_File (AP (Standard_Err));
-
-   FIO.Make_Unbuffered (AP (Standard_Out));
-   FIO.Make_Unbuffered (AP (Standard_Err));
 
 end Ada.Wide_Text_IO;

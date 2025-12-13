@@ -1,9 +1,12 @@
-// Copyright (C) 2004 Free Software Foundation, Inc.
+// { dg-require-namedlocale "de_DE" }
+// { dg-require-namedlocale "es_ES" }
+
+// Copyright (C) 2004, 2005, 2009 Free Software Foundation, Inc.
 //
 // This file is part of the GNU ISO C++ Library.  This library is free
 // software; you can redistribute it and/or modify it under the
 // terms of the GNU General Public License as published by the
-// Free Software Foundation; either version 2, or (at your option)
+// Free Software Foundation; either version 3, or (at your option)
 // any later version.
 
 // This library is distributed in the hope that it will be useful,
@@ -12,9 +15,8 @@
 // GNU General Public License for more details.
 
 // You should have received a copy of the GNU General Public License along
-// with this library; see the file COPYING.  If not, write to the Free
-// Software Foundation, 59 Temple Place - Suite 330, Boston, MA 02111-1307,
-// USA.
+// with this library; see the file COPYING3.  If not see
+// <http://www.gnu.org/licenses/>.
 
 #include <sstream>
 #include <locale>
@@ -25,8 +27,8 @@ int main()
   using namespace std;
 
   bool test __attribute__((unused)) = true;
-  locale l1 = __gnu_test::try_named_locale("de_DE");
-  locale l2 = __gnu_test::try_named_locale("es_ES");
+  locale l1 = locale("de_DE");
+  locale l2 = locale("es_ES");
   
   const time_put<char> &tp = use_facet<time_put<char> >(l1);  
   ostringstream oss;
@@ -61,7 +63,7 @@ int main()
 /*
 The problems with the first approach, as above, are numerous.
 
-1) Then locale usage and design for formatters and parsers becomes
+1) The locale usage and design for formatters and parsers becomes
    fragmented. On one side, num_put and money_put, and on the other,
    time_put. This inconsistency is not useful.
 
@@ -79,7 +81,7 @@ The problems with the first approach, as above, are numerous.
  time_put<charT,OutputIterator> provide date and time formatting and
  parsing. All specifications of member functions for time_put and
  time_get in the subclauses of lib.category.time only apply to the
- instantiations required in Tables ?? and ??
+ instantiations required in Tables 51 and 52
  (lib.locale.category). Their members use their ios_base&,
  ios_base::iostate&, and fill arguments as described in
  (lib.locale.categories), and the ctype<> facet, to determine

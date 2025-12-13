@@ -1,13 +1,14 @@
 /* Core target definitions for GNU compiler
    for PowerPC embedded targeted systems with SPE support.
-   Copyright (C) 2002, 2003, 2004 Free Software Foundation, Inc.
+   Copyright (C) 2002, 2003, 2004, 2005, 2006, 2007, 2008
+   Free Software Foundation, Inc.
    Contributed by Aldy Hernandez (aldyh@redhat.com).
 
    This file is part of GCC.
 
    GCC is free software; you can redistribute it and/or modify it
    under the terms of the GNU General Public License as published
-   by the Free Software Foundation; either version 2, or (at your
+   by the Free Software Foundation; either version 3, or (at your
    option) any later version.
 
    GCC is distributed in the hope that it will be useful, but WITHOUT
@@ -16,12 +17,12 @@
    License for more details.
 
    You should have received a copy of the GNU General Public License
-   along with GCC; see the file COPYING.  If not, write to the
-   Free Software Foundation, 59 Temple Place - Suite 330, Boston,
-   MA 02111-1307, USA.  */
+   along with GCC; see the file COPYING3.  If not see
+   <http://www.gnu.org/licenses/>.  */
 
 #undef  TARGET_DEFAULT
-#define TARGET_DEFAULT (MASK_POWERPC | MASK_NEW_MNEMONICS | MASK_EABI)
+#define TARGET_DEFAULT (MASK_POWERPC | MASK_NEW_MNEMONICS | MASK_EABI	\
+  | MASK_STRICT_ALIGN)
 
 #undef  TARGET_VERSION
 #define TARGET_VERSION fprintf (stderr, " (PowerPC Embedded SPE)");
@@ -30,17 +31,14 @@
 #define SUBSUBTARGET_OVERRIDE_OPTIONS \
   if (rs6000_select[1].string == NULL) \
     rs6000_cpu = PROCESSOR_PPC8540; \
-  if (rs6000_abi_string == NULL) \
+  if (!rs6000_explicit_options.spe_abi) \
     rs6000_spe_abi = 1; \
-  if (rs6000_float_gprs_string == NULL) \
+  if (!rs6000_explicit_options.float_gprs) \
     rs6000_float_gprs = 1; \
-  /* See note below.  */ \
-  /*if (rs6000_long_double_size_string == NULL)*/ \
-  /*  rs6000_long_double_type_size = 128;*/ \
-  if (rs6000_spe_string == NULL) \
+  if (!rs6000_explicit_options.spe) \
     rs6000_spe = 1; \
-  if (rs6000_isel_string == NULL) \
-    rs6000_isel = 1
+  if (target_flags & MASK_64BIT) \
+    error ("-m64 not supported in this configuration")
 
 /* The e500 ABI says that either long doubles are 128 bits, or if
    implemented in any other size, the compiler/linker should error out.
@@ -49,8 +47,7 @@
    specifications, until I properly fix the emulation.
 
    Enable these later.
-#undef CPP_LONGDOUBLE_DEFAULT_SPEC
-#define CPP_LONGDOUBLE_DEFAULT_SPEC "-D__LONG_DOUBLE_128__=1"
+#define RS6000_DEFAULT_LONG_DOUBLE_SIZE (TARGET_SPE ? 128 : 64)
 */
 
 #undef  ASM_DEFAULT_SPEC

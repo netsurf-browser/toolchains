@@ -1,12 +1,13 @@
 /* Definitions of target machine for GNU compiler,
    for IBM RS/6000 POWER running AIX.
-   Copyright (C) 2000, 2001, 2002, 2003, 2004, 2005 Free Software Foundation, Inc.
+   Copyright (C) 2000, 2001, 2002, 2003, 2004, 2005, 2006, 2007, 2008, 2010
+   Free Software Foundation, Inc.
 
    This file is part of GCC.
 
    GCC is free software; you can redistribute it and/or modify it
    under the terms of the GNU General Public License as published
-   by the Free Software Foundation; either version 2, or (at your
+   by the Free Software Foundation; either version 3, or (at your
    option) any later version.
 
    GCC is distributed in the hope that it will be useful, but WITHOUT
@@ -15,14 +16,18 @@
    License for more details.
 
    You should have received a copy of the GNU General Public License
-   along with GCC; see the file COPYING.  If not, write to the
-   Free Software Foundation, 59 Temple Place - Suite 330, Boston,
-   MA 02111-1307, USA.  */
+   along with GCC; see the file COPYING3.  If not see
+   <http://www.gnu.org/licenses/>.  */
 
 /* Yes!  We are AIX!  */
 #define DEFAULT_ABI ABI_AIX
 #undef  TARGET_AIX
 #define TARGET_AIX 1
+
+/* Linux64.h wants to redefine TARGET_AIX based on -m64, but it can't be used
+   in the #if conditional in options-default.h, so provide another macro.  */
+#undef  TARGET_AIX_OS
+#define TARGET_AIX_OS 1
 
 /* AIX always has a TOC.  */
 #define TARGET_NO_TOC 0
@@ -32,45 +37,75 @@
 /* AIX allows r13 to be used in 32-bit mode.  */
 #define FIXED_R13 0
 
-/* AIX does not support Altivec.  */
-#undef  TARGET_ALTIVEC
-#define TARGET_ALTIVEC 0
-#undef  TARGET_ALTIVEC_ABI
-#define TARGET_ALTIVEC_ABI 0
-#undef  TARGET_ALTIVEC_VRSAVE
-#define TARGET_ALTIVEC_VRSAVE 0
+/* 32-bit and 64-bit AIX stack boundary is 128.  */
+#undef  STACK_BOUNDARY
+#define STACK_BOUNDARY 128
+
+#undef  TARGET_IEEEQUAD
+#define TARGET_IEEEQUAD 0
 
 /* The AIX linker will discard static constructors in object files before
    collect has a chance to see them, so scan the object files directly.  */
 #define COLLECT_EXPORT_LIST
 
-/* Handle #pragma weak and #pragma pack.  */
-#define HANDLE_SYSV_PRAGMA 1
+#if HAVE_AS_REF
+/* Issue assembly directives that create a reference to the given DWARF table
+   identifier label from the current function section.  This is defined to
+   ensure we drag frame frame tables associated with needed function bodies in
+   a link with garbage collection activated.  */
+#define ASM_OUTPUT_DWARF_TABLE_REF rs6000_aix_asm_output_dwarf_table_ref
+#endif
 
 /* This is the only version of nm that collect2 can work with.  */
 #define REAL_NM_FILE_NAME "/usr/ucb/nm"
 
 #define USER_LABEL_PREFIX  ""
+
 /* Don't turn -B into -L if the argument specifies a relative file name.  */
 #define RELATIVE_PREFIX_NOT_LINKDIR
 
 /* Because of the above, we must have gcc search itself to find libgcc.a.  */
 #define LINK_LIBGCC_SPECIAL_1
 
+#define MFWRAP_SPEC " %{static: %{fmudflap|fmudflapth: \
+ -brename:malloc,__wrap_malloc -brename:__real_malloc,malloc \
+ -brename:free,__wrap_free -brename:__real_free,free \
+ -brename:calloc,__wrap_calloc -brename:__real_calloc,calloc \
+ -brename:realloc,__wrap_realloc -brename:__real_realloc,realloc \
+ -brename:mmap,__wrap_mmap -brename:__real_mmap,mmap \
+ -brename:munmap,__wrap_munmap -brename:__real_munmap,munmap \
+ -brename:alloca,__wrap_alloca -brename:__real_alloca,alloca \
+} %{fmudflapth: \
+ -brename:pthread_create,__wrap_pthread_create \
+ -brename:__real_pthread_create,pthread_create \
+ -brename:pthread_join,__wrap_pthread_join \
+ -brename:__real_pthread_join,pthread_join \
+ -brename:pthread_exit,__wrap_pthread_exit \
+ -brename:__real_pthread_exit,pthread_exit \
+}} %{fmudflap|fmudflapth: \
+ -brename:main,__wrap_main -brename:__real_main,main \
+}"
+
+#define MFLIB_SPEC " %{fmudflap: -lmudflap \
+ %{static:%(link_gcc_c_sequence) -lmudflap}} \
+ %{fmudflapth: -lmudflapth -lpthread \
+ %{static:%(link_gcc_c_sequence) -lmudflapth}} "
+
 /* Names to predefine in the preprocessor for this target machine.  */
-#define TARGET_OS_CPP_BUILTINS()         \
-  do                                     \
-    {                                    \
-      builtin_define ("_IBMR2");         \
-      builtin_define ("_POWER");         \
-      builtin_define ("_AIX");           \
-      builtin_define ("_AIX32");         \
-      builtin_define ("_LONG_LONG");     \
-      builtin_assert ("system=unix");    \
-      builtin_assert ("system=aix");     \
-      builtin_assert ("cpu=rs6000");     \
-      builtin_assert ("machine=rs6000"); \
-    }                                    \
+#define TARGET_OS_AIX_CPP_BUILTINS()		\
+  do						\
+    {						\
+      builtin_define ("_IBMR2");		\
+      builtin_define ("_POWER");		\
+      builtin_define ("_AIX");			\
+      builtin_define ("_AIX32");		\
+      builtin_define ("_AIX41");		\
+      builtin_define ("_LONG_LONG");		\
+      if (TARGET_LONG_DOUBLE_128)		\
+        builtin_define ("__LONGDOUBLE128");	\
+      builtin_assert ("system=unix");		\
+      builtin_assert ("system=aix");		\
+    }						\
   while (0)
 
 /* Define appropriate architecture macros for preprocessor depending on
@@ -78,6 +113,8 @@
 
 #define CPP_SPEC "%{posix: -D_POSIX_SOURCE}\
    %{ansi: -D_ANSI_C_SOURCE}"
+
+#define CC1_SPEC "%(cc1_cpu)"
 
 #undef ASM_DEFAULT_SPEC
 #define ASM_DEFAULT_SPEC ""
@@ -93,18 +130,10 @@
 /* #define ASM_SPEC "-u %(asm_cpu)" */
 
 /* Default location of syscalls.exp under AIX */
-#ifndef CROSS_COMPILE
-#define LINK_SYSCALLS_SPEC "-bI:/lib/syscalls.exp"
-#else
-#define LINK_SYSCALLS_SPEC ""
-#endif
+#define LINK_SYSCALLS_SPEC "-bI:%R/lib/syscalls.exp"
 
 /* Default location of libg.exp under AIX */
-#ifndef CROSS_COMPILE
-#define LINK_LIBG_SPEC "-bexport:/usr/lib/libg.exp"
-#else
-#define LINK_LIBG_SPEC ""
-#endif
+#define LINK_LIBG_SPEC "-bexport:%R/usr/lib/libg.exp"
 
 /* Define the options for the binder: Start text at 512, align all segments
    to 512 bytes, and warn if there is text relocation.
@@ -125,26 +154,28 @@
 %{!shared:%{g*: %(link_libg) }} %{shared:-bM:SRE}"
 
 /* Profiled library versions are used by linking with special directories.  */
-#define LIB_SPEC "%{pg:-L/lib/profiled -L/usr/lib/profiled}\
-%{p:-L/lib/profiled -L/usr/lib/profiled} %{!shared:%{g*:-lg}} -lc"
+#define LIB_SPEC "%{pg:-L%R/lib/profiled -L%R/usr/lib/profiled}\
+%{p:-L%R/lib/profiled -L%R/usr/lib/profiled} %{!shared:%{g*:-lg}} -lc"
+
+/* Static linking with shared libstdc++ requires libsupc++ as well.  */
+#define LIBSTDCXX_STATIC "supc++"
 
 /* This now supports a natural alignment mode.  */
 /* AIX word-aligns FP doubles but doubleword-aligns 64-bit ints.  */
 #define ADJUST_FIELD_ALIGN(FIELD, COMPUTED) \
-  (TARGET_ALIGN_NATURAL ? (COMPUTED) : \
-  (TYPE_MODE (TREE_CODE (TREE_TYPE (FIELD)) == ARRAY_TYPE \
-	      ? get_inner_array_type (FIELD) \
-	      : TREE_TYPE (FIELD)) == DFmode \
-   ? MIN ((COMPUTED), 32) : (COMPUTED)))
+  ((TARGET_ALIGN_NATURAL == 0						\
+    && TYPE_MODE (strip_array_types (TREE_TYPE (FIELD))) == DFmode)	\
+   ? MIN ((COMPUTED), 32)						\
+   : (COMPUTED))
 
 /* AIX increases natural record alignment to doubleword if the first
    field is an FP double while the FP fields remain word aligned.  */
-#define ROUND_TYPE_ALIGN(STRUCT, COMPUTED, SPECIFIED)				\
-  ((TREE_CODE (STRUCT) == RECORD_TYPE						\
-    || TREE_CODE (STRUCT) == UNION_TYPE						\
-    || TREE_CODE (STRUCT) == QUAL_UNION_TYPE)					\
-   && TARGET_ALIGN_NATURAL == 0							\
-   ? rs6000_special_round_type_align (STRUCT, COMPUTED, SPECIFIED)		\
+#define ROUND_TYPE_ALIGN(STRUCT, COMPUTED, SPECIFIED)			\
+  ((TREE_CODE (STRUCT) == RECORD_TYPE					\
+    || TREE_CODE (STRUCT) == UNION_TYPE					\
+    || TREE_CODE (STRUCT) == QUAL_UNION_TYPE)				\
+   && TARGET_ALIGN_NATURAL == 0						\
+   ? rs6000_special_round_type_align (STRUCT, COMPUTED, SPECIFIED)	\
    : MAX ((COMPUTED), (SPECIFIED)))
 
 /* The AIX ABI isn't explicit on whether aggregates smaller than a
@@ -157,13 +188,6 @@
 #define AGGREGATE_PADDING_FIXED 1
 #define AGGREGATES_PAD_UPWARD_ALWAYS 1
 
-/* We don't want anything in the reg parm area being passed on the
-   stack.  */
-#define MUST_PASS_IN_STACK(MODE, TYPE)				\
-   ((TYPE) != 0							\
-    && (TREE_CODE (TYPE_SIZE (TYPE)) != INTEGER_CST		\
-	|| TREE_ADDRESSABLE (TYPE)))
-
 /* Specify padding for the last element of a block move between
    registers and memory.  FIRST is nonzero if this is the only
    element.  */
@@ -174,19 +198,6 @@
 
 #define JUMP_TABLES_IN_TEXT_SECTION 1
 
-/* Enable AIX XL compiler calling convention breakage compatibility.  */
-#undef TARGET_XL_COMPAT
-#define MASK_XL_COMPAT		0x40000000
-#define	TARGET_XL_COMPAT	(target_flags & MASK_XL_COMPAT)
-#undef  SUBTARGET_SWITCHES
-#define SUBTARGET_SWITCHES		\
-  {"xl-compat",		MASK_XL_COMPAT,					\
-   N_("Conform more closely to IBM XLC semantics") },			\
-  {"no-xl-compat",	- MASK_XL_COMPAT,				\
-   N_("Default GCC semantics that differ from IBM XLC") },		\
-  SUBSUBTARGET_SWITCHES
-#define SUBSUBTARGET_SWITCHES 
-
 /* Define any extra SPECS that the compiler needs to generate.  */
 #undef  SUBTARGET_EXTRA_SPECS
 #define SUBTARGET_EXTRA_SPECS						\
@@ -195,19 +206,16 @@
 
 /* Define cutoff for using external functions to save floating point.  */
 #define FP_SAVE_INLINE(FIRST_REG) ((FIRST_REG) == 62 || (FIRST_REG) == 63)
-
-/* __throw will restore its own return address to be the same as the
-   return address of the function that the throw is being made to.
-   This is unfortunate, because we want to check the original
-   return address to see if we need to restore the TOC.
-   So we have to squirrel it away with this.  */
-#define SETUP_FRAME_ADDRESSES() rs6000_aix_emit_builtin_unwind_init ()
+/* And similarly for general purpose registers.  */
+#define GP_SAVE_INLINE(FIRST_REG) ((FIRST_REG) < 32)
 
 /* If the current unwind info (FS) does not contain explicit info
    saving R2, then we have to do a minor amount of code reading to
    figure out if it was saved.  The big problem here is that the
    code that does the save/restore is generated by the linker, so
    we have no good way to determine at compile time what to do.  */
+
+#define R_LR 65
 
 #ifdef __64BIT__
 #define MD_FROB_UPDATE_CONTEXT(CTX, FS)					\
@@ -216,7 +224,7 @@
       {									\
 	unsigned int *insn						\
 	  = (unsigned int *)						\
-	    _Unwind_GetGR ((CTX), LINK_REGISTER_REGNUM);		\
+	    _Unwind_GetGR ((CTX), R_LR);				\
 	if (*insn == 0xE8410028)					\
 	  _Unwind_SetGRPtr ((CTX), 2, (CTX)->cfa + 40);			\
       }									\
@@ -228,7 +236,7 @@
       {									\
 	unsigned int *insn						\
 	  = (unsigned int *)						\
-	    _Unwind_GetGR ((CTX), LINK_REGISTER_REGNUM);		\
+	    _Unwind_GetGR ((CTX), R_LR);				\
 	if (*insn == 0x80410014)					\
 	  _Unwind_SetGRPtr ((CTX), 2, (CTX)->cfa + 20);			\
       }									\
@@ -244,3 +252,9 @@
    32-bit mode.  */
 #define OS_MISSING_POWERPC64 1
 #define OS_MISSING_ALTIVEC 1
+
+/* WINT_TYPE */
+#define WINT_TYPE "int"
+
+/* Static stack checking is supported by means of probes.  */
+#define STACK_CHECK_STATIC_BUILTIN 1

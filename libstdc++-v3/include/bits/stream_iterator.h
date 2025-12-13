@@ -1,11 +1,11 @@
 // Stream iterators
 
-// Copyright (C) 2001, 2004 Free Software Foundation, Inc.
+// Copyright (C) 2001, 2004, 2005, 2009, 2010 Free Software Foundation, Inc.
 //
 // This file is part of the GNU ISO C++ Library.  This library is free
 // software; you can redistribute it and/or modify it under the
 // terms of the GNU General Public License as published by the
-// Free Software Foundation; either version 2, or (at your option)
+// Free Software Foundation; either version 3, or (at your option)
 // any later version.
 
 // This library is distributed in the hope that it will be useful,
@@ -13,23 +13,18 @@
 // MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
 // GNU General Public License for more details.
 
-// You should have received a copy of the GNU General Public License along
-// with this library; see the file COPYING.  If not, write to the Free
-// Software Foundation, 59 Temple Place - Suite 330, Boston, MA 02111-1307,
-// USA.
+// Under Section 7 of GPL version 3, you are granted additional
+// permissions described in the GCC Runtime Library Exception, version
+// 3.1, as published by the Free Software Foundation.
 
-// As a special exception, you may use this file as part of a free software
-// library without restriction.  Specifically, if other files instantiate
-// templates or use macros or inline functions from this file, or you compile
-// this file and link it with other files to produce an executable, this
-// file does not by itself cause the resulting executable to be covered by
-// the GNU General Public License.  This exception does not however
-// invalidate any other reasons why the executable file might be covered by
-// the GNU General Public License.
+// You should have received a copy of the GNU General Public License and
+// a copy of the GCC Runtime Library Exception along with this program;
+// see the files COPYING3 and COPYING.RUNTIME respectively.  If not, see
+// <http://www.gnu.org/licenses/>.
 
-/** @file stream_iterator.h
+/** @file bits/stream_iterator.h
  *  This is an internal header file, included by other library headers.
- *  You should not attempt to use it directly.
+ *  Do not attempt to use it directly. @headername{iterator}
  */
 
 #ifndef _STREAM_ITERATOR_H
@@ -39,8 +34,15 @@
 
 #include <debug/debug.h>
 
-namespace std
+namespace std _GLIBCXX_VISIBILITY(default)
 {
+_GLIBCXX_BEGIN_NAMESPACE_VERSION
+
+  /**
+   * @addtogroup iterators
+   * @{
+   */
+
   /// Provides input iterator semantics for streams.
   template<typename _Tp, typename _CharT = char,
            typename _Traits = char_traits<_CharT>, typename _Dist = ptrdiff_t>
@@ -59,8 +61,8 @@ namespace std
 
     public:
       ///  Construct end of input stream iterator.
-      istream_iterator()
-      : _M_stream(0), _M_ok(false) {}
+      _GLIBCXX_CONSTEXPR istream_iterator()
+      : _M_stream(0), _M_value(), _M_ok(false) {}
 
       ///  Construct start of input stream iterator.
       istream_iterator(istream_type& __s)
@@ -210,5 +212,10 @@ namespace std
       operator++(int)
       { return *this; }
     };
-} // namespace std
+
+  // @} group iterators
+
+_GLIBCXX_END_NAMESPACE_VERSION
+} // namespace
+
 #endif

@@ -6,7 +6,7 @@
 --                                                                          --
 --                                 S p e c                                  --
 --                                                                          --
---          Copyright (C) 1992-2001 Free Software Foundation, Inc.          --
+--          Copyright (C) 1992-2009, Free Software Foundation, Inc.         --
 --                                                                          --
 -- This specification is derived from the Ada Reference Manual for use with --
 -- GNAT. The copyright notice above, and the license provisions that follow --
@@ -14,21 +14,19 @@
 --                                                                          --
 -- GNAT is free software;  you can  redistribute it  and/or modify it under --
 -- terms of the  GNU General Public License as published  by the Free Soft- --
--- ware  Foundation;  either version 2,  or (at your option) any later ver- --
+-- ware  Foundation;  either version 3,  or (at your option) any later ver- --
 -- sion.  GNAT is distributed in the hope that it will be useful, but WITH- --
 -- OUT ANY WARRANTY;  without even the  implied warranty of MERCHANTABILITY --
--- or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU General Public License --
--- for  more details.  You should have  received  a copy of the GNU General --
--- Public License  distributed with GNAT;  see file COPYING.  If not, write --
--- to  the Free Software Foundation,  59 Temple Place - Suite 330,  Boston, --
--- MA 02111-1307, USA.                                                      --
+-- or FITNESS FOR A PARTICULAR PURPOSE.                                     --
 --                                                                          --
--- As a special exception,  if other files  instantiate  generics from this --
--- unit, or you link  this unit with other files  to produce an executable, --
--- this  unit  does not  by itself cause  the resulting  executable  to  be --
--- covered  by the  GNU  General  Public  License.  This exception does not --
--- however invalidate  any other reasons why  the executable file  might be --
--- covered by the  GNU Public License.                                      --
+-- As a special exception under Section 7 of GPL version 3, you are granted --
+-- additional permissions described in the GCC Runtime Library Exception,   --
+-- version 3.1, as published by the Free Software Foundation.               --
+--                                                                          --
+-- You should have received a copy of the GNU General Public License and    --
+-- a copy of the GCC Runtime Library Exception along with this program;     --
+-- see the files COPYING3 and COPYING.RUNTIME respectively.  If not, see    --
+-- <http://www.gnu.org/licenses/>.                                          --
 --                                                                          --
 -- GNAT was originally developed  by the GNAT team at  New York University. --
 -- Extensive contributions were provided by Ada Core Technologies Inc.      --
@@ -38,15 +36,16 @@
 with Ada.Characters.Latin_1;
 
 package Ada.Strings.Maps is
-pragma Preelaborate (Maps);
-
-   package L renames Ada.Characters.Latin_1;
+   pragma Preelaborate;
+   pragma Pure_05;
+   --  In accordance with Ada 2005 AI-362
 
    --------------------------------
    -- Character Set Declarations --
    --------------------------------
 
    type Character_Set is private;
+   pragma Preelaborable_Initialization (Character_Set);
    --  Representation for a set of character values:
 
    Null_Set : constant Character_Set;
@@ -63,60 +62,56 @@ pragma Preelaborate (Maps);
 
    type Character_Ranges is array (Positive range <>) of Character_Range;
 
-   function To_Set    (Ranges : in Character_Ranges) return Character_Set;
+   function To_Set    (Ranges : Character_Ranges) return Character_Set;
 
-   function To_Set    (Span   : in Character_Range)  return Character_Set;
+   function To_Set    (Span   : Character_Range)  return Character_Set;
 
-   function To_Ranges (Set    : in Character_Set)    return Character_Ranges;
+   function To_Ranges (Set    : Character_Set)    return Character_Ranges;
 
    ----------------------------------
    -- Operations on Character Sets --
    ----------------------------------
 
-   function "="   (Left, Right : in Character_Set) return Boolean;
+   function "="   (Left, Right : Character_Set) return Boolean;
 
-   function "not" (Right       : in Character_Set) return Character_Set;
-   function "and" (Left, Right : in Character_Set) return Character_Set;
-   function "or"  (Left, Right : in Character_Set) return Character_Set;
-   function "xor" (Left, Right : in Character_Set) return Character_Set;
-   function "-"   (Left, Right : in Character_Set) return Character_Set;
+   function "not" (Right       : Character_Set) return Character_Set;
+   function "and" (Left, Right : Character_Set) return Character_Set;
+   function "or"  (Left, Right : Character_Set) return Character_Set;
+   function "xor" (Left, Right : Character_Set) return Character_Set;
+   function "-"   (Left, Right : Character_Set) return Character_Set;
 
    function Is_In
-     (Element : in Character;
-      Set     : in Character_Set)
-      return    Boolean;
+     (Element : Character;
+      Set     : Character_Set) return Boolean;
 
    function Is_Subset
-     (Elements : in Character_Set;
-      Set      : in Character_Set)
-      return     Boolean;
+     (Elements : Character_Set;
+      Set      : Character_Set) return     Boolean;
 
    function "<="
-     (Left  : in Character_Set;
-      Right : in Character_Set)
-      return  Boolean
+     (Left  : Character_Set;
+      Right : Character_Set) return  Boolean
    renames Is_Subset;
 
    subtype Character_Sequence is String;
    --  Alternative representation for a set of character values
 
-   function To_Set (Sequence  : in Character_Sequence) return Character_Set;
+   function To_Set (Sequence  : Character_Sequence) return Character_Set;
+   function To_Set (Singleton : Character)          return Character_Set;
 
-   function To_Set (Singleton : in Character)          return Character_Set;
-
-   function To_Sequence (Set : in Character_Set) return Character_Sequence;
+   function To_Sequence (Set : Character_Set) return Character_Sequence;
 
    ------------------------------------
    -- Character Mapping Declarations --
    ------------------------------------
 
    type Character_Mapping is private;
+   pragma Preelaborable_Initialization (Character_Mapping);
    --  Representation for a character to character mapping:
 
    function Value
-     (Map     : in Character_Mapping;
-      Element : in Character)
-      return    Character;
+     (Map     : Character_Mapping;
+      Element : Character) return Character;
 
    Identity : constant Character_Mapping;
 
@@ -125,23 +120,16 @@ pragma Preelaborate (Maps);
    ----------------------------
 
    function To_Mapping
-     (From, To : in Character_Sequence)
-      return     Character_Mapping;
+     (From, To : Character_Sequence) return Character_Mapping;
 
    function To_Domain
-     (Map  : in Character_Mapping)
-      return Character_Sequence;
+     (Map : Character_Mapping) return Character_Sequence;
 
    function To_Range
-     (Map  : in Character_Mapping)
-      return Character_Sequence;
+     (Map : Character_Mapping) return Character_Sequence;
 
    type Character_Mapping_Function is
-      access function (From : in Character) return Character;
-
-   ------------------
-   -- Private Part --
-   ------------------
+      access function (From : Character) return Character;
 
 private
    pragma Inline (Is_In);
@@ -160,6 +148,8 @@ private
    Null_Set : constant Character_Set := (others => False);
 
    type Character_Mapping is array (Character) of Character;
+
+   package L renames Ada.Characters.Latin_1;
 
    Identity : constant Character_Mapping :=
      (L.NUL                         &  -- NUL                             0

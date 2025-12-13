@@ -6,18 +6,17 @@
 --                                                                          --
 --                                 S p e c                                  --
 --                                                                          --
---          Copyright (C) 1992-2003 Free Software Foundation, Inc.          --
+--          Copyright (C) 1992-2008, Free Software Foundation, Inc.         --
 --                                                                          --
 -- GNAT is free software;  you can  redistribute it  and/or modify it under --
 -- terms of the  GNU General Public License as published  by the Free Soft- --
--- ware  Foundation;  either version 2,  or (at your option) any later ver- --
+-- ware  Foundation;  either version 3,  or (at your option) any later ver- --
 -- sion.  GNAT is distributed in the hope that it will be useful, but WITH- --
 -- OUT ANY WARRANTY;  without even the  implied warranty of MERCHANTABILITY --
 -- or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU General Public License --
 -- for  more details.  You should have  received  a copy of the GNU General --
--- Public License  distributed with GNAT;  see file COPYING.  If not, write --
--- to  the Free Software Foundation,  59 Temple Place - Suite 330,  Boston, --
--- MA 02111-1307, USA.                                                      --
+-- Public License  distributed with GNAT; see file COPYING3.  If not, go to --
+-- http://www.gnu.org/licenses for a complete copy of the license.          --
 --                                                                          --
 -- GNAT was originally developed  by the GNAT team at  New York University. --
 -- Extensive contributions were provided by Ada Core Technologies Inc.      --
@@ -25,7 +24,8 @@
 ------------------------------------------------------------------------------
 
 with Types; use Types;
-package Sem_Ch7  is
+
+package Sem_Ch7 is
 
    procedure Analyze_Package_Body                       (N : Node_Id);
    procedure Analyze_Package_Declaration                (N : Node_Id);
@@ -33,7 +33,7 @@ package Sem_Ch7  is
    procedure Analyze_Private_Type_Declaration           (N : Node_Id);
 
    procedure End_Package_Scope (P : Entity_Id);
-   --  Calls Uninstall_Declarations, and then pops the scope stack.
+   --  Calls Uninstall_Declarations, and then pops the scope stack
 
    procedure Exchange_Declarations (Id : Entity_Id);
    --  Exchange private and full declaration on entry/exit from a package
@@ -57,9 +57,10 @@ package Sem_Ch7  is
    --  if it contains declarations that require completion in a body.
 
    procedure May_Need_Implicit_Body (E : Entity_Id);
-   --  If a package declaration contains tasks and does not require a
-   --  body, create an implicit body at the end of the current declarative
-   --  part to activate those tasks.
+   --  If a package declaration contains tasks or RACWs and does not require
+   --  a body, create an implicit body at the end of the current declarative
+   --  part to activate those tasks or contain the bodies for the RACW
+   --  calling stubs.
 
    procedure New_Private_Type (N : Node_Id; Id : Entity_Id; Def : Node_Id);
    --  Common processing for private type declarations and for formal
@@ -74,4 +75,5 @@ package Sem_Ch7  is
    --  visible entities at the end of their homonym chains. For compilation
    --  units, make all entities invisible. In both cases, exchange private
    --  and visible declarations to restore order of elaboration.
+
 end Sem_Ch7;

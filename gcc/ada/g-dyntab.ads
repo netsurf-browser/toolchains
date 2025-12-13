@@ -6,7 +6,7 @@
 --                                                                          --
 --                                 S p e c                                  --
 --                                                                          --
---            Copyright (C) 2000-2003 Ada Core Technologies, Inc.           --
+--                     Copyright (C) 2000-2009, AdaCore                     --
 --                                                                          --
 -- GNAT is free software;  you can  redistribute it  and/or modify it under --
 -- terms of the  GNU General Public License as published  by the Free Soft- --
@@ -16,8 +16,8 @@
 -- or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU General Public License --
 -- for  more details.  You should have  received  a copy of the GNU General --
 -- Public License  distributed with GNAT;  see file COPYING.  If not, write --
--- to  the Free Software Foundation,  59 Temple Place - Suite 330,  Boston, --
--- MA 02111-1307, USA.                                                      --
+-- to  the  Free Software Foundation,  51  Franklin  Street,  Fifth  Floor, --
+-- Boston, MA 02110-1301, USA.                                              --
 --                                                                          --
 -- As a special exception,  if other files  instantiate  generics from this --
 -- unit, or you link  this unit with other files  to produce an executable, --
@@ -46,6 +46,8 @@
 --  Note that this interface should remain synchronized with those in
 --  GNAT.Table and the GNAT compiler source unit Table to keep as much
 --  coherency as possible between these three related units.
+
+pragma Compiler_Unit;
 
 generic
    type Table_Component_Type is private;
@@ -91,21 +93,22 @@ package GNAT.Dynamic_Tables is
 
    type Table_Type is
      array (Table_Index_Type range <>) of Table_Component_Type;
-
    subtype Big_Table_Type is
      Table_Type (Table_Low_Bound .. Table_Index_Type'Last);
-   --  We work with pointers to a bogus array type that is constrained
-   --  with the maximum possible range bound. This means that the pointer
-   --  is a thin pointer, which is more efficient. Since subscript checks
-   --  in any case must be on the logical, rather than physical bounds,
-   --  safety is not compromised by this approach.
+   --  We work with pointers to a bogus array type that is constrained with
+   --  the maximum possible range bound. This means that the pointer is a thin
+   --  pointer, which is more efficient. Since subscript checks in any case
+   --  must be on the logical, rather than physical bounds, safety is not
+   --  compromised by this approach. These types should not be used by the
+   --  client.
 
    type Table_Ptr is access all Big_Table_Type;
-   --  The table is actually represented as a pointer to allow
-   --  reallocation.
+   for Table_Ptr'Storage_Size use 0;
+   --  The table is actually represented as a pointer to allow reallocation.
+   --  This type should not be used by the client.
 
    type Table_Private is private;
-   --  table private data that is not exported in Instance.
+   --  Table private data that is not exported in Instance
 
    type Instance is record
       Table : aliased Table_Ptr := null;
@@ -123,7 +126,7 @@ package GNAT.Dynamic_Tables is
    --  previously allocated larger table). Init must be called before using
    --  the table. Init is convenient in reestablishing a table for new use.
 
-   function Last (T : in Instance) return Table_Index_Type;
+   function Last (T : Instance) return Table_Index_Type;
    pragma Inline (Last);
    --  Returns the current value of the last used entry in the table,
    --  which can then be used as a subscript for Table. Note that the
@@ -168,6 +171,9 @@ package GNAT.Dynamic_Tables is
    --  i.e. the table size is increased by one, and the given new item
    --  stored in the newly created table element.
 
+   procedure Append_All (T : in out Instance; New_Vals : Table_Type);
+   --  Appends all components of New_Vals
+
    procedure Set_Item
      (T     : in out Instance;
       Index : Table_Index_Type;
@@ -203,9 +209,7 @@ package GNAT.Dynamic_Tables is
    --  to return False). The sort is not stable (the order of equal items
    --  in the table is not preserved).
 
-
 private
-
    type Table_Private is record
       Max : Integer;
       --  Subscript of the maximum entry in the currently allocated table
@@ -215,7 +219,7 @@ private
       --  ensures that we initially allocate the table.
 
       Last_Val : Integer;
-      --  Current value of Last.
+      --  Current value of Last
    end record;
 
 end GNAT.Dynamic_Tables;

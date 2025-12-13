@@ -1,4 +1,5 @@
 /* Test for constant expressions: broken optimization with const variables.  */
+/* Reference: ISO 9989:1990 6.5.15 */
 /* Origin: Joseph Myers <jsm28@cam.ac.uk> */
 /* { dg-do compile } */
 /* { dg-options "-std=iso9899:1990 -O2" } */
@@ -27,19 +28,19 @@ foo (void)
   ASSERT_NPC (0);
   ASSERT_NOT_NPC (ZERO);
   ASSERT_NPC (0 + 0);
-  ASSERT_NOT_NPC (ZERO + 0); /* { dg-bogus "incompatible" "bogus null pointer constant" { xfail *-*-* } } */
-  ASSERT_NOT_NPC (ZERO + ZERO); /* { dg-bogus "incompatible" "bogus null pointer constant" { xfail *-*-* } } */
+  ASSERT_NOT_NPC (ZERO + 0); /* { dg-bogus "incompatible" "bogus null pointer constant" } */
+  ASSERT_NOT_NPC (ZERO + ZERO); /* { dg-bogus "incompatible" "bogus null pointer constant" } */
   ASSERT_NPC (+0);
-  ASSERT_NOT_NPC (+ZERO); /* { dg-bogus "incompatible" "bogus null pointer constant" { xfail *-*-* } } */
+  ASSERT_NOT_NPC (+ZERO); /* { dg-bogus "incompatible" "bogus null pointer constant" } */
   ASSERT_NPC (-0);
-  ASSERT_NOT_NPC (-ZERO); /* { dg-bogus "incompatible" "bogus null pointer constant" { xfail *-*-* } } */
+  ASSERT_NOT_NPC (-ZERO); /* { dg-bogus "incompatible" "bogus null pointer constant" } */
   ASSERT_NPC ((char) 0);
   ASSERT_NOT_NPC ((char) ZERO);
   ASSERT_NPC ((int) 0);
   ASSERT_NOT_NPC ((int) ZERO);
   ASSERT_NPC ((int) 0.0);
   ASSERT_NOT_NPC ((int) DZERO);
-  ASSERT_NOT_NPC ((int) +0.0); /* { dg-bogus "incompatible" "bogus null pointer constant" { xfail *-*-* } } */
-  ASSERT_NOT_NPC ((int) (0.0+0.0)); /* { dg-bogus "incompatible" "bogus null pointer constant" { xfail *-*-* } } */
-  ASSERT_NOT_NPC ((int) (double)0.0); /* { dg-bogus "incompatible" "bogus null pointer constant" { xfail *-*-* } } */
+  ASSERT_NOT_NPC ((int) +0.0); /* { dg-bogus "incompatible" "bogus null pointer constant" } */
+  ASSERT_NOT_NPC ((int) (0.0+0.0)); /* { dg-bogus "incompatible" "bogus null pointer constant" } */
+  ASSERT_NOT_NPC ((int) (double)0.0); /* { dg-bogus "incompatible" "bogus null pointer constant" } */
 }

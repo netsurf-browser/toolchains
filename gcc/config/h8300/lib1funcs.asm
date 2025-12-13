@@ -2,31 +2,27 @@
 ;; Contributed by Steve Chamberlain <sac@cygnus.com>
 ;; Optimizations by Toshiyasu Morita <toshiyasu.morita@renesas.com>
 
-/* Copyright (C) 1994, 2000, 2001, 2002 Free Software Foundation, Inc.
+/* Copyright (C) 1994, 2000, 2001, 2002, 2003, 2004, 2009
+   Free Software Foundation, Inc.
 
 This file is free software; you can redistribute it and/or modify it
 under the terms of the GNU General Public License as published by the
-Free Software Foundation; either version 2, or (at your option) any
+Free Software Foundation; either version 3, or (at your option) any
 later version.
-
-In addition to the permissions in the GNU General Public License, the
-Free Software Foundation gives you unlimited permission to link the
-compiled version of this file into combinations with other programs,
-and to distribute those combinations without any restriction coming
-from the use of this file.  (The General Public License restrictions
-do apply in other respects; for example, they cover modification of
-the file, and distribution when not linked into a combine
-executable.)
 
 This file is distributed in the hope that it will be useful, but
 WITHOUT ANY WARRANTY; without even the implied warranty of
 MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
 General Public License for more details.
 
-You should have received a copy of the GNU General Public License
-along with this program; see the file COPYING.  If not, write to
-the Free Software Foundation, 59 Temple Place - Suite 330,
-Boston, MA 02111-1307, USA.  */
+Under Section 7 of GPL version 3, you are granted additional
+permissions described in the GCC Runtime Library Exception, version
+3.1, as published by the Free Software Foundation.
+
+You should have received a copy of the GNU General Public License and
+a copy of the GCC Runtime Library Exception along with this program;
+see the files COPYING3 and COPYING.RUNTIME respectively.  If not, see
+<http://www.gnu.org/licenses/>.  */
 
 /* Assembler register definitions.  */
 
@@ -71,7 +67,7 @@ Boston, MA 02111-1307, USA.  */
 #define S2P	r6
 #endif
 
-#if defined (__H8300H__) || defined (__H8300S__)
+#if defined (__H8300H__) || defined (__H8300S__) || defined (__H8300SX__)
 #define PUSHP	push.l
 #define POPP	pop.l
 
@@ -102,6 +98,13 @@ Boston, MA 02111-1307, USA.  */
 	.h8300sn
 #else
 	.h8300s
+#endif
+#endif
+#ifdef __H8300SX__
+#ifdef __NORMAL_MODE__
+	.h8300sxn
+#else
+	.h8300sx
 #endif
 #endif
 
@@ -174,30 +177,28 @@ ___ucmpsi2:
 	.section .text
 	.align 2
 divnorm:
-	mov.b	#0x0,A2L
 	or	A0H,A0H		; is divisor > 0
+	stc	ccr,A2L
 	bge	_lab1
 	not	A0H		; no - then make it +ve
 	not	A0L
 	adds	#1,A0
-	xor	#0x1,A2L	; and remember that in A2L
 _lab1:	or	A1H,A1H	; look at dividend
 	bge	_lab2
 	not	A1H		; it is -ve, make it positive
 	not	A1L
 	adds	#1,A1
-	xor	#0x1,A2L; and toggle sign of result
+	xor	#0x8,A2L; and toggle sign of result
 _lab2:	rts
 ;; Basically the same, except that the sign of the divisor determines
 ;; the sign.
 modnorm:
-	mov.b	#0x0,A2L
 	or	A0H,A0H		; is divisor > 0
+	stc	ccr,A2L
 	bge	_lab7
 	not	A0H		; no - then make it +ve
 	not	A0L
 	adds	#1,A0
-	xor	#0x1,A2L	; and remember that in A2L
 _lab7:	or	A1H,A1H	; look at dividend
 	bge	_lab8
 	not	A1H		; it is -ve, make it positive
@@ -211,7 +212,7 @@ _lab8:	rts
 ___divhi3:
 	bsr	divnorm
 	bsr	___udivhi3
-negans:	or	A2L,A2L	; should answer be negative ?
+negans:	btst	#3,A2L	; should answer be negative ?
 	beq	_lab4
 	not	A0H	; yes, so make it so
 	not	A0L

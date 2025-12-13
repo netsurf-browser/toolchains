@@ -1,11 +1,12 @@
 // 2001-12-27 pme
 //
-// Copyright (C) 2001, 2002, 2003, 2004 Free Software Foundation, Inc.
+// Copyright (C) 2001, 2002, 2003, 2004, 2005, 2009
+// Free Software Foundation, Inc.
 //
 // This file is part of the GNU ISO C++ Library.  This library is free
 // software; you can redistribute it and/or modify it under the
 // terms of the GNU General Public License as published by the
-// Free Software Foundation; either version 2, or (at your option)
+// Free Software Foundation; either version 3, or (at your option)
 // any later version.
 //
 // This library is distributed in the hope that it will be useful,
@@ -14,9 +15,8 @@
 // GNU General Public License for more details.
 //
 // You should have received a copy of the GNU General Public License along
-// with this library; see the file COPYING.  If not, write to the Free
-// Software Foundation, 59 Temple Place - Suite 330, Boston, MA 02111-1307,
-// USA.
+// with this library; see the file COPYING3.  If not see
+// <http://www.gnu.org/licenses/>.
 
 // 23.2.1.1 deque constructors, copy, and assignment
 
@@ -27,14 +27,14 @@
 #include <testsuite_hooks.h>
 
 using __gnu_test::copy_tracker;
-using __gnu_test::allocation_tracker;
-using __gnu_test::tracker_alloc;
+using __gnu_test::tracker_allocator_counter;
+using __gnu_test::tracker_allocator;
 using __gnu_test::copy_constructor;
 using __gnu_test::assignment_operator;
-using __gnu_test::counter;
+using __gnu_test::object_counter;
 using __gnu_test::destructor;
 
-typedef std::deque<counter>   gdeque;
+typedef std::deque<object_counter>   gdeque;
 
 bool test __attribute__((unused)) = true;
 
@@ -445,16 +445,17 @@ test_default_ctor_exception_safety()
 {
   // setup
   typedef copy_tracker T;
-  typedef std::deque<T, tracker_alloc<T> > X;
+  typedef std::deque<T, tracker_allocator<T> > X;
 
   T::reset();
   copy_constructor::throw_on(3);
-  allocation_tracker::resetCounts();
+  tracker_allocator_counter::reset();
 
   // test
   try
   {
-    X a(7);
+    T ref;
+    X a(7, ref);
     VERIFY( false );
   }
   catch (...)
@@ -462,7 +463,7 @@ test_default_ctor_exception_safety()
   }
 
   // assert postconditions
-  VERIFY(allocation_tracker::allocationTotal() == allocation_tracker::deallocationTotal());
+  VERIFY(tracker_allocator_counter::get_allocation_count() == tracker_allocator_counter::get_deallocation_count());
 
   // teardown
 }
@@ -473,9 +474,9 @@ test_copy_ctor_exception_safety()
 {
   // setup
   typedef copy_tracker T;
-  typedef std::deque<T, tracker_alloc<T> > X;
+  typedef std::deque<T, tracker_allocator<T> > X;
 
-  allocation_tracker::resetCounts();
+  tracker_allocator_counter::reset();
   {
     X a(7);
     T::reset();
@@ -494,18 +495,10 @@ test_copy_ctor_exception_safety()
   }
 
   // assert postconditions
-  VERIFY(allocation_tracker::allocationTotal() == allocation_tracker::deallocationTotal());
+  VERIFY(tracker_allocator_counter::get_allocation_count() == tracker_allocator_counter::get_deallocation_count());
 
   // teardown
 }
-
-#if !__GXX_WEAK__ && _MT_ALLOCATOR_H
-// Explicitly instantiate for systems with no COMDAT or weak support.
-template class __gnu_cxx::__mt_alloc<int>;
-template class __gnu_cxx::__mt_alloc<int*>;
-template class __gnu_cxx::__mt_alloc<__gnu_test::copy_tracker>;
-template class __gnu_cxx::__mt_alloc<__gnu_test::copy_tracker*>;
-#endif
 
 int main()
 {

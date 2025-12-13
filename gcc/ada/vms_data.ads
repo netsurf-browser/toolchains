@@ -6,18 +6,17 @@
 --                                                                          --
 --                                 S p e c                                  --
 --                                                                          --
---          Copyright (C) 1996-2003 Free Software Foundation, Inc.          --
+--          Copyright (C) 1996-2010, Free Software Foundation, Inc.         --
 --                                                                          --
 -- GNAT is free software;  you can  redistribute it  and/or modify it under --
 -- terms of the  GNU General Public License as published  by the Free Soft- --
--- ware  Foundation;  either version 2,  or (at your option) any later ver- --
+-- ware  Foundation;  either version 3,  or (at your option) any later ver- --
 -- sion.  GNAT is distributed in the hope that it will be useful, but WITH- --
 -- OUT ANY WARRANTY;  without even the  implied warranty of MERCHANTABILITY --
 -- or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU General Public License --
 -- for  more details.  You should have  received  a copy of the GNU General --
--- Public License  distributed with GNAT;  see file COPYING.  If not, write --
--- to  the Free Software Foundation,  59 Temple Place - Suite 330,  Boston, --
--- MA 02111-1307, USA.                                                      --
+-- Public License  distributed with GNAT; see file COPYING3.  If not, go to --
+-- http://www.gnu.org/licenses for a complete copy of the license.          --
 --                                                                          --
 -- GNAT was originally developed  by the GNAT team at  New York University. --
 -- Extensive contributions were provided by Ada Core Technologies Inc.      --
@@ -41,7 +40,7 @@
 --  NOTE: the format of this package must follow the following rules, so that
 --        the VMS GNAT help tool works properly:
 
---    - Each command zone (where the eventual qualifiers are declared must
+--    - Each command zone (where the eventual qualifiers are declared) must
 --      begin with a boxed comment of the form:
 
 --      ---------------------------------
@@ -57,7 +56,7 @@
 --         - a contiguous sequence of comments that constitute the
 --           documentation of the qualifier.
 
---    - each command zone ends with the declaration of the contant array
+--    - each command zone ends with the declaration of the constant array
 --      for the command, of the form:
 
 --      <Command>__Switches : aliased constant Switches :=
@@ -68,7 +67,7 @@ package VMS_Data is
    -- QUALIFIERS --
    ----------------
 
-   --  The syntax of a qualifier delaration is as follows:
+   --  The syntax of a qualifier declaration is as follows:
 
    --    SWITCH_STRING ::= "/ command-qualifier-name TRANSLATION"
 
@@ -110,7 +109,7 @@ package VMS_Data is
    --  The unix-switch-string always starts with a minus, and has no commas
    --  or spaces in it. Case is significant in the unix switch string. If a
    --  unix switch string is preceded by the not sign (!) it means that the
-   --  effect of the corresponding command qualifer is to remove any previous
+   --  effect of the corresponding command qualifier is to remove any previous
    --  occurrence of the given switch in the command line.
 
    --  The DIRECTORIES_TRANSLATION format is used where a list of directories
@@ -132,7 +131,7 @@ package VMS_Data is
    --  no space is inserted between the switch and the file name.
 
    --  The NUMERIC_TRANSLATION format is similar to the FILE_TRANSLATION case
-   --  except that the parameter is a decimal integer in the range 0 to 999.
+   --  except that the parameter is a decimal integer in the range 0 to 999999.
 
    --  For the OPTIONS_TRANSLATION case, GNATCmd similarly permits one or
    --  more options to appear (although only in some cases does the use of
@@ -150,7 +149,7 @@ package VMS_Data is
    --  The COMMANDS_TRANSLATION case is only used for gnatmake, to correspond
    --  to the use of -cargs, -bargs and -largs (the ARGS string as indicated
    --  is one of these three possibilities). The name given by COMMAND is the
-   --  corresponding command name to be used to interprete the switches to be
+   --  corresponding command name to be used to interpret the switches to be
    --  passed on. Switches of this type set modes, e.g. /COMPILER_QUALIFIERS
    --  sets the mode so that all subsequent switches, up to another switch
    --  with COMMANDS_TRANSLATION apply to the corresponding commands issued
@@ -163,7 +162,7 @@ package VMS_Data is
    --  since all subsequent switches apply to an issued command.
 
    --  For the DIRECT_TRANSLATION case, an implicit additional qualifier
-   --  declaration is created by prepending NO to the name of the qualifer,
+   --  declaration is created by prepending NO to the name of the qualifier,
    --  and then inverting the sense of the UNIX_SWITCHES string. For example,
    --  given the qualifier definition:
 
@@ -183,7 +182,7 @@ package VMS_Data is
    --  String pointer type used throughout
 
    type Switches is array (Natural range <>) of String_Ptr;
-   --  Type used for array of swtiches
+   --  Type used for array of switches
 
    type Switches_Ptr is access constant Switches;
 
@@ -191,6 +190,19 @@ package VMS_Data is
    -- Switches for GNAT BIND --
    ----------------------------
 
+   S_Bind_Add     : aliased constant S := "/ADD_PROJECT_SEARCH_DIR=*"      &
+                                            "-aP*";
+   --        /ADD_PROJECT_SEARCH_PATH=(directory[,...])
+   --
+   --   Add directories to the project search path.
+
+   S_Bind_ALI     : aliased constant S := "/ALI_LIST "                     &
+                                            "-A";
+   --        /NOALI_LIST (D)
+   --        /ALI_LIST
+   --
+   --    Output full names of all the ALI files in the partition. The output is
+   --    written to SYS$OUTPUT.
 
    S_Bind_Bind    : aliased constant S := "/BIND_FILE="                    &
                                             "ADA "                         &
@@ -271,6 +283,13 @@ package VMS_Data is
    --   Example:
    --      /EXTERNAL_REFERENCE="DEBUG=TRUE"
 
+   S_Bind_Follow  : aliased constant S := "/FOLLOW_LINKS_FOR_FILES "       &
+                                            "-eL";
+   --        /NOFOLLOW_LINKS_FOR_FILES (D)
+   --        /FOLLOW_LINKS_FOR_FILES
+   --
+   --    Follow links when parsing project files
+
    S_Bind_Force   : aliased constant S := "/FORCE_ELAB_FLAGS "             &
                                             "-F";
    --        /NOFORCE_ELAB_FLAGS (D)
@@ -301,6 +320,13 @@ package VMS_Data is
    --      LOW          Initialize with the lowest valid value of the subtype.
    --      HIGH         Initialize with the highest valid value of the subtype.
 
+   S_Bind_Leap    : aliased constant S := "/ENABLE_LEAP_SECONDS "          &
+                                            "-y";
+   --      /ENABLE_LEAP_SECONDS
+   --      /NOENABLE_LEAP_SECONDS (D)
+   --
+   --   Enable leap seconds support in Ada.Calendar and its children.
+
    S_Bind_Library : aliased constant S := "/LIBRARY_SEARCH=*"              &
                                             "-aO*";
    --        /LIBRARY_SEARCH=(direc[,...])
@@ -326,6 +352,20 @@ package VMS_Data is
    --        /NOMAIN
    --
    --   The main program is not in Ada.
+
+   S_Bind_Alloc32 : aliased constant S := "/32_MALLOC "                    &
+                                            "-H32";
+   --        /32_MALLOC
+   --
+   --        Use 32-bit allocations for `__gnat_malloc' (and thus for
+   --        access types).
+
+   S_Bind_Alloc64 : aliased constant S := "/64_MALLOC "                    &
+                                            "-H64";
+   --        /64_MALLOC
+   --
+   --        Use 64-bit allocations for `__gnat_malloc' (and thus for
+   --        access types).
 
    S_Bind_Mess    : aliased constant S := "/MESSAGES_PROJECT_FILE="        &
                                             "DEFAULT "                     &
@@ -367,7 +407,7 @@ package VMS_Data is
    --        /NOOBJECT_LIST (D)
    --        /OBJECT_LIST
    --
-   --    Output full names of all the object files that must be linker to
+   --    Output full names of all the object files that must be linked to
    --    provide the Ada component of the program. The output is written to
    --    SYS$OUTPUT.
 
@@ -490,15 +530,29 @@ package VMS_Data is
                                             "!-b,!-v";
    --  NODOC (see /REPORT_ERRORS)
 
-
    S_Bind_Restr   : aliased constant S := "/RESTRICTION_LIST "             &
                                             "-r";
    --        /NORESTRICTION_LIST (D)
    --        /RESTRICTION_LIST
    --
-   --   Generate list of pragma Rerstrictions that could be applied to the
+   --   Generate list of pragma Restrictions that could be applied to the
    --   current unit. This is useful for code audit purposes, and also may be
    --   used to improve code generation in some cases.
+
+   S_Bind_Return  : aliased constant S := "/RETURN_CODES="                 &
+                                            "POSIX "                       &
+                                               "!-X1 "                     &
+                                            "VMS "                         &
+                                               "-X1";
+   --        /RETURN_CODES=POSIX (D)
+   --        /RETURN_CODES=VMS
+   --
+   --   Specifies the style of default exit code returned. Must be used in
+   --   conjunction with and match the Link qualifier with same name.
+   --
+   --        POSIX (D)   Return Posix success (0) by default.
+   --
+   --        VMS         Return VMS success (1) by default.
 
    S_Bind_RTS     : aliased constant S := "/RUNTIME_SYSTEM=|"              &
                                             "--RTS=|";
@@ -517,8 +571,8 @@ package VMS_Data is
    --   for a directory.
 
    S_Bind_Shared  : aliased constant S := "/SHARED "                       &
-                                            "-shared";
-   --        /SHARED (D)
+                                            "-shared,!-static";
+   --        /SHARED
    --        /NOSHARED
    --
    --    Link against a shared GNAT run time when available.
@@ -537,6 +591,13 @@ package VMS_Data is
    --
    --    When looking for source files also look in directories specified.
 
+   S_Bind_Static  : aliased constant S := "/STATIC "                       &
+                                            "-static,!-shared";
+   --        /STATIC
+   --        /NOSTATIC
+   --
+   --    Link against a static GNAT run time.
+
    S_Bind_Store   : aliased constant S := "/STORE_TRACEBACKS "             &
                                             "-E";
    --        /STORE_TRACEBACKS (D)
@@ -546,6 +607,14 @@ package VMS_Data is
    --   This is the default on VMS, with the zero-cost exception mechanism.
    --   This qualifier has no impact, except when using the setjmp/longjmp
    --   exception mechanism, with the GNAT COMPILE qualifier /LONGJMP_SETJMP.
+
+   S_Bind_Subdirs : aliased constant S := "/SUBDIRS=<"                     &
+                                            "--subdirs=>";
+   --        /SUBDIRS=dir
+   --
+   --   The actual directories (object, exec, library, ...) are subdirectories
+   --   of the directory specified in the project file. If the subdirectory
+   --   does not exist, it is created automatically.
 
    S_Bind_Time    : aliased constant S := "/TIME_STAMP_CHECK "             &
                                             "!-t";
@@ -590,6 +659,26 @@ package VMS_Data is
                                             "-ws";
    --  NODOC (see /WARNINGS)
 
+   S_Bind_Wide    : aliased constant S := "/WIDE_CHARACTER_ENCODING="      &
+                                            "BRACKETS "                    &
+                                               "-gnatWb "                  &
+                                            "HEX "                         &
+                                               "-gnatWh "                  &
+                                            "UPPER "                       &
+                                               "-gnatWu "                  &
+                                            "SHIFT_JIS "                   &
+                                               "-gnatWs "                  &
+                                            "UTF8 "                        &
+                                               "-gnatW8 "                  &
+                                            "EUC "                         &
+                                               "-gnatWe";
+   --        /NOWIDE_CHARACTER_ENCODING (D)
+   --        /WIDE_CHARACTER_ENCODING[=encode-type]
+   --
+   --   Specifies the mechanism used to encode wide characters, overriding
+   --   the default as set by the /WIDE_CHARACTER_ENCODING option for the
+   --   compilation of the main program.
+
    S_Bind_Zero    : aliased constant S := "/ZERO_MAIN "                    &
                                             "-z";
    --        /NOZERO_MAIN (D)
@@ -601,47 +690,232 @@ package VMS_Data is
    --   consists of elaboration of these units in an appropriate order.
 
    Bind_Switches : aliased constant Switches :=
-     (S_Bind_Bind    'Access,
-      S_Bind_Build   'Access,
-      S_Bind_Current 'Access,
-      S_Bind_Debug   'Access,
-      S_Bind_DebugX  'Access,
-      S_Bind_Elab    'Access,
-      S_Bind_Error   'Access,
-      S_Bind_Ext     'Access,
-      S_Bind_Force   'Access,
-      S_Bind_Help    'Access,
-      S_Bind_Init    'Access,
-      S_Bind_Library 'Access,
-      S_Bind_Linker  'Access,
-      S_Bind_Main    'Access,
-      S_Bind_Mess    'Access,
-      S_Bind_Nostinc 'Access,
-      S_Bind_Nostlib 'Access,
-      S_Bind_No_Time 'Access,
-      S_Bind_Object  'Access,
-      S_Bind_Order   'Access,
-      S_Bind_Output  'Access,
-      S_Bind_OutputX 'Access,
-      S_Bind_Pess    'Access,
-      S_Bind_Project 'Access,
-      S_Bind_Read    'Access,
-      S_Bind_ReadX   'Access,
-      S_Bind_Rename  'Access,
-      S_Bind_Report  'Access,
-      S_Bind_ReportX 'Access,
-      S_Bind_Restr   'Access,
-      S_Bind_RTS     'Access,
-      S_Bind_Search  'Access,
-      S_Bind_Shared  'Access,
-      S_Bind_Slice   'Access,
-      S_Bind_Source  'Access,
-      S_Bind_Store   'Access,
-      S_Bind_Time    'Access,
-      S_Bind_Verbose 'Access,
-      S_Bind_Warn    'Access,
-      S_Bind_WarnX   'Access,
-      S_Bind_Zero    'Access);
+                     (S_Bind_Add     'Access,
+                      S_Bind_ALI     'Access,
+                      S_Bind_Bind    'Access,
+                      S_Bind_Build   'Access,
+                      S_Bind_Current 'Access,
+                      S_Bind_Debug   'Access,
+                      S_Bind_DebugX  'Access,
+                      S_Bind_Elab    'Access,
+                      S_Bind_Error   'Access,
+                      S_Bind_Ext     'Access,
+                      S_Bind_Follow  'Access,
+                      S_Bind_Force   'Access,
+                      S_Bind_Help    'Access,
+                      S_Bind_Init    'Access,
+                      S_Bind_Leap    'Access,
+                      S_Bind_Library 'Access,
+                      S_Bind_Linker  'Access,
+                      S_Bind_Main    'Access,
+                      S_Bind_Alloc32 'Access,
+                      S_Bind_Alloc64 'Access,
+                      S_Bind_Mess    'Access,
+                      S_Bind_Nostinc 'Access,
+                      S_Bind_Nostlib 'Access,
+                      S_Bind_No_Time 'Access,
+                      S_Bind_Object  'Access,
+                      S_Bind_Order   'Access,
+                      S_Bind_Output  'Access,
+                      S_Bind_OutputX 'Access,
+                      S_Bind_Pess    'Access,
+                      S_Bind_Project 'Access,
+                      S_Bind_Read    'Access,
+                      S_Bind_ReadX   'Access,
+                      S_Bind_Rename  'Access,
+                      S_Bind_Report  'Access,
+                      S_Bind_ReportX 'Access,
+                      S_Bind_Restr   'Access,
+                      S_Bind_Return  'Access,
+                      S_Bind_RTS     'Access,
+                      S_Bind_Search  'Access,
+                      S_Bind_Shared  'Access,
+                      S_Bind_Slice   'Access,
+                      S_Bind_Source  'Access,
+                      S_Bind_Static  'Access,
+                      S_Bind_Store   'Access,
+                      S_Bind_Subdirs 'Access,
+                      S_Bind_Time    'Access,
+                      S_Bind_Verbose 'Access,
+                      S_Bind_Warn    'Access,
+                      S_Bind_WarnX   'Access,
+                      S_Bind_Wide    'Access,
+                      S_Bind_Zero    'Access);
+
+   -----------------------------
+   -- Switches for GNAT CHECK --
+   -----------------------------
+
+   S_Check_Add    : aliased constant S := "/ADD_PROJECT_SEARCH_DIR=*"      &
+                                            "-aP*";
+   --        /ADD_PROJECT_SEARCH_PATH=(directory[,...])
+   --
+   --   Add directories to the project search path.
+
+   S_Check_All    : aliased constant S := "/ALL "                          &
+                                            "-a";
+   --        /NOALL (D)
+   --        /ALL
+   --
+   --   Also check the components of the GNAT run time and process the needed
+   --  components of the GNAT RTL when building and analyzing the global
+   --  structure for checking the global rules.
+
+   S_Check_Ext     : aliased constant S := "/EXTERNAL_REFERENCE=" & '"'    &
+                                             "-X" & '"';
+   --       /EXTERNAL_REFERENCE="name=val"
+   --
+   --   Specifies an external reference to the project manager. Useful only if
+   --   /PROJECT_FILE is used.
+   --
+   --   Example:
+   --      /EXTERNAL_REFERENCE="DEBUG=TRUE"
+
+   S_Check_Files  : aliased constant S := "/FILES=@"                       &
+                                             "-files=@";
+   --      /FILES=filename
+   --
+   --   Take as arguments the files that are listed in the specified
+   --   text file.
+
+   S_Check_Follow : aliased constant S := "/FOLLOW_LINKS_FOR_FILES "       &
+                                            "-eL";
+   --        /NOFOLLOW_LINKS_FOR_FILES (D)
+   --        /FOLLOW_LINKS_FOR_FILES
+   --
+   --    Follow links when parsing project files
+
+   S_Check_Help   : aliased constant S := "/HELP "                         &
+                                            "-h";
+   --        /NOHELP (D)
+   --        /HELP
+   --
+   --   Print information about currently implemented checks.
+
+   S_Check_Locs   : aliased constant S := "/LOCS "                         &
+                                            "-l";
+   --        /NOLOCS (D)
+   --        /LOCS
+   --
+   --   Use full source locations references in the report file.
+
+   S_Diagnosis   : aliased constant S := "/DIAGNOSTIC_LIMIT=#"             &
+                                            "-m#";
+   --        /DIAGNOSTIC_LIMIT=500 (D)
+   --        /DIAGNOSTIC_LIMIT=nnn
+   --
+   --   NNN is a decimal integer in the range of 1 to 1000 and limits the
+   --   number of diagnostic messages to be generated into Stdout to that
+   --   number.  Once that number has been reached, gnatcheck stops
+   --   to print out diagnoses into Stderr. If NNN is equal to 0, this means
+   --   that there is no limit on the number of diagnoses in Stdout.
+
+   S_Check_Mess    : aliased constant S := "/MESSAGES_PROJECT_FILE="       &
+                                             "DEFAULT "                    &
+                                                "-vP0 "                    &
+                                             "MEDIUM "                     &
+                                                "-vP1 "                    &
+                                             "HIGH "                       &
+                                                "-vP2";
+   --        /MESSAGES_PROJECT_FILE[=messages-option]
+   --
+   --   Specifies the "verbosity" of the parsing of project files.
+   --   messages-option may be one of the following:
+   --
+   --      DEFAULT (D)  No messages are output if there is no error or warning.
+   --
+   --      MEDIUM       A small number of messages are output.
+   --
+   --      HIGH         A great number of messages are output, most of them not
+   --                   being useful for the user.
+
+   S_Check_Project : aliased constant S := "/PROJECT_FILE=<"               &
+                                             "-P>";
+   --        /PROJECT_FILE=filename
+   --
+   --   Specifies the main project file to be used. The project files rooted
+   --   at the main project file will be parsed before the invocation of the
+   --   gnatcheck. The source directories to be searched will be communicated
+   --   to gnatcheck through logical name ADA_PRJ_INCLUDE_FILE.
+
+   S_Check_Quiet  : aliased constant S := "/QUIET "                        &
+                                            "-q";
+   --        /NOQUIET (D)
+   --        /QUIET
+   --
+   --   Work quietly, only output warnings and errors.
+
+   S_Check_Time     : aliased constant S := "/TIME "                       &
+                                               "-t";
+   --        /NOTIME (D)
+   --        /TIME
+   --
+   --   Print out execution time
+
+   S_Check_Log      : aliased constant S := "/LOG "                        &
+                                               "-log";
+   --        /NOLOG (D)
+   --        /LOG
+   --
+   --   Duplicate all the output sent to Stderr into a log file.
+
+   S_Check_Short  : aliased constant S := "/SHORT "                        &
+                                            "-s";
+   --        /NOSHORT (D)
+   --        /SHORT
+   --
+   --   Generate a short form of the report file.
+
+   S_Check_Include : aliased constant S := "/INCLUDE_FILE=@"               &
+                                            "--include-file=@";
+
+   --        /INCLUDE_FILE=filename
+   --
+   --   Add the content of the specified text file to the generated report
+   --   file.
+
+   S_Check_Subdirs : aliased constant S := "/SUBDIRS=<"                    &
+                                             "--subdirs=>";
+   --        /SUBDIRS=dir
+   --
+   --   The actual directories (object, exec, library, ...) are subdirectories
+   --   of the directory specified in the project file. If the subdirectory
+   --   does not exist, it is created automatically.
+
+   S_Check_Verb   : aliased constant S := "/VERBOSE "                      &
+                                            "-v";
+   --        /NOVERBOSE (D)
+   --        /VERBOSE
+   --
+   --   The version number and copyright notice are output, as well as exact
+   --   copies of the gnat1 commands spawned to obtain the chop control
+   --   information.
+
+   S_Check_Out  : aliased constant S := "/OUTPUT=@"                &
+                                             "-o@";
+   --        /OUTPUT=filename
+   --
+   --   Specify the name of the output file.
+
+   Check_Switches : aliased constant Switches :=
+                      (S_Check_Add    'Access,
+                       S_Check_All    'Access,
+                       S_Diagnosis    'Access,
+                       S_Check_Ext    'Access,
+                       S_Check_Files  'Access,
+                       S_Check_Follow 'Access,
+                       S_Check_Help   'Access,
+                       S_Check_Locs   'Access,
+                       S_Check_Mess   'Access,
+                       S_Check_Project'Access,
+                       S_Check_Quiet  'Access,
+                       S_Check_Time   'Access,
+                       S_Check_Log    'Access,
+                       S_Check_Short  'Access,
+                       S_Check_Include'Access,
+                       S_Check_Subdirs'Access,
+                       S_Check_Verb   'Access,
+                       S_Check_Out    'Access);
 
    ----------------------------
    -- Switches for GNAT CHOP --
@@ -687,7 +961,7 @@ package VMS_Data is
    --
    --   Causes the file modification time stamp of the input file to be
    --   preserved and used for the time stamp of the output file(s). This may
-   --   be useful for preserving coherency of time stamps in an enviroment
+   --   be useful for preserving coherency of time stamps in an environment
    --   where gnatchop is used as part of a standard build process.
 
    S_Chop_Quiet  : aliased constant S := "/QUIET "                         &
@@ -726,18 +1000,24 @@ package VMS_Data is
    --   information.
 
    Chop_Switches : aliased constant Switches :=
-     (S_Chop_Comp   'Access,
-      S_Chop_File   'Access,
-      S_Chop_Help   'Access,
-      S_Chop_Over   'Access,
-      S_Chop_Pres   'Access,
-      S_Chop_Quiet  'Access,
-      S_Chop_Ref    'Access,
-      S_Chop_Verb   'Access);
+                     (S_Chop_Comp   'Access,
+                      S_Chop_File   'Access,
+                      S_Chop_Help   'Access,
+                      S_Chop_Over   'Access,
+                      S_Chop_Pres   'Access,
+                      S_Chop_Quiet  'Access,
+                      S_Chop_Ref    'Access,
+                      S_Chop_Verb   'Access);
 
    -----------------------------
    -- Switches for GNAT CLEAN --
    -----------------------------
+
+   S_Clean_Add    : aliased constant S := "/ADD_PROJECT_SEARCH_DIR=*"      &
+                                            "-aP*";
+   --        /ADD_PROJECT_SEARCH_PATH=(directory[,...])
+   --
+   --   Add directories to the project search path.
 
    S_Clean_Compil  : aliased constant S := "/COMPILER_FILES_ONLY "         &
                                              "-c";
@@ -789,6 +1069,13 @@ package VMS_Data is
    --   Example:
    --      /EXTERNAL_REFERENCE="DEBUG=TRUE"
 
+   S_Clean_Follow : aliased constant S := "/FOLLOW_LINKS_FOR_FILES "       &
+                                            "-eL";
+   --        /NOFOLLOW_LINKS_FOR_FILES (D)
+   --        /FOLLOW_LINKS_FOR_FILES
+   --
+   --    Follow links when parsing project files
+
    S_Clean_Full    : aliased constant S := "/FULL_PATH_IN_BRIEF_MESSAGES " &
                                             "-F";
    --        /NOFULL_PATH_IN_BRIEF_MESSAGES (D)
@@ -805,6 +1092,13 @@ package VMS_Data is
    --        /HELP
    --
    --   Output a message explaining the usage of gnatclean.
+
+   S_Clean_Index   : aliased constant S := "/SOURCE_INDEX=#"               &
+                                             "-i#";
+   --        /SOURCE_INDEX=nnn
+   --
+   --   Specifies the index of the units in the source file
+   --   By default, source files are mono-unit and there is no index
 
    S_Clean_Mess    : aliased constant S := "/MESSAGES_PROJECT_FILE="       &
                                             "DEFAULT "                     &
@@ -824,7 +1118,6 @@ package VMS_Data is
    --
    --      HIGH        A great number of messages are output, most of them not
    --                  being useful for the user.
-
 
    S_Clean_Object  : aliased constant S := "/OBJECT_SEARCH=*"              &
                                             "-aO*";
@@ -849,7 +1142,7 @@ package VMS_Data is
    --        /NOQUIET (D)
    --        /QUIET
    --
-   --   Quiet output. If there are no error, do not ouuput anything, except in
+   --   Quiet output. If there are no error, do not output anything, except in
    --   verbose mode (qualifier /VERBOSE) or in informative-only mode
    --  (qualifier /NODELETE).
 
@@ -869,6 +1162,21 @@ package VMS_Data is
    --
    --   Equivalent to /OBJECT_SEARCH=(directory,...).
 
+   S_Clean_Subdirs : aliased constant S := "/SUBDIRS=<"                    &
+                                              "--subdirs=>";
+   --        /SUBDIRS=dir
+   --
+   --   The actual directories (object, exec, library, ...) are subdirectories
+   --   of the directory specified in the project file. If the subdirectory
+   --   does not exist, it is created automatically.
+
+   S_Clean_USL : aliased constant S :=  "/UNCHECKED_SHARED_LIB_IMPORTS " &
+                                           "--unchecked-shared-lib-imports";
+   --        /NOUNCHECKED_SHARED_LIB_IMPORTS (D)
+   --        /UNCHECKED_SHARED_LIB_IMPORTS
+   --
+   --   Allow shared library projects to import static library projects
+
    S_Clean_Verbose : aliased constant S := "/VERBOSE "                     &
                                             "-v";
    --        /NOVERBOSE (D)
@@ -877,20 +1185,25 @@ package VMS_Data is
    --   Verbose mode.
 
    Clean_Switches : aliased constant Switches :=
-     (S_Clean_Compil 'Access,
-      S_Clean_Current'Access,
-      S_Clean_Delete 'Access,
-      S_Clean_Dirobj 'Access,
-      S_Clean_Ext    'Access,
-      S_Clean_Full   'Access,
-      S_Clean_Help   'Access,
-      S_Clean_Mess   'Access,
-      S_Clean_Object 'Access,
-      S_Clean_Project'Access,
-      S_Clean_Quiet  'Access,
-      S_Clean_Recurs 'Access,
-      S_Clean_Search 'Access,
-      S_Clean_Verbose'Access);
+                      (S_Clean_Add    'Access,
+                       S_Clean_Compil 'Access,
+                       S_Clean_Current'Access,
+                       S_Clean_Delete 'Access,
+                       S_Clean_Dirobj 'Access,
+                       S_Clean_Ext    'Access,
+                       S_Clean_Follow 'Access,
+                       S_Clean_Full   'Access,
+                       S_Clean_Help   'Access,
+                       S_Clean_Index  'Access,
+                       S_Clean_Mess   'Access,
+                       S_Clean_Object 'Access,
+                       S_Clean_Project'Access,
+                       S_Clean_Quiet  'Access,
+                       S_Clean_Recurs 'Access,
+                       S_Clean_Search 'Access,
+                       S_Clean_Subdirs'Access,
+                       S_Clean_Verbose'Access,
+                       S_Clean_USL    'Access);
 
    -------------------------------
    -- Switches for GNAT COMPILE --
@@ -920,14 +1233,45 @@ package VMS_Data is
    --   Ada 95 program.
 
    S_GCC_Ada_95  : aliased constant S := "/95 "                            &
-                                             "!-gnat83";
+                                             "-gnat95";
    --        /95 (D)
    --
-   --   Same as /NO83.
+   --   Allows GNAT to recognize the full range of Ada 95 constructs.
+   --   This is the normal default for GNAT Pro.
+
+   S_GCC_Ada_05 : aliased constant S := "/05 "                             &
+                                             "-gnat05";
+   --        /05 (D)
    --
-   --        /NO95
+   --   Allows GNAT to recognize the full range of Ada 2005 constructs.
+
+   S_GCC_Ada_2005 : aliased constant S := "/2005 "                         &
+                                             "-gnat2005";
+   --        /05 (D)
    --
-   --   Same as /83.
+   --   Allows GNAT to recognize the full range of Ada 2005 constructs.
+   --   Equivalent to /05 (/2005 is the preferred usage).
+
+   S_GCC_Ada_12 : aliased constant S := "/12 "                             &
+                                             "-gnat12";
+   --        /05 (D)
+   --
+   --   Allows GNAT to recognize all implemented proposed Ada 2012
+   --   extensions. See features file for list of implemented features.
+
+   S_GCC_Ada_2012 : aliased constant S := "/2012 "                         &
+                                             "-gnat2012";
+   --        /05 (D)
+   --
+   --   Allows GNAT to recognize all implemented proposed Ada 2012
+   --   extensions. See features file for list of implemented features.
+   --   Equivalent to /12 (/2012 is the preferred usage).
+
+   S_GCC_Add     : aliased constant S := "/ADD_PROJECT_SEARCH_DIR=*"       &
+                                            "-aP*";
+   --        /ADD_PROJECT_SEARCH_PATH=(directory[,...])
+   --
+   --   Add directories to the project search path.
 
    S_GCC_Asm     : aliased constant S := "/ASM "                           &
                                              "-S,!-c";
@@ -935,8 +1279,19 @@ package VMS_Data is
    --        /ASM
    --
    --   Use to cause the assembler source file to be generated, using S as the
-   --   filetype, instead of the object file.  This may be useful if you need
+   --   filetype, instead of the object file. This may be useful if you need
    --   to examine the generated assembly code.
+
+   S_GCC_AValid  : aliased constant S := "/ASSUME_VALID "                  &
+                                             "-gnatB";
+   --        /NO_ASSUME_VALID (D)
+   --        /ASSUME_VALID
+   --
+   --   Use to tell the compiler to assume that all objects have valid values
+   --   except those occurring as prefixes to 'Valid attributes. In the default
+   --   mode, the compiler assumes that values may be invalid unless it can
+   --   be sure that they are valid, and code is generated to allow for this
+   --   possibility. The use of /ASSUME_VALID will improve the code.
 
    S_GCC_Checks  : aliased constant S := "/CHECKS="                        &
                                              "FULL "                       &
@@ -952,7 +1307,9 @@ package VMS_Data is
                                              "STACK "                      &
                                                 "-fstack-check "           &
                                              "SUPPRESS_ALL "               &
-                                                "-gnatp";
+                                                "-gnatp "                  &
+                                             "UNSUPPRESS_ALL "             &
+                                                "-gnat-p";
    --        /NOCHECKS
    --        /CHECKS[=(keyword[,...])]
    --
@@ -966,46 +1323,50 @@ package VMS_Data is
    --   You may specify one or more of the following keywords to the /CHECKS
    --   qualifier to modify this behavior:
    --
-   --     DEFAULT       The behavior described above. This is the default
-   --                   if the /CHECKS qualifier is not present on the
-   --                   command line. Same as /NOCHECKS.
+   --     DEFAULT          The behavior described above. This is the default
+   --                      if the /CHECKS qualifier is not present on the
+   --                      command line. Same as /NOCHECKS.
    --
-   --     OVERFLOW      Enables overflow checking for integer operations and
-   --                   checks for access before elaboration on subprogram
-   --                   calls. This causes GNAT to generate slower and larger
-   --                   executable programs by adding code to check for both
-   --                   overflow and division by zero (resulting in raising
-   --                   "Constraint_Error" as required by Ada semantics).
-   --                   Similarly, GNAT does not generate elaboration check
-   --                   by default, and you must specify this keyword to
-   --                   enable them.
+   --     OVERFLOW        Enables overflow checking for integer operations and
+   --                     checks for access before elaboration on subprogram
+   --                     calls. This causes GNAT to generate slower and larger
+   --                     executable programs by adding code to check for both
+   --                     overflow and division by zero (resulting in raising
+   --                     "Constraint_Error" as required by Ada semantics).
+   --                     Similarly, GNAT does not generate elaboration check
+   --                     by default, and you must specify this keyword to
+   --                     enable them.
    --
-   --                   Note that this keyword does not affect the code
-   --                   generated for any floating-point operations; it
-   --                   applies only to integer operations. For floating-point,
-   --                   GNAT has the "Machine_Overflows" attribute set to
-   --                   "False" and the normal mode of operation is to generate
-   --                   IEEE NaN and infinite values on overflow or invalid
-   --                   operations (such as dividing 0.0 by 0.0).
+   --                     Note that this keyword does not affect the code
+   --                     generated for any floating-point operations; it
+   --                     applies only to integer operations. For the case of
+   --                     floating-point, GNAT has the "Machine_Overflows"
+   --                     attribute set to "False" and the normal mode of
+   --                     operation is to generate IEEE NaN and infinite values
+   --                     on overflow or invalid operations (such as dividing
+   --                     0.0 by 0.0).
    --
-   --     ELABORATION   Enables dynamic checks for access-before-elaboration
-   --                   on subprogram calls and generic instantiations.
+   --     ELABORATION     Enables dynamic checks for access-before-elaboration
+   --                     on subprogram calls and generic instantiations.
    --
-   --     ASSERTIONS    The pragmas "Assert" and "Debug" normally have no
-   --                   effect and are ignored. This keyword causes "Assert"
-   --                   and "Debug" pragmas to be activated.
+   --     ASSERTIONS      The pragmas "Assert" and "Debug" normally have no
+   --                     effect and are ignored. This keyword causes "Assert"
+   --                     and "Debug" pragmas to be activated, as well as
+   --                     "Check", "Precondition" and "Postcondition" pragmas.
    --
-   --     SUPPRESS_ALL  Suppress all runtime checks as though you have "pragma
-   --                   Suppress (all_checks)" in your source. Use this switch
-   --                   to improve the performance of the code at the expense
-   --                   of safety in the presence of invalid data or program
-   --                   bugs.
+   --     SUPPRESS_ALL    Suppress all runtime checks as though you have
+   --                     "pragma Suppress (all_checks)" in your source. Use
+   --                     this switch to improve the performance of the code at
+   --                     the expense of safety in the presence of invalid data
+   --                     or program bugs.
    --
-   --     DEFAULT       Suppress the effect of any option OVERFLOW or
-   --                   ASSERTIONS.
+   --     UNSUPPRESS_ALL  Cancels effect of previous SUPPRESS_ALL.
    --
-   --     FULL (D)      Similar to OVERFLOW, but suppress the effect of any
-   --                   option ELABORATION or SUPPRESS_ALL.
+   --     DEFAULT         Suppress the effect of any option OVERFLOW or
+   --                     ASSERTIONS.
+   --
+   --     FULL (D)        Similar to OVERFLOW, but suppress the effect of any
+   --                     option ELABORATION or SUPPRESS_ALL.
    --
    --   These keywords only control the default setting of the checks.  You
    --   may modify them using either "Suppress" (to remove checks) or
@@ -1041,7 +1402,7 @@ package VMS_Data is
    --
    --   Look for source files in the default directory.
 
-   S_GCC_Data    : aliased constant S := "/DATA_PREPROCESSING=<"  &
+   S_GCC_Data    : aliased constant S := "/DATA_PREPROCESSING=<"           &
                                             "-gnatep>";
    --        /DATA_PREPROCESSING=file_name
    --
@@ -1182,6 +1543,15 @@ package VMS_Data is
                                             "-gnatm999999";
    --  NODOC (see /ERROR_LIMIT)
 
+   S_GCC_Except  : aliased constant S := "/EXTRA_EXCEPTION_INFORMATION "   &
+                                            "-gnateE";
+   --        /EXTRA_EXCEPTION_INFORMATION
+   --
+   --   Generate extra information in exception messages, in particular
+   --   display extra column information and the value and range associated
+   --   with index and range check failures, and extra column information for
+   --   access checks.
+
    S_GCC_Expand  : aliased constant S := "/EXPAND_SOURCE "                 &
                                             "-gnatG";
    --        /NOEXPAND_SOURCE (D)
@@ -1189,7 +1559,16 @@ package VMS_Data is
    --
    --   Produces a listing of the expanded code in Ada source form. For
    --   example, all tasking constructs are reduced to appropriate run-time
-   --   library calls.
+   --   library calls. The maximum line length for the listing 72.
+
+   S_GCC_Lexpand : aliased constant S := "/LEXPAND_SOURCE=#"               &
+                                            "-gnatG#";
+   --        /LEXPAND_SOURCE=nnn
+   --
+   --   Produces a listing of the expanded code in Ada source form. For
+   --   example, all tasking constructs are reduced to appropriate run-time
+   --   library calls. The parameter is the maximum line length for the
+   --   listing.
 
    S_GCC_Extend  : aliased constant S := "/EXTENSIONS_ALLOWED "            &
                                             "-gnatX";
@@ -1217,6 +1596,13 @@ package VMS_Data is
    --   including the ADS or ADB filetype. The default is not to enable file
    --   name krunching.
 
+   S_GCC_Follow : aliased constant S := "/FOLLOW_LINKS_FOR_FILES "       &
+                                            "-eL";
+   --        /NOFOLLOW_LINKS_FOR_FILES (D)
+   --        /FOLLOW_LINKS_FOR_FILES
+   --
+   --    Follow links when parsing project files
+
    S_GCC_Force   : aliased constant S := "/FORCE_ALI "                     &
                                             "-gnatQ";
    --        /NOFORCE_ALI (D)
@@ -1227,7 +1613,7 @@ package VMS_Data is
    --   forces generation of the .ALI file. This file is marked as being
    --   in error, so it cannot be used for binding purposes, but it does
    --   contain reasonably complete cross-reference information, and thus may
-   --   be useful for use by tools (e.g. semantic browing tools or integrated
+   --   be useful for use by tools (e.g. semantic browsing tools or integrated
    --   development environments) that are driven from the .ALI file.
 
    S_GCC_Full    : aliased constant S := "/FULL_PATH_IN_BRIEF_MESSAGES "   &
@@ -1239,6 +1625,27 @@ package VMS_Data is
    --   during parsing and verbose mode is not in effect (no use of qualifier
    --   /VERBOSE), then error lines start with the full path name of the
    --   project file, rather than its simple file name.
+
+   S_GCC_Generate : aliased constant S := "/GENERATE_PROCESSED_SOURCE "    &
+                                             "-gnateG";
+   --        /NOGENERATE_PROCESSED_SOURCE (D)
+   --        /GENERATE_PROCESSED_SOURCE
+   --
+   --        Generate a file <source>_prep if the integrated preprocessing
+   --        is modifying the source text.
+
+   S_GCC_GNAT    : aliased constant S := "/GNAT_INTERNAL "                 &
+                                            "-gnatg";
+   --        /NOGNAT_INTERNAL (D)
+   --        /GNAT_INTERNAL
+   --
+   --        Internal GNAT implementation mode. This should not be used for
+   --        applications programs, it is intended only for use by the compiler
+   --        and its run-time library. For documentation, see the GNAT sources.
+   --        Note that it implies /WARNINGS=ALL,ERRORS and /STYLE_CHECKS=GNAT
+   --        so that all standard warnings and all standard style options are
+   --        turned on. All warnings and style error messages are treated as
+   --        errors.
 
    S_GCC_Help    : aliased constant S := "/HELP "                          &
                                             "-gnath";
@@ -1336,7 +1743,15 @@ package VMS_Data is
                                              "-gnati1";
    --  NODOC (see /IDENTIFIER_CHARACTER_SET)
 
-   S_GCC_Immed   : aliased constant S := "/IMMEDIATE_ERRORS "    &
+   S_GCC_Ignore  : aliased constant S := "/IGNORE_REP_CLAUSES "            &
+                                             "-gnatI";
+   --        /IGNORE_REP_CLAUSES
+   --
+   --   Causes all representation clauses to be ignored and treated as
+   --   comments. Useful when compiling foreign code (for example when ASIS
+   --   is used to analyze such code).
+
+   S_GCC_Immed   : aliased constant S := "/IMMEDIATE_ERRORS "              &
                                              "-gnatdO";
    --        /NOIMMEDIATE_ERRORS (D)
    --        /IMMEDIATE_ERRORS
@@ -1394,22 +1809,33 @@ package VMS_Data is
                                              "!-gnatn,!-gnatN";
    --  NODOC (see /INLINE)
 
-   S_GCC_Jumps   : aliased constant S := "/LONGJMP_SETJMP "                &
+   S_GCC_Intsrc  : aliased constant S := "/INTERSPERSE_SOURCE "            &
                                              "-gnatL";
-   --        /NOLONGJMP_SETJMP (D)
-   --        /LONGJMP_SETJMP
+
+   --        /NO_INTERSPERSE_SOURCE (D)
+   --        /INTERSPERSE_SOURCE
    --
-   --   Causes the longjmp/setjmp approach to be used for exception handling.
+   --   Causes output from /XDEBUG or /EXPAND_SOURCE to be interspersed with
+   --   lines from the original source file, output as comment lines with the
+   --   associated line number.
+
+   S_GCC_Just   : aliased constant S := "/JUSTIFY_MESSAGES=#"              &
+                                             "-gnatj#";
+
+   --        /NO_JUSTIFY_MESSAGES (D)
+   --        /JUSTIFY_MESSAGES=nnn
    --
-   --   The default mechanism for OpenVMS is zero cost exceptions. This
-   --   qualifier can be used to modify this default, but it must be used for
-   --   all units in the partition, including all run-time library units.
-   --   One way to achieve this is to use the /ALL_FILES and /FORCE_COMPILE
-   --   for gnatmake.
-   --   This option is rarely used. One case in which it may be advantageous is
-   --   in an application where exception raising is common and the overall
-   --   performance of the application is improved by favoring exception
-   --   propagation.
+   --   Causes error messages to be reformatted so that a message and all its
+   --   continuation lines count as one warning or error in the statistics on
+   --   total errors, and the message is broken down into lines (justified) so
+   --   that no line is longer than nnn characters. The default message
+   --   behavior (each message counted separately and not reformatted to fit
+   --   a particular line length) can be obtained using /NO_JUSTIFY_MESSAGES.
+
+   S_GCC_JustX  : aliased constant S := "/NO_JUSTIFY_MESSAGES "            &
+                                             "-gnatj0";
+
+   --  NODOC (see /JUSTIFY_MESSAGES)
 
    S_GCC_Length  : aliased constant S := "/MAX_LINE_LENGTH=#"              &
                                              "-gnatyM#";
@@ -1423,9 +1849,20 @@ package VMS_Data is
    --        /NOLIST (D)
    --        /LIST
    --
-   --   Cause a full listing of the file to be generated.
+   --   Cause a full listing of the file to be generated. In the case where
+   --   a body is compiled, the corresponding spec is also listed, along
+   --   with any subunits.
 
-   S_GCC_Mapping : aliased constant S := "/MAPPING_FILE=<"  &
+   S_GCC_Machine : aliased constant S := "/MACHINE_CODE_LISTING "          &
+                                             "-source-listing";
+   --        /NOMACHINE_CODE_LISTING (D)
+   --        /MACHINE_CODE_LISTING
+   --
+   --   Cause a full machine code listing of the file to be generated to
+   --   <filename>.lis. Interspersed source is included if the /DEBUG
+   --   qualifier is also present.
+
+   S_GCC_Mapping : aliased constant S := "/MAPPING_FILE=<"                 &
                                             "-gnatem>";
    --        /MAPPING_FILE=file_name
    --
@@ -1488,6 +1925,15 @@ package VMS_Data is
    --      HIGH        A great number of messages are output, most of them not
    --                  being useful for the user.
 
+   S_GCC_Nesting  : aliased constant S := "/MAX_NESTING=#"                 &
+                                             "-gnatyL#";
+   --        /MAX_NESTING=nnn
+   --
+   --   Set maximum level of nesting of constructs (including subprograms,
+   --   loops, blocks, packages, and conditionals).
+   --   The level of nesting must not exceed the given value nnn.
+   --   A value of zero disable this style check (not enabled by default).
+
    S_GCC_Noadc   : aliased constant S := "/NO_GNAT_ADC "                   &
                                              "-gnatA";
    --        /NO_GNAT_ADC
@@ -1526,11 +1972,18 @@ package VMS_Data is
    --
    --   Do not look in the default directory for source files of the runtime.
 
-   S_GCC_Nostlib : aliased constant S := "/NOSTD_LIBRARIES "              &
+   S_GCC_Nostlib : aliased constant S := "/NOSTD_LIBRARIES "               &
                                             "-nostdlib";
    --        /NOSTD_LIBRARIES
    --
    --    Do not look for library files in the system default directory.
+
+   S_GCC_NoWarnP  : aliased constant S := "/NOWARNING_PRAGMAS "            &
+                                             "-gnatd.i";
+   --        /NOWARNING_PRAGMAS
+   --
+   --   Causes all Warnings pragmas to be ignored. Useful to check if the
+   --   program has obsolete warnings pragmas that are hiding problems.
 
    S_GCC_Opt     : aliased constant S := "/OPTIMIZE="                      &
                                             "ALL "                         &
@@ -1539,10 +1992,14 @@ package VMS_Data is
                                                "-O0,!-O1,!-O2,!-O3 "       &
                                             "SOME "                        &
                                                "-O1,!-O0,!-O2,!-O3 "       &
+                                            "SPACE "                       &
+                                               "-Os,!-O0,!-O1,!-O2,!-O3 "  &
                                             "DEVELOPMENT "                 &
                                                "-O1,!-O0,!-O2,!-O3 "       &
                                             "UNROLL_LOOPS "                &
                                                "-funroll-loops "           &
+                                            "NO_STRICT_ALIASING "          &
+                                               "-fno-strict-aliasing "     &
                                             "INLINING "                    &
                                                "-O3,!-O0,!-O1,!-O2";
    --        /NOOPTIMIZE (D)
@@ -1554,24 +2011,80 @@ package VMS_Data is
    --      ALL (D)       Perform most optimizations, including those that
    --                    may be expensive.
    --
-   --      NONE          Do not do any optimizations.  Same as /NOOPTIMIZE.
+   --      NONE          Do not do any optimizations. Same as /NOOPTIMIZE.
    --
    --      SOME          Perform some optimizations, but omit ones that
-   --                    are costly.
+   --                    are costly in compilation time.
+   --
+   --      SPACE         Optimize space usage
    --
    --      DEVELOPMENT   Same as SOME.
    --
    --      INLINING      Full optimization, and also attempt automatic inlining
    --                    of small subprograms within a unit
    --
-   --      UNROLL_LOOPS  Try to unroll loops.  This keyword may be specified
-   --                    with any keyword above other than NONE.  Loop
+   --      UNROLL_LOOPS  Try to unroll loops. This keyword may be specified
+   --                    with any keyword above other than NONE. Loop
    --                    unrolling usually, but not always, improves the
    --                    performance of programs.
+   --
+   --      NO_STRICT_ALIASING
+   --                    Suppress aliasing analysis. When optimization is
+   --                    enabled (ALL or SOME above), the compiler assumes
+   --                    that pointers do in fact point to legitimate values
+   --                    of the pointer type (allocated from the proper pool).
+   --                    If this assumption is violated, e.g. by the use of
+   --                    unchecked conversion, then it may be necessary to
+   --                    suppress this assumption using this keyword (which
+   --                    may be specified only in conjunction with any
+   --                    keyword above, other than NONE).
 
    S_GCC_OptX    : aliased constant S := "/NOOPTIMIZE "                    &
                                             "-O0,!-O1,!-O2,!-O3";
    --  NODOC (see /OPTIMIZE)
+
+   S_GCC_Output  : aliased constant S := "/OUTPUT_FILE=<"                  &
+                                            "-gnatl=>";
+   --        /OUTPUT_FILE=fname
+   --
+   --   This has the same effect as /LIST except that the output is written
+   --   to a file instead of to standard output. If the given fname
+   --   does not start with a period, then it is the full name of the file
+   --   to be written. If fname starts with a period, the name of the file
+   --   is the concatenation of to the name of the file being compiled with
+   --   fname where the period is replace by an underline. For example, if
+   --   file xyz.adb is compiled with -gnatl=.lst, then the output is written
+   --   to file xyz.adb_lst.
+
+   S_GCC_Pointer : aliased constant S := "/POINTER_SIZE="                  &
+                                            "64 "                          &
+                                               "-mmalloc64 "               &
+                                            "LONG "                        &
+                                               "-mmalloc64 "               &
+                                            "32 "                          &
+                                               "-mno-malloc64 "            &
+                                            "SHORT "                       &
+                                               "-mno-malloc64";
+   --        /POINTER_SIZE=64 (D)
+   --        /POINTER_SIZE[=(keyword[,...])]
+   --
+   --   Change how pointers and descriptors are allocated. The following
+   --   keywords are supported:
+   --
+   --        64 (D)       Allocate heap pointers in 64bit space except as
+   --                     constrained by a 32bit size clause or by
+   --                     Convention_C and generate 64bit descriptors for
+   --                     Descriptor mechanisms for calling imported
+   --                     subprograms and accept both 64bit and 32bit
+   --                     descriptors for calls to exported subprograms.
+   --
+   --        LONG         Equivalent to option 64.
+   --
+   --        32           Allocate all heap pointers in 32bit space and
+   --                     generate 32bit descriptors for Descriptor
+   --                     mechanisms for calling imported subprograms.
+   --
+   --        SHORT        Equivalent to option 32.
 
    S_GCC_Polling : aliased constant S := "/POLLING "                       &
                                             "-gnatP";
@@ -1601,6 +2114,16 @@ package VMS_Data is
    --   cannot be created in standard Ada), but the output is easily
    --   readable to any Ada programmer, and is useful to determine the
    --   characteristics of target dependent types in package Standard.
+
+   S_GCC_Reswarn : aliased constant S := "/TREAT_RESTRICTIONS_AS_WARNINGS " &
+                                             "-gnatr";
+
+   --        /NO_TREAT_RESTRICTIONS_AS_WARNINGS (D)
+   --        /TREAT_RESTRICTIONS_AS_WARNINGS
+   --
+   --   Causes all restrictions to be treated as warnings (pragma Restriction
+   --   treated as Restriction_Warnings, pragma Profile as Profile_Warnings,
+   --   and pragma Ravenscar sets restriction warnings instead of restrictions)
 
    S_GCC_Report  : aliased constant S := "/REPORT_ERRORS="                 &
                                             "VERBOSE "                     &
@@ -1712,15 +2235,34 @@ package VMS_Data is
    --
    --    Build against an alternate runtime system named xxx or RTS-xxx.
 
+   S_GCC_SCO     : aliased constant S := "/SCO_OUTPUT "   &
+                                            "-gnateS";
+   --        /NOSCO_OUTPUT (D)
+   --        /SCO_OUTPUT
+   --
+   --   Controls the output of SCO (Source Coverage Obligation) information
+   --   in the generated ALI file. This information is used by advanced source
+   --   coverage tools. For a full description of the SCO format, see unit
+   --   SCOs in the compiler sources (sco.ads/sco.adb).
+
    S_GCC_Search  : aliased constant S := "/SEARCH=*"                       &
                                             "-I*";
    --        /SEARCH=(directory[,...])
    --
    --    When looking for source files also look in directories specified.
 
+   S_GCC_Src_Info : aliased constant S := "/SRC_INFO=<"                    &
+                                             "--source-info=>";
+   --        /SRC_INFO=source-info-file
+   --
+   --   Specify a source info file to be read or written by the Project
+   --   Manager when project files are used.
+
    S_GCC_Style   : aliased constant S := "/STYLE_CHECKS="                  &
                                             "ALL_BUILTIN "                 &
-                                               "-gnaty "                   &
+                                               "-gnatyy "                  &
+                                            "0 "                           &
+                                               "-gnaty0 "                  &
                                             "1 "                           &
                                                "-gnaty1 "                  &
                                             "2 "                           &
@@ -1741,40 +2283,104 @@ package VMS_Data is
                                                "-gnaty9 "                  &
                                             "ATTRIBUTE "                   &
                                                "-gnatya "                  &
+                                            "NOATTRIBUTE "                 &
+                                               "-gnaty-a "                 &
+                                            "ARRAY_INDEXES "               &
+                                               "-gnatyA "                  &
+                                            "NOARRAY_INDEXES "             &
+                                               "-gnaty-A "                 &
                                             "BLANKS "                      &
                                                "-gnatyb "                  &
+                                            "NOBLANKS "                    &
+                                               "-gnaty-b "                 &
+                                            "BOOLEAN_OPERATORS "           &
+                                               "-gnatyB "                  &
+                                            "NOBOOLEAN_OPERATORS "         &
+                                               "-gnaty-B "                 &
                                             "COMMENTS "                    &
                                                "-gnatyc "                  &
+                                            "NOCOMMENTS "                  &
+                                               "-gnaty-c "                 &
+                                            "DOS_LINE_ENDINGS "            &
+                                               "-gnatyd "                  &
+                                            "NODOS_LINE_ENDINGS "          &
+                                               "-gnaty-d "                 &
                                             "END "                         &
                                                "-gnatye "                  &
+                                            "NOEND "                       &
+                                               "-gnaty-e "                 &
                                             "VTABS "                       &
                                                "-gnatyf "                  &
+                                            "NOVTABS "                     &
+                                               "-gnaty-f "                 &
                                             "GNAT "                        &
-                                               "-gnatg "                   &
+                                               "-gnatyg "                  &
                                             "HTABS "                       &
                                                "-gnatyh "                  &
+                                            "NOHTABS "                     &
+                                               "-gnaty-h "                 &
                                             "IF_THEN "                     &
                                                "-gnatyi "                  &
+                                            "NOIF_THEN "                   &
+                                               "-gnaty-i "                 &
                                             "KEYWORD "                     &
                                                "-gnatyk "                  &
+                                            "NOKEYWORD "                   &
+                                               "-gnaty-k "                 &
                                             "LAYOUT "                      &
                                                "-gnatyl "                  &
+                                            "NOLAYOUT "                    &
+                                               "-gnaty-l "                 &
                                             "LINE_LENGTH "                 &
                                                "-gnatym "                  &
+                                            "NOLINE_LENGTH "               &
+                                               "-gnaty-m "                 &
+                                            "MODE_IN "                     &
+                                               "-gnatyI "                  &
+                                            "NOMODE_IN "                   &
+                                               "-gnaty-I "                 &
+                                            "NONE "                        &
+                                               "-gnatyN "                  &
                                             "STANDARD_CASING "             &
                                                "-gnatyn "                  &
+                                            "NOSTANDARD_CASING "           &
+                                               "-gnaty-n "                 &
                                             "ORDERED_SUBPROGRAMS "         &
                                                "-gnatyo "                  &
-                                            "NONE "                        &
-                                               "!-gnatg,!-gnaty* "         &
+                                            "NOORDERED_SUBPROGRAMS "       &
+                                               "-gnaty-o "                 &
+                                            "OVERRIDING_INDICATORS "       &
+                                               "-gnatyO "                  &
+                                            "NOOVERRIDING_INDICATORS "     &
+                                               "-gnaty-O "                 &
                                             "PRAGMA "                      &
                                                "-gnatyp "                  &
+                                            "NOPRAGMA "                    &
+                                               "-gnaty-p "                 &
                                             "REFERENCES "                  &
                                                "-gnatyr "                  &
+                                            "NOREFERENCES "                &
+                                               "-gnaty-r "                 &
                                             "SPECS "                       &
                                                "-gnatys "                  &
+                                            "NOSPECS "                     &
+                                               "-gnaty-s "                 &
+                                            "STATEMENTS_AFTER_THEN_ELSE "  &
+                                               "-gnatyS "                  &
+                                            "NOSTATEMENTS_AFTER_THEN_ELSE " &
+                                               "-gnaty-S "                 &
                                             "TOKEN "                       &
-                                               "-gnatyt ";
+                                               "-gnatyt "                  &
+                                            "NOTOKEN "                     &
+                                               "-gnaty-t "                 &
+                                            "UNNECESSARY_BLANK_LINES "     &
+                                               "-gnatyu "                  &
+                                            "NOUNNECESSARY_BLANK_LINES "   &
+                                               "-gnaty-u "                 &
+                                            "XTRA_PARENS "                 &
+                                               "-gnaty-x "                 &
+                                            "NOXTRA_PARENS "               &
+                                               "-gnaty-x ";
    --        /NOSTYLE_CHECKS (D)
    --        /STYLE_CHECKS[=(keyword,[...])]
    --
@@ -1801,6 +2407,12 @@ package VMS_Data is
    --                           the initial letter and any letter following an
    --                           underscore must be uppercase.
    --                           All other letters must be lowercase.
+   --
+   --      ARRAY_INDEXES        Check indexes of array attributes.
+   --                           For array attributes First, Last, Range,
+   --                           or Length, the index number must be omitted
+   --                           for one-dimensional arrays and is required
+   --                           for multi-dimensional arrays.
    --
    --      BLANKS               Blanks not allowed at statement end.
    --                           Trailing blanks are not allowed at the end of
@@ -1833,7 +2445,7 @@ package VMS_Data is
    --                               allows proper processing of the output
    --                               generated by specialized tools including
    --                               gnatprep (where --! is used) and the SPARK
-   --                               annnotation language (where --# is used).
+   --                               annotation language (where --# is used).
    --                               For the purposes of this rule, a special
    --                               character is defined as being in one of the
    --                               ASCII ranges 16#21#..16#2F# or
@@ -1852,11 +2464,14 @@ package VMS_Data is
    --                               construction of box comments, as shown in
    --                               the following example:
    --
+   --                               ---------------------------
+   --                               -- This is a box comment --
+   --                               ---------------------------
    --
-   --                           ---------------------------
-   --                           -- This is a box comment --
-   --                           -- with two text lines.  --
-   --                           ---------------------------
+   --      DOS_LINE_ENDINGS     Check that no DOS line terminators are present
+   --                           All lines must be terminated by a single
+   --                           ASCII.LF character. In particular the DOS line
+   --                           terminator sequence CR / LF is not allowed).
    --
    --      END                  Check end/exit labels.
    --                           Optional labels on end statements ending
@@ -1864,20 +2479,10 @@ package VMS_Data is
    --                           named loops, are required to be present.
    --
    --      GNAT                 Enforces a set of style conventions that
-   --                           correspond to the style used in the GNAT
-   --                           source code.  All compiler units are always
-   --                           compile with this keyword specified.
-   --
-   --                           You can find the full documentation for the
-   --                           style conventions imposed by this keyword
-   --                           in the body of the package "Style" in the
-   --                           compiler sources.
-   --
-   --                           You should not normally use this keyword.
-   --                           However, you MUST use it for compiling any
-   --                           language-defined unit, or for adding children
-   --                           to any language-defined unit other than
-   --                           "Standard".
+   --                           match the style used in the GNAT source code.
+   --                           This maybe useful when developing code that
+   --                           is eventually intended to be incorporated into
+   --                           GNAT. For further details, see GNAT sources.
    --
    --      HTABS                No horizontal tabs.
    --                           Horizontal tab characters are not permitted in
@@ -1975,6 +2580,8 @@ package VMS_Data is
    --                           for possible special treatment of 80 character
    --                           lines.
    --
+   --      NONE                 Clear any previously set style checks.
+   --
    --      ORDERED_SUBPROGRAMS  Check order of subprogram bodies.
    --                           All subprogram bodies in a given scope (e.g.
    --                           a package body) must be in alphabetical order.
@@ -1985,7 +2592,11 @@ package VMS_Data is
    --                           in the ordering (e.g. Junk2 comes before
    --                           Junk10).
    --
-   --      NONE                 The default behavior.  Same as /NOSTYLE_CHECKS.
+   --      OVERRIDING_INDICATORS Check that overriding subprograms are
+   --                           explicitly marked as such. The declaration of
+   --                           a primitive operation of a type extension that
+   --                           overrides an inherited operation must carry
+   --                           an overriding indicator.
    --
    --      PRAGMA               Check pragma casing.
    --                           Pragma names must be written in mixed case,
@@ -1999,15 +2610,6 @@ package VMS_Data is
    --                           No specific casing style is imposed on
    --                           identifiers. The only requirement is for
    --                           consistency of references with declarations.
-   --
-   --      RM_COLUMN_LAYOUT     Enforce the layout conventions suggested by
-   --                           the examples and syntax rules of the Ada
-   --                           Language Reference Manual. For example, an
-   --                           "else" must line up with an "if" and code in
-   --                           the "then" and "else" parts must be indented.
-   --                           The compiler considers violations of the
-   --                           layout rules a syntax error if you specify
-   --                           this keyword.
    --
    --      SPECS                Check separate specs.
    --                           Separate declarations ("specs") are required
@@ -2079,13 +2681,32 @@ package VMS_Data is
    --                           or as meeting a requirement for no following
    --                           space.
    --
+   --      UNNECESSARY_BLANK_LINES
+   --                           Check for unnecessary blank lines.
+   --                           A blank line is considered unnecessary if it
+   --                           appears at the end of the file, or if more
+   --                           than one blank line occurs in sequence.
+   --
    --      VTABS                No form feeds or vertical tabs.
    --                           Form feeds or vertical tab characters are not
    --                           permitted in the source text.
+   --
+   --      XTRA_PARENS          Check for the use of an unnecessary extra
+   --                           level of parentheses (C - style) around
+   --                           conditions in if statements, while statements
+   --                           and exit statements.
 
    S_GCC_StyleX  : aliased constant S := "/NOSTYLE_CHECKS "                &
                                             "!-gnatg,!-gnaty*";
    --  NODOC (see /STYLE_CHECKS)
+
+   S_GCC_Subdirs : aliased constant S := "/SUBDIRS=<"                      &
+                                            "--subdirs=>";
+   --        /SUBDIRS=dir
+   --
+   --   The actual directories (object, exec, library, ...) are subdirectories
+   --   of the directory specified in the project file. If the subdirectory
+   --   does not exist, it is created automatically.
 
    S_GCC_Symbol  : aliased constant S := "/SYMBOL_PREPROCESSING=" & '"'    &
                                             "-gnateD" & '"';
@@ -2171,6 +2792,13 @@ package VMS_Data is
    --   semantic analyzer is more likely to encounter some internal fatal
    --   error when given a syntactically invalid tree.
 
+   S_GCC_USL : aliased constant S := "/UNCHECKED_SHARED_LIB_IMPORTS "      &
+                                         "--unchecked-shared-lib-imports";
+   --        /NOUNCHECKED_SHARED_LIB_IMPORTS (D)
+   --        /UNCHECKED_SHARED_LIB_IMPORTS
+   --
+   --   Allow shared library projects to import static library projects
+
    S_GCC_Units   : aliased constant S := "/UNITS_LIST "                    &
                                             "-gnatu";
    --        /NOUNITS_LIST (D)
@@ -2204,6 +2832,10 @@ package VMS_Data is
                                                "-gnatVc "                  &
                                             "NOCOPIES "                    &
                                                "-gnatVC "                  &
+                                            "COMPONENTS "                  &
+                                               "-gnatVe "                  &
+                                            "NOCOMPONENTS "                &
+                                               "-gnatVE "                  &
                                             "FLOATS "                      &
                                                "-gnatVf "                  &
                                             "NOFLOATS "                    &
@@ -2280,71 +2912,56 @@ package VMS_Data is
    --   debugging purposes or if you need to be sure what version of the
    --   compiler you are executing.
 
+   S_GCC_Verb_Asm : aliased constant S := "/VERBOSE_ASM " &
+                                          "-S,-verbose_asm,!-c";
+   --        /NOASM (D)
+   --        /ASM
+   --
+   --   Use to cause the assembler source file to be generated, using S as the
+   --   filetype, instead of the object file. This may be useful if you need
+   --   to examine the generated assembly code.
+
    S_GCC_Warn    : aliased constant S := "/WARNINGS="                      &
                                             "DEFAULT "                     &
                                                "!-gnatws,!-gnatwe "        &
                                             "ALL "                         &
                                                "-gnatwa "                  &
-                                            "NOALL "                       &
-                                               "-gnatwA "                  &
-                                            "ALL_GCC "                     &
-                                               "-Wall "                    &
-                                            "CONDITIONALS "                &
-                                               "-gnatwc "                  &
-                                            "NOCONDITIONALS "              &
-                                               "-gnatwC "                  &
-                                            "CONSTANT_VARIABLES "          &
-                                               "-gnatwk "                  &
-                                            "NOCONSTANT_VARIABLES "        &
-                                               "-gnatwK "                  &
-                                            "IMPLICIT_DEREFERENCE "        &
-                                               "-gnatwd "                  &
-                                            "NO_IMPLICIT_DEREFERENCE "     &
-                                               "-gnatwD "                  &
-                                            "ELABORATION "                 &
-                                               "-gnatwl "                  &
-                                            "NOELABORATION "               &
-                                               "-gnatwL "                  &
-                                            "ERRORS "                      &
-                                               "-gnatwe "                  &
-                                            "HIDING "                      &
-                                               "-gnatwh "                  &
-                                            "NOHIDING "                    &
-                                               "-gnatwH "                  &
-                                            "IMPLEMENTATION "              &
-                                               "-gnatwi "                  &
-                                            "NOIMPLEMENTATION "            &
-                                               "-gnatwI "                  &
-                                            "INEFFECTIVE_INLINE "          &
-                                               "-gnatwp "                  &
-                                            "NOINEFFECTIVE_INLINE "        &
-                                               "-gnatwP "                  &
-                                            "MODIFIED_UNREF "              &
-                                               "-gnatwm "                  &
-                                            "NOMODIFIED_UNREF "            &
-                                               "-gnatwM "                  &
+                                            "EVERY "                       &
+                                               "-gnatw.e "                 &
                                             "OPTIONAL "                    &
                                                "-gnatwa "                  &
                                             "NOOPTIONAL "                  &
                                                "-gnatwA "                  &
-                                            "NORMAL "                      &
-                                               "-gnatwn "                  &
-                                            "OBSOLESCENT "                 &
-                                               "-gnatwj "                  &
-                                            "NOOBSOLESCENT "               &
-                                               "-gnatwJ "                  &
-                                            "OVERLAYS "                    &
-                                               "-gnatwo "                  &
-                                            "NOOVERLAYS "                  &
-                                               "-gnatwO "                  &
-                                            "REDUNDANT "                   &
-                                               "-gnatwr "                  &
-                                            "NOREDUNDANT "                 &
-                                               "-gnatwR "                  &
-                                            "SUPPRESS "                    &
-                                               "-gnatws "                  &
-                                            "UNINITIALIZED "               &
-                                               "-Wuninitialized "          &
+                                            "NOALL "                       &
+                                               "-gnatwA "                  &
+                                            "ALL_GCC "                     &
+                                               "-Wall "                    &
+                                            "FAILING_ASSERTIONS "          &
+                                               "-gnatw.a "                 &
+                                            "NO_FAILING_ASSERTIONS "       &
+                                               "-gnatw.A "                 &
+                                            "BAD_FIXED_VALUES "            &
+                                               "-gnatwb "                  &
+                                            "NO_BAD_FIXED_VALUES "         &
+                                               "-gnatwB "                  &
+                                            "BIASED_REPRESENTATION "       &
+                                               "-gnatw.b "                 &
+                                            "NO_BIASED_REPRESENTATION "    &
+                                               "-gnatw.B "                 &
+                                            "CONDITIONALS "                &
+                                               "-gnatwc "                  &
+                                            "NOCONDITIONALS "              &
+                                               "-gnatwC "                  &
+                                            "MISSING_COMPONENT_CLAUSES "   &
+                                               "-gnatw.c "                 &
+                                            "NOMISSING_COMPONENT_CLAUSES " &
+                                               "-gnatw.C "                 &
+                                            "IMPLICIT_DEREFERENCE "        &
+                                               "-gnatwd "                  &
+                                            "NO_IMPLICIT_DEREFERENCE "     &
+                                               "-gnatwD "                  &
+                                            "ERRORS "                      &
+                                               "-gnatwe "                  &
                                             "UNREFERENCED_FORMALS "        &
                                                "-gnatwf "                  &
                                             "NOUNREFERENCED_FORMALS "      &
@@ -2353,18 +2970,116 @@ package VMS_Data is
                                                "-gnatwg "                  &
                                             "NOUNRECOGNIZED_PRAGMAS "      &
                                                "-gnatwG "                  &
+                                            "HIDING "                      &
+                                               "-gnatwh "                  &
+                                            "NOHIDING "                    &
+                                               "-gnatwH "                  &
+                                            "AVOIDGAPS "                   &
+                                               "-gnatw.h "                 &
+                                            "NOAVOIDGAPS "                 &
+                                               "-gnatw.H "                 &
+                                            "IMPLEMENTATION "              &
+                                               "-gnatwi "                  &
+                                            "NOIMPLEMENTATION "            &
+                                               "-gnatwI "                  &
+                                            "OBSOLESCENT "                 &
+                                               "-gnatwj "                  &
+                                            "NOOBSOLESCENT "               &
+                                               "-gnatwJ "                  &
+                                            "CONSTANT_VARIABLES "          &
+                                               "-gnatwk "                  &
+                                            "NOCONSTANT_VARIABLES "        &
+                                               "-gnatwK "                  &
+                                            "ELABORATION "                 &
+                                               "-gnatwl "                  &
+                                            "NOELABORATION "               &
+                                               "-gnatwL "                  &
+                                            "MODIFIED_UNREF "              &
+                                               "-gnatwm "                  &
+                                            "NOMODIFIED_UNREF "            &
+                                               "-gnatwM "                  &
+                                            "SUSPICIOUS_MODULUS "          &
+                                               "-gnatw.m "                 &
+                                            "NOSUSPICIOUS_MODULUS "        &
+                                               "-gnatw.M "                 &
+                                            "NORMAL "                      &
+                                               "-gnatwn "                  &
+                                            "OVERLAYS "                    &
+                                               "-gnatwo "                  &
+                                            "NOOVERLAYS "                  &
+                                               "-gnatwO "                  &
+                                            "OUT_PARAM_UNREF "             &
+                                               "-gnatw.o "                 &
+                                            "NOOUT_PARAM_UNREF "           &
+                                               "-gnatw.O "                 &
+                                            "INEFFECTIVE_INLINE "          &
+                                               "-gnatwp "                  &
+                                            "NOINEFFECTIVE_INLINE "        &
+                                               "-gnatwP "                  &
+                                            "MISSING_PARENS "              &
+                                               "-gnatwq "                  &
+                                            "PARAMETER_ORDER "             &
+                                               "-gnatw.p "                 &
+                                            "NOPARAMETER_ORDER "           &
+                                               "-gnatw.P "                 &
+                                            "NOMISSING_PARENS "            &
+                                               "-gnatwQ "                  &
+                                            "REDUNDANT "                   &
+                                               "-gnatwr "                  &
+                                            "NOREDUNDANT "                 &
+                                               "-gnatwR "                  &
+                                            "OBJECT_RENAMES "              &
+                                               "-gnatw.r "                 &
+                                            "NOOBJECT_RENAMES "            &
+                                               "-gnatw.R "                 &
+                                            "SUPPRESS "                    &
+                                               "-gnatws "                  &
+                                            "OVERRIDING_SIZE "             &
+                                               "-gnatw.s "                 &
+                                            "NOOVERRIDING_SIZE "           &
+                                               "-gnatw.S "                 &
+                                            "DELETED_CODE "                &
+                                               "-gnatwt "                  &
+                                            "NODELETED_CODE "              &
+                                               "-gnatwT "                  &
+                                            "UNINITIALIZED "               &
+                                               "-Wuninitialized "          &
                                             "UNUSED "                      &
                                                "-gnatwu "                  &
                                             "NOUNUSED "                    &
                                                "-gnatwU "                  &
+                                            "UNORDERED_ENUMERATIONS "      &
+                                               "-gnatw.u "                 &
+                                            "NOUNORDERED_ENUMERATIONS "    &
+                                               "-gnatw.U "                 &
                                             "VARIABLES_UNINITIALIZED "     &
                                                "-gnatwv "                  &
                                             "NOVARIABLES_UNINITIALIZED "   &
                                                "-gnatwV "                  &
+                                            "REVERSE_BIT_ORDER "           &
+                                               "-gnatw.v "                 &
+                                            "NOREVERSE_BIT_ORDER "         &
+                                               "-gnatw.V "                 &
+                                            "LOWBOUND_ASSUMED "            &
+                                               "-gnatww "                  &
+                                            "NOLOWBOUND_ASSUMED "          &
+                                               "-gnatwW "                  &
+                                            "WARNINGS_OFF_PRAGMAS "        &
+                                               "-gnatw.w "                 &
+                                            "NO_WARNINGS_OFF_PRAGMAS "     &
+                                               "-gnatw.W "                 &
                                             "IMPORT_EXPORT_PRAGMAS "       &
                                                "-gnatwx "                  &
                                             "NOIMPORT_EXPORT_PRAGMAS "     &
                                                "-gnatwX "                  &
+                                            "LOCAL_RAISE_HANDLING "        &
+                                               "-gnatw.x "                 &
+                                            "NOLOCAL_RAISE_HANDLING "      &
+                                               "-gnatw.X "                 &
+                                            "ADA_2005_COMPATIBILITY "      &
+                                               "-gnatwy "                  &
+                                            "NOADA_2005_COMPATIBILITY "    &
+                                               "-gnatwY "                  &
                                             "UNCHECKED_CONVERSIONS "       &
                                                "-gnatwz "                  &
                                             "NOUNCHECKED_CONVERSIONS "     &
@@ -2397,6 +3112,10 @@ package VMS_Data is
    --                           IMPLICIT_DEREFERENCE, HIDING and
    --                           ELABORATION. All other optional Ada
    --                           warnings are turned on.
+   --
+   --   EVERY                   Activate every optional warning.
+   --                           Activates all optional warnings, including
+   --                           those listed above as exceptions for ALL.
    --
    --   NOALL                   Suppress all optional errors.
    --                           Suppresses all optional warning messages
@@ -2483,6 +3202,28 @@ package VMS_Data is
    --                           inline a call, it will simply ignore the
    --                           request silently.
    --
+   --   MISSING_COMPONENT_CLAUSES
+   --                           Activate warnings for cases when there are
+   --                           component clauses for a record type, but not
+   --                           for every component of the record.
+   --
+   --   NOMISSING_COMPONENT_CLAUSES
+   --                           Suppress warnings for cases when there are
+   --                           missing component clauses for a record type.
+   --
+   --   MISSING_PARENS
+   --                           Activate warnings for cases where parentheses
+   --                           are not used and the result is potential
+   --                           ambiguity from a reader's point of view.
+   --                           For example (not a > b) when a and b are
+   --                           modular means (not (a) > b) and very likely
+   --                           the programmer intended (not (a > b)).
+   --
+   --   NOMISSING_PARENS
+   --                           Suppress warnings for cases where parentheses
+   --                           are not used and the result is potential
+   --                           ambiguity from a reader's point of view.
+   --
    --   MODIFIED_UNREF          Activates warnings for variables that are
    --                           assigned (using an initialization value or with
    --                           one or more assignment statements) but whose
@@ -2519,20 +3260,15 @@ package VMS_Data is
    --   NOOBSOLESCENT           Disables warnings on use of obsolescent
    --                           features.
    --
-   --   OPTIONAL                Activate all optional warning messages.
-   --                           See other options under this qualifier
-   --                           for details on optional warning messages
-   --                           that can be individually controlled. The
-   --                           one exception is that /WARNINGS=OPTIONAL
-   --                           doesn't activate warnings for hiding
-   --                           variables (/WARNINGS=HIDING), so if this
-   --                           warning is required it must be explicitly
-   --                           set.
+   --   OBJECT_RENAME           Activate warnings for non limited objects
+   --                           renaming parameterless functions.
    --
-   --   NOOPTIONAL              Suppress all optional warning messages.
-   --                           See other options under this qualifier
-   --                           for details on optional warning messages
-   --                           that can be individually controlled.
+   --   NOOBJECT_RENAME         Suppress warnings for non limited objects
+   --                           renaming parameterless functions.
+   --
+   --   OPTIONAL                Equivalent to ALL.
+   --
+   --   NOOPTIONAL              Equivalent to NOALL.
    --
    --   OVERLAYS                Activate warnings for possibly unintended
    --                           initialization effects of defining address
@@ -2553,7 +3289,7 @@ package VMS_Data is
    --
    --   NOREDUNDANT             Suppress warnings for redundant constructs.
    --
-   --   SUPPRESS                Completely suppresse the output of all warning
+   --   SUPPRESS                Completely suppress the output of all warning
    --                           messages.  Same as /NOWARNINGS.
    --
    --   UNCHECKED_CONVERSIONS   Activates warnings on unchecked conversions.
@@ -2626,11 +3362,15 @@ package VMS_Data is
    --
    --   Inhibit all warning messages of the GCC back-end.
 
+   S_GCC_All_Back : aliased constant S := "/ALL_BACK_END_WARNINGS "        &
+                                            "-Wall";
+   --        /ALL_BACK_END_WARNINGS
+   --
+   --   Activate all warning messages of the GCC back-end.
+
    S_GCC_Wide    : aliased constant S := "/WIDE_CHARACTER_ENCODING="       &
                                              "BRACKETS "                   &
                                                 "-gnatWb "                 &
-                                             "NONE "                       &
-                                                "-gnatWn "                 &
                                              "HEX "                        &
                                                 "-gnatWh "                 &
                                              "UPPER "                      &
@@ -2661,7 +3401,7 @@ package VMS_Data is
    --                   of lower case.
    --
    --   NONE            No wide characters are allowed.  Same
-   --                   as /NOWIDE_CHARCTER_ENCODING.
+   --                   as /NOWIDE_CHARACTER_ENCODING.
    --
    --   HEX             In this encoding, a wide character is represented by
    --                   the following five character sequence: ESC a b c d
@@ -2701,7 +3441,7 @@ package VMS_Data is
    --                   16#0800#-16#ffff#: 2#1110xxxx# 2#10xxxxxx# 2#10xxxxxx#
    --
    --                   where the xxx bits correspond to the left-padded bits
-   --                   of the the 16-bit character value. Note that all lower
+   --                   of the 16-bit character value. Note that all lower
    --                   half ASCII characters are represented as ASCII bytes
    --                   and all upper half characters and other wide characters
    --                   are represented as sequences of upper-half (The full
@@ -2722,7 +3462,7 @@ package VMS_Data is
    --  NODOC (see /WIDE_CHARACTER_ENCODING)
 
    S_GCC_Xdebug  : aliased constant S := "/XDEBUG "                        &
-                                             "-gnatD";
+                                            "-gnatD";
    --        /NOXDEBUG (D)
    --        /XDEBUG
    --
@@ -2733,7 +3473,21 @@ package VMS_Data is
    --   refer to the generated file. This allows source level debugging using
    --   the generated code which is sometimes useful for complex code, for
    --   example to find out exactly which part of a complex construction
-   --   raised an exception.
+   --   raised an exception. The maximum line length for the output is 72.
+
+   S_GCC_Lxdebug : aliased constant S := "/LXDEBUG=#"                      &
+                                            "-gnatD=#";
+   --        /LXDEBUG=nnn
+   --
+   --   Output expanded source files for source level debugging.
+   --   The expanded source (see /EXPAND_SOURCE) is written to files
+   --   with names formed by appending "_DG" to the input file name,
+   --   The debugging information generated by the /DEBUG qualifier will then
+   --   refer to the generated file. This allows source level debugging using
+   --   the generated code which is sometimes useful for complex code, for
+   --   example to find out exactly which part of a complex construction
+   --   raised an exception. The parameter is the maximum line length for
+   --   the output.
 
    S_GCC_Xref    : aliased constant S := "/XREF="                          &
                                             "GENERATE "                    &
@@ -2753,88 +3507,110 @@ package VMS_Data is
    --                                speed up compilation, but means that some
    --                                tools cannot be used.
 
-   S_GCC_Zero    : aliased constant S := "/ZERO_COST_EXCEPTIONS "          &
-                                             "-gnatZ";
-   --        /ZERO_COST_EXCEPTIONS
-   --        /NOZERO_COST_EXCEPTIONS
-   --
-   --   As zero-cost exceptions is the default on VMS, this qualifier has
-   --   no effect, except that it cancels the effect of a previous
-   --   /LONGJMP_SETJUMP qualifier.
-
    GCC_Switches : aliased constant Switches :=
-     (S_GCC_Ada_83  'Access,
-      S_GCC_Ada_95  'Access,
-      S_GCC_Asm     'Access,
-      S_GCC_Checks  'Access,
-      S_GCC_ChecksX 'Access,
-      S_GCC_Compres 'Access,
-      S_GCC_Config  'Access,
-      S_GCC_Current 'Access,
-      S_GCC_Debug   'Access,
-      S_GCC_DebugX  'Access,
-      S_GCC_Data    'Access,
-      S_GCC_Dist    'Access,
-      S_GCC_DistX   'Access,
-      S_GCC_Error   'Access,
-      S_GCC_ErrorX  'Access,
-      S_GCC_Expand  'Access,
-      S_GCC_Extend  'Access,
-      S_GCC_Ext     'Access,
-      S_GCC_File    'Access,
-      S_GCC_Force   'Access,
-      S_GCC_Full    'Access,
-      S_GCC_Help    'Access,
-      S_GCC_Ident   'Access,
-      S_GCC_IdentX  'Access,
-      S_GCC_Immed   'Access,
-      S_GCC_Inline  'Access,
-      S_GCC_InlineX 'Access,
-      S_GCC_Jumps   'Access,
-      S_GCC_Length  'Access,
-      S_GCC_List    'Access,
-      S_GCC_Mapping 'Access,
-      S_GCC_Mess    'Access,
-      S_GCC_Noadc   'Access,
-      S_GCC_Noload  'Access,
-      S_GCC_Nostinc 'Access,
-      S_GCC_Nostlib 'Access,
-      S_GCC_Opt     'Access,
-      S_GCC_OptX    'Access,
-      S_GCC_Polling 'Access,
-      S_GCC_Project 'Access,
-      S_GCC_Psta    'Access,
-      S_GCC_Report  'Access,
-      S_GCC_ReportX 'Access,
-      S_GCC_Repinfo 'Access,
-      S_GCC_RepinfX 'Access,
-      S_GCC_RTS     'Access,
-      S_GCC_Search  'Access,
-      S_GCC_Style   'Access,
-      S_GCC_StyleX  'Access,
-      S_GCC_Symbol  'Access,
-      S_GCC_Syntax  'Access,
-      S_GCC_Table   'Access,
-      S_GCC_Trace   'Access,
-      S_GCC_Tree    'Access,
-      S_GCC_Trys    'Access,
-      S_GCC_Units   'Access,
-      S_GCC_Unique  'Access,
-      S_GCC_Upcase  'Access,
-      S_GCC_Valid   'Access,
-      S_GCC_Verbose 'Access,
-      S_GCC_Warn    'Access,
-      S_GCC_WarnX   'Access,
-      S_GCC_Wide    'Access,
-      S_GCC_WideX   'Access,
-      S_GCC_No_Back 'Access,
-      S_GCC_Xdebug  'Access,
-      S_GCC_Xref    'Access,
-      S_GCC_Zero    'Access);
+                    (S_GCC_Ada_83  'Access,
+                     S_GCC_Ada_95  'Access,
+                     S_GCC_Ada_05  'Access,
+                     S_GCC_Ada_2005'Access,
+                     S_GCC_Ada_12  'Access,
+                     S_GCC_Ada_2012'Access,
+                     S_GCC_Add     'Access,
+                     S_GCC_Asm     'Access,
+                     S_GCC_AValid  'Access,
+                     S_GCC_Checks  'Access,
+                     S_GCC_ChecksX 'Access,
+                     S_GCC_Compres 'Access,
+                     S_GCC_Config  'Access,
+                     S_GCC_Current 'Access,
+                     S_GCC_Debug   'Access,
+                     S_GCC_DebugX  'Access,
+                     S_GCC_Data    'Access,
+                     S_GCC_Dist    'Access,
+                     S_GCC_DistX   'Access,
+                     S_GCC_Error   'Access,
+                     S_GCC_ErrorX  'Access,
+                     S_GCC_Expand  'Access,
+                     S_GCC_Lexpand 'Access,
+                     S_GCC_Except  'Access,
+                     S_GCC_Extend  'Access,
+                     S_GCC_Ext     'Access,
+                     S_GCC_File    'Access,
+                     S_GCC_Follow  'Access,
+                     S_GCC_Force   'Access,
+                     S_GCC_Full    'Access,
+                     S_GCC_Generate'Access,
+                     S_GCC_GNAT    'Access,
+                     S_GCC_Help    'Access,
+                     S_GCC_Ident   'Access,
+                     S_GCC_IdentX  'Access,
+                     S_GCC_Ignore  'Access,
+                     S_GCC_Immed   'Access,
+                     S_GCC_Inline  'Access,
+                     S_GCC_InlineX 'Access,
+                     S_GCC_Intsrc  'Access,
+                     S_GCC_Just    'Access,
+                     S_GCC_JustX   'Access,
+                     S_GCC_Length  'Access,
+                     S_GCC_List    'Access,
+                     S_GCC_Output  'Access,
+                     S_GCC_Machine 'Access,
+                     S_GCC_Mapping 'Access,
+                     S_GCC_Mess    'Access,
+                     S_GCC_Nesting 'Access,
+                     S_GCC_Noadc   'Access,
+                     S_GCC_Noload  'Access,
+                     S_GCC_Nostinc 'Access,
+                     S_GCC_Nostlib 'Access,
+                     S_GCC_NoWarnP 'Access,
+                     S_GCC_Opt     'Access,
+                     S_GCC_OptX    'Access,
+                     S_GCC_Pointer 'Access,
+                     S_GCC_Polling 'Access,
+                     S_GCC_Project 'Access,
+                     S_GCC_Psta    'Access,
+                     S_GCC_Report  'Access,
+                     S_GCC_ReportX 'Access,
+                     S_GCC_Repinfo 'Access,
+                     S_GCC_RepinfX 'Access,
+                     S_GCC_RTS     'Access,
+                     S_GCC_SCO     'Access,
+                     S_GCC_Search  'Access,
+                     S_GCC_Src_Info'Access,
+                     S_GCC_Style   'Access,
+                     S_GCC_StyleX  'Access,
+                     S_GCC_Subdirs 'Access,
+                     S_GCC_Symbol  'Access,
+                     S_GCC_Syntax  'Access,
+                     S_GCC_Table   'Access,
+                     S_GCC_Trace   'Access,
+                     S_GCC_Tree    'Access,
+                     S_GCC_Trys    'Access,
+                     S_GCC_USL     'Access,
+                     S_GCC_Units   'Access,
+                     S_GCC_Unique  'Access,
+                     S_GCC_Upcase  'Access,
+                     S_GCC_Valid   'Access,
+                     S_GCC_Verbose 'Access,
+                     S_GCC_Verb_Asm'Access,
+                     S_GCC_Warn    'Access,
+                     S_GCC_WarnX   'Access,
+                     S_GCC_Wide    'Access,
+                     S_GCC_WideX   'Access,
+                     S_GCC_No_Back 'Access,
+                     S_GCC_All_Back'Access,
+                     S_GCC_Xdebug  'Access,
+                     S_GCC_Lxdebug 'Access,
+                     S_GCC_Xref    'Access);
 
    ----------------------------
    -- Switches for GNAT ELIM --
    ----------------------------
+
+   S_Elim_Add    : aliased constant S := "/ADD_PROJECT_SEARCH_DIR=*"       &
+                                           "-aP*";
+   --        /ADD_PROJECT_SEARCH_PATH=(directory[,...])
+   --
+   --   Add directories to the project search path.
 
    S_Elim_All    : aliased constant S := "/ALL "                           &
                                             "-a";
@@ -2875,6 +3651,23 @@ package VMS_Data is
    --
    --        Look for source files in the default directory.
 
+   S_Elim_Ext     : aliased constant S := "/EXTERNAL_REFERENCE=" & '"'     &
+                                             "-X" & '"';
+   --       /EXTERNAL_REFERENCE="name=val"
+   --
+   --   Specifies an external reference to the project manager. Useful only if
+   --   /PROJECT_FILE is used.
+   --
+   --   Example:
+   --      /EXTERNAL_REFERENCE="DEBUG=TRUE"
+
+   S_Elim_Follow  : aliased constant S := "/FOLLOW_LINKS_FOR_FILES "       &
+                                            "-eL";
+   --        /NOFOLLOW_LINKS_FOR_FILES (D)
+   --        /FOLLOW_LINKS_FOR_FILES
+   --
+   --    Follow links when parsing project files
+
    S_Elim_GNATMAKE : aliased constant S := "/GNATMAKE=@"                   &
                                             "--GNATMAKE=@";
    --        /GNATMAKE=path_name
@@ -2882,7 +3675,49 @@ package VMS_Data is
    --   Instructs GNAT MAKE to use a specific gnatmake instead of one available
    --   on the path.
 
-   S_Elim_Quiet  : aliased constant S := "/QUIET "                         &
+   S_Elim_Mess    : aliased constant S := "/MESSAGES_PROJECT_FILE="        &
+                                             "DEFAULT "                    &
+                                                "-vP0 "                    &
+                                             "MEDIUM "                     &
+                                                "-vP1 "                    &
+                                             "HIGH "                       &
+                                                "-vP2";
+   --        /MESSAGES_PROJECT_FILE[=messages-option]
+   --
+   --   Specifies the "verbosity" of the parsing of project files.
+   --   messages-option may be one of the following:
+   --
+   --      DEFAULT (D)  No messages are output if there is no error or warning.
+   --
+   --      MEDIUM       A small number of messages are output.
+   --
+   --      HIGH         A great number of messages are output, most of them not
+   --                   being useful for the user.
+
+   S_Elim_Nodisp : aliased constant S := "/NO_DISPATCH "                   &
+                                          "--no-elim-dispatch";
+   --        /NONO_DISPATCH (D)
+   --        /NO_DISPATCH
+   --
+   --   Do not generate pragmas for dispatching operations.
+
+   S_Elim_Ignore : aliased constant S := "/IGNORE=@"                       &
+                                         "--ignore=@";
+   --      /IGNORE=filename
+   --
+   --   Do not generate pragmas for subprograms declared in the sources
+   --  listed in a specified file
+
+   S_Elim_Project : aliased constant S := "/PROJECT_FILE=<"                &
+                                             "-P>";
+   --        /PROJECT_FILE=filename
+   --
+   --   Specifies the main project file to be used. The project files rooted
+   --   at the main project file will be parsed before the invocation of the
+   --   gnatelim. The source directories to be searched will be communicated
+   --   to gnatelim through logical name ADA_PRJ_INCLUDE_FILE.
+
+   S_Elim_Quiet   : aliased constant S := "/QUIET "                        &
                                             "-q";
    --        /NOQUIET (D)
    --        /QUIET
@@ -2891,11 +3726,61 @@ package VMS_Data is
    --   the number of program units left to be processed. This option turns
    --   this trace off.
 
+   S_Elim_Files   : aliased constant S := "/FILES=@"                       &
+                                         "-files=@";
+
+   --      /FILES=filename
+   --
+   --   Take as arguments the files that are listed in the specified
+   --   text file.
+
+   S_Elim_Log     : aliased constant S := "/LOG "                          &
+                                          "-l";
+   --        /NOLOG (D)
+   --        /LOG
+   --
+   --   Duplicate all the output sent to Stderr into a default log file.
+
+   S_Elim_Logfile : aliased constant S := "/LOGFILE=@"                     &
+                                          "-l@";
+
+   --      /LOGFILE=logfilename
+   --
+   --   Duplicate all the output sent to Stderr into a specified log file.
+
+   S_Elim_Main    : aliased constant S := "/MAIN=@"                        &
+                                          "-main=@";
+
+   --      /MAIN=filename
+   --
+   --   Specify the main subprogram of the partition to analyse.
+
+   S_Elim_Out     : aliased constant S := "/OUTPUT=@"                     &
+                                             "-o@";
+   --        /OUTPUT=filename
+   --
+   --   Specify the name of the output file.
+
+   S_Elim_Time    : aliased constant S := "/TIME "                        &
+                                            "-t";
+   --        /NOTIME (D)
+   --        /TIME
+   --
+   --   Print out execution time
+
    S_Elim_Search : aliased constant S := "/SEARCH=*"                       &
                                             "-I*";
    --        /SEARCH=(directory, ...)
    --
    --   When looking for source files also look in the specified directories.
+
+   S_Elim_Subdirs : aliased constant S := "/SUBDIRS=<"                     &
+                                             "--subdirs=>";
+   --        /SUBDIRS=dir
+   --
+   --   The actual directories (object, exec, library, ...) are subdirectories
+   --   of the directory specified in the project file. If the subdirectory
+   --   does not exist, it is created automatically.
 
    S_Elim_Verb   : aliased constant S := "/VERBOSE "                       &
                                             "-v";
@@ -2907,20 +3792,53 @@ package VMS_Data is
    --   program units left, GNAT ELIM will output the name of the current unit
    --   being processed.
 
+   S_Elim_Warn   : aliased constant S := "/WARNINGS="                      &
+                                           "NORMAL "                       &
+                                               "-wn "                      &
+                                           "QUIET "                        &
+                                                "-ws";
+
+   --      /WARNINGS[=(keyword[,...])]
+   --
+   --   The following keywords are supported:
+   --
+   --        NORMAL (D)    Print warning all the messages.
+   --        QUIET         Some warning messages are suppressed
+
    Elim_Switches : aliased constant Switches :=
-     (S_Elim_All     'Access,
-      S_Elim_Bind    'Access,
-      S_Elim_Comp    'Access,
-      S_Elim_Config  'Access,
-      S_Elim_Current 'Access,
-      S_Elim_GNATMAKE'Access,
-      S_Elim_Quiet   'Access,
-      S_Elim_Search  'Access,
-      S_Elim_Verb    'Access);
+                     (S_Elim_Add     'Access,
+                      S_Elim_All     'Access,
+                      S_Elim_Bind    'Access,
+                      S_Elim_Comp    'Access,
+                      S_Elim_Config  'Access,
+                      S_Elim_Current 'Access,
+                      S_Elim_Ext     'Access,
+                      S_Elim_Files   'Access,
+                      S_Elim_Follow  'Access,
+                      S_Elim_GNATMAKE'Access,
+                      S_Elim_Log     'Access,
+                      S_Elim_Logfile 'Access,
+                      S_Elim_Main    'Access,
+                      S_Elim_Mess    'Access,
+                      S_Elim_Nodisp  'Access,
+                      S_Elim_Out     'Access,
+                      S_Elim_Project 'Access,
+                      S_Elim_Quiet   'Access,
+                      S_Elim_Search  'Access,
+                      S_Elim_Subdirs 'Access,
+                      S_Elim_Time    'Access,
+                      S_Elim_Verb    'Access,
+                      S_Elim_Warn    'Access);
 
    ----------------------------
    -- Switches for GNAT FIND --
    ----------------------------
+
+   S_Find_Add     : aliased constant S := "/ADD_PROJECT_SEARCH_DIR=*"      &
+                                            "-aP*";
+   --        /ADD_PROJECT_SEARCH_PATH=(directory[,...])
+   --
+   --   Add directories to the project search path.
 
    S_Find_All     : aliased constant S := "/ALL_FILES "                    &
                                             "-a";
@@ -2958,6 +3876,13 @@ package VMS_Data is
    --
    --   Example:
    --      /EXTERNAL_REFERENCE="DEBUG=TRUE"
+
+   S_Find_Follow  : aliased constant S := "/FOLLOW_LINKS_FOR_FILES "       &
+                                            "-eL";
+   --        /NOFOLLOW_LINKS_FOR_FILES (D)
+   --        /FOLLOW_LINKS_FOR_FILES
+   --
+   --    Follow links when parsing project files
 
    S_Find_Full    : aliased constant S := "/FULL_PATHNAME "                &
                                             "-f";
@@ -3038,14 +3963,14 @@ package VMS_Data is
    --
    --   This qualifier is not compatible with /PROJECT_FILE
 
-   S_Find_Prj     : aliased constant S := "/PROJECT_FILE=<"               &
+   S_Find_Prj     : aliased constant S := "/PROJECT_FILE=<"                &
                                             "-P>";
    --        /PROJECT_FILE=filename
    --
    --   Specifies the main project file to be used. The project files rooted
    --   at the main project file will be parsed before looking for sources.
    --   The source and object directories to be searched will be communicated
-   --   to gnatfind  through logical names ADA_PRJ_INCLUDE_FILE and
+   --   to gnatfind through logical names ADA_PRJ_INCLUDE_FILE and
    --   ADA_PRJ_OBJECTS_FILE.
 
    S_Find_Ref     : aliased constant S := "/REFERENCES "                   &
@@ -3074,6 +3999,14 @@ package VMS_Data is
    --   The order in which source file search is undertaken is the same as for
    --   MAKE.
 
+   S_Find_Subdirs : aliased constant S := "/SUBDIRS=<"                     &
+                                             "--subdirs=>";
+   --        /SUBDIRS=dir
+   --
+   --   The actual directories (object, exec, library, ...) are subdirectories
+   --   of the directory specified in the project file. If the subdirectory
+   --   does not exist, it is created automatically.
+
    S_Find_Types   : aliased constant S := "/TYPE_HIERARCHY "               &
                                             "-t";
    --        /NOTYPE_HIERARCHY (D)
@@ -3085,23 +4018,26 @@ package VMS_Data is
    --   specify more than one file.
 
    Find_Switches : aliased constant Switches :=
-     (S_Find_All     'Access,
-      S_Find_Deriv   'Access,
-      S_Find_Expr    'Access,
-      S_Find_Ext     'Access,
-      S_Find_Full    'Access,
-      S_Find_Ignore  'Access,
-      S_Find_Mess    'Access,
-      S_Find_Nostinc 'Access,
-      S_Find_Nostlib 'Access,
-      S_Find_Object  'Access,
-      S_Find_Print   'Access,
-      S_Find_Project 'Access,
-      S_Find_Prj     'Access,
-      S_Find_Ref     'Access,
-      S_Find_Search  'Access,
-      S_Find_Source  'Access,
-      S_Find_Types   'Access);
+                     (S_Find_Add     'Access,
+                      S_Find_All     'Access,
+                      S_Find_Deriv   'Access,
+                      S_Find_Expr    'Access,
+                      S_Find_Ext     'Access,
+                      S_Find_Follow  'Access,
+                      S_Find_Full    'Access,
+                      S_Find_Ignore  'Access,
+                      S_Find_Mess    'Access,
+                      S_Find_Nostinc 'Access,
+                      S_Find_Nostlib 'Access,
+                      S_Find_Object  'Access,
+                      S_Find_Print   'Access,
+                      S_Find_Project 'Access,
+                      S_Find_Prj     'Access,
+                      S_Find_Ref     'Access,
+                      S_Find_Search  'Access,
+                      S_Find_Source  'Access,
+                      S_Find_Subdirs 'Access,
+                      S_Find_Types   'Access);
 
    ------------------------------
    -- Switches for GNAT KRUNCH --
@@ -3119,45 +4055,17 @@ package VMS_Data is
    --   be specified.
 
    Krunch_Switches : aliased constant Switches  :=
-     (1 .. 1 => S_Krunch_Count  'Access);
-
-   -------------------------------
-   -- Switches for GNAT LIBRARY --
-   -------------------------------
-
-   S_Lbr_Config    : aliased constant S := "/CONFIG=@"                     &
-                                            "--config=@";
-   --        /CONFIG=file
-   --
-   --   File containing configuration pragmas.
-
-   S_Lbr_Create    : aliased constant S := "/CREATE=%"                     &
-                                            "--create=%";
-   --        /CREATE=directory
-   --
-   --   Directory to create and build alternate library in.
-
-   S_Lbr_Delete    : aliased constant S := "/DELETE=%"                     &
-                                            "--delete=%";
-   --        /DELETE=directory
-   --
-   --   Directory containing alternate library to be deleted.
-
-   S_Lbr_Set       : aliased constant S := "/SET=%"                        &
-                                            "--set=%";
-   --        /SET=directory
-   --
-   --   Directory containing alternate library to be made the current library.
-
-   Lbr_Switches : aliased constant Switches  :=
-     (S_Lbr_Config 'Access,
-      S_Lbr_Create 'Access,
-      S_Lbr_Delete 'Access,
-      S_Lbr_Set    'Access);
+                       (1 .. 1 => S_Krunch_Count  'Access);
 
    ----------------------------
    -- Switches for GNAT LINK --
    ----------------------------
+
+   S_Link_Add     : aliased constant S := "/ADD_PROJECT_SEARCH_DIR=*"      &
+                                            "-aP*";
+   --        /ADD_PROJECT_SEARCH_PATH=(directory[,...])
+   --
+   --   Add directories to the project search path.
 
    S_Link_Bind    : aliased constant S := "/BIND_FILE="                    &
                                             "ADA "                         &
@@ -3218,6 +4126,13 @@ package VMS_Data is
    --   Example:
    --      /EXTERNAL_REFERENCE="DEBUG=TRUE"
 
+   S_Link_Follow  : aliased constant S := "/FOLLOW_LINKS_FOR_FILES "       &
+                                            "-eL";
+   --        /NOFOLLOW_LINKS_FOR_FILES (D)
+   --        /FOLLOW_LINKS_FOR_FILES
+   --
+   --    Follow links when parsing project files
+
    S_Link_Forlink : aliased constant S := "/FOR_LINKER=" & '"'             &
                                             "--for-linker=" & '"';
    --        /FOR_LINKER=<string>
@@ -3250,7 +4165,7 @@ package VMS_Data is
 
    S_Link_Library : aliased constant S := "/LIBRARY=|"                     &
                                             "-l|";
-   --        /LYBRARY=xyz
+   --        /LIBRARY=xyz
    --
    --   Link with library named "xyz".
 
@@ -3313,7 +4228,8 @@ package VMS_Data is
    --        /RETURN_CODES=VMS
    --
    --   Specifies the style of codes returned by
-   --   Ada.Command_Line.Set_Exit_Status.
+   --   Ada.Command_Line.Set_Exit_Status. Must be used in conjunction with
+   --   and match the Bind qualifier with the same name.
    --
    --        POSIX (D)   Return Posix compatible exit codes.
    --
@@ -3326,6 +4242,14 @@ package VMS_Data is
    --        /STATIC
    --
    --   Indicate to the linker that the link is static.
+
+   S_Link_Subdirs : aliased constant S := "/SUBDIRS=<"                     &
+                                             "--subdirs=>";
+   --        /SUBDIRS=dir
+   --
+   --   The actual directories (object, exec, library, ...) are subdirectories
+   --   of the directory specified in the project file. If the subdirectory
+   --   does not exist, it is created automatically.
 
    S_Link_Verb    : aliased constant S := "/VERBOSE "                      &
                                             "-v";
@@ -3340,32 +4264,41 @@ package VMS_Data is
                                             "--for-linker=";
    --        /<other>
    --
-   --   Any other switch that will be transmited to the underlying linker.
+   --   Any other switch that will be transmitted to the underlying linker.
 
    Link_Switches : aliased constant Switches :=
-     (S_Link_Bind    'Access,
-      S_Link_Debug   'Access,
-      S_Link_Nodebug 'Access,
-      S_Link_Execut  'Access,
-      S_Link_Ext     'Access,
-      S_Link_Forlink 'Access,
-      S_Link_Force   'Access,
-      S_Link_Ident   'Access,
-      S_Link_Libdir  'Access,
-      S_Link_Library 'Access,
-      S_Link_Mess    'Access,
-      S_Link_Nocomp  'Access,
-      S_Link_Nofiles 'Access,
-      S_Link_Noinhib 'Access,
-      S_Link_Project 'Access,
-      S_Link_Return  'Access,
-      S_Link_Static  'Access,
-      S_Link_Verb    'Access,
-      S_Link_ZZZZZ   'Access);
+                     (S_Link_Add     'Access,
+                      S_Link_Bind    'Access,
+                      S_Link_Debug   'Access,
+                      S_Link_Nodebug 'Access,
+                      S_Link_Execut  'Access,
+                      S_Link_Ext     'Access,
+                      S_Link_Follow  'Access,
+                      S_Link_Forlink 'Access,
+                      S_Link_Force   'Access,
+                      S_Link_Ident   'Access,
+                      S_Link_Libdir  'Access,
+                      S_Link_Library 'Access,
+                      S_Link_Mess    'Access,
+                      S_Link_Nocomp  'Access,
+                      S_Link_Nofiles 'Access,
+                      S_Link_Noinhib 'Access,
+                      S_Link_Project 'Access,
+                      S_Link_Return  'Access,
+                      S_Link_Static  'Access,
+                      S_Link_Subdirs 'Access,
+                      S_Link_Verb    'Access,
+                      S_Link_ZZZZZ   'Access);
 
    ----------------------------
    -- Switches for GNAT LIST --
    ----------------------------
+
+   S_List_Add     : aliased constant S := "/ADD_PROJECT_SEARCH_DIR=*"      &
+                                            "-aP*";
+   --        /ADD_PROJECT_SEARCH_PATH=(directory[,...])
+   --
+   --   Add directories to the project search path.
 
    S_List_All     : aliased constant S := "/ALL_UNITS "                    &
                                             "-a";
@@ -3374,6 +4307,15 @@ package VMS_Data is
    --
    --   Consider all units, including those of the predefined Ada library.
    --   Especially useful with /DEPENDENCIES.
+
+   S_List_Allproj : aliased constant S := "/ALL_PROJECTS "                 &
+                                            "-U";
+   --        /NOALL_PROJECTS (D)
+   --        /ALL_PROJECTS
+   --
+   --   When used with a project file and no file specified, indicate
+   --   that gnatls should be called for all sources of all projects in
+   --   the project tree.
 
    S_List_Current : aliased constant S := "/CURRENT_DIRECTORY "            &
                                             "!-I-";
@@ -3396,6 +4338,20 @@ package VMS_Data is
    --
    --   Example:
    --      /EXTERNAL_REFERENCE="DEBUG=TRUE"
+
+   S_List_Files   : aliased constant S := "/FILES=@"                       &
+                                            "-files=@";
+   --        /FILES=filename
+   --
+   --   Take as arguments the files that are listed in the specified
+   --   text file.
+
+   S_List_Follow  : aliased constant S := "/FOLLOW_LINKS_FOR_FILES "       &
+                                            "-eL";
+   --        /NOFOLLOW_LINKS_FOR_FILES (D)
+   --        /FOLLOW_LINKS_FOR_FILES
+   --
+   --    Follow links when parsing project files
 
    S_List_Mess    : aliased constant S := "/MESSAGES_PROJECT_FILE="        &
                                             "DEFAULT "                     &
@@ -3482,18 +4438,31 @@ package VMS_Data is
    --
    --   When looking for source files also look in the specified directories.
 
+   S_List_Subdirs : aliased constant S := "/SUBDIRS=<"                     &
+                                             "--subdirs=>";
+   --        /SUBDIRS=dir
+   --
+   --   The actual directories (object, exec, library, ...) are subdirectories
+   --   of the directory specified in the project file. If the subdirectory
+   --   does not exist, it is created automatically.
+
    List_Switches : aliased constant Switches :=
-     (S_List_All     'Access,
-      S_List_Current 'Access,
-      S_List_Depend  'Access,
-      S_List_Ext     'Access,
-      S_List_Mess    'Access,
-      S_List_Nostinc 'Access,
-      S_List_Object  'Access,
-      S_List_Output  'Access,
-      S_List_Project 'Access,
-      S_List_Search  'Access,
-      S_List_Source  'Access);
+                     (S_List_Add     'Access,
+                      S_List_All     'Access,
+                      S_List_Allproj 'Access,
+                      S_List_Current 'Access,
+                      S_List_Depend  'Access,
+                      S_List_Ext     'Access,
+                      S_List_Files   'Access,
+                      S_List_Follow  'Access,
+                      S_List_Mess    'Access,
+                      S_List_Nostinc 'Access,
+                      S_List_Object  'Access,
+                      S_List_Output  'Access,
+                      S_List_Project 'Access,
+                      S_List_Search  'Access,
+                      S_List_Source  'Access,
+                      S_List_Subdirs 'Access);
 
    ----------------------------
    -- Switches for GNAT MAKE --
@@ -3543,6 +4512,12 @@ package VMS_Data is
    --                   have been previously compiled and must be up to date,
    --                   and the main program need to have been bound.
 
+   S_Make_Add     : aliased constant S := "/ADD_PROJECT_SEARCH_DIR=*"      &
+                                            "-aP*";
+   --        /ADD_PROJECT_SEARCH_PATH=(directory[,...])
+   --
+   --   Add directories to the project search path.
+
    S_Make_All     : aliased constant S := "/ALL_FILES "                    &
                                             "-a";
    --        /NOALL_FILES (D)
@@ -3564,7 +4539,7 @@ package VMS_Data is
    --
    --   Implies /Unique.
    --   When used without project files, it is equivalent to /UNIQUE.
-   --   When used with a project file wit no main (neither on the command
+   --   When used with a project file with no main (neither on the command
    --   line nor in the attribute Main) check every source of every project,
    --   recompile all sources that are not up to date and rebuild libraries
    --   if necessary.
@@ -3632,7 +4607,7 @@ package VMS_Data is
    --   a Unix-style Makefile. By default, each source file is prefixed with
    --   its (relative or absolute) directory name. This name is whatever you
    --   specified in the various /SOURCE_SEARCH and /SEARCH qualifiers.  If
-   --   you also speficy the /QUIET qualifier, only the source file names,
+   --   you also specify the /QUIET qualifier, only the source file names,
    --   without relative paths, are output. If you just specify the
    --   /DEPENDENCY_LIST qualifier, dependencies of the GNAT internal system
    --   files are omitted.  This is typically what you want. If you also
@@ -3647,6 +4622,17 @@ package VMS_Data is
    --
    --   Put all object files and .ALI files in <file>.
    --   This qualifier is not compatible with /PROJECT_FILE.
+
+   S_Make_Disprog : aliased constant S := "/DISPLAY_PROGRESS "             &
+                                            "-d";
+   --        /NOPLAY_PROGRESS (D)
+   --        /DISPLAY_PROGRESS
+   --
+   --   Display progress for each source, up to date or not, as a single line
+   --      completed x out of y (zz%)
+   --   If the file needs to be compiled this is displayed after the
+   --   invocation of the compiler. These lines are displayed even in quiet
+   --   output mode (/QUIET).
 
    S_Make_Doobj   : aliased constant S := "/DO_OBJECT_CHECK "              &
                                             "-n";
@@ -3680,6 +4666,13 @@ package VMS_Data is
    --   Example:
    --      /EXTERNAL_REFERENCE="DEBUG=TRUE"
 
+   S_Make_Follow  : aliased constant S := "/FOLLOW_LINKS_FOR_FILES "       &
+                                            "-eL";
+   --        /NOFOLLOW_LINKS_FOR_FILES (D)
+   --        /FOLLOW_LINKS_FOR_FILES
+   --
+   --    Follow links when parsing project files
+
    S_Make_Force   : aliased constant S := "/FORCE_COMPILE "                &
                                             "-f";
    --        /NOFORCE_COMPILE (D)
@@ -3687,7 +4680,7 @@ package VMS_Data is
    --
    --   Force recompilations. Recompile all sources, even though some object
    --   files may be up to date, but don't recompile predefined or GNAT
-   --   internal files unless the /ALL_FILES qualfier is also specified.
+   --   internal files unless the /ALL_FILES qualifier is also specified.
 
    S_Make_Full    : aliased constant S := "/FULL_PATH_IN_BRIEF_MESSAGES "  &
                                             "-F";
@@ -3698,6 +4691,14 @@ package VMS_Data is
    --   during parsing and verbose mode is not in effect (no use of qualifier
    --   /VERBOSE), then error lines start with the full path name of the
    --   project file, rather than its simple file name.
+
+   S_Make_Hi_Verb : aliased constant S := "/HIGH_VERBOSITY "               &
+                                          "-vh";
+   --        /NOHIGH_VERBOSITY (D)
+   --        /HIGH_VERBOSITY
+   --
+   --   Displays the reason for all recompilations GNAT MAKE decides are
+   --   necessary, in high verbosity. Equivalent to /VERBOSE.
 
    S_Make_Inplace : aliased constant S := "/IN_PLACE "                     &
                                             "-i";
@@ -3713,6 +4714,15 @@ package VMS_Data is
    --   are found on the Ada object path, the new object and ALI files are
    --   created in the directory containing the source being compiled.
 
+   S_Make_Index   : aliased constant S := "/SOURCE_INDEX=#"                &
+                                             "-eI#";
+   --        /SOURCE_INDEX=nnn
+   --
+   --   Specifies the index of the units in the source file
+   --   By default, source files are mono-unit and there is no index
+   --   When /SOURCE_INDEX=nnn is specified, only one main may be specified
+   --   on the command line.
+
    S_Make_Library : aliased constant S := "/LIBRARY_SEARCH=*"              &
                                             "-L*";
    --        /LIBRARY_SEARCH=(directory[,...])
@@ -3727,6 +4737,15 @@ package VMS_Data is
    --   Any qualifiers specified after this qualifier other than
    --   /COMPILER_QUALIFIERS, /BINDER_QUALIFIERS and /MAKE_QUALIFIERS will be
    --   passed to any GNAT LINK commands generated by GNAT LINK.
+
+   S_Make_Low_Verb : aliased constant S := "/LOW_VERBOSITY "               &
+                                           "-vl";
+   --        /NOLOW_VERBOSITY (D)
+   --        /LOW_VERBOSITY
+   --
+   --   Displays the reason for all recompilations GNAT MAKE decides are
+   --   necessary, in low verbosity, that is with less output than
+   --   /MEDIUM_VERBOSITY, /HIGH_VERBOSITY or /VERBOSE.
 
    S_Make_Make    : aliased constant S := "/MAKE_QUALIFIERS=?"             &
                                             "-margs MAKE";
@@ -3751,6 +4770,15 @@ package VMS_Data is
    --   Each invocation of the compiler will add the newly accessed sources to
    --   the mapping file. This will improve the source search during the next
    --   invocations of the compiler
+
+   S_Make_Med_Verb : aliased constant S := "/MEDIUM_VERBOSITY "            &
+                                           "-vm";
+   --        /NOMEDIUM_VERBOSITY (D)
+   --        /MEDIUM_VERBOSITY
+   --
+   --   Displays the reason for all recompilations GNAT MAKE decides are
+   --   necessary, in medium verbosity, that is with potentially less output
+   --   than /HIGH_VERBOSITY or /VERBOSE.
 
    S_Make_Mess    : aliased constant S := "/MESSAGES_PROJECT_FILE="        &
                                             "DEFAULT "                     &
@@ -3781,6 +4809,14 @@ package VMS_Data is
    --   when the only modifications to a source file consist in
    --   adding/removing comments, empty lines, spaces or tabs.
 
+   S_Make_Missing : aliased constant S := "/CREATE_MISSING_DIRS "          &
+                                            "-p";
+   --        /NOCREATE_MISSING_DIRS (D)
+   --        /CREATE_MISSING_DIRS
+   --
+   --   When an object directory, a library directory or an exec directory
+   --   in missing, attempt to create the directory.
+
    S_Make_Nolink  : aliased constant S := "/NOLINK "                       &
                                             "-c";
    --        /NOLINK
@@ -3799,6 +4835,14 @@ package VMS_Data is
    --   given on the command line is a package name. The resulting executable
    --   will execute the elaboration routines of the package and its closure,
    --   then the finalization routines.
+
+   S_Make_Nonpro  : aliased constant S := "/NON_PROJECT_UNIT_COMPILATION " &
+                                            "-x";
+   --        /NON_PROJECT_UNIT_COMPILATION
+   --
+   --    Normally, when using project files, a unit that is not part of any
+   --    project file, cannot be compile. These units may be compile, when
+   --    needed, if this qualifier is specified.
 
    S_Make_Nostinc : aliased constant S := "/NOSTD_INCLUDES "               &
                                             "-nostdinc";
@@ -3824,7 +4868,7 @@ package VMS_Data is
    --        /NOPROCESSES (D)
    --        /PROCESSES=NNN
    --
-   --   Use NNN processes to carry out the (re)complations. If you have a
+   --   Use NNN processes to carry out the (re)compilations. If you have a
    --   multiprocessor machine, compilations will occur in parallel.  In the
    --   event of compilation errors, messages from various compilations might
    --   get interspersed (but GNAT MAKE will give you the full ordered list of
@@ -3871,6 +4915,14 @@ package VMS_Data is
    --
    --   Search the specified directories for both source and object files.
 
+   S_Make_Single  : aliased constant S := "/SINGLE_COMPILE_PER_OBJ_DIR "   &
+                                            "--single-compile-per-obj-dir";
+   --        /NOSINGLE_COMPILE_PER_OBJ_DIR (D)
+   --        /SINGLE_COMPILE_PER_OBJ_DIR
+   --
+   --    When project files are used, do not allow simultaneous compilations
+   --    for the same object directory.
+
    S_Make_Skip    : aliased constant S := "/SKIP_MISSING=*"                &
                                             "-aL*";
    --        /SKIP_MISSING=(directory[,...])
@@ -3883,6 +4935,29 @@ package VMS_Data is
    --
    --   When looking for source files also look in the specified directories.
 
+   S_Make_Src_Info : aliased constant S := "/SRC_INFO=<"                   &
+                                             "--source-info=>";
+   --        /SRC_INFO=source-info-file
+   --
+   --   Specify a source info file to be read or written by the Project
+   --   Manager when project files are used.
+
+   S_Make_Stand   : aliased constant S := "/STANDARD_OUTPUT_FOR_COMMANDS " &
+                                            "-eS";
+   --        /NOSTANDARD_OUTPUT_FOR_COMMANDS (D)
+   --        /STANDARD_OUTPUT_FOR_COMMANDS
+   --
+   --   Output the commands for the compiler, the binder and the linker
+   --   on SYS$OUTPUT, instead of SYS$ERROR.
+
+   S_Make_Subdirs : aliased constant S := "/SUBDIRS=<"                     &
+                                             "--subdirs=>";
+   --        /SUBDIRS=dir
+   --
+   --   The actual directories (object, exec, library, ...) are subdirectories
+   --   of the directory specified in the project file. If the subdirectory
+   --   does not exist, it is created automatically.
+
    S_Make_Switch  : aliased constant S := "/SWITCH_CHECK "                 &
                                             "-s";
    --        /NOSWITCH_CHECK (D)
@@ -3894,6 +4969,13 @@ package VMS_Data is
    --   ignored, but orders between same switches are taken into account.
    --   For example, -O -O2 is different than -O2 -O, but -g -O is equivalent
    --   to -O -g.
+
+   S_Make_USL : aliased constant S := "/UNCHECKED_SHARED_LIB_IMPORTS " &
+                                         "--unchecked-shared-lib-imports";
+   --        /NOUNCHECKED_SHARED_LIB_IMPORTS (D)
+   --        /UNCHECKED_SHARED_LIB_IMPORTS
+   --
+   --   Allow shared library projects to import static library projects
 
    S_Make_Unique  : aliased constant S := "/UNIQUE "                       &
                                             "-u";
@@ -3924,46 +5006,548 @@ package VMS_Data is
    --   necessary.
 
    Make_Switches : aliased constant Switches :=
-     (S_Make_Actions 'Access,
-      S_Make_All     'Access,
-      S_Make_Allproj 'Access,
-      S_Make_Bind    'Access,
-      S_Make_Comp    'Access,
-      S_Make_Cond    'Access,
-      S_Make_Cont    'Access,
-      S_Make_Current 'Access,
-      S_Make_Dep     'Access,
-      S_Make_Dirobj  'Access,
-      S_Make_Doobj   'Access,
-      S_Make_Execut  'Access,
-      S_Make_Ext     'Access,
-      S_Make_Force   'Access,
-      S_Make_Full    'Access,
-      S_Make_Inplace 'Access,
-      S_Make_Library 'Access,
-      S_Make_Link    'Access,
-      S_Make_Make    'Access,
-      S_Make_Mapping 'Access,
-      S_Make_Mess    'Access,
-      S_Make_Minimal 'Access,
-      S_Make_Nolink  'Access,
-      S_Make_Nomain  'Access,
-      S_Make_Nostinc 'Access,
-      S_Make_Nostlib 'Access,
-      S_Make_Object  'Access,
-      S_Make_Proc    'Access,
-      S_Make_Nojobs  'Access,
-      S_Make_Project 'Access,
-      S_Make_Quiet   'Access,
-      S_Make_Reason  'Access,
-      S_Make_RTS     'Access,
-      S_Make_Search  'Access,
-      S_Make_Skip    'Access,
-      S_Make_Source  'Access,
-      S_Make_Switch  'Access,
-      S_Make_Unique  'Access,
-      S_Make_Use_Map 'Access,
-      S_Make_Verbose 'Access);
+                     (S_Make_Add     'Access,
+                      S_Make_Actions 'Access,
+                      S_Make_All     'Access,
+                      S_Make_Allproj 'Access,
+                      S_Make_Bind    'Access,
+                      S_Make_Comp    'Access,
+                      S_Make_Cond    'Access,
+                      S_Make_Cont    'Access,
+                      S_Make_Current 'Access,
+                      S_Make_Dep     'Access,
+                      S_Make_Dirobj  'Access,
+                      S_Make_Disprog 'Access,
+                      S_Make_Doobj   'Access,
+                      S_Make_Execut  'Access,
+                      S_Make_Ext     'Access,
+                      S_Make_Follow  'Access,
+                      S_Make_Force   'Access,
+                      S_Make_Full    'Access,
+                      S_Make_Hi_Verb 'Access,
+                      S_Make_Inplace 'Access,
+                      S_Make_Index   'Access,
+                      S_Make_Library 'Access,
+                      S_Make_Link    'Access,
+                      S_Make_Low_Verb'Access,
+                      S_Make_Make    'Access,
+                      S_Make_Mapping 'Access,
+                      S_Make_Med_Verb'Access,
+                      S_Make_Mess    'Access,
+                      S_Make_Minimal 'Access,
+                      S_Make_Missing 'Access,
+                      S_Make_Nolink  'Access,
+                      S_Make_Nomain  'Access,
+                      S_Make_Nonpro  'Access,
+                      S_Make_Nostinc 'Access,
+                      S_Make_Nostlib 'Access,
+                      S_Make_Object  'Access,
+                      S_Make_Proc    'Access,
+                      S_Make_Nojobs  'Access,
+                      S_Make_Project 'Access,
+                      S_Make_Quiet   'Access,
+                      S_Make_Reason  'Access,
+                      S_Make_RTS     'Access,
+                      S_Make_Search  'Access,
+                      S_Make_Single  'Access,
+                      S_Make_Skip    'Access,
+                      S_Make_Source  'Access,
+                      S_Make_Src_Info'Access,
+                      S_Make_Stand   'Access,
+                      S_Make_Subdirs 'Access,
+                      S_Make_Switch  'Access,
+                      S_Make_USL     'Access,
+                      S_Make_Unique  'Access,
+                      S_Make_Use_Map 'Access,
+                      S_Make_Verbose 'Access);
+
+   ------------------------------
+   -- Switches for GNAT METRIC --
+   ------------------------------
+
+   S_Metric_Add     : aliased constant S := "/ADD_PROJECT_SEARCH_DIR=*"    &
+                                              "-aP*";
+   --        /ADD_PROJECT_SEARCH_PATH=(directory[,...])
+   --
+   --   Add directories to the project search path.
+
+   S_Metric_All_Prjs : aliased constant S := "/ALL_PROJECTS "              &
+                                               "-U";
+   --        /NOALL_PROJECTS (D)
+   --        /ALL_PROJECTS
+   --   When GNAT METRIC is used with a Project File and no source is
+   --   specified, the underlying tool gnatmetric is called for all the
+   --   sources of all the Project Files in the project tree.
+
+   S_Metric_Debug    : aliased constant S := "/DEBUG_OUTPUT "              &
+                                             "-dv";
+   --      /DEBUG_OUTPUT
+   --
+   --   Generate the debug information
+
+   S_Metric_Direct   : aliased constant S := "/DIRECTORY=@"                &
+                                             "-d=@";
+   --      /DIRECTORY=pathname
+   --
+   --   Put the files with detailed metric information into the specified
+   --   directory
+
+   S_Metric_Element : aliased constant S := "/ELEMENT_METRICS="            &
+                                             "ALL "                        &
+                                              "!-ed,!-es,!-enl,!-eps,"     &
+                                              "!-eas,!-ept,!-eat,!-enu,"   &
+                                              "!-ec "                      &
+                                             "DECLARATION_TOTAL "          &
+                                              "-ed "                       &
+                                             "STATEMENT_TOTAL "            &
+                                              "-es "                       &
+                                             "LOOP_NESTING_MAX "           &
+                                              "-enl "                      &
+                                             "INT_SUBPROGRAMS "            &
+                                              "-eps "                      &
+                                             "SUBPROGRAMS_ALL "            &
+                                              "-eas "                      &
+                                             "INT_TYPES "                  &
+                                              "-ept "                      &
+                                             "TYPES_ALL "                  &
+                                              "-eat "                      &
+                                             "PROGRAM_NESTING_MAX "        &
+                                              "-enu "                      &
+                                             "CONSTRUCT_NESTING_MAX "      &
+                                              "-ec";
+   --  NODOC  (see /SYNTAX_METRICS)
+
+   S_Metric_Syntax : aliased constant S := "/SYNTAX_METRICS="              &
+                                             "ALL "                        &
+                                             "--syntax-all "               &
+                                             "NONE "                       &
+                                             "--no-syntax-all "            &
+                                             "DECLARATIONS "               &
+                                             "--declarations "             &
+                                             "NODECLARATIONS "             &
+                                             "--no-declarations "          &
+                                             "STATEMENTS "                 &
+                                             "--statements "               &
+                                             "NOSTATEMENTS "               &
+                                             "--no-statements "            &
+                                             "PUBLIC_SUBPROGRAMS "         &
+                                             "--public-subprograms "       &
+                                             "NOPUBLIC_SUBPROGRAMS "       &
+                                             "--no-public-subprograms "    &
+                                             "ALL_SUBPROGRAMS "            &
+                                             "--all-subprograms "          &
+                                             "NOALL_SUBPROGRAMS "          &
+                                             "--no-all-subprograms "       &
+                                             "PUBLIC_TYPES "               &
+                                             "--public-types "             &
+                                             "NOPUBLIC_TYPES "             &
+                                             "--no-public-types "          &
+                                             "ALL_TYPES "                  &
+                                             "--all-types "                &
+                                             "NOALL_TYPES "                &
+                                             "--no-all-types "             &
+                                             "UNIT_NESTING "               &
+                                             "--unit-nesting "             &
+                                             "NOUNIT_NESTING "             &
+                                             "--no-unit-nesting "          &
+                                             "CONSTRUCT_NESTING "          &
+                                             "--construct-nesting "        &
+                                             "NOCONSTRUCT_NESTING "        &
+                                             "--no-construct-nesting";
+   --       /SYNTAX_METRICS(option, option ...)
+   --
+   --   Specifies the syntax element metrics to be computed (if at least one
+   --   positive syntax element metric, line metric, complexity or coupling
+   --   metric is specified then only explicitly specified syntax element
+   --   metrics are computed and reported)
+   --
+   --   option may be one of the following:
+   --
+   --     ALL (D)               All the syntax element metrics are computed
+   --     NONE                  None of syntax element metrics is computed
+   --     DECLARATIONS          Compute the total number of declarations
+   --     NODECLARATIONS        Do not compute the total number of declarations
+   --     STATEMENTS            Compute the total number of statements
+   --     NOSTATEMENTS          Do not compute the total number of statements
+   --     PUBLIC_SUBPROGRAMS    Compute the number of public subprograms
+   --     NOPUBLIC_SUBPROGRAMS  Do not compute the number of public subprograms
+   --     ALL_SUBPROGRAMS       Compute the number of all the subprograms
+   --     NOALL_SUBPROGRAMS     Do not compute the number of all the
+   --                           subprograms
+   --     PUBLIC_TYPES          Compute the number of public types
+   --     NOPUBLIC_TYPES        Do not compute the number of public types
+   --     ALL_TYPES             Compute the number of all the types
+   --     NOALL_TYPES           Do not compute the number of all the types
+   --     UNIT_NESTING          Compute the maximal program unit nesting
+   --                           level
+   --     NOUNIT_NESTING        Do not compute the maximal program unit
+   --                           nesting level
+   --     CONSTRUCT_NESTING     Compute the maximal construct nesting level
+   --     NOCONSTRUCT_NESTING   Do not compute the maximal construct nesting
+   --                           level
+   --
+   --   All combinations of syntax element metrics options are allowed.
+
+   S_Metric_Ext     : aliased constant S := "/EXTERNAL_REFERENCE=" & '"'   &
+                                             "-X" & '"';
+   --       /EXTERNAL_REFERENCE="name=val"
+   --
+   --   Specifies an external reference to the project manager. Useful only if
+   --   /PROJECT_FILE is used.
+   --
+   --   Example:
+   --      /EXTERNAL_REFERENCE="DEBUG=TRUE"
+
+   S_Metric_Files   : aliased constant S := "/FILES=@"                     &
+                                             "-files=@";
+   --      /FILES=filename
+   --
+   --   Take as arguments the files that are listed in the specified
+   --   text file.
+
+   S_Metric_Format  : aliased constant S := "/FORMAT_OUTPUT="              &
+                                             "DEFAULT "                    &
+                                              "!-x,!-nt,!-sfn "            &
+                                             "XML "                        &
+                                              "-x "                        &
+                                             "XSD "                        &
+                                              "-xs "                       &
+                                             "NO_TEXT "                    &
+                                              "-nt "                       &
+                                             "SHORT_SOURCE_FILE_NAME "     &
+                                              "-sfn";
+   --       /FORMAT_OUTPUT=(option, option ...)
+   --
+   --   Specifies the details of the tool output
+   --
+   --   option may be one of the following:
+   --
+   --     DEFAULT (D)             Generate the text output only, use full
+   --                             argument source names in global information
+   --     XML                     Generate the output in XML format
+   --     XSD                     Generate the output in XML format, and
+   --                             generate an XML schema file that describes
+   --                             the structure of XML metrics report
+   --     NO_TEXT                 Do not generate the text output (implies XML)
+   --     SHORT_SOURCE_FILE_NAME  Use short argument source names in output
+
+   S_Metric_Globout : aliased constant S := "/GLOBAL_OUTPUT=@"             &
+                                             "-og@";
+   --        /GLOBAL_OUTPUT=filename
+   --
+   --   Put the textual global metric information into the specified file
+
+   S_Metric_Line     : aliased constant S := "/LINE_METRICS="              &
+                                                "ALL "                     &
+                                                 "!-la,!-lcode,!-lcomm,"   &
+                                                 "!-leol,!-lb "            &
+                                                "LINES_ALL "               &
+                                                 "-la "                    &
+                                                "CODE_LINES "              &
+                                                 "-lcode "                 &
+                                                "COMENT_LINES "            &
+                                                 "-lcomm "                 &
+                                                "MIXED_CODE_COMMENTS "     &
+                                                 "-leol "                  &
+                                                "COMMENT_PERCENTAGE "      &
+                                                 "-lratio "                &
+                                                "BLANK_LINES "             &
+                                                 "-lb "                    &
+                                                "AVERAGE_LINES_IN_BODIES " &
+                                                 "-lav ";
+   --  NODOC  (see /LINE_COUNT_METRICS)
+
+   S_Metric_Lines : aliased constant S := "/LINE_COUNT_METRICS="           &
+                                           "ALL "                          &
+                                           "--lines-all "                  &
+                                           "NONE "                         &
+                                           "--no-lines-all "               &
+                                           "ALL_LINES "                    &
+                                           "--lines "                      &
+                                           "NOALL_LINES "                  &
+                                           "--no-lines "                   &
+                                           "CODE_LINES "                   &
+                                           "--lines-code "                 &
+                                           "NOCODE_LINES "                 &
+                                           "--no-lines-code "              &
+                                           "COMMENT_LINES "                &
+                                           "--lines-comment "              &
+                                           "NOCOMMENT_LINES "              &
+                                           "--no-lines-comment "           &
+                                           "CODE_COMMENT_LINES "           &
+                                           "--lines-eol-comment "          &
+                                           "NOCODE_COMMENT_LINES "         &
+                                           "--no-lines-eol-comment "       &
+                                           "COMMENT_PERCENTAGE "           &
+                                           "--lines-ratio "                &
+                                           "NOCOMMENT_PERCENTAGE "         &
+                                           "--no-lines-ratio "             &
+                                           "BLANK_LINES "                  &
+                                           "--lines-blank "                &
+                                           "NOBLANK_LINES "                &
+                                           "--no-lines-blank "             &
+                                           "AVERAGE_BODY_LINES "           &
+                                           "--lines-average "              &
+                                           "NOAVERAGE_BODY_LINES "         &
+                                           "--no-lines-average";
+   --      /LINE_COUNT_METRICS=(option, option ...)
+
+   --   Specifies the line metrics to be computed (if at least one positive
+   --   syntax element metric, line metric, complexity or coupling metric is
+   --   specified then only explicitly specified line metrics are computed
+   --   and reported)
+   --
+   --   option may be one of the following:
+   --
+   --     ALL (D)               All the line metrics are computed
+   --     NONE                  None of line metrics is computed
+   --     ALL_LINES             All lines are computed
+   --     NOALL_LINES           All lines are not computed
+   --     CODE_LINES            Lines with Ada code are computed
+   --     NOCODE_LINES          Lines with Ada code are not computed
+   --     COMMENT_LINES         Comment lines are computed
+   --     NOCOMMENT_LINES       Comment lines are not computed
+   --     CODE_COMMENT_LINES    Lines containing both code and comment parts
+   --                           are computed
+   --     NOCODE_COMMENT_LINES  Lines containing both code and comment parts
+   --                           are not computed
+   --     COMMENT_PERCENTAGE    Ratio between comment lines and all the lines
+   --                           containing comments and program code is
+   --                           computed
+   --     NOCOMMENT_PERCENTAGE  Ratio between comment lines and all the lines
+   --                           containing comments and program code is not
+   --                           computed
+   --     BLANK_LINES           Blank lines are computed
+   --     NOBLANK_LINES         Blank lines are not computed
+   --     AVERAGE_BODY_LINES    Average number of code lines in subprogram,
+   --                           task and entry bodies and statement sequences
+   --                           of package bodies is computed
+   --     NOAVERAGE_BODY_LINES  Average number of code lines in subprogram,
+   --                           task and entry bodies and statement sequences
+   --                           of package bodies is not computed
+   --
+   --   All combinations of line metrics options are allowed.
+
+   S_Metric_Complexity : aliased constant S := "/COMPLEXITY_METRICS="      &
+                                               "ALL "                      &
+                                               "--complexity-all "         &
+                                              "NONE "                      &
+                                              "--no-complexity-all "       &
+                                              "CYCLOMATIC "                &
+                                              "--complexity-cyclomatic "   &
+                                              "NOCYCLOMATIC "              &
+                                              "--no-complexity-cyclomatic "&
+                                              "ESSENTIAL "                 &
+                                              "--complexity-essential "    &
+                                              "NOESSENTIAL "               &
+                                              "--no-complexity-essential " &
+                                              "LOOP_NESTING "              &
+                                              "--loop-nesting "            &
+                                              "NOLOOP_NESTING "            &
+                                              "--no-loop-nesting "         &
+                                              "AVERAGE_COMPLEXITY "        &
+                                              "--complexity-average "      &
+                                              "NOAVERAGE_COMPLEXITY "      &
+                                              "--no-complexity-average "   &
+                                              "EXTRA_EXIT_POINTS "         &
+                                              "--extra-exit-points "       &
+                                              "NOEXTRA_EXIT_POINTS "       &
+                                              "--no-extra-exit-points";
+   --      /COMPLEXITY_METRICS=(option, option ...)
+
+   --   Specifies the complexity metrics to be computed (if at least one
+   --   positive syntax element metric, line metric, complexity or coupling
+   --   metric is specified then only explicitly specified complexity metrics
+   --   are computed and reported)
+   --
+   --   option may be one of the following:
+   --
+   --     ALL (D)               All the complexity metrics are computed
+   --     NONE                  None of complexity metrics is computed
+   --     CYCLOMATIC            Compute the McCabe Cyclomatic Complexity
+   --     NOCYCLOMATIC          Do not compute the McCabe Cyclomatic Complexity
+   --     ESSENTIAL             Compute the Essential Complexity
+   --     NOESSENTIAL           Do not compute the Essential Complexity
+   --     LOOP_NESTING          Compute the maximal loop nesting
+   --     NOLOOP_NESTING        Do not compute the maximal loop nesting
+   --     AVERAGE_COMPLEXITY    Compute the average complexity for executable
+   --                           bodies
+   --     NOAVERAGE_COMPLEXITY  Do not compute the average complexity for
+   --                           executable bodies
+   --     EXTRA_EXIT_POINTS     Compute extra exit points metric
+   --     NOEXTRA_EXIT_POINTS   Do not compute extra exit points metric
+   --
+   --   All combinations of line metrics options are allowed.
+
+   S_Metric_Coupling : aliased constant S := "/COUPLING_METRICS="             &
+                                           "ALL "                             &
+                                           "--coupling-all "                  &
+                                           "NONE "                            &
+                                           "--no-coupling-all "               &
+                                           "PACKAGE_EFFERENT "                &
+                                           "--package-efferent-coupling "     &
+                                           "NOPACKAGE_EFFERENT "              &
+                                           "--no-package-efferent-coupling "  &
+                                           "PACKAGE_AFFERENT "                &
+                                           "--package-afferent-coupling "     &
+                                           "NOPACKAGE_AFFERENT "              &
+                                           "--no-package-afferent-coupling "  &
+                                           "CATEGORY_EFFERENT "               &
+                                           "--category-efferent-coupling "    &
+                                           "NOCATEGORY_EFFERENT "             &
+                                           "--no-category-efferent-coupling " &
+                                           "CATEGORY_AFFERENT "               &
+                                           "--category-afferent-coupling "    &
+                                           "NOCATEGORY_AFFERENT "             &
+                                           "--no-category-afferent-coupling";
+
+   --      /COUPLING_METRICS=(option, option ...)
+
+   --   Specifies the coupling metrics to be computed.
+   --
+   --   option may be one of the following:
+   --
+   --     ALL                   All the coupling metrics are computed
+   --     NONE (D)              None of coupling metrics is computed
+   --     PACKAGE_EFFERENT      Compute package efferent coupling
+   --     NOPACKAGE_EFFERENT    Do not compute package efferent coupling
+   --     PACKAGE_AFFERENT      Compute package afferent coupling
+   --     NOPACKAGE_AFFERENT    Do not compute package afferent coupling
+   --     CATEGORY_EFFERENT     Compute category efferent coupling
+   --     NOCATEGORY_EFFERENT   Do not compute category efferent coupling
+   --     CATEGORY_AFFERENT     Compute category afferent coupling
+   --     NOCATEGORY_AFFERENT   Do not compute category afferent coupling
+   --
+   --   All combinations of coupling metrics options are allowed.
+
+   S_Metric_Follow : aliased constant S := "/FOLLOW_LINKS_FOR_FILES "      &
+                                             "-eL";
+   --        /NOFOLLOW_LINKS_FOR_FILES (D)
+   --        /FOLLOW_LINKS_FOR_FILES
+   --
+   --    Follow links when parsing project files
+
+   S_Metric_No_Local : aliased constant S := "/NO_LOCAL_DETAILS "          &
+                                             "-nolocal";
+   --        /LOCAL_DETAILS (D)
+   --        /NO_LOCAL_DETAILS
+   --
+   --   Do not compute the detailed metrics for local program units.
+
+   S_Metric_No_Exits_As_Gotos : aliased constant S := "/NO_EXITS_AS_GOTOS " &
+                                                      "-ne";
+   --        /EXITS_AS_GOTOS (D)
+   --        /NO_EXITS_AS_GOTOS
+   --
+   --   Do not count EXIT statements as GOTOs when computing the Essential
+   --   Complexity.
+
+   S_Metric_Mess    : aliased constant S := "/MESSAGES_PROJECT_FILE="      &
+                                             "DEFAULT "                    &
+                                                "-vP0 "                    &
+                                             "MEDIUM "                     &
+                                                "-vP1 "                    &
+                                             "HIGH "                       &
+                                                "-vP2";
+   --        /MESSAGES_PROJECT_FILE[=messages-option]
+   --
+   --   Specifies the "verbosity" of the parsing of project files.
+   --   messages-option may be one of the following:
+   --
+   --      DEFAULT (D)  No messages are output if there is no error or warning.
+   --
+   --      MEDIUM       A small number of messages are output.
+   --
+   --      HIGH         A great number of messages are output, most of them not
+   --                   being useful for the user.
+
+   S_Metric_Project : aliased constant S := "/PROJECT_FILE=<"              &
+                                             "-P>";
+   --        /PROJECT_FILE=filename
+   --
+   --   Specifies the main project file to be used. The project files rooted
+   --   at the main project file will be parsed before the invocation of the
+   --   binder.
+
+   S_Metric_Quiet    : aliased constant S := "/QUIET "                     &
+                                             "-q";
+   --        /NOQUIET (D)
+   --        /QUIET
+   --
+   --   Quiet mode: by default GNAT METRIC outputs to the standard error stream
+   --   the number of program units left to be processed. This option turns
+   --   this trace off.
+
+   S_Metric_Subdirs : aliased constant S := "/SUBDIRS=<"                   &
+                                               "--subdirs=>";
+   --        /SUBDIRS=dir
+   --
+   --   The actual directories (object, exec, library, ...) are subdirectories
+   --   of the directory specified in the project file. If the subdirectory
+   --   does not exist, it is created automatically.
+
+   S_Metric_Suffix  : aliased constant S := "/SUFFIX_DETAILS=" & '"'       &
+                                             "-o" & '"';
+   --        /SUFFIX_DETAILS=suffix
+   --
+   --   Use the given suffix as the suffix for the name of the file to place
+   --   the detailed metrics into.
+
+   S_Metric_Suppress : aliased constant S :=  "/SUPPRESS="                 &
+                                               "NOTHING "                  &
+                                                "!-nocc,!-noec,!-nonl,"    &
+                                                "!-ne,!-nolocal "          &
+                                               "CYCLOMATIC_COMPLEXITY "    &
+                                                "-nocc "                   &
+                                               "ESSENTIAL_COMPLEXITY "     &
+                                                "-noec "                   &
+                                               "MAXIMAL_LOOP_NESTING "     &
+                                                "-nonl "                   &
+                                               "EXITS_AS_GOTOS "           &
+                                                "-ne "                     &
+                                               "LOCAL_DETAILS "            &
+                                                "-nolocal ";
+   --  NODOC  (see /COMPLEXITY_METRICS /NO_LOCAL_DETAILS /NO_EXITS_AS_GOTOS)
+
+   S_Metric_Verbose  : aliased constant S := "/VERBOSE "                   &
+                                             "-v";
+   --        /NOVERBOSE (D)
+   --        /VERBOSE
+   --
+   --   Verbose mode.
+
+   S_Metric_XMLout  : aliased constant S := "/XML_OUTPUT=@"                &
+                                             "-ox@";
+   --        /XML_OUTPUT=filename
+   --
+   --   Place the XML output into the specified file
+
+   Metric_Switches : aliased constant Switches :=
+                       (S_Metric_Add              'Access,
+                        S_Metric_All_Prjs         'Access,
+                        S_Metric_Complexity       'Access,
+                        S_Metric_Coupling         'Access,
+                        S_Metric_Debug            'Access,
+                        S_Metric_Direct           'Access,
+                        S_Metric_Element          'Access,
+                        S_Metric_Ext              'Access,
+                        S_Metric_Files            'Access,
+                        S_Metric_Follow           'Access,
+                        S_Metric_Format           'Access,
+                        S_Metric_Globout          'Access,
+                        S_Metric_Line             'Access,
+                        S_Metric_Lines            'Access,
+                        S_Metric_Mess             'Access,
+                        S_Metric_No_Exits_As_Gotos'Access,
+                        S_Metric_No_Local         'Access,
+                        S_Metric_Project          'Access,
+                        S_Metric_Quiet            'Access,
+                        S_Metric_Suffix           'Access,
+                        S_Metric_Subdirs          'Access,
+                        S_Metric_Syntax           'Access,
+                        S_Metric_Suppress         'Access,
+                        S_Metric_Verbose          'Access,
+                        S_Metric_XMLout           'Access);
 
    ----------------------------
    -- Switches for GNAT NAME --
@@ -4005,6 +5589,13 @@ package VMS_Data is
    --   qualifiers /SOURCE_DIRS as there are non empty lines in the specified
    --   text file.
 
+   S_Name_Follow  : aliased constant S := "/FOLLOW_LINKS_FOR_FILES "       &
+                                            "-eL";
+   --        /NOFOLLOW_LINKS_FOR_FILES (D)
+   --        /FOLLOW_LINKS_FOR_FILES
+   --
+   --    Follow links when parsing project files
+
    S_Name_Frng    : aliased constant S := "/FOREIGN_PATTERN=" & '"'        &
                                             "-f" & '"';
    --        /FOREIGN_PATTERN=<string>
@@ -4033,8 +5624,16 @@ package VMS_Data is
    --
    --   Create or update a project file. 'file_name' may include directory
    --   information. The specified file must be writable. There may be only
-   --   one qualifier /PROJECT_FILE. When a qualifier /PROJECT_DILE is
+   --   one qualifier /PROJECT_FILE. When a qualifier /PROJECT_FILE is
    --   specified, no qualifier /CONFIG_FILE may be specified.
+
+   S_Name_Subdirs : aliased constant S := "/SUBDIRS=<"                     &
+                                             "--subdirs=>";
+   --        /SUBDIRS=dir
+   --
+   --   The actual directories (object, exec, library, ...) are subdirectories
+   --   of the directory specified in the project file. If the subdirectory
+   --   does not exist, it is created automatically.
 
    S_Name_Verbose : aliased constant S := "/VERBOSE "                      &
                                             "-v";
@@ -4061,14 +5660,16 @@ package VMS_Data is
    --   those whose names end with '_NT.ADA'.
 
    Name_Switches : aliased constant Switches :=
-     (S_Name_Conf         'Access,
-      S_Name_Dirs         'Access,
-      S_Name_Dfile        'Access,
-      S_Name_Frng         'Access,
-      S_Name_Help         'Access,
-      S_Name_Proj         'Access,
-      S_Name_Verbose      'Access,
-      S_Name_Excl         'Access);
+                     (S_Name_Conf    'Access,
+                      S_Name_Dirs    'Access,
+                      S_Name_Dfile   'Access,
+                      S_Name_Follow  'Access,
+                      S_Name_Frng    'Access,
+                      S_Name_Help    'Access,
+                      S_Name_Proj    'Access,
+                      S_Name_Subdirs 'Access,
+                      S_Name_Verbose 'Access,
+                      S_Name_Excl    'Access);
 
    ----------------------------------
    -- Switches for GNAT PREPROCESS --
@@ -4123,6 +5724,14 @@ package VMS_Data is
    --   Preprocessor lines and deleted lines are completely removed from the
    --   output.
 
+   S_Prep_Replace : aliased constant S := "/REPLACE_IN_COMMENTS "          &
+                                            "-C";
+   --        /NOREPLACE_IN_COMMENTS (D)
+   --        /REPLACE_IN_COMMENTS
+   --
+   --   Causes preprocessor to scan comments and perform replacements on
+   --   any $symbol occurrences within the comment text.
+
    S_Prep_Symbols : aliased constant S := "/SYMBOLS "                      &
                                             "-s";
    --        /NOSYMBOLS (D)
@@ -4137,21 +5746,28 @@ package VMS_Data is
    --        /UNDEFINED
 
    Prep_Switches : aliased constant Switches :=
-     (S_Prep_Assoc   'Access,
-      S_Prep_Blank   'Access,
-      S_Prep_Com     'Access,
-      S_Prep_Ref     'Access,
-      S_Prep_Remove  'Access,
-      S_Prep_Symbols 'Access,
-      S_Prep_Undef   'Access);
+                     (S_Prep_Assoc   'Access,
+                      S_Prep_Blank   'Access,
+                      S_Prep_Com     'Access,
+                      S_Prep_Ref     'Access,
+                      S_Prep_Remove  'Access,
+                      S_Prep_Replace 'Access,
+                      S_Prep_Symbols 'Access,
+                      S_Prep_Undef   'Access);
 
    ------------------------------
    -- Switches for GNAT PRETTY --
    ------------------------------
 
+   S_Pretty_Add    : aliased constant S := "/ADD_PROJECT_SEARCH_DIR=*"     &
+                                             "-aP*";
+   --        /ADD_PROJECT_SEARCH_PATH=(directory[,...])
+   --
+   --   Add directories to the project search path.
+
    S_Pretty_Align  : aliased constant S := "/ALIGN="                       &
                                            "DEFAULT "                      &
-                                               "-A1234 "                   &
+                                               "-A12345 "                  &
                                            "OFF "                          &
                                                "-A0 "                      &
                                            "COLONS "                       &
@@ -4161,7 +5777,9 @@ package VMS_Data is
                                            "STATEMENTS "                   &
                                                "-A3 "                      &
                                            "ARROWS "                       &
-                                              "-A4";
+                                               "-A4 "                      &
+                                           "COMPONENT_CLAUSES "            &
+                                               "-A5";
    --        /ALIGN[=align-option, align-option, ...]
    --
    --   Set alignments. By default, all alignments (colons in declarations,
@@ -4170,14 +5788,25 @@ package VMS_Data is
    --
    --   align-option may be one of the following:
    --
-   --      OFF (D)      Set all alignments to OFF
-   --      COLONS       Set alignments of colons in declarations to ON
-   --      DECLARATIONS Set alignments of initialisations in declarations to ON
-   --      STATEMENTS   Set alignments of assignments statements to ON
-   --      ARROWS       Set alignments of arrow delimiters to ON.
+   --      OFF (D)           Set all alignments to OFF
+   --      COLONS            Set alignments of colons in declarations to ON
+   --      DECLARATIONS      Set alignments of initialisations in declarations
+   --                        to ON
+   --      STATEMENTS        Set alignments of assignments statements to ON
+   --      ARROWS            Set alignments of arrow delimiters to ON.
+   --      COMPONENT_CLAUSES Set alignments of AT keywords in component
+   --                        clauses ON
    --
    --   Specifying one of the ON options without first specifying the OFF
    --   option has no effect, because by default all alignments are set to ON.
+
+   S_Pretty_All_Prjs : aliased constant S := "/ALL_PROJECTS "              &
+                                              "-U";
+   --        /NOALL_PROJECTS (D)
+   --        /ALL_PROJECTS
+   --   When GNAT PRETTY is used with a Project File and no source is
+   --   specified, the underlying tool gnatpp is called for all the
+   --   sources of all the Project Files in the project tree.
 
    S_Pretty_Attrib : aliased constant S := "/ATTRIBUTE_CASING="            &
                                            "MIXED_CASE "                   &
@@ -4197,6 +5826,8 @@ package VMS_Data is
    --      UPPER_CASE
 
    S_Pretty_Comments  : aliased constant S := "/COMMENTS_LAYOUT="          &
+                                              "UNTOUCHED "                 &
+                                                 "-c0 "                    &
                                               "DEFAULT "                   &
                                                  "-c1 "                    &
                                               "STANDARD_INDENT "           &
@@ -4204,20 +5835,26 @@ package VMS_Data is
                                               "GNAT_BEGINNING "            &
                                                  "-c3 "                    &
                                               "REFORMAT "                  &
-                                                 "-c4";
+                                                 "-c4 "                    &
+                                              "KEEP_SPECIAL "              &
+                                                 "-c5";
    --        /COMMENTS_LAYOUT[=layout-option, layout-option, ...]
    --
-   --   Set the comment layout. By default, comments use the GNAT style comment
-   --   line indentation.
+   --   Set the comment layout. By default, comments use the GNAT style
+   --   comment line indentation.
+   --
    --   layout-option may be one of the following:
    --
+   --     UNTOUCHED           All the comments remain unchanged
    --     DEFAULT (D)         GNAT style comment line indentation
    --     STANDARD_INDENT     Standard comment line indentation
    --     GNAT_BEGINNING      GNAT style comment beginning
    --     REFORMAT            Reformat comment blocks
+   --     KEEP_SPECIAL        Keep unchanged special form comments
    --
    --     All combinations of layout options are allowed, except for DEFAULT
-   --     and STANDARD_INDENT which are mutually exclusive.
+   --     and STANDARD_INDENT which are mutually exclusive, and also if
+   --     UNTOUCHED is specified, this must be the only option.
    --
    --     The difference between "GNAT style comment line indentation" and
    --     "standard comment line indentation" is the following: for standard
@@ -4315,6 +5952,66 @@ package VMS_Data is
    --   unless the indentation is set to 1: in that case the default value for
    --   continuation line indentation is also 1.
 
+   S_Pretty_Compact_Is : aliased constant S := "/NO_SEPARATE_IS "          &
+                                                 "--no-separate-is";
+   --        /NO_SEPARATE_IS
+   --
+   --   Do not place the IS keyword on a separate line in a subprogram body in
+   --   case if the specification occupies more then one line.
+
+   S_Pretty_Sep_Label : aliased constant S := "/SEPARATE_LABEL "           &
+                                                    "--separate-label";
+   --        /SEPARATE_LABEL
+   --
+   --   Place statement label(s) and the statement itself on separate lines.
+
+   S_Pretty_Sep_Loop_Then : aliased constant S := "/SEPARATE_LOOP_THEN "   &
+                                                    "--separate-loop-then";
+   --        /SEPARATE_LOOP_THEN
+   --
+   --   Place the THEN keyword in IF statement and the LOOP keyword in for-
+   --   and while-loops on a separate line.
+
+   S_Pretty_N_Sep_Loop_Then : aliased constant S := "/NO_SEPARATE_LOOP_THEN " &
+                                                    "--no-separate-loop-then";
+   --        /NO_SEPARATE_LOOP_THEN
+   --
+   --   Do not place the THEN keyword in IF statement and the LOOP keyword in
+   --   for- and while-loops on a separate line.
+
+   S_Pretty_Use_On_New_Line : aliased constant S := "/USE_ON_NEW_LINE "    &
+                                                      "--use-on-new-line";
+   --        /USE_ON_NEW_LINE
+   --
+   --   Start any USE clause that is a part of a context clause from a
+   --   separate line.
+
+   S_Pretty_Stnm_On_Nw_Line : aliased constant S := "/STMT_NAME_ON_NEW_LINE " &
+                                                      "--separate-stmt-name";
+   --        /STMT_NAME_ON_NEW_LINE
+   --
+   --   For named block and loop statements use a separate line for the
+   --   statement name, but do not use an extra indentation level for the
+   --   statement itself.
+
+   S_Pretty_Eol       : aliased constant S := "/END_OF_LINE="              &
+                                                "DOS "                     &
+                                                   "--eol=dos "            &
+                                                "UNIX "                    &
+                                                   "--eol=unix "           &
+                                                "CRLF "                    &
+                                                   "--eol=crlf "           &
+                                                "LF "                      &
+                                                   "--eol=lf";
+   --        /END_OF_LINE=[option]
+   --
+   --   Specifies the form of the line terminators in the produced source.
+   --   By default, the form of the line terminator depends on the platforms.
+   --   On Unix and VMS, it is a Line Feed (LF) character. On Windows (DOS),
+   --   It is a Carriage Return (CR) followed by a Line Feed.
+   --   The Options DOS and CRLF are equivalent. The options UNIX and LF are
+   --   also equivalent.
+
    S_Pretty_Ext       : aliased constant S := "/EXTERNAL_REFERENCE=" & '"' &
                                             "-X" & '"';
    --        /EXTERNAL_REFERENCE="name=val"
@@ -4350,6 +6047,54 @@ package VMS_Data is
    --   used in the default dictionary file, are defined in the GNAT User's
    --   Guide.
 
+   S_Pretty_Encoding  : aliased constant S := "/RESULT_ENCODING="          &
+                                              "BRACKETS "                  &
+                                                 "-Wb "                    &
+                                              "HEX "                       &
+                                                 "-Wh "                    &
+                                              "UPPER "                     &
+                                                 "-Wu "                    &
+                                              "SHIFT_JIS "                 &
+                                                 "-Ws "                    &
+                                              "EUC "                       &
+                                                 "-We "                    &
+                                              "UTF8 "                      &
+                                                 "-W8";
+   --        /RESULT_ENCODING[=encoding-type]
+   --
+   --   Specify the wide character encoding method used when writing the
+   --   reformatted code in the result file. 'encoding-type' is one of the
+   --   following:
+   --
+   --      BRACKETS (D)      Brackets encoding.
+   --
+   --      HEX               Hex ESC encoding.
+   --
+   --      UPPER             Upper half encoding.
+   --
+   --      SHIFT_JIS         Shift-JIS encoding.
+   --
+   --      EUC               EUC Encoding.
+   --
+   --      UTF8              UTF-8 encoding.
+   --
+   --   See 'HELP GNAT COMPILE /WIDE_CHARACTER_ENCODING' for an explanation
+   --   about the different character encoding methods.
+
+   S_Pretty_Files     : aliased constant S := "/FILES=@"                   &
+                                                 "-files=@";
+   --      /FILES=filename
+   --
+   --   Take as arguments the files that are listed in the specified
+   --   text file.
+
+   S_Pretty_Follow : aliased constant S := "/FOLLOW_LINKS_FOR_FILES "      &
+                                             "-eL";
+   --        /NOFOLLOW_LINKS_FOR_FILES (D)
+   --        /FOLLOW_LINKS_FOR_FILES
+   --
+   --    Follow links when parsing project files
+
    S_Pretty_Forced    : aliased constant S := "/FORCED_OUTPUT=@"           &
                                                  "-of@";
    --        /FORCED_OUTPUT=file
@@ -4381,6 +6126,7 @@ package VMS_Data is
    --
    --   Specify the case of Ada keywords. The default is keywords in lower
    --   case.
+   --
    --   keyword-option may be one of the following:
    --
    --      LOWER_CASE (D)
@@ -4397,9 +6143,9 @@ package VMS_Data is
    --        /MAX_INDENT=nnn
    --
    --   Do not use an additional indentation level for case alternatives
-   --   and variants if their number is nnn or more. The default is  10.
-   --   If nnn is zero, an additional indentation level is  used for any number
-   --   of case alternatives and variants.
+   --   and variants if their number is nnn or more. The default is 10.
+   --   If nnn is zero, an additional indentation level is used for any
+   --   number of case alternatives and variants.
 
    S_Pretty_Mess      : aliased constant S := "/MESSAGES_PROJECT_FILE="    &
                                             "DEFAULT "                     &
@@ -4443,6 +6189,13 @@ package VMS_Data is
    --
    --      MIXED_CASE        Names are in mixed case.
 
+   S_Pretty_Replace_No_Backup : aliased constant S := "/REPLACE_NO_BACKUP " &
+                                                 "-rnb";
+   --        /REPLACE_NO_BACKUP
+   --
+   --   Replace the argument source with the pretty-printed source without
+   --   creating any backup copy of the argument source.
+
    S_Pretty_No_Labels : aliased constant S := "/NO_MISSED_LABELS "         &
                                                  "-e";
    --        /NO_MISSED_LABELS
@@ -4455,6 +6208,12 @@ package VMS_Data is
    --   inserts these end/exit labels when they are absent in the original
    --   source. This qualifier /NO_MISSED_LABELS suppresses this insertion,
    --   so that the formatted source reflects the original.
+
+   S_Pretty_Notabs    : aliased constant S := "/NOTABS "                   &
+                                                 "-notabs";
+   --        /NOTABS
+   --
+   --   Replace all tabulations in comments with spaces.
 
    S_Pretty_Output    : aliased constant S := "/OUTPUT=@"                  &
                                               "-o@";
@@ -4478,7 +6237,8 @@ package VMS_Data is
                                               "LOWER_CASE "                &
                                                  "-pL "                    &
                                               "UPPER_CASE "                &
-      --        /PRAGMA_CASING[=pragma-option]
+                                                 "-pU";
+   --        /PRAGMA_CASING[=pragma-option]
    --
    --   Set the case of pragma identifiers. The default is Mixed case.
    --   pragma-option may be one of the following:
@@ -4486,9 +6246,9 @@ package VMS_Data is
    --      MIXED_CASE (D)
    --      LOWER_CASE
    --      UPPER_CASE
-                                              "-pU";
-   S_Pretty_Project   : aliased constant S := "/PROJECT_FILE=<"               &
-                                            "-P>";
+
+   S_Pretty_Project   : aliased constant S := "/PROJECT_FILE=<"            &
+                                                "-P>";
    --        /PROJECT_FILE=filename
    --
    --   Specifies the main project file to be used. The project files rooted
@@ -4503,6 +6263,12 @@ package VMS_Data is
    --   Replace the argument source with the pretty-printed source and copy the
    --   argument source into filename.NPP. If filename.NPP already exists,
    --   report an error and exit.
+
+   S_Pretty_RTS       : aliased constant S := "/RUNTIME_SYSTEM=|"          &
+                                               "--RTS=|";
+   --        /RUNTIME_SYSTEM=xxx
+   --
+   --    Compile against an alternate runtime system named xxx or RTS-xxx.
 
    S_Pretty_Search    : aliased constant S := "/SEARCH=*"                  &
                                               "-I*";
@@ -4525,6 +6291,14 @@ package VMS_Data is
    --
    --   Redirect the output to the standard output.
 
+   S_Pretty_Subdirs : aliased constant S := "/SUBDIRS=<"                   &
+                                               "--subdirs=>";
+   --        /SUBDIRS=dir
+   --
+   --   The actual directories (object, exec, library, ...) are subdirectories
+   --   of the directory specified in the project file. If the subdirectory
+   --   does not exist, it is created automatically.
+
    S_Pretty_Verbose   : aliased constant S := "/VERBOSE "                  &
                                               "-v";
    --        /NOVERBOSE (D)
@@ -4543,34 +6317,50 @@ package VMS_Data is
    --   By default such warnings are not activated.
 
    Pretty_Switches : aliased constant Switches :=
-     (S_Pretty_Align     'Access,
-      S_Pretty_Attrib    'Access,
-      S_Pretty_Comments  'Access,
-      S_Pretty_Config    'Access,
-      S_Pretty_Constr    'Access,
-      S_Pretty_Comind    'Access,
-      S_Pretty_Ext       'Access,
-      S_Pretty_Current   'Access,
-      S_Pretty_Dico      'Access,
-      S_Pretty_Forced    'Access,
-      S_Pretty_Formfeed  'Access,
-      S_Pretty_Indent    'Access,
-      S_Pretty_Keyword   'Access,
-      S_Pretty_Maxlen    'Access,
-      S_Pretty_Maxind    'Access,
-      S_Pretty_Mess      'Access,
-      S_Pretty_Names     'Access,
-      S_Pretty_No_Labels 'Access,
-      S_Pretty_Output    'Access,
-      S_Pretty_Override  'Access,
-      S_Pretty_Pragma    'Access,
-      S_Pretty_Replace   'Access,
-      S_Pretty_Project   'Access,
-      S_Pretty_Search    'Access,
-      S_Pretty_Specific  'Access,
-      S_Pretty_Standard  'Access,
-      S_Pretty_Verbose   'Access,
-      S_Pretty_Warnings  'Access);
+                       (S_Pretty_Add              'Access,
+                        S_Pretty_Align            'Access,
+                        S_Pretty_All_Prjs         'Access,
+                        S_Pretty_Attrib           'Access,
+                        S_Pretty_Comments         'Access,
+                        S_Pretty_Compact_Is       'Access,
+                        S_Pretty_Config           'Access,
+                        S_Pretty_Constr           'Access,
+                        S_Pretty_Comind           'Access,
+                        S_Pretty_Current          'Access,
+                        S_Pretty_Dico             'Access,
+                        S_Pretty_Eol              'Access,
+                        S_Pretty_Ext              'Access,
+                        S_Pretty_Encoding         'Access,
+                        S_Pretty_Files            'Access,
+                        S_Pretty_Follow           'Access,
+                        S_Pretty_Forced           'Access,
+                        S_Pretty_Formfeed         'Access,
+                        S_Pretty_Indent           'Access,
+                        S_Pretty_Keyword          'Access,
+                        S_Pretty_Maxlen           'Access,
+                        S_Pretty_Maxind           'Access,
+                        S_Pretty_Mess             'Access,
+                        S_Pretty_Names            'Access,
+                        S_Pretty_No_Labels        'Access,
+                        S_Pretty_Notabs           'Access,
+                        S_Pretty_Output           'Access,
+                        S_Pretty_Override         'Access,
+                        S_Pretty_Pragma           'Access,
+                        S_Pretty_Replace          'Access,
+                        S_Pretty_Replace_No_Backup'Access,
+                        S_Pretty_Project          'Access,
+                        S_Pretty_RTS              'Access,
+                        S_Pretty_Search           'Access,
+                        S_Pretty_Sep_Label        'Access,
+                        S_Pretty_Sep_Loop_Then    'Access,
+                        S_Pretty_N_Sep_Loop_Then  'Access,
+                        S_Pretty_Subdirs          'Access,
+                        S_Pretty_Use_On_New_Line  'Access,
+                        S_Pretty_Stnm_On_Nw_Line  'Access,
+                        S_Pretty_Specific         'Access,
+                        S_Pretty_Standard         'Access,
+                        S_Pretty_Verbose          'Access,
+                        S_Pretty_Warnings         'Access);
 
    ------------------------------
    -- Switches for GNAT SHARED --
@@ -4642,17 +6432,226 @@ package VMS_Data is
    --   Any other switch transmitted to the underlying linker.
 
    Shared_Switches : aliased constant Switches :=
-     (S_Shared_Debug   'Access,
-      S_Shared_Image   'Access,
-      S_Shared_Ident   'Access,
-      S_Shared_Nofiles 'Access,
-      S_Shared_Noinhib 'Access,
-      S_Shared_Verb    'Access,
-      S_Shared_ZZZZZ   'Access);
+                       (S_Shared_Debug   'Access,
+                        S_Shared_Image   'Access,
+                        S_Shared_Ident   'Access,
+                        S_Shared_Nofiles 'Access,
+                        S_Shared_Noinhib 'Access,
+                        S_Shared_Verb    'Access,
+                        S_Shared_ZZZZZ   'Access);
+
+   -----------------------------
+   -- Switches for GNAT STACK --
+   -----------------------------
+
+   S_Stack_Add        : aliased constant S := "/ADD_PROJECT_SEARCH_DIR=*"  &
+                                                "-aP*";
+   --        /ADD_PROJECT_SEARCH_PATH=(directory[,...])
+   --
+   --   Add directories to the project search path.
+
+   S_Stack_All        : aliased constant S := "/ALL_SUBPROGRAMS "          &
+                                                "-a";
+   --        /NOALL_SUBPROGRAMS (D)
+   --        /ALL_SUBPROGRAMS
+   --
+   --   Consider all subprograms as entry points.
+
+   S_Stack_All_Cycles : aliased constant S := "/ALL_CYCLES "               &
+                                                "-ca";
+   --        /NOALL_CYCLES (D)
+   --        /ALL_CYCLES
+   --
+   --   Extract all possible cycles in the call graph.
+
+   S_Stack_All_Prjs   : aliased constant S := "/ALL_PROJECTS "             &
+                                                "-U";
+   --        /NOALL_PROJECTS (D)
+   --        /ALL_PROJECTS
+   --
+   --   When GNAT STACK is used with a Project File and no source is
+   --   specified, the underlying tool gnatstack is called for all the
+   --   units of all the Project Files in the project tree.
+
+   S_Stack_Debug      : aliased constant S := "/DEBUG "                    &
+                                                "-g";
+   --        /NODEBUG (D)
+   --        /DEBUG
+   --
+   --   Generate internal debug information.
+
+   S_Stack_Directory  : aliased constant S := "/DIRECTORY=*"               &
+                                                "-aO*";
+   --        /DIRECTORY=(direc[,...])
+   --
+   --   When looking for .ci files look also in directories specified.
+
+   S_Stack_Entries    : aliased constant S := "/ENTRIES=*"                 &
+                                                "-e*";
+   --
+   --        /ENTRY=(entry_point[,...])
+   --
+   --   Name of symbol to be used as entry point for the analysis.
+
+   S_Stack_Files      : aliased constant S := "/FILES=@"                   &
+                                                "-files=@";
+   --      /FILES=filename
+   --
+   --   Take as arguments the files that are listed in the specified
+   --   text file.
+
+   S_Stack_Follow : aliased constant S := "/FOLLOW_LINKS_FOR_FILES "       &
+                                            "-eL";
+   --        /NOFOLLOW_LINKS_FOR_FILES (D)
+   --        /FOLLOW_LINKS_FOR_FILES
+   --
+   --    Follow links when parsing project files
+
+   S_Stack_Help       : aliased constant S := "/HELP "                     &
+                                                "-h";
+   --        /NOHELP (D)
+   --        /HELP
+   --
+   --   Output a message explaining the usage of gnatstack.
+
+   S_Stack_List       : aliased constant S := "/LIST=#"                    &
+                                                "-l#";
+   --        /LIST=nnn
+   --
+   --   Print the nnn subprograms requiring the biggest local stack usage. By
+   --   default none will be displayed.
+
+   S_Stack_Order      : aliased constant S := "/ORDER="                    &
+                                              "STACK "                     &
+                                                 "-os "                    &
+                                              "ALPHABETICAL "              &
+                                                 "-oa";
+   --        /ORDER[=order-option]
+   --
+   --   Specifies the order for displaying the different call graphs.
+   --   order-option may be one of the following:
+   --
+   --      STACK (D)    Select stack usage order
+   --
+   --      ALPHABETICAL Select alphabetical order
+
+   S_Stack_Path       : aliased constant S := "/PATH "                     &
+                                                "-p";
+   --        /NOPATH (D)
+   --        /PATH
+   --
+   --   Print all the subprograms that make up the worst-case path for every
+   --   entry point.
+
+   S_Stack_Project    : aliased constant S := "/PROJECT_FILE=<"            &
+                                                "-P>";
+   --        /PROJECT_FILE=filename
+   --
+   --   Specifies the main project file to be used. The project files rooted
+   --   at the main project file will be parsed before the invocation of
+   --   gnatstack.
+
+   S_Stack_Output     : aliased constant S := "/OUTPUT=@"                  &
+                                                "-f@";
+   --        /OUTPUT=filename
+   --
+   --   Name of the file containing the generated graph (VCG format).
+
+   S_Stack_Regexp     : aliased constant S := "/EXPRESSION=|"              &
+                                                "-r|";
+   --
+   --        /EXPRESSION=regular-expression
+   --
+   --   Any symbol matching the regular expression will be considered as a
+   --   potential entry point for the analysis.
+
+   S_Stack_Subdirs : aliased constant S := "/SUBDIRS=<"                    &
+                                              "--subdirs=>";
+   --        /SUBDIRS=dir
+   --
+   --   The actual directories (object, exec, library, ...) are subdirectories
+   --   of the directory specified in the project file. If the subdirectory
+   --   does not exist, it is created automatically.
+
+   S_Stack_Unbounded  : aliased constant S := "/UNBOUNDED=#"               &
+                                                "-d#";
+   --        /UNBOUNDED=nnn
+   --
+   --   Default stack size to be used for unbounded (dynamic) frames.
+
+   S_Stack_Unknown    : aliased constant S := "/UNKNOWN=#"                 &
+                                                "-u#";
+   --        /UNKNOWN=nnn
+   --
+   --   Default stack size to be used for unknown (external) calls.
+
+   S_Stack_Verbose    : aliased constant S := "/VERBOSE "                  &
+                                                "-v";
+   --        /NOVERBOSE (D)
+   --        /VERBOSE
+   --
+   --   Specifies the amount of information to be displayed about the
+   --   different subprograms. In verbose mode the full location of the
+   --   subprogram will be part of the output, as well as detailed information
+   --   about inaccurate data.
+
+   S_Stack_Warnings   : aliased constant S := "/WARNINGS="                 &
+                                              "ALL "                       &
+                                                 "-Wa "                    &
+                                              "CYCLES "                    &
+                                                 "-Wc "                    &
+                                              "UNBOUNDED "                 &
+                                                 "-Wu "                    &
+                                              "EXTERNAL "                  &
+                                                 "-We "                    &
+                                              "INDIRECT "                  &
+                                                 "-Wi";
+   --        /WARNINGS[=(keyword[,...])]
+   --
+   --    The following keywords are supported:
+   --
+   --        ALL        Turn on all optional warnings
+   --
+   --        CYCLES     Turn on warnings for cycles
+   --
+   --        UNBOUNDED  Turn on warnings for unbounded frames
+   --
+   --        EXTERNAL   Turn on warnings for external calls
+   --
+   --        INDIRECT   Turn on warnings for indirect calls
+
+   Stack_Switches : aliased constant Switches :=
+                      (S_Stack_Add        'Access,
+                       S_Stack_All        'Access,
+                       S_Stack_All_Cycles 'Access,
+                       S_Stack_All_Prjs   'Access,
+                       S_Stack_Debug      'Access,
+                       S_Stack_Directory  'Access,
+                       S_Stack_Entries    'Access,
+                       S_Stack_Files      'Access,
+                       S_Stack_Follow     'Access,
+                       S_Stack_Help       'Access,
+                       S_Stack_List       'Access,
+                       S_Stack_Order      'Access,
+                       S_Stack_Path       'Access,
+                       S_Stack_Project    'Access,
+                       S_Stack_Output     'Access,
+                       S_Stack_Regexp     'Access,
+                       S_Stack_Subdirs    'Access,
+                       S_Stack_Unbounded  'Access,
+                       S_Stack_Unknown    'Access,
+                       S_Stack_Verbose    'Access,
+                       S_Stack_Warnings   'Access);
 
    ----------------------------
    -- Switches for GNAT STUB --
    ----------------------------
+
+   S_Stub_Add     : aliased constant S := "/ADD_PROJECT_SEARCH_DIR=*"      &
+                                            "-aP*";
+   --        /ADD_PROJECT_SEARCH_PATH=(directory[,...])
+   --
+   --   Add directories to the project search path.
 
    S_Stub_Config  : aliased constant S := "/CONFIGURATION_PRAGMAS_FILE=<"  &
                                             "-gnatec>";
@@ -4677,6 +6676,13 @@ package VMS_Data is
    --
    --   Example:
    --      /EXTERNAL_REFERENCE="DEBUG=TRUE"
+
+   S_Stub_Follow  : aliased constant S := "/FOLLOW_LINKS_FOR_FILES "       &
+                                            "-eL";
+   --        /NOFOLLOW_LINKS_FOR_FILES (D)
+   --        /FOLLOW_LINKS_FOR_FILES
+   --
+   --    Follow links when parsing project files
 
    S_Stub_Full    : aliased constant S := "/FULL "                         &
                                             "-f";
@@ -4706,13 +6712,21 @@ package VMS_Data is
    --                   preceding the compilation unit) from the source of the
    --                   library unit declaration into the body stub.
 
+   S_Stub_Header_File : aliased constant S := "/FROM_HEADER_FILE=<" &
+                                                "--header-file=>";
+
+   --        /FROM_HEADER_FILE==filename
+   --
+   --   Use the content of the file as the comment header for a generated body
+   --   stub.
+
    S_Stub_Indent  : aliased constant S := "/INDENTATION=#"                 &
                                             "-i#";
    --        /INDENTATION=nnn
    --
    --   (nnn is a non-negative integer). Set the indentation level in the
    --   generated body stub to nnn. nnn=0 means "no indentation".
-   --   Default insdentation is 3.
+   --   Default indentation is 3.
 
    S_Stub_Keep    : aliased constant S := "/KEEP "                         &
                                             "-k";
@@ -4748,6 +6762,20 @@ package VMS_Data is
    --      HIGH         A great number of messages are output, most of them not
    --                   being useful for the user.
 
+   S_Stub_No_Exc  : aliased constant S := "/NO_EXCEPTION "                 &
+                                          "--no-exception";
+   --        /NONO_EXCEPTION (D)
+   --        /NO_EXCEPTION
+   --
+   --  Avoid raising PROGRAM_ERROR in the generated program unit stubs.
+
+   S_Stub_No_Head : aliased constant S := "/NO_LOCAL_HEADER "             &
+                                          "--no-local-header";
+   --        /NONO_LOCAL_HEADER (D)
+   --        /NO_LOCAL_HEADER
+   --
+   --  Do not put local comment header before body stub for local program unit.
+
    S_Stub_Output  : aliased constant S := "/OUTPUT=@"                      &
                                             "-o@";
    --        /OUTPUT=filespec
@@ -4782,6 +6810,14 @@ package VMS_Data is
    --
    --    When looking for source files also look in directories specified.
 
+   S_Stub_Subdirs : aliased constant S := "/SUBDIRS=<"                     &
+                                             "--subdirs=>";
+   --        /SUBDIRS=dir
+   --
+   --   The actual directories (object, exec, library, ...) are subdirectories
+   --   of the directory specified in the project file. If the subdirectory
+   --   does not exist, it is created automatically.
+
    S_Stub_Tree    : aliased constant S := "/TREE_FILE="                    &
                                             "OVERWRITE "                   &
                                                "-t "                       &
@@ -4797,9 +6833,9 @@ package VMS_Data is
    --      OVERWRITE (D)  Overwrite the existing tree file. If the current
    --                     directory already contains the file which, according
    --                     to the GNAT file naming rules should be considered
-   --                     as a tree file for the argument source file,
-   --                     gnatstub will refuse to create the tree file needed
-   --                     to create a sample body unless this option is chosen.
+   --                     as a tree file for the argument source file, gnatstub
+   --                     will refuse to create the tree file needed to create
+   --                     a sample body unless this option is chosen.
    --
    --      SAVE           Do not remove the tree file (i.e., the snapshot
    --                     of the compiler internal structures used by gnatstub)
@@ -4822,25 +6858,202 @@ package VMS_Data is
    --   Verbose mode: generate version information.
 
    Stub_Switches : aliased constant Switches :=
-     (S_Stub_Config  'Access,
-      S_Stub_Current 'Access,
-      S_Stub_Ext     'Access,
-      S_Stub_Full    'Access,
-      S_Stub_Header  'Access,
-      S_Stub_Indent  'Access,
-      S_Stub_Keep    'Access,
-      S_Stub_Length  'Access,
-      S_Stub_Mess    'Access,
-      S_Stub_Output  'Access,
-      S_Stub_Project 'Access,
-      S_Stub_Quiet   'Access,
-      S_Stub_Search  'Access,
-      S_Stub_Tree    'Access,
-      S_Stub_Verbose 'Access);
+                     (S_Stub_Add        'Access,
+                      S_Stub_Config     'Access,
+                      S_Stub_Current    'Access,
+                      S_Stub_Ext        'Access,
+                      S_Stub_Follow     'Access,
+                      S_Stub_Full       'Access,
+                      S_Stub_Header     'Access,
+                      S_Stub_Header_File'Access,
+                      S_Stub_Indent     'Access,
+                      S_Stub_Keep       'Access,
+                      S_Stub_Length     'Access,
+                      S_Stub_Mess       'Access,
+                      S_Stub_Output     'Access,
+                      S_Stub_Project    'Access,
+                      S_Stub_No_Exc     'Access,
+                      S_Stub_No_Head    'Access,
+                      S_Stub_Quiet      'Access,
+                      S_Stub_Search     'Access,
+                      S_Stub_Subdirs    'Access,
+                      S_Stub_Tree       'Access,
+                      S_Stub_Verbose    'Access);
+
+   ----------------------------
+   -- Switches for GNAT SYNC --
+   ----------------------------
+
+   S_Sync_Add    : aliased constant S := "/ADD_PROJECT_SEARCH_DIR=*"       &
+                                            "-aP*";
+   --        /ADD_PROJECT_SEARCH_PATH=(directory[,...])
+   --
+   --   Add directories to the project search path.
+
+   S_Sync_All    : aliased constant S := "/ALL "                           &
+                                            "-a";
+   --        /NOALL (D)
+   --        /ALL
+   --
+   --   Also check the components of the GNAT run time and process the needed
+   --  components of the GNAT RTL when building and analyzing the global
+   --  structure for checking the global rules.
+
+   S_Sync_Allproj : aliased constant S := "/ALL_PROJECTS "                 &
+                                            "-U";
+   --        /NOALL_PROJECTS (D)
+   --        /ALL_PROJECTS
+   --
+   --   When GNAT SYNC is used with a Project File and no source is
+   --   specified, the underlying tool gnatsync is called for all the
+   --   sources of all the Project Files in the project tree.
+
+   S_Sync_Ext     : aliased constant S := "/EXTERNAL_REFERENCE=" & '"'     &
+                                             "-X" & '"';
+   --       /EXTERNAL_REFERENCE="name=val"
+   --
+   --   Specifies an external reference to the project manager. Useful only if
+   --   /PROJECT_FILE is used.
+   --
+   --   Example:
+   --      /EXTERNAL_REFERENCE="DEBUG=TRUE"
+
+   S_Sync_Files  : aliased constant S := "/FILES=@"                        &
+                                             "-files=@";
+   --      /FILES=filename
+   --
+   --   Take as arguments the files that are listed in the specified
+   --   text file.
+
+   S_Sync_Follow  : aliased constant S := "/FOLLOW_LINKS_FOR_FILES "       &
+                                            "-eL";
+   --        /NOFOLLOW_LINKS_FOR_FILES (D)
+   --        /FOLLOW_LINKS_FOR_FILES
+   --
+   --    Follow links when parsing project files
+
+   S_Sync_Main    : aliased constant S := "/MAIN_SUBPROGRAM=@"             &
+                                            "-main=@";
+   --        /MAIN_SUBPROGRAM=filename
+   --
+   --   Specify the name of the file containing the main subprogram
+
+   S_Sync_Mess    : aliased constant S := "/MESSAGES_PROJECT_FILE="        &
+                                             "DEFAULT "                    &
+                                                "-vP0 "                    &
+                                             "MEDIUM "                     &
+                                                "-vP1 "                    &
+                                             "HIGH "                       &
+                                                "-vP2";
+   --        /MESSAGES_PROJECT_FILE[=messages-option]
+   --
+   --   Specifies the "verbosity" of the parsing of project files.
+   --   messages-option may be one of the following:
+   --
+   --      DEFAULT (D)  No messages are output if there is no error or warning.
+   --
+   --      MEDIUM       A small number of messages are output.
+   --
+   --      HIGH         A great number of messages are output, most of them not
+   --                   being useful for the user.
+
+   S_Sync_Project : aliased constant S := "/PROJECT_FILE=<"                &
+                                             "-P>";
+   --        /PROJECT_FILE=filename
+   --
+   --   Specifies the main project file to be used. The project files rooted
+   --   at the main project file will be parsed before the invocation of the
+   --   gnatcheck. The source directories to be searched will be communicated
+   --   to gnatcheck through logical name ADA_PRJ_INCLUDE_FILE.
+
+   S_Sync_Quiet  : aliased constant S := "/QUIET "                         &
+                                            "-q";
+   --        /NOQUIET (D)
+   --        /QUIET
+   --
+   --   Work quietly, only output warnings and errors.
+
+   S_Sync_Subdirs : aliased constant S := "/SUBDIRS=<"                     &
+                                             "--subdirs=>";
+   --        /SUBDIRS=dir
+   --
+   --   The actual directories (object, exec, library, ...) are subdirectories
+   --   of the directory specified in the project file. If the subdirectory
+   --   does not exist, it is created automatically.
+
+   S_Sync_Verb   : aliased constant S := "/VERBOSE "                       &
+                                            "-v";
+   --        /NOVERBOSE (D)
+   --        /VERBOSE
+   --
+   --   The version number and copyright notice are output, as well as exact
+   --   copies of the gnat1 commands spawned to obtain the chop control
+   --   information.
+
+   S_Sync_Exec   : aliased constant S := "/EXECUTION_TIME "                &
+                                            "-t";
+   --        /NOEXECUTION_TIME (D)
+   --        /EXECUTION_TIME
+   --
+   --   Output the execution time
+
+   S_Sync_Details : aliased constant S := "/DETAILS="                      &
+                                             "MEDIUM "                     &
+                                               "-om "                      &
+                                             "SHORT "                      &
+                                               "-os "                      &
+                                             "FULL "                       &
+                                               "-of";
+   --         /DETAILS[=options]
+   --
+   --   Specifies the details of the output.
+   --   Options may be one of the following:
+   --
+   --       MEDIUM (D)
+   --       SHORT
+   --       FULL
+
+   S_Sync_Warnoff : aliased constant S := "/WARNINGS_OFF "                 &
+                                             "-wq";
+   --
+   --         /WARNINGS_OFF
+   --
+   --   Turn warnings off
+
+   S_Sync_Output  : aliased constant S := "/OUTPUT_FILE=<"                 &
+                                             "-out_file=>";
+   --
+   --        /OUTPUT_FILE=filename
+   --
+   --   Redirect output to a text file
+
+   Sync_Switches : aliased constant Switches :=
+                      (S_Sync_Add      'Access,
+                       S_Sync_All      'Access,
+                       S_Sync_Allproj  'Access,
+                       S_Sync_Ext      'Access,
+                       S_Sync_Follow   'Access,
+                       S_Sync_Files    'Access,
+                       S_Sync_Main     'Access,
+                       S_Sync_Mess     'Access,
+                       S_Sync_Project  'Access,
+                       S_Sync_Quiet    'Access,
+                       S_Sync_Subdirs  'Access,
+                       S_Sync_Verb     'Access,
+                       S_Sync_Exec     'Access,
+                       S_Sync_Details  'Access,
+                       S_Sync_Warnoff  'Access,
+                       S_Sync_Output   'Access);
 
    ----------------------------
    -- Switches for GNAT XREF --
    ----------------------------
+
+   S_Xref_Add     : aliased constant S := "/ADD_PROJECT_SEARCH_DIR=*"      &
+                                            "-aP*";
+   --        /ADD_PROJECT_SEARCH_PATH=(directory[,...])
+   --
+   --   Add directories to the project search path.
 
    S_Xref_All     : aliased constant S := "/ALL_FILES "                    &
                                             "-a";
@@ -4869,6 +7082,13 @@ package VMS_Data is
    --
    --   Example:
    --      /EXTERNAL_REFERENCE="DEBUG=TRUE"
+
+   S_Xref_Follow  : aliased constant S := "/FOLLOW_LINKS_FOR_FILES "       &
+                                            "-eL";
+   --        /NOFOLLOW_LINKS_FOR_FILES (D)
+   --        /FOLLOW_LINKS_FOR_FILES
+   --
+   --    Follow links when parsing project files
 
    S_Xref_Full    : aliased constant S := "/FULL_PATHNAME "                &
                                             "-f";
@@ -4964,6 +7184,14 @@ package VMS_Data is
    --   The order in which source file search is undertaken is the same as for
    --   MAKE.
 
+   S_Xref_Subdirs : aliased constant S := "/SUBDIRS=<"                     &
+                                             "--subdirs=>";
+   --        /SUBDIRS=dir
+   --
+   --   The actual directories (object, exec, library, ...) are subdirectories
+   --   of the directory specified in the project file. If the subdirectory
+   --   does not exist, it is created automatically.
+
    S_Xref_Output  : aliased constant S := "/UNUSED "                       &
                                             "-u";
    --        /SOURCE_SEARCH=(directory,...)
@@ -4980,20 +7208,23 @@ package VMS_Data is
    --   Print a 'tags' file for vi.
 
    Xref_Switches : aliased constant Switches :=
-     (S_Xref_All     'Access,
-      S_Xref_Deriv   'Access,
-      S_Xref_Ext     'Access,
-      S_Xref_Full    'Access,
-      S_Xref_Global  'Access,
-      S_Xref_Mess    'Access,
-      S_Xref_Nostinc 'Access,
-      S_Xref_Nostlib 'Access,
-      S_Xref_Object  'Access,
-      S_Xref_Project 'Access,
-      S_Xref_Prj     'Access,
-      S_Xref_Search  'Access,
-      S_Xref_Source  'Access,
-      S_Xref_Output  'Access,
-      S_Xref_Tags    'Access);
+                     (S_Xref_Add     'Access,
+                      S_Xref_All     'Access,
+                      S_Xref_Deriv   'Access,
+                      S_Xref_Ext     'Access,
+                      S_Xref_Follow  'Access,
+                      S_Xref_Full    'Access,
+                      S_Xref_Global  'Access,
+                      S_Xref_Mess    'Access,
+                      S_Xref_Nostinc 'Access,
+                      S_Xref_Nostlib 'Access,
+                      S_Xref_Object  'Access,
+                      S_Xref_Project 'Access,
+                      S_Xref_Prj     'Access,
+                      S_Xref_Search  'Access,
+                      S_Xref_Source  'Access,
+                      S_Xref_Subdirs 'Access,
+                      S_Xref_Output  'Access,
+                      S_Xref_Tags    'Access);
 
 end VMS_Data;

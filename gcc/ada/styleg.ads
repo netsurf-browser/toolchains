@@ -6,18 +6,17 @@
 --                                                                          --
 --                                 S p e c                                  --
 --                                                                          --
---          Copyright (C) 1992-2002 Free Software Foundation, Inc.          --
+--          Copyright (C) 1992-2010, Free Software Foundation, Inc.         --
 --                                                                          --
 -- GNAT is free software;  you can  redistribute it  and/or modify it under --
 -- terms of the  GNU General Public License as published  by the Free Soft- --
--- ware  Foundation;  either version 2,  or (at your option) any later ver- --
+-- ware  Foundation;  either version 3,  or (at your option) any later ver- --
 -- sion.  GNAT is distributed in the hope that it will be useful, but WITH- --
 -- OUT ANY WARRANTY;  without even the  implied warranty of MERCHANTABILITY --
 -- or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU General Public License --
 -- for  more details.  You should have  received  a copy of the GNU General --
--- Public License  distributed with GNAT;  see file COPYING.  If not, write --
--- to  the Free Software Foundation,  59 Temple Place - Suite 330,  Boston, --
--- MA 02111-1307, USA.                                                      --
+-- Public License  distributed with GNAT; see file COPYING3.  If not, go to --
+-- http://www.gnu.org/licenses for a complete copy of the license.          --
 --                                                                          --
 -- GNAT was originally developed  by the GNAT team at  New York University. --
 -- Extensive contributions were provided by Ada Core Technologies Inc.      --
@@ -29,9 +28,6 @@
 --  a separate package so that they can more easily be customized. Calls
 --  to these subprograms are only made if Opt.Style_Check is set True.
 --  Styleg does not depends on the GNAT tree (Atree, Sinfo, ...).
-
---  For the compiler, there is also a child package Styleg.C that depends
---  on the GNAT tree.
 
 with Types; use Types;
 
@@ -65,6 +61,10 @@ package Styleg is
    --  the attribute designator is a reserved word (access, digits,
    --  delta or range) to allow differing rules for the two cases.
 
+   procedure Check_Boolean_Operator (Node : Node_Id);
+   --  Node is a node for an AND or OR operator. Check that the usage meets
+   --  the style rules.
+
    procedure Check_Box;
    --  Called after scanning out a box to check spacing
 
@@ -92,6 +92,9 @@ package Styleg is
    procedure Check_Dot_Dot;
    --  Called after scanning out dot dot to check spacing
 
+   procedure Check_EOF;
+   --  Called after scanning out EOF mark
+
    procedure Check_HT;
    --  Called with Scan_Ptr pointing to a horizontal tab character
 
@@ -102,20 +105,24 @@ package Styleg is
    --  Token_Ptr is the first token on the line.
 
    procedure Check_Left_Paren;
-   --  Called after scanning out a left parenthesis to check spacing.
+   --  Called after scanning out a left parenthesis to check spacing
+
+   procedure Check_Line_Max_Length (Len : Int);
+   --  Called with Scan_Ptr pointing to the first line terminator character
+   --  terminating the current line. Used to check for appropriate line length.
+   --  The parameter Len is the length of the current line.
 
    procedure Check_Line_Terminator (Len : Int);
    --  Called with Scan_Ptr pointing to the first line terminator terminating
-   --  the current line, used to check for appropriate line terminator and
-   --  to check the line length (Len is the length of the current line).
-   --  Note that the terminator may be the EOF character.
+   --  the current line, used to check for appropriate line terminator usage.
+   --  The parameter Len is the length of the current line.
 
    procedure Check_Pragma_Name;
    --  The current token is a pragma identifier. Check that it is spelled
    --  properly (i.e. with an appropriate casing convention).
 
    procedure Check_Right_Paren;
-   --  Called after scanning out a right parenthesis to check spacing.
+   --  Called after scanning out a right parenthesis to check spacing
 
    procedure Check_Semicolon;
    --  Called after scanning out a semicolon to check spacing
@@ -126,11 +133,27 @@ package Styleg is
    --  procedure is called only if THEN appears at the start of a line with
    --  Token_Ptr pointing to the THEN keyword.
 
+   procedure Check_Separate_Stmt_Lines;
+   pragma Inline (Check_Separate_Stmt_Lines);
+   --  Called after scanning THEN (not preceded by AND) or ELSE (not preceded
+   --  by OR). Used to check that no tokens follow on the same line (which
+   --  would interfere with coverage testing). Handles case of THEN ABORT as
+   --  an exception, as well as PRAGMA after ELSE.
+
    procedure Check_Unary_Plus_Or_Minus;
    --  Called after scanning a unary plus or minus to check spacing
 
    procedure Check_Vertical_Bar;
    --  Called after scanning a vertical bar to check spacing
+
+   procedure Check_Xtra_Parens (Loc : Source_Ptr);
+   --  Called after scanning a conditional expression that has at least one
+   --  level of parentheses around the entire expression.
+
+   function Mode_In_Check return Boolean;
+   pragma Inline (Mode_In_Check);
+   --  Determines whether style checking is active and the Mode_In_Check is
+   --  set, forbidding the explicit use of mode IN.
 
    procedure No_End_Name (Name : Node_Id);
    --  Called if an END is encountered where a name is allowed but not present.
@@ -150,10 +173,5 @@ package Styleg is
    --  lower case letters. On entry Token_Ptr points to the keyword token.
    --  This is not used for keywords appearing as attribute designators,
    --  where instead Check_Attribute_Name (True) is called.
-
-   function RM_Column_Check return Boolean;
-   pragma Inline (RM_Column_Check);
-   --  Determines whether style checking is active and the RM column check
-   --  mode is set requiring checking of RM format layout.
 
 end Styleg;

@@ -1,11 +1,13 @@
 // nonstandard construct and destroy functions -*- C++ -*-
 
-// Copyright (C) 2001, 2002, 2003, 2004 Free Software Foundation, Inc.
+// Copyright (C) 2001, 2002, 2003, 2004, 2005, 2006, 2007, 2008,
+// 2009, 2010
+// Free Software Foundation, Inc.
 //
 // This file is part of the GNU ISO C++ Library.  This library is free
 // software; you can redistribute it and/or modify it under the
 // terms of the GNU General Public License as published by the
-// Free Software Foundation; either version 2, or (at your option)
+// Free Software Foundation; either version 3, or (at your option)
 // any later version.
 
 // This library is distributed in the hope that it will be useful,
@@ -13,19 +15,14 @@
 // MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
 // GNU General Public License for more details.
 
-// You should have received a copy of the GNU General Public License along
-// with this library; see the file COPYING.  If not, write to the Free
-// Software Foundation, 59 Temple Place - Suite 330, Boston, MA 02111-1307,
-// USA.
+// Under Section 7 of GPL version 3, you are granted additional
+// permissions described in the GCC Runtime Library Exception, version
+// 3.1, as published by the Free Software Foundation.
 
-// As a special exception, you may use this file as part of a free software
-// library without restriction.  Specifically, if other files instantiate
-// templates or use macros or inline functions from this file, or you compile
-// this file and link it with other files to produce an executable, this
-// file does not by itself cause the resulting executable to be covered by
-// the GNU General Public License.  This exception does not however
-// invalidate any other reasons why the executable file might be covered by
-// the GNU General Public License.
+// You should have received a copy of the GNU General Public License and
+// a copy of the GCC Runtime Library Exception along with this program;
+// see the files COPYING3 and COPYING.RUNTIME respectively.  If not, see
+// <http://www.gnu.org/licenses/>.
 
 /*
  *
@@ -53,25 +50,31 @@
  * purpose.  It is provided "as is" without express or implied warranty.
  */
 
-/** @file stl_construct.h
+/** @file bits/stl_construct.h
  *  This is an internal header file, included by other library headers.
- *  You should not attempt to use it directly.
+ *  Do not attempt to use it directly. @headername{memory}
  */
 
 #ifndef _STL_CONSTRUCT_H
 #define _STL_CONSTRUCT_H 1
 
-#include <bits/type_traits.h>
 #include <new>
+#include <bits/move.h>
 
-namespace std
+namespace std _GLIBCXX_VISIBILITY(default)
 {
+_GLIBCXX_BEGIN_NAMESPACE_VERSION
+
   /**
-   * @if maint
    * Constructs an object in existing memory by invoking an allocated
    * object's constructor with an initializer.
-   * @endif
    */
+#ifdef __GXX_EXPERIMENTAL_CXX0X__
+  template<typename _T1, typename... _Args>
+    inline void
+    _Construct(_T1* __p, _Args&&... __args)
+    { ::new(static_cast<void*>(__p)) _T1(std::forward<_Args>(__args)...); }
+#else
   template<typename _T1, typename _T2>
     inline void
     _Construct(_T1* __p, const _T2& __value)
@@ -80,65 +83,40 @@ namespace std
       // 402. wrong new expression in [some_]allocator::construct
       ::new(static_cast<void*>(__p)) _T1(__value);
     }
+#endif
 
   /**
-   * @if maint
-   * Constructs an object in existing memory by invoking an allocated
-   * object's default constructor (no initializers).
-   * @endif
-   */
-  template<typename _T1>
-    inline void
-    _Construct(_T1* __p)
-    {
-      // _GLIBCXX_RESOLVE_LIB_DEFECTS
-      // 402. wrong new expression in [some_]allocator::construct
-      ::new(static_cast<void*>(__p)) _T1();
-    }
-
-  /**
-   * @if maint
    * Destroy the object pointed to by a pointer type.
-   * @endif
    */
   template<typename _Tp>
     inline void
     _Destroy(_Tp* __pointer)
     { __pointer->~_Tp(); }
 
-  /**
-   * @if maint
-   * Destroy a range of objects with nontrivial destructors.
-   *
-   * This is a helper function used only by _Destroy().
-   * @endif
-   */
-  template<typename _ForwardIterator>
-    inline void
-    __destroy_aux(_ForwardIterator __first, _ForwardIterator __last,
-		  __false_type)
-    { for ( ; __first != __last; ++__first) std::_Destroy(&*__first); }
+  template<bool>
+    struct _Destroy_aux
+    {
+      template<typename _ForwardIterator>
+        static void
+        __destroy(_ForwardIterator __first, _ForwardIterator __last)
+	{
+	  for (; __first != __last; ++__first)
+	    std::_Destroy(std::__addressof(*__first));
+	}
+    };
+
+  template<>
+    struct _Destroy_aux<true>
+    {
+      template<typename _ForwardIterator>
+        static void
+        __destroy(_ForwardIterator, _ForwardIterator) { }
+    };
 
   /**
-   * @if maint
-   * Destroy a range of objects with trivial destructors.  Since the destructors
-   * are trivial, there's nothing to do and hopefully this function will be
-   * entirely optimized away.
-   *
-   * This is a helper function used only by _Destroy().
-   * @endif
-   */
-  template<typename _ForwardIterator>
-    inline void
-    __destroy_aux(_ForwardIterator, _ForwardIterator, __true_type)
-    { }
-
-  /**
-   * @if maint
    * Destroy a range of objects.  If the value_type of the object has
    * a trivial destructor, the compiler should optimize all of this
    * away, otherwise the objects' destructors must be invoked.
-   * @endif
    */
   template<typename _ForwardIterator>
     inline void
@@ -146,12 +124,37 @@ namespace std
     {
       typedef typename iterator_traits<_ForwardIterator>::value_type
                        _Value_type;
-      typedef typename __type_traits<_Value_type>::has_trivial_destructor
-                       _Has_trivial_destructor;
-
-      std::__destroy_aux(__first, __last, _Has_trivial_destructor());
+      std::_Destroy_aux<__has_trivial_destructor(_Value_type)>::
+	__destroy(__first, __last);
     }
-} // namespace std
+
+  /**
+   * Destroy a range of objects using the supplied allocator.  For
+   * nondefault allocators we do not optimize away invocation of 
+   * destroy() even if _Tp has a trivial destructor.
+   */
+
+  template <typename _Tp> class allocator;
+
+  template<typename _ForwardIterator, typename _Allocator>
+    void
+    _Destroy(_ForwardIterator __first, _ForwardIterator __last,
+	     _Allocator& __alloc)
+    {
+      for (; __first != __last; ++__first)
+	__alloc.destroy(std::__addressof(*__first));
+    }
+
+  template<typename _ForwardIterator, typename _Tp>
+    inline void
+    _Destroy(_ForwardIterator __first, _ForwardIterator __last,
+	     allocator<_Tp>&)
+    {
+      _Destroy(__first, __last);
+    }
+
+_GLIBCXX_END_NAMESPACE_VERSION
+} // namespace
 
 #endif /* _STL_CONSTRUCT_H */
 

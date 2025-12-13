@@ -6,18 +6,17 @@
 --                                                                          --
 --                                 S p e c                                  --
 --                                                                          --
---          Copyright (C) 1992-2001 Free Software Foundation, Inc.          --
+--          Copyright (C) 1992-2010, Free Software Foundation, Inc.         --
 --                                                                          --
 -- GNAT is free software;  you can  redistribute it  and/or modify it under --
 -- terms of the  GNU General Public License as published  by the Free Soft- --
--- ware  Foundation;  either version 2,  or (at your option) any later ver- --
+-- ware  Foundation;  either version 3,  or (at your option) any later ver- --
 -- sion.  GNAT is distributed in the hope that it will be useful, but WITH- --
 -- OUT ANY WARRANTY;  without even the  implied warranty of MERCHANTABILITY --
 -- or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU General Public License --
 -- for  more details.  You should have  received  a copy of the GNU General --
--- Public License  distributed with GNAT;  see file COPYING.  If not, write --
--- to  the Free Software Foundation,  59 Temple Place - Suite 330,  Boston, --
--- MA 02111-1307, USA.                                                      --
+-- Public License  distributed with GNAT; see file COPYING3.  If not, go to --
+-- http://www.gnu.org/licenses for a complete copy of the license.          --
 --                                                                          --
 -- GNAT was originally developed  by the GNAT team at  New York University. --
 -- Extensive contributions were provided by Ada Core Technologies Inc.      --
@@ -37,8 +36,10 @@
 --  Frontend, and thus are not mutually recursive.
 
 with Alloc;
+with Opt;   use Opt;
+with Sem;   use Sem;
 with Table;
-with Types;  use Types;
+with Types; use Types;
 
 package Inline is
 
@@ -51,7 +52,7 @@ package Inline is
    --  global data structure, and the bodies constructed by means of a separate
    --  analysis and expansion step.
 
-   --  See full description in body of Sem_Ch12 for details
+   --  See full description in body of Sem_Ch12 for more details
 
    type Pending_Body_Info is record
       Inst_Node : Node_Id;
@@ -68,6 +69,26 @@ package Inline is
       --  The semantic unit within which the instantiation is found. Must
       --  be restored when compiling the body, to insure that internal enti-
       --  ties use the same counter and are unique over spec and body.
+
+      Scope_Suppress           : Suppress_Array;
+      Local_Suppress_Stack_Top : Suppress_Stack_Entry_Ptr;
+      --  Save suppress information at the point of instantiation. Used to
+      --  properly inherit check status active at this point (see RM 11.5
+      --  (7.2/2), AI95-00224-01):
+      --
+      --    "If a checking pragma applies to a generic instantiation, then the
+      --    checking pragma also applies to the instance. If a checking pragma
+      --    applies to a call to a subprogram that has a pragma Inline applied
+      --    to it, then the checking pragma also applies to the inlined
+      --    subprogram body".
+      --
+      --  This means we have to capture this information from the current scope
+      --  at the point of instantiation.
+
+      Version : Ada_Version_Type;
+      --  The body must be compiled with the same language version as the
+      --  spec. The version may be set by a configuration pragma in a separate
+      --  file or in the current file, and may differ from body to body.
    end record;
 
    package Pending_Instantiations is new Table.Table (

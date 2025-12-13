@@ -6,7 +6,7 @@
 --                                                                          --
 --                                 S p e c                                  --
 --                                                                          --
---          Copyright (C) 1992-2003 Free Software Foundation, Inc.          --
+--          Copyright (C) 1992-2009, Free Software Foundation, Inc.         --
 --                                                                          --
 -- This specification is derived from the Ada Reference Manual for use with --
 -- GNAT. The copyright notice above, and the license provisions that follow --
@@ -14,41 +14,62 @@
 --                                                                          --
 -- GNAT is free software;  you can  redistribute it  and/or modify it under --
 -- terms of the  GNU General Public License as published  by the Free Soft- --
--- ware  Foundation;  either version 2,  or (at your option) any later ver- --
+-- ware  Foundation;  either version 3,  or (at your option) any later ver- --
 -- sion.  GNAT is distributed in the hope that it will be useful, but WITH- --
 -- OUT ANY WARRANTY;  without even the  implied warranty of MERCHANTABILITY --
--- or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU General Public License --
--- for  more details.  You should have  received  a copy of the GNU General --
--- Public License  distributed with GNAT;  see file COPYING.  If not, write --
--- to  the Free Software Foundation,  59 Temple Place - Suite 330,  Boston, --
--- MA 02111-1307, USA.                                                      --
+-- or FITNESS FOR A PARTICULAR PURPOSE.                                     --
 --                                                                          --
--- As a special exception,  if other files  instantiate  generics from this --
--- unit, or you link  this unit with other files  to produce an executable, --
--- this  unit  does not  by itself cause  the resulting  executable  to  be --
--- covered  by the  GNU  General  Public  License.  This exception does not --
--- however invalidate  any other reasons why  the executable file  might be --
--- covered by the  GNU Public License.                                      --
+-- As a special exception under Section 7 of GPL version 3, you are granted --
+-- additional permissions described in the GCC Runtime Library Exception,   --
+-- version 3.1, as published by the Free Software Foundation.               --
+--                                                                          --
+-- You should have received a copy of the GNU General Public License and    --
+-- a copy of the GCC Runtime Library Exception along with this program;     --
+-- see the files COPYING3 and COPYING.RUNTIME respectively.  If not, see    --
+-- <http://www.gnu.org/licenses/>.                                          --
 --                                                                          --
 -- GNAT was originally developed  by the GNAT team at  New York University. --
 -- Extensive contributions were provided by Ada Core Technologies Inc.      --
 --                                                                          --
 ------------------------------------------------------------------------------
 
+--  This version of Ada.Exceptions is a full Ada 95 version. It omits Ada 2005
+--  features such as the additional definitions of Exception_Name returning
+--  Wide_[Wide_]String.
+
+--  It is used for building the compiler and the basic tools, since these
+--  builds may be done with bootstrap compilers that cannot handle these
+--  additions. The full version of Ada.Exceptions can be found in the files
+--  a-except-2005.ads/adb, and is used for all other builds where full Ada
+--  2005 functionality is required. In particular, it is used for building
+--  run times on all targets.
+
+pragma Compiler_Unit;
+
 pragma Polling (Off);
 --  We must turn polling off for this unit, because otherwise we get
 --  elaboration circularities with ourself.
 
 with System;
+with System.Parameters;
 with System.Standard_Library;
 with System.Traceback_Entries;
 
 package Ada.Exceptions is
+   pragma Warnings (Off);
+   pragma Preelaborate_05;
+   pragma Warnings (On);
+   --  We make this preelaborable in Ada 2005 mode. If we did not do this, then
+   --  run time units used by the compiler (e.g. s-soflin.ads) would run
+   --  into trouble. Conformance is not an issue, since this version is used
+   --  only by the compiler.
 
    type Exception_Id is private;
+
    Null_Id : constant Exception_Id;
 
    type Exception_Occurrence is limited private;
+
    type Exception_Occurrence_Access is access all Exception_Occurrence;
 
    Null_Occurrence : constant Exception_Occurrence;
@@ -59,12 +80,8 @@ package Ada.Exceptions is
    function Exception_Name (Id : Exception_Id) return String;
 
    procedure Raise_Exception (E : Exception_Id; Message : String := "");
-   --  Note: it would be really nice to give a pragma No_Return for this
-   --  procedure, but it would be wrong, since Raise_Exception does return
-   --  if given the null exception. However we do special case the name in
-   --  the test in the compiler for issuing a warning for a missing return
-   --  after this call. Program_Error seems reasonable enough in such a case.
-   --  See also the routine Raise_Exception_Always in the private part.
+   pragma No_Return (Raise_Exception);
+   --  Note: In accordance with AI-466, CE is raised if E = Null_Id
 
    function Exception_Message (X : Exception_Occurrence) return String;
 
@@ -103,20 +120,20 @@ package Ada.Exceptions is
 
 private
    package SSL renames System.Standard_Library;
+   package SP renames System.Parameters;
 
    subtype EOA is Exception_Occurrence_Access;
 
-   Exception_Msg_Max_Length : constant := 200;
+   Exception_Msg_Max_Length : constant := SP.Default_Exception_Msg_Max_Length;
 
    ------------------
    -- Exception_Id --
    ------------------
 
    subtype Code_Loc is System.Address;
-   --  Code location used in building exception tables and for call
-   --  addresses when propagating an exception.
-   --  Values of this type are created by using Label'Address or
-   --  extracted from machine states using Get_Code_Loc.
+   --  Code location used in building exception tables and for call addresses
+   --  when propagating an exception. Values of this type are created by using
+   --  Label'Address or extracted from machine states using Get_Code_Loc.
 
    Null_Loc : constant Code_Loc := System.Null_Address;
    --  Null code location, used to flag outer level frame
@@ -147,40 +164,45 @@ private
    --  to be in the visible part, since this is set by the reference manual).
 
    function Exception_Name_Simple (X : Exception_Occurrence) return String;
-   --  Like Exception_Name, but returns the simple non-qualified name of
-   --  the exception. This is used to implement the Exception_Name function
-   --  in Current_Exceptions (the DEC compatible unit). It is called from
-   --  the compiler generated code (using Rtsfind, which does not respect
-   --  the private barrier, so we can place this function in the private
-   --  part where the compiler can find it, but the spec is unchanged.)
+   --  Like Exception_Name, but returns the simple non-qualified name of the
+   --  exception. This is used to implement the Exception_Name function in
+   --  Current_Exceptions (the DEC compatible unit). It is called from the
+   --  compiler generated code (using Rtsfind, which does not respect the
+   --  private barrier, so we can place this function in the private part
+   --  where the compiler can find it, but the spec is unchanged.)
 
    procedure Raise_Exception_Always (E : Exception_Id; Message : String := "");
    pragma No_Return (Raise_Exception_Always);
    pragma Export (Ada, Raise_Exception_Always, "__gnat_raise_exception");
    --  This differs from Raise_Exception only in that the caller has determined
-   --  that for sure the parameter E is not null, and that therefore the call
-   --  to this procedure cannot return. The expander converts Raise_Exception
-   --  calls to Raise_Exception_Always if it can determine this is the case.
-   --  The Export allows this routine to be accessed from Pure units.
+   --  that for sure the parameter E is not null, and that therefore no check
+   --  for Null_Id is required. The expander converts Raise_Exception calls to
+   --  Raise_Exception_Always if it can determine this is the case. The Export
+   --  allows this routine to be accessed from Pure units.
 
    procedure Raise_From_Signal_Handler
      (E : Exception_Id;
-      M : SSL.Big_String_Ptr);
+      M : System.Address);
    pragma Export
      (Ada, Raise_From_Signal_Handler,
            "ada__exceptions__raise_from_signal_handler");
    pragma No_Return (Raise_From_Signal_Handler);
-   --  This routine is used to raise an exception from a signal handler.
-   --  The signal handler has already stored the machine state (i.e. the
-   --  state that corresponds to the location at which the signal was
-   --  raised). E is the Exception_Id specifying what exception is being
-   --  raised, and M is a pointer to a null-terminated string which is the
-   --  message to be raised. Note that this routine never returns, so it is
-   --  permissible to simply jump to this routine, rather than call it. This
-   --  may be appropriate for systems where the right way to get out of a
-   --  signal handler is to alter the PC value in the machine state or in
-   --  some other way ask the operating system to return here rather than
-   --  to the original location.
+   --  This routine is used to raise an exception from a signal handler. The
+   --  signal handler has already stored the machine state (i.e. the state that
+   --  corresponds to the location at which the signal was raised). E is the
+   --  Exception_Id specifying what exception is being raised, and M is a
+   --  pointer to a null-terminated string which is the message to be raised.
+   --  Note that this routine never returns, so it is permissible to simply
+   --  jump to this routine, rather than call it. This may be appropriate for
+   --  systems where the right way to get out of signal handler is to alter the
+   --  PC value in the machine state or in some other way ask the operating
+   --  system to return here rather than to the original location.
+
+   procedure Raise_From_Controlled_Operation
+     (X : Ada.Exceptions.Exception_Occurrence);
+   pragma No_Return (Raise_From_Controlled_Operation);
+   --  Raise Program_Error, providing information about X (an exception
+   --  raised during a controlled operation) in the exception message.
 
    procedure Reraise_Occurrence_Always (X : Exception_Occurrence);
    pragma No_Return (Reraise_Occurrence_Always);
@@ -193,8 +215,8 @@ private
    pragma No_Return (Reraise_Occurrence_No_Defer);
    --  Exactly like Reraise_Occurrence, except that abort is not deferred
    --  before the call and the parameter X is known not to be the null
-   --  occurrence. This is used in generated code when it is known
-   --  that abort is already deferred.
+   --  occurrence. This is used in generated code when it is known that
+   --  abort is already deferred.
 
    -----------------------
    -- Polling Interface --
@@ -210,7 +232,7 @@ private
    --  purposes (e.g. implementing watchpoints in software or in the debugger).
 
    --  In the GNAT technology itself, this interface is used to implement
-   --  immediate aynschronous transfer of control and immediate abort on
+   --  immediate asynchronous transfer of control and immediate abort on
    --  targets which do not provide for one thread interrupting another.
 
    --  Note: this used to be in a separate unit called System.Poll, but that
@@ -246,7 +268,7 @@ private
       Msg : String (1 .. Exception_Msg_Max_Length);
       --  Characters of message
 
-      Cleanup_Flag : Boolean;
+      Cleanup_Flag : Boolean := False;
       --  The cleanup flag is normally False, it is set True for an exception
       --  occurrence passed to a cleanup routine, and will still be set True
       --  when the cleanup routine does a Reraise_Occurrence call using this
@@ -262,7 +284,7 @@ private
       --  it is dealing with the reraise case (which is useful to distinguish
       --  for exception tracing purposes).
 
-      Pid : Natural;
+      Pid : Natural := 0;
       --  Partition_Id for partition raising exception
 
       Num_Tracebacks : Natural range 0 .. Max_Tracebacks := 0;
@@ -289,7 +311,7 @@ private
    --  Functions for implementing Exception_Occurrence stream attributes
 
    Null_Occurrence : constant Exception_Occurrence := (
-     Id               => Null_Id,
+     Id               => null,
      Msg_Length       => 0,
      Msg              => (others => ' '),
      Cleanup_Flag     => False,

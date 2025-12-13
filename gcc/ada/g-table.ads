@@ -1,12 +1,12 @@
 ------------------------------------------------------------------------------
 --                                                                          --
---                         GNAT RUNTIME COMPONENTS                          --
+--                         GNAT RUN-TIME COMPONENTS                         --
 --                                                                          --
 --                            G N A T . T A B L E                           --
 --                                                                          --
 --                                 S p e c                                  --
 --                                                                          --
---            Copyright (C) 1998-2003 Ada Core Technologies, Inc.           --
+--                     Copyright (C) 1998-2009, AdaCore                     --
 --                                                                          --
 -- GNAT is free software;  you can  redistribute it  and/or modify it under --
 -- terms of the  GNU General Public License as published  by the Free Soft- --
@@ -16,8 +16,8 @@
 -- or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU General Public License --
 -- for  more details.  You should have  received  a copy of the GNU General --
 -- Public License  distributed with GNAT;  see file COPYING.  If not, write --
--- to  the Free Software Foundation,  59 Temple Place - Suite 330,  Boston, --
--- MA 02111-1307, USA.                                                      --
+-- to  the  Free Software Foundation,  51  Franklin  Street,  Fifth  Floor, --
+-- Boston, MA 02110-1301, USA.                                              --
 --                                                                          --
 -- As a special exception,  if other files  instantiate  generics from this --
 -- unit, or you link  this unit with other files  to produce an executable, --
@@ -56,7 +56,7 @@ generic
    Table_Increment : Natural;
 
 package GNAT.Table is
-pragma Elaborate_Body (Table);
+   pragma Elaborate_Body;
 
    --  Table_Component_Type and Table_Index_Type specify the type of the
    --  array, Table_Low_Bound is the lower bound. Index_type must be an
@@ -105,17 +105,19 @@ pragma Elaborate_Body (Table);
 
    type Table_Type is
      array (Table_Index_Type range <>) of Table_Component_Type;
-
    subtype Big_Table_Type is
      Table_Type (Table_Low_Bound .. Table_Index_Type'Last);
    --  We work with pointers to a bogus array type that is constrained
    --  with the maximum possible range bound. This means that the pointer
    --  is a thin pointer, which is more efficient. Since subscript checks
    --  in any case must be on the logical, rather than physical bounds,
-   --  safety is not compromised by this approach.
+   --  safety is not compromised by this approach. These types should never
+   --  be used by the client.
 
    type Table_Ptr is access all Big_Table_Type;
-   --  The table is actually represented as a pointer to allow reallocation
+   for Table_Ptr'Storage_Size use 0;
+   --  The table is actually represented as a pointer to allow reallocation.
+   --  This type should never be used by the client.
 
    Table : aliased Table_Ptr := null;
    --  The table itself. The lower bound is the value of Low_Bound.
@@ -151,7 +153,7 @@ pragma Elaborate_Body (Table);
    --  array value. Current array values are not affected by this call.
 
    procedure Free;
-   --  Free all allocated memory for the table. A call to init is required
+   --  Free all allocated memory for the table. A call to Init is required
    --  before any use of this table after calling Free.
 
    First : constant Table_Index_Type := Table_Low_Bound;
@@ -181,6 +183,9 @@ pragma Elaborate_Body (Table);
    --    x.Table (x.Last) := New_Val;
    --  i.e. the table size is increased by one, and the given new item
    --  stored in the newly created table element.
+
+   procedure Append_All (New_Vals : Table_Type);
+   --  Appends all components of New_Vals
 
    procedure Set_Item
      (Index : Table_Index_Type;

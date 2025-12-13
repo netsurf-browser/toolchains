@@ -1,5 +1,6 @@
-/* { dg-do run { target powerpc*-*-* } } */
-/* { dg-xfail-if "" { "powerpc-ibm-aix*" } { "-maltivec" } { "" } } */
+/* { dg-do run { target { powerpc*-*-* && vmx_hw } } } */
+/* { dg-do compile { target { powerpc*-*-* && { ! vmx_hw } } } } */
+/* { dg-require-effective-target powerpc_altivec_ok } */
 /* { dg-options "-maltivec" } */
 
 /* Test for correct handling of AltiVec constants passed
@@ -10,7 +11,6 @@
 #include <stdlib.h>
 
 #include <altivec.h>
-#include "altivec_check.h"
 
 #define CHECK_INVARIANT(expr) \
   if (!(expr)) { \
@@ -23,10 +23,10 @@ struct vfoo { int x; __vector signed int v; int y; };
 union u { __vector signed int v; signed int i[4]; };
 
 struct foo x_g = { 3, 4};
-struct vfoo vx_g = { 10, (vector signed int) {11, 12, 13, 14}, 15 };
-__vector signed int v_g = (vector signed int) {22, 23, 24, 25};
-struct vfoo vx2_g = { 30, (vector signed int) {31, 32, 33, 34}, 35 };
-__vector signed int v2_g = (vector signed int) {40, 41, 42, 43};
+struct vfoo vx_g = { 10, {11, 12, 13, 14}, 15 };
+__vector signed int v_g = {22, 23, 24, 25};
+struct vfoo vx2_g = { 30, {31, 32, 33, 34}, 35 };
+__vector signed int v2_g = {40, 41, 42, 43};
 int i_1 = 99, i_2 = 33;
 double d_2 = 1.5, d_3 = 1.75;
 double ld_1 = 1.25;
@@ -75,11 +75,15 @@ void baz (int i, ... )
       
     CHECK_INVARIANT (vec_all_eq (v_i, v_g));
     CHECK_INVARIANT (j == i_1);
-    CHECK_INVARIANT (vx.x == vx_g.x && vec_all_eq(vx.v, vx_g.v) && vx.y == vx_g.y);
+    CHECK_INVARIANT (vx.x == vx_g.x);
+    CHECK_INVARIANT (vec_all_eq (vx.v, vx_g.v));
+    CHECK_INVARIANT (vx.y == vx_g.y);
     CHECK_INVARIANT (k == i_1);
     CHECK_INVARIANT (vec_all_eq (v2_i, v2_g));
     CHECK_INVARIANT (l == i_1);
-    CHECK_INVARIANT (vx2.x == vx2_g.x && vec_all_eq(vx2.v, vx2_g.v) && vx2.y == vx2_g.y);
+    CHECK_INVARIANT (vx2.x == vx2_g.x);
+    CHECK_INVARIANT (vec_all_eq (vx2.v, vx2_g.v));
+    CHECK_INVARIANT (vx2.y == vx2_g.y);
 }
 
 void quux (int i, ... )
@@ -110,20 +114,24 @@ void baz2 (int i, ... )
     va_end(ap);
     vxi.v = vx.v;
 
-    CHECK_INVARIANT (vx.x == vx_g.x && vec_all_eq(vx.v, vx_g.v) && vx.y == vx_g.y);
+    CHECK_INVARIANT (vx.x == vx_g.x);
+    CHECK_INVARIANT (vec_all_eq (vx.v, vx_g.v));
+    CHECK_INVARIANT (vx.y == vx_g.y);
     CHECK_INVARIANT (vec_all_eq (vxi.v, vx_g.v));
 }
 
-int main(void)
+void main1(void)
 {
     CHECK_INVARIANT (sizeof(struct foo) == 8 && sizeof(struct vfoo) == 48);
-
-    altivec_check();
 
     bar(i_1, x_g, (short)i_2, (float)d_2, ld_1, (char)i_1, d_3);
     baz(i_1, v_g, i_1, vx_g, i_1, v2_g, i_1, vx2_g); 
     quux(i_1, v_g, v_g);
     baz2(i_1, vx_g);
-    
+}
+
+int main(void)
+{
+    main1();
     return 0;
 }

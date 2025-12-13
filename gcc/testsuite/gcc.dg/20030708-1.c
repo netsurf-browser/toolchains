@@ -1,5 +1,5 @@
 /* PR c/11420 */
-/* { dg-do link } */
+/* { dg-do link { target fpic } } */
 /* { dg-options "-O2 -fpic" } */
 
 void (* volatile fn) (void);

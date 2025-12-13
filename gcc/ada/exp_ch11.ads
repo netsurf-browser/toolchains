@@ -6,18 +6,18 @@
 --                                                                          --
 --                                 S p e c                                  --
 --                                                                          --
---          Copyright (C) 1992-2000 Free Software Foundation, Inc.          --
+--          Copyright (C) 1992-2009, Free Software Foundation, Inc.         --
 --                                                                          --
 -- GNAT is free software;  you can  redistribute it  and/or modify it under --
 -- terms of the  GNU General Public License as published  by the Free Soft- --
--- ware  Foundation;  either version 2,  or (at your option) any later ver- --
+-- ware  Foundation;  either version 3,  or (at your option) any later ver- --
 -- sion.  GNAT is distributed in the hope that it will be useful, but WITH- --
 -- OUT ANY WARRANTY;  without even the  implied warranty of MERCHANTABILITY --
--- or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU General Public License --
--- for  more details.  You should have  received  a copy of the GNU General --
--- Public License  distributed with GNAT;  see file COPYING.  If not, write --
--- to  the Free Software Foundation,  59 Temple Place - Suite 330,  Boston, --
--- MA 02111-1307, USA.                                                      --
+-- or FITNESS FOR A PARTICULAR PURPOSE.                                     --
+--                                                                          --
+-- You should have received a copy of the GNU General Public License along  --
+-- with this program; see file COPYING3.  If not see                        --
+-- <http://www.gnu.org/licenses/>.                                          --
 --                                                                          --
 -- GNAT was originally developed  by the GNAT team at  New York University. --
 -- Extensive contributions were provided by Ada Core Technologies Inc.      --
@@ -41,9 +41,6 @@ package Exp_Ch11 is
    --  See runtime routine Ada.Exceptions for full details on the format and
    --  content of these tables.
 
-   procedure Initialize;
-   --  Initializes these data structures for a new main unit file
-
    procedure Expand_At_End_Handler (HSS : Node_Id; Block : Node_Id);
    --  Given a handled statement sequence, HSS, for which the At_End_Proc
    --  field is set, and which currently has no exception handlers, this
@@ -59,59 +56,40 @@ package Exp_Ch11 is
    --  is also called to expand the special exception handler built for
    --  accept bodies (see Exp_Ch9.Build_Accept_Body).
 
-   procedure Generate_Unit_Exception_Table;
-   --  Procedure called by main driver to generate unit exception table if
-   --  zero cost exceptions are enabled. See System.Exceptions for details.
+   function Find_Local_Handler
+     (Ename : Entity_Id;
+      Nod   : Node_Id) return Node_Id;
+   --  This function searches for a local exception handler that will handle
+   --  the exception named by Ename. If such a local hander exists, then the
+   --  corresponding N_Exception_Handler is returned. If no such handler is
+   --  found then Empty is returned. In order to match and return True, the
+   --  handler may not have a choice parameter specification. Nod is the raise
+   --  node that references the handler.
+
+   function Get_Local_Raise_Call_Entity return Entity_Id;
+   --  This function is provided for use by the back end in conjunction with
+   --  generation of Local_Raise calls when an exception raise is converted to
+   --  a goto statement. If Local_Raise is defined, its entity is returned,
+   --  if not, Empty is returned (in which case the call is silently skipped).
+
+   function Get_RT_Exception_Entity (R : RT_Exception_Code) return Entity_Id;
+   --  This function is provided for use by the back end in conjunction with
+   --  generation of Local_Raise calls when an exception raise is converted to
+   --  a goto statement. The argument is the reason code which would be used
+   --  to determine which Rcheck_nn procedure to call. The returned result is
+   --  the exception entity to be passed to Local_Raise.
 
    function Is_Non_Ada_Error (E : Entity_Id) return Boolean;
    --  This function is provided for Gigi use. It returns True if operating on
    --  VMS, and the argument E is the entity for System.Aux_Dec.Non_Ada_Error.
    --  This is used to generate the special matching code for this exception.
 
-   procedure Remove_Handler_Entries (N : Node_Id);
-   --  This procedure is called when optimization circuits determine that
-   --  an entire subtree can be removed. If the subtree contains handler
-   --  entries in zero cost exception mode, then such removal can lead to
-   --  dangling references to non-existent handlers in the handler table.
-   --  This procedure removes such references.
-
-   --------------------------------------
-   -- Subprogram_Descriptor Generation --
-   --------------------------------------
-
-   --  Subprogram descriptors are required for all subprograms, including
-   --  explicit subprograms defined in the program, subprograms that are
-   --  imported via pragma Import, and also for the implicit elaboration
-   --  subprograms used to elaborate package specs and bodies.
-
-   procedure Generate_Subprogram_Descriptor_For_Package
-     (N    : Node_Id;
-      Spec : Entity_Id);
-   --  This is used to create a descriptor for the implicit elaboration
-   --  procedure for a package spec of body. The compiler only generates
-   --  such descriptors if the package spec or body contains exception
-   --  handlers (either explicitly in the case of a body, or from generic
-   --  package instantiations). N is the node for the package body or
-   --  spec, and Spec is the package body or package entity respectively.
-   --  N must be a compilation unit, and the descriptor is placed at
-   --  the end of the actions for the auxiliary compilation unit node.
-
-   procedure Generate_Subprogram_Descriptor_For_Subprogram
-     (N    : Node_Id;
-      Spec : Entity_Id);
-   --  This is used to create a desriptor for a subprogram, both those
-   --  present in the source, and those implicitly generated by code
-   --  expansion. N is the subprogram body node, and Spec is the entity
-   --  for the subprogram. The descriptor is placed at the end of the
-   --  Last exception handler, or, if there are no handlers, at the end
-   --  of the statement sequence.
-
-   procedure Generate_Subprogram_Descriptor_For_Imported_Subprogram
-     (Spec  : Entity_Id;
-      Slist : List_Id);
-   --  This is used to create a descriptor for an imported subprogram.
-   --  Such descriptors are needed for propagation of exceptions through
-   --  such subprograms. The descriptor never references any handlers,
-   --  and is appended to the given Slist.
+   procedure Possible_Local_Raise (N : Node_Id; E : Entity_Id);
+   --  This procedure is called whenever node N might cause the back end
+   --  to generate a local raise for a local Constraint/Program/Storage_Error
+   --  exception. It deals with generating a warning if there is no local
+   --  handler (and restriction No_Exception_Propagation is set), or if there
+   --  is a local handler marking that it has a local raise. E is the entity
+   --  of the corresponding exception.
 
 end Exp_Ch11;

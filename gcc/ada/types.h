@@ -6,18 +6,17 @@
  *                                                                          *
  *                              C Header File                               *
  *                                                                          *
- *          Copyright (C) 1992-2003, Free Software Foundation, Inc.         *
+ *          Copyright (C) 1992-2010, Free Software Foundation, Inc.         *
  *                                                                          *
  * GNAT is free software;  you can  redistribute it  and/or modify it under *
  * terms of the  GNU General Public License as published  by the Free Soft- *
- * ware  Foundation;  either version 2,  or (at your option) any later ver- *
+ * ware  Foundation;  either version 3,  or (at your option) any later ver- *
  * sion.  GNAT is distributed in the hope that it will be useful, but WITH- *
  * OUT ANY WARRANTY;  without even the  implied warranty of MERCHANTABILITY *
  * or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU General Public License *
  * for  more details.  You should have  received  a copy of the GNU General *
- * Public License  distributed with GNAT;  see file COPYING.  If not, write *
- * to  the Free Software Foundation,  59 Temple Place - Suite 330,  Boston, *
- * MA 02111-1307, USA.                                                      *
+ * Public License  distributed with GNAT; see file COPYING3.  If not, go to *
+ * http://www.gnu.org/licenses for a complete copy of the license.          *
  *                                                                          *
  * GNAT was originally developed  by the GNAT team at  New York University. *
  * Extensive contributions were provided by Ada Core Technologies Inc.      *
@@ -161,8 +160,6 @@ typedef int Union_Id;
 #define Uint_Table_Start        2000000000
 #define Uint_High_Bound	        2099999999
 
-#define Char_Code_Bias		2100000000
-
 SUBTYPE (List_Range,      Int, List_Low_Bound,    List_High_Bound)
 SUBTYPE (Node_Range,      Int, Node_Low_Bound,    Node_High_Bound)
 SUBTYPE (Elist_Range,     Int, Elist_Low_Bound,   Elist_High_Bound)
@@ -171,7 +168,6 @@ SUBTYPE (Names_Range,     Int, Names_Low_Bound,   Names_High_Bound)
 SUBTYPE (Strings_Range,   Int, Strings_Low_Bound, Strings_High_Bound)
 SUBTYPE (Uint_Range,      Int, Uint_Low_Bound,    Uint_High_Bound)
 SUBTYPE (Ureal_Range,     Int, Ureal_Low_Bound,   Ureal_High_Bound)
-SUBTYPE (Char_Code_Range, Int, Char_Code_Bias,    (Char_Code_Bias + 65535))
 
 /* Types for Names_Table Package:  */
 
@@ -286,8 +282,8 @@ typedef Int Ureal;
 
 /* Character Code Type:  */
 
-/* Character code value, intended to be 16 bits.  */
-typedef short Char_Code;
+/* Character code value, intended to be 32 bits.  */
+typedef unsigned Char_Code;
 
 /* Types Used for Library Management:  */
 
@@ -331,6 +327,19 @@ typedef Int Mechanism_Type;
 #define By_Descriptor_SB   (-8)
 #define By_Descriptor_A    (-9)
 #define By_Descriptor_NCA  (-10)
+#define By_Descriptor_Last (-10)
+#define By_Short_Descriptor      (-11)
+#define By_Short_Descriptor_UBS  (-12)
+#define By_Short_Descriptor_UBSB (-13)
+#define By_Short_Descriptor_UBA  (-14)
+#define By_Short_Descriptor_S    (-15)
+#define By_Short_Descriptor_SB   (-16)
+#define By_Short_Descriptor_A    (-17)
+#define By_Short_Descriptor_NCA  (-18)
+#define By_Short_Descriptor_Last (-18)
+
+/* Internal to Gigi.  */
+#define By_Copy_Return     (-128)
 
 /* Definitions of Reason codes for Raise_xxx_Error nodes */
 #define CE_Access_Check_Failed              0
@@ -341,26 +350,34 @@ typedef Int Mechanism_Type;
 #define CE_Index_Check_Failed               5
 #define CE_Invalid_Data                     6
 #define CE_Length_Check_Failed              7
-#define CE_Overflow_Check_Failed            8
-#define CE_Partition_Check_Failed           9
-#define CE_Range_Check_Failed              10
-#define CE_Tag_Check_Failed                11
-#define PE_Access_Before_Elaboration       12
-#define PE_Accessibility_Check_Failed      13
-#define PE_All_Guards_Closed               14
-#define PE_Duplicated_Entry_Address        15
-#define PE_Explicit_Raise                  16
-#define PE_Finalize_Raised_Exception       17
-#define PE_Misaligned_Address_Value        18
-#define PE_Missing_Return                  19
-#define PE_Overlaid_Controlled_Object      20
-#define PE_Potentially_Blocking_Operation  21
-#define PE_Stubbed_Subprogram_Called       22
-#define PE_Unchecked_Union_Restriction     23
-#define SE_Empty_Storage_Pool              24
-#define SE_Explicit_Raise                  25
-#define SE_Infinite_Recursion              26
-#define SE_Object_Too_Large                27
-#define SE_Restriction_Violation           28
+#define CE_Null_Exception_Id                8
+#define CE_Null_Not_Allowed                 9
+#define CE_Overflow_Check_Failed           10
+#define CE_Partition_Check_Failed          11
+#define CE_Range_Check_Failed              12
+#define CE_Tag_Check_Failed                13
 
-#define LAST_REASON_CODE                   28
+#define PE_Access_Before_Elaboration       14
+#define PE_Accessibility_Check_Failed      15
+#define PE_Address_Of_Intrinsic            16
+#define PE_All_Guards_Closed               17
+#define PE_Bad_Attribute_For_Predicate     18
+#define PE_Current_Task_In_Entry_Body      19
+#define PE_Duplicated_Entry_Address        20
+#define PE_Explicit_Raise                  21
+#define PE_Finalize_Raised_Exception       22
+#define PE_Implicit_Return                 23
+#define PE_Misaligned_Address_Value        24
+#define PE_Missing_Return                  25
+#define PE_Overlaid_Controlled_Object      26
+#define PE_Potentially_Blocking_Operation  27
+#define PE_Stubbed_Subprogram_Called       28
+#define PE_Unchecked_Union_Restriction     29
+#define PE_Non_Transportable_Actual        30
+
+#define SE_Empty_Storage_Pool              31
+#define SE_Explicit_Raise                  32
+#define SE_Infinite_Recursion              33
+#define SE_Object_Too_Large                34
+
+#define LAST_REASON_CODE                   34

@@ -1,12 +1,12 @@
 /* Definitions for SH running NetBSD using ELF
-   Copyright (C) 2002, 2003, 2004 Free Software Foundation, Inc.
+   Copyright (C) 2002, 2003, 2004, 2005, 2007 Free Software Foundation, Inc.
    Contributed by Wasabi Systems, Inc.
 
 This file is part of GCC.
 
 GCC is free software; you can redistribute it and/or modify
 it under the terms of the GNU General Public License as published by
-the Free Software Foundation; either version 2, or (at your option)
+the Free Software Foundation; either version 3, or (at your option)
 any later version.
 
 GCC is distributed in the hope that it will be useful,
@@ -15,26 +15,25 @@ MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
 GNU General Public License for more details.
 
 You should have received a copy of the GNU General Public License
-along with this program; see the file COPYING.  If not, write to
-the Free Software Foundation, 59 Temple Place - Suite 330,
-Boston, MA 02111-1307, USA.  */
+along with GCC; see the file COPYING3.  If not see
+<http://www.gnu.org/licenses/>.  */
 
 /* Run-time Target Specification.  */
-#if TARGET_ENDIAN_DEFAULT == LITTLE_ENDIAN_BIT
+#if TARGET_ENDIAN_DEFAULT == MASK_LITTLE_ENDIAN
 #define TARGET_VERSION_ENDIAN "le"
 #else
 #define TARGET_VERSION_ENDIAN ""
 #endif
 
-#if TARGET_CPU_DEFAULT & SH5_BIT
-#if TARGET_CPU_DEFAULT & SH3E_BIT
+#if TARGET_CPU_DEFAULT & MASK_SH5
+#if TARGET_CPU_DEFAULT & MASK_SH_E
 #define TARGET_VERSION_CPU "sh5"
 #else
 #define TARGET_VERSION_CPU "sh64"
-#endif /* SH3E_BIT */
+#endif /* MASK_SH_E */
 #else
 #define TARGET_VERSION_CPU "sh"
-#endif /* SH5_BIT */
+#endif /* MASK_SH5 */
 
 #undef TARGET_VERSION
 #define TARGET_VERSION	fprintf (stderr, " (NetBSD/%s%s ELF)",		\
@@ -63,17 +62,6 @@ Boston, MA 02111-1307, USA.  */
 
 /* LINK_EMUL_PREFIX from sh/elf.h */
 
-#undef LINK_DEFAULT_CPU_EMUL
-#if TARGET_CPU_DEFAULT & SH5_BIT
-#if TARGET_CPU_DEFAULT & SH3E_BIT
-#define LINK_DEFAULT_CPU_EMUL "32"
-#else
-#define LINK_DEFAULT_CPU_EMUL "64"
-#endif /* SH3E_BIT */
-#else
-#define LINK_DEFAULT_CPU_EMUL ""
-#endif /* SH5_BIT */
-
 #undef SUBTARGET_LINK_EMUL_SUFFIX
 #define SUBTARGET_LINK_EMUL_SUFFIX "_nbsd"
 
@@ -91,24 +79,19 @@ Boston, MA 02111-1307, USA.  */
 
 #undef TARGET_DEFAULT
 #define TARGET_DEFAULT \
-  (TARGET_CPU_DEFAULT | USERMODE_BIT | TARGET_ENDIAN_DEFAULT)
+  (TARGET_CPU_DEFAULT | MASK_USERMODE | TARGET_ENDIAN_DEFAULT)
 
 /* Define because we use the label and we do not need them.  */
-#define NO_PROFILE_COUNTERS
+#define NO_PROFILE_COUNTERS 1
  
 #undef FUNCTION_PROFILER
 #define FUNCTION_PROFILER(STREAM,LABELNO)				\
 do									\
   {									\
-    if (TARGET_SHMEDIA32)						\
+    if (TARGET_SHMEDIA32 || TARGET_SHMEDIA64)				\
       {									\
 	/* FIXME */							\
-	abort ();							\
-      }									\
-    else if (TARGET_SHMEDIA64)						\
-      {									\
-	/* FIXME */							\
-	abort ();							\
+	sorry ("unimplemented-shmedia profiling");			\
       }									\
     else								\
       {									\
@@ -125,3 +108,10 @@ do									\
       }									\
   }									\
 while (0)
+
+/* Since libgcc is compiled with -fpic for this target, we can't use
+   __sdivsi3_1 as the division strategy for -O0 and -Os.  */
+#undef SH_DIV_STRATEGY_DEFAULT
+#define SH_DIV_STRATEGY_DEFAULT SH_DIV_CALL2
+#undef SH_DIV_STR_FOR_SIZE
+#define SH_DIV_STR_FOR_SIZE "call2"

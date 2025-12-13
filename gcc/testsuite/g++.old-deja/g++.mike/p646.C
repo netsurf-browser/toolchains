@@ -90,7 +90,7 @@ foo_parm_returns_foo (foo f)
 }
 
 void
-abort_because (char *str)
+abort_because (const char *str)
 {
   printf ("aborting because %s\n", str);
   abort ();
@@ -132,8 +132,8 @@ warn_foo_parm_returns_foo (foo f)
   f;
 }                              // { dg-warning "" } control reaches end
 
-main ()
-{				// { dg-warning "" } no type
+main ()			       // { dg-warning "" } no type
+{
   int ii = return_1 ();
   if (ii != 1)
     abort_because ("wrong value returned");

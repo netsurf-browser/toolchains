@@ -1,18 +1,17 @@
 // PR c++/13594
 
+// { dg-options "" }
 // { dg-do compile }
 
-namespace foo_impl {
-  class T; // { dg-error "first declared" "" }
-}
-namespace bar_impl {
-  class T; // { dg-error "also declared" "" }
-}
 namespace foo {
-  using namespace foo_impl __attribute__((strong));
+  inline namespace foo_impl {
+    class T; // { dg-error "T" "" }
+  }
 }
 namespace bar {
-  using namespace bar_impl __attribute__((strong));
+  inline namespace bar_impl {
+    class T; // { dg-error "T" "" }
+  }
   using namespace foo;
 }
 namespace baz {
@@ -22,4 +21,4 @@ namespace baz {
 
 foo::T *t1;
 bar::T *t2;
-baz::T *t3; // { dg-error "(ambiguous|expected|extra)" "" }
+baz::T *t3; // { dg-error "(ambiguous|does not name a type)" "" }

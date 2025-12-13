@@ -5,7 +5,9 @@
 
 // PR c++ 10953. ICE
 
+// { dg-bogus "" "" { target *-*-* } 14 }
+
 class 
 {
-  typename::  // { dg-error "" "" }
+  typename::
 ; // { dg-error "" "" }

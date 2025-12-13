@@ -3,5 +3,4 @@
 
 struct A { };
 int main() { b: A() && && b; } // { dg-error "A\\(\\) && && *b" }
-
-// { dg-error "candidate" "additional" { target *-*-* } 5 }
+// { dg-message "candidate|operator&&|no known conversion" "additional" { target *-*-* } 5 }

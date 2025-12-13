@@ -1,4 +1,10 @@
-// { dg-do run  }
+// This test fails on VxWorks in kernel mode because it depends on the
+// library version of "::operator new[]" calling the "::operator new"
+// defined in this module.  This doesn't work because the library version
+// of "::operator new[]" is built into the kernel itself; library relocations
+// are resolved when the kernel is linked.
+// { dg-do run { xfail { powerpc-ibm-aix* || vxworks_kernel } } }
+// { dg-options "-flat_namespace" { target *-*-darwin[67]* } }
 // GROUPS passed operator-new
 #include <stdio.h>
 #include <stdlib.h>

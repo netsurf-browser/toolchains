@@ -1,11 +1,12 @@
 // std::ctype implementation details, GNU version -*- C++ -*-
 
-// Copyright (C) 2001, 2002, 2003, 2004 Free Software Foundation, Inc.
+// Copyright (C) 2001, 2002, 2003, 2004, 2005, 2006, 2007, 2008, 2009, 2010
+// Free Software Foundation, Inc.
 //
 // This file is part of the GNU ISO C++ Library.  This library is free
 // software; you can redistribute it and/or modify it under the
 // terms of the GNU General Public License as published by the
-// Free Software Foundation; either version 2, or (at your option)
+// Free Software Foundation; either version 3, or (at your option)
 // any later version.
 
 // This library is distributed in the hope that it will be useful,
@@ -13,19 +14,14 @@
 // MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
 // GNU General Public License for more details.
 
-// You should have received a copy of the GNU General Public License along
-// with this library; see the file COPYING.  If not, write to the Free
-// Software Foundation, 59 Temple Place - Suite 330, Boston, MA 02111-1307,
-// USA.
+// Under Section 7 of GPL version 3, you are granted additional
+// permissions described in the GCC Runtime Library Exception, version
+// 3.1, as published by the Free Software Foundation.
 
-// As a special exception, you may use this file as part of a free software
-// library without restriction.  Specifically, if other files instantiate
-// templates or use macros or inline functions from this file, or you compile
-// this file and link it with other files to produce an executable, this
-// file does not by itself cause the resulting executable to be covered by
-// the GNU General Public License.  This exception does not however
-// invalidate any other reasons why the executable file might be covered by
-// the GNU General Public License.
+// You should have received a copy of the GNU General Public License and
+// a copy of the GCC Runtime Library Exception along with this program;
+// see the files COPYING3 and COPYING.RUNTIME respectively.  If not, see
+// <http://www.gnu.org/licenses/>.
 
 //
 // ISO C++ 14882: 22.2.1.1.2  ctype virtual functions.
@@ -34,29 +30,34 @@
 // Written by Benjamin Kosnik <bkoz@redhat.com>
 
 #include <locale>
+#include <cstdio>
 #include <bits/c++locale_internal.h>
 
-namespace std
+namespace std _GLIBCXX_VISIBILITY(default)
 {
+_GLIBCXX_BEGIN_NAMESPACE_VERSION
+
   // NB: The other ctype<char> specializations are in src/locale.cc and
   // various /config/os/* files.
-  template<>
-    ctype_byname<char>::ctype_byname(const char* __s, size_t __refs)
-    : ctype<char>(0, false, __refs) 
-    { 		
-      if (std::strcmp(__s, "C") != 0 && std::strcmp(__s, "POSIX") != 0)
-	{
-	  this->_S_destroy_c_locale(this->_M_c_locale_ctype);
-	  this->_S_create_c_locale(this->_M_c_locale_ctype, __s); 
-	  this->_M_toupper = this->_M_c_locale_ctype->__ctype_toupper;
-	  this->_M_tolower = this->_M_c_locale_ctype->__ctype_tolower;
-	  this->_M_table = this->_M_c_locale_ctype->__ctype_b;
-	}
-    }
+  ctype_byname<char>::ctype_byname(const char* __s, size_t __refs)
+  : ctype<char>(0, false, __refs) 
+  { 		
+    if (std::strcmp(__s, "C") != 0 && std::strcmp(__s, "POSIX") != 0)
+      {
+	this->_S_destroy_c_locale(this->_M_c_locale_ctype);
+	this->_S_create_c_locale(this->_M_c_locale_ctype, __s); 
+	this->_M_toupper = this->_M_c_locale_ctype->__ctype_toupper;
+	this->_M_tolower = this->_M_c_locale_ctype->__ctype_tolower;
+	this->_M_table = this->_M_c_locale_ctype->__ctype_b;
+      }
+  }
+
+  ctype_byname<char>::~ctype_byname()
+  { }
 
 #ifdef _GLIBCXX_USE_WCHAR_T  
   ctype<wchar_t>::__wmask_type
-  ctype<wchar_t>::_M_convert_to_wmask(const mask __m) const
+  ctype<wchar_t>::_M_convert_to_wmask(const mask __m) const throw()
   {
     __wmask_type __ret;
     switch (__m)
@@ -95,7 +96,7 @@ namespace std
 	__ret = __wctype_l("graph", _M_c_locale_ctype);
 	break;
       default:
-	__ret = 0;
+	__ret = __wmask_type();
       }
     return __ret;
   }
@@ -134,20 +135,34 @@ namespace std
   ctype<wchar_t>::
   do_is(mask __m, wchar_t __c) const
   { 
-    // Highest bitmask in ctype_base == 10, but extra in "C"
-    // library for blank.
+    // The case of __m == ctype_base::space is particularly important,
+    // due to its use in many istream functions.  Therefore we deal with
+    // it first, exploiting the knowledge that on GNU systems _M_bit[5]
+    // is the mask corresponding to ctype_base::space.  NB: an encoding
+    // change would not affect correctness!
     bool __ret = false;
-    const size_t __bitmasksize = 11; 
-    for (size_t __bitcur = 0; __bitcur <= __bitmasksize; ++__bitcur)
-      if (__m & _M_bit[__bitcur]
-	  && __iswctype_l(__c, _M_wmask[__bitcur], _M_c_locale_ctype))
-	{
-	  __ret = true;
-	  break;
-	}
+    if (__m == _M_bit[5])
+      __ret = __iswctype_l(__c, _M_wmask[5], _M_c_locale_ctype);
+    else
+      {
+	// Highest bitmask in ctype_base == 10, but extra in "C"
+	// library for blank.
+	const size_t __bitmasksize = 11;
+	for (size_t __bitcur = 0; __bitcur <= __bitmasksize; ++__bitcur)
+	  if (__m & _M_bit[__bitcur])
+	    {
+	      if (__iswctype_l(__c, _M_wmask[__bitcur], _M_c_locale_ctype))
+		{
+		  __ret = true;
+		  break;
+		}
+	      else if (__m == _M_bit[__bitcur])
+		break;
+	    }
+      }
     return __ret;    
   }
-  
+
   const wchar_t* 
   ctype<wchar_t>::
   do_is(const wchar_t* __lo, const wchar_t* __hi, mask* __vec) const
@@ -254,7 +269,7 @@ namespace std
   }
 
   void
-  ctype<wchar_t>::_M_initialize_ctype()
+  ctype<wchar_t>::_M_initialize_ctype() throw()
   {
 #if __GLIBC__ > 2 || (__GLIBC__ == 2 && __GLIBC_MINOR__ > 2)
     __c_locale __old = __uselocale(_M_c_locale_ctype);
@@ -286,4 +301,6 @@ namespace std
 #endif
   }
 #endif //  _GLIBCXX_USE_WCHAR_T
-}
+
+_GLIBCXX_END_NAMESPACE_VERSION
+} // namespace

@@ -1,30 +1,28 @@
 ------------------------------------------------------------------------------
 --                                                                          --
---                GNU ADA RUN-TIME LIBRARY (GNARL) COMPONENTS               --
+--                 GNAT RUN-TIME LIBRARY (GNARL) COMPONENTS                 --
 --                                                                          --
 --      S Y S T E M . T A S K I N G . P R O T E C T E D _ O B J E C T S     --
 --                                                                          --
 --                                  S p e c                                 --
 --                                                                          --
---          Copyright (C) 1992-2003, Free Software Foundation, Inc.         --
+--          Copyright (C) 1992-2009, Free Software Foundation, Inc.         --
 --                                                                          --
 -- GNARL is free software; you can  redistribute it  and/or modify it under --
 -- terms of the  GNU General Public License as published  by the Free Soft- --
--- ware  Foundation;  either version 2,  or (at your option) any later ver- --
--- sion. GNARL is distributed in the hope that it will be useful, but WITH- --
+-- ware  Foundation;  either version 3,  or (at your option) any later ver- --
+-- sion.  GNAT is distributed in the hope that it will be useful, but WITH- --
 -- OUT ANY WARRANTY;  without even the  implied warranty of MERCHANTABILITY --
--- or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU General Public License --
--- for  more details.  You should have  received  a copy of the GNU General --
--- Public License  distributed with GNARL; see file COPYING.  If not, write --
--- to  the Free Software Foundation,  59 Temple Place - Suite 330,  Boston, --
--- MA 02111-1307, USA.                                                      --
+-- or FITNESS FOR A PARTICULAR PURPOSE.                                     --
 --                                                                          --
--- As a special exception,  if other files  instantiate  generics from this --
--- unit, or you link  this unit with other files  to produce an executable, --
--- this  unit  does not  by itself cause  the resulting  executable  to  be --
--- covered  by the  GNU  General  Public  License.  This exception does not --
--- however invalidate  any other reasons why  the executable file  might be --
--- covered by the  GNU Public License.                                      --
+-- As a special exception under Section 7 of GPL version 3, you are granted --
+-- additional permissions described in the GCC Runtime Library Exception,   --
+-- version 3.1, as published by the Free Software Foundation.               --
+--                                                                          --
+-- You should have received a copy of the GNU General Public License and    --
+-- a copy of the GCC Runtime Library Exception along with this program;     --
+-- see the files COPYING3 and COPYING.RUNTIME respectively.  If not, see    --
+-- <http://www.gnu.org/licenses/>.                                          --
 --                                                                          --
 -- GNARL was developed by the GNARL team at Florida State University.       --
 -- Extensive contributions were provided by Ada Core Technologies, Inc.     --
@@ -45,7 +43,7 @@
 
 --  Note: the compiler generates direct calls to this interface, via Rtsfind.
 --  Any changes to this interface may require corresponding compiler changes
---  in exp_ch9.adb and possibly exp_ch7.adb
+--  in exp_ch9.adb and possibly exp_ch7.adb and exp_attr.adb
 
 package System.Tasking.Protected_Objects is
    pragma Elaborate_Body;
@@ -172,6 +170,10 @@ package System.Tasking.Protected_Objects is
 
    Null_PO : constant Protection_Access := null;
 
+   function Get_Ceiling
+     (Object : Protection_Access) return System.Any_Priority;
+   --  Returns the new ceiling priority of the protected object
+
    procedure Initialize_Protection
      (Object           : Protection_Access;
       Ceiling_Priority : Integer);
@@ -196,6 +198,11 @@ package System.Tasking.Protected_Objects is
    --  for possible future use. At the current time, everyone uses Lock
    --  for both read and write locks.
 
+   procedure Set_Ceiling
+     (Object : Protection_Access;
+      Prio   : System.Any_Priority);
+   --  Sets the new ceiling priority of the protected object
+
    procedure Unlock (Object : Protection_Access);
    --  Relinquish ownership of the lock for the object represented by
    --  the Object parameter. If this ownership was for write access, or
@@ -206,13 +213,34 @@ package System.Tasking.Protected_Objects is
 
 private
    type Protection is record
-      L       : aliased Task_Primitives.Lock;
+      L : aliased Task_Primitives.Lock;
+      --  Lock used to ensure mutual exclusive access to the protected object
+
       Ceiling : System.Any_Priority;
+      --  Ceiling priority associated to the protected object
+
+      New_Ceiling : System.Any_Priority;
+      --  New ceiling priority associated to the protected object. In case
+      --  of assignment of a new ceiling priority to the protected object the
+      --  frontend generates a call to set_ceiling to save the new value in
+      --  this field. After such assignment this value can be read by means
+      --  of the 'Priority attribute, which generates a call to get_ceiling.
+      --  However, the ceiling of the protected object will not be changed
+      --  until completion of the protected action in which the assignment
+      --  has been executed (AARM D.5.2 (10/2)).
+
+      Owner : Task_Id;
+      --  This field contains the protected object's owner. Null_Task
+      --  indicates that the protected object is not currently being used.
+      --  This information is used for detecting the type of potentially
+      --  blocking operations described in the ARM 9.5.1, par. 15 (external
+      --  calls on a protected subprogram with the same target object as that
+      --  of the protected action).
    end record;
 
    procedure Finalize_Protection (Object : in out Protection);
-   --  Clean up a Protection object; in particular, finalize the associated
-   --  Lock object. The compiler generates automatically calls to this
+   --  Clean up a Protection object (in particular, finalize the associated
+   --  Lock object). The compiler generates calls automatically to this
    --  procedure
 
 end System.Tasking.Protected_Objects;

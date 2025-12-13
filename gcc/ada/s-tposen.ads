@@ -1,30 +1,28 @@
 ------------------------------------------------------------------------------
 --                                                                          --
---               GNU ADA RUN-TIME LIBRARY (GNARL) COMPONENTS                --
+--                GNAT RUN-TIME LIBRARY (GNARL) COMPONENTS                  --
 --                                                                          --
---              SYSTEM.TASKING.PROTECTED_OBJECTS.SINGLE_ENTRY               --
+--             SYSTEM.TASKING.PROTECTED_OBJECTS.SINGLE_ENTRY                --
 --                                                                          --
 --                                  S p e c                                 --
 --                                                                          --
---          Copyright (C) 1992-2003 Free Software Foundation, Inc.          --
+--          Copyright (C) 1992-2009, Free Software Foundation, Inc.         --
 --                                                                          --
 -- GNARL is free software; you can  redistribute it  and/or modify it under --
 -- terms of the  GNU General Public License as published  by the Free Soft- --
--- ware  Foundation;  either version 2,  or (at your option) any later ver- --
--- sion. GNARL is distributed in the hope that it will be useful, but WITH- --
+-- ware  Foundation;  either version 3,  or (at your option) any later ver- --
+-- sion.  GNAT is distributed in the hope that it will be useful, but WITH- --
 -- OUT ANY WARRANTY;  without even the  implied warranty of MERCHANTABILITY --
--- or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU General Public License --
--- for  more details.  You should have  received  a copy of the GNU General --
--- Public License  distributed with GNARL; see file COPYING.  If not, write --
--- to  the Free Software Foundation,  59 Temple Place - Suite 330,  Boston, --
--- MA 02111-1307, USA.                                                      --
+-- or FITNESS FOR A PARTICULAR PURPOSE.                                     --
 --                                                                          --
--- As a special exception,  if other files  instantiate  generics from this --
--- unit, or you link  this unit with other files  to produce an executable, --
--- this  unit  does not  by itself cause  the resulting  executable  to  be --
--- covered  by the  GNU  General  Public  License.  This exception does not --
--- however invalidate  any other reasons why  the executable file  might be --
--- covered by the  GNU Public License.                                      --
+-- As a special exception under Section 7 of GPL version 3, you are granted --
+-- additional permissions described in the GCC Runtime Library Exception,   --
+-- version 3.1, as published by the Free Software Foundation.               --
+--                                                                          --
+-- You should have received a copy of the GNU General Public License and    --
+-- a copy of the GCC Runtime Library Exception along with this program;     --
+-- see the files COPYING3 and COPYING.RUNTIME respectively.  If not, see    --
+-- <http://www.gnu.org/licenses/>.                                          --
 --                                                                          --
 -- GNARL was developed by the GNARL team at Florida State University.       --
 -- Extensive contributions were provided by Ada Core Technologies, Inc.     --
@@ -34,13 +32,13 @@
 --  This package provides an optimized version of Protected_Objects.Operations
 --  and Protected_Objects.Entries making the following assumptions:
 --
---  PO have only one entry
---  There is only one caller at a time (No_Entry_Queue)
---  There is no dynamic priority support (No_Dynamic_Priorities)
---  No Abort Statements
---    (No_Abort_Statements, Max_Asynchronous_Select_Nesting => 0)
---  PO are at library level
---  None of the tasks will terminate (no need for finalization)
+--    PO have only one entry
+--    There is only one caller at a time (No_Entry_Queue)
+--    There is no dynamic priority support (No_Dynamic_Priorities)
+--    No Abort Statements
+--      (No_Abort_Statements, Max_Asynchronous_Select_Nesting => 0)
+--    PO are at library level
+--    None of the tasks will terminate (no need for finalization)
 --
 --  This interface is intended to be used in the ravenscar profile, the
 --  compiler is responsible for ensuring that the conditions mentioned above
@@ -204,7 +202,7 @@ package System.Tasking.Protected_Objects.Single_Entry is
    --  Lock a protected object for read access.  Upon return, the caller
    --  owns the lock for read access, and no other calls to Lock
    --  with the same argument will return until the corresponding call
-   --  to Unlock has been made by the caller.  Other cals to Lock_Read_Only
+   --  to Unlock has been made by the caller.  Other calls to Lock_Read_Only
    --  may (but need not) return before the call to Unlock, and the
    --  corresponding callers will also own the lock for read access.
 
@@ -222,8 +220,9 @@ package System.Tasking.Protected_Objects.Single_Entry is
    --  barrier. This is used when the state of a protected object may have
    --  changed, in particular after the execution of the statement sequence of
    --  a protected procedure.
-   --  This must be called with abortion deferred and with the corresponding
-   --  object locked.
+   --
+   --  This must be called with abort deferred and with the corresponding
+   --  object locked. Object is unlocked on return.
 
    procedure Protected_Single_Entry_Call
      (Object              : Protection_Entry_Access;
@@ -266,22 +265,31 @@ package System.Tasking.Protected_Objects.Single_Entry is
 
    function Protected_Count_Entry (Object : Protection_Entry)
      return Natural;
-   --  Return the number of entry calls on Object (0 or 1).
+   --  Return the number of entry calls on Object (0 or 1)
 
    function Protected_Single_Entry_Caller (Object : Protection_Entry)
-     return Task_ID;
+     return Task_Id;
    --  Return value of E'Caller, where E is the protected entry currently
    --  being handled. This will only work if called from within an
    --  entry body, as required by the LRM (C.7.1(14)).
 
 private
    type Protection_Entry is record
-      L                 : aliased Task_Primitives.Lock;
-      Compiler_Info     : System.Address;
-      Call_In_Progress  : Entry_Call_Link;
-      Ceiling           : System.Any_Priority;
-      Entry_Body        : Entry_Body_Access;
-      Entry_Queue       : Entry_Call_Link;
+      Common : aliased Protection;
+      --  State of the protected object. This part is common to any protected
+      --  object, including those without entries.
+
+      Compiler_Info : System.Address;
+      --  Pointer to compiler-generated record representing protected object
+
+      Call_In_Progress : Entry_Call_Link;
+      --  Pointer to the entry call being executed (if any)
+
+      Entry_Body : Entry_Body_Access;
+      --  Pointer to executable code for the entry body of the protected type
+
+      Entry_Queue : Entry_Call_Link;
+      --  Place to store the waiting entry call (if any)
    end record;
 
 end System.Tasking.Protected_Objects.Single_Entry;

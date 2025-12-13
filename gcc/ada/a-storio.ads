@@ -6,7 +6,7 @@
 --                                                                          --
 --                                 S p e c                                  --
 --                                                                          --
--- This specification is adapted from the Ada Reference Manual for use with --
+-- This specification is derived from the Ada Reference Manual for use with --
 -- GNAT.  In accordance with the copyright of that document, you can freely --
 -- copy and modify this specification,  provided that if you redistribute a --
 -- modified version,  any changes that you have made are clearly indicated. --
@@ -20,7 +20,7 @@ generic
    type Element_Type is private;
 
 package Ada.Storage_IO is
-pragma Preelaborate (Storage_IO);
+   pragma Preelaborate;
 
    Buffer_Size : constant System.Storage_Elements.Storage_Count :=
                    System.Storage_Elements.Storage_Count
@@ -34,9 +34,9 @@ pragma Preelaborate (Storage_IO);
    -- Input and Output Operations --
    ---------------------------------
 
-   procedure Read  (Buffer : in  Buffer_Type; Item : out Element_Type);
+   procedure Read (Buffer : Buffer_Type; Item : out Element_Type);
 
-   procedure Write (Buffer : out Buffer_Type; Item : in  Element_Type);
+   procedure Write (Buffer : out Buffer_Type; Item : Element_Type);
 
    ----------------
    -- Exceptions --

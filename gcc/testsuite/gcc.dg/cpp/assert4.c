@@ -1,12 +1,13 @@
-/* Copyright (C) 2003 Free Software Foundation, Inc.
+/* Copyright (C) 2003, 2006, 2008, 2009, 2011 Free Software Foundation, Inc.
    Test builtin preprocessor assertions.
    By Kaveh Ghazi <ghazi@caip.rutgers.edu>.  */
 
 /* { dg-do preprocess } */
+/* { dg-options "-ansi -Wno-deprecated" } */
 
 /* Check for #system assertions.  */
 
-#if defined __gnu_linux__
+#if defined __linux__
 # if !#system(linux) || !#system(unix) || !#system(posix)
 #  error
 # endif
@@ -78,7 +79,8 @@
 # error
 #endif
 
-#if defined __unix__ && !defined __CYGWIN__ 
+#if ( defined __unix__ && !defined __CYGWIN__ ) || defined _AIX \
+    || defined __vxworks
 # if !#system(unix)
 #  error
 # endif
@@ -118,19 +120,11 @@
 # error
 #endif
 
-#if defined __WINNT__ || defined __CYGWIN__ 
+#if defined __WINNT__ || defined __CYGWIN__
 # if !#system(winnt)
 #  error
 # endif
 #elif #system(winnt)
-# error
-#endif
-
-#if defined __BEOS__
-# if !#system(beos)
-#  error
-# endif
-#elif #system(beos)
 # error
 #endif
 
@@ -192,14 +186,6 @@
 # error
 #endif
 
-#if defined __d30v__
-# if !#cpu(d30v) || !#machine(d30v)
-#  error
-# endif
-#elif #cpu(d30v) || #machine(d30v)
-# error
-#endif
-
 #if defined __fr30__
 # if !#cpu(fr30) || !#machine(fr30)
 #  error
@@ -216,7 +202,7 @@
 # error
 #endif
 
-#if defined __h8300__ 
+#if defined __H8300__ 
 # if !#cpu(h8300) || !#machine(h8300) \
   || (defined __H8300__ && (!#cpu(h8300) || !#machine(h8300))) \
   || (defined __H8300H__ && (!#cpu(h8300h) || !#machine(h8300h))) \
@@ -259,22 +245,6 @@
 #  error
 # endif
 #elif #cpu(i386) || #machine(i386)
-# error
-#endif
-
-#if defined __i860__
-# if !#cpu(i860) || !#machine(i860)
-#  error
-# endif
-#elif #cpu(i860) || #machine(i860)
-# error
-#endif
-
-#if defined __i960__
-# if !#cpu(i960) || !#machine(i960)
-#  error
-# endif
-#elif #cpu(i960) || #machine(i960)
 # error
 #endif
 
@@ -327,27 +297,11 @@
 # error
 #endif
 
-#if defined __mmix__
-# if !#cpu(mmix) || !#machine(mmix)
-#  error
-# endif
-#elif #cpu(mmix) || #machine(mcore)
-# error
-#endif
-
 #if defined __mn10300__
 # if !#cpu(mn10300) || !#machine(mn10300)
 #  error
 # endif
 #elif #cpu(mn10300) || #machine(mn10300)
-# error
-#endif
-
-#if defined __ns32k__
-# if !#cpu(ns32k) || !#machine(ns32k)
-#  error
-# endif
-#elif #cpu(ns32k) || #machine(ns32k)
 # error
 #endif
 
@@ -359,7 +313,7 @@
 # error
 #endif
 
-#if defined __powerpc__
+#if defined __powerpc__ || defined __PPC__
 # if defined __powerpc64__
 #  if (#cpu(powerpc) || #machine(powerpc) \
        || !#cpu(powerpc64) || !#machine(powerpc64))

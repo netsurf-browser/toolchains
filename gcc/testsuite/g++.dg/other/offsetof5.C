@@ -1,17 +1,22 @@
+// PR c++/35741
 // { dg-do compile }
-
-// Copyright (C) 2003 Free Software Foundation, Inc.
-// Contributed by Nathan Sidwell 30 June 2003 <nathan@codesourcery.com>
-
-// PR c++ 11072, DR 273's solution is broken
 
 #include <stddef.h>
 
-struct F
+struct A
 {
-  char i;
-  char j;
+  char c;
+  int &i;
 };
 
-static int ary[offsetof (F, j)];
+int j = offsetof (A, i);		// { dg-warning "invalid access|offsetof" }
 
+template <typename T>
+struct S
+{
+  T h;
+  T &i;
+  static const int j = offsetof (S, i);	// { dg-warning "invalid access|offsetof" }
+};
+
+int k = S<int>::j;			// { dg-message "instantiated from here" }

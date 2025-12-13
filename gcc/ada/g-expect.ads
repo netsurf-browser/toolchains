@@ -6,7 +6,7 @@
 --                                                                          --
 --                                 S p e c                                  --
 --                                                                          --
---           Copyright (C) 2000-2003 Ada Core Technologies, Inc.            --
+--                     Copyright (C) 2000-2010, AdaCore                     --
 --                                                                          --
 -- GNAT is free software;  you can  redistribute it  and/or modify it under --
 -- terms of the  GNU General Public License as published  by the Free Soft- --
@@ -16,8 +16,8 @@
 -- or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU General Public License --
 -- for  more details.  You should have  received  a copy of the GNU General --
 -- Public License  distributed with GNAT;  see file COPYING.  If not, write --
--- to  the Free Software Foundation,  59 Temple Place - Suite 330,  Boston, --
--- MA 02111-1307, USA.                                                      --
+-- to  the  Free Software Foundation,  51  Franklin  Street,  Fifth  Floor, --
+-- Boston, MA 02110-1301, USA.                                              --
 --                                                                          --
 -- As a special exception,  if other files  instantiate  generics from this --
 -- unit, or you link  this unit with other files  to produce an executable, --
@@ -35,8 +35,9 @@
 --  for VMS. It is not yet implemented for any of the cross-ports (e.g. it
 --  is not available for VxWorks or LynxOS).
 
---  Usage
---  =====
+--  -----------
+--  -- Usage --
+--  -----------
 
 --  This package provides a set of subprograms similar to what is available
 --  with the standard Tcl Expect tool.
@@ -49,8 +50,8 @@
 
 --      Non_Blocking_Spawn
 --         (Fd, "ftp",
---           (1 => new String' ("machine@domaine")));
---      Timeout := 10000;  --  10 seconds
+--           (1 => new String' ("machine@domain")));
+--      Timeout := 10_000;  --  10 seconds
 --      Expect (Fd, Result, Regexp_Array'(+"\(user\)", +"\(passwd\)"),
 --              Timeout);
 --      case Result is
@@ -62,13 +63,13 @@
 --      Close (Fd);
 
 --  You can also combine multiple regular expressions together, and get the
---  specific string matching a parenthesis pair by doing something like. If you
---  expect either "lang=optional ada" or "lang=ada" from the external process,
---  you can group the two together, which is more efficient, and simply get the
---  name of the language by doing:
+--  specific string matching a parenthesis pair by doing something like this:
+--  If you expect either "lang=optional ada" or "lang=ada" from the external
+--  process, you can group the two together, which is more efficient, and
+--  simply get the name of the language by doing:
 
 --      declare
---         Matched : Regexp_Array (0 .. 2);
+--         Matched : Match_Array (0 .. 2);
 --      begin
 --         Expect (Fd, Result, "lang=(optional)? ([a-z]+)", Matched);
 --         Put_Line ("Seen: " &
@@ -111,11 +112,14 @@
 --      Send (Fd, "command");
 --      Expect (Fd, Result, ".."); -- match only on the output of command
 
---  Task Safety
---  ===========
+--  -----------------
+--  -- Task Safety --
+--  -----------------
 
---  This package is not task-safe: there should be not concurrent calls to
---  the functions defined in this package.
+--  This package is not task-safe: there should not be concurrent calls to the
+--  functions defined in this package. In other words, separate tasks must not
+--  access the facilities of this package without synchronization that
+--  serializes access.
 
 with System;
 with GNAT.OS_Lib;
@@ -128,21 +132,21 @@ package GNAT.Expect is
    Null_Pid    : constant Process_Id := 0;
 
    type Filter_Type is (Output, Input, Died);
-   --  The signals that are emitted by the Process_Descriptor upon state
-   --  changed in the child. One can connect to any of this signal through
-   --  the Add_Filter subprograms.
+   --  The signals that are emitted by the Process_Descriptor upon state change
+   --  in the child. One can connect to any of these signals through the
+   --  Add_Filter subprograms.
    --
    --     Output => Every time new characters are read from the process
    --               associated with Descriptor, the filter is called with
-   --               these new characters in argument.
+   --               these new characters in the argument.
    --
-   --               Note that output is only generated when the program is
+   --               Note that output is generated only when the program is
    --               blocked in a call to Expect.
    --
    --     Input  => Every time new characters are written to the process
    --               associated with Descriptor, the filter is called with
-   --               these new characters in argument.
-   --               Note that input is only generated by calls to Send.
+   --               these new characters in the argument.
+   --               Note that input is generated only by calls to Send.
    --
    --     Died   => The child process has died, or was explicitly killed
 
@@ -168,58 +172,70 @@ package GNAT.Expect is
    --  the process and/or automatic parsing of the output.
    --
    --  The expect buffer associated with that process can contain at most
-   --  Buffer_Size characters. Older characters are simply discarded when
-   --  this buffer is full. Beware that if the buffer is too big, this could
-   --  slow down the Expect calls if not output is matched, since Expect has
-   --  to match all the regexp against all the characters in the buffer.
-   --  If Buffer_Size is 0, there is no limit (ie all the characters are kept
+   --  Buffer_Size characters. Older characters are simply discarded when this
+   --  buffer is full. Beware that if the buffer is too big, this could slow
+   --  down the Expect calls if the output not is matched, since Expect has to
+   --  match all the regexp against all the characters in the buffer. If
+   --  Buffer_Size is 0, there is no limit (i.e. all the characters are kept
    --  till Expect matches), but this is slower.
    --
    --  If Err_To_Out is True, then the standard error of the spawned process is
-   --  connected to the standard output. This is the only way to get the
-   --  Except subprograms also match on output on standard error.
+   --  connected to the standard output. This is the only way to get the Except
+   --  subprograms to also match on output on standard error.
    --
    --  Invalid_Process is raised if the process could not be spawned.
+   --
+   --  For information about spawning processes from tasking programs, see the
+   --  "NOTE: Spawn in tasking programs" in System.OS_Lib (s-os_lib.ads).
 
    procedure Close (Descriptor : in out Process_Descriptor);
-   --  Terminate the process and close the pipes to it. It implicitly
-   --  does the 'wait' command required to clean up the process table.
-   --  This also frees the buffer associated with the process id.
+   --  Terminate the process and close the pipes to it. It implicitly does the
+   --  'wait' command required to clean up the process table. This also frees
+   --  the buffer associated with the process id. Raise Invalid_Process if the
+   --  process id is invalid.
 
    procedure Close
      (Descriptor : in out Process_Descriptor;
       Status     : out Integer);
-   --  Same as above, but also returns the exit status of the process,
-   --  as set for example by the procedure GNAT.OS_Lib.OS_Exit.
+   --  Same as above, but also returns the exit status of the process, as set
+   --  for example by the procedure GNAT.OS_Lib.OS_Exit.
 
    procedure Send_Signal
      (Descriptor : Process_Descriptor;
       Signal     : Integer);
-   --  Send a given signal to the process.
+   --  Send a given signal to the process. Raise Invalid_Process if the process
+   --  id is invalid.
 
    procedure Interrupt (Descriptor : in out Process_Descriptor);
    --  Interrupt the process (the equivalent of Ctrl-C on unix and windows)
    --  and call close if the process dies.
 
    function Get_Input_Fd
-     (Descriptor : Process_Descriptor)
-      return       GNAT.OS_Lib.File_Descriptor;
-   --  Return the input file descriptor associated with Descriptor.
+     (Descriptor : Process_Descriptor) return GNAT.OS_Lib.File_Descriptor;
+   --  Return the input file descriptor associated with Descriptor
 
    function Get_Output_Fd
-     (Descriptor : Process_Descriptor)
-      return       GNAT.OS_Lib.File_Descriptor;
-   --  Return the output file descriptor associated with Descriptor.
+     (Descriptor : Process_Descriptor) return GNAT.OS_Lib.File_Descriptor;
+   --  Return the output file descriptor associated with Descriptor
 
    function Get_Error_Fd
-     (Descriptor : Process_Descriptor)
-      return       GNAT.OS_Lib.File_Descriptor;
-   --  Return the error output file descriptor associated with Descriptor.
+     (Descriptor : Process_Descriptor) return GNAT.OS_Lib.File_Descriptor;
+   --  Return the error output file descriptor associated with Descriptor
 
    function Get_Pid
-     (Descriptor : Process_Descriptor)
-      return       Process_Id;
-   --  Return the process id assocated with a given process descriptor.
+     (Descriptor : Process_Descriptor) return Process_Id;
+   --  Return the process id associated with a given process descriptor
+
+   function Get_Command_Output
+     (Command    : String;
+      Arguments  : GNAT.OS_Lib.Argument_List;
+      Input      : String;
+      Status     : not null access Integer;
+      Err_To_Out : Boolean := False) return String;
+   --  Execute Command with the specified Arguments and Input, and return the
+   --  generated standard output data as a single string. If Err_To_Out is
+   --  True, generated standard error output is included as well. On return,
+   --  Status is set to the command's exit status.
 
    --------------------
    -- Adding filters --
@@ -234,14 +250,14 @@ package GNAT.Expect is
        (Descriptor : Process_Descriptor'Class;
         Str        : String;
         User_Data  : System.Address := System.Null_Address);
-   --  Function called every time new characters are read from or written
-   --  to the process.
+   --  Function called every time new characters are read from or written to
+   --  the process.
    --
    --  Str is a string of all these characters.
    --
-   --  User_Data, if specified, is a user specific data that will be passed to
-   --  the filter. Note that no checks are done on this parameter that should
-   --  be used with cautiousness.
+   --  User_Data, if specified, is user specific data that will be passed to
+   --  the filter. Note that no checks are done on this parameter, so it should
+   --  be used with caution.
 
    procedure Add_Filter
      (Descriptor : in out Process_Descriptor;
@@ -249,10 +265,10 @@ package GNAT.Expect is
       Filter_On  : Filter_Type := Output;
       User_Data  : System.Address := System.Null_Address;
       After      : Boolean := False);
-   --  Add a new filter for one of the filter type. This filter will be
-   --  run before all the existing filters, unless After is set True,
-   --  in which case it will be run after existing filters. User_Data
-   --  is passed as is to the filter procedure.
+   --  Add a new filter for one of the filter types. This filter will be run
+   --  before all the existing filters, unless After is set True, in which case
+   --  it will be run after existing filters. User_Data is passed as is to the
+   --  filter procedure.
 
    procedure Remove_Filter
      (Descriptor : in out Process_Descriptor;
@@ -264,14 +280,14 @@ package GNAT.Expect is
      (Descriptor : Process_Descriptor'Class;
       Str        : String;
       User_Data  : System.Address := System.Null_Address);
-   --  Function that can be used a filter and that simply outputs Str on
+   --  Function that can be used as a filter and that simply outputs Str on
    --  Standard_Output. This is mainly used for debugging purposes.
    --  User_Data is ignored.
 
    procedure Lock_Filters (Descriptor : in out Process_Descriptor);
    --  Temporarily disables all output and input filters. They will be
    --  reactivated only when Unlock_Filters has been called as many times as
-   --  Lock_Filters;
+   --  Lock_Filters.
 
    procedure Unlock_Filters (Descriptor : in out Process_Descriptor);
    --  Unlocks the filters. They are reactivated only if Unlock_Filters
@@ -288,9 +304,9 @@ package GNAT.Expect is
       Empty_Buffer : Boolean := False);
    --  Send a string to the file descriptor.
    --
-   --  The string is not formatted in any way, except if Add_LF is True,
-   --  in which case an ASCII.LF is added at the end, so that Str is
-   --  recognized as a command by the external process.
+   --  The string is not formatted in any way, except if Add_LF is True, in
+   --  which case an ASCII.LF is added at the end, so that Str is recognized
+   --  as a command by the external process.
    --
    --  If Empty_Buffer is True, any input waiting from the process (or in the
    --  buffer) is first discarded before the command is sent. The output
@@ -302,24 +318,23 @@ package GNAT.Expect is
 
    type Expect_Match is new Integer;
    Expect_Full_Buffer : constant Expect_Match := -1;
-   --  If the buffer was full and some characters were discarded.
+   --  If the buffer was full and some characters were discarded
 
    Expect_Timeout : constant Expect_Match := -2;
-   --  If not output matching the regexps was found before the timeout.
+   --  If no output matching the regexps was found before the timeout
 
    function "+" (S : String) return GNAT.OS_Lib.String_Access;
    --  Allocate some memory for the string. This is merely a convenience
-   --  convenience function to help create the array of regexps in the
-   --  call to Expect.
+   --  function to help create the array of regexps in the call to Expect.
 
    procedure Expect
      (Descriptor  : in out Process_Descriptor;
       Result      : out Expect_Match;
       Regexp      : String;
-      Timeout     : Integer := 10000;
+      Timeout     : Integer := 10_000;
       Full_Buffer : Boolean := False);
-   --  Wait till a string matching Fd can be read from Fd, and return 1
-   --  if a match was found.
+   --  Wait till a string matching Fd can be read from Fd, and return 1 if a
+   --  match was found.
    --
    --  It consumes all the characters read from Fd until a match found, and
    --  then sets the return values for the subprograms Expect_Out and
@@ -347,7 +362,7 @@ package GNAT.Expect is
      (Descriptor  : in out Process_Descriptor;
       Result      : out Expect_Match;
       Regexp      : GNAT.Regpat.Pattern_Matcher;
-      Timeout     : Integer := 10000;
+      Timeout     : Integer := 10_000;
       Full_Buffer : Boolean := False);
    --  Same as the previous one, but with a precompiled regular expression.
    --  This is more efficient however, especially if you are using this
@@ -359,7 +374,7 @@ package GNAT.Expect is
       Result      : out Expect_Match;
       Regexp      : String;
       Matched     : out GNAT.Regpat.Match_Array;
-      Timeout     : Integer := 10000;
+      Timeout     : Integer := 10_000;
       Full_Buffer : Boolean := False);
    --  Same as above, but it is now possible to get the indexes of the
    --  substrings for the parentheses in the regexp (see the example at the
@@ -379,9 +394,9 @@ package GNAT.Expect is
       Result      : out Expect_Match;
       Regexp      : GNAT.Regpat.Pattern_Matcher;
       Matched     : out GNAT.Regpat.Match_Array;
-      Timeout     : Integer := 10000;
+      Timeout     : Integer := 10_000;
       Full_Buffer : Boolean := False);
-   --  Same as above, but with a precompiled regular expression.
+   --  Same as above, but with a precompiled regular expression
 
    -------------------------------------------------------------
    -- Working on the output (single process, multiple regexp) --
@@ -389,22 +404,20 @@ package GNAT.Expect is
 
    type Regexp_Array is array (Positive range <>) of GNAT.OS_Lib.String_Access;
 
-   type Pattern_Matcher_Access is access GNAT.Regpat.Pattern_Matcher;
-   type Compiled_Regexp_Array is array (Positive range <>)
-     of Pattern_Matcher_Access;
+   type Pattern_Matcher_Access is access all GNAT.Regpat.Pattern_Matcher;
+   type Compiled_Regexp_Array is
+     array (Positive range <>) of Pattern_Matcher_Access;
 
    function "+"
-     (P    : GNAT.Regpat.Pattern_Matcher)
-      return Pattern_Matcher_Access;
-   --  Allocate some memory for the pattern matcher.
-   --  This is only a convenience function to help create the array of
-   --  compiled regular expressoins.
+     (P : GNAT.Regpat.Pattern_Matcher) return Pattern_Matcher_Access;
+   --  Allocate some memory for the pattern matcher. This is only a convenience
+   --  function to help create the array of compiled regular expressions.
 
    procedure Expect
      (Descriptor  : in out Process_Descriptor;
       Result      : out Expect_Match;
       Regexps     : Regexp_Array;
-      Timeout     : Integer := 10000;
+      Timeout     : Integer := 10_000;
       Full_Buffer : Boolean := False);
    --  Wait till a string matching one of the regular expressions in Regexps
    --  is found. This function returns the index of the regexp that matched.
@@ -415,7 +428,7 @@ package GNAT.Expect is
      (Descriptor  : in out Process_Descriptor;
       Result      : out Expect_Match;
       Regexps     : Compiled_Regexp_Array;
-      Timeout     : Integer := 10000;
+      Timeout     : Integer := 10_000;
       Full_Buffer : Boolean := False);
    --  Same as the previous one, but with precompiled regular expressions.
    --  This can be much faster if you are using them multiple times.
@@ -425,10 +438,11 @@ package GNAT.Expect is
       Result      : out Expect_Match;
       Regexps     : Regexp_Array;
       Matched     : out GNAT.Regpat.Match_Array;
-      Timeout     : Integer := 10000;
+      Timeout     : Integer := 10_000;
       Full_Buffer : Boolean := False);
    --  Same as above, except that you can also access the parenthesis
    --  groups inside the matching regular expression.
+   --
    --  The first index in Matched must be 0, or Constraint_Error will be
    --  raised. The index 0 contains the indexes for the whole string that was
    --  matched, the index 1 contains the indexes for the first parentheses
@@ -439,11 +453,10 @@ package GNAT.Expect is
       Result      : out Expect_Match;
       Regexps     : Compiled_Regexp_Array;
       Matched     : out GNAT.Regpat.Match_Array;
-      Timeout     : Integer := 10000;
+      Timeout     : Integer := 10_000;
       Full_Buffer : Boolean := False);
-   --  Same as above, but with precompiled regular expressions.
-   --  The first index in Matched must be 0, or Constraint_Error will be
-   --  raised.
+   --  Same as above, but with precompiled regular expressions. The first index
+   --  in Matched must be 0, or Constraint_Error will be raised.
 
    -------------------------------------------
    -- Working on the output (multi-process) --
@@ -453,24 +466,61 @@ package GNAT.Expect is
       Descriptor : Process_Descriptor_Access;
       Regexp     : Pattern_Matcher_Access;
    end record;
-   type Multiprocess_Regexp_Array is array (Positive range <>)
-     of Multiprocess_Regexp;
+
+   type Multiprocess_Regexp_Array is
+     array (Positive range <>) of Multiprocess_Regexp;
+
+   procedure Free (Regexp : in out Multiprocess_Regexp);
+   --  Free the memory occupied by Regexp
+
+   function Has_Process (Regexp : Multiprocess_Regexp_Array) return Boolean;
+   --  Return True if at least one entry in Regexp is non-null, ie there is
+   --  still at least one process to monitor
+
+   function First_Dead_Process
+     (Regexp : Multiprocess_Regexp_Array) return Natural;
+   --  Find the first entry in Regexp that corresponds to a dead process that
+   --  wasn't Free-d yet. This function is called in general when Expect
+   --  (below) raises the exception Process_Died. This returns 0 if no process
+   --  has died yet.
 
    procedure Expect
      (Result      : out Expect_Match;
       Regexps     : Multiprocess_Regexp_Array;
       Matched     : out GNAT.Regpat.Match_Array;
-      Timeout     : Integer := 10000;
+      Timeout     : Integer := 10_000;
       Full_Buffer : Boolean := False);
-   --  Same as above, but for multi processes.
+   --  Same as above, but for multi processes. Any of the entries in
+   --  Regexps can have a null Descriptor or Regexp. Such entries will
+   --  simply be ignored. Therefore when a process terminates, you can
+   --  simply reset its entry.
+   --
+   --  The expect loop would therefore look like:
+   --
+   --     Processes : Multiprocess_Regexp_Array (...) := ...;
+   --     R         : Natural;
+   --
+   --     while Has_Process (Processes) loop
+   --        begin
+   --           Expect (Result, Processes, Timeout => -1);
+   --           ... process output of process Result (output, full buffer,...)
+   --
+   --        exception
+   --           when Process_Died =>
+   --               --  Free memory
+   --               R := First_Dead_Process (Processes);
+   --               Close (Processes (R).Descriptor.all, Status);
+   --               Free (Processes (R));
+   --        end;
+   --     end loop;
 
    procedure Expect
      (Result      : out Expect_Match;
       Regexps     : Multiprocess_Regexp_Array;
-      Timeout     : Integer := 10000;
+      Timeout     : Integer := 10_000;
       Full_Buffer : Boolean := False);
-   --  Same as the previous one, but for multiple processes.
-   --  This procedure finds the first regexp that match the associated process.
+   --  Same as the previous one, but for multiple processes. This procedure
+   --  finds the first regexp that match the associated process.
 
    ------------------------
    -- Getting the output --
@@ -482,8 +532,8 @@ package GNAT.Expect is
    --  Discard all output waiting from the process.
    --
    --  This output is simply discarded, and no filter is called. This output
-   --  will also not be visible by the next call to Expect, nor will any
-   --  output currently buffered.
+   --  will also not be visible by the next call to Expect, nor will any output
+   --  currently buffered.
    --
    --  Timeout is the delay for which we wait for output to be available from
    --  the process. If 0, we only get what is immediately available.
@@ -491,13 +541,13 @@ package GNAT.Expect is
    function Expect_Out (Descriptor : Process_Descriptor) return String;
    --  Return the string matched by the last Expect call.
    --
-   --  The returned string is in fact the concatenation of all the strings
-   --  read from the file descriptor up to, and including, the characters
-   --  that matched the regular expression.
+   --  The returned string is in fact the concatenation of all the strings read
+   --  from the file descriptor up to, and including, the characters that
+   --  matched the regular expression.
    --
-   --  For instance, with an input "philosophic", and a regular expression
-   --  "hi" in the call to expect, the strings returned the first and second
-   --  time would be respectively "phi" and "losophi".
+   --  For instance, with an input "philosophic", and a regular expression "hi"
+   --  in the call to expect, the strings returned the first and second time
+   --  would be respectively "phi" and "losophi".
 
    function Expect_Out_Match (Descriptor : Process_Descriptor) return String;
    --  Return the string matched by the last Expect call.
@@ -536,14 +586,14 @@ private
    type Pipe_Type is record
       Input, Output : GNAT.OS_Lib.File_Descriptor;
    end record;
-   --  This type represents a pipe, used to communicate between two processes.
+   --  This type represents a pipe, used to communicate between two processes
 
    procedure Set_Up_Communications
      (Pid        : in out Process_Descriptor;
       Err_To_Out : Boolean;
-      Pipe1      : access Pipe_Type;
-      Pipe2      : access Pipe_Type;
-      Pipe3      : access Pipe_Type);
+      Pipe1      : not null access Pipe_Type;
+      Pipe2      : not null access Pipe_Type;
+      Pipe3      : not null access Pipe_Type);
    --  Set up all the communication pipes and file descriptors prior to
    --  spawning the child process.
 
@@ -561,10 +611,9 @@ private
       Pipe3 : in out Pipe_Type;
       Cmd   : String;
       Args  : System.Address);
-   --  Finish the set up of the pipes while in the child process
-   --  This also spawns the child process (based on Cmd).
-   --  On systems that support fork, this procedure is executed inside the
-   --  newly created process.
+   --  Finish the set up of the pipes while in the child process This also
+   --  spawns the child process (based on Cmd). On systems that support fork,
+   --  this procedure is executed inside the newly created process.
 
    type Process_Descriptor is tagged record
       Pid              : aliased Process_Id := Invalid_Pid;
@@ -587,12 +636,12 @@ private
    --  possibly in future child units providing extensions to this package.
 
    procedure Portable_Execvp
-     (Pid  : access Process_Id;
+     (Pid  : not null access Process_Id;
       Cmd  : String;
       Args : System.Address);
    pragma Import (C, Portable_Execvp, "__gnat_expect_portable_execvp");
    --  Executes, in a portable way, the command Cmd (full path must be
-   --  specified), with the given Args. Args must be an array of string
+   --  specified), with the given Args, which must be an array of string
    --  pointers. Note that the first element in Args must be the executable
    --  name, and the last element must be a null pointer. The returned value
    --  in Pid is the process ID, or zero if not supported on the platform.

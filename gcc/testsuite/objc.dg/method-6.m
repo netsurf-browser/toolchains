@@ -2,8 +2,9 @@
    unless they reside in root classes.  */
 /* Author: Ziemowit Laski <zlaski@apple.com>  */
 /* { dg-do compile } */
+/* { dg-options "-Wstrict-selector-match" } */
 
-#include <objc/Protocol.h>
+#include "../objc-obj-c++-shared/Protocol1.h"
 
 @interface Base
 - (unsigned)port;
@@ -19,13 +20,13 @@ void foo(void) {
   Class receiver;
 
   [receiver port];  /* { dg-warning "multiple methods named .\\+port. found" } */
-       /* { dg-warning "using .\\-\\(unsigned\\)port." "" { target *-*-* } 9 } */
-       /* { dg-warning "also found .\\+\\(Protocol \\*\\)port." "" { target *-*-* } 14 } */
+       /* { dg-message "using .\\-\\(unsigned( int)?\\)port." "" { target *-*-* } 10 } */
+       /* { dg-message "also found .\\+\\(Protocol \\*\\)port." "" { target *-*-* } 15 } */
 
-  [receiver starboard];  /* { dg-warning ".Class. may not respond to .\\+starboard." } */
-       /* { dg-warning "Messages without a matching method signature" "" { target *-*-* } 25 } */
-       /* { dg-warning "will be assumed to return .id. and accept" "" { target *-*-* } 25 } */
-       /* { dg-warning ".\.\.\.. as arguments" "" { target *-*-* } 25 } */
+  [receiver starboard];  /* { dg-warning "no .\\+starboard. method found" } */
+       /* { dg-warning "Messages without a matching method signature" "" { target *-*-* } 26 } */
+       /* { dg-warning "will be assumed to return .id. and accept" "" { target *-*-* } 26 } */
+       /* { dg-warning ".\.\.\.. as arguments" "" { target *-*-* } 26 } */
 
   [Class port];  /* { dg-error ".Class. is not an Objective\\-C class name or alias" } */
 }

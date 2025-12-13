@@ -6,26 +6,26 @@
 --                                                                          --
 --                                 B o d y                                  --
 --                                                                          --
---          Copyright (C) 1992-2003 Free Software Foundation, Inc.          --
+--          Copyright (C) 1992-2010, Free Software Foundation, Inc.         --
 --                                                                          --
 -- GNAT is free software;  you can  redistribute it  and/or modify it under --
 -- terms of the  GNU General Public License as published  by the Free Soft- --
--- ware  Foundation;  either version 2,  or (at your option) any later ver- --
+-- ware  Foundation;  either version 3,  or (at your option) any later ver- --
 -- sion.  GNAT is distributed in the hope that it will be useful, but WITH- --
 -- OUT ANY WARRANTY;  without even the  implied warranty of MERCHANTABILITY --
 -- or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU General Public License --
 -- for  more details.  You should have  received  a copy of the GNU General --
--- Public License  distributed with GNAT;  see file COPYING.  If not, write --
--- to  the Free Software Foundation,  59 Temple Place - Suite 330,  Boston, --
--- MA 02111-1307, USA.                                                      --
+-- Public License  distributed with GNAT; see file COPYING3.  If not, go to --
+-- http://www.gnu.org/licenses for a complete copy of the license.          --
 --                                                                          --
 -- GNAT was originally developed  by the GNAT team at  New York University. --
 -- Extensive contributions were provided by Ada Core Technologies Inc.      --
 --                                                                          --
 ------------------------------------------------------------------------------
 
-with Osint;  use Osint;
-with Output; use Output;
+with Makeutl;
+with Osint;   use Osint;
+with Output;  use Output;
 with Usage;
 
 procedure Makeusg is
@@ -88,6 +88,22 @@ begin
    Write_Str ("  -D dir   Specify dir as the object directory");
    Write_Eol;
 
+   --  Line for -eI
+
+   Write_Str ("  -eI      Index of unit in multi-unit source file");
+   Write_Eol;
+
+   --  Line for -eL
+
+   Write_Str ("  -eL      Follow symbolic links when processing " &
+              "project files");
+   Write_Eol;
+
+   --  Line for -eS
+
+   Write_Str ("  -eS      Echo commands to stdout instead of stderr");
+   Write_Eol;
+
    --  Line for -f
 
    Write_Str ("  -f       Force recompilations of non predefined units");
@@ -140,6 +156,11 @@ begin
    Write_Str ("  -o name  Choose an alternate executable name");
    Write_Eol;
 
+   --  Line for -p
+
+   Write_Str ("  -p       Create missing obj, lib and exec dirs");
+   Write_Eol;
+
    --  Line for -P
 
    Write_Str ("  -Pproj   Use GNAT Project File proj");
@@ -162,7 +183,7 @@ begin
 
    --  Line for -u
 
-   Write_Str ("  -u       Unique compilation. Only compile the given files.");
+   Write_Str ("  -u       Unique compilation, only compile the given files");
    Write_Eol;
 
    --  Line for -U
@@ -175,9 +196,45 @@ begin
    Write_Str ("  -v       Display reasons for all (re)compilations");
    Write_Eol;
 
+   --  Line for -vl
+
+   Write_Str ("  -vl      Verbose output (low verbosity)");
+   Write_Eol;
+
+   --  Line for -vm
+
+   Write_Str ("  -vm      Verbose output (medium verbosity)");
+   Write_Eol;
+
+   --  Line for -vh
+
+   Write_Str ("  -vh      Equivalent to -v (high verbosity)");
+   Write_Eol;
+
    --  Line for -vPx
 
    Write_Str ("  -vPx     Specify verbosity when parsing GNAT Project Files");
+   Write_Eol;
+
+   --  Line for -we
+
+   Write_Str ("  -we      Treat all warnings as errors");
+   Write_Eol;
+
+   --  Line for -wn
+
+   Write_Str ("  -wn      Normal warning mode (cancels -we/-ws)");
+   Write_Eol;
+
+   --  Line for -ws
+
+   Write_Str ("  -ws      Suppress all warnings");
+   Write_Eol;
+
+   --  Line for -x
+
+   Write_Str ("  -x       " &
+              "Allow compilation of needed units external to the projects");
    Write_Eol;
 
    --  Line for -X
@@ -204,7 +261,12 @@ begin
 
    --  Source and Library search path switches
 
-   Write_Str ("Source and Library search path switches:");
+   Write_Str ("Project, Source and Library search path switches:");
+   Write_Eol;
+
+   --  Line for -aP
+
+   Write_Str ("  -aPdir    Add directory dir to project search path");
    Write_Eol;
 
    --  Line for -aL
@@ -259,6 +321,26 @@ begin
 
    Write_Str ("  --RTS=dir specify the default source and object search"
               & " path");
+   Write_Eol;
+
+   --  Line for --subdirs=
+
+   Write_Str ("  --subdirs=dir real obj/lib/exec dirs are subdirs");
+   Write_Eol;
+
+   --  Line for --source-info=
+
+   Write_Str ("  ");
+   Write_Str (Makeutl.Source_Info_Option);
+   Write_Str ("file specify a source info file");
+   Write_Eol;
+
+   --  Line for --unchecked-shared-lib-imports
+
+   Write_Str ("  ");
+   Write_Str (Makeutl.Unchecked_Shared_Lib_Imports);
+   Write_Eol;
+   Write_Str ("            Allow shared libraries to import static libraries");
    Write_Eol;
    Write_Eol;
 

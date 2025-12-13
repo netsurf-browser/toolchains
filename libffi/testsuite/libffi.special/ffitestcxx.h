@@ -6,6 +6,15 @@
 
 #define MAX_ARGS 256
 
+
+/* Define __UNUSED__ that also other compilers than gcc can run the tests.  */
+#undef __UNUSED__
+#if defined(__GNUC__)
+#define __UNUSED__ __attribute__((__unused__))
+#else
+#define __UNUSED__
+#endif
+
 #define CHECK(x) (!(x) ? abort() : (void)0)
 
 /* Prefer MAP_ANON(YMOUS) to /dev/zero, since we don't need to keep a
@@ -32,6 +41,16 @@
 # endif
 # define USING_MMAP
 
+#endif
+
+
+/* MinGW kludge.  */
+#ifdef _WIN64
+#define PRIdLL "I64d"
+#define PRIuLL "I64u"
+#else
+#define PRIdLL "lld"
+#define PRIuLL "llu"
 #endif
 
 #ifdef USING_MMAP
@@ -65,7 +84,7 @@ allocate_mmap (size_t size)
 	       MAP_PRIVATE, dev_zero_fd, 0);
 #endif
 
-  if (page == MAP_FAILED)
+  if (page == (char *) MAP_FAILED)
     {
       perror ("virtual memory exhausted");
       exit (1);

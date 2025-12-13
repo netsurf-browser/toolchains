@@ -1,30 +1,28 @@
 ------------------------------------------------------------------------------
 --                                                                          --
---                         GNAT RUNTIME COMPONENTS                          --
+--                         GNAT RUN-TIME COMPONENTS                         --
 --                                                                          --
 --               A D A . T E X T _ I O . I N T E G E R _ I O                --
 --                                                                          --
 --                                 B o d y                                  --
 --                                                                          --
---          Copyright (C) 1992-1999 Free Software Foundation, Inc.          --
+--          Copyright (C) 1992-2009, Free Software Foundation, Inc.         --
 --                                                                          --
 -- GNAT is free software;  you can  redistribute it  and/or modify it under --
 -- terms of the  GNU General Public License as published  by the Free Soft- --
--- ware  Foundation;  either version 2,  or (at your option) any later ver- --
+-- ware  Foundation;  either version 3,  or (at your option) any later ver- --
 -- sion.  GNAT is distributed in the hope that it will be useful, but WITH- --
 -- OUT ANY WARRANTY;  without even the  implied warranty of MERCHANTABILITY --
--- or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU General Public License --
--- for  more details.  You should have  received  a copy of the GNU General --
--- Public License  distributed with GNAT;  see file COPYING.  If not, write --
--- to  the Free Software Foundation,  59 Temple Place - Suite 330,  Boston, --
--- MA 02111-1307, USA.                                                      --
+-- or FITNESS FOR A PARTICULAR PURPOSE.                                     --
 --                                                                          --
--- As a special exception,  if other files  instantiate  generics from this --
--- unit, or you link  this unit with other files  to produce an executable, --
--- this  unit  does not  by itself cause  the resulting  executable  to  be --
--- covered  by the  GNU  General  Public  License.  This exception does not --
--- however invalidate  any other reasons why  the executable file  might be --
--- covered by the  GNU Public License.                                      --
+-- As a special exception under Section 7 of GPL version 3, you are granted --
+-- additional permissions described in the GCC Runtime Library Exception,   --
+-- version 3.1, as published by the Free Software Foundation.               --
+--                                                                          --
+-- You should have received a copy of the GNU General Public License and    --
+-- a copy of the GCC Runtime Library Exception along with this program;     --
+-- see the files COPYING3 and COPYING.RUNTIME respectively.  If not, see    --
+-- <http://www.gnu.org/licenses/>.                                          --
 --                                                                          --
 -- GNAT was originally developed  by the GNAT team at  New York University. --
 -- Extensive contributions were provided by Ada Core Technologies Inc.      --
@@ -38,20 +36,19 @@ package body Ada.Text_IO.Integer_IO is
    package Aux renames Ada.Text_IO.Integer_Aux;
 
    Need_LLI : constant Boolean := Num'Base'Size > Integer'Size;
-   --  Throughout this generic body, we distinguish between the case
-   --  where type Integer is acceptable, and where a Long_Long_Integer
-   --  is needed. This constant Boolean is used to test for these cases
-   --  and since it is a constant, only the code for the relevant case
-   --  will be included in the instance.
+   --  Throughout this generic body, we distinguish between the case where type
+   --  Integer is acceptable, and where a Long_Long_Integer is needed. This
+   --  Boolean is used to test for these cases and since it is a constant, only
+   --  code for the relevant case will be included in the instance.
 
    ---------
    -- Get --
    ---------
 
    procedure Get
-     (File  : in File_Type;
+     (File  : File_Type;
       Item  : out Num;
-      Width : in Field := 0)
+      Width : Field := 0)
    is
       --  We depend on a range check to get Data_Error
 
@@ -71,7 +68,7 @@ package body Ada.Text_IO.Integer_IO is
 
    procedure Get
      (Item  : out Num;
-      Width : in Field := 0)
+      Width : Field := 0)
    is
       --  We depend on a range check to get Data_Error
 
@@ -90,7 +87,7 @@ package body Ada.Text_IO.Integer_IO is
    end Get;
 
    procedure Get
-     (From : in String;
+     (From : String;
       Item : out Num;
       Last : out Positive)
    is
@@ -115,10 +112,10 @@ package body Ada.Text_IO.Integer_IO is
    ---------
 
    procedure Put
-     (File  : in File_Type;
-      Item  : in Num;
-      Width : in Field := Default_Width;
-      Base  : in Number_Base := Default_Base)
+     (File  : File_Type;
+      Item  : Num;
+      Width : Field := Default_Width;
+      Base  : Number_Base := Default_Base)
    is
    begin
       if Need_LLI then
@@ -129,9 +126,9 @@ package body Ada.Text_IO.Integer_IO is
    end Put;
 
    procedure Put
-     (Item  : in Num;
-      Width : in Field := Default_Width;
-      Base  : in Number_Base := Default_Base)
+     (Item  : Num;
+      Width : Field := Default_Width;
+      Base  : Number_Base := Default_Base)
    is
    begin
       if Need_LLI then
@@ -143,8 +140,8 @@ package body Ada.Text_IO.Integer_IO is
 
    procedure Put
      (To   : out String;
-      Item : in Num;
-      Base : in Number_Base := Default_Base)
+      Item : Num;
+      Base : Number_Base := Default_Base)
    is
    begin
       if Need_LLI then

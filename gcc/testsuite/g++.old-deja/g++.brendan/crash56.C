@@ -21,15 +21,15 @@ public:
     public:
 	Vix();
 	friend int operator==(void *v, const Vix& x)
-	    { return v == x.item; }// { dg-error "" } list of candidates
+	    { return v == x.item; }
 	friend int operator==(const Vix& x, void *v)
-	    { return v == x.item; }// { dg-error "" } candidate for call
+	    { return v == x.item; }
 	friend int operator!=(void *v, const Vix& x)
 	    { return v != x.item; }
 	friend int operator!=(const Vix& x, void *v)
 	    { return v != x.item; }
 	friend int operator==(const Vix& x1, const Vix& x2)
-	    { return x1.owner == x2.owner && x1.item == x2.item; }// { dg-error "" } candidate for call
+	    { return x1.owner == x2.owner && x1.item == x2.item; }
 	friend int operator!=(const Vix& x1, const Vix& x2)
 	    { return x1.owner != x2.owner || x1.item != x2.item; }
 	bool first;		 
@@ -278,6 +278,7 @@ SetLD<T>::remove(const T& item)
     Vix x;
     for (first(x); 0 != x && this->REMOVE_CURRENT != a; next(x, a))
 	a = operator()(x) == item ? this->REMOVE_CURRENT: this->NORMAL; // { dg-error "" } .*
+    // { dg-message "candidate" "candidate note" { target *-*-* } 280 }
 }
 template<class T>
 bool
@@ -286,13 +287,14 @@ SetLD<T>::contains(const T& item) const
     Vix x;
     for (first(x); 0 != x; next(x)) {
 	if (operator()(x) == item)// { dg-error "" } .*
+	  // { dg-message "candidate" "candidate note" { target *-*-* } 289 }
 	    return TRUE;
     }
     return FALSE;
 }
 template<class T>
 int
-operator==(const SetLD<T>& a, const SetLD<T>& b)
+operator==(const SetLD<T>& a, const SetLD<T>& b) // { dg-message "note" }
 {
     if (a.length() != b.length())
 	return FALSE;
@@ -342,9 +344,9 @@ operator>=(const SetLD<T>& a, const SetLD<T>& b)
 { return ! (a < b); }
 class String { };
 class IcaseString: public String { };
-template <> class SetLD< IcaseString >: public SetLD<    String  > {	public:	 SetLD (): SetLD<    String  >() { };	 SetLD (const ListD<   IcaseString  >& other): SetLD<    String  >()	{ ListD<   IcaseString  >::Vix x;	for (other.first(x); 0 != x; other.next(x))	add(other(x)); };	 SetLD (const  SetLD & other): SetLD<    String  >(other) { };	const    IcaseString  & operator()(const Vix& x) const	{ return (   IcaseString  &) SetLD<    String  >::operator()(x); }	}; 	typedef SetLD<  String > SetLD_String_IcaseString_old_tmp99;	typedef SetLD< IcaseString > SetLD_String_IcaseString_new_tmp99;	
-inline int	 operator== (const SetLD_String_IcaseString_new_tmp99& a,	const SetLD_String_IcaseString_new_tmp99& b)
-{// { dg-error "" } candidate for call
+template <> class SetLD< IcaseString >: public SetLD<    String  > {	public:	 SetLD (): SetLD<    String  >() { };	 SetLD (const ::ListD<   IcaseString  >& other): SetLD<    String  >()	{ ::ListD<   IcaseString  >::Vix x;	for (other.first(x); 0 != x; other.next(x))	add(other(x)); };	 SetLD (const  SetLD & other): SetLD<    String  >(other) { };	const    IcaseString  & operator()(const Vix& x) const	{ return (   IcaseString  &) SetLD<    String  >::operator()(x); }	}; 	typedef SetLD<  String > SetLD_String_IcaseString_old_tmp99;	typedef SetLD< IcaseString > SetLD_String_IcaseString_new_tmp99;	
+inline int	 operator== (const SetLD_String_IcaseString_new_tmp99& a,	const SetLD_String_IcaseString_new_tmp99& b) // { dg-message "operator==|no known conversion" }
+{
 const SetLD_String_IcaseString_old_tmp99& oa = a;
 const SetLD_String_IcaseString_old_tmp99& ob = b;
 return  operator== (oa, ob);	} 	

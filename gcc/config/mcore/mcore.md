@@ -1,12 +1,13 @@
 ;;  Machine description the Motorola MCore
-;;  Copyright (C) 1993, 1999, 2000, 2004 Free Software Foundation, Inc.
+;;  Copyright (C) 1993, 1999, 2000, 2004, 2005, 2007, 2009, 2010
+;;  Free Software Foundation, Inc.
 ;;  Contributed by Motorola.
 
 ;; This file is part of GCC.
 
 ;; GCC is free software; you can redistribute it and/or modify
 ;; it under the terms of the GNU General Public License as published by
-;; the Free Software Foundation; either version 2, or (at your option)
+;; the Free Software Foundation; either version 3, or (at your option)
 ;; any later version.
 
 ;; GCC is distributed in the hope that it will be useful,
@@ -15,9 +16,8 @@
 ;; GNU General Public License for more details.
 
 ;; You should have received a copy of the GNU General Public License
-;; along with GCC; see the file COPYING.  If not, write to
-;; the Free Software Foundation, 59 Temple Place - Suite 330,
-;; Boston, MA 02111-1307, USA.
+;; along with GCC; see the file COPYING3.  If not see
+;; <http://www.gnu.org/licenses/>.
 
 ;;- See file "rtl.def" for documentation on define_insn, match_*, et. al.
 
@@ -41,15 +41,20 @@
 ;; calculations and the literal table placement into the assembler,
 ;; where their interactions can be managed in a single place.
 
-; All MCORE instructions are two bytes long.
+;; All MCORE instructions are two bytes long.
 
 (define_attr "length" "" (const_int 2))
 
-;; (define_function_unit {name} {num-units} {n-users} {test}
-;;                       {ready-delay} {issue-delay} [{conflict-list}])
-				      
+;; Scheduling.  We only model a simple load latency.
+(define_insn_reservation "any_insn" 1
+			 (eq_attr "type" "!load")
+			 "nothing")
+(define_insn_reservation "memory" 2
+			 (eq_attr "type" "load")
+			 "nothing")
 
-(define_function_unit "memory" 1 1 (eq_attr "type" "load") 2 0)
+(include "predicates.md")
+(include "constraints.md")
 
 ;; -------------------------------------------------------------------------
 ;; Test and bit test
@@ -187,11 +192,11 @@
 (define_split 
   [(parallel[
       (set (reg:CC 17)
-           (ne:CC (ne:SI (leu:CC (match_operand:SI 0 "mcore_arith_reg_operand" "r")
-                                 (match_operand:SI 1 "mcore_arith_reg_operand" "r"))
+           (ne:CC (ne:SI (leu:CC (match_operand:SI 0 "mcore_arith_reg_operand" "")
+                                 (match_operand:SI 1 "mcore_arith_reg_operand" ""))
                          (const_int 0))
                   (const_int 0)))
-      (clobber (match_operand:CC 2 "mcore_arith_reg_operand" "=r"))])]
+      (clobber (match_operand:CC 2 "mcore_arith_reg_operand" ""))])]
   ""
   [(set (reg:CC 17) (ne:SI (match_dup 0) (const_int 0)))
    (set (reg:CC 17) (leu:CC (match_dup 0) (match_dup 1)))])
@@ -299,22 +304,6 @@
   ""
   "cmphs	%1,%0")
 
-;; We save the compare operands in the cmpxx patterns and use them when
-;; we generate the branch.
-
-;; We accept constants here, in case we can modify them to ones which
-;; are more efficient to load.  E.g. change 'x <= 62' to 'x < 63'.
-
-(define_expand "cmpsi"
-  [(set (reg:CC 17) (compare:CC (match_operand:SI 0 "mcore_compare_operand" "")
-				(match_operand:SI 1 "nonmemory_operand" "")))]
-  ""
-  "
-{ arch_compare_op0 = operands[0];
-  arch_compare_op1 = operands[1];
-  DONE;
-}")
-
 ;; -------------------------------------------------------------------------
 ;; Logical operations
 ;; -------------------------------------------------------------------------
@@ -350,7 +339,8 @@
   if (GET_CODE (operands[2]) == CONST_INT && INTVAL (operands[2]) < 0
       && ! mcore_arith_S_operand (operands[2]))
     {
-      int not_value = ~ INTVAL (operands[2]);
+      HOST_WIDE_INT not_value = ~ INTVAL (operands[2]);
+
       if (   CONST_OK_FOR_I (not_value)
           || CONST_OK_FOR_M (not_value)
 	  || CONST_OK_FOR_N (not_value))
@@ -379,7 +369,7 @@
      case 2: return \"and	%0,%1\";
      /* case -1: return \"bclri	%0,%Q2\";	 will not happen */
      case 3: return mcore_output_bclri (operands[0], INTVAL (operands[2]));
-     default: abort ();
+     default: gcc_unreachable ();
      }
 }")
 
@@ -399,7 +389,7 @@
      case 1: return \"andi	%0,%2\";
      case 2: return \"and	%0,%1\";
      case 3: return mcore_output_bclri (operands[0], INTVAL (operands[2]));
-     default: abort ();
+     default: gcc_unreachable ();
      }
 }")
 
@@ -434,7 +424,7 @@
      case 0: return \"or	%0,%2\";
      case 1: return \"bseti	%0,%P2\";
      case 2: return mcore_output_bseti (operands[0], INTVAL (operands[2]));
-     default: abort ();
+     default: gcc_unreachable ();
      }
 }")
 
@@ -450,7 +440,7 @@
      case 0: return \"or	%0,%2\";
      case 1: return \"bseti	%0,%P2\";
      case 2: return mcore_output_bseti (operands[0], INTVAL (operands[2]));
-     default: abort ();
+     default: gcc_unreachable ();
      }
 }")
 
@@ -708,8 +698,6 @@
   ""
   "
 {
-  extern int flag_omit_frame_pointer;
-
   /* If this is an add to the frame pointer, then accept it as is so
      that we can later fold in the fp/sp offset from frame pointer
      elimination.  */
@@ -725,9 +713,11 @@
   /* Convert adds to subtracts if this makes loading the constant cheaper.
      But only if we are allowed to generate new pseudos.  */
   if (! (reload_in_progress || reload_completed)
-      && GET_CODE (operands[2]) == CONST_INT && INTVAL (operands[2]) < -32)
+      && GET_CODE (operands[2]) == CONST_INT
+      && INTVAL (operands[2]) < -32)
     {
-      int neg_value = - INTVAL (operands[2]);
+      HOST_WIDE_INT neg_value = - INTVAL (operands[2]);
+
       if (   CONST_OK_FOR_I (neg_value)
 	  || CONST_OK_FOR_M (neg_value)
 	  || CONST_OK_FOR_N (neg_value))
@@ -759,7 +749,7 @@
 ;;        || (INTVAL (operands[2]) < -32 && INTVAL(operands[2]) >= -64))"
 ;;   "*
 ;; {
-;;    int n = INTVAL(operands[2]);
+;;    HOST_WIDE_INT n = INTVAL(operands[2]);
 ;;    if (n > 0)
 ;;      {
 ;;        operands[2] = GEN_INT(n - 32);
@@ -817,7 +807,7 @@
 ;;        || (INTVAL (operands[2]) < -32 && INTVAL(operands[2]) >= -64))"
 ;;   "*
 ;; {
-;;    int n = INTVAL(operands[2]);
+;;    HOST_WIDE_INT n = INTVAL(operands[2]);
 ;;    if ( n > 0)
 ;;      {
 ;;        operands[2] = GEN_INT( n - 32);
@@ -923,8 +913,7 @@
    && INTVAL (operands[2]) > 0 && ! (INTVAL (operands[2]) & 0x80000000)"
   "*
 {
-  if (GET_MODE (operands[2]) != SImode)
-     abort ();
+  gcc_assert (GET_MODE (operands[2]) == SImode);
   if (TARGET_LITTLE_END)
     return \"addu	%0,%2\;cmphs	%0,%2\;incf	%R0\";
   return \"addu	%R0,%2\;cmphs	%R0,%2\;incf	%0\";
@@ -1413,13 +1402,13 @@
   count = INTVAL (operands[2]);
   regno = REGNO (operands[0]);
 
-  operands[3] = gen_rtx (PARALLEL, VOIDmode, rtvec_alloc (count));
+  operands[3] = gen_rtx_PARALLEL (VOIDmode, rtvec_alloc (count));
 
   for (i = 0; i < count; i++)
     XVECEXP (operands[3], 0, i)
-      = gen_rtx (SET, VOIDmode,
-		 gen_rtx (REG, SImode, regno + i),
-		 gen_rtx (MEM, SImode, plus_constant (stack_pointer_rtx,
+      = gen_rtx_SET (VOIDmode,
+		 gen_rtx_REG (SImode, regno + i),
+		 gen_rtx_MEM (SImode, plus_constant (stack_pointer_rtx,
 						      i * 4)));
 }")
 
@@ -1452,14 +1441,14 @@
   count = INTVAL (operands[2]);
   regno = REGNO (operands[1]);
 
-  operands[3] = gen_rtx (PARALLEL, VOIDmode, rtvec_alloc (count));
+  operands[3] = gen_rtx_PARALLEL (VOIDmode, rtvec_alloc (count));
 
   for (i = 0; i < count; i++)
     XVECEXP (operands[3], 0, i)
-      = gen_rtx (SET, VOIDmode,
-		 gen_rtx (MEM, SImode, plus_constant (stack_pointer_rtx,
+      = gen_rtx_SET (VOIDmode,
+		 gen_rtx_MEM (SImode, plus_constant (stack_pointer_rtx,
 						      i * 4)),
-		 gen_rtx (REG, SImode, regno + i));
+		 gen_rtx_REG (SImode, regno + i));
 }")
 
 (define_insn ""
@@ -1472,6 +1461,10 @@
 ;; ------------------------------------------------------------------------
 ;; Define the real conditional branch instructions.
 ;; ------------------------------------------------------------------------
+
+;; At top-level, condition test are eq/ne, because we
+;; are comparing against the condition register (which
+;; has the result of the true relational test
 
 (define_insn "branch_true"
   [(set (pc) (if_then_else (ne (reg:CC 17) (const_int 0))
@@ -1507,189 +1500,28 @@
 
 ;; Conditional branch insns
 
-;; At top-level, condition test are eq/ne, because we
-;; are comparing against the condition register (which
-;; has the result of the true relational test
-
-; There is no beq compare, so we reverse the branch arms.
-
-(define_expand "beq"
-  [(set (pc) (if_then_else (ne (match_dup 1) (const_int 0))
-			   (pc)
-			   (label_ref (match_operand 0 "" ""))))]
+(define_expand "cbranchsi4"
+  [(set (pc)
+	(if_then_else (match_operator:SI 0 "ordered_comparison_operator"
+		       [(match_operand:SI 1 "mcore_compare_operand")
+			(match_operand:SI 2 "nonmemory_operand")])
+		      (label_ref (match_operand 3 ""))
+		      (pc)))]
   ""
   "
 {
-  operands[1] = mcore_gen_compare_reg (EQ);
-}")
+  bool invert;
+  invert = mcore_gen_compare (GET_CODE (operands[0]),
+			      operands[1], operands[2]);
 
-(define_expand "bne"
-  [(set (pc) (if_then_else (ne (match_dup 1) (const_int 0))
-			   (label_ref (match_operand 0 "" ""))
-			   (pc)))]
-  ""
-  "
-{
-  operands[1] = mcore_gen_compare_reg (NE);
-}")
-
-; check whether (GT A imm) can become (LE A imm) with the branch reversed.  
-; if so, emit a (LT A imm + 1) in place of the (LE A imm).  BRC
-
-(define_expand "bgt"
-  [(set (pc) (if_then_else (ne (match_dup 1) (const_int 0))
-			   (label_ref (match_operand 0 "" ""))
-			   (pc)))]
-  ""
-  "
-{
-  if (mcore_modify_comparison (LE))
-    {
-      emit_jump_insn (gen_reverse_blt (operands[0]));
-      DONE;
-    }
-  operands[1] = mcore_gen_compare_reg (GT);
-}")
-
-; There is no ble compare, so we reverse the branch arms.
-; reversed the condition and branch arms for ble -- the check_dbra_loop()
-; transformation assumes that ble uses a branch-true with the label as
-; as the target. BRC
-
-; check whether (LE A imm) can become (LT A imm + 1).
-
-(define_expand "ble"
-  [(set (pc) (if_then_else (eq (match_dup 1) (const_int 0))
-			   (label_ref (match_operand 0 "" ""))
-                           (pc)))]
-  ""
-  "
-{
-  if (mcore_modify_comparison (LE))
-    {
-      emit_jump_insn (gen_blt (operands[0]));
-      DONE;
-    }
-  operands[1] = mcore_gen_compare_reg (LE);
-}")
-
-; make generating a reversed blt simple
-(define_expand "reverse_blt"
-  [(set (pc) (if_then_else (ne (match_dup 1) (const_int 0))
-                           (pc)
-                           (label_ref (match_operand 0 "" ""))))]
-  ""
-  "
-{
-  operands[1] = mcore_gen_compare_reg (LT);
-}")
-
-(define_expand "blt"
-  [(set (pc) (if_then_else (ne (match_dup 1) (const_int 0))
-			   (label_ref (match_operand 0 "" ""))
-			   (pc)))]
-  ""
-  "
-{
-  operands[1] = mcore_gen_compare_reg (LT);
-}")
-
-; There is no bge compare, so we reverse the branch arms.
-
-(define_expand "bge"
-  [(set (pc) (if_then_else (ne (match_dup 1) (const_int 0))
-			   (pc)
-			   (label_ref (match_operand 0 "" ""))))]
-  ""
-  "
-{
-  operands[1] = mcore_gen_compare_reg (GE);
-}")
-
-; There is no gtu compare, so we reverse the branch arms
-
-;(define_expand "bgtu"
-;  [(set (pc) (if_then_else (ne (match_dup 1) (const_int 0))
-;			   (pc)
-;			   (label_ref (match_operand 0 "" ""))))]
-;  ""
-;  "
-;{
-;  if (GET_CODE (arch_compare_op1) == CONST_INT
-;      && INTVAL (arch_compare_op1) == 0)
-;    operands[1] = mcore_gen_compare_reg (NE);
-;  else 
-;    { if (mcore_modify_comparison (GTU))
-;	{
-;	  emit_jump_insn (gen_bgeu (operands[0]));
-;	  DONE;
-;	}
-;      operands[1] = mcore_gen_compare_reg (LEU);
-;    }
-;}")
-
-(define_expand "bgtu"
-  [(set (pc) (if_then_else (ne (match_dup 1) (const_int 0))
-			   (pc)
-			   (label_ref (match_operand 0 "" ""))))]
-  ""
-  "
-{
-  if (GET_CODE (arch_compare_op1) == CONST_INT
-      && INTVAL (arch_compare_op1) == 0)
-    {
-      /* The inverse of '> 0' for an unsigned test is
-	 '== 0' but we do not have such an instruction available.
-	 Instead we must reverse the branch (back to the normal
-	 ordering) and test '!= 0'.  */
-	 
-      operands[1] = mcore_gen_compare_reg (NE);
-      
-      emit_jump_insn (gen_rtx_SET (VOIDmode,
-	pc_rtx,
-	gen_rtx_IF_THEN_ELSE (VOIDmode,
-	gen_rtx_NE (VOIDmode,
-	operands[1],
-	const0_rtx),
-	gen_rtx_LABEL_REF (VOIDmode,operands[0]),
-	pc_rtx)));
-      DONE;	      
-    }
-  operands[1] = mcore_gen_compare_reg (GTU);
+  if (invert)
+    emit_jump_insn (gen_branch_false (operands[3]));
+  else
+    emit_jump_insn (gen_branch_true (operands[3]));
+  DONE;
 }")
 
 
-(define_expand "bleu"
-  [(set (pc) (if_then_else (ne (match_dup 1) (const_int 0))
-			   (label_ref (match_operand 0 "" ""))
-			   (pc)))]
-  ""
-  "
-{
-  operands[1] = mcore_gen_compare_reg (LEU);
-}")
-
-; There is no bltu compare, so we reverse the branch arms
-(define_expand "bltu"
-  [(set (pc) (if_then_else (ne (match_dup 1) (const_int 0))
-			   (pc)
-			   (label_ref (match_operand 0 "" ""))))]
-  ""
-  "
-{
-  operands[1] = mcore_gen_compare_reg (LTU);
-}")
-
-(define_expand "bgeu"
-  [(set (pc) (if_then_else (ne (match_dup 1) (const_int 0))
-			   (label_ref (match_operand 0 "" ""))
-			   (pc)))]
-  ""
-  "
-{
-
-  operands[1] = mcore_gen_compare_reg (GEU);
-}")
 
 ;; ------------------------------------------------------------------------
 ;; Jump and linkage insns
@@ -1729,7 +1561,7 @@
   if (GET_CODE (operands[0]) == MEM
       && ! register_operand (XEXP (operands[0], 0), SImode)
       && ! mcore_symbolic_address_p (XEXP (operands[0], 0)))
-    operands[0] = gen_rtx (MEM, GET_MODE (operands[0]),
+    operands[0] = gen_rtx_MEM (GET_MODE (operands[0]),
 			   force_reg (Pmode, XEXP (operands[0], 0)));
 }")
 
@@ -1751,7 +1583,7 @@
   if (GET_CODE (operands[0]) == MEM
       && ! register_operand (XEXP (operands[0], 0), SImode)
       && ! mcore_symbolic_address_p (XEXP (operands[0], 0)))
-    operands[1] = gen_rtx (MEM, GET_MODE (operands[1]),
+    operands[1] = gen_rtx_MEM (GET_MODE (operands[1]),
 			   force_reg (Pmode, XEXP (operands[1], 0)));
 }")
 
@@ -1847,118 +1679,23 @@
    (set (match_dup 0) (eq:SI (reg:CC 17) (const_int 0)))])
      
 
-(define_expand "seq"
+(define_expand "cstoresi4"
   [(set (match_operand:SI 0 "mcore_arith_reg_operand" "")
-	(eq:SI (match_dup 1) (const_int 0)))]
+	(match_operator:SI 1 "ordered_comparison_operator"
+	 [(match_operand:SI 2 "mcore_compare_operand" "")
+	  (match_operand:SI 3 "nonmemory_operand" "")]))]
   ""
   "
 {
-  operands[1] = mcore_gen_compare_reg (NE);
-}")
+  bool invert;
+  invert = mcore_gen_compare (GET_CODE (operands[1]),
+			      operands[2], operands[3]);
 
-(define_expand "sne"
-  [(set (match_operand:SI 0 "mcore_arith_reg_operand" "")
-	(ne:SI (match_dup 1) (const_int 0)))]
-  ""
-  "
-{
-  operands[1] = mcore_gen_compare_reg (NE);
-}")
-
-(define_expand "slt"
-  [(set (match_operand:SI 0 "mcore_arith_reg_operand" "")
-	(ne:SI (match_dup 1) (const_int 0)))]
-  ""
-  "
-{
-  operands[1] = mcore_gen_compare_reg (LT);
-}")
-
-; make generating a LT with the comparison reversed easy.  BRC
-(define_expand "reverse_slt"
-  [(set (match_operand:SI 0 "mcore_arith_reg_operand" "")
-        (eq:SI (match_dup 1) (const_int 0)))]
-  ""
-  "
-{
-  operands[1] = mcore_gen_compare_reg (LT);
-}")
-
-(define_expand "sge"
-  [(set (match_operand:SI 0 "mcore_arith_reg_operand" "")
-	(eq:SI (match_dup 1) (const_int 0)))]
-  ""
-  "
-{
-  operands[1] = mcore_gen_compare_reg (LT);
-}")
-
-; check whether (GT A imm) can become (LE A imm) with the comparison
-; reversed.  if so, emit a (LT A imm + 1) in place of the (LE A imm).  BRC
-
-(define_expand "sgt"
-  [(set (match_operand:SI 0 "mcore_arith_reg_operand" "")
-	(ne:SI (match_dup 1) (const_int 0)))]
-  ""
-  "
-{
-  if (mcore_modify_comparison (LE))
-    {
-      emit_insn (gen_reverse_slt (operands[0]));
-      DONE;
-    }
-  
-  operands[1] = mcore_gen_compare_reg (GT);
-}")
-
-(define_expand "sle"
-  [(set (match_operand:SI 0 "mcore_arith_reg_operand" "")
-	(eq:SI (match_dup 1) (const_int 0)))]
-  ""
-  "
-{
-  if (mcore_modify_comparison (LE))
-    {
-      emit_insn (gen_slt (operands[0]));
-      DONE;
-    }
-  operands[1] = mcore_gen_compare_reg (GT);
-}")
-
-(define_expand "sltu"
-  [(set (match_operand:SI 0 "mcore_arith_reg_operand" "")
-	(eq:SI (match_dup 1) (const_int 0)))]
-  ""
-  "
-{
-  operands[1] = mcore_gen_compare_reg (GEU);
-}")
-
-(define_expand "sgeu"
-  [(set (match_operand:SI 0 "mcore_arith_reg_operand" "")
-	(ne:SI (match_dup 1) (const_int 0)))]
-  ""
-  "
-{
-  operands[1] = mcore_gen_compare_reg (GEU);
-}")
-
-(define_expand "sgtu"
-  [(set (match_operand:SI 0 "mcore_arith_reg_operand" "")
-	(eq:SI (match_dup 1) (const_int 0)))]
-  ""
-  "
-{
-  operands[1] = mcore_gen_compare_reg (LEU);
-}")
-
-(define_expand "sleu"
-  [(set (match_operand:SI 0 "mcore_arith_reg_operand" "")
-	(ne:SI (match_dup 1) (const_int 0)))]
-  ""
-  "
-{
-  operands[1] = mcore_gen_compare_reg (LEU);
+  if (invert)
+    emit_insn (gen_mvcv (operands[0]));
+  else
+    emit_insn (gen_mvc (operands[0]));
+  DONE;
 }")
 
 (define_insn "incscc"
@@ -2627,11 +2364,11 @@
 ;        rtx lshft = GEN_INT (32 - (INTVAL (operands[2]) + INTVAL (operands[3])));
 ;        rtx rshft = GEN_INT (32 - INTVAL (operands[2]));
 ;
-;        emit_insn (gen_rtx (SET, SImode, operands[0], operands[1]));
-;        emit_insn (gen_rtx (SET, SImode, operands[0],
-;                            gen_rtx (ASHIFT, SImode, operands[0], lshft)));
-;        emit_insn (gen_rtx (SET, SImode, operands[0],
-;                            gen_rtx (ASHIFTRT, SImode, operands[0], rshft)));
+;        emit_insn (gen_rtx_SET (SImode, operands[0], operands[1]));
+;        emit_insn (gen_rtx_SET (SImode, operands[0],
+;                            gen_rtx_ASHIFT (SImode, operands[0], lshft)));
+;        emit_insn (gen_rtx_SET (SImode, operands[0],
+;                            gen_rtx_ASHIFTRT (SImode, operands[0], rshft)));
 ;        DONE;
 ;     }
 ;     else
@@ -2650,7 +2387,7 @@
 {
   if (INTVAL (operands[2]) == 8 && INTVAL (operands[3]) % 8 == 0)
     {
-       /* 8 bit field, aligned properly, use the xtrb[0123]+sext sequence.  */
+       /* 8-bit field, aligned properly, use the xtrb[0123]+sext sequence.  */
        /* not DONE, not FAIL, but let the RTL get generated....  */
     }
   else if (TARGET_W_FIELD)
@@ -2662,11 +2399,11 @@
       rtx tmp1 = gen_reg_rtx (SImode);
       rtx tmp2 = gen_reg_rtx (SImode);
 
-      emit_insn (gen_rtx (SET, SImode, tmp1, operands[1]));
-      emit_insn (gen_rtx (SET, SImode, tmp2,
-                         gen_rtx (ASHIFT, SImode, tmp1, lshft)));
-      emit_insn (gen_rtx (SET, SImode, operands[0],
-                         gen_rtx (ASHIFTRT, SImode, tmp2, rshft)));
+      emit_insn (gen_rtx_SET (SImode, tmp1, operands[1]));
+      emit_insn (gen_rtx_SET (SImode, tmp2,
+                         gen_rtx_ASHIFT (SImode, tmp1, lshft)));
+      emit_insn (gen_rtx_SET (SImode, operands[0],
+                         gen_rtx_ASHIFTRT (SImode, tmp2, rshft)));
       DONE;
     }
   else
@@ -2687,7 +2424,7 @@
 {
   if (INTVAL (operands[2]) == 8 && INTVAL (operands[3]) % 8 == 0)
     {
-       /* 8 bit field, aligned properly, use the xtrb[0123] sequence.  */
+       /* 8-bit field, aligned properly, use the xtrb[0123] sequence.  */
        /* Let the template generate some RTL....  */
     }
   else if (CONST_OK_FOR_K ((1 << INTVAL (operands[2])) - 1))
@@ -2707,11 +2444,11 @@
         {
           rtx rshft = GEN_INT (INTVAL (operands[3]));
           shifted = gen_reg_rtx (SImode);
-          emit_insn (gen_rtx (SET, SImode, shifted,
-                         gen_rtx (LSHIFTRT, SImode, operands[1], rshft)));
+          emit_insn (gen_rtx_SET (SImode, shifted,
+                         gen_rtx_LSHIFTRT (SImode, operands[1], rshft)));
         }
-     emit_insn (gen_rtx (SET, SImode, operands[0],
-                       gen_rtx (AND, SImode, shifted, mask)));
+     emit_insn (gen_rtx_SET (SImode, operands[0],
+                       gen_rtx_AND (SImode, shifted, mask)));
      DONE;
    }
  else if (TARGET_W_FIELD)
@@ -2723,11 +2460,11 @@
      rtx tmp1 = gen_reg_rtx (SImode);
      rtx tmp2 = gen_reg_rtx (SImode);
 
-     emit_insn (gen_rtx (SET, SImode, tmp1, operands[1]));
-     emit_insn (gen_rtx (SET, SImode, tmp2,
-                         gen_rtx (ASHIFT, SImode, tmp1, lshft)));
-     emit_insn (gen_rtx (SET, SImode, operands[0],
-                       gen_rtx (LSHIFTRT, SImode, tmp2, rshft)));
+     emit_insn (gen_rtx_SET (SImode, tmp1, operands[1]));
+     emit_insn (gen_rtx_SET (SImode, tmp2,
+                         gen_rtx_ASHIFT (SImode, tmp1, lshft)));
+     emit_insn (gen_rtx_SET (SImode, operands[0],
+                       gen_rtx_LSHIFTRT (SImode, tmp2, rshft)));
      DONE;
    }
  else
@@ -2844,7 +2581,7 @@
 ;; Block move - adapted from m88k.md
 ;; ------------------------------------------------------------------------
 
-(define_expand "movstrsi"
+(define_expand "movmemsi"
   [(parallel [(set (mem:BLK (match_operand:BLK 0 "" ""))
 		   (mem:BLK (match_operand:BLK 1 "" "")))
 	      (use (match_operand:SI 2 "general_operand" ""))
@@ -2852,12 +2589,10 @@
   ""
   "
 {
-  rtx dest_mem = operands[0];
-  rtx src_mem = operands[1];
-  operands[0] = copy_to_mode_reg (SImode, XEXP (operands[0], 0));
-  operands[1] = copy_to_mode_reg (SImode, XEXP (operands[1], 0));
-  mcore_expand_block_move (dest_mem, src_mem, operands);
-  DONE;
+  if (mcore_expand_block_move (operands))
+    DONE;
+  else
+    FAIL;
 }")
 
 ;; ;;; ??? These patterns are meant to be generated from expand_block_move,
@@ -2974,8 +2709,9 @@
         (match_operand:SI 1 "const_int_operand" ""))
    (set (match_operand:SI 2 "mcore_arith_reg_operand" "")
         (ior:SI (match_dup 2) (match_dup 0)))]
-  "TARGET_HARDLIT && mcore_num_ones (INTVAL (operands[1])) == 2 &&
-       mcore_is_dead (insn, operands[0])"
+  "TARGET_HARDLIT
+   && mcore_num_ones (INTVAL (operands[1])) == 2
+   && mcore_is_dead (insn, operands[0])"
   "* return mcore_output_bseti (operands[2], INTVAL (operands[1]));")
 
 (define_peephole
@@ -3069,13 +2805,13 @@
    else if ((ofs = mcore_halfword_offset (INTVAL (operands[3]))) > -1)
       mode = HImode;
    else
-      abort ();
+      gcc_unreachable ();
 
    if (ofs > 0) 
-      operands[4] = gen_rtx (MEM, mode, 
-                              gen_rtx (PLUS, SImode, base_reg, GEN_INT(ofs)));
+      operands[4] = gen_rtx_MEM (mode, 
+                              gen_rtx_PLUS (SImode, base_reg, GEN_INT(ofs)));
    else
-      operands[4] = gen_rtx (MEM, mode, base_reg);
+      operands[4] = gen_rtx_MEM (mode, base_reg);
 
    if (mode == QImode)
       return \"movi	%0,0\\n\\tst.b	%0,%4\";
@@ -3145,19 +2881,18 @@
  	   return \"btsti	%1,%2\\n\\tmovt	%0,%4\";
        }
 
-     abort ();
+     gcc_unreachable ();
     }
   else if (GET_CODE (operands[3]) == CONST_INT
            && INTVAL (operands[3]) == 0
 	   && GET_CODE (operands[4]) == REG)
      return \"btsti	%1,%2\\n\\tclrt	%0\";
 
-  abort ();
-  return \"\"; 
+  gcc_unreachable ();
 }")
 
 ; experimental - do the constant folding ourselves.  note that this isn't
-;   re-applied like we'd really want.  ie., four ands collapse into two
+;   re-applied like we'd really want.  i.e., four ands collapse into two
 ;   instead of one.  this is because peepholes are applied as a sliding
 ;   window.  the peephole does not generate new rtl's, but instead slides
 ;   across the rtl's generating machine instructions.  it would be nice
@@ -3275,7 +3010,7 @@
   if (GET_CODE (operands[1]) == CONST_INT
       && INTVAL (operands[1]) < 8 * STACK_UNITS_MAXSTEP)
     {
-      int left = INTVAL(operands[1]);
+      HOST_WIDE_INT left = INTVAL(operands[1]);
 
       /* If it's a long way, get close enough for a last shot.  */
       if (left >= STACK_UNITS_MAXSTEP)
@@ -3284,7 +3019,7 @@
 	  emit_insn (gen_movsi (tmp, GEN_INT (STACK_UNITS_MAXSTEP)));
 	  do
 	    {
-	      rtx memref = gen_rtx (MEM, SImode, stack_pointer_rtx);
+	      rtx memref = gen_rtx_MEM (SImode, stack_pointer_rtx);
 
               MEM_VOLATILE_P (memref) = 1;
 	      emit_insn (gen_subsi3 (stack_pointer_rtx, stack_pointer_rtx, tmp));
@@ -3294,7 +3029,7 @@
 	  while (left > STACK_UNITS_MAXSTEP);
 	}
       /* Perform the final adjustment.  */
-      emit_insn (gen_addsi3 (stack_pointer_rtx,stack_pointer_rtx,GEN_INT(-left)));
+      emit_insn (gen_addsi3 (stack_pointer_rtx, stack_pointer_rtx, GEN_INT (-left)));
 ;;      emit_move_insn (operands[0], virtual_stack_dynamic_rtx);
       DONE;
     }
@@ -3304,17 +3039,17 @@
       rtx loop_label = gen_label_rtx ();
       rtx step = gen_reg_rtx (Pmode);
       rtx tmp = gen_reg_rtx (Pmode);
-      rtx memref;
+      rtx test, memref;
 
 #if 1
       emit_insn (gen_movsi (tmp, operands[1]));
-      emit_insn (gen_movsi (step, GEN_INT(STACK_UNITS_MAXSTEP)));
+      emit_insn (gen_movsi (step, GEN_INT (STACK_UNITS_MAXSTEP)));
 
       if (GET_CODE (operands[1]) != CONST_INT)
 	{
 	  out_label = gen_label_rtx ();
-	  emit_insn (gen_cmpsi (step, tmp));		/* quick out */
-	  emit_jump_insn (gen_bgeu (out_label));
+	  test = gen_rtx_GEU (VOIDmode, step, tmp);		/* quick out */
+	  emit_jump_insn (gen_cbranchsi4 (test, step, tmp, out_label));
 	}
 
       /* Run a loop that steps it incrementally.  */
@@ -3322,14 +3057,14 @@
 
       /* Extend a step, probe, and adjust remaining count.  */
       emit_insn(gen_subsi3(stack_pointer_rtx, stack_pointer_rtx, step));
-      memref = gen_rtx (MEM, SImode, stack_pointer_rtx);
+      memref = gen_rtx_MEM (SImode, stack_pointer_rtx);
       MEM_VOLATILE_P (memref) = 1;
       emit_insn(gen_movsi(memref, stack_pointer_rtx));
       emit_insn(gen_subsi3(tmp, tmp, step));
 
       /* Loop condition -- going back up.  */
-      emit_insn (gen_cmpsi (step, tmp));
-      emit_jump_insn (gen_bltu (loop_label));
+      test = gen_rtx_LTU (VOIDmode, step, tmp);
+      emit_jump_insn (gen_cbranchsi4 (test, step, tmp, loop_label));
 
       if (out_label)
 	emit_label (out_label);

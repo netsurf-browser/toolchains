@@ -6,25 +6,23 @@
 --                                                                          --
 --                                 B o d y                                  --
 --                                                                          --
---          Copyright (C) 1992-2001 Free Software Foundation, Inc.          --
+--          Copyright (C) 1992-2009 Free Software Foundation, Inc.          --
 --                                                                          --
 -- GNAT is free software;  you can  redistribute it  and/or modify it under --
 -- terms of the  GNU General Public License as published  by the Free Soft- --
--- ware  Foundation;  either version 2,  or (at your option) any later ver- --
+-- ware  Foundation;  either version 3,  or (at your option) any later ver- --
 -- sion.  GNAT is distributed in the hope that it will be useful, but WITH- --
 -- OUT ANY WARRANTY;  without even the  implied warranty of MERCHANTABILITY --
--- or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU General Public License --
--- for  more details.  You should have  received  a copy of the GNU General --
--- Public License  distributed with GNAT;  see file COPYING.  If not, write --
--- to  the Free Software Foundation,  59 Temple Place - Suite 330,  Boston, --
--- MA 02111-1307, USA.                                                      --
+-- or FITNESS FOR A PARTICULAR PURPOSE.                                     --
 --                                                                          --
--- As a special exception,  if other files  instantiate  generics from this --
--- unit, or you link  this unit with other files  to produce an executable, --
--- this  unit  does not  by itself cause  the resulting  executable  to  be --
--- covered  by the  GNU  General  Public  License.  This exception does not --
--- however invalidate  any other reasons why  the executable file  might be --
--- covered by the  GNU Public License.                                      --
+-- As a special exception under Section 7 of GPL version 3, you are granted --
+-- additional permissions described in the GCC Runtime Library Exception,   --
+-- version 3.1, as published by the Free Software Foundation.               --
+--                                                                          --
+-- You should have received a copy of the GNU General Public License and    --
+-- a copy of the GCC Runtime Library Exception along with this program;     --
+-- see the files COPYING3 and COPYING.RUNTIME respectively.  If not, see    --
+-- <http://www.gnu.org/licenses/>.                                          --
 --                                                                          --
 -- GNAT was originally developed  by the GNAT team at  New York University. --
 -- Extensive contributions were provided by Ada Core Technologies Inc.      --
@@ -34,7 +32,6 @@
 with Csets;    use Csets;
 with Namet;    use Namet;
 with Opt;      use Opt;
-with Types;    use Types;
 with Widechar; use Widechar;
 
 package body Casing is
@@ -140,6 +137,17 @@ package body Casing is
       Ptr := 1;
 
       while Ptr <= Name_Len loop
+
+         --  Wide character. Note that we do nothing with casing in this case.
+         --  In Ada 2005 mode, required folding of lower case letters happened
+         --  as the identifier was scanned, and we do not attempt any further
+         --  messing with case (note that in any case we do not know how to
+         --  fold upper case to lower case in wide character mode). We also
+         --  do not bother with recognizing punctuation as equivalent to an
+         --  underscore. There is nothing functional at this stage in doing
+         --  the requested casing operation, beyond folding to upper case
+         --  when it is mandatory, which does not involve underscores.
+
          if Name_Buffer (Ptr) = ASCII.ESC
            or else Name_Buffer (Ptr) = '['
            or else (Upper_Half_Encoding
@@ -148,11 +156,15 @@ package body Casing is
             Skip_Wide (Name_Buffer, Ptr);
             After_Und := False;
 
+         --  Underscore, or non-identifer character (error case)
+
          elsif Name_Buffer (Ptr) = '_'
             or else not Identifier_Char (Name_Buffer (Ptr))
          then
             After_Und := True;
             Ptr := Ptr + 1;
+
+         --  Lower case letter
 
          elsif Is_Lower_Case_Letter (Name_Buffer (Ptr)) then
             if Actual_Casing = All_Upper_Case
@@ -164,6 +176,8 @@ package body Casing is
             After_Und := False;
             Ptr := Ptr + 1;
 
+         --  Upper case letter
+
          elsif Is_Upper_Case_Letter (Name_Buffer (Ptr)) then
             if Actual_Casing = All_Lower_Case
               or else (not After_Und and then Actual_Casing = Mixed_Case)
@@ -174,7 +188,9 @@ package body Casing is
             After_Und := False;
             Ptr := Ptr + 1;
 
-         else  --  all other characters
+         --  Other identifier character (must be digit)
+
+         else
             After_Und := False;
             Ptr := Ptr + 1;
          end if;

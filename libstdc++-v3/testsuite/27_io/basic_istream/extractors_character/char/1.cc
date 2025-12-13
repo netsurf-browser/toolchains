@@ -1,11 +1,11 @@
 // 1999-07-26 bkoz
 
-// Copyright (C) 1999, 2003 Free Software Foundation
+// Copyright (C) 1999, 2003, 2005, 2009, 2010 Free Software Foundation
 //
 // This file is part of the GNU ISO C++ Library.  This library is free
 // software; you can redistribute it and/or modify it under the
 // terms of the GNU General Public License as published by the
-// Free Software Foundation; either version 2, or (at your option)
+// Free Software Foundation; either version 3, or (at your option)
 // any later version.
 
 // This library is distributed in the hope that it will be useful,
@@ -14,9 +14,8 @@
 // GNU General Public License for more details.
 
 // You should have received a copy of the GNU General Public License along
-// with this library; see the file COPYING.  If not, write to the Free
-// Software Foundation, 59 Temple Place - Suite 330, Boston, MA 02111-1307,
-// USA.
+// with this library; see the file COPYING3.  If not see
+// <http://www.gnu.org/licenses/>.
 
 // 27.6.1.2.3 character extractors
 
@@ -33,7 +32,7 @@ void test01()
 
   std::stringbuf isbuf_01(std::ios_base::in);
   std::stringbuf isbuf_02(str_02, std::ios_base::in);
-  std::istream is_01(NULL);
+  std::istream is_01(0);
   std::istream is_02(&isbuf_02);
 
   std::ios_base::iostate state1, state2, statefail;
@@ -41,8 +40,9 @@ void test01()
 
   // template<_CharT, _Traits>
   //  basic_istream& operator>>(istream&, _CharT*)
-  int n = 20;
+  const int n = 20;
   char array1[n];
+  array1[0] = '\0';
   typedef std::ios::traits_type ctraits_type;
   ctraits_type::int_type i1, i2;
 

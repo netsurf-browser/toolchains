@@ -1,11 +1,12 @@
 // Numeric functions implementation -*- C++ -*-
 
-// Copyright (C) 2001, 2004 Free Software Foundation, Inc.
+// Copyright (C) 2001, 2002, 2003, 2004, 2005, 2006, 2007, 2008, 2009, 2010,
+// 2011 Free Software Foundation, Inc.
 //
 // This file is part of the GNU ISO C++ Library.  This library is free
 // software; you can redistribute it and/or modify it under the
 // terms of the GNU General Public License as published by the
-// Free Software Foundation; either version 2, or (at your option)
+// Free Software Foundation; either version 3, or (at your option)
 // any later version.
 
 // This library is distributed in the hope that it will be useful,
@@ -13,19 +14,14 @@
 // MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
 // GNU General Public License for more details.
 
-// You should have received a copy of the GNU General Public License along
-// with this library; see the file COPYING.  If not, write to the Free
-// Software Foundation, 59 Temple Place - Suite 330, Boston, MA 02111-1307,
-// USA.
+// Under Section 7 of GPL version 3, you are granted additional
+// permissions described in the GCC Runtime Library Exception, version
+// 3.1, as published by the Free Software Foundation.
 
-// As a special exception, you may use this file as part of a free software
-// library without restriction.  Specifically, if other files instantiate
-// templates or use macros or inline functions from this file, or you compile
-// this file and link it with other files to produce an executable, this
-// file does not by itself cause the resulting executable to be covered by
-// the GNU General Public License.  This exception does not however
-// invalidate any other reasons why the executable file might be covered by
-// the GNU General Public License.
+// You should have received a copy of the GNU General Public License and
+// a copy of the GCC Runtime Library Exception along with this program;
+// see the files COPYING3 and COPYING.RUNTIME respectively.  If not, see
+// <http://www.gnu.org/licenses/>.
 
 /*
  *
@@ -53,18 +49,61 @@
  * purpose.  It is provided "as is" without express or implied warranty.
  */
 
-/** @file stl_numeric.h
+/** @file bits/stl_numeric.h
  *  This is an internal header file, included by other library headers.
- *  You should not attempt to use it directly.
+ *  Do not attempt to use it directly. @headername{numeric}
  */
 
 #ifndef _STL_NUMERIC_H
 #define _STL_NUMERIC_H 1
 
+#include <bits/concept_check.h>
 #include <debug/debug.h>
+#include <bits/move.h> // For _GLIBCXX_MOVE
 
-namespace std
+#ifdef __GXX_EXPERIMENTAL_CXX0X__
+
+namespace std _GLIBCXX_VISIBILITY(default)
 {
+_GLIBCXX_BEGIN_NAMESPACE_VERSION
+
+  /**
+   *  @brief  Create a range of sequentially increasing values.
+   *
+   *  For each element in the range @p [first,last) assigns @p value and
+   *  increments @p value as if by @p ++value.
+   *
+   *  @param  first  Start of range.
+   *  @param  last  End of range.
+   *  @param  value  Starting value.
+   *  @return  Nothing.
+   */
+  template<typename _ForwardIterator, typename _Tp>
+    void
+    iota(_ForwardIterator __first, _ForwardIterator __last, _Tp __value)
+    {
+      // concept requirements
+      __glibcxx_function_requires(_Mutable_ForwardIteratorConcept<
+				  _ForwardIterator>)
+      __glibcxx_function_requires(_ConvertibleConcept<_Tp,
+	    typename iterator_traits<_ForwardIterator>::value_type>)
+      __glibcxx_requires_valid_range(__first, __last);
+
+      for (; __first != __last; ++__first)
+	{
+	  *__first = __value;
+	  ++__value;
+	}
+    }
+
+_GLIBCXX_END_NAMESPACE_VERSION
+} // namespace std
+
+#endif
+
+namespace std _GLIBCXX_VISIBILITY(default)
+{
+_GLIBCXX_BEGIN_NAMESPACE_ALGO
 
   /**
    *  @brief  Accumulate values in a range.
@@ -78,14 +117,14 @@ namespace std
    *  @return  The final sum.
    */
   template<typename _InputIterator, typename _Tp>
-    _Tp
+    inline _Tp
     accumulate(_InputIterator __first, _InputIterator __last, _Tp __init)
     {
       // concept requirements
       __glibcxx_function_requires(_InputIteratorConcept<_InputIterator>)
       __glibcxx_requires_valid_range(__first, __last);
 
-      for ( ; __first != __last; ++__first)
+      for (; __first != __last; ++__first)
 	__init = __init + *__first;
       return __init;
     }
@@ -104,7 +143,7 @@ namespace std
    *  @return  The final sum.
    */
   template<typename _InputIterator, typename _Tp, typename _BinaryOperation>
-    _Tp
+    inline _Tp
     accumulate(_InputIterator __first, _InputIterator __last, _Tp __init,
 	       _BinaryOperation __binary_op)
     {
@@ -112,7 +151,7 @@ namespace std
       __glibcxx_function_requires(_InputIteratorConcept<_InputIterator>)
       __glibcxx_requires_valid_range(__first, __last);
 
-      for ( ; __first != __last; ++__first)
+      for (; __first != __last; ++__first)
 	__init = __binary_op(__init, *__first);
       return __init;
     }
@@ -132,7 +171,7 @@ namespace std
    *  @return  The final inner product.
    */
   template<typename _InputIterator1, typename _InputIterator2, typename _Tp>
-    _Tp
+    inline _Tp
     inner_product(_InputIterator1 __first1, _InputIterator1 __last1,
 		  _InputIterator2 __first2, _Tp __init)
     {
@@ -141,7 +180,7 @@ namespace std
       __glibcxx_function_requires(_InputIteratorConcept<_InputIterator2>)
       __glibcxx_requires_valid_range(__first1, __last1);
 
-      for ( ; __first1 != __last1; ++__first1, ++__first2)
+      for (; __first1 != __last1; ++__first1, ++__first2)
 	__init = __init + (*__first1 * *__first2);
       return __init;
     }
@@ -163,8 +202,8 @@ namespace std
    *  @return  The final inner product.
    */
   template<typename _InputIterator1, typename _InputIterator2, typename _Tp,
-	    typename _BinaryOperation1, typename _BinaryOperation2>
-    _Tp
+	   typename _BinaryOperation1, typename _BinaryOperation2>
+    inline _Tp
     inner_product(_InputIterator1 __first1, _InputIterator1 __last1,
 		  _InputIterator2 __first2, _Tp __init,
 		  _BinaryOperation1 __binary_op1,
@@ -175,7 +214,7 @@ namespace std
       __glibcxx_function_requires(_InputIteratorConcept<_InputIterator2>)
       __glibcxx_requires_valid_range(__first1, __last1);
 
-      for ( ; __first1 != __last1; ++__first1, ++__first2)
+      for (; __first1 != __last1; ++__first1, ++__first2)
 	__init = __binary_op1(__init, __binary_op2(*__first1, *__first2));
       return __init;
     }
@@ -183,10 +222,10 @@ namespace std
   /**
    *  @brief  Return list of partial sums
    *
-   *  Accumulates the values in the range [first,last) using operator+().
+   *  Accumulates the values in the range [first,last) using the @c + operator.
    *  As each successive input value is added into the total, that partial sum
-   *  is written to @a result.  Therefore, the first value in result is the
-   *  first value of the input, the second value in result is the sum of the
+   *  is written to @p result.  Therefore, the first value in @p result is the
+   *  first value of the input, the second value in @p result is the sum of the
    *  first and second input values, and so on.
    *
    *  @param  first  Start of input range.
@@ -203,34 +242,39 @@ namespace std
 
       // concept requirements
       __glibcxx_function_requires(_InputIteratorConcept<_InputIterator>)
-      __glibcxx_function_requires(_OutputIteratorConcept<_OutputIterator, _ValueType>)
+      __glibcxx_function_requires(_OutputIteratorConcept<_OutputIterator,
+				                         _ValueType>)
       __glibcxx_requires_valid_range(__first, __last);
 
-      if (__first == __last) return __result;
-      *__result = *__first;
+      if (__first == __last)
+	return __result;
       _ValueType __value = *__first;
-      while (++__first != __last) {
-	__value = __value + *__first;
-	*++__result = __value;
-      }
+      *__result = __value;
+      while (++__first != __last)
+	{
+	  __value = __value + *__first;
+	  *++__result = __value;
+	}
       return ++__result;
     }
 
   /**
    *  @brief  Return list of partial sums
    *
-   *  Accumulates the values in the range [first,last) using operator+().
+   *  Accumulates the values in the range [first,last) using @p binary_op.
    *  As each successive input value is added into the total, that partial sum
-   *  is written to @a result.  Therefore, the first value in result is the
-   *  first value of the input, the second value in result is the sum of the
+   *  is written to @a result.  Therefore, the first value in @p result is the
+   *  first value of the input, the second value in @p result is the sum of the
    *  first and second input values, and so on.
    *
    *  @param  first  Start of input range.
    *  @param  last  End of input range.
    *  @param  result  Output to write sums to.
+   *  @param  binary_op  Function object.
    *  @return  Iterator pointing just beyond the values written to result.
    */
-  template<typename _InputIterator, typename _OutputIterator, typename _BinaryOperation>
+  template<typename _InputIterator, typename _OutputIterator,
+	   typename _BinaryOperation>
     _OutputIterator
     partial_sum(_InputIterator __first, _InputIterator __last,
 		_OutputIterator __result, _BinaryOperation __binary_op)
@@ -239,16 +283,19 @@ namespace std
 
       // concept requirements
       __glibcxx_function_requires(_InputIteratorConcept<_InputIterator>)
-      __glibcxx_function_requires(_OutputIteratorConcept<_OutputIterator, _ValueType>)
+      __glibcxx_function_requires(_OutputIteratorConcept<_OutputIterator,
+				                         _ValueType>)
       __glibcxx_requires_valid_range(__first, __last);
 
-      if (__first == __last) return __result;
-      *__result = *__first;
+      if (__first == __last)
+	return __result;
       _ValueType __value = *__first;
-      while (++__first != __last) {
-	__value = __binary_op(__value, *__first);
-	*++__result = __value;
-      }
+      *__result = __value;
+      while (++__first != __last)
+	{
+	  __value = __binary_op(__value, *__first);
+	  *++__result = __value;
+	}
       return ++__result;
     }
 
@@ -262,6 +309,9 @@ namespace std
    *  @param  last  End of input range.
    *  @param  result  Output to write sums to.
    *  @return  Iterator pointing just beyond the values written to result.
+   *
+   *  _GLIBCXX_RESOLVE_LIB_DEFECTS
+   *  DR 539. partial_sum and adjacent_difference should mention requirements
    */
   template<typename _InputIterator, typename _OutputIterator>
     _OutputIterator
@@ -272,17 +322,20 @@ namespace std
 
       // concept requirements
       __glibcxx_function_requires(_InputIteratorConcept<_InputIterator>)
-      __glibcxx_function_requires(_OutputIteratorConcept<_OutputIterator, _ValueType>)
+      __glibcxx_function_requires(_OutputIteratorConcept<_OutputIterator,
+				                         _ValueType>)
       __glibcxx_requires_valid_range(__first, __last);
 
-      if (__first == __last) return __result;
-      *__result = *__first;
+      if (__first == __last)
+	return __result;
       _ValueType __value = *__first;
-      while (++__first != __last) {
-	_ValueType __tmp = *__first;
-	*++__result = __tmp - __value;
-	__value = __tmp;
-      }
+      *__result = __value;
+      while (++__first != __last)
+	{
+	  _ValueType __tmp = *__first;
+	  *++__result = __tmp - __value;
+	  __value = _GLIBCXX_MOVE(__tmp);
+	}
       return ++__result;
     }
 
@@ -297,8 +350,12 @@ namespace std
    *  @param  last  End of input range.
    *  @param  result  Output to write sums to.
    *  @return  Iterator pointing just beyond the values written to result.
+   *
+   *  _GLIBCXX_RESOLVE_LIB_DEFECTS
+   *  DR 539. partial_sum and adjacent_difference should mention requirements
    */
-  template<typename _InputIterator, typename _OutputIterator, typename _BinaryOperation>
+  template<typename _InputIterator, typename _OutputIterator,
+	   typename _BinaryOperation>
     _OutputIterator
     adjacent_difference(_InputIterator __first, _InputIterator __last,
 			_OutputIterator __result, _BinaryOperation __binary_op)
@@ -307,20 +364,24 @@ namespace std
 
       // concept requirements
       __glibcxx_function_requires(_InputIteratorConcept<_InputIterator>)
-      __glibcxx_function_requires(_OutputIteratorConcept<_OutputIterator, _ValueType>)
+      __glibcxx_function_requires(_OutputIteratorConcept<_OutputIterator,
+				                         _ValueType>)
       __glibcxx_requires_valid_range(__first, __last);
 
-      if (__first == __last) return __result;
-      *__result = *__first;
+      if (__first == __last)
+	return __result;
       _ValueType __value = *__first;
-      while (++__first != __last) {
-	_ValueType __tmp = *__first;
-	*++__result = __binary_op(__tmp, __value);
-	__value = __tmp;
-      }
+      *__result = __value;
+      while (++__first != __last)
+	{
+	  _ValueType __tmp = *__first;
+	  *++__result = __binary_op(__tmp, __value);
+	  __value = _GLIBCXX_MOVE(__tmp);
+	}
       return ++__result;
     }
 
+_GLIBCXX_END_NAMESPACE_ALGO
 } // namespace std
 
 #endif /* _STL_NUMERIC_H */

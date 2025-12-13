@@ -1,11 +1,12 @@
 // 2001-09-17 Benjamin Kosnik  <bkoz@redhat.com>
 
-// Copyright (C) 2001, 2002, 2003 Free Software Foundation
+// Copyright (C) 2001, 2002, 2003, 2004, 2005, 2006, 2009
+// Free Software Foundation
 //
 // This file is part of the GNU ISO C++ Library.  This library is free
 // software; you can redistribute it and/or modify it under the
 // terms of the GNU General Public License as published by the
-// Free Software Foundation; either version 2, or (at your option)
+// Free Software Foundation; either version 3, or (at your option)
 // any later version.
 
 // This library is distributed in the hope that it will be useful,
@@ -14,11 +15,12 @@
 // GNU General Public License for more details.
 
 // You should have received a copy of the GNU General Public License along
-// with this library; see the file COPYING.  If not, write to the Free
-// Software Foundation, 59 Temple Place - Suite 330, Boston, MA 02111-1307,
-// USA.
+// with this library; see the file COPYING3.  If not see
+// <http://www.gnu.org/licenses/>.
 
 // 22.2.5.3.1 time_put members
+
+// { dg-do run { xfail dummy_wcsftime } }
 
 #include <locale>
 #include <sstream>
@@ -40,7 +42,7 @@ void test10()
   const locale loc_c = locale::classic();
   const wstring x(50, 'x'); // have to have allocated wstring!
   wstring res;
-  const tm time_sanity = { 0, 0, 12, 26, 5, 97, 2 };
+  const tm time_sanity = __gnu_test::test_tm(0, 0, 12, 26, 5, 97, 2, 0, 0);
 
   wostringstream oss; 
   oss.imbue(locale(loc_c, new time_put_type));
@@ -48,7 +50,7 @@ void test10()
 
   // 02 char format
   res = x;
-  iter_type ret2 = tp.put(res.begin(), oss, ' ', &time_sanity, 'A');
+  iter_type ret2 = tp.put(res.begin(), oss, L' ', &time_sanity, 'A');
   wstring sanity2(res.begin(), ret2);
   VERIFY( err == goodbit );
   VERIFY( res == L"Tuesdayxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx" );

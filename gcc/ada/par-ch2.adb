@@ -6,18 +6,17 @@
 --                                                                          --
 --                                 B o d y                                  --
 --                                                                          --
---          Copyright (C) 1992-2003 Free Software Foundation, Inc.          --
+--          Copyright (C) 1992-2010, Free Software Foundation, Inc.         --
 --                                                                          --
 -- GNAT is free software;  you can  redistribute it  and/or modify it under --
 -- terms of the  GNU General Public License as published  by the Free Soft- --
--- ware  Foundation;  either version 2,  or (at your option) any later ver- --
+-- ware  Foundation;  either version 3,  or (at your option) any later ver- --
 -- sion.  GNAT is distributed in the hope that it will be useful, but WITH- --
 -- OUT ANY WARRANTY;  without even the  implied warranty of MERCHANTABILITY --
 -- or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU General Public License --
 -- for  more details.  You should have  received  a copy of the GNU General --
--- Public License  distributed with GNAT;  see file COPYING.  If not, write --
--- to  the Free Software Foundation,  59 Temple Place - Suite 330,  Boston, --
--- MA 02111-1307, USA.                                                      --
+-- Public License  distributed with GNAT; see file COPYING3.  If not, go to --
+-- http://www.gnu.org/licenses for a complete copy of the license.          --
 --                                                                          --
 -- GNAT was originally developed  by the GNAT team at  New York University. --
 -- Extensive contributions were provided by Ada Core Technologies Inc.      --
@@ -33,7 +32,14 @@ package body Ch2 is
 
    --  Local functions, used only in this chapter
 
-   function P_Pragma_Argument_Association return Node_Id;
+   procedure Scan_Pragma_Argument_Association
+     (Identifier_Seen : in out Boolean;
+      Association     : out Node_Id);
+   --  Scans out a pragma argument association. Identifier_Seen is true on
+   --  entry if a previous association had an identifier, and gets set True if
+   --  the scanned association has an identifier (this is used to check the
+   --  rule that no associations without identifiers can follow an association
+   --  which has an identifier). The result is returned in Association.
 
    ---------------------
    -- 2.3  Identifier --
@@ -54,6 +60,22 @@ package body Ch2 is
       --  All set if we do indeed have an identifier
 
       if Token = Tok_Identifier then
+
+         --  Ada 2005 (AI-284): Compiling in Ada95 mode we warn that INTERFACE,
+         --  OVERRIDING, and SYNCHRONIZED are new reserved words.
+
+         if Ada_Version = Ada_95
+           and then Warn_On_Ada_2005_Compatibility
+         then
+            if Token_Name = Name_Overriding
+              or else Token_Name = Name_Synchronized
+              or else (Token_Name = Name_Interface
+                        and then Prev_Token /= Tok_Pragma)
+            then
+               Error_Msg_N ("& is a reserved word in Ada 2005?", Token_Node);
+            end if;
+         end if;
+
          Ident_Node := Token_Node;
          Scan; -- past Identifier
          return Ident_Node;
@@ -96,7 +118,7 @@ package body Ch2 is
 
    --  DECIMAL_LITERAL ::= NUMERAL [.NUMERAL] [EXPONENT]
 
-   --  Handled by scanner as part of numeric lIteral handing (see 2.4)
+   --  Handled by scanner as part of numeric literal handing (see 2.4)
 
    --------------------
    -- 2.4.1  Numeral --
@@ -154,7 +176,7 @@ package body Ch2 is
 
    --  CHARACTER_LITERAL ::= ' GRAPHIC_CHARACTER '
 
-   --  Handled by the scanner and returned as Tok_Character_Literal
+   --  Handled by the scanner and returned as Tok_Char_Literal
 
    -------------------------
    -- 2.6  String Literal --
@@ -162,7 +184,7 @@ package body Ch2 is
 
    --  STRING LITERAL ::= "{STRING_ELEMENT}"
 
-   --  Handled by the scanner and returned as Tok_Character_Literal
+   --  Handled by the scanner and returned as Tok_String_Literal
    --  or if the string looks like an operator as Tok_Operator_Symbol.
 
    -------------------------
@@ -205,8 +227,7 @@ package body Ch2 is
    --  will think there are missing bodies, and try to change ; to IS, when
    --  in fact the bodies ARE present, supplied by these pragmas.
 
-   function P_Pragma return Node_Id is
-
+   function P_Pragma (Skipping : Boolean := False) return Node_Id is
       Interface_Check_Required : Boolean := False;
       --  Set True if check of pragma INTERFACE is required
 
@@ -216,8 +237,12 @@ package body Ch2 is
       Arg_Count : Int := 0;
       --  Number of argument associations processed
 
-      Pragma_Node   : Node_Id;
-      Pragma_Name   : Name_Id;
+      Identifier_Seen : Boolean := False;
+      --  Set True if an identifier is encountered for a pragma argument. Used
+      --  to check that there are no more arguments without identifiers.
+
+      Prag_Node     : Node_Id;
+      Prag_Name     : Name_Id;
       Semicolon_Loc : Source_Ptr;
       Ident_Node    : Node_Id;
       Assoc_Node    : Node_Id;
@@ -233,33 +258,56 @@ package body Ch2 is
       procedure Skip_Pragma_Semicolon is
       begin
          if Token /= Tok_Semicolon then
-            T_Semicolon;
-            Resync_Past_Semicolon;
+
+            --  If skipping the pragma, ignore a missing semicolon
+
+            if Skipping then
+               null;
+
+            --  Otherwise demand a semicolon
+
+            else
+               T_Semicolon;
+            end if;
+
+         --  Scan past semicolon if present
+
          else
-            Scan; -- past semicolon
+            Scan;
          end if;
       end Skip_Pragma_Semicolon;
 
    --  Start of processing for P_Pragma
 
    begin
-      Pragma_Node := New_Node (N_Pragma, Token_Ptr);
+      Prag_Node := New_Node (N_Pragma, Token_Ptr);
       Scan; -- past PRAGMA
-      Pragma_Name := Token_Name;
+      Prag_Name := Token_Name;
 
       if Style_Check then
          Style.Check_Pragma_Name;
       end if;
 
-      Ident_Node := P_Identifier;
-      Set_Chars (Pragma_Node, Pragma_Name);
-      Delete_Node (Ident_Node);
+      --  Ada 2005 (AI-284): INTERFACE is a new reserved word but it is
+      --  allowed as a pragma name.
+
+      if Ada_Version >= Ada_2005
+        and then Token = Tok_Interface
+      then
+         Prag_Name := Name_Interface;
+         Ident_Node  := Make_Identifier (Token_Ptr, Name_Interface);
+         Scan; -- past INTERFACE
+      else
+         Ident_Node := P_Identifier;
+      end if;
+
+      Set_Pragma_Identifier (Prag_Node, Ident_Node);
 
       --  See if special INTERFACE/IMPORT check is required
 
       if SIS_Entry_Active then
-         Interface_Check_Required := (Pragma_Name = Name_Interface);
-         Import_Check_Required    := (Pragma_Name = Name_Import);
+         Interface_Check_Required := (Prag_Name = Name_Interface);
+         Import_Check_Required    := (Prag_Name = Name_Import);
       else
          Interface_Check_Required := False;
          Import_Check_Required    := False;
@@ -273,12 +321,12 @@ package body Ch2 is
         or else (Token /= Tok_Semicolon
                    and then not Token_Is_At_Start_Of_Line)
       then
-         Set_Pragma_Argument_Associations (Pragma_Node, New_List);
+         Set_Pragma_Argument_Associations (Prag_Node, New_List);
          T_Left_Paren;
 
          loop
             Arg_Count := Arg_Count + 1;
-            Assoc_Node := P_Pragma_Argument_Association;
+            Scan_Pragma_Argument_Association (Identifier_Seen, Assoc_Node);
 
             if Arg_Count = 2
               and then (Interface_Check_Required or else Import_Check_Required)
@@ -293,17 +341,17 @@ package body Ch2 is
                end if;
             end if;
 
-            Append (Assoc_Node, Pragma_Argument_Associations (Pragma_Node));
+            Append (Assoc_Node, Pragma_Argument_Associations (Prag_Node));
             exit when Token /= Tok_Comma;
             Scan; -- past comma
          end loop;
 
-         --  If we have := for pragma Debug, it is worth special casing
-         --  the error message (it is easy to think of pragma Debug as
-         --  taking a statement, and an assignment statement is the most
-         --  likely candidate for this error)
+         --  If we have := for pragma Debug, it is worth special casing the
+         --  error message (it is easy to think of pragma Debug as taking a
+         --  statement, and an assignment statement is the most likely
+         --  candidate for this error)
 
-         if Token = Tok_Colon_Equal and then Pragma_Name = Name_Debug then
+         if Token = Tok_Colon_Equal and then Prag_Name = Name_Debug then
             Error_Msg_SC ("argument for pragma Debug must be procedure call");
             Resync_To_Semicolon;
 
@@ -329,13 +377,13 @@ package body Ch2 is
       --  case of pragma Source_File_Name, which assume the semicolon
       --  is already scanned out.
 
-      if Chars (Pragma_Node) = Name_Style_Checks then
-         Result := Par.Prag (Pragma_Node, Semicolon_Loc);
+      if Prag_Name = Name_Style_Checks then
+         Result := Par.Prag (Prag_Node, Semicolon_Loc);
          Skip_Pragma_Semicolon;
          return Result;
       else
          Skip_Pragma_Semicolon;
-         return Par.Prag (Pragma_Node, Semicolon_Loc);
+         return Par.Prag (Prag_Node, Semicolon_Loc);
       end if;
 
    exception
@@ -356,7 +404,7 @@ package body Ch2 is
    begin
       while Token = Tok_Pragma loop
          Error_Msg_SC ("pragma not allowed here");
-         Discard_Junk_Node (P_Pragma);
+         Discard_Junk_Node (P_Pragma (Skipping => True));
       end loop;
    end P_Pragmas_Misplaced;
 
@@ -385,14 +433,18 @@ package body Ch2 is
    --  Error recovery: Cannot raise Error_Resync
 
    procedure P_Pragmas_Opt (List : List_Id) is
-      P : Node_Id;
+      P     : Node_Id;
 
    begin
       while Token = Tok_Pragma loop
          P := P_Pragma;
 
-         if Chars (P) = Name_Assert or else Chars (P) = Name_Debug then
-            Error_Msg_Name_1 := Chars (P);
+         if Nkind (P) /= N_Error
+          and then (Pragma_Name (P) = Name_Assert
+                      or else
+                    Pragma_Name (P) = Name_Debug)
+         then
+            Error_Msg_Name_1 := Pragma_Name (P);
             Error_Msg_N
               ("pragma% must be in declaration/statement context", P);
          else
@@ -411,14 +463,19 @@ package body Ch2 is
 
    --  Error recovery: cannot raise Error_Resync
 
-   function P_Pragma_Argument_Association return Node_Id is
+   procedure Scan_Pragma_Argument_Association
+     (Identifier_Seen : in out Boolean;
+      Association     : out Node_Id)
+   is
       Scan_State      : Saved_Scan_State;
-      Pragma_Arg_Node : Node_Id;
       Identifier_Node : Node_Id;
+      Id_Present      : Boolean;
 
    begin
-      Pragma_Arg_Node := New_Node (N_Pragma_Argument_Association, Token_Ptr);
-      Set_Chars (Pragma_Arg_Node, No_Name);
+      Association := New_Node (N_Pragma_Argument_Association, Token_Ptr);
+      Set_Chars (Association, No_Name);
+
+      --  Argument starts with identifier
 
       if Token = Tok_Identifier then
          Identifier_Node := Token_Node;
@@ -426,17 +483,41 @@ package body Ch2 is
          Scan; -- past Identifier
 
          if Token = Tok_Arrow then
+            Identifier_Seen := True;
             Scan; -- past arrow
-            Set_Chars (Pragma_Arg_Node, Chars (Identifier_Node));
-            Delete_Node (Identifier_Node);
+            Set_Chars (Association, Chars (Identifier_Node));
+            Id_Present := True;
+
+         --  Case of argument with no identifier
+
          else
             Restore_Scan_State (Scan_State); -- to Identifier
+            Id_Present := False;
          end if;
+
+      --  Argument does not start with identifier
+
+      else
+         Id_Present := False;
       end if;
 
-      Set_Expression (Pragma_Arg_Node, P_Expression);
-      return Pragma_Arg_Node;
+      --  Diagnose error of "positional" argument for pragma appearing after
+      --  a "named" argument (quotes here are because that's not quite accurate
+      --  Ada RM terminology).
 
-   end P_Pragma_Argument_Association;
+      --  Since older GNAT versions did not generate this error, disable this
+      --  message in codepeer mode to help legacy code using codepeer.
+
+      if Identifier_Seen and not Id_Present and not CodePeer_Mode then
+         Error_Msg_SC ("|pragma argument identifier required here");
+         Error_Msg_SC ("\since previous argument had identifier (RM 2.8(4))");
+      end if;
+
+      if Id_Present then
+         Set_Expression (Association, P_Expression);
+      else
+         Set_Expression (Association, P_Expression_If_OK);
+      end if;
+   end Scan_Pragma_Argument_Association;
 
 end Ch2;

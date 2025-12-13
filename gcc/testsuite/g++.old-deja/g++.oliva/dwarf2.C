@@ -1,4 +1,4 @@
-// { dg-do assemble { xfail i386-pc-solaris* } }
+// { dg-do assemble }
 
 // Copyright (C) 1999 Free Software Foundation
 

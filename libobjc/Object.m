@@ -1,11 +1,12 @@
 /* The implementation of class Object for Objective-C.
-   Copyright (C) 1993, 1994, 1995, 1997, 2002 Free Software Foundation, Inc.
+   Copyright (C) 1993, 1994, 1995, 1997, 2002, 2009, 2010
+   Free Software Foundation, Inc.
 
 This file is part of GCC.
 
 GCC is free software; you can redistribute it and/or modify it
 under the terms of the GNU General Public License as published by the
-Free Software Foundation; either version 2, or (at your option) any
+Free Software Foundation; either version 3, or (at your option) any
 later version.
 
 GCC is distributed in the hope that it will be useful, but WITHOUT
@@ -13,27 +14,39 @@ ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
 FITNESS FOR A PARTICULAR PURPOSE.  See the GNU General Public
 License for more details.
 
-You should have received a copy of the GNU General Public License
-along with GCC; see the file COPYING.  If not, write to
-the Free Software Foundation, 59 Temple Place - Suite 330,
-Boston, MA 02111-1307, USA.  */
+Under Section 7 of GPL version 3, you are granted additional
+permissions described in the GCC Runtime Library Exception, version
+3.1, as published by the Free Software Foundation.
 
-/* As a special exception, if you link this library with files compiled
-   with GCC to produce an executable, this does not cause the resulting
-   executable to be covered by the GNU General Public License.  This
-   exception does not however invalidate any other reasons why the
-   executable file might be covered by the GNU General Public License. */
+You should have received a copy of the GNU General Public License and
+a copy of the GCC Runtime Library Exception along with this program;
+see the files COPYING3 and COPYING.RUNTIME respectively.  If not, see
+<http://www.gnu.org/licenses/>.  */
 
+#include "objc-private/common.h"
 #include <stdarg.h>
+#include <errno.h>
 #include "objc/Object.h"
 #include "objc/Protocol.h"
 #include "objc/objc-api.h"
 
-extern int errno;
-
-#define MAX_CLASS_NAME_LEN 256
-
 @implementation Object
+
+- (Class)class
+{
+  return object_get_class (self);
+}
+
+- (BOOL)isEqual: (id)anObject
+{
+  return self == anObject;
+}
+
+@end
+
+/* The following methods were deprecated in GCC 4.6.0 and will be
+   removed in the next GCC release.  */
+@implementation Object (Deprecated)
 
 + initialize
 {
@@ -80,11 +93,6 @@ extern int errno;
   return [self copy];
 }
 
-- (Class)class
-{
-  return object_get_class(self);
-}
-
 - (Class)superClass
 {
   return object_get_super_class(self);
@@ -110,18 +118,13 @@ extern int errno;
   return (size_t)self;
 }
 
-- (BOOL)isEqual:anObject
-{
-  return self==anObject;
-}
-
-- (int)compare:anotherObject;
+- (int)compare:(id)anotherObject;
 {
   if ([self isEqual:anotherObject])
     return 0;
   // Ordering objects by their address is pretty useless, 
   // so subclasses should override this is some useful way.
-  else if (self > anotherObject)
+  else if ((id)self > anotherObject)
     return 1;
   else 
     return -1;
@@ -176,14 +179,14 @@ extern int errno;
 
 + (BOOL)instancesRespondTo:(SEL)aSel
 {
-  return class_get_instance_method(self, aSel)!=METHOD_NULL;
+  return class_get_instance_method(self, aSel) != (Method_t)0;
 }
 
 - (BOOL)respondsTo:(SEL)aSel
 {
   return ((object_is_instance(self)
            ?class_get_instance_method(self->isa, aSel)
-           :class_get_class_method(self->isa, aSel))!=METHOD_NULL);
+           :class_get_class_method(self->isa, aSel)) != (Method_t)0);
 }
 
 + (IMP)instanceMethodFor:(SEL)aSel

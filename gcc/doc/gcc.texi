@@ -40,16 +40,17 @@
 @c %**end of header
 
 @copying
-Copyright @copyright{} 1988, 1989, 1992, 1993, 1994, 1995, 1996, 1997, 1998,
-1999, 2000, 2001, 2002, 2003, 2004 Free Software Foundation, Inc.
+Copyright @copyright{} 1988, 1989, 1992, 1993, 1994, 1995, 1996, 1997,
+1998, 1999, 2000, 2001, 2002, 2003, 2004, 2005, 2006, 2007, 2008, 2009,
+2010 Free Software Foundation, Inc.
 
 Permission is granted to copy, distribute and/or modify this document
-under the terms of the GNU Free Documentation License, Version 1.2 or
+under the terms of the GNU Free Documentation License, Version 1.3 or
 any later version published by the Free Software Foundation; with the
-Invariant Sections being ``GNU General Public License'' and ``Funding
-Free Software'', the Front-Cover texts being (a) (see below), and with
-the Back-Cover Texts being (b) (see below).  A copy of the license is
-included in the section entitled ``GNU Free Documentation License''.
+Invariant Sections being ``Funding Free Software'', the Front-Cover
+Texts being (a) (see below), and with the Back-Cover Texts being (b)
+(see below).  A copy of the license is included in the section entitled
+``GNU Free Documentation License''.
 
 (a) The FSF's Front-Cover Text is:
 
@@ -62,9 +63,10 @@ included in the section entitled ``GNU Free Documentation License''.
      funds for GNU development.
 @end copying
 @ifnottex
-@dircategory Programming
+@dircategory Software development
 @direntry
 * gcc: (gcc).                  The GNU Compiler Collection.
+* g++: (gcc).                  The GNU C++ compiler.
 @end direntry
 This file documents the use of the GNU compilers.
 @sp 1
@@ -73,20 +75,12 @@ This file documents the use of the GNU compilers.
 @end ifnottex
 
 @setchapternewpage odd
-@shorttitlepage Using the GNU Compiler Collection (GCC)
 @titlepage
-@center @titlefont{Using the GNU Compiler Collection}
-@sp 2
-@center by Richard M. Stallman and the GCC Developer Community
-@sp 3
-@center Last updated 23 May 2004
-@sp 1
-
-@center for GCC @value{version-GCC}
+@title Using the GNU Compiler Collection
+@versionsubtitle
+@author Richard M. Stallman and the @sc{GCC} Developer Community
 @page
 @vskip 0pt plus 1filll
-For GCC Version @value{version-GCC}@*
-@sp 1
 Published by:
 @multitable @columnfractions 0.5 0.5
 @item GNU Press
@@ -95,9 +89,9 @@ Published by:
 @tab General: @tex press@@gnu.org @end tex
 @item Free Software Foundation
 @tab Orders:  @tex sales@@gnu.org @end tex
-@item 59 Temple Place Suite 330
+@item 51 Franklin Street, Fifth Floor
 @tab Tel 617-542-5942
-@item Boston, MA 02111-1307 USA
+@item Boston, MA 02110-1301 USA
 @tab Fax 617-542-2652
 @end multitable
 @sp 2
@@ -124,7 +118,11 @@ Printed copies are available for $45 each.
 
 This manual documents how to use the GNU compilers,
 as well as their features and incompatibilities, and how to report
-bugs.  It corresponds to GCC version @value{version-GCC}.
+bugs.  It corresponds to the compilers
+@ifset VERSION_PACKAGE
+@value{VERSION_PACKAGE}
+@end ifset
+version @value{version-GCC}.
 The internals of the GNU compilers, including how to port them to new
 targets and some information about how to write front ends for new
 languages, are documented in a separate manual.  @xref{Top,,
@@ -136,6 +134,7 @@ Introduction, gccint, GNU Compiler Collection (GCC) Internals}.
 * Invoking GCC::    Command options supported by @samp{gcc}.
 * C Implementation:: How GCC implements the ISO C specification.
 * C Extensions::    GNU extensions to the C language family.
+* C++ Implementation:: How GCC implements the ISO C++ specification.
 * C++ Extensions::  GNU extensions to the C++ language.
 * Objective-C::     GNU Objective-C runtime features.
 * Compatibility::   Binary Compatibility
@@ -149,17 +148,19 @@ Introduction, gccint, GNU Compiler Collection (GCC) Internals}.
 * GNU Project::     The GNU Project and GNU/Linux.
 
 * Copying::         GNU General Public License says
-                     how you can copy and share GCC.
+                    how you can copy and share GCC.
 * GNU Free Documentation License:: How you can copy and share this manual.
 * Contributors::    People who have contributed to GCC.
 
 * Option Index::    Index to command line options.
-* Keyword Index::    Index of concepts and symbol names.
+* Keyword Index::   Index of concepts and symbol names.
 @end menu
 
 @include frontends.texi
 @include standards.texi
 @include invoke.texi
+@include implement-c.texi
+@include implement-cxx.texi
 @include extend.texi
 @include objc.texi
 @include compat.texi
@@ -171,7 +172,7 @@ Introduction, gccint, GNU Compiler Collection (GCC) Internals}.
 
 @include funding.texi
 @include gnu.texi
-@include gpl.texi
+@include gpl_v3.texi
 
 @c ---------------------------------------------------------------------
 @c GFDL

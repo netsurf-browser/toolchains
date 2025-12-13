@@ -6,18 +6,17 @@
  *                                                                          *
  *                              C Header File                               *
  *                                                                          *
- *          Copyright (C) 1992-2003 Free Software Foundation, Inc.          *
+ *            Copyright (C) 1992-2008, Free Software Foundation, Inc.       *
  *                                                                          *
  * GNAT is free software;  you can  redistribute it  and/or modify it under *
  * terms of the  GNU General Public License as published  by the Free Soft- *
- * ware  Foundation;  either version 2,  or (at your option) any later ver- *
+ * ware  Foundation;  either version 3,  or (at your option) any later ver- *
  * sion.  GNAT is distributed in the hope that it will be useful, but WITH- *
  * OUT ANY WARRANTY;  without even the  implied warranty of MERCHANTABILITY *
  * or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU General Public License *
  * for  more details.  You should have  received  a copy of the GNU General *
- * Public License  distributed with GNAT;  see file COPYING.  If not, write *
- * to  the Free Software Foundation,  59 Temple Place - Suite 330,  Boston, *
- * MA 02111-1307, USA.                                                      *
+ * Public License  distributed with GNAT; see file COPYING3.  If not, go to *
+ * http://www.gnu.org/licenses for a complete copy of the license.          *
  *                                                                          *
  * GNAT was originally developed  by the GNAT team at  New York University. *
  * Extensive contributions were provided by Ada Core Technologies Inc.      *
@@ -86,7 +85,7 @@ Get_Decoded_Name_String (Name_Id Id)
 
 /* Like Get_Decoded_Name_String, but the result has all qualification and
    package body entity suffixes stripped, and also all letters are upper
-   cased.  This is used fo rbuilding the enumeration literal table. */
+   cased.  This is used for building the enumeration literal table. */
 
 extern void casing__set_all_upper_case (void);
 
@@ -111,15 +110,20 @@ extern Boolean Is_Non_Ada_Error (Entity_Id);
 /* Here are some functions in sinput.adb we call from a-trans.c.  */
 typedef Nat Source_File_Index;
 typedef Int Logical_Line_Number;
+typedef Int Column_Number;
 
 #define Debug_Source_Name sinput__debug_source_name
 #define Full_Debug_Name sinput__full_debug_name
 #define Reference_Name sinput__reference_name
 #define Get_Source_File_Index sinput__get_source_file_index
 #define Get_Logical_Line_Number sinput__get_logical_line_number
+#define Get_Column_Number sinput__get_column_number
+#define Instantiation sinput__instantiation
 
 extern File_Name_Type Debug_Source_Name	(Source_File_Index);
 extern File_Name_Type Full_Debug_Name	(Source_File_Index);
 extern File_Name_Type Reference_Name	(Source_File_Index);
 extern Source_File_Index Get_Source_File_Index (Source_Ptr);
 extern Logical_Line_Number Get_Logical_Line_Number (Source_Ptr);
+extern Column_Number Get_Column_Number (Source_Ptr);
+extern Source_Ptr Instantiation (Source_File_Index);

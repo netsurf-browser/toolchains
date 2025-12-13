@@ -1,11 +1,11 @@
 // 2004-01-25 jlquinn@gcc.gnu.org
 
-// Copyright (C) 2004 Free Software Foundation
+// Copyright (C) 2004, 2005, 2009 Free Software Foundation
 //
 // This file is part of the GNU ISO C++ Library.  This library is free
 // software; you can redistribute it and/or modify it under the
 // terms of the GNU General Public License as published by the
-// Free Software Foundation; either version 2, or (at your option)
+// Free Software Foundation; either version 3, or (at your option)
 // any later version.
 
 // This library is distributed in the hope that it will be useful,
@@ -14,9 +14,8 @@
 // GNU General Public License for more details.
 
 // You should have received a copy of the GNU General Public License along
-// with this library; see the file COPYING.  If not, write to the Free
-// Software Foundation, 59 Temple Place - Suite 330, Boston, MA 02111-1307,
-// USA.
+// with this library; see the file COPYING3.  If not see
+// <http://www.gnu.org/licenses/>.
 
 // 27.4.2.5 ios_base storage functions
 
@@ -42,21 +41,22 @@ void operator delete[] (void *p) throw() { operator delete(p); }
 int main ()
 {
   bool test __attribute__((unused)) = true;
-  const int i = std::ios::xalloc ();
+  const int i = std::ios::xalloc();
+  VERIFY( i >= 0 );
 
   new_fails = 1;
   
   // Successive accesses to failure storage clears to zero.
-  std::cout.iword(100) = 0xdeadbeef;
-  VERIFY(std::cout.iword(100) == 0);
+  std::cout.iword(100) = 69;
+  VERIFY( std::cout.iword(100) == 0 );
   
   // Access to pword failure storage shouldn't clear iword pword storage.
   long& lr = std::cout.iword(100);
-  lr = 0xdeadbeef;
+  lr = 69;
   
   void* pv = std::cout.pword(100);
-  VERIFY(pv == 0);
-  VERIFY(lr == 0xdeadbeef);
+  VERIFY( pv == 0 );
+  VERIFY( lr == 69 );
   
   return 0;
 }

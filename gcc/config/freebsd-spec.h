@@ -1,11 +1,12 @@
 /* Base configuration file for all FreeBSD targets.
-   Copyright (C) 1999, 2000, 2001 Free Software Foundation, Inc.
+   Copyright (C) 1999, 2000, 2001, 2004, 2005, 2007, 2009, 2010
+   Free Software Foundation, Inc.
 
 This file is part of GCC.
 
 GCC is free software; you can redistribute it and/or modify
 it under the terms of the GNU General Public License as published by
-the Free Software Foundation; either version 2, or (at your option)
+the Free Software Foundation; either version 3, or (at your option)
 any later version.
 
 GCC is distributed in the hope that it will be useful,
@@ -13,10 +14,14 @@ but WITHOUT ANY WARRANTY; without even the implied warranty of
 MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
 GNU General Public License for more details.
 
-You should have received a copy of the GNU General Public License
-along with GCC; see the file COPYING.  If not, write to
-the Free Software Foundation, 59 Temple Place - Suite 330,
-Boston, MA 02111-1307, USA.  */
+Under Section 7 of GPL version 3, you are granted additional
+permissions described in the GCC Runtime Library Exception, version
+3.1, as published by the Free Software Foundation.
+
+You should have received a copy of the GNU General Public License and
+a copy of the GCC Runtime Library Exception along with this program;
+see the files COPYING3 and COPYING.RUNTIME respectively.  If not, see
+<http://www.gnu.org/licenses/>.  */
 
 /* Common FreeBSD configuration. 
    All FreeBSD architectures should include this file, which will specify
@@ -29,44 +34,10 @@ Boston, MA 02111-1307, USA.  */
 /* In case we need to know.  */
 #define USING_CONFIG_FREEBSD_SPEC 1
 
-/* This defines which switch letters take arguments.  On FreeBSD, most of
-   the normal cases (defined in gcc.c) apply, and we also have -h* and
-   -z* options (for the linker) (coming from SVR4).
-   We also have -R (alias --rpath), no -z, --soname (-h), --assert etc.  */
-
-#define FBSD_SWITCH_TAKES_ARG(CHAR)					\
-  (DEFAULT_SWITCH_TAKES_ARG (CHAR)					\
-    || (CHAR) == 'h'							\
-    || (CHAR) == 'z' /* ignored by ld */				\
-    || (CHAR) == 'R')
-
-/* This defines which multi-letter switches take arguments.  */
-
-#define FBSD_WORD_SWITCH_TAKES_ARG(STR)					\
-  (DEFAULT_WORD_SWITCH_TAKES_ARG (STR)					\
-   || !strcmp ((STR), "rpath") || !strcmp ((STR), "rpath-link")		\
-   || !strcmp ((STR), "soname") || !strcmp ((STR), "defsym") 		\
-   || !strcmp ((STR), "assert") || !strcmp ((STR), "dynamic-linker"))
-
 #define FBSD_TARGET_OS_CPP_BUILTINS()					\
   do									\
     {									\
-	if (FBSD_MAJOR == 9)						\
-	  builtin_define ("__FreeBSD__=9");			       	\
-	else if (FBSD_MAJOR == 8)					\
-	  builtin_define ("__FreeBSD__=8");			       	\
-	if (FBSD_MAJOR == 7)						\
-	  builtin_define ("__FreeBSD__=7");			       	\
-	else if (FBSD_MAJOR == 6)					\
-	  builtin_define ("__FreeBSD__=6");			       	\
-	else if (FBSD_MAJOR == 5)	       				\
-	  builtin_define ("__FreeBSD__=5");			       	\
-	else if (FBSD_MAJOR == 4)			       		\
-	  builtin_define ("__FreeBSD__=4");			       	\
-	else if (FBSD_MAJOR == 3)	       				\
-	  builtin_define ("__FreeBSD__=3");			       	\
-	else								\
-	  builtin_define ("__FreeBSD__");			       	\
+	builtin_define_with_int_value ("__FreeBSD__", FBSD_MAJOR);	\
 	builtin_define_std ("unix");					\
 	builtin_define ("__KPRINTF_ATTRIBUTE__");		       	\
 	builtin_assert ("system=unix");					\
@@ -76,7 +47,7 @@ Boston, MA 02111-1307, USA.  */
     }									\
   while (0)
 
-/* Define the default FreeBSD-specific per-CPU hook code. */
+/* Define the default FreeBSD-specific per-CPU hook code.  */
 #define FBSD_TARGET_CPU_CPP_BUILTINS() do {} while (0)
 
 /* Provide a CPP_SPEC appropriate for FreeBSD.  We just deal with the GCC 
@@ -84,7 +55,7 @@ Boston, MA 02111-1307, USA.  */
 
 #define FBSD_CPP_SPEC "							\
   %(cpp_cpu)								\
-  %{fPIC|fpic|fPIE|fpie:-D__PIC__ -D__pic__}				\
+  %(cpp_arch)								\
   %{posix:-D_POSIX_SOURCE}"
 
 /* Provide a STARTFILE_SPEC appropriate for FreeBSD.  Here we add
@@ -124,7 +95,7 @@ Boston, MA 02111-1307, USA.  */
 
 /* Provide a LIB_SPEC appropriate for FreeBSD.  Just select the appropriate
    libc, depending on whether we're doing profiling or need threads support.
-   (simular to the default, except no -lg, and no -p).  */
+   (similar to the default, except no -lg, and no -p).  */
 
 #ifdef FBSD_NO_THREADS
 #define FBSD_LIB_SPEC "							\
@@ -150,6 +121,9 @@ is built with the --enable-threads configure-time option.}		\
   %{!shared:								\
     %{!pg: %{pthread:-lpthread} -lc}					\
     %{pg:  %{pthread:-lpthread_p} -lc_p}				\
+  }									\
+  %{shared:								\
+    %{pthread:-lpthread} -lc						\
   }"
 #endif
 #endif
@@ -158,4 +132,13 @@ is built with the --enable-threads configure-time option.}		\
 #define FBSD_DYNAMIC_LINKER "/usr/libexec/ld-elf.so.1"
 #else
 #define FBSD_DYNAMIC_LINKER "/libexec/ld-elf.so.1"
+#endif
+
+#if defined(HAVE_LD_EH_FRAME_HDR)
+#define LINK_EH_SPEC "%{!static:--eh-frame-hdr} "
+#endif
+
+/* Use --as-needed -lgcc_s for eh support.  */
+#ifdef HAVE_LD_AS_NEEDED
+#define USE_LD_AS_NEEDED 1
 #endif

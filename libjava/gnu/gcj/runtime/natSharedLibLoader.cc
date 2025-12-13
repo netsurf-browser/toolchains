@@ -1,6 +1,6 @@
 // natSharedLibLoader.cc - Implementation of SharedLibHelper native methods.
 
-/* Copyright (C) 2001, 2003  Free Software Foundation
+/* Copyright (C) 2001, 2003, 2004, 2005, 2006, 2010  Free Software Foundation
 
    This file is part of libgcj.
 
@@ -9,13 +9,27 @@ Libgcj License.  Please consult the file "LIBGCJ_LICENSE" for
 details.  */
 
 #include <config.h>
+#include <platform.h>
 
 #include <gcj/cni.h>
 #include <jvm.h>
+#include <execution.h>
+
 #include <gnu/gcj/runtime/SharedLibHelper.h>
 #include <java/io/IOException.h>
 #include <java/lang/UnsupportedOperationException.h>
 #include <java/lang/UnknownError.h>
+
+#include <java/lang/VMClassLoader.h>
+
+// If we're using the Boehm GC, then we need this include to override dlopen.
+#ifdef HAVE_BOEHM_GC
+// Set GC_DEBUG before including gc.h!
+#ifdef LIBGCJ_GC_DEBUG
+# define GC_DEBUG
+#endif
+#include <gc.h>
+#endif /* HAVE_BOEHM_GC */
 
 #ifdef HAVE_DLOPEN
 #include <dlfcn.h>
@@ -30,9 +44,11 @@ typedef void (*CoreHookFunc) (_Jv_core_chain *);
 void
 _Jv_sharedlib_register_hook (jclass cls)
 {
-  curHelper->registerClass(cls->getName(), cls);
   cls->protectionDomain = curHelper->domain;
   cls->loader = curLoader;
+  if (! cls->engine)
+    cls->engine = &_Jv_soleCompiledEngine;
+  curHelper->registerClass(cls->getName(), cls);
 }
 
 static void
@@ -71,9 +87,10 @@ gnu::gcj::runtime::SharedLibHelper::init(void)
 
   if (flags==0)
     flags = RTLD_GLOBAL | RTLD_LAZY;
-  JvSynchronize dummy1(&java::lang::Class::class$);
+  JvSynchronize dummy1(&::java::lang::Class::class$);
   SharedLibDummy dummy2;
-  curLoader = loader;
+  curLoader = ((void*)loader == ::java::lang::VMClassLoader::bootLoader
+	       ? NULL : loader);
   curHelper = this;
   _Jv_RegisterClassHook = _Jv_sharedlib_register_hook;
   _Jv_RegisterCoreHook = core_hook;
@@ -81,13 +98,13 @@ gnu::gcj::runtime::SharedLibHelper::init(void)
   if (h == NULL)
     {
       const char *msg = dlerror();
-      throw new java::lang::UnknownError(JvNewStringLatin1(msg));
+      throw new ::java::lang::UnknownError(JvNewStringLatin1(msg));
     }
   handler = (gnu::gcj::RawData*) h;
 #else
   const char *msg
     = "shared library class loading is not supported on this platform";
-  throw new java::lang::UnsupportedOperationException(JvNewStringLatin1(msg));
+  throw new ::java::lang::UnsupportedOperationException(JvNewStringLatin1(msg));
 #endif
 }
 
@@ -102,11 +119,14 @@ gnu::gcj::runtime::SharedLibHelper::hasResource (jstring name)
 #endif
 }
 
+#ifdef HAVE_DLOPEN
+extern gnu::gcj::Core *_Jv_create_core (_Jv_core_chain *node, jstring name);
+#endif
+
 gnu::gcj::Core *
 gnu::gcj::runtime::SharedLibHelper::findCore (jstring name)
 {
 #ifdef HAVE_DLOPEN
-  extern gnu::gcj::Core *_Jv_create_core (_Jv_core_chain *node, jstring name);
   ensureInit();
   return _Jv_create_core ((_Jv_core_chain *) core_chain, name);
 #else
@@ -119,6 +139,13 @@ gnu::gcj::runtime::SharedLibHelper::finalize()
 {
   _Jv_FreeCoreChain ((_Jv_core_chain *) core_chain);
 #ifdef HAVE_DLOPEN
-  dlclose (handler);
+  if (handler)
+    dlclose (handler);
 #endif
+}
+
+void
+gnu::gcj::runtime::SharedLibHelper::ensureSupersLinked(jclass k)
+{
+  _Jv_Linker::wait_for_state (k, JV_STATE_LOADING);
 }

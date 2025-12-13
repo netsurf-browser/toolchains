@@ -4,6 +4,8 @@
 // The first one should still fail because it requires an implicit conversion
 // to pointer_to_binary_function, which has an `explicit' constructor.
 
+// { dg-prune-output "note" }
+
 #include <vector>
 #include <algorithm>
 #include <functional>
@@ -13,8 +15,8 @@ using namespace std;
 template <class T> class Expr 
 {
 public :
-  Expr(){};
-  Expr(const T&){};
+  Expr(){}
+  Expr(const T&){}
 };
 
 template <class T >

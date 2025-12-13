@@ -1,6 +1,12 @@
-// { dg-do run  }
+// This test fails on VxWorks in kernel mode because it depends on the
+// library version of "::operator new[]" calling the "::operator new"
+// defined in this module.  This doesn't work because the library version
+// of "::operator new[]" is built into the kernel itself; library relocations
+// are resolved when the kernel is linked.
+// { dg-do run { xfail { powerpc-ibm-aix* || vxworks_kernel } } }
+// { dg-options "-flat_namespace" { target *-*-darwin[67]* } }
 // Test __cxa_vec routines
-// Copyright (C) 2000 Free Software Foundation, Inc.
+// Copyright (C) 2000, 2005 Free Software Foundation, Inc.
 // Contributed by Nathan Sidwell 7 Apr 2000 <nathan@nathan@codesourcery.com>
 
 #if defined (__GXX_ABI_VERSION) && __GXX_ABI_VERSION >= 100
@@ -14,15 +20,25 @@ static int ctor_count = 0;
 static int dtor_count = 0;
 static bool dtor_repeat = false;
 
+// Allocate enough padding to hold an array cookie.
+#ifdef __ARM_EABI__
+#define padding 8
+#else
+#define padding (sizeof (std::size_t))
+#endif
+
 // our pseudo ctors and dtors
-static void ctor (void *)
+static abi::__cxa_cdtor_return_type ctor (void *x)
 {
   if (!ctor_count)
     throw 1;
   ctor_count--;
+#ifdef __ARM_EABI__
+  return x;
+#endif
 }
 
-static void dtor (void *)
+static abi::__cxa_cdtor_return_type dtor (void *x)
 {
   if (!dtor_count)
     {
@@ -31,6 +47,9 @@ static void dtor (void *)
       throw 1;
     }
   dtor_count--;
+#ifdef __ARM_EABI__
+  return x;
+#endif
 }
 
 // track new and delete
@@ -71,8 +90,8 @@ void test0 ()
       
       try
         {
-          void *ary = abi::__cxa_vec_new (5, 1, sizeof (std::size_t), ctor, dtor);
-          abi::__cxa_vec_delete (ary, 1, sizeof (std::size_t), dtor);
+          void *ary = abi::__cxa_vec_new (5, 1, padding, ctor, dtor);
+          abi::__cxa_vec_delete (ary, 1, padding, dtor);
           if (ctor_count || dtor_count || blocks)
             longjmp (jump, 1);
         }
@@ -105,7 +124,7 @@ void test1 ()
       ctor_count = 4;
       try
         {
-          void *ary = abi::__cxa_vec_new (5, 1, sizeof (std::size_t), ctor, dtor);
+          void *ary = abi::__cxa_vec_new (5, 1, padding, ctor, dtor);
           longjmp (jump, 1);
         }
       catch (...)
@@ -138,8 +157,8 @@ void test2 ()
       dtor_count = 3;
       try
         {
-          void *ary = abi::__cxa_vec_new (5, 1, sizeof (std::size_t), ctor, dtor);
-          abi::__cxa_vec_delete (ary, 1, sizeof (std::size_t), dtor);
+          void *ary = abi::__cxa_vec_new (5, 1, padding, ctor, dtor);
+          abi::__cxa_vec_delete (ary, 1, padding, dtor);
           longjmp (jump, 1);
         }
       catch (...)
@@ -174,8 +193,8 @@ void test3 ()
       dtor_repeat = true;
       try
         {
-          void *ary = abi::__cxa_vec_new (5, 1, sizeof (std::size_t), ctor, dtor);
-          abi::__cxa_vec_delete (ary, 1, sizeof (std::size_t), dtor);
+          void *ary = abi::__cxa_vec_new (5, 1, padding, ctor, dtor);
+          abi::__cxa_vec_delete (ary, 1, padding, dtor);
           longjmp (jump, 1);
         }
       catch (...)
@@ -212,7 +231,7 @@ void test4 ()
       dtor_count = 2;
       try
         {
-          void *ary = abi::__cxa_vec_new (5, 1, sizeof (std::size_t), ctor, dtor);
+          void *ary = abi::__cxa_vec_new (5, 1, padding, ctor, dtor);
           longjmp (jump, 1);
         }
       catch (...)

@@ -6,7 +6,7 @@
 --                                                                          --
 --                                 S p e c                                  --
 --                                                                          --
---           Copyright (C) 1999-2002 Ada Core Technologies, Inc.            --
+--                     Copyright (C) 1999-2008, AdaCore                     --
 --                                                                          --
 -- GNAT is free software;  you can  redistribute it  and/or modify it under --
 -- terms of the  GNU General Public License as published  by the Free Soft- --
@@ -16,8 +16,8 @@
 -- or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU General Public License --
 -- for  more details.  You should have  received  a copy of the GNU General --
 -- Public License  distributed with GNAT;  see file COPYING.  If not, write --
--- to  the Free Software Foundation,  59 Temple Place - Suite 330,  Boston, --
--- MA 02111-1307, USA.                                                      --
+-- to  the  Free Software Foundation,  51  Franklin  Street,  Fifth  Floor, --
+-- Boston, MA 02110-1301, USA.                                              --
 --                                                                          --
 -- As a special exception,  if other files  instantiate  generics from this --
 -- unit, or you link  this unit with other files  to produce an executable, --
@@ -42,6 +42,10 @@
 --  These code locations may be converted to corresponding source locations
 --  using the external addr2line utility, or from within GDB.
 
+--  In order to use this facility, in some cases the binder must be invoked
+--  with -E switch (store the backtrace with exception occurrence). Please
+--  refer to gnatbind documentation for more information.
+
 --  To analyze the code locations later using addr2line or gdb, the necessary
 --  units must be compiled with the debugging switch -g in the usual manner.
 --  Note that it is not necessary to compile with -g to use Call_Chain. In
@@ -50,18 +54,27 @@
 --     Compile without -g
 --     Run the program, and call Call_Chain
 --     Recompile with -g
---     Use addr2line to interpret the absolute call locations
+--     Use addr2line to interpret the absolute call locations (note that
+--      addr2line expects addresses in hexadecimal format).
 
 --  This capability is currently supported on the following targets:
 
---     All x86 ports
 --     AiX PowerPC
 --     HP-UX
---     Irix
+--     GNU/Linux x86
+--     Irix MIPS
+--     LynxOS x86
+--     Solaris x86
 --     Solaris sparc
---     Tru64
+--     Tru64 alpha
+--     OpenVMS/Alpha
+--     OpenVMS/ia64
 --     VxWorks PowerPC
---     VxWorks Alpha
+--     VxWorks x86
+--     Windows NT/XP
+
+--  Note: see also GNAT.Traceback.Symbolic, a child unit in file g-trasym.ads
+--  providing symbolic trace back capability for a subset of the above targets.
 
 with System;
 with Ada.Exceptions.Traceback;
@@ -73,7 +86,7 @@ package GNAT.Traceback is
    --  Code location used in building tracebacks
 
    subtype Tracebacks_Array is Ada.Exceptions.Traceback.Tracebacks_Array;
-   --  Traceback array used to hold a generated traceback list.
+   --  Traceback array used to hold a generated traceback list
 
    ----------------
    -- Call_Chain --

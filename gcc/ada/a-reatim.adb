@@ -1,13 +1,13 @@
 ------------------------------------------------------------------------------
 --                                                                          --
---                GNU ADA RUN-TIME LIBRARY (GNARL) COMPONENTS               --
+--                 GNAT RUN-TIME LIBRARY (GNARL) COMPONENTS                 --
 --                                                                          --
 --                         A D A . R E A L _ T I M E                        --
 --                                                                          --
 --                                 B o d y                                  --
 --                                                                          --
 --             Copyright (C) 1991-1994, Florida State University            --
---             Copyright (C) 1995-2003, Ada Core Technologies               --
+--                     Copyright (C) 1995-2010, AdaCore                     --
 --                                                                          --
 -- GNARL is free software; you can  redistribute it  and/or modify it under --
 -- terms of the  GNU General Public License as published  by the Free Soft- --
@@ -17,8 +17,8 @@
 -- or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU General Public License --
 -- for  more details.  You should have  received  a copy of the GNU General --
 -- Public License  distributed with GNARL; see file COPYING.  If not, write --
--- to  the Free Software Foundation,  59 Temple Place - Suite 330,  Boston, --
--- MA 02111-1307, USA.                                                      --
+-- to  the  Free Software Foundation,  51  Franklin  Street,  Fifth  Floor, --
+-- Boston, MA 02110-1301, USA.                                              --
 --                                                                          --
 -- As a special exception,  if other files  instantiate  generics from this --
 -- unit, or you link  this unit with other files  to produce an executable, --
@@ -32,8 +32,7 @@
 --                                                                          --
 ------------------------------------------------------------------------------
 
-with System.Task_Primitives.Operations;
---  used for Monotonic_Clock
+with System.Tasking;
 
 package body Ada.Real_Time is
 
@@ -154,6 +153,15 @@ package body Ada.Real_Time is
       return Time_Span_Unit * MS * 1_000_000;
    end Milliseconds;
 
+   -------------
+   -- Minutes --
+   -------------
+
+   function Minutes (M : Integer) return Time_Span is
+   begin
+      return Milliseconds (M) * Integer'(60_000);
+   end Minutes;
+
    -----------------
    -- Nanoseconds --
    -----------------
@@ -162,6 +170,15 @@ package body Ada.Real_Time is
    begin
       return Time_Span_Unit * NS;
    end Nanoseconds;
+
+   -------------
+   -- Seconds --
+   -------------
+
+   function Seconds (S : Integer) return Time_Span is
+   begin
+      return Milliseconds (S) * Integer'(1000);
+   end Seconds;
 
    -----------
    -- Split --
@@ -174,19 +191,12 @@ package body Ada.Real_Time is
       --  Special-case for Time_First, whose absolute value is anomalous,
       --  courtesy of two's complement.
 
-      if T = Time_First then
-         T_Val := abs (Time_Last);
-      else
-         T_Val := abs (T);
-      end if;
+      T_Val := (if T = Time_First then abs (Time_Last) else abs (T));
 
-      --  Extract the integer part of T, truncating towards zero.
+      --  Extract the integer part of T, truncating towards zero
 
-      if T_Val < 0.5 then
-         SC := 0;
-      else
-         SC := Seconds_Count (Time_Span'(T_Val - 0.5));
-      end if;
+      SC :=
+        (if T_Val < 0.5 then 0 else Seconds_Count (Time_Span'(T_Val - 0.5)));
 
       if T < 0.0 then
          SC := -SC;
@@ -226,7 +236,18 @@ package body Ada.Real_Time is
 
    function To_Time_Span (D : Duration) return Time_Span is
    begin
+      --  Note regarding AI-00432 requiring range checking on this conversion.
+      --  In almost all versions of GNAT (and all to which this version of the
+      --  Ada.Real_Time package apply), the range of Time_Span and Duration are
+      --  the same, so there is no issue of overflow.
+
       return Time_Span (D);
    end To_Time_Span;
 
+begin
+   --  Ensure that the tasking run time is initialized when using clock and/or
+   --  delay operations. The initialization routine has the required machinery
+   --  to prevent multiple calls to Initialize.
+
+   System.Tasking.Initialize;
 end Ada.Real_Time;

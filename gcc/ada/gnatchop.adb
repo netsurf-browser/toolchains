@@ -6,39 +6,41 @@
 --                                                                          --
 --                                 B o d y                                  --
 --                                                                          --
---            Copyright (C) 1998-2004 Ada Core Technologies, Inc.           --
+--          Copyright (C) 1998-2009, Free Software Foundation, Inc.         --
 --                                                                          --
 -- GNAT is free software;  you can  redistribute it  and/or modify it under --
 -- terms of the  GNU General Public License as published  by the Free Soft- --
--- ware  Foundation;  either version 2,  or (at your option) any later ver- --
+-- ware  Foundation;  either version 3,  or (at your option) any later ver- --
 -- sion.  GNAT is distributed in the hope that it will be useful, but WITH- --
 -- OUT ANY WARRANTY;  without even the  implied warranty of MERCHANTABILITY --
 -- or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU General Public License --
 -- for  more details.  You should have  received  a copy of the GNU General --
--- Public License  distributed with GNAT;  see file COPYING.  If not, write --
--- to  the Free Software Foundation,  59 Temple Place - Suite 330,  Boston, --
--- MA 02111-1307, USA.                                                      --
+-- Public License  distributed with GNAT; see file COPYING3.  If not, go to --
+-- http://www.gnu.org/licenses for a complete copy of the license.          --
 --                                                                          --
 -- GNAT was originally developed  by the GNAT team at  New York University. --
 -- Extensive contributions were provided by Ada Core Technologies Inc.      --
 --                                                                          --
 ------------------------------------------------------------------------------
 
-with Ada.Command_Line;  use Ada.Command_Line;
-with Ada.Text_IO;       use Ada.Text_IO;
+with Ada.Characters.Conversions; use Ada.Characters.Conversions;
+with Ada.Command_Line;           use Ada.Command_Line;
+with Ada.Directories;            use Ada.Directories;
+with Ada.Streams.Stream_IO;      use Ada.Streams;
+with Ada.Text_IO;                use Ada.Text_IO;
+with System.CRTL;                use System; use System.CRTL;
 
-with GNAT.Command_Line; use GNAT.Command_Line;
-with GNAT.OS_Lib;       use GNAT.OS_Lib;
+with GNAT.Byte_Order_Mark;       use GNAT.Byte_Order_Mark;
+with GNAT.Command_Line;          use GNAT.Command_Line;
+with GNAT.OS_Lib;                use GNAT.OS_Lib;
 with GNAT.Heap_Sort_G;
 with GNAT.Table;
 
-with Gnatvsn;
 with Hostparm;
+with Switch;                     use Switch;
+with Types;
 
 procedure Gnatchop is
-
-   Terminate_Program : exception;
-   --  Used to terminate execution immediately
 
    Config_File_Name : constant String_Access := new String'("gnat.adc");
    --  The name of the file holding the GNAT configuration pragmas
@@ -62,9 +64,12 @@ procedure Gnatchop is
    --  Arguments used in Gnat_Cmd call
 
    EOF : constant Character := Character'Val (26);
-   --  Special character to signal end of file. Not required in input
-   --  files, but properly treated if present. Not generated in output
-   --  files except as a result of copying input file.
+   --  Special character to signal end of file. Not required in input files,
+   --  but properly treated if present. Not generated in output files except
+   --  as a result of copying input file.
+
+   BOM_Length : Natural := 0;
+   --  Reset to non-zero value if BOM detected at start of file
 
    --------------------
    -- File arguments --
@@ -151,9 +156,8 @@ procedure Gnatchop is
       --  Index of unit in sorted unit list
 
       Bufferg : String_Access;
-      --  Pointer to buffer containing configuration pragmas to be
-      --  prepended. Null if no pragmas to be prepended.
-
+      --  Pointer to buffer containing configuration pragmas to be prepended.
+      --  Null if no pragmas to be prepended.
    end record;
 
    --  The following table stores the unit offset information
@@ -182,7 +186,7 @@ procedure Gnatchop is
    --  Note that this function returns false for the last entry.
 
    procedure Sort_Units;
-   --  Sort units and set up sorted unit table.
+   --  Sort units and set up sorted unit table
 
    ----------------------
    -- File_Descriptors --
@@ -190,10 +194,6 @@ procedure Gnatchop is
 
    function dup  (handle   : File_Descriptor) return File_Descriptor;
    function dup2 (from, to : File_Descriptor) return File_Descriptor;
-   --  File descriptor based functions needed for redirecting stdin/stdout
-
-   pragma Import (C, dup, "dup");
-   pragma Import (C, dup2, "dup2");
 
    ---------------------
    -- Local variables --
@@ -229,8 +229,7 @@ procedure Gnatchop is
 
    function Locate_Executable
      (Program_Name    : String;
-      Look_For_Prefix : Boolean := True)
-     return             String_Access;
+      Look_For_Prefix : Boolean := True) return String_Access;
    --  Locate executable for given program name. This takes into account
    --  the target-prefix of the current command, if Look_For_Prefix is True.
 
@@ -242,12 +241,13 @@ procedure Gnatchop is
    end record;
 
    function Get_EOL
-     (Source : access String;
-      Start  : Positive)
-      return   EOL_String;
+     (Source : not null access String;
+      Start  : Positive) return EOL_String;
    --  Return the line terminator used in the passed string
 
-   procedure Parse_EOL (Source : access String; Ptr : in out Positive);
+   procedure Parse_EOL
+     (Source : not null access String;
+      Ptr    : in out Positive);
    --  On return Source (Ptr) is the first character of the next line
    --  or EOF. Source.all must be terminated by EOF.
 
@@ -257,12 +257,14 @@ procedure Gnatchop is
    --  completes, False if some system error (e.g. failure to read the
    --  offset information) occurs.
 
-   procedure Parse_Offset_Info (Chop_File : File_Num; Source : access String);
+   procedure Parse_Offset_Info
+     (Chop_File : File_Num;
+      Source    : not null access String);
    --  Parses the output of the compiler indicating the offsets
    --  and names of the compilation units in Chop_File.
 
    procedure Parse_Token
-     (Source    : access String;
+     (Source    : not null access String;
       Ptr       : in out Positive;
       Token_Ptr : out Positive);
    --  Skips any separators and stores the start of the token in Token_Ptr.
@@ -282,7 +284,7 @@ procedure Gnatchop is
 
    function Report_Duplicate_Units return Boolean;
    --  Output messages about duplicate units in the input files in Unit.Table
-   --  Returns True if any duplicates found, Fals if no duplicates found.
+   --  Returns True if any duplicates found, False if no duplicates found.
 
    function Scan_Arguments return Boolean;
    --  Scan command line options and set global variables accordingly.
@@ -305,8 +307,7 @@ procedure Gnatchop is
 
    function Get_Config_Pragmas
      (Input : File_Num;
-      U     : Unit_Num)
-      return  String_Access;
+      U     : Unit_Num) return String_Access;
    --  Call to read configuration pragmas from given unit entry, and
    --  return a buffer containing the pragmas to be appended to
    --  following units. Input is the file number for the chop file and
@@ -315,7 +316,7 @@ procedure Gnatchop is
    procedure Write_Source_Reference_Pragma
      (Info    : Unit_Info;
       Line    : Line_Num;
-      FD      : File_Descriptor;
+      File    : Stream_IO.File_Type;
       EOL     : EOL_String;
       Success : in out Boolean);
    --  If Success is True on entry, writes a source reference pragma using
@@ -326,11 +327,33 @@ procedure Gnatchop is
    --  of line sequence to be written at the end of the pragma.
 
    procedure Write_Unit
-     (Source  : access String;
-      Num     : Unit_Num;
-      TS_Time : OS_Time;
-      Success : out Boolean);
-   --  Write one compilation unit of the source to file
+     (Source    : not null access String;
+      Num       : Unit_Num;
+      TS_Time   : OS_Time;
+      Write_BOM : Boolean;
+      Success   : out Boolean);
+   --  Write one compilation unit of the source to file. Source is the pointer
+   --  to the input string, Num is the unit number, TS_Time is the timestamp,
+   --  Write_BOM is set True to write a UTF-8 BOM at the start of the file.
+   --  Success is set True unless the write attempt fails.
+
+   ---------
+   -- dup --
+   ---------
+
+   function dup (handle : File_Descriptor) return File_Descriptor is
+   begin
+      return File_Descriptor (System.CRTL.dup (int (handle)));
+   end dup;
+
+   ----------
+   -- dup2 --
+   ----------
+
+   function dup2 (from, to : File_Descriptor) return File_Descriptor is
+   begin
+      return File_Descriptor (System.CRTL.dup2 (int (from), int (to)));
+   end dup2;
 
    ---------------
    -- Error_Msg --
@@ -344,7 +367,7 @@ procedure Gnatchop is
          Set_Exit_Status (Failure);
 
          if Exit_On_Error then
-            raise Terminate_Program;
+            raise Types.Terminate_Program;
          end if;
       end if;
    end Error_Msg;
@@ -404,17 +427,18 @@ procedure Gnatchop is
 
    function Get_Config_Pragmas
      (Input : File_Num;
-      U     : Unit_Num)
-      return  String_Access
+      U     : Unit_Num) return String_Access
    is
       Info    : Unit_Info renames Unit.Table (U);
       FD      : File_Descriptor;
       Name    : aliased constant String :=
-                  File.Table (Input).Name.all & ASCII.Nul;
+                  File.Table (Input).Name.all & ASCII.NUL;
       Length  : File_Offset;
       Buffer  : String_Access;
-      Success : Boolean;
       Result  : String_Access;
+
+      Success : Boolean;
+      pragma Warnings (Off, Success);
 
    begin
       FD := Open_Read (Name'Address, Binary);
@@ -446,9 +470,8 @@ procedure Gnatchop is
    -------------
 
    function Get_EOL
-     (Source : access String;
-      Start  : Positive)
-      return   EOL_String
+     (Source : not null access String;
+      Start  : Positive) return EOL_String
    is
       Ptr   : Positive := Start;
       First : Positive;
@@ -476,11 +499,9 @@ procedure Gnatchop is
          First := Ptr + 1;
       end if;
 
-      --  Recognize CR/LF or LF/CR combination
+      --  Recognize CR/LF
 
-      if (Source (Ptr + 1) = ASCII.CR or Source (Ptr + 1) = ASCII.LF)
-         and then Source (Ptr) /= Source (Ptr + 1)
-      then
+      if Source (Ptr) = ASCII.CR and then Source (Ptr + 1) = ASCII.LF then
          Last := First + 1;
       end if;
 
@@ -505,23 +526,28 @@ procedure Gnatchop is
 
    function Locate_Executable
      (Program_Name    : String;
-      Look_For_Prefix : Boolean := True)
-     return             String_Access
+      Look_For_Prefix : Boolean := True) return String_Access
    is
-      Current_Command : constant String := Command_Name;
-      End_Of_Prefix   : Natural  := Current_Command'First - 1;
-      Start_Of_Prefix : Positive := Current_Command'First;
+      Gnatchop_Str    : constant String := "gnatchop";
+      Current_Command : constant String := Normalize_Pathname (Command_Name);
+      End_Of_Prefix   : Natural;
+      Start_Of_Prefix : Positive;
+      Start_Of_Suffix : Positive;
       Result          : String_Access;
 
    begin
+      Start_Of_Prefix := Current_Command'First;
+      Start_Of_Suffix := Current_Command'Last + 1;
+      End_Of_Prefix   := Start_Of_Prefix - 1;
 
       if Look_For_Prefix then
+
          --  Find Start_Of_Prefix
 
          for J in reverse Current_Command'Range loop
-            if Current_Command (J) = '/' or
-              Current_Command (J) = Directory_Separator or
-              Current_Command (J) = ':'
+            if Current_Command (J) = '/'                 or else
+               Current_Command (J) = Directory_Separator or else
+               Current_Command (J) = ':'
             then
                Start_Of_Prefix := J + 1;
                exit;
@@ -530,20 +556,28 @@ procedure Gnatchop is
 
          --  Find End_Of_Prefix
 
-         End_Of_Prefix := Start_Of_Prefix - 1;
-
-         for J in reverse Start_Of_Prefix .. Current_Command'Last loop
-            if Current_Command (J) = '-' then
-               End_Of_Prefix := J;
+         for J in Start_Of_Prefix ..
+                  Current_Command'Last - Gnatchop_Str'Length + 1
+         loop
+            if Current_Command (J .. J + Gnatchop_Str'Length - 1) =
+                                                                  Gnatchop_Str
+            then
+               End_Of_Prefix := J - 1;
                exit;
             end if;
          end loop;
       end if;
 
+      if End_Of_Prefix > Current_Command'First then
+         Start_Of_Suffix := End_Of_Prefix + Gnatchop_Str'Length + 1;
+      end if;
+
       declare
          Command : constant String :=
-                     Current_Command (Start_Of_Prefix .. End_Of_Prefix) &
-                                                                Program_Name;
+                     Current_Command (Start_Of_Prefix .. End_Of_Prefix)
+                       & Program_Name
+                       & Current_Command (Start_Of_Suffix ..
+                                          Current_Command'Last);
       begin
          Result := Locate_Exec_On_Path (Command);
 
@@ -560,7 +594,9 @@ procedure Gnatchop is
    -- Parse_EOL --
    ---------------
 
-   procedure Parse_EOL (Source : access String; Ptr : in out Positive) is
+   procedure Parse_EOL
+     (Source : not null access String;
+      Ptr    : in out Positive) is
    begin
       --  Skip to end of line
 
@@ -576,7 +612,7 @@ procedure Gnatchop is
 
       --  Skip past CR/LF or LF/CR combination
 
-      if (Source (Ptr) = ASCII.CR or Source (Ptr) = ASCII.LF)
+      if (Source (Ptr) = ASCII.CR or else Source (Ptr) = ASCII.LF)
          and then Source (Ptr) /= Source (Ptr - 1)
       then
          Ptr := Ptr + 1;
@@ -676,7 +712,7 @@ procedure Gnatchop is
       return Success;
 
    exception
-      when Failure | Terminate_Program =>
+      when Failure | Types.Terminate_Program =>
          Close (Offset_FD);
          Delete_File (Offset_Name'Address, Success);
          return False;
@@ -689,7 +725,7 @@ procedure Gnatchop is
 
    procedure Parse_Offset_Info
      (Chop_File : File_Num;
-      Source    : access String)
+      Source    : not null access String)
    is
       First_Unit : constant Unit_Num := Unit.Last + 1;
       Bufferg    : String_Access     := null;
@@ -742,7 +778,7 @@ procedure Gnatchop is
 
          --  Note that the unit name can be an operator name in quotes.
          --  This is of course illegal, but both GNAT and gnatchop handle
-         --  the case so that this error does not intefere with chopping.
+         --  the case so that this error does not interfere with chopping.
 
          --  The SR ir present indicates that a source reference pragma
          --  was processed as part of this unit (and that therefore no
@@ -928,7 +964,7 @@ procedure Gnatchop is
    -----------------
 
    procedure Parse_Token
-     (Source    : access String;
+     (Source    : not null access String;
       Ptr       : in out Positive;
       Token_Ptr : out Positive)
    is
@@ -937,7 +973,7 @@ procedure Gnatchop is
    begin
       --  Skip separators
 
-      while Source (Ptr) = ' ' or Source (Ptr) = ',' loop
+      while Source (Ptr) = ' ' or else Source (Ptr) = ',' loop
          Ptr := Ptr + 1;
       end loop;
 
@@ -945,7 +981,8 @@ procedure Gnatchop is
 
       --  Find end-of-token
 
-      while (In_Quotes or else not (Source (Ptr) = ' ' or Source (Ptr) = ','))
+      while (In_Quotes
+              or else not (Source (Ptr) = ' ' or else Source (Ptr) = ','))
         and then Source (Ptr) >= ' '
       loop
          if Source (Ptr) = '"' then
@@ -986,9 +1023,9 @@ procedure Gnatchop is
       Contents := new String (1 .. Read_Ptr);
       Contents.all := Buffer (1 .. Read_Ptr);
 
-      --  Things aren't simple on VMS due to the plethora of file types
-      --  and organizations. It seems clear that there shouldn't be more
-      --  bytes read than are contained in the file though.
+      --  Things aren't simple on VMS due to the plethora of file types and
+      --  organizations. It seems clear that there shouldn't be more bytes
+      --  read than are contained in the file though.
 
       if Hostparm.OpenVMS then
          Success := Read_Ptr <= Length + 1;
@@ -1094,7 +1131,7 @@ procedure Gnatchop is
 
             when 'h' =>
                Usage;
-               raise Terminate_Program;
+               raise Types.Terminate_Program;
 
             when 'k' =>
                declare
@@ -1140,15 +1177,7 @@ procedure Gnatchop is
 
             when 'v' =>
                Verbose_Mode := True;
-
-               --  Why is following written to standard error. Most other
-               --  tools write to standard output ???
-
-               Put (Standard_Error, "GNATCHOP ");
-               Put (Standard_Error, Gnatvsn.Gnat_Version_String);
-               Put_Line
-                 (Standard_Error,
-                  " Copyright 1998-2004, Ada Core Technologies Inc.");
+               Display_Version ("GNATCHOP", "1998");
 
             when 'w' =>
                Overwrite_Files := True;
@@ -1225,7 +1254,6 @@ procedure Gnatchop is
             F : constant String := File.Table (File_Num).Name.all;
 
          begin
-
             if Is_Directory (F) then
                Error_Msg (F & " is a directory, cannot be chopped");
                return False;
@@ -1253,7 +1281,6 @@ procedure Gnatchop is
          end if;
 
          return False;
-
    end Scan_Arguments;
 
    ----------------
@@ -1316,7 +1343,7 @@ procedure Gnatchop is
 
       Unit_Sort.Sort (Natural (Unit.Last));
 
-      --  Set the Sorted_Index fields in the unit tables.
+      --  Set the Sorted_Index fields in the unit tables
 
       for J in 1 .. SUnit_Num (Unit.Last) loop
          Unit.Table (Sorted_Units.Table (J)).Sorted_Index := J;
@@ -1402,11 +1429,15 @@ procedure Gnatchop is
 
    function Write_Chopped_Files (Input : File_Num) return Boolean is
       Name    : aliased constant String :=
-                  File.Table (Input).Name.all & ASCII.Nul;
+                  File.Table (Input).Name.all & ASCII.NUL;
       FD      : File_Descriptor;
       Buffer  : String_Access;
       Success : Boolean;
       TS_Time : OS_Time;
+
+      BOM_Present : Boolean;
+      BOM         : BOM_Kind;
+      --  Record presence of UTF8 BOM in input
 
    begin
       FD := Open_Read (Name'Address, Binary);
@@ -1429,18 +1460,27 @@ procedure Gnatchop is
          Put_Line ("splitting " & File.Table (Input).Name.all & " into:");
       end if;
 
+      --  Test for presence of BOM
+
+      Read_BOM (Buffer.all, BOM_Length, BOM, False);
+      BOM_Present := BOM /= Unknown;
+
       --  Only chop those units that come from this file
 
-      for Num in 1 .. Unit.Last loop
-         if Unit.Table (Num).Chop_File = Input then
-            Write_Unit (Buffer, Num, TS_Time, Success);
+      for Unit_Number in 1 .. Unit.Last loop
+         if Unit.Table (Unit_Number).Chop_File = Input then
+            Write_Unit
+              (Source    => Buffer,
+               Num       => Unit_Number,
+               TS_Time   => TS_Time,
+               Write_BOM => BOM_Present and then Unit_Number /= 1,
+               Success   => Success);
             exit when not Success;
          end if;
       end loop;
 
       Close (FD);
       return Success;
-
    end Write_Chopped_Files;
 
    -----------------------
@@ -1541,15 +1581,15 @@ procedure Gnatchop is
    procedure Write_Source_Reference_Pragma
      (Info    : Unit_Info;
       Line    : Line_Num;
-      FD      : File_Descriptor;
+      File    : Stream_IO.File_Type;
       EOL     : EOL_String;
       Success : in out Boolean)
    is
-      FTE : File_Entry renames File.Table (Info.Chop_File);
+      FTE : File_Entry renames Gnatchop.File.Table (Info.Chop_File);
       Nam : String_Access;
 
    begin
-      if Success and Source_References and not Info.SR_Present then
+      if Success and then Source_References and then not Info.SR_Present then
          if FTE.SR_Name /= null then
             Nam := FTE.SR_Name;
          else
@@ -1557,7 +1597,7 @@ procedure Gnatchop is
          end if;
 
          declare
-            Reference : aliased String :=
+            Reference : String :=
                           "pragma Source_Reference (000000, """
                             & Nam.all & """);" & EOL.Str;
 
@@ -1580,9 +1620,13 @@ procedure Gnatchop is
 
             pragma Assert (Lin = 0);
 
-            Success :=
-              Write (FD, Reference'Address, Reference'Length)
-                                                     = Reference'Length;
+            begin
+               String'Write (Stream_IO.Stream (File), Reference);
+               Success := True;
+            exception
+               when others =>
+                  Success := False;
+            end;
          end;
       end if;
    end Write_Source_Reference_Pragma;
@@ -1592,17 +1636,40 @@ procedure Gnatchop is
    ----------------
 
    procedure Write_Unit
-     (Source  : access String;
-      Num     : Unit_Num;
-      TS_Time : OS_Time;
-      Success : out Boolean)
+     (Source    : not null access String;
+      Num       : Unit_Num;
+      TS_Time   : OS_Time;
+      Write_BOM : Boolean;
+      Success   : out Boolean)
    is
-      Info   : Unit_Info renames Unit.Table (Num);
-      FD     : File_Descriptor;
-      Name   : aliased constant String := Info.File_Name.all & ASCII.NUL;
-      Length : File_Offset;
-      EOL    : constant EOL_String :=
-                 Get_EOL (Source, Source'First + Info.Offset);
+
+      procedure OS_Filename
+        (Name     : String;
+         W_Name   : Wide_String;
+         OS_Name  : Address;
+         N_Length : access Natural;
+         Encoding : Address;
+         E_Length : access Natural);
+      pragma Import (C, OS_Filename, "__gnat_os_filename");
+      --  Returns in OS_Name the proper name for the OS when used with the
+      --  returned Encoding value. For example on Windows this will return the
+      --  UTF-8 encoded name into OS_Name and set Encoding to encoding=utf8
+      --  (the form parameter for Stream_IO).
+      --
+      --  Name is the filename and W_Name the same filename in Unicode 16 bits
+      --  (this corresponds to Win32 Unicode ISO/IEC 10646). N_Length/E_Length
+      --  are the length returned in OS_Name/Encoding respectively.
+
+      Info     : Unit_Info renames Unit.Table (Num);
+      Name     : aliased constant String := Info.File_Name.all & ASCII.NUL;
+      W_Name   : aliased constant Wide_String := To_Wide_String (Name);
+      EOL      : constant EOL_String :=
+                   Get_EOL (Source, Source'First + Info.Offset);
+      OS_Name  : aliased String (1 .. Name'Length * 2);
+      O_Length : aliased Natural := OS_Name'Length;
+      Encoding : aliased String (1 .. 64);
+      E_Length : aliased Natural := Encoding'Length;
+      Length   : File_Offset;
 
    begin
       --  Skip duplicated files
@@ -1613,66 +1680,127 @@ procedure Gnatchop is
          return;
       end if;
 
-      if Overwrite_Files then
-         FD := Create_File (Name'Address, Binary);
-      else
-         FD := Create_New_File (Name'Address, Binary);
-      end if;
+      --  Get OS filename
 
-      Success := FD /= Invalid_FD;
+      OS_Filename
+        (Name, W_Name,
+         OS_Name'Address, O_Length'Access,
+         Encoding'Address, E_Length'Access);
 
-      if not Success then
-         Error_Msg ("cannot create " & Info.File_Name.all);
-         return;
-      end if;
+      declare
+         E_Name      : constant String := OS_Name (1 .. O_Length);
+         C_Name      : aliased constant String := E_Name & ASCII.NUL;
+         OS_Encoding : constant String := Encoding (1 .. E_Length);
+         File        : Stream_IO.File_Type;
 
-      --  A length of 0 indicates that the rest of the file belongs to
-      --  this unit. The actual length must be calculated now. Take into
-      --  account that the last character (EOF) must not be written.
+      begin
+         begin
+            if not Overwrite_Files and then Exists (E_Name) then
+               raise Stream_IO.Name_Error;
+            else
+               Stream_IO.Create
+                 (File, Stream_IO.Out_File, E_Name, OS_Encoding);
+               Success := True;
+            end if;
 
-      if Info.Length = 0 then
-         Length := Source'Last - (Source'First + Info.Offset);
-      else
-         Length := Info.Length;
-      end if;
+         exception
+            when Stream_IO.Name_Error | Stream_IO.Use_Error =>
+               Error_Msg ("cannot create " & Info.File_Name.all);
+               return;
+         end;
 
-      --  Prepend configuration pragmas if necessary
+         --  A length of 0 indicates that the rest of the file belongs to
+         --  this unit. The actual length must be calculated now. Take into
+         --  account that the last character (EOF) must not be written.
 
-      if Success and then Info.Bufferg /= null then
-         Write_Source_Reference_Pragma (Info, 1, FD, EOL, Success);
-         Success :=
-           Write (FD, Info.Bufferg.all'Address, Info.Bufferg'Length) =
-                                                       Info.Bufferg'Length;
-      end if;
+         if Info.Length = 0 then
+            Length := Source'Last - (Source'First + Info.Offset);
+         else
+            Length := Info.Length;
+         end if;
 
-      Write_Source_Reference_Pragma (Info, Info.Start_Line, FD, EOL, Success);
+         --  Write BOM if required
 
-      if Success then
-         Success := Write (FD, Source (Source'First + Info.Offset)'Address,
-                           Length) = Length;
-      end if;
+         if Write_BOM then
+            String'Write
+              (Stream_IO.Stream (File),
+               Source.all (Source'First .. Source'First + BOM_Length - 1));
+         end if;
 
-      if not Success then
-         Error_Msg ("disk full writing " & Info.File_Name.all);
-         return;
-      end if;
+         --  Prepend configuration pragmas if necessary
 
-      if not Quiet_Mode then
-         Put_Line ("   " & Info.File_Name.all);
-      end if;
+         if Success and then Info.Bufferg /= null then
+            Write_Source_Reference_Pragma (Info, 1, File, EOL, Success);
+            String'Write (Stream_IO.Stream (File), Info.Bufferg.all);
+         end if;
 
-      Close (FD);
+         Write_Source_Reference_Pragma
+           (Info, Info.Start_Line, File, EOL, Success);
 
-      if Preserve_Mode then
-         File_Time_Stamp (Name'Address, TS_Time);
-      end if;
+         if Success then
+            begin
+               String'Write
+                 (Stream_IO.Stream (File),
+                  Source (Source'First + Info.Offset ..
+                      Source'First + Info.Offset + Length - 1));
+            exception
+               when Stream_IO.Use_Error | Stream_IO.Device_Error =>
+                  Error_Msg ("disk full writing " & Info.File_Name.all);
+                  return;
+            end;
+         end if;
 
+         if not Quiet_Mode then
+            Put_Line ("   " & Info.File_Name.all);
+         end if;
+
+         Stream_IO.Close (File);
+
+         if Preserve_Mode then
+            File_Time_Stamp (C_Name'Address, TS_Time);
+         end if;
+      end;
    end Write_Unit;
+
+      procedure Check_Version_And_Help is new Check_Version_And_Help_G (Usage);
 
 --  Start of processing for gnatchop
 
 begin
+   --  Add the directory where gnatchop is invoked in front of the path, if
+   --  gnatchop is invoked with directory information. Only do this if the
+   --  platform is not VMS, where the notion of path does not really exist.
+
+   if not Hostparm.OpenVMS then
+      declare
+         Command : constant String := Command_Name;
+
+      begin
+         for Index in reverse Command'Range loop
+            if Command (Index) = Directory_Separator then
+               declare
+                  Absolute_Dir : constant String :=
+                                   Normalize_Pathname
+                                     (Command (Command'First .. Index));
+                  PATH         : constant String :=
+                                   Absolute_Dir
+                                   & Path_Separator
+                                   & Getenv ("PATH").all;
+               begin
+                  Setenv ("PATH", PATH);
+               end;
+
+               exit;
+            end if;
+         end loop;
+      end;
+   end if;
+
    --  Process command line options and initialize global variables
+
+   --  First, scan to detect --version and/or --help
+
+   Check_Version_And_Help ("GNATCHOP", "1998");
 
    if not Scan_Arguments then
       Set_Exit_Status (Failure);
@@ -1707,26 +1835,24 @@ begin
 
    Sort_Units;
 
-   --  Check if any duplicate files would be created. If so, emit
-   --  a warning if Overwrite_Files is true, otherwise generate an error.
+   --  Check if any duplicate files would be created. If so, emit a warning if
+   --  Overwrite_Files is true, otherwise generate an error.
 
    if Report_Duplicate_Units and then not Overwrite_Files then
       goto No_Files_Written;
    end if;
 
-   --  Check if any files exist, if so do not write anything
-   --  Because all files have been parsed and checked already,
-   --  there won't be any duplicates
+   --  Check if any files exist, if so do not write anything Because all files
+   --  have been parsed and checked already, there won't be any duplicates
 
    if not Overwrite_Files and then Files_Exist then
       goto No_Files_Written;
    end if;
 
-   --  After this point, all source files are read in succession
-   --  and chopped into their destination files.
+   --  After this point, all source files are read in succession and chopped
+   --  into their destination files.
 
-   --  As the Source_File_Name pragmas are handled as logical file 0,
-   --  write it first.
+   --  Source_File_Name pragmas are handled as logical file 0 so write it first
 
    for F in 1 .. File.Last loop
       if not Write_Chopped_Files (F) then
@@ -1757,7 +1883,7 @@ begin
    return;
 
 exception
-   when Terminate_Program =>
+   when Types.Terminate_Program =>
       null;
 
 end Gnatchop;

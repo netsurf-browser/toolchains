@@ -6,45 +6,40 @@
 --                                                                          --
 --                                 S p e c                                  --
 --                                                                          --
---             Copyright (C) 2000-2003 Free Software Foundation, Inc.       --
+--          Copyright (C) 2000-2010, Free Software Foundation, Inc.         --
 --                                                                          --
 -- GNAT is free software;  you can  redistribute it  and/or modify it under --
 -- terms of the  GNU General Public License as published  by the Free Soft- --
--- ware  Foundation;  either version 2,  or (at your option) any later ver- --
+-- ware  Foundation;  either version 3,  or (at your option) any later ver- --
 -- sion.  GNAT is distributed in the hope that it will be useful, but WITH- --
 -- OUT ANY WARRANTY;  without even the  implied warranty of MERCHANTABILITY --
 -- or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU General Public License --
 -- for  more details.  You should have  received  a copy of the GNU General --
--- Public License  distributed with GNAT;  see file COPYING.  If not, write --
--- to  the Free Software Foundation,  59 Temple Place - Suite 330,  Boston, --
--- MA 02111-1307, USA.                                                      --
+-- Public License  distributed with GNAT; see file COPYING3.  If not, go to --
+-- http://www.gnu.org/licenses for a complete copy of the license.          --
 --                                                                          --
 -- GNAT was originally developed  by the GNAT team at  New York University. --
 -- Extensive contributions were provided by Ada Core Technologies Inc.      --
 --                                                                          --
 ------------------------------------------------------------------------------
 
---  Check the Naming Scheme of a project file, find the directories
---  and the source files.
+--  Find source dirs and source files for a project
+
+with Prj.Tree;
 
 private package Prj.Nmsc is
 
-   procedure Ada_Check
-     (Project      : Project_Id;
-      Report_Error : Put_Line_Access);
-   --  Call Language_Independent_Check.
-   --  Check the naming scheme for Ada.
-   --  Find the Ada source files if any.
-   --  If Report_Error is null , use the standard error reporting mechanism
-   --  (Errout). Otherwise, report errors using Report_Error.
-
-   procedure Language_Independent_Check
-     (Project      : Project_Id;
-      Report_Error : Put_Line_Access);
-   --  Check the object directory and the source directories.
-   --  Check the library attributes, including the library directory if any.
-   --  Get the set of specification and implementation suffixs, if any.
-   --  If Report_Error is null , use the standard error reporting mechanism
-   --  (Errout). Otherwise, report errors using Report_Error.
+   procedure Process_Naming_Scheme
+     (Tree         : Project_Tree_Ref;
+      Root_Project : Project_Id;
+      Node_Tree    : Prj.Tree.Project_Node_Tree_Ref;
+      Flags        : Processing_Flags);
+   --  Perform consistency and semantic checks on all the projects in the tree.
+   --  This procedure interprets the various case statements in the project
+   --  based on the current external references. After checking the validity of
+   --  the naming scheme, it searches for all the source files of the project.
+   --  The result of this procedure is a filled-in data structure for
+   --  Project_Id which contains all the information about the project. This
+   --  information is only valid while the external references are preserved.
 
 end Prj.Nmsc;

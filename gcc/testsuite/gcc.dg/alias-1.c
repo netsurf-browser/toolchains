@@ -1,5 +1,5 @@
 // { dg-do compile }
-// { dg-options "-Wstrict-aliasing -fstrict-aliasing" }
+// { dg-options "-Wstrict-aliasing=2 -fstrict-aliasing" }
 
 // Copyright (C) 2002 Free Software Foundation, Inc.
 // Contributed by Nathan Sidwell 29 Sep 2002 <nathan@codesourcery.com>
@@ -19,7 +19,7 @@ YYSTYPE
  addSibMacro(
          YYSTYPE  list )
  {
-     tDefEntry** ppT   = (tDefEntry**)&list; // { dg-warning "type-punned pointer" "" }
+     tDefEntry** ppT   = (tDefEntry**)&list; // { dg-warning "type-punned pointer will" "" }
  
      struct incomplete *p = (struct incomplete *)&list; // { dg-warning "type-punning to incomplete" "" }
      

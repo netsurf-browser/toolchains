@@ -6,18 +6,17 @@
 --                                                                          --
 --                                 B o d y                                  --
 --                                                                          --
---          Copyright (C) 1992-2003 Free Software Foundation, Inc.          --
+--          Copyright (C) 1992-2010, Free Software Foundation, Inc.         --
 --                                                                          --
 -- GNAT is free software;  you can  redistribute it  and/or modify it under --
 -- terms of the  GNU General Public License as published  by the Free Soft- --
--- ware  Foundation;  either version 2,  or (at your option) any later ver- --
+-- ware  Foundation;  either version 3,  or (at your option) any later ver- --
 -- sion.  GNAT is distributed in the hope that it will be useful, but WITH- --
 -- OUT ANY WARRANTY;  without even the  implied warranty of MERCHANTABILITY --
 -- or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU General Public License --
 -- for  more details.  You should have  received  a copy of the GNU General --
--- Public License  distributed with GNAT;  see file COPYING.  If not, write --
--- to  the Free Software Foundation,  59 Temple Place - Suite 330,  Boston, --
--- MA 02111-1307, USA.                                                      --
+-- Public License  distributed with GNAT; see file COPYING3.  If not, go to --
+-- http://www.gnu.org/licenses for a complete copy of the license.          --
 --                                                                          --
 -- GNAT was originally developed  by the GNAT team at  New York University. --
 -- Extensive contributions were provided by Ada Core Technologies Inc.      --
@@ -62,10 +61,12 @@ package body Ch12 is
    --    GENERIC_SUBPROGRAM_DECLARATION | GENERIC_PACKAGE_DECLARATION
 
    --  GENERIC_SUBPROGRAM_DECLARATION ::=
-   --    GENERIC_FORMAL_PART SUBPROGRAM_SPECIFICATION;
+   --    GENERIC_FORMAL_PART SUBPROGRAM_SPECIFICATION
+   --      [ASPECT_SPECIFICATIONS];
 
    --  GENERIC_PACKAGE_DECLARATION ::=
-   --    GENERIC_FORMAL_PART PACKAGE_SPECIFICATION;
+   --    GENERIC_FORMAL_PART PACKAGE_SPECIFICATION
+   --      [ASPECT_SPECIFICATIONS];
 
    --  GENERIC_FORMAL_PART ::=
    --    generic {GENERIC_FORMAL_PARAMETER_DECLARATION | USE_CLAUSE}
@@ -101,7 +102,8 @@ package body Ch12 is
       Scan; -- past GENERIC
 
       if Token = Tok_Private then
-         Error_Msg_SC ("PRIVATE goes before GENERIC, not after");
+         Error_Msg_SC -- CODEFIX
+           ("PRIVATE goes before GENERIC, not after");
          Scan; -- past junk PRIVATE token
       end if;
 
@@ -153,7 +155,11 @@ package body Ch12 is
 
       Decl_Loop : loop
          P_Pragmas_Opt (Decls);
-         Ignore (Tok_Private);
+
+         if Token = Tok_Private then
+            Error_Msg_S ("generic private child packages not permitted");
+            Scan; -- past PRIVATE
+         end if;
 
          if Token = Tok_Use then
             Append (P_Use_Clause, Decls);
@@ -176,7 +182,7 @@ package body Ch12 is
                   Append (P_Formal_Subprogram_Declaration, Decls);
 
                else
-                  Error_Msg_BC
+                  Error_Msg_BC -- CODEFIX
                     ("FUNCTION, PROCEDURE or PACKAGE expected here");
                   Resync_Past_Semicolon;
                end if;
@@ -190,18 +196,27 @@ package body Ch12 is
                exit Decl_Loop;
             end if;
          end if;
-
       end loop Decl_Loop;
 
       --  Generic formal part is scanned, scan out subprogram or package spec
 
       if Token = Tok_Package then
          Gen_Decl := New_Node (N_Generic_Package_Declaration, Gen_Sloc);
-         Set_Specification (Gen_Decl, P_Package (Pf_Spcn));
+         Set_Specification (Gen_Decl, P_Package (Pf_Spcn, Gen_Decl));
+
       else
          Gen_Decl := New_Node (N_Generic_Subprogram_Declaration, Gen_Sloc);
+
          Set_Specification (Gen_Decl, P_Subprogram_Specification);
-         TF_Semicolon;
+
+         if Nkind (Defining_Unit_Name (Specification (Gen_Decl))) =
+                                             N_Defining_Program_Unit_Name
+           and then Scope.Last > 0
+         then
+            Error_Msg_SP ("child unit allowed only at library level");
+         end if;
+
+         P_Aspect_Specifications (Gen_Decl);
       end if;
 
       Set_Generic_Formal_Declarations (Gen_Decl, Decls);
@@ -263,8 +278,9 @@ package body Ch12 is
    begin
       --  Figure out if a generic actual part operation is present. Clearly
       --  there is no generic actual part if the current token is semicolon
+      --  or if we have aspect specifications present.
 
-      if Token = Tok_Semicolon then
+      if Token = Tok_Semicolon or else Aspect_Specifications_Present then
          return No_List;
 
       --  If we don't have a left paren, then we have an error, and the job
@@ -320,6 +336,36 @@ package body Ch12 is
    begin
       Generic_Assoc_Node := New_Node (N_Generic_Association, Token_Ptr);
 
+      --  Ada2005: an association can be given by: others => <>
+
+      if Token = Tok_Others then
+         if Ada_Version < Ada_2005 then
+            Error_Msg_SP
+              ("partial parametrization of formal packages" &
+                " is an Ada 2005 extension");
+            Error_Msg_SP
+              ("\unit must be compiled with -gnat05 switch");
+         end if;
+
+         Scan;  --  past OTHERS
+
+         if Token /= Tok_Arrow then
+            Error_Msg_BC  ("expect arrow after others");
+         else
+            Scan;  --  past arrow
+         end if;
+
+         if Token /= Tok_Box then
+            Error_Msg_BC ("expect Box after arrow");
+         else
+            Scan;  --  past box
+         end if;
+
+         --  Source position of the others choice is beginning of construct
+
+         return New_Node (N_Others_Choice, Sloc (Generic_Assoc_Node));
+      end if;
+
       if Token in Token_Class_Desig then
          Param_Name_Node := Token_Node;
          Save_Scan_State (Scan_State); -- at designator
@@ -333,7 +379,18 @@ package body Ch12 is
          end if;
       end if;
 
-      Set_Explicit_Generic_Actual_Parameter (Generic_Assoc_Node, P_Expression);
+      --  In Ada 2005 the actual can be a box
+
+      if Token = Tok_Box then
+         Scan;
+         Set_Box_Present (Generic_Assoc_Node);
+         Set_Explicit_Generic_Actual_Parameter (Generic_Assoc_Node, Empty);
+
+      else
+         Set_Explicit_Generic_Actual_Parameter
+           (Generic_Assoc_Node, P_Expression);
+      end if;
+
       return Generic_Assoc_Node;
    end P_Generic_Association;
 
@@ -349,17 +406,22 @@ package body Ch12 is
 
    --  FORMAL_OBJECT_DECLARATION ::=
    --    DEFINING_IDENTIFIER_LIST :
-   --      MODE SUBTYPE_MARK [:= DEFAULT_EXPRESSION];
+   --      MODE [NULL_EXCLUSION] SUBTYPE_MARK [:= DEFAULT_EXPRESSION]
+   --        [ASPECT_SPECIFICATIONS];
+   --  | DEFINING_IDENTIFIER_LIST :
+   --      MODE ACCESS_DEFINITION [:= DEFAULT_EXPRESSION];
+   --        [ASPECT_SPECIFICATIONS];
 
    --  The caller has checked that the initial token is an identifier
 
    --  Error recovery: cannot raise Error_Resync
 
    procedure P_Formal_Object_Declarations (Decls : List_Id) is
-      Decl_Node  : Node_Id;
-      Scan_State : Saved_Scan_State;
-      Num_Idents : Nat;
-      Ident      : Nat;
+      Decl_Node        : Node_Id;
+      Ident            : Nat;
+      Not_Null_Present : Boolean := False;
+      Num_Idents       : Nat;
+      Scan_State       : Saved_Scan_State;
 
       Idents : array (Int range 1 .. 4096) of Entity_Id;
       --  This array holds the list of defining identifiers. The upper bound
@@ -369,7 +431,6 @@ package body Ch12 is
    begin
       Idents (1) := P_Defining_Identifier (C_Comma_Colon);
       Num_Idents := 1;
-
       while Comma_Present loop
          Num_Idents := Num_Idents + 1;
          Idents (Num_Idents) := P_Defining_Identifier (C_Comma_Colon);
@@ -393,9 +454,37 @@ package body Ch12 is
          Decl_Node := New_Node (N_Formal_Object_Declaration, Token_Ptr);
          Set_Defining_Identifier (Decl_Node, Idents (Ident));
          P_Mode (Decl_Node);
-         Set_Subtype_Mark (Decl_Node, P_Subtype_Mark_Resync);
+
+         Not_Null_Present := P_Null_Exclusion;  --  Ada 2005 (AI-423)
+
+         --  Ada 2005 (AI-423): Formal object with an access definition
+
+         if Token = Tok_Access then
+
+            --  The access definition is still parsed and set even though
+            --  the compilation may not use the proper switch. This action
+            --  ensures the required local error recovery.
+
+            Set_Access_Definition (Decl_Node,
+              P_Access_Definition (Not_Null_Present));
+
+            if Ada_Version < Ada_2005 then
+               Error_Msg_SP
+                 ("access definition not allowed in formal object " &
+                  "declaration");
+               Error_Msg_SP ("\unit must be compiled with -gnat05 switch");
+            end if;
+
+         --  Formal object with a subtype mark
+
+         else
+            Set_Null_Exclusion_Present (Decl_Node, Not_Null_Present);
+            Set_Subtype_Mark (Decl_Node, P_Subtype_Mark_Resync);
+         end if;
+
          No_Constraint;
-         Set_Expression (Decl_Node, Init_Expr_Opt);
+         Set_Default_Expression (Decl_Node, Init_Expr_Opt);
+         P_Aspect_Specifications (Decl_Node);
 
          if Ident > 1 then
             Set_Prev_Ids (Decl_Node, True);
@@ -411,8 +500,6 @@ package body Ch12 is
          Ident := Ident + 1;
          Restore_Scan_State (Scan_State);
       end loop Ident_Loop;
-
-      TF_Semicolon;
    end P_Formal_Object_Declarations;
 
    -----------------------------------
@@ -421,7 +508,8 @@ package body Ch12 is
 
    --  FORMAL_TYPE_DECLARATION ::=
    --    type DEFINING_IDENTIFIER [DISCRIMINANT_PART]
-   --      is FORMAL_TYPE_DEFINITION;
+   --      is FORMAL_TYPE_DEFINITION
+   --        [ASPECT_SPECIFICATIONS];
 
    --  The caller has checked that the initial token is TYPE
 
@@ -449,15 +537,20 @@ package body Ch12 is
 
       if Def_Node /= Error then
          Set_Formal_Type_Definition (Decl_Node, Def_Node);
-         TF_Semicolon;
+         P_Aspect_Specifications (Decl_Node);
 
       else
          Decl_Node := Error;
 
+         --  If we have aspect specifications, skip them
+
+         if Aspect_Specifications_Present then
+            P_Aspect_Specifications (Error);
+
          --  If we have semicolon, skip it to avoid cascaded errors
 
-         if Token = Tok_Semicolon then
-            Scan;
+         elsif Token = Tok_Semicolon then
+            Scan; -- past semicolon
          end if;
       end if;
 
@@ -479,13 +572,17 @@ package body Ch12 is
    --  | FORMAL_DECIMAL_FIXED_POINT_DEFINITION
    --  | FORMAL_ARRAY_TYPE_DEFINITION
    --  | FORMAL_ACCESS_TYPE_DEFINITION
+   --  | FORMAL_INTERFACE_TYPE_DEFINITION
 
    --  FORMAL_ARRAY_TYPE_DEFINITION ::= ARRAY_TYPE_DEFINITION
 
    --  FORMAL_ACCESS_TYPE_DEFINITION ::= ACCESS_TYPE_DEFINITION
 
+   --  FORMAL_INTERFACE_TYPE_DEFINITION ::= INTERFACE_TYPE_DEFINITION
+
    function P_Formal_Type_Definition return Node_Id is
-      Scan_State : Saved_Scan_State;
+      Scan_State   : Saved_Scan_State;
+      Typedef_Node : Node_Id;
 
    begin
       if Token_Name = Name_Abstract then
@@ -503,6 +600,9 @@ package body Ch12 is
          --  exception is ABSTRACT, where we have to scan ahead to see if we
          --  have a formal derived type or a formal private type definition.
 
+         --  In addition, in Ada 2005 LIMITED may appear after abstract, so
+         --  that the lookahead must be extended by one more token.
+
          when Tok_Abstract =>
             Save_Scan_State (Scan_State);
             Scan; -- past ABSTRACT
@@ -511,42 +611,158 @@ package body Ch12 is
                Restore_Scan_State (Scan_State); -- to ABSTRACT
                return P_Formal_Derived_Type_Definition;
 
+            elsif Token = Tok_Limited then
+               Scan;  --  past LIMITED
+
+               if Token = Tok_New then
+                  Restore_Scan_State (Scan_State); -- to ABSTRACT
+                  return P_Formal_Derived_Type_Definition;
+
+               else
+                  Restore_Scan_State (Scan_State); -- to ABSTRACT
+                  return P_Formal_Private_Type_Definition;
+               end if;
+
+            --  Ada 2005 (AI-443): Abstract synchronized formal derived type
+
+            elsif Token = Tok_Synchronized then
+               Restore_Scan_State (Scan_State); -- to ABSTRACT
+               return P_Formal_Derived_Type_Definition;
+
             else
                Restore_Scan_State (Scan_State); -- to ABSTRACT
                return P_Formal_Private_Type_Definition;
             end if;
 
-         when Tok_Private | Tok_Limited | Tok_Tagged =>
-            return P_Formal_Private_Type_Definition;
-
-         when Tok_New =>
-            return P_Formal_Derived_Type_Definition;
-
-         when Tok_Left_Paren =>
-            return P_Formal_Discrete_Type_Definition;
-
-         when Tok_Range =>
-            return P_Formal_Signed_Integer_Type_Definition;
-
-         when Tok_Mod =>
-            return P_Formal_Modular_Type_Definition;
-
-         when Tok_Digits =>
-            return P_Formal_Floating_Point_Definition;
-
-         when Tok_Delta =>
-            return P_Formal_Fixed_Point_Definition;
+         when Tok_Access =>
+            return P_Access_Type_Definition;
 
          when Tok_Array =>
             return P_Array_Type_Definition;
 
-         when Tok_Access =>
-            return P_Access_Type_Definition;
+         when Tok_Delta =>
+            return P_Formal_Fixed_Point_Definition;
+
+         when Tok_Digits =>
+            return P_Formal_Floating_Point_Definition;
+
+         when Tok_Interface => --  Ada 2005 (AI-251)
+            return P_Interface_Type_Definition (Abstract_Present => False);
+
+         when Tok_Left_Paren =>
+            return P_Formal_Discrete_Type_Definition;
+
+         when Tok_Limited =>
+            Save_Scan_State (Scan_State);
+            Scan; --  past LIMITED
+
+            if Token = Tok_Interface then
+               Typedef_Node :=
+                 P_Interface_Type_Definition (Abstract_Present => False);
+               Set_Limited_Present (Typedef_Node);
+               return Typedef_Node;
+
+            elsif Token = Tok_New then
+               Restore_Scan_State (Scan_State); -- to LIMITED
+               return P_Formal_Derived_Type_Definition;
+
+            else
+               if Token = Tok_Abstract then
+                  Error_Msg_SC -- CODEFIX
+                    ("ABSTRACT must come before LIMITED");
+                  Scan;  --  past improper ABSTRACT
+
+                  if Token = Tok_New then
+                     Restore_Scan_State (Scan_State); -- to LIMITED
+                     return P_Formal_Derived_Type_Definition;
+
+                  else
+                     Restore_Scan_State (Scan_State);
+                     return P_Formal_Private_Type_Definition;
+                  end if;
+               end if;
+
+               Restore_Scan_State (Scan_State);
+               return P_Formal_Private_Type_Definition;
+            end if;
+
+         when Tok_Mod =>
+            return P_Formal_Modular_Type_Definition;
+
+         when Tok_New =>
+            return P_Formal_Derived_Type_Definition;
+
+         when Tok_Not =>
+            if P_Null_Exclusion then
+               Typedef_Node :=  P_Access_Type_Definition;
+               Set_Null_Exclusion_Present (Typedef_Node);
+               return Typedef_Node;
+
+            else
+               Error_Msg_SC ("expect valid formal access definition!");
+               Resync_Past_Semicolon;
+               return Error;
+            end if;
+
+         when Tok_Private |
+              Tok_Tagged  =>
+            return P_Formal_Private_Type_Definition;
+
+         when Tok_Range =>
+            return P_Formal_Signed_Integer_Type_Definition;
 
          when Tok_Record =>
             Error_Msg_SC ("record not allowed in generic type definition!");
             Discard_Junk_Node (P_Record_Definition);
             return Error;
+
+         --  Ada 2005 (AI-345): Task, Protected or Synchronized interface or
+         --  (AI-443): Synchronized formal derived type declaration.
+
+         when Tok_Protected    |
+              Tok_Synchronized |
+              Tok_Task         =>
+
+            declare
+               Saved_Token : constant Token_Type := Token;
+
+            begin
+               Scan; -- past TASK, PROTECTED or SYNCHRONIZED
+
+               --  Synchronized derived type
+
+               if Token = Tok_New then
+                  Typedef_Node := P_Formal_Derived_Type_Definition;
+
+                  if Saved_Token = Tok_Synchronized then
+                     Set_Synchronized_Present (Typedef_Node);
+                  else
+                     Error_Msg_SC ("invalid kind of formal derived type");
+                  end if;
+
+               --  Interface
+
+               else
+                  Typedef_Node :=
+                    P_Interface_Type_Definition (Abstract_Present => False);
+
+                  case Saved_Token is
+                     when Tok_Task =>
+                        Set_Task_Present         (Typedef_Node);
+
+                     when Tok_Protected =>
+                        Set_Protected_Present    (Typedef_Node);
+
+                     when Tok_Synchronized =>
+                        Set_Synchronized_Present (Typedef_Node);
+
+                     when others =>
+                        null;
+                  end case;
+               end if;
+
+               return Typedef_Node;
+            end;
 
          when others =>
             Error_Msg_BC ("expecting generic type definition here");
@@ -599,8 +815,39 @@ package body Ch12 is
          Scan; -- past LIMITED
       end if;
 
+      if Token = Tok_Abstract then
+         if Prev_Token = Tok_Tagged then
+            Error_Msg_SC -- CODEFIX
+              ("ABSTRACT must come before TAGGED");
+         elsif Prev_Token = Tok_Limited then
+            Error_Msg_SC -- CODEFIX
+              ("ABSTRACT must come before LIMITED");
+         end if;
+
+         Resync_Past_Semicolon;
+
+      elsif Token = Tok_Tagged then
+         Error_Msg_SC -- CODEFIX
+           ("TAGGED must come before LIMITED");
+         Resync_Past_Semicolon;
+      end if;
+
       Set_Sloc (Def_Node, Token_Ptr);
       T_Private;
+
+      if Token = Tok_Tagged then -- CODEFIX
+         Error_Msg_SC ("TAGGED must come before PRIVATE");
+         Scan; -- past TAGGED
+
+      elsif Token = Tok_Abstract then -- CODEFIX
+         Error_Msg_SC ("`ABSTRACT TAGGED` must come before PRIVATE");
+         Scan; -- past ABSTRACT
+
+         if Token = Tok_Tagged then
+            Scan; -- past TAGGED
+         end if;
+      end if;
+
       return Def_Node;
    end P_Formal_Private_Type_Definition;
 
@@ -609,9 +856,12 @@ package body Ch12 is
    --------------------------------------------
 
    --  FORMAL_DERIVED_TYPE_DEFINITION ::=
-   --    [abstract] new SUBTYPE_MARK [with private]
+   --    [abstract] [limited | synchronized]
+   --         new SUBTYPE_MARK [[and INTERFACE_LIST] with private]
 
-   --  The caller has checked the initial token(s) is/are NEW or ASTRACT NEW
+   --  The caller has checked the initial token(s) is/are NEW, ABSTRACT NEW,
+   --  or LIMITED NEW, ABSTRACT LIMITED NEW, SYNCHRONIZED NEW or ABSTRACT
+   --  SYNCHRONIZED NEW.
 
    --  Error recovery: cannot raise Error_Resync
 
@@ -626,9 +876,56 @@ package body Ch12 is
          Scan; -- past ABSTRACT
       end if;
 
+      if Token = Tok_Limited then
+         Set_Limited_Present (Def_Node);
+         Scan;  --  past LIMITED
+
+         if Ada_Version < Ada_2005 then
+            Error_Msg_SP
+              ("LIMITED in derived type is an Ada 2005 extension");
+            Error_Msg_SP
+              ("\unit must be compiled with -gnat05 switch");
+         end if;
+
+      elsif Token = Tok_Synchronized then
+         Set_Synchronized_Present (Def_Node);
+         Scan;  --  past SYNCHRONIZED
+
+         if Ada_Version < Ada_2005 then
+            Error_Msg_SP
+              ("SYNCHRONIZED in derived type is an Ada 2005 extension");
+            Error_Msg_SP
+              ("\unit must be compiled with -gnat05 switch");
+         end if;
+      end if;
+
+      if Token = Tok_Abstract then
+         Scan;  --  past ABSTRACT, diagnosed already in caller.
+      end if;
+
       Scan; -- past NEW;
       Set_Subtype_Mark (Def_Node, P_Subtype_Mark);
       No_Constraint;
+
+      --  Ada 2005 (AI-251): Deal with interfaces
+
+      if Token = Tok_And then
+         Scan; -- past AND
+
+         if Ada_Version < Ada_2005 then
+            Error_Msg_SP
+              ("abstract interface is an Ada 2005 extension");
+            Error_Msg_SP ("\unit must be compiled with -gnat05 switch");
+         end if;
+
+         Set_Interface_List (Def_Node, New_List);
+
+         loop
+            Append (P_Qualified_Simple_Name, Interface_List (Def_Node));
+            exit when Token /= Tok_And;
+            Scan; -- past AND
+         end loop;
+      end if;
 
       if Token = Tok_With then
          Scan; -- past WITH
@@ -639,7 +936,8 @@ package body Ch12 is
          Scan;
 
          if Token = Tok_Private then
-            Error_Msg_SC ("TAGGED should be WITH");
+            Error_Msg_SC  -- CODEFIX
+              ("TAGGED should be WITH");
             Set_Private_Present (Def_Node, True);
             T_Private;
          else
@@ -800,41 +1098,91 @@ package body Ch12 is
    -----------------------------------------
 
    --  FORMAL_SUBPROGRAM_DECLARATION ::=
-   --    with SUBPROGRAM_SPECIFICATION [is SUBPROGRAM_DEFAULT];
+   --    FORMAL_CONCRETE_SUBPROGRAM_DECLARATION
+   --  | FORMAL_ABSTRACT_SUBPROGRAM_DECLARATION
+
+   --  FORMAL_CONCRETE_SUBPROGRAM_DECLARATION ::=
+   --    with SUBPROGRAM_SPECIFICATION [is SUBPROGRAM_DEFAULT]
+   --      [ASPECT_SPECIFICATIONS];
+
+   --  FORMAL_ABSTRACT_SUBPROGRAM_DECLARATION ::=
+   --    with SUBPROGRAM_SPECIFICATION is abstract [SUBPROGRAM_DEFAULT]
+   --      [ASPECT_SPECIFICATIONS];
 
    --  SUBPROGRAM_DEFAULT ::= DEFAULT_NAME | <>
 
-   --  DEFAULT_NAME ::= NAME
+   --  DEFAULT_NAME ::= NAME | null
 
    --  The caller has checked that the initial tokens are WITH FUNCTION or
    --  WITH PROCEDURE, and the initial WITH has been scanned out.
 
-   --  Note: we separate this into two procedures because the name is allowed
-   --  to be an operator symbol for a function, but not for a procedure.
+   --  A null default is an Ada 2005 feature
 
    --  Error recovery: cannot raise Error_Resync
 
    function P_Formal_Subprogram_Declaration return Node_Id is
-      Def_Node : Node_Id;
+      Prev_Sloc : constant Source_Ptr := Prev_Token_Ptr;
+      Spec_Node : constant Node_Id    := P_Subprogram_Specification;
+      Def_Node  : Node_Id;
 
    begin
-      Def_Node := New_Node (N_Formal_Subprogram_Declaration, Prev_Token_Ptr);
-      Set_Specification (Def_Node, P_Subprogram_Specification);
-
       if Token = Tok_Is then
          T_Is; -- past IS, skip extra IS or ";"
 
-         if Token = Tok_Box then
+         if Token = Tok_Abstract then
+            Def_Node :=
+              New_Node (N_Formal_Abstract_Subprogram_Declaration, Prev_Sloc);
+            Scan; -- past ABSTRACT
+
+            if Ada_Version < Ada_2005 then
+               Error_Msg_SP
+                 ("formal abstract subprograms are an Ada 2005 extension");
+               Error_Msg_SP ("\unit must be compiled with -gnat05 switch");
+            end if;
+
+         else
+            Def_Node :=
+              New_Node (N_Formal_Concrete_Subprogram_Declaration, Prev_Sloc);
+         end if;
+
+         Set_Specification (Def_Node, Spec_Node);
+
+         if Token = Tok_Semicolon then
+            null;
+
+         elsif Aspect_Specifications_Present then
+            null;
+
+         elsif Token = Tok_Box then
             Set_Box_Present (Def_Node, True);
             Scan; -- past <>
+
+         elsif Token = Tok_Null then
+            if Ada_Version < Ada_2005 then
+               Error_Msg_SP
+                 ("null default subprograms are an Ada 2005 extension");
+               Error_Msg_SP ("\unit must be compiled with -gnat05 switch");
+            end if;
+
+            if Nkind (Spec_Node) = N_Procedure_Specification then
+               Set_Null_Present (Spec_Node);
+            else
+               Error_Msg_SP ("only procedures can be null");
+            end if;
+
+            Scan;  --  past NULL
 
          else
             Set_Default_Name (Def_Node, P_Name);
          end if;
 
+      else
+         Def_Node :=
+           New_Node (N_Formal_Concrete_Subprogram_Declaration, Prev_Sloc);
+         Set_Specification (Def_Node, Spec_Node);
       end if;
 
-      T_Semicolon;
+      P_Aspect_Specifications (Def_Node);
       return Def_Node;
    end P_Formal_Subprogram_Declaration;
 
@@ -856,10 +1204,18 @@ package body Ch12 is
 
    --  FORMAL_PACKAGE_DECLARATION ::=
    --    with package DEFINING_IDENTIFIER
-   --      is new generic_package_NAME FORMAL_PACKAGE_ACTUAL_PART;
+   --      is new generic_package_NAME FORMAL_PACKAGE_ACTUAL_PART
+   --        [ASPECT_SPECIFICATIONS];
 
    --  FORMAL_PACKAGE_ACTUAL_PART ::=
-   --    (<>) | [GENERIC_ACTUAL_PART]
+   --    ([OTHERS =>] <>) |
+   --    [GENERIC_ACTUAL_PART]
+   --    (FORMAL_PACKAGE_ASSOCIATION {, FORMAL_PACKAGE_ASSOCIATION}
+   --      [, OTHERS => <>)
+
+   --  FORMAL_PACKAGE_ASSOCIATION ::=
+   --    GENERIC_ASSOCIATION
+   --    | GENERIC_FORMAL_PARAMETER_SELECTOR_NAME => <>
 
    --  The caller has checked that the initial tokens are WITH PACKAGE,
    --  and the initial WITH has been scanned out (so Token = Tok_Package).
@@ -893,7 +1249,7 @@ package body Ch12 is
          end if;
       end if;
 
-      T_Semicolon;
+      P_Aspect_Specifications (Def_Node);
       return Def_Node;
    end P_Formal_Package_Declaration;
 

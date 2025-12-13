@@ -2,10 +2,13 @@
 
 /* { dg-do run } */
 /* { dg-options "-fshort-wchar" } */
+/* { dg-options "-fshort-wchar -Wl,--no-wchar-size-warning" { target arm*-*-*eabi } } */
 
 /* Source: Neil Booth, 10 Dec 2002.
 
    Test that __WCHAR_MAX__ is correct with -fshort-wchar.  */
+
+extern void abort (void);
 
 int main ()
 {

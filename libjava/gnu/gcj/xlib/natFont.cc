@@ -16,7 +16,7 @@ details.  */
 #include <gnu/gcj/xlib/Font.h>
 #include <gnu/gcj/xlib/XException.h>
 
-gnu::gcj::RawData* gnu::gcj::xlib::Font::loadFont(Display* display,
+gnu::gcj::RawData* gnu::gcj::xlib::Font::loadFontImpl(Display* display,
 						  jstring lfdNamePattern)
 {
   ::Display* dpy = (::Display*) display->display;
@@ -75,7 +75,7 @@ jint gnu::gcj::xlib::Font::getDescent()
   return returnValue-1;  // -1 to exclude the baseline
 }
 
-jint gnu::gcj::xlib::Font::getStringWidth(java::lang::String* text)
+jint gnu::gcj::xlib::Font::getStringWidth(::java::lang::String* text)
 {
   XFontStruct* fontStruct = (XFontStruct*) structure;
   

@@ -6,27 +6,26 @@
 --                                                                          --
 --                                 S p e c                                  --
 --                                                                          --
---          Copyright (C) 1992-2003 Free Software Foundation, Inc.          --
+--          Copyright (C) 1992-2010, Free Software Foundation, Inc.         --
 --                                                                          --
 -- GNAT is free software;  you can  redistribute it  and/or modify it under --
 -- terms of the  GNU General Public License as published  by the Free Soft- --
--- ware  Foundation;  either version 2,  or (at your option) any later ver- --
+-- ware  Foundation;  either version 3,  or (at your option) any later ver- --
 -- sion.  GNAT is distributed in the hope that it will be useful, but WITH- --
 -- OUT ANY WARRANTY;  without even the  implied warranty of MERCHANTABILITY --
 -- or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU General Public License --
 -- for  more details.  You should have  received  a copy of the GNU General --
--- Public License  distributed with GNAT;  see file COPYING.  If not, write --
--- to  the Free Software Foundation,  59 Temple Place - Suite 330,  Boston, --
--- MA 02111-1307, USA.                                                      --
+-- Public License  distributed with GNAT; see file COPYING3.  If not, go to --
+-- http://www.gnu.org/licenses for a complete copy of the license.          --
 --                                                                          --
 -- GNAT was originally developed  by the GNAT team at  New York University. --
 -- Extensive contributions were provided by Ada Core Technologies Inc.      --
 --                                                                          --
 ------------------------------------------------------------------------------
 
---  This package contains a generic lexical analyzer. This is used
---  for scanning Ada source files or text files with an Ada-like syntax,
---  such as project files. It is instantiated in Scn and Prj.Err.
+--  This package contains a generic lexical analyzer. This is used for scanning
+--  Ada source files or text files with an Ada-like syntax, such as project
+--  files. It is instantiated in Scn and Prj.Err.
 
 with Casing; use Casing;
 with Styleg;
@@ -34,9 +33,10 @@ with Types;  use Types;
 
 generic
    with procedure Post_Scan;
-   --  Procedure called by Scan for the following tokens:
-   --  Tok_Char_Literal, Tok_Identifier, Tok_Real_Literal, Tok_Real_Literal,
-   --  Tok_Integer_Literal, Tok_String_Literal, Tok_Operator_Symbol.
+   --  Procedure called by Scan for the following tokens: Tok_Char_Literal,
+   --  Tok_Identifier, Tok_Real_Literal, Tok_Real_Literal, Tok_Integer_Literal,
+   --  Tok_String_Literal, Tok_Operator_Symbol, and Tok_Vertical_Bar. Used to
+   --  build Token_Node and also check for obsolescent features.
 
    with procedure Error_Msg (Msg : String; Flag_Location : Source_Ptr);
    --  Output a message at specified location
@@ -56,14 +56,8 @@ generic
 
 package Scng is
 
-   procedure Initialize_Scanner
-     (Unit  : Unit_Number_Type;
-      Index : Source_File_Index);
-   --  Initialize lexical scanner for scanning a new file. The caller has
-   --  completed the construction of the Units.Table entry for the specified
-   --  Unit and Index references the corresponding source file. A special
-   --  case is when Unit = No_Unit_Number, and Index corresponds to the
-   --  source index for reading the configuration pragma file.
+   procedure Initialize_Scanner (Index : Source_File_Index);
+   --  Initialize lexical scanner for scanning a new file referenced by Index.
    --  Initialize_Scanner does not call Scan.
 
    procedure Scan;

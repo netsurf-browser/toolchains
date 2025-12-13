@@ -1,36 +1,34 @@
 /*  -*- Mode: Asm -*-  */
-/* Copyright (C) 1998, 1999, 2000 Free Software Foundation, Inc.
-   Contributed by Denis Chertykov <denisc@overta.ru>
+/* Copyright (C) 1998, 1999, 2000, 2007, 2008, 2009
+   Free Software Foundation, Inc.
+   Contributed by Denis Chertykov <chertykov@gmail.com>
 
 This file is free software; you can redistribute it and/or modify it
 under the terms of the GNU General Public License as published by the
-Free Software Foundation; either version 2, or (at your option) any
+Free Software Foundation; either version 3, or (at your option) any
 later version.
-
-In addition to the permissions in the GNU General Public License, the
-Free Software Foundation gives you unlimited permission to link the
-compiled version of this file into combinations with other programs,
-and to distribute those combinations without any restriction coming
-from the use of this file.  (The General Public License restrictions
-do apply in other respects; for example, they cover modification of
-the file, and distribution when not linked into a combine
-executable.)
 
 This file is distributed in the hope that it will be useful, but
 WITHOUT ANY WARRANTY; without even the implied warranty of
 MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
 General Public License for more details.
 
-You should have received a copy of the GNU General Public License
-along with this program; see the file COPYING.  If not, write to
-the Free Software Foundation, 59 Temple Place - Suite 330,
-Boston, MA 02111-1307, USA.  */
+Under Section 7 of GPL version 3, you are granted additional
+permissions described in the GCC Runtime Library Exception, version
+3.1, as published by the Free Software Foundation.
+
+You should have received a copy of the GNU General Public License and
+a copy of the GCC Runtime Library Exception along with this program;
+see the files COPYING3 and COPYING.RUNTIME respectively.  If not, see
+<http://www.gnu.org/licenses/>.  */
 
 #define __zero_reg__ r1
 #define __tmp_reg__ r0
 #define __SREG__ 0x3f
 #define __SP_H__ 0x3e
 #define __SP_L__ 0x3d
+#define __RAMPZ__ 0x3B
+#define __EIND__  0x3C
 
 /* Most of the functions here are called directly from avr.md
    patterns, instead of using the standard libcall mechanisms.
@@ -40,7 +38,7 @@ Boston, MA 02111-1307, USA.  */
 	.section .text.libgcc, "ax", @progbits
 
 	.macro	mov_l  r_dest, r_src
-#if defined (__AVR_ENHANCED__)
+#if defined (__AVR_HAVE_MOVW__)
 	movw	\r_dest, \r_src
 #else
 	mov	\r_dest, \r_src
@@ -48,7 +46,7 @@ Boston, MA 02111-1307, USA.  */
 	.endm
 
 	.macro	mov_h  r_dest, r_src
-#if defined (__AVR_ENHANCED__)
+#if defined (__AVR_HAVE_MOVW__)
 	; empty
 #else
 	mov	\r_dest, \r_src
@@ -56,7 +54,7 @@ Boston, MA 02111-1307, USA.  */
 	.endm
 
 /* Note: mulqi3, mulhi3 are open-coded on the enhanced core.  */
-#if !defined (__AVR_ENHANCED__)
+#if !defined (__AVR_HAVE_MUL__)
 /*******************************************************
                Multiplication  8 x 8
 *******************************************************/
@@ -159,7 +157,7 @@ __mulhi3_exit:
 
 .endfunc
 #endif /* defined (L_mulhi3) */
-#endif /* !defined (__AVR_ENHANCED__) */
+#endif /* !defined (__AVR_HAVE_MUL__) */
 
 #if defined (L_mulhisi3)
 	.global	__mulhisi3
@@ -217,7 +215,7 @@ __umulhisi3:
 	.global	__mulsi3
 	.func	__mulsi3
 __mulsi3:
-#if defined (__AVR_ENHANCED__)
+#if defined (__AVR_HAVE_MUL__)
 	mul	r_arg1L, r_arg2L
 	movw	r_resL, r0
 	mul	r_arg1H, r_arg2H
@@ -276,12 +274,12 @@ __mulsi3_skip1:
 	cpc	r_arg1H,r_arg1L
 	brne	__mulsi3_loop		; exit if multiplier = 0
 __mulsi3_exit:
-	mov	r_arg1HH,r_resHH	; result to return register
-	mov	r_arg1HL,r_resHL
-	mov	r_arg1H,r_resH
-	mov	r_arg1L,r_resL
+	mov_h	r_arg1HH,r_resHH	; result to return register
+	mov_l	r_arg1HL,r_resHL
+	mov_h	r_arg1H,r_resH
+	mov_l	r_arg1L,r_resL
 	ret
-#endif /* !defined (__AVR_ENHANCED__) */
+#endif /* defined (__AVR_HAVE_MUL__) */
 #undef r_arg1L 
 #undef r_arg1H 
 #undef r_arg1HL
@@ -593,7 +591,12 @@ __prologue_saves__:
 	out	__SP_H__,r29
 	out	__SREG__,__tmp_reg__
 	out	__SP_L__,r28
+#if defined (__AVR_HAVE_EIJMP_EICALL__)
+	eijmp
+#else
 	ijmp
+#endif
+
 .endfunc
 #endif /* defined (L_prologue) */
 
@@ -643,13 +646,14 @@ __epilogue_restores__:
 _exit:
 	.weak	exit
 exit:
+	.endfunc
 
 	/* Code from .fini8 ... .fini1 sections inserted by ld script.  */
 
 	.section .fini0,"ax",@progbits
+	cli
 __stop_program:
 	rjmp	__stop_program
-	.endfunc
 #endif /* defined (L_exit) */
 
 #ifdef L_cleanup
@@ -668,47 +672,91 @@ __tablejump2__:
 	rol	r31
 	.global __tablejump__
 __tablejump__:
-#if defined (__AVR_ENHANCED__)
+#if defined (__AVR_HAVE_LPMX__)
 	lpm	__tmp_reg__, Z+
 	lpm	r31, Z
 	mov	r30, __tmp_reg__
+#if defined (__AVR_HAVE_EIJMP_EICALL__)
+	eijmp
+#else
 	ijmp
+#endif
+
 #else
 	lpm
 	adiw	r30, 1
 	push	r0
 	lpm
 	push	r0
+#if defined (__AVR_HAVE_EIJMP_EICALL__)
+	in   __tmp_reg__, __EIND__
+	push __tmp_reg__
+#endif
 	ret
 #endif
 	.endfunc
 #endif /* defined (L_tablejump) */
 
-/* __do_copy_data is only necessary if there is anything in .data section.
-   Does not use RAMPZ - crt*.o provides a replacement for >64K devices.  */
-
 #ifdef L_copy_data
 	.section .init4,"ax",@progbits
 	.global __do_copy_data
 __do_copy_data:
+#if defined(__AVR_HAVE_ELPMX__)
 	ldi	r17, hi8(__data_end)
 	ldi	r26, lo8(__data_start)
 	ldi	r27, hi8(__data_start)
 	ldi	r30, lo8(__data_load_start)
 	ldi	r31, hi8(__data_load_start)
-	rjmp	.do_copy_data_start
-.do_copy_data_loop:
-#if defined (__AVR_ENHANCED__)
+	ldi	r16, hh8(__data_load_start)
+	out	__RAMPZ__, r16
+	rjmp	.L__do_copy_data_start
+.L__do_copy_data_loop:
+	elpm	r0, Z+
+	st	X+, r0
+.L__do_copy_data_start:
+	cpi	r26, lo8(__data_end)
+	cpc	r27, r17
+	brne	.L__do_copy_data_loop
+#elif  !defined(__AVR_HAVE_ELPMX__) && defined(__AVR_HAVE_ELPM__)
+	ldi	r17, hi8(__data_end)
+	ldi	r26, lo8(__data_start)
+	ldi	r27, hi8(__data_start)
+	ldi	r30, lo8(__data_load_start)
+	ldi	r31, hi8(__data_load_start)
+	ldi	r16, hh8(__data_load_start - 0x10000)
+.L__do_copy_data_carry:
+	inc	r16
+	out	__RAMPZ__, r16
+	rjmp	.L__do_copy_data_start
+.L__do_copy_data_loop:
+	elpm
+	st	X+, r0
+	adiw	r30, 1
+	brcs	.L__do_copy_data_carry
+.L__do_copy_data_start:
+	cpi	r26, lo8(__data_end)
+	cpc	r27, r17
+	brne	.L__do_copy_data_loop
+#elif !defined(__AVR_HAVE_ELPMX__) && !defined(__AVR_HAVE_ELPM__)
+	ldi	r17, hi8(__data_end)
+	ldi	r26, lo8(__data_start)
+	ldi	r27, hi8(__data_start)
+	ldi	r30, lo8(__data_load_start)
+	ldi	r31, hi8(__data_load_start)
+	rjmp	.L__do_copy_data_start
+.L__do_copy_data_loop:
+#if defined (__AVR_HAVE_LPMX__)
 	lpm	r0, Z+
 #else
 	lpm
 	adiw	r30, 1
 #endif
 	st	X+, r0
-.do_copy_data_start:
+.L__do_copy_data_start:
 	cpi	r26, lo8(__data_end)
 	cpc	r27, r17
-	brne	.do_copy_data_loop
+	brne	.L__do_copy_data_loop
+#endif /* !defined(__AVR_HAVE_ELPMX__) && !defined(__AVR_HAVE_ELPM__) */
 #endif /* L_copy_data */
 
 /* __do_clear_bss is only necessary if there is anything in .bss section.  */
@@ -732,7 +780,7 @@ __do_clear_bss:
 /* __do_global_ctors and __do_global_dtors are only necessary
    if there are any constructors/destructors.  */
 
-#if defined (__AVR_MEGA__)
+#if defined (__AVR_HAVE_JMP_CALL__)
 #define XCALL call
 #else
 #define XCALL rcall
@@ -741,38 +789,113 @@ __do_clear_bss:
 #ifdef L_ctors
 	.section .init6,"ax",@progbits
 	.global	__do_global_ctors
+#if defined(__AVR_HAVE_RAMPZ__)
 __do_global_ctors:
 	ldi	r17, hi8(__ctors_start)
 	ldi	r28, lo8(__ctors_end)
 	ldi	r29, hi8(__ctors_end)
-	rjmp	.do_global_ctors_start
-.do_global_ctors_loop:
+	ldi	r16, hh8(__ctors_end)
+	rjmp	.L__do_global_ctors_start
+.L__do_global_ctors_loop:
+	sbiw	r28, 2
+	sbc     r16, __zero_reg__
+	mov_h	r31, r29
+	mov_l	r30, r28
+	out     __RAMPZ__, r16
+	XCALL	__tablejump_elpm__
+.L__do_global_ctors_start:
+	cpi	r28, lo8(__ctors_start)
+	cpc	r29, r17
+	ldi	r24, hh8(__ctors_start)
+	cpc	r16, r24
+	brne	.L__do_global_ctors_loop
+#else
+__do_global_ctors:
+	ldi	r17, hi8(__ctors_start)
+	ldi	r28, lo8(__ctors_end)
+	ldi	r29, hi8(__ctors_end)
+	rjmp	.L__do_global_ctors_start
+.L__do_global_ctors_loop:
 	sbiw	r28, 2
 	mov_h	r31, r29
 	mov_l	r30, r28
 	XCALL	__tablejump__
-.do_global_ctors_start:
+.L__do_global_ctors_start:
 	cpi	r28, lo8(__ctors_start)
 	cpc	r29, r17
-	brne	.do_global_ctors_loop
+	brne	.L__do_global_ctors_loop
+#endif /* defined(__AVR_HAVE_RAMPZ__) */
 #endif /* L_ctors */
 
 #ifdef L_dtors
 	.section .fini6,"ax",@progbits
 	.global	__do_global_dtors
+#if defined(__AVR_HAVE_RAMPZ__)
 __do_global_dtors:
 	ldi	r17, hi8(__dtors_end)
 	ldi	r28, lo8(__dtors_start)
 	ldi	r29, hi8(__dtors_start)
-	rjmp	.do_global_dtors_start
-.do_global_dtors_loop:
+	ldi	r16, hh8(__dtors_start)
+	rjmp	.L__do_global_dtors_start
+.L__do_global_dtors_loop:
+	sbiw	r28, 2
+	sbc     r16, __zero_reg__
+	mov_h	r31, r29
+	mov_l	r30, r28
+	out     __RAMPZ__, r16
+	XCALL	__tablejump_elpm__
+.L__do_global_dtors_start:
+	cpi	r28, lo8(__dtors_end)
+	cpc	r29, r17
+	ldi	r24, hh8(__dtors_end)
+	cpc	r16, r24
+	brne	.L__do_global_dtors_loop
+#else
+__do_global_dtors:
+	ldi	r17, hi8(__dtors_end)
+	ldi	r28, lo8(__dtors_start)
+	ldi	r29, hi8(__dtors_start)
+	rjmp	.L__do_global_dtors_start
+.L__do_global_dtors_loop:
 	mov_h	r31, r29
 	mov_l	r30, r28
 	XCALL	__tablejump__
 	adiw	r28, 2
-.do_global_dtors_start:
+.L__do_global_dtors_start:
 	cpi	r28, lo8(__dtors_end)
 	cpc	r29, r17
-	brne	.do_global_dtors_loop
+	brne	.L__do_global_dtors_loop
+#endif /* defined(__AVR_HAVE_RAMPZ__) */
 #endif /* L_dtors */
+
+#ifdef L_tablejump_elpm
+	.global __tablejump_elpm__
+	.func	__tablejump_elpm__
+__tablejump_elpm__:
+#if defined (__AVR_HAVE_ELPM__)
+#if defined (__AVR_HAVE_LPMX__)
+	elpm	__tmp_reg__, Z+
+	elpm	r31, Z
+	mov	r30, __tmp_reg__
+#if defined (__AVR_HAVE_EIJMP_EICALL__)
+	eijmp
+#else
+	ijmp
+#endif
+
+#else
+	elpm
+	adiw	r30, 1
+	push	r0
+	elpm
+	push	r0
+#if defined (__AVR_HAVE_EIJMP_EICALL__)
+	in      __tmp_reg__, __EIND__
+	push    __tmp_reg__
+#endif
+	ret
+#endif
+#endif /* defined (__AVR_HAVE_ELPM__) */
+	.endfunc
+#endif /* defined (L_tablejump_elpm) */
 

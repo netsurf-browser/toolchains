@@ -6,18 +6,17 @@
 --                                                                          --
 --                                 B o d y                                  --
 --                                                                          --
---          Copyright (C) 1997-2002 Free Software Foundation, Inc.          --
+--          Copyright (C) 1997-2010, Free Software Foundation, Inc.         --
 --                                                                          --
 -- GNAT is free software;  you can  redistribute it  and/or modify it under --
 -- terms of the  GNU General Public License as published  by the Free Soft- --
--- ware  Foundation;  either version 2,  or (at your option) any later ver- --
+-- ware  Foundation;  either version 3,  or (at your option) any later ver- --
 -- sion.  GNAT is distributed in the hope that it will be useful, but WITH- --
 -- OUT ANY WARRANTY;  without even the  implied warranty of MERCHANTABILITY --
 -- or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU General Public License --
 -- for  more details.  You should have  received  a copy of the GNU General --
--- Public License  distributed with GNAT;  see file COPYING.  If not, write --
--- to  the Free Software Foundation,  59 Temple Place - Suite 330,  Boston, --
--- MA 02111-1307, USA.                                                      --
+-- Public License  distributed with GNAT; see file COPYING3.  If not, go to --
+-- http://www.gnu.org/licenses for a complete copy of the license.          --
 --                                                                          --
 -- GNAT was originally developed  by the GNAT team at  New York University. --
 -- Extensive contributions were provided by Ada Core Technologies Inc.      --
@@ -33,11 +32,14 @@ with Sem_Res;  use Sem_Res;
 with Sinfo;    use Sinfo;
 with Stand;    use Stand;
 with Tbuild;   use Tbuild;
-with Ttypef;   use Ttypef;
 with Uintp;    use Uintp;
 with Urealp;   use Urealp;
 
 package body Exp_VFpt is
+
+   VAXFF_Digits : constant := 6;
+   VAXDF_Digits : constant := 9;
+   VAXGF_Digits : constant := 15;
 
    ----------------------
    -- Expand_Vax_Arith --
@@ -196,6 +198,13 @@ package body Exp_VFpt is
                Func := RE_Lt_G;
             end if;
 
+         when N_Op_Ne =>
+            if Typc = 'F' then
+               Func := RE_Ne_F;
+            else
+               Func := RE_Ne_G;
+            end if;
+
          when others =>
             Func := RE_Null;
             raise Program_Error;
@@ -236,7 +245,7 @@ package body Exp_VFpt is
       Func  : RE_Id;
 
       function Call_Type (T : Entity_Id; Otyp : Entity_Id) return RE_Id;
-      --  Given one of the two types T, determines the coresponding call
+      --  Given one of the two types T, determines the corresponding call
       --  type, i.e. the type to be used for the call (or the result of
       --  the call). The actual operand is converted to (or from) this type.
       --  Otyp is the other type, which is useful in figuring out the result.
@@ -295,14 +304,16 @@ package body Exp_VFpt is
          end if;
       end Call_Type;
 
+      -------------------------------------------------
+      -- Expand_Multiply_Fixed_By_Fixed_Giving_Fixed --
+      -------------------------------------------------
+
       function Equivalent_Integer_Type (T : Entity_Id) return Entity_Id is
       begin
          if Esize (T) = Esize (Standard_Long_Long_Integer) then
             return Standard_Long_Long_Integer;
-
          elsif Esize (T) = Esize (Standard_Long_Integer) then
             return  Standard_Long_Integer;
-
          else
             return Standard_Integer;
          end if;
@@ -320,40 +331,64 @@ package body Exp_VFpt is
          Rewrite (N,
            Unchecked_Convert_To (T_Typ, Expr));
 
+      --  Case of conversion of fixed-point type to Vax_Float type
+
       elsif Is_Fixed_Point_Type (S_Typ) then
 
-         --  convert the scaled integer value to the target type, and multiply
-         --  by 'Small of type.
+         --  If Conversion_OK set, then we introduce an intermediate IEEE
+         --  target type since we are expecting the code generator to handle
+         --  the case of integer to IEEE float.
 
-         Rewrite (N,
-            Make_Op_Multiply (Loc,
-              Left_Opnd =>
-                Make_Type_Conversion (Loc,
-                  Subtype_Mark => New_Occurrence_Of (T_Typ, Loc),
-                  Expression   =>
-                    Unchecked_Convert_To (
-                      Equivalent_Integer_Type (S_Typ), Expr)),
-              Right_Opnd =>
-                Make_Real_Literal (Loc, Realval => Small_Value (S_Typ))));
+         if Conversion_OK (N) then
+            Rewrite (N,
+              Convert_To (T_Typ, OK_Convert_To (Universal_Real, Expr)));
+
+         --  Otherwise, convert the scaled integer value to the target type,
+         --  and multiply by 'Small of type.
+
+         else
+            Rewrite (N,
+               Make_Op_Multiply (Loc,
+                 Left_Opnd =>
+                   Make_Type_Conversion (Loc,
+                     Subtype_Mark => New_Occurrence_Of (T_Typ, Loc),
+                     Expression   =>
+                       Unchecked_Convert_To (
+                         Equivalent_Integer_Type (S_Typ), Expr)),
+                 Right_Opnd =>
+                   Make_Real_Literal (Loc, Realval => Small_Value (S_Typ))));
+         end if;
+
+      --  Case of conversion of Vax_Float type to fixed-point type
 
       elsif Is_Fixed_Point_Type (T_Typ) then
 
-         --  multiply value by 'small of type, and convert to the corresponding
-         --  integer type.
+         --  If Conversion_OK set, then we introduce an intermediate IEEE
+         --  target type, since we are expecting the code generator to handle
+         --  the case of IEEE float to integer.
 
-         Rewrite (N,
-           Unchecked_Convert_To (T_Typ,
-             Make_Type_Conversion (Loc,
-               Subtype_Mark =>
-                 New_Occurrence_Of (Equivalent_Integer_Type (T_Typ), Loc),
-               Expression =>
-                 Make_Op_Multiply (Loc,
-                   Left_Opnd => Expr,
-                   Right_Opnd =>
-                     Make_Real_Literal (Loc,
-                       Realval => Ureal_1 / Small_Value (T_Typ))))));
+         if Conversion_OK (N) then
+            Rewrite (N,
+              OK_Convert_To (T_Typ, Convert_To (Universal_Real, Expr)));
 
-      --  All other cases.
+         --  Otherwise, multiply value by 'small of type, and convert to the
+         --  corresponding integer type.
+
+         else
+            Rewrite (N,
+              Unchecked_Convert_To (T_Typ,
+                Make_Type_Conversion (Loc,
+                  Subtype_Mark =>
+                    New_Occurrence_Of (Equivalent_Integer_Type (T_Typ), Loc),
+                  Expression =>
+                    Make_Op_Multiply (Loc,
+                      Left_Opnd => Expr,
+                      Right_Opnd =>
+                        Make_Real_Literal (Loc,
+                          Realval => Ureal_1 / Small_Value (T_Typ))))));
+         end if;
+
+      --  All other cases
 
       else
          --  Compute types for call
@@ -410,6 +445,41 @@ package body Exp_VFpt is
 
       Analyze_And_Resolve (N, T_Typ, Suppress => All_Checks);
    end Expand_Vax_Conversion;
+
+   -------------------------------
+   -- Expand_Vax_Foreign_Return --
+   -------------------------------
+
+   procedure Expand_Vax_Foreign_Return (N : Node_Id) is
+      Loc  : constant Source_Ptr := Sloc (N);
+      Typ  : constant Entity_Id  := Base_Type (Etype (N));
+      Func : RE_Id;
+      Args : List_Id;
+      Atyp : Entity_Id;
+      Rtyp : constant Entity_Id  := Etype (N);
+
+   begin
+      if Digits_Value (Typ) = VAXFF_Digits then
+         Func := RE_Return_F;
+         Atyp := RTE (RE_F);
+      elsif Digits_Value (Typ) = VAXDF_Digits then
+         Func := RE_Return_D;
+         Atyp := RTE (RE_D);
+      else pragma Assert (Digits_Value (Typ) = VAXGF_Digits);
+         Func := RE_Return_G;
+         Atyp := RTE (RE_G);
+      end if;
+
+      Args := New_List (Convert_To (Atyp, N));
+
+      Rewrite (N,
+        Convert_To (Rtyp,
+          Make_Function_Call (Loc,
+            Name                   => New_Occurrence_Of (RTE (Func), Loc),
+            Parameter_Associations => Args)));
+
+      Analyze_And_Resolve (N, Typ, Suppress => All_Checks);
+   end Expand_Vax_Foreign_Return;
 
    -----------------------------
    -- Expand_Vax_Real_Literal --
@@ -498,5 +568,39 @@ package body Exp_VFpt is
          Set_Is_Static_Expression (N, Stat);
       end if;
    end Expand_Vax_Real_Literal;
+
+   ----------------------
+   -- Expand_Vax_Valid --
+   ----------------------
+
+   procedure Expand_Vax_Valid (N : Node_Id) is
+      Loc  : constant Source_Ptr := Sloc (N);
+      Pref : constant Node_Id    := Prefix (N);
+      Ptyp : constant Entity_Id  := Root_Type (Etype (Pref));
+      Rtyp : constant Entity_Id  := Etype (N);
+      Vtyp : RE_Id;
+      Func : RE_Id;
+
+   begin
+      if Digits_Value (Ptyp) = VAXFF_Digits then
+         Func := RE_Valid_F;
+         Vtyp := RE_F;
+      elsif Digits_Value (Ptyp) = VAXDF_Digits then
+         Func := RE_Valid_D;
+         Vtyp := RE_D;
+      else pragma Assert (Digits_Value (Ptyp) = VAXGF_Digits);
+         Func := RE_Valid_G;
+         Vtyp := RE_G;
+      end if;
+
+      Rewrite (N,
+        Convert_To (Rtyp,
+          Make_Function_Call (Loc,
+            Name                   => New_Occurrence_Of (RTE (Func), Loc),
+            Parameter_Associations => New_List (
+              Convert_To (RTE (Vtyp), Pref)))));
+
+      Analyze_And_Resolve (N);
+   end Expand_Vax_Valid;
 
 end Exp_VFpt;

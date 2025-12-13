@@ -1,10 +1,11 @@
-/* Copyright (C) 1989, 1997, 1998, 1999, 2000, 2002 Free Software Foundation, Inc.
+/* Copyright (C) 1989, 1997, 1998, 1999, 2000, 2002, 2004, 2009
+   Free Software Foundation, Inc.
 
 This file is part of GCC.
 
 GCC is free software; you can redistribute it and/or modify
 it under the terms of the GNU General Public License as published by
-the Free Software Foundation; either version 2, or (at your option)
+the Free Software Foundation; either version 3, or (at your option)
 any later version.
 
 GCC is distributed in the hope that it will be useful,
@@ -12,17 +13,14 @@ but WITHOUT ANY WARRANTY; without even the implied warranty of
 MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
 GNU General Public License for more details.
 
-You should have received a copy of the GNU General Public License
-along with GCC; see the file COPYING.  If not, write to
-the Free Software Foundation, 59 Temple Place - Suite 330,
-Boston, MA 02111-1307, USA.  */
+Under Section 7 of GPL version 3, you are granted additional
+permissions described in the GCC Runtime Library Exception, version
+3.1, as published by the Free Software Foundation.
 
-/* As a special exception, if you include this header file into source
-   files compiled by GCC, this header file does not by itself cause
-   the resulting executable to be covered by the GNU General Public
-   License.  This exception does not however invalidate any other
-   reasons why the executable file might be covered by the GNU General
-   Public License.  */
+You should have received a copy of the GNU General Public License and
+a copy of the GCC Runtime Library Exception along with this program;
+see the files COPYING3 and COPYING.RUNTIME respectively.  If not, see
+<http://www.gnu.org/licenses/>.  */
 
 /*
  * ISO C Standard:  7.17  Common definitions  <stddef.h>
@@ -63,8 +61,9 @@ Boston, MA 02111-1307, USA.  */
 
 /* In 4.3bsd-net2, machine/ansi.h defines these symbols, which are
    defined if the corresponding type is *not* defined.
-   FreeBSD-2.1 defines _MACHINE_ANSI_H_ instead of _ANSI_H_ */
-#if defined(_ANSI_H_) || defined(_MACHINE_ANSI_H_)
+   FreeBSD-2.1 defines _MACHINE_ANSI_H_ instead of _ANSI_H_.
+   NetBSD defines _I386_ANSI_H_ and _X86_64_ANSI_H_ instead of _ANSI_H_ */
+#if defined(_ANSI_H_) || defined(_MACHINE_ANSI_H_) || defined(_X86_64_ANSI_H_)  || defined(_I386_ANSI_H_)
 #if !defined(_SIZE_T_) && !defined(_BSD_SIZE_T_)
 #define _SIZE_T
 #endif
@@ -91,7 +90,7 @@ Boston, MA 02111-1307, USA.  */
 #undef _WCHAR_T_
 #undef _BSD_WCHAR_T_
 #endif
-#endif /* defined(_ANSI_H_) || defined(_MACHINE_ANSI_H_) */
+#endif /* defined(_ANSI_H_) || defined(_MACHINE_ANSI_H_) || defined(_X86_64_ANSI_H_) || defined(_I386_ANSI_H_) */
 
 /* Sequent's header files use _PTRDIFF_T_ in some conflicting way.
    Just ignore it.  */
@@ -295,7 +294,7 @@ typedef _BSD_RUNE_T_ rune_t;
 #define _BSD_WCHAR_T_DEFINED_
 #define _BSD_RUNE_T_DEFINED_	/* Darwin */
 #if defined (__FreeBSD__) && (__FreeBSD__ < 5)
-/* Why is this file so hard to maintain properly?  In constrast to
+/* Why is this file so hard to maintain properly?  In contrast to
    the comment above regarding BSD/386 1.1, on FreeBSD for as long
    as the symbol has existed, _BSD_RUNE_T_ must not stay defined or
    redundant typedefs will occur when stdlib.h is included after this file. */
@@ -359,7 +358,8 @@ typedef __WINT_TYPE__ wint_t;
 /*  In 4.3bsd-net2, leave these undefined to indicate that size_t, etc.
     are already defined.  */
 /*  BSD/OS 3.1 and FreeBSD [23].x require the MACHINE_ANSI_H check here.  */
-#if defined(_ANSI_H_) || defined(_MACHINE_ANSI_H_)
+/*  NetBSD 5 requires the I386_ANSI_H and X86_64_ANSI_H checks here.  */
+#if defined(_ANSI_H_) || defined(_MACHINE_ANSI_H_) || defined(_X86_64_ANSI_H_) || defined(_I386_ANSI_H_)
 /*  The references to _GCC_PTRDIFF_T_, _GCC_SIZE_T_, and _GCC_WCHAR_T_
     are probably typos and should be removed before 2.8 is released.  */
 #ifdef _GCC_PTRDIFF_T_
@@ -387,7 +387,7 @@ typedef __WINT_TYPE__ wint_t;
 #undef _WCHAR_T_
 #undef _BSD_WCHAR_T_
 #endif
-#endif /* _ANSI_H_ || _MACHINE_ANSI_H_ */
+#endif /* _ANSI_H_ || _MACHINE_ANSI_H_ || _X86_64_ANSI_H_ || _I386_ANSI_H_ */
 
 #endif /* __sys_stdtypes_h */
 
@@ -410,16 +410,8 @@ typedef __WINT_TYPE__ wint_t;
 #ifdef _STDDEF_H
 
 /* Offset of member MEMBER in a struct of type TYPE. */
-#ifndef __cplusplus
-#define offsetof(TYPE, MEMBER) ((size_t) &((TYPE *)0)->MEMBER)
-#else
-/* The cast to "char &" below avoids problems with user-defined
-   "operator &", which can appear in a POD type.  */
-#define offsetof(TYPE, MEMBER)					\
-  (__offsetof__ (reinterpret_cast <size_t>			\
-                 (&reinterpret_cast <const volatile char &>	\
-                  (static_cast<TYPE *> (0)->MEMBER))))
-#endif /* C++ */
+#define offsetof(TYPE, MEMBER) __builtin_offsetof (TYPE, MEMBER)
+
 #endif /* _STDDEF_H was defined this time */
 
 #endif /* !_STDDEF_H && !_STDDEF_H_ && !_ANSI_STDDEF_H && !__STDDEF_H__

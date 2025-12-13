@@ -1,12 +1,12 @@
 // PR c++/13659
 
+// { dg-options "" }
 // { dg-do compile }
 
-namespace foo {
-  template <class T> void f(T, T);
-}
 namespace bar {
-  using namespace foo __attribute__((strong));
+  inline namespace foo {
+    template <class T> void f(T, T);
+  }
   template <class T> void f(T);
 }
 

@@ -1,11 +1,12 @@
 // strstream definitions -*- C++ -*-
 
-// Copyright (C) 2001, 2002, 2003 Free Software Foundation
+// Copyright (C) 2001, 2002, 2003, 2005, 2009, 2010, 2011
+// Free Software Foundation
 //
 // This file is part of the GNU ISO C++ Library.  This library is free
 // software; you can redistribute it and/or modify it under the
 // terms of the GNU General Public License as published by the
-// Free Software Foundation; either version 2, or (at your option)
+// Free Software Foundation; either version 3, or (at your option)
 // any later version.
 
 // This library is distributed in the hope that it will be useful,
@@ -13,19 +14,14 @@
 // MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
 // GNU General Public License for more details.
 
-// You should have received a copy of the GNU General Public License along
-// with this library; see the file COPYING.  If not, write to the Free
-// Software Foundation, 59 Temple Place - Suite 330, Boston, MA 02111-1307,
-// USA.
+// Under Section 7 of GPL version 3, you are granted additional
+// permissions described in the GCC Runtime Library Exception, version
+// 3.1, as published by the Free Software Foundation.
 
-// As a special exception, you may use this file as part of a free software
-// library without restriction.  Specifically, if other files instantiate
-// templates or use macros or inline functions from this file, or you compile
-// this file and link it with other files to produce an executable, this
-// file does not by itself cause the resulting executable to be covered by
-// the GNU General Public License.  This exception does not however
-// invalidate any other reasons why the executable file might be covered by
-// the GNU General Public License.
+// You should have received a copy of the GNU General Public License and
+// a copy of the GCC Runtime Library Exception along with this program;
+// see the files COPYING3 and COPYING.RUNTIME respectively.  If not, see
+// <http://www.gnu.org/licenses/>.
 
 /*
  * Copyright (c) 1998
@@ -53,8 +49,10 @@
 #include <string.h>
 #include <limits.h>
 
-namespace std
+namespace std _GLIBCXX_VISIBILITY(default)
 {
+_GLIBCXX_BEGIN_NAMESPACE_VERSION
+
   strstreambuf::strstreambuf(streamsize initial_capacity)
   : _Base(), _M_alloc_fun(0), _M_free_fun(0), _M_dynamic(true), 
     _M_frozen(false), _M_constant(false)
@@ -83,33 +81,33 @@ namespace std
       }
   }
 
-  strstreambuf::strstreambuf(char* get, streamsize n, char* put)
+  strstreambuf::strstreambuf(char* get, streamsize n, char* put) throw ()
   : _Base(), _M_alloc_fun(0), _M_free_fun(0), _M_dynamic(false), 
     _M_frozen(false), _M_constant(false)
   { _M_setup(get, put, n); }
 
-  strstreambuf::strstreambuf(signed char* get, streamsize n, signed char* put)
+  strstreambuf::strstreambuf(signed char* get, streamsize n, signed char* put) throw ()
   : _Base(), _M_alloc_fun(0), _M_free_fun(0), _M_dynamic(false), 
   _M_frozen(false), _M_constant(false)
   { _M_setup(reinterpret_cast<char*>(get), reinterpret_cast<char*>(put), n); }
 
   strstreambuf::strstreambuf(unsigned char* get, streamsize n, 
-			     unsigned char* put)
+			     unsigned char* put) throw ()
   : _Base(), _M_alloc_fun(0), _M_free_fun(0), _M_dynamic(false), 
     _M_frozen(false), _M_constant(false)
   { _M_setup(reinterpret_cast<char*>(get), reinterpret_cast<char*>(put), n); }
 
-  strstreambuf::strstreambuf(const char* get, streamsize n)
+  strstreambuf::strstreambuf(const char* get, streamsize n) throw ()
   : _Base(), _M_alloc_fun(0), _M_free_fun(0), _M_dynamic(false), 
     _M_frozen(false), _M_constant(true)
   { _M_setup(const_cast<char*>(get), 0, n); }
 
-  strstreambuf::strstreambuf(const signed char* get, streamsize n)
+  strstreambuf::strstreambuf(const signed char* get, streamsize n) throw ()
   : _Base(), _M_alloc_fun(0), _M_free_fun(0), _M_dynamic(false), 
     _M_frozen(false), _M_constant(true)
   { _M_setup(reinterpret_cast<char*>(const_cast<signed char*>(get)), 0, n); }
 
-  strstreambuf::strstreambuf(const unsigned char* get, streamsize n)
+  strstreambuf::strstreambuf(const unsigned char* get, streamsize n) throw ()
   : _Base(), _M_alloc_fun(0), _M_free_fun(0), _M_dynamic(false), 
     _M_frozen(false), _M_constant(true)
   { _M_setup(reinterpret_cast<char*>(const_cast<unsigned char*>(get)), 0, n); }
@@ -121,21 +119,21 @@ namespace std
   }
 
   void 
-  strstreambuf::freeze(bool frozenflag)
+  strstreambuf::freeze(bool frozenflag) throw ()
   {
     if (_M_dynamic)
       _M_frozen = frozenflag;
   }
 
   char* 
-  strstreambuf::str()
+  strstreambuf::str() throw ()
   {
     freeze(true);
     return eback();
   }
 
   int 
-  strstreambuf::pcount() const
+  strstreambuf::pcount() const throw ()
   { return pptr() ? pptr() - pbase() : 0; }
 
   strstreambuf::int_type 
@@ -164,7 +162,7 @@ namespace std
 	      }
 	    
 	    setp(buf, buf + new_size);
-	    pbump(old_size);
+	    __safe_pbump(old_size);
 
 	    if (reposition_get)
 	      setg(buf, buf + old_get_offset, buf + 
@@ -274,12 +272,12 @@ namespace std
 	if (seeklow + off < pbase()) 
 	  {
 	    setp(seeklow, epptr());
-	    pbump(off);
+	    __safe_pbump(off);
 	  }
 	else 
 	  {
 	    setp(pbase(), epptr());
-	    pbump(off - (pbase() - seeklow));
+	    __safe_pbump(off - (pbase() - seeklow));
 	  }
       }
     if (do_get) 
@@ -311,14 +309,16 @@ namespace std
   strstreambuf::_M_free(char* p)
   {
     if (p)
-      if (_M_free_fun)
-	_M_free_fun(p);
-      else
-	delete[] p;
+      {
+	if (_M_free_fun)
+	  _M_free_fun(p);
+	else
+	  delete[] p;
+      }
   }
 
   void 
-  strstreambuf::_M_setup(char* get, char* put, streamsize n)
+  strstreambuf::_M_setup(char* get, char* put, streamsize n) throw ()
   {
     if (get) 
       {
@@ -353,11 +353,11 @@ namespace std
   istrstream::~istrstream() { }
 
   strstreambuf* 
-  istrstream::rdbuf() const 
+  istrstream::rdbuf() const throw ()
   { return const_cast<strstreambuf*>(&_M_buf); }
 
   char* 
-  istrstream::str() 
+  istrstream::str() throw ()
   { return _M_buf.str(); }
 
   ostrstream::ostrstream()
@@ -372,19 +372,19 @@ namespace std
   ostrstream::~ostrstream() {}
 
   strstreambuf* 
-  ostrstream::rdbuf() const
+  ostrstream::rdbuf() const throw ()
   { return const_cast<strstreambuf*>(&_M_buf); }
 
   void 
-  ostrstream::freeze(bool freezeflag)
+  ostrstream::freeze(bool freezeflag) throw ()
   { _M_buf.freeze(freezeflag); }
 
   char* 
-  ostrstream::str()
+  ostrstream::str() throw ()
   { return _M_buf.str(); }
 
   int 
-  ostrstream::pcount() const
+  ostrstream::pcount() const throw ()
   { return _M_buf.pcount(); }
 
   strstream::strstream()
@@ -399,18 +399,20 @@ namespace std
   strstream::~strstream() { }
 
   strstreambuf* 
-  strstream::rdbuf() const
+  strstream::rdbuf() const throw ()
   { return const_cast<strstreambuf*>(&_M_buf); }
 
   void 
-  strstream::freeze(bool freezeflag)
+  strstream::freeze(bool freezeflag) throw ()
   { _M_buf.freeze(freezeflag); }
 
   int 
-  strstream::pcount() const
+  strstream::pcount() const throw ()
   { return _M_buf.pcount(); }
 
   char* 
-  strstream::str()
+  strstream::str() throw ()
   { return _M_buf.str(); }
-} // namespace std
+
+_GLIBCXX_END_NAMESPACE_VERSION
+} // namespace

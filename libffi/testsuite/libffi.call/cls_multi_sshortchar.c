@@ -4,7 +4,7 @@
    PR:		PR13221.
    Originator:	<andreast@gcc.gnu.org> 20031129  */
 
-/* { dg-do run { xfail mips*-*-* arm*-*-* strongarm*-*-* xscale*-*-* } } */
+/* { dg-do run } */
 #include "ffitest.h"
 
 signed short test_func_fn(signed char a1, signed short a2,
@@ -20,7 +20,8 @@ signed short test_func_fn(signed char a1, signed short a2,
 
 }
 
-static void test_func_gn(ffi_cif *cif, void *rval, void **avals, void *data)
+static void test_func_gn(ffi_cif *cif __UNUSED__, void *rval, void **avals,
+			 void *data __UNUSED__)
 {
   signed char a1, a3;
   signed short a2, a4;
@@ -40,21 +41,13 @@ typedef signed short (*test_type)(signed char, signed short,
 int main (void)
 {
   ffi_cif cif;
-#ifndef USING_MMAP
-  static ffi_closure cl;
-#endif
-  ffi_closure *pcl;
+  void *code;
+  ffi_closure *pcl = ffi_closure_alloc(sizeof(ffi_closure), &code);
   void * args_dbl[5];
   ffi_type * cl_arg_types[5];
   ffi_arg res_call;
   signed char a, c;
   signed short b, d, res_closure;
-
-#ifdef USING_MMAP
-  pcl = allocate_mmap (sizeof(ffi_closure));
-#else
-  pcl = &cl;
-#endif
 
   a = 1;
   b = 32765;
@@ -79,12 +72,12 @@ int main (void)
 
   ffi_call(&cif, FFI_FN(test_func_fn), &res_call, args_dbl);
   /* { dg-output "1 32765 127 -128: 32765" } */
-  printf("res: %d\n", res_call);
+  printf("res: %d\n", (signed short)res_call);
   /* { dg-output "\nres: 32765" } */
 
-  CHECK(ffi_prep_closure(pcl, &cif, test_func_gn, NULL)  == FFI_OK);
+  CHECK(ffi_prep_closure_loc(pcl, &cif, test_func_gn, NULL, code)  == FFI_OK);
 
-  res_closure = (*((test_type)pcl))(1, 32765, 127, -128);
+  res_closure = (*((test_type)code))(1, 32765, 127, -128);
   /* { dg-output "\n1 32765 127 -128: 32765" } */
   printf("res: %d\n", res_closure);
   /* { dg-output "\nres: 32765" } */

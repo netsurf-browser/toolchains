@@ -2,34 +2,36 @@
 --                                                                          --
 --                         GNAT COMPILER COMPONENTS                         --
 --                                                                          --
---                             S I N P U T . P                              --
+--                             S I N P U T . C                              --
 --                                                                          --
 --                                 B o d y                                  --
 --                                                                          --
---          Copyright (C) 1992-2003 Free Software Foundation, Inc.          --
+--          Copyright (C) 1992-2010, Free Software Foundation, Inc.         --
 --                                                                          --
 -- GNAT is free software;  you can  redistribute it  and/or modify it under --
 -- terms of the  GNU General Public License as published  by the Free Soft- --
--- ware  Foundation;  either version 2,  or (at your option) any later ver- --
+-- ware  Foundation;  either version 3,  or (at your option) any later ver- --
 -- sion.  GNAT is distributed in the hope that it will be useful, but WITH- --
 -- OUT ANY WARRANTY;  without even the  implied warranty of MERCHANTABILITY --
 -- or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU General Public License --
 -- for  more details.  You should have  received  a copy of the GNU General --
--- Public License  distributed with GNAT;  see file COPYING.  If not, write --
--- to  the Free Software Foundation,  59 Temple Place - Suite 330,  Boston, --
--- MA 02111-1307, USA.                                                      --
+-- Public License  distributed with GNAT; see file COPYING3.  If not, go to --
+-- http://www.gnu.org/licenses for a complete copy of the license.          --
 --                                                                          --
 -- GNAT was originally developed  by the GNAT team at  New York University. --
 -- Extensive contributions were provided by Ada Core Technologies Inc.      --
 --                                                                          --
 ------------------------------------------------------------------------------
 
+with Opt;    use Opt;
+with System; use System;
+
 with Ada.Unchecked_Conversion;
 
-with GNAT.OS_Lib; use GNAT.OS_Lib;
-with Namet;       use Namet;
-with Opt;         use Opt;
-with System;      use System;
+pragma Warnings (Off);
+--  This package is used also by gnatcoll
+with System.OS_Lib; use System.OS_Lib;
+pragma Warnings (On);
 
 package body Sinput.C is
 
@@ -52,8 +54,8 @@ package body Sinput.C is
 
       Actual_Len : Integer;
 
-      Path_Id : Name_Id;
-      File_Id : Name_Id;
+      Path_Id : File_Name_Type;
+      File_Id : File_Name_Type;
 
    begin
       if Path = "" then
@@ -103,7 +105,7 @@ package body Sinput.C is
          type Actual_Source_Ptr is access Actual_Source_Buffer;
          --  This is the pointer type for the physical buffer allocated
 
-         Actual_Ptr : Actual_Source_Ptr := new Actual_Source_Buffer;
+         Actual_Ptr : constant Actual_Source_Ptr := new Actual_Source_Buffer;
          --  And this is the actual physical buffer
 
       begin
@@ -117,7 +119,7 @@ package body Sinput.C is
          loop
             Actual_Len := Read (Source_File_FD, Actual_Ptr (Hi)'Address, Len);
             Hi := Hi + Source_Ptr (Actual_Len);
-            exit when Actual_Len = Len or Actual_Len <= 0;
+            exit when Actual_Len = Len or else Actual_Len <= 0;
          end loop;
 
          Actual_Ptr (Hi) := EOF;
@@ -129,8 +131,14 @@ package body Sinput.C is
          declare
             pragma Suppress (All_Checks);
 
+            pragma Warnings (Off);
+            --  The following unchecked conversion is aliased safe, since it
+            --  is not used to create improperly aliased pointer values.
+
             function To_Source_Buffer_Ptr is new
               Ada.Unchecked_Conversion (Address, Source_Buffer_Ptr);
+
+            pragma Warnings (On);
 
          begin
             Src := To_Source_Buffer_Ptr (Actual_Ptr (0)'Address);
@@ -187,6 +195,7 @@ package body Sinput.C is
                Source_Last         => Hi,
                Source_Text         => Src,
                Template            => No_Source_File,
+               Unit                => No_Unit,
                Time_Stamp          => Empty_Time_Stamp);
 
          Alloc_Line_Tables (S, Opt.Table_Factor * Alloc.Lines_Initial);

@@ -3,14 +3,15 @@
    in the form of comments (the mips assembler does not support
    assembly access to debug information).
    Copyright (C) 1991, 1993, 1994, 1995, 1997, 1998, 1999, 2000, 2001,
-   2002, 2003, 2004, 2006 Free Software Foundation, Inc.
+   2002, 2003, 2004, 2005, 2006, 2007, 2008, 2009, 2010, 2011
+   Free Software Foundation, Inc.
    Contributed by Michael Meissner (meissner@cygnus.com).
 
 This file is part of GCC.
 
 GCC is free software; you can redistribute it and/or modify it under
 the terms of the GNU General Public License as published by the Free
-Software Foundation; either version 2, or (at your option) any later
+Software Foundation; either version 3, or (at your option) any later
 version.
 
 GCC is distributed in the hope that it will be useful, but WITHOUT ANY
@@ -19,9 +20,8 @@ FITNESS FOR A PARTICULAR PURPOSE.  See the GNU General Public License
 for more details.
 
 You should have received a copy of the GNU General Public License
-along with GCC; see the file COPYING.  If not, write to the Free
-Software Foundation, 59 Temple Place - Suite 330, Boston, MA
-02111-1307, USA.  */
+along with GCC; see the file COPYING3.  If not see
+<http://www.gnu.org/licenses/>.  */
 
 
 /* Here is a brief description of the MIPS ECOFF symbol table.  The
@@ -57,7 +57,7 @@ Software Foundation, 59 Temple Place - Suite 330, Boston, MA
 
    The auxiliary table is a series of 32 bit integers, that are
    referenced as needed from the local symbol table.  Unlike standard
-   COFF, the aux.  information does not follow the symbol that uses
+   COFF, the aux. information does not follow the symbol that uses
    it, but rather is a separate table.  In theory, this would allow
    the MIPS compilers to collapse duplicate aux. entries, but I've not
    noticed this happening with the 1.31 compiler suite.  The different
@@ -637,7 +637,6 @@ Software Foundation, 59 Temple Place - Suite 330, Boston, MA
    so they can't be static.  */
 
 extern void pfatal_with_name (const char *) ATTRIBUTE_NORETURN;
-extern void fancy_abort (void) ATTRIBUTE_NORETURN;
 extern void botch (const char *) ATTRIBUTE_NORETURN;
 
 extern void fatal (const char *format, ...) ATTRIBUTE_PRINTF_1 ATTRIBUTE_NORETURN;
@@ -666,17 +665,13 @@ main (void)
 
 #undef index
 
-#include <signal.h>
-
-#ifndef CROSS_COMPILE
+#ifndef CROSS_DIRECTORY_STRUCTURE
 #include <a.out.h>
 #else
 #include "mips/a.out.h"
-#endif /* CROSS_COMPILE */
+#endif /* CROSS_DIRECTORY_STRUCTURE */
 
 #include "gstab.h"
-
-#define STAB_CODE_TYPE enum __stab_debug_code
 
 #ifndef MALLOC_CHECK
 #ifdef	__SABER__
@@ -738,7 +733,7 @@ typedef enum st {
   st_StaticProc	= stStaticProc,	/* load time only static procs */
   st_Constant	= stConstant,	/* const */
   st_Str	= stStr,	/* string */
-  st_Number	= stNumber,	/* pure number (ie. 4 NOR 2+2) */
+  st_Number	= stNumber,	/* pure number (i.e. 4 NOR 2+2) */
   st_Expr	= stExpr,	/* 2+2 vs. 4 */
   st_Type	= stType,	/* post-coercion SER */
   st_Max	= stMax		/* max type+1 */
@@ -1747,7 +1742,7 @@ add_string (varray_t *vp, shash_t **hash_tbl, const char *start,
 
 
 /* Add a local symbol.  The symbol string starts at STR_START and the
-   first byte after it is makred by STR_END_P1.  The symbol has type
+   first byte after it is marked by STR_END_P1.  The symbol has type
    TYPE and storage class STORAGE and value VALUE.  INDX is an index
    to local/aux. symbols.  */
 
@@ -1940,8 +1935,8 @@ add_ext_symbol (EXTR *esym, int ifd)
   if (debug > 1)
     {
       long value = esym->asym.value;
-      const char *sc_str = sc_to_string (esym->asym.sc);
-      const char *st_str = st_to_string (esym->asym.st);
+      const char *sc_str = sc_to_string ((sc_t) esym->asym.sc);
+      const char *st_str = st_to_string ((st_t) esym->asym.st);
 
       fprintf (stderr,
 	       "\tesym\tv= %10ld, ifd= %2d, sc= %-12s",
@@ -2353,15 +2348,28 @@ add_procedure (const char *func_start,  /* 1st byte of func name */
 STATIC void
 initialize_init_file (void)
 {
+  union {
+    unsigned char c[4];
+    int i;
+  } endian_test;
+
   memset (&init_file, 0, sizeof (init_file));
 
   init_file.fdr.lang = langC;
   init_file.fdr.fMerge = 1;
   init_file.fdr.glevel = GLEVEL_2;
 
-#ifdef HOST_WORDS_BIG_ENDIAN
-  init_file.fdr.fBigendian = 1;
-#endif
+  /* mips-tfile doesn't attempt to perform byte swapping and always writes
+     out integers in its native ordering.  For cross-compilers, this need
+     not be the same as either the host or the target.  The simplest thing
+     to do is skip the configury and perform an introspective test.  */
+  /* ??? Despite the name, mips-tfile is currently only used on alpha/Tru64
+     and would/may require significant work to be used in cross-compiler
+     configurations, so we could simply admit defeat and hard code this as
+     little-endian, i.e. init_file.fdr.fBigendian = 0.  */
+  endian_test.i = 1;
+  if (endian_test.c[3])
+    init_file.fdr.fBigendian = 1;
 
   INITIALIZE_VARRAY (&init_file.strings, char);
   INITIALIZE_VARRAY (&init_file.symbols, SYMR);
@@ -2844,7 +2852,8 @@ parse_def (const char *name_start)
 	{
 	  int ch2;
 	  arg_number = strtol (arg_start, (char **) &arg_end_p1, 0);
-	  if (arg_end_p1 != arg_start || ((ch2 = *arg_end_p1) != ';') || ch2 != ',')
+	  /* It's only a number if followed by ';' or ','. */
+	  if (arg_end_p1 != arg_start && (((ch2 = *arg_end_p1) == ';') || ch2 == ','))
 	    arg_was_number++;
 	}
 
@@ -2900,7 +2909,7 @@ parse_def (const char *name_start)
 		    {
 		      int ch2;
 		      arg_number = strtol (arg_start, (char **) &arg_end_p1, 0);
-		      if (arg_end_p1 != arg_start || ((ch2 = *arg_end_p1) != ';') || ch2 != ',')
+		      if (arg_end_p1 != arg_start && (((ch2 = *arg_end_p1) == ';') || ch2 == ','))
 			arg_was_number++;
 
 		      if (t_ptr == &temp_array[0])
@@ -2974,7 +2983,7 @@ parse_def (const char *name_start)
 		    {
 		      int ch2;
 		      arg_number = strtol (arg_start, (char **) &arg_end_p1, 0);
-		      if (arg_end_p1 != arg_start || ((ch2 = *arg_end_p1) != ';') || ch2 != ',')
+		      if (arg_end_p1 != arg_start && (((ch2 = *arg_end_p1) == ';') || ch2 == ','))
 			arg_was_number++;
 
 		      if (t_ptr == &temp_array[0])
@@ -3462,7 +3471,8 @@ mark_stabs (const char *start ATTRIBUTE_UNUSED)
       stabs_seen = 1;
       (void) add_local_symbol (stabs_symbol,
 			       stabs_symbol + sizeof (stabs_symbol),
-			       stNil, scInfo, -1, MIPS_MARK_STAB (0));
+			       (st_t) stNil, (sc_t) scInfo, -1,
+			       MIPS_MARK_STAB (0));
 
     }
 }
@@ -3655,8 +3665,8 @@ parse_stabs_common (const char *string_start,	/* start of string or NULL */
 	  /* Traditionally, N_LBRAC and N_RBRAC are *not* relocated.  */
 	  if (code == (int) N_LBRAC || code == (int) N_RBRAC)
 	    {
-	      sc = scNil;
-	      st = stNil;
+	      sc = (sc_t) scNil;
+	      st = (st_t) stNil;
 	    }
 	  else
 	    {
@@ -3982,7 +3992,7 @@ write_varray (varray_t *vp,    /* virtual array */
 
   if (debug)
     fprintf (stderr, "\twarray\tvp = " HOST_PTR_PRINTF
-	     ", offset = %7lu, size = %7lu, %s\n",
+	    ", offset = %7lu, size = %7lu, %s\n",
 	     (void *) vp, (unsigned long) offset,
 	     vp->num_allocated * vp->object_size, str);
 
@@ -4022,7 +4032,7 @@ write_object (void)
 
   if (debug)
     fprintf (stderr, "\n\twrite\tvp = " HOST_PTR_PRINTF
-	     ", offset = %7u, size = %7lu, %s\n",
+	    ", offset = %7u, size = %7lu, %s\n",
 	     (void *) &symbolic_header, 0,
 	     (unsigned long) sizeof (symbolic_header), "symbolic header");
 
@@ -4053,7 +4063,7 @@ write_object (void)
 
       if (debug)
 	fprintf (stderr, "\twrite\tvp = " HOST_PTR_PRINTF
-		 ", offset = %7lu, size = %7lu, %s\n",
+		", offset = %7lu, size = %7lu, %s\n",
 		 (void *) &orig_linenum, (long) symbolic_header.cbLineOffset,
 		 (long) symbolic_header.cbLine, "Line numbers");
 
@@ -4085,7 +4095,7 @@ write_object (void)
 
       if (debug)
 	fprintf (stderr, "\twrite\tvp = " HOST_PTR_PRINTF
-		 ", offset = %7lu, size = %7lu, %s\n",
+		", offset = %7lu, size = %7lu, %s\n",
 		 (void *) &orig_opt_syms, (long) symbolic_header.cbOptOffset,
 		 num_write, "Optimizer symbols");
 
@@ -4174,7 +4184,7 @@ write_object (void)
 	{
 	  if (debug)
 	    fprintf (stderr, "\twrite\tvp = " HOST_PTR_PRINTF
-		     ", offset = %7lu, size = %7lu, %s\n",
+		    ", offset = %7lu, size = %7lu, %s\n",
 		     (void *) &file_ptr->fdr, file_offset,
 		     (unsigned long) sizeof (FDR), "File header");
 
@@ -4207,7 +4217,7 @@ write_object (void)
 
       if (debug)
 	fprintf (stderr, "\twrite\tvp = " HOST_PTR_PRINTF
-		 ", offset = %7lu, size = %7lu, %s\n",
+		", offset = %7lu, size = %7lu, %s\n",
 		 (void *) &orig_rfds, (long) symbolic_header.cbRfdOffset,
 		 num_write, "Relative file descriptors");
 
@@ -4370,7 +4380,7 @@ copy_object (void)
 
 
   /* Read in each of the sections if they exist in the object file.
-     We read things in in the order the mips assembler creates the
+     We read things in the order the mips assembler creates the
      sections, so in theory no extra seeks are done.
 
      For simplicity sake, round each read up to a page boundary,
@@ -4439,7 +4449,7 @@ copy_object (void)
 
 
 
-  /* Abort if the symbol table is not last.  */
+  /* The symbol table should be last.  */
   if (max_file_offset != (unsigned long) stat_buf.st_size)
     fatal ("symbol table is not last (symbol table ends at %ld, .o ends at %ld",
 	   max_file_offset,
@@ -4464,7 +4474,7 @@ copy_object (void)
      (in case there are duplicate filenames, we collapse them into one
      file section, the MIPS assembler may or may not collapse them).  */
 
-  remap_file_number = alloca (sizeof (int) * orig_sym_hdr.ifdMax);
+  remap_file_number = (int *) alloca (sizeof (int) * orig_sym_hdr.ifdMax);
 
   for (fd = delete_ifd; fd < orig_sym_hdr.ifdMax; fd++)
     {
@@ -4773,8 +4783,8 @@ main (int argc, char **argv)
 
   if (version)
     {
-      printf (_("mips-tfile (GCC) %s\n"), version_string);
-      fputs ("Copyright (C) 2006 Free Software Foundation, Inc.\n", stdout);
+      printf (_("mips-tfile %s%s\n"), pkgversion_string, version_string);
+      fputs ("Copyright (C) 2011 Free Software Foundation, Inc.\n", stdout);
       fputs (_("This is free software; see the source for copying conditions.  There is NO\n\
 warranty; not even for MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.\n\n"),
 	     stdout);
@@ -4941,7 +4951,7 @@ pfatal_with_name (const char *msg)
 }
 
 
-/* Procedure to abort with an out of bounds error message.  It has
+/* Procedure to die with an out of bounds error message.  It has
    type int, so it can be used with an ?: expression within the
    ORIG_xxx macros, but the function never returns.  */
 
@@ -5471,13 +5481,12 @@ error (const char *format, ...)
   saber_stop ();
 }
 
-/* More 'friendly' abort that prints the line and file.
-   config.h can #define abort fancy_abort if you like that sort of thing.  */
+/* More 'friendly' abort that prints the line and file.  */
 
 void
-fancy_abort (void)
+fancy_abort (const char *file, int line, const char *func)
 {
-  fatal ("internal abort");
+  fatal ("abort in %s, at %s:%d", func, file, line);
 }
 
 

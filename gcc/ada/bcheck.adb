@@ -6,18 +6,17 @@
 --                                                                          --
 --                                 B o d y                                  --
 --                                                                          --
---          Copyright (C) 1992-2003 Free Software Foundation, Inc.          --
+--          Copyright (C) 1992-2010, Free Software Foundation, Inc.         --
 --                                                                          --
 -- GNAT is free software;  you can  redistribute it  and/or modify it under --
 -- terms of the  GNU General Public License as published  by the Free Soft- --
--- ware  Foundation;  either version 2,  or (at your option) any later ver- --
+-- ware  Foundation;  either version 3,  or (at your option) any later ver- --
 -- sion.  GNAT is distributed in the hope that it will be useful, but WITH- --
 -- OUT ANY WARRANTY;  without even the  implied warranty of MERCHANTABILITY --
 -- or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU General Public License --
 -- for  more details.  You should have  received  a copy of the GNU General --
--- Public License  distributed with GNAT;  see file COPYING.  If not, write --
--- to  the Free Software Foundation,  59 Temple Place - Suite 330,  Boston, --
--- MA 02111-1307, USA.                                                      --
+-- Public License  distributed with GNAT; see file COPYING3.  If not, go to --
+-- http://www.gnu.org/licenses for a complete copy of the license.          --
 --                                                                          --
 -- GNAT was originally developed  by the GNAT team at  New York University. --
 -- Extensive contributions were provided by Ada Core Technologies Inc.      --
@@ -44,24 +43,31 @@ package body Bcheck is
    -----------------------
 
    --  The following checking subprograms make up the parts of the
-   --  configuration consistency check.
+   --  configuration consistency check. See bodies for details of checks.
 
+   procedure Check_Consistent_Dispatching_Policy;
    procedure Check_Consistent_Dynamic_Elaboration_Checking;
    procedure Check_Consistent_Floating_Point_Format;
    procedure Check_Consistent_Interrupt_States;
    procedure Check_Consistent_Locking_Policy;
    procedure Check_Consistent_Normalize_Scalars;
-   procedure Check_Consistent_Partition_Restrictions;
+   procedure Check_Consistent_Optimize_Alignment;
    procedure Check_Consistent_Queuing_Policy;
+   procedure Check_Consistent_Restrictions;
+   procedure Check_Consistent_Restriction_No_Default_Initialization;
    procedure Check_Consistent_Zero_Cost_Exception_Handling;
 
    procedure Consistency_Error_Msg (Msg : String);
-   --  Produce an error or a warning message, depending on whether
-   --  an inconsistent configuration is permitted or not.
+   --  Produce an error or a warning message, depending on whether an
+   --  inconsistent configuration is permitted or not.
 
-   ------------------------------------
-   -- Check_Consistent_Configuration --
-   ------------------------------------
+   function Same_Unit (U1 : Unit_Name_Type; U2 : Name_Id) return Boolean;
+   --  Used to compare two unit names for No_Dependence checks. U1 is in
+   --  standard unit name format, and U2 is in literal form with periods.
+
+   -------------------------------------
+   -- Check_Configuration_Consistency --
+   -------------------------------------
 
    procedure Check_Configuration_Consistency is
    begin
@@ -82,11 +88,343 @@ package body Bcheck is
       end if;
 
       Check_Consistent_Normalize_Scalars;
+      Check_Consistent_Optimize_Alignment;
       Check_Consistent_Dynamic_Elaboration_Checking;
-
-      Check_Consistent_Partition_Restrictions;
+      Check_Consistent_Restrictions;
+      Check_Consistent_Restriction_No_Default_Initialization;
       Check_Consistent_Interrupt_States;
+      Check_Consistent_Dispatching_Policy;
    end Check_Configuration_Consistency;
+
+   -----------------------
+   -- Check_Consistency --
+   -----------------------
+
+   procedure Check_Consistency is
+      Src : Source_Id;
+      --  Source file Id for this Sdep entry
+
+      ALI_Path_Id : File_Name_Type;
+
+   begin
+      --  First, we go through the source table to see if there are any cases
+      --  in which we should go after source files and compute checksums of
+      --  the source files. We need to do this for any file for which we have
+      --  mismatching time stamps and (so far) matching checksums.
+
+      for S in Source.First .. Source.Last loop
+
+         --  If all time stamps for a file match, then there is nothing to
+         --  do, since we will not be checking checksums in that case anyway
+
+         if Source.Table (S).All_Timestamps_Match then
+            null;
+
+         --  If we did not find the source file, then we can't compute its
+         --  checksum anyway. Note that when we have a time stamp mismatch,
+         --  we try to find the source file unconditionally (i.e. if
+         --  Check_Source_Files is False).
+
+         elsif not Source.Table (S).Source_Found then
+            null;
+
+         --  If we already have non-matching or missing checksums, then no
+         --  need to try going after source file, since we won't trust the
+         --  checksums in any case.
+
+         elsif not Source.Table (S).All_Checksums_Match then
+            null;
+
+         --  Now we have the case where we have time stamp mismatches, and
+         --  the source file is around, but so far all checksums match. This
+         --  is the case where we need to compute the checksum from the source
+         --  file, since otherwise we would ignore the time stamp mismatches,
+         --  and that is wrong if the checksum of the source does not agree
+         --  with the checksums in the ALI files.
+
+         elsif Check_Source_Files then
+            if not Checksums_Match
+              (Source.Table (S).Checksum,
+               Get_File_Checksum (Source.Table (S).Sfile))
+            then
+               Source.Table (S).All_Checksums_Match := False;
+            end if;
+         end if;
+      end loop;
+
+      --  Loop through ALI files
+
+      ALIs_Loop : for A in ALIs.First .. ALIs.Last loop
+
+         --  Loop through Sdep entries in one ALI file
+
+         Sdep_Loop : for D in
+           ALIs.Table (A).First_Sdep .. ALIs.Table (A).Last_Sdep
+         loop
+            if Sdep.Table (D).Dummy_Entry then
+               goto Continue;
+            end if;
+
+            Src := Source_Id (Get_Name_Table_Info (Sdep.Table (D).Sfile));
+
+            --  If the time stamps match, or all checksums match, then we
+            --  are OK, otherwise we have a definite error.
+
+            if Sdep.Table (D).Stamp /= Source.Table (Src).Stamp
+              and then not Source.Table (Src).All_Checksums_Match
+            then
+               Error_Msg_File_1 := ALIs.Table (A).Sfile;
+               Error_Msg_File_2 := Sdep.Table (D).Sfile;
+
+               --  Two styles of message, depending on whether or not
+               --  the updated file is the one that must be recompiled
+
+               if Error_Msg_File_1 = Error_Msg_File_2 then
+                  if Tolerate_Consistency_Errors then
+                     Error_Msg
+                        ("?{ has been modified and should be recompiled");
+                  else
+                     Error_Msg
+                       ("{ has been modified and must be recompiled");
+                  end if;
+
+               else
+                  ALI_Path_Id :=
+                    Osint.Full_Lib_File_Name (ALIs.Table (A).Afile);
+
+                  if Osint.Is_Readonly_Library (ALI_Path_Id) then
+                     if Tolerate_Consistency_Errors then
+                        Error_Msg ("?{ should be recompiled");
+                        Error_Msg_File_1 := ALI_Path_Id;
+                        Error_Msg ("?({ is obsolete and read-only)");
+                     else
+                        Error_Msg ("{ must be compiled");
+                        Error_Msg_File_1 := ALI_Path_Id;
+                        Error_Msg ("({ is obsolete and read-only)");
+                     end if;
+
+                  elsif Tolerate_Consistency_Errors then
+                     Error_Msg
+                       ("?{ should be recompiled ({ has been modified)");
+
+                  else
+                     Error_Msg ("{ must be recompiled ({ has been modified)");
+                  end if;
+               end if;
+
+               if (not Tolerate_Consistency_Errors) and Verbose_Mode then
+                  Error_Msg_File_1 := Sdep.Table (D).Sfile;
+                  Error_Msg
+                    ("{ time stamp " & String (Source.Table (Src).Stamp));
+
+                  Error_Msg_File_1 := Sdep.Table (D).Sfile;
+                  --  Something wrong here, should be different file ???
+
+                  Error_Msg
+                    (" conflicts with { timestamp " &
+                     String (Sdep.Table (D).Stamp));
+               end if;
+
+               --  Exit from the loop through Sdep entries once we find one
+               --  that does not match.
+
+               exit Sdep_Loop;
+            end if;
+
+         <<Continue>>
+            null;
+         end loop Sdep_Loop;
+      end loop ALIs_Loop;
+   end Check_Consistency;
+
+   -----------------------------------------
+   -- Check_Consistent_Dispatching_Policy --
+   -----------------------------------------
+
+   --  The rule is that all files for which the dispatching policy is
+   --  significant must meet the following rules:
+
+   --    1. All files for which a task dispatching policy is significant must
+   --    be compiled with the same setting.
+
+   --    2. If a partition contains one or more Priority_Specific_Dispatching
+   --    pragmas it cannot contain a Task_Dispatching_Policy pragma.
+
+   --    3. No overlap is allowed in the priority ranges specified in
+   --    Priority_Specific_Dispatching pragmas within the same partition.
+
+   --    4. If a partition contains one or more Priority_Specific_Dispatching
+   --    pragmas then the Ceiling_Locking policy is the only one allowed for
+   --    the partition.
+
+   procedure Check_Consistent_Dispatching_Policy is
+      Max_Prio : Nat := 0;
+      --  Maximum priority value for which a Priority_Specific_Dispatching
+      --  pragma has been specified.
+
+      TDP_Pragma_Afile : ALI_Id := No_ALI_Id;
+      --  ALI file where a Task_Dispatching_Policy pragma appears
+
+   begin
+      --  Consistency checks in units specifying a Task_Dispatching_Policy
+
+      if Task_Dispatching_Policy_Specified /= ' ' then
+         Find_Policy : for A1 in ALIs.First .. ALIs.Last loop
+            if ALIs.Table (A1).Task_Dispatching_Policy /= ' ' then
+
+               --  Store the place where the first task dispatching pragma
+               --  appears. We may need this value for issuing consistency
+               --  errors if Priority_Specific_Dispatching pragmas are used.
+
+               TDP_Pragma_Afile := A1;
+
+               Check_Policy : declare
+                  Policy : constant Character :=
+                             ALIs.Table (A1).Task_Dispatching_Policy;
+
+               begin
+                  for A2 in A1 + 1 .. ALIs.Last loop
+                     if ALIs.Table (A2).Task_Dispatching_Policy /= ' '
+                          and then
+                        ALIs.Table (A2).Task_Dispatching_Policy /= Policy
+                     then
+                        Error_Msg_File_1 := ALIs.Table (A1).Sfile;
+                        Error_Msg_File_2 := ALIs.Table (A2).Sfile;
+
+                        Consistency_Error_Msg
+                          ("{ and { compiled with different task" &
+                           " dispatching policies");
+                        exit Find_Policy;
+                     end if;
+                  end loop;
+               end Check_Policy;
+
+               exit Find_Policy;
+            end if;
+         end loop Find_Policy;
+      end if;
+
+      --  If no Priority_Specific_Dispatching entries, nothing else to do
+
+      if Specific_Dispatching.Last >= Specific_Dispatching.First then
+
+         --  Find out the maximum priority value for which one of the
+         --  Priority_Specific_Dispatching pragmas applies.
+
+         Max_Prio := 0;
+         for J in Specific_Dispatching.First .. Specific_Dispatching.Last loop
+            if Specific_Dispatching.Table (J).Last_Priority > Max_Prio then
+               Max_Prio := Specific_Dispatching.Table (J).Last_Priority;
+            end if;
+         end loop;
+
+         --  Now establish tables to be used for consistency checking
+
+         declare
+            --  The following record type is used to record locations of the
+            --  Priority_Specific_Dispatching pragmas applying to the Priority.
+
+            type Specific_Dispatching_Entry is record
+               Dispatching_Policy : Character := ' ';
+               --  First character (upper case) of corresponding policy name
+
+               Afile : ALI_Id := No_ALI_Id;
+               --  ALI file that generated Priority Specific Dispatching
+               --  entry for consistency message.
+
+               Loc : Nat := 0;
+               --  Line numbers from Priority_Specific_Dispatching pragma
+            end record;
+
+            PSD_Table  : array (0 .. Max_Prio) of Specific_Dispatching_Entry :=
+                           (others => Specific_Dispatching_Entry'
+                              (Dispatching_Policy => ' ',
+                               Afile              => No_ALI_Id,
+                               Loc                => 0));
+            --  Array containing an entry per priority containing the location
+            --  where there is a Priority_Specific_Dispatching pragma that
+            --  applies to the priority.
+
+         begin
+            for F in ALIs.First .. ALIs.Last loop
+               for K in ALIs.Table (F).First_Specific_Dispatching ..
+                        ALIs.Table (F).Last_Specific_Dispatching
+               loop
+                  declare
+                     DTK : Specific_Dispatching_Record
+                             renames Specific_Dispatching.Table (K);
+                  begin
+                     --  Check whether pragma Task_Dispatching_Policy and
+                     --  pragma Priority_Specific_Dispatching are used in the
+                     --  same partition.
+
+                     if Task_Dispatching_Policy_Specified /= ' ' then
+                        Error_Msg_File_1 := ALIs.Table (F).Sfile;
+                        Error_Msg_File_2 :=
+                          ALIs.Table (TDP_Pragma_Afile).Sfile;
+
+                        Error_Msg_Nat_1 := DTK.PSD_Pragma_Line;
+
+                        Consistency_Error_Msg
+                          ("Priority_Specific_Dispatching at {:#" &
+                           " incompatible with Task_Dispatching_Policy at {");
+                     end if;
+
+                     --  Ceiling_Locking must also be specified for a partition
+                     --  with at least one Priority_Specific_Dispatching
+                     --  pragma.
+
+                     if Locking_Policy_Specified /= ' '
+                       and then Locking_Policy_Specified /= 'C'
+                     then
+                        for A in ALIs.First .. ALIs.Last loop
+                           if ALIs.Table (A).Locking_Policy /= ' '
+                             and then ALIs.Table (A).Locking_Policy /= 'C'
+                           then
+                              Error_Msg_File_1 := ALIs.Table (F).Sfile;
+                              Error_Msg_File_2 := ALIs.Table (A).Sfile;
+
+                              Error_Msg_Nat_1  := DTK.PSD_Pragma_Line;
+
+                              Consistency_Error_Msg
+                                ("Priority_Specific_Dispatching at {:#" &
+                                 " incompatible with Locking_Policy at {");
+                           end if;
+                        end loop;
+                     end if;
+
+                     --  Check overlapping priority ranges
+
+                     Find_Overlapping : for Prio in
+                       DTK.First_Priority .. DTK.Last_Priority
+                     loop
+                        if PSD_Table (Prio).Afile = No_ALI_Id then
+                           PSD_Table (Prio) :=
+                             (Dispatching_Policy => DTK.Dispatching_Policy,
+                              Afile => F, Loc => DTK.PSD_Pragma_Line);
+
+                        elsif PSD_Table (Prio).Dispatching_Policy /=
+                              DTK.Dispatching_Policy
+
+                        then
+                           Error_Msg_File_1 :=
+                             ALIs.Table (PSD_Table (Prio).Afile).Sfile;
+                           Error_Msg_File_2 := ALIs.Table (F).Sfile;
+                           Error_Msg_Nat_1  := PSD_Table (Prio).Loc;
+                           Error_Msg_Nat_2  := DTK.PSD_Pragma_Line;
+
+                           Consistency_Error_Msg
+                             ("overlapping priority ranges at {:# and {:#");
+
+                           exit Find_Overlapping;
+                        end if;
+                     end loop Find_Overlapping;
+                  end;
+               end loop;
+            end loop;
+         end;
+      end if;
+   end Check_Consistent_Dispatching_Policy;
 
    ---------------------------------------------------
    -- Check_Consistent_Dynamic_Elaboration_Checking --
@@ -134,7 +472,7 @@ package body Bcheck is
 
                               --  Case 3. With'ed unit is Preelaborate or Pure
 
-                              elsif WU.Preelab or WU.Pure then
+                              elsif WU.Preelab or else WU.Pure then
                                  null;
 
                               --  Case 4. With'ed unit is internal file
@@ -145,14 +483,14 @@ package body Bcheck is
                               --  Issue warning, not one of the safe cases
 
                               else
-                                 Error_Msg_Name_1 := UR.Sfile;
+                                 Error_Msg_File_1 := UR.Sfile;
                                  Error_Msg
-                                   ("?% has dynamic elaboration checks " &
+                                   ("?{ has dynamic elaboration checks " &
                                                                  "and with's");
 
-                                 Error_Msg_Name_1 := WU.Sfile;
+                                 Error_Msg_File_1 := WU.Sfile;
                                  Error_Msg
-                                   ("?  % which has static elaboration " &
+                                   ("?  { which has static elaboration " &
                                                                      "checks");
 
                                  Warnings_Detected := Warnings_Detected - 1;
@@ -186,11 +524,11 @@ package body Bcheck is
             begin
                for A2 in A1 + 1 .. ALIs.Last loop
                   if ALIs.Table (A2).Float_Format /= Format then
-                     Error_Msg_Name_1 := ALIs.Table (A1).Sfile;
-                     Error_Msg_Name_2 := ALIs.Table (A2).Sfile;
+                     Error_Msg_File_1 := ALIs.Table (A1).Sfile;
+                     Error_Msg_File_2 := ALIs.Table (A2).Sfile;
 
                      Consistency_Error_Msg
-                       ("% and % compiled with different " &
+                       ("{ and { compiled with different " &
                         "floating-point representations");
                      exit Find_Format;
                   end if;
@@ -265,13 +603,13 @@ package body Bcheck is
                   Loc    (Inum) := Lnum;
 
                elsif Istate (Inum) /= Stat then
-                  Error_Msg_Name_1 := ALIs.Table (Afile (Inum)).Sfile;
-                  Error_Msg_Name_2 := ALIs.Table (F).Sfile;
+                  Error_Msg_File_1 := ALIs.Table (Afile (Inum)).Sfile;
+                  Error_Msg_File_2 := ALIs.Table (F).Sfile;
                   Error_Msg_Nat_1  := Loc (Inum);
                   Error_Msg_Nat_2  := Lnum;
 
                   Consistency_Error_Msg
-                    ("inconsistent interrupt states at %:# and %:#");
+                    ("inconsistent interrupt states at {:# and {:#");
                end if;
             end loop;
          end loop;
@@ -297,14 +635,15 @@ package body Bcheck is
 
             begin
                for A2 in A1 + 1 .. ALIs.Last loop
-                  if ALIs.Table (A2).Locking_Policy /= ' ' and
+                  if ALIs.Table (A2).Locking_Policy /= ' '
+                       and then
                      ALIs.Table (A2).Locking_Policy /= Policy
                   then
-                     Error_Msg_Name_1 := ALIs.Table (A1).Sfile;
-                     Error_Msg_Name_2 := ALIs.Table (A2).Sfile;
+                     Error_Msg_File_1 := ALIs.Table (A1).Sfile;
+                     Error_Msg_File_2 := ALIs.Table (A2).Sfile;
 
                      Consistency_Error_Msg
-                       ("% and % compiled with different locking policies");
+                       ("{ and { compiled with different locking policies");
                      exit Find_Policy;
                   end if;
                end loop;
@@ -323,12 +662,11 @@ package body Bcheck is
    --  then all other units in the partition must also be compiled with
    --  Normalized_Scalars in effect.
 
-   --  There is some issue as to whether this consistency check is
-   --  desirable, it is certainly required at the moment by the RM.
-   --  We should keep a watch on the ARG and HRG deliberations here.
-   --  GNAT no longer depends on this consistency (it used to do so,
-   --  but that has been corrected in the latest version, since the
-   --  Initialize_Scalars pragma does not require consistency.
+   --  There is some issue as to whether this consistency check is desirable,
+   --  it is certainly required at the moment by the RM. We should keep a watch
+   --  on the ARG and HRG deliberations here. GNAT no longer depends on this
+   --  consistency (it used to do so, but that is no longer the case, since
+   --  pragma Initialize_Scalars pragma does not require consistency.)
 
    procedure Check_Consistent_Normalize_Scalars is
    begin
@@ -362,147 +700,49 @@ package body Bcheck is
       end if;
    end Check_Consistent_Normalize_Scalars;
 
-   ---------------------------------------------
-   -- Check_Consistent_Partition_Restrictions --
-   ---------------------------------------------
+   -----------------------------------------
+   -- Check_Consistent_Optimize_Alignment --
+   -----------------------------------------
 
-   --  The rule is that if a restriction is specified in any unit,
-   --  then all units must obey the restriction. The check applies
-   --  only to restrictions which require partition wide consistency,
-   --  and not to internal units.
+   --  The rule is that all units which depend on the global default setting
+   --  of Optimize_Alignment must be compiled with the same setting for this
+   --  default. Units which specify an explicit local value for this setting
+   --  are exempt from the consistency rule (this includes all internal units).
 
-   --  The check is done in two steps. First for every restriction
-   --  a unit specifying that restriction is found, if any.
-   --  Second, all units are verified against the specified restrictions.
+   procedure Check_Consistent_Optimize_Alignment is
+      OA_Setting : Character := ' ';
+      --  Reset when we find a unit that depends on the default and does
+      --  not have a local specification of the Optimize_Alignment setting.
 
-   procedure Check_Consistent_Partition_Restrictions is
-      No_Restriction_List : constant array (All_Restrictions) of Boolean :=
-        (No_Implicit_Conditionals => True,
-         --  This could modify and pessimize generated code
+      OA_Unit : Unit_Id;
+      --  Id of unit from which OA_Setting was set
 
-         No_Implicit_Dynamic_Code => True,
-         --  This could modify and pessimize generated code
-
-         No_Implicit_Loops        => True,
-         --  This could modify and pessimize generated code
-
-         No_Recursion             => True,
-         --  Not checkable at compile time
-
-         No_Reentrancy            => True,
-         --  Not checkable at compile time
-
-         others                   => False);
-      --  Define those restrictions that should be output if the gnatbind -r
-      --  switch is used. Not all restrictions are output for the reasons given
-      --  above in the list, and this array is used to test whether the
-      --  corresponding pragma should be listed. True means that it should not
-      --  be listed.
-
-      R : array (All_Restrictions) of ALI_Id := (others => No_ALI_Id);
-      --  Record the first unit specifying each compilation unit restriction
-
-      V : array (All_Restrictions) of ALI_Id := (others => No_ALI_Id);
-      --  Record the last unit violating each partition restriction. Note
-      --  that entries in this array that do not correspond to partition
-      --  restrictions can never be modified.
-
-      Additional_Restrictions_Listed : Boolean := False;
-      --  Set True if we have listed header for restrictions
+      C : Character;
 
    begin
-      --  Loop to find restrictions
+      for U in First_Unit_Entry .. Units.Last loop
+         C := Units.Table (U).Optimize_Alignment;
 
-      for A in ALIs.First .. ALIs.Last loop
-         for J in All_Restrictions loop
-            if R (J) = No_ALI_Id and ALIs.Table (A).Restrictions (J) = 'r' then
-               R (J) := A;
+         if C /= 'L' then
+            if OA_Setting = ' ' then
+               OA_Setting := C;
+               OA_Unit := U;
+
+            elsif OA_Setting = C then
+               null;
+
+            else
+               Error_Msg_Unit_1 := Units.Table (OA_Unit).Uname;
+               Error_Msg_Unit_2 := Units.Table (U).Uname;
+
+               Consistency_Error_Msg
+                 ("$ and $ compiled with different "
+                  & "default Optimize_Alignment settings");
+               return;
             end if;
-         end loop;
+         end if;
       end loop;
-
-      --  Loop to find violations
-
-      for A in ALIs.First .. ALIs.Last loop
-         for J in All_Restrictions loop
-            if ALIs.Table (A).Restrictions (J) = 'v'
-               and then not Is_Internal_File_Name (ALIs.Table (A).Sfile)
-            then
-               --  A violation of a restriction was found
-
-               V (J) := A;
-
-               --  If this is a paritition restriction, and the restriction
-               --  was specified in some unit in the partition, then this
-               --  is a violation of the consistency requirement, so we
-               --  generate an appropriate error message.
-
-               if R (J) /= No_ALI_Id
-                 and then J in Partition_Restrictions
-               then
-                  declare
-                     M1 : constant String := "% has Restriction (";
-                     S  : constant String := Restriction_Id'Image (J);
-                     M2 : String (1 .. M1'Length + S'Length + 1);
-
-                  begin
-                     Name_Buffer (1 .. S'Length) := S;
-                     Name_Len := S'Length;
-                     Set_Casing
-                       (Units.Table (ALIs.Table (R (J)).First_Unit).Icasing);
-
-                     M2 (M1'Range) := M1;
-                     M2 (M1'Length + 1 .. M2'Last - 1) :=
-                                                   Name_Buffer (1 .. S'Length);
-                     M2 (M2'Last) := ')';
-
-                     Error_Msg_Name_1 := ALIs.Table (R (J)).Sfile;
-                     Consistency_Error_Msg (M2);
-                     Error_Msg_Name_1 := ALIs.Table (A).Sfile;
-                     Consistency_Error_Msg
-                       ("but file % violates this restriction");
-                  end;
-               end if;
-            end if;
-         end loop;
-      end loop;
-
-      --  List applicable restrictions if option set
-
-      if List_Restrictions then
-
-         --  List any restrictions which were not violated and not specified
-
-         for J in All_Restrictions loop
-            if V (J) = No_ALI_Id
-              and then R (J) = No_ALI_Id
-              and then not No_Restriction_List (J)
-            then
-               if not Additional_Restrictions_Listed then
-                  Write_Eol;
-                  Write_Line
-                    ("The following additional restrictions may be" &
-                     " applied to this partition:");
-                  Additional_Restrictions_Listed := True;
-               end if;
-
-               Write_Str ("pragma Restrictions (");
-
-               declare
-                  S : constant String := Restriction_Id'Image (J);
-               begin
-                  Name_Len := S'Length;
-                  Name_Buffer (1 .. Name_Len) := S;
-               end;
-
-               Set_Casing (Mixed_Case);
-               Write_Str (Name_Buffer (1 .. Name_Len));
-               Write_Str (");");
-               Write_Eol;
-            end if;
-         end loop;
-      end if;
-   end Check_Consistent_Partition_Restrictions;
+   end Check_Consistent_Optimize_Alignment;
 
    -------------------------------------
    -- Check_Consistent_Queuing_Policy --
@@ -526,11 +766,11 @@ package body Bcheck is
                        and then
                      ALIs.Table (A2).Queuing_Policy /= Policy
                   then
-                     Error_Msg_Name_1 := ALIs.Table (A1).Sfile;
-                     Error_Msg_Name_2 := ALIs.Table (A2).Sfile;
+                     Error_Msg_File_1 := ALIs.Table (A1).Sfile;
+                     Error_Msg_File_2 := ALIs.Table (A2).Sfile;
 
                      Consistency_Error_Msg
-                       ("% and % compiled with different queuing policies");
+                       ("{ and { compiled with different queuing policies");
                      exit Find_Policy;
                   end if;
                end loop;
@@ -540,6 +780,269 @@ package body Bcheck is
          end if;
       end loop Find_Policy;
    end Check_Consistent_Queuing_Policy;
+
+   -----------------------------------
+   -- Check_Consistent_Restrictions --
+   -----------------------------------
+
+   --  The rule is that if a restriction is specified in any unit, then all
+   --  units must obey the restriction. The check applies only to restrictions
+   --  which require partition wide consistency, and not to internal units.
+
+   procedure Check_Consistent_Restrictions is
+      Restriction_File_Output : Boolean;
+      --  Shows if we have output header messages for restriction violation
+
+      procedure Print_Restriction_File (R : All_Restrictions);
+      --  Print header line for R if not printed yet
+
+      ----------------------------
+      -- Print_Restriction_File --
+      ----------------------------
+
+      procedure Print_Restriction_File (R : All_Restrictions) is
+      begin
+         if not Restriction_File_Output then
+            Restriction_File_Output := True;
+
+            --  Find an ali file specifying the restriction
+
+            for A in ALIs.First .. ALIs.Last loop
+               if ALIs.Table (A).Restrictions.Set (R)
+                 and then (R in All_Boolean_Restrictions
+                             or else ALIs.Table (A).Restrictions.Value (R) =
+                                     Cumulative_Restrictions.Value (R))
+               then
+                  --  We have found that ALI file A specifies the restriction
+                  --  that is being violated (the minimum value is specified
+                  --  in the case of a parameter restriction).
+
+                  declare
+                     M1 : constant String := "{ has restriction ";
+                     S  : constant String := Restriction_Id'Image (R);
+                     M2 : String (1 .. 2000); -- big enough!
+                     P  : Integer;
+
+                  begin
+                     Name_Buffer (1 .. S'Length) := S;
+                     Name_Len := S'Length;
+                     Set_Casing (Mixed_Case);
+
+                     M2 (M1'Range) := M1;
+                     P := M1'Length + 1;
+                     M2 (P .. P + S'Length - 1) := Name_Buffer (1 .. S'Length);
+                     P := P + S'Length;
+
+                     if R in All_Parameter_Restrictions then
+                        M2 (P .. P + 4) := " => #";
+                        Error_Msg_Nat_1 :=
+                          Int (Cumulative_Restrictions.Value (R));
+                        P := P + 5;
+                     end if;
+
+                     Error_Msg_File_1 := ALIs.Table (A).Sfile;
+                     Consistency_Error_Msg (M2 (1 .. P - 1));
+                     Consistency_Error_Msg
+                       ("but the following files violate this restriction:");
+                     return;
+                  end;
+               end if;
+            end loop;
+         end if;
+      end Print_Restriction_File;
+
+   --  Start of processing for Check_Consistent_Restrictions
+
+   begin
+      --  A special test, if we have a main program, then if it has an
+      --  allocator in the body, this is considered to be a violation of
+      --  the restriction No_Allocators_After_Elaboration. We just mark
+      --  this restriction and then the normal circuit will flag it.
+
+      if Bind_Main_Program
+        and then ALIs.Table (ALIs.First).Main_Program /= None
+        and then not No_Main_Subprogram
+        and then ALIs.Table (ALIs.First).Allocator_In_Body
+      then
+         Cumulative_Restrictions.Violated
+           (No_Allocators_After_Elaboration) := True;
+         ALIs.Table (ALIs.First).Restrictions.Violated
+           (No_Allocators_After_Elaboration) := True;
+      end if;
+
+      --  Loop through all restriction violations
+
+      for R in All_Restrictions loop
+
+         --  Check for violation of this restriction
+
+         if Cumulative_Restrictions.Set (R)
+           and then Cumulative_Restrictions.Violated (R)
+           and then (R in Partition_Boolean_Restrictions
+                       or else (R in All_Parameter_Restrictions
+                                   and then
+                                     Cumulative_Restrictions.Count (R) >
+                                     Cumulative_Restrictions.Value (R)))
+         then
+            Restriction_File_Output := False;
+
+            --  Loop through files looking for violators
+
+            for A2 in ALIs.First .. ALIs.Last loop
+               declare
+                  T : ALIs_Record renames ALIs.Table (A2);
+
+               begin
+                  if T.Restrictions.Violated (R) then
+
+                     --  We exclude predefined files from the list of
+                     --  violators. This should be rethought. It is not
+                     --  clear that this is the right thing to do, that
+                     --  is particularly the case for restricted runtimes.
+
+                     if not Is_Internal_File_Name (T.Sfile) then
+
+                        --  Case of Boolean restriction, just print file name
+
+                        if R in All_Boolean_Restrictions then
+                           Print_Restriction_File (R);
+                           Error_Msg_File_1 := T.Sfile;
+                           Consistency_Error_Msg ("  {");
+
+                        --  Case of Parameter restriction where violation
+                        --  count exceeds restriction value, print file
+                        --  name and count, adding "at least" if the
+                        --  exact count is not known.
+
+                        elsif R in Checked_Add_Parameter_Restrictions
+                          or else T.Restrictions.Count (R) >
+                          Cumulative_Restrictions.Value (R)
+                        then
+                           Print_Restriction_File (R);
+                           Error_Msg_File_1 := T.Sfile;
+                           Error_Msg_Nat_1 := Int (T.Restrictions.Count (R));
+
+                           if T.Restrictions.Unknown (R) then
+                              Consistency_Error_Msg
+                                ("  { (count = at least #)");
+                           else
+                              Consistency_Error_Msg
+                                ("  { (count = #)");
+                           end if;
+                        end if;
+                     end if;
+                  end if;
+               end;
+            end loop;
+         end if;
+      end loop;
+
+      --  Now deal with No_Dependence indications. Note that we put the loop
+      --  through entries in the no dependency table first, since this loop
+      --  is most often empty (no such pragma Restrictions in use).
+
+      for ND in No_Deps.First .. No_Deps.Last loop
+         declare
+            ND_Unit : constant Name_Id :=
+                        No_Deps.Table (ND).No_Dep_Unit;
+
+         begin
+            for J in ALIs.First .. ALIs.Last loop
+               declare
+                  A : ALIs_Record renames ALIs.Table (J);
+
+               begin
+                  for K in A.First_Unit .. A.Last_Unit loop
+                     declare
+                        U : Unit_Record renames Units.Table (K);
+                     begin
+                        for L in U.First_With .. U.Last_With loop
+                           if Same_Unit
+                             (Withs.Table (L).Uname, ND_Unit)
+                           then
+                              Error_Msg_File_1 := U.Sfile;
+                              Error_Msg_Name_1 := ND_Unit;
+                              Consistency_Error_Msg
+                                ("file { violates restriction " &
+                                 "No_Dependence => %");
+                           end if;
+                        end loop;
+                     end;
+                  end loop;
+               end;
+            end loop;
+         end;
+      end loop;
+   end Check_Consistent_Restrictions;
+
+   ------------------------------------------------------------
+   -- Check_Consistent_Restriction_No_Default_Initialization --
+   ------------------------------------------------------------
+
+   --  The Restriction (No_Default_Initialization) has special consistency
+   --  rules. The rule is that no unit compiled without this restriction
+   --  that violates the restriction can WITH a unit that is compiled with
+   --  the restriction.
+
+   procedure Check_Consistent_Restriction_No_Default_Initialization is
+   begin
+      --  Nothing to do if no one set this restriction
+
+      if not Cumulative_Restrictions.Set (No_Default_Initialization) then
+         return;
+      end if;
+
+      --  Nothing to do if no one violates the restriction
+
+      if not Cumulative_Restrictions.Violated (No_Default_Initialization) then
+         return;
+      end if;
+
+      --  Otherwise we go into a full scan to find possible problems
+
+      for U in Units.First .. Units.Last loop
+         declare
+            UTE : Unit_Record renames Units.Table (U);
+            ATE : ALIs_Record renames ALIs.Table (UTE.My_ALI);
+
+         begin
+            if ATE.Restrictions.Violated (No_Default_Initialization) then
+               for W in UTE.First_With .. UTE.Last_With loop
+                  declare
+                     AFN : constant File_Name_Type := Withs.Table (W).Afile;
+
+                  begin
+                     --  The file name may not be present for withs of certain
+                     --  generic run-time files. The test can be safely left
+                     --  out in such cases anyway.
+
+                     if AFN /= No_File then
+                        declare
+                           WAI : constant ALI_Id :=
+                                   ALI_Id (Get_Name_Table_Info (AFN));
+                           WTE : ALIs_Record renames ALIs.Table (WAI);
+
+                        begin
+                           if WTE.Restrictions.Set
+                               (No_Default_Initialization)
+                           then
+                              Error_Msg_Unit_1 := UTE.Uname;
+                              Consistency_Error_Msg
+                                ("unit $ compiled without restriction "
+                                 & "No_Default_Initialization");
+                              Error_Msg_Unit_1 := Withs.Table (W).Uname;
+                              Consistency_Error_Msg
+                                ("withs unit $, compiled with restriction "
+                                 & "No_Default_Initialization");
+                           end if;
+                        end;
+                     end if;
+                  end;
+               end loop;
+            end if;
+         end;
+      end loop;
+   end Check_Consistent_Restriction_No_Default_Initialization;
 
    ---------------------------------------------------
    -- Check_Consistent_Zero_Cost_Exception_Handling --
@@ -553,169 +1056,15 @@ package body Bcheck is
       Check_Mechanism : for A1 in ALIs.First + 1 .. ALIs.Last loop
          if ALIs.Table (A1).Zero_Cost_Exceptions /=
             ALIs.Table (ALIs.First).Zero_Cost_Exceptions
-
          then
-            Error_Msg_Name_1 := ALIs.Table (A1).Sfile;
-            Error_Msg_Name_2 := ALIs.Table (ALIs.First).Sfile;
+            Error_Msg_File_1 := ALIs.Table (A1).Sfile;
+            Error_Msg_File_2 := ALIs.Table (ALIs.First).Sfile;
 
-            Consistency_Error_Msg ("% and % compiled with different "
+            Consistency_Error_Msg ("{ and { compiled with different "
                                             & "exception handling mechanisms");
          end if;
       end loop Check_Mechanism;
    end Check_Consistent_Zero_Cost_Exception_Handling;
-
-   -----------------------
-   -- Check_Consistency --
-   -----------------------
-
-   procedure Check_Consistency is
-      Src : Source_Id;
-      --  Source file Id for this Sdep entry
-
-   begin
-      --  First, we go through the source table to see if there are any cases
-      --  in which we should go after source files and compute checksums of
-      --  the source files. We need to do this for any file for which we have
-      --  mismatching time stamps and (so far) matching checksums.
-
-      for S in Source.First .. Source.Last loop
-
-         --  If all time stamps for a file match, then there is nothing to
-         --  do, since we will not be checking checksums in that case anyway
-
-         if Source.Table (S).All_Timestamps_Match then
-            null;
-
-         --  If we did not find the source file, then we can't compute its
-         --  checksum anyway. Note that when we have a time stamp mismatch,
-         --  we try to find the source file unconditionally (i.e. if
-         --  Check_Source_Files is False).
-
-         elsif not Source.Table (S).Source_Found then
-            null;
-
-         --  If we already have non-matching or missing checksums, then no
-         --  need to try going after source file, since we won't trust the
-         --  checksums in any case.
-
-         elsif not Source.Table (S).All_Checksums_Match then
-            null;
-
-         --  Now we have the case where we have time stamp mismatches, and
-         --  the source file is around, but so far all checksums match. This
-         --  is the case where we need to compute the checksum from the source
-         --  file, since otherwise we would ignore the time stamp mismatches,
-         --  and that is wrong if the checksum of the source does not agree
-         --  with the checksums in the ALI files.
-
-         elsif Check_Source_Files then
-            if not Checksums_Match
-              (Source.Table (S).Checksum,
-               Get_File_Checksum (Source.Table (S).Sfile))
-            then
-               Source.Table (S).All_Checksums_Match := False;
-            end if;
-         end if;
-      end loop;
-
-      --  Loop through ALI files
-
-      ALIs_Loop : for A in ALIs.First .. ALIs.Last loop
-
-         --  Loop through Sdep entries in one ALI file
-
-         Sdep_Loop : for D in
-           ALIs.Table (A).First_Sdep .. ALIs.Table (A).Last_Sdep
-         loop
-            if Sdep.Table (D).Dummy_Entry then
-               goto Continue;
-            end if;
-
-            Src := Source_Id (Get_Name_Table_Info (Sdep.Table (D).Sfile));
-
-            --  If the time stamps match, or all checksums match, then we
-            --  are OK, otherwise we have a definite error.
-
-            if Sdep.Table (D).Stamp /= Source.Table (Src).Stamp
-              and then not Source.Table (Src).All_Checksums_Match
-            then
-               Error_Msg_Name_1 := ALIs.Table (A).Sfile;
-               Error_Msg_Name_2 := Sdep.Table (D).Sfile;
-
-               --  Two styles of message, depending on whether or not
-               --  the updated file is the one that must be recompiled
-
-               if Error_Msg_Name_1 = Error_Msg_Name_2 then
-                  if Tolerate_Consistency_Errors then
-                     Error_Msg
-                        ("?% has been modified and should be recompiled");
-                  else
-                     Error_Msg
-                       ("% has been modified and must be recompiled");
-                  end if;
-
-               else
-                  if Osint.Is_Readonly_Library (ALIs.Table (A).Afile) then
-                     Error_Msg_Name_2 :=
-                       Osint.Find_File ((ALIs.Table (A).Afile), Osint.Library);
-
-                     if Tolerate_Consistency_Errors then
-                        Error_Msg ("?% should be recompiled");
-                        Error_Msg_Name_1 := Error_Msg_Name_2;
-                        Error_Msg ("?(% is obsolete and read-only)");
-
-                     else
-                        Error_Msg ("% must be compiled");
-                        Error_Msg_Name_1 := Error_Msg_Name_2;
-                        Error_Msg ("(% is obsolete and read-only)");
-                     end if;
-
-                  elsif Tolerate_Consistency_Errors then
-                     Error_Msg
-                       ("?% should be recompiled (% has been modified)");
-
-                  else
-                     Error_Msg ("% must be recompiled (% has been modified)");
-                  end if;
-               end if;
-
-               if (not Tolerate_Consistency_Errors) and Verbose_Mode then
-                  declare
-                     Msg : constant String := "% time stamp ";
-                     Buf : String (1 .. Msg'Length + Time_Stamp_Length);
-
-                  begin
-                     Buf (1 .. Msg'Length) := Msg;
-                     Buf (Msg'Length + 1 .. Buf'Length) :=
-                       String (Source.Table (Src).Stamp);
-                     Error_Msg_Name_1 := Sdep.Table (D).Sfile;
-                     Error_Msg (Buf);
-                  end;
-
-                  declare
-                     Msg : constant String := " conflicts with % timestamp ";
-                     Buf : String (1 .. Msg'Length + Time_Stamp_Length);
-
-                  begin
-                     Buf (1 .. Msg'Length) := Msg;
-                     Buf (Msg'Length + 1 .. Buf'Length) :=
-                       String (Sdep.Table (D).Stamp);
-                     Error_Msg_Name_1 := Sdep.Table (D).Sfile;
-                     Error_Msg (Buf);
-                  end;
-               end if;
-
-               --  Exit from the loop through Sdep entries once we find one
-               --  that does not match.
-
-               exit Sdep_Loop;
-            end if;
-
-         <<Continue>>
-            null;
-         end loop Sdep_Loop;
-      end loop ALIs_Loop;
-   end Check_Consistency;
 
    -------------------------------
    -- Check_Duplicated_Subunits --
@@ -734,13 +1083,13 @@ package body Bcheck is
             for K in Boolean loop
                if K then
                   Name_Buffer (Name_Len) := 'b';
-
                else
                   Name_Buffer (Name_Len) := 's';
                end if;
 
                declare
-                  Info : constant Int := Get_Name_Table_Info (Name_Find);
+                  Unit : constant Unit_Name_Type := Name_Find;
+                  Info : constant Int := Get_Name_Table_Info (Unit);
 
                begin
                   if Info /= 0 then
@@ -781,11 +1130,11 @@ package body Bcheck is
            or else ALIs.Table (A).Ver          (1 .. VL) /=
                    ALIs.Table (ALIs.First).Ver (1 .. VL)
          then
-            Error_Msg_Name_1 := ALIs.Table (A).Sfile;
-            Error_Msg_Name_2 := ALIs.Table (ALIs.First).Sfile;
+            Error_Msg_File_1 := ALIs.Table (A).Sfile;
+            Error_Msg_File_2 := ALIs.Table (ALIs.First).Sfile;
 
             Consistency_Error_Msg
-               ("% and % compiled with different GNAT versions");
+               ("{ and { compiled with different GNAT versions");
          end if;
       end loop;
    end Check_Versions;
@@ -801,15 +1150,7 @@ package body Bcheck is
          --  If consistency errors are tolerated,
          --  output the message as a warning.
 
-         declare
-            Warning_Msg : String (1 .. Msg'Length + 1);
-
-         begin
-            Warning_Msg (1) := '?';
-            Warning_Msg (2 .. Warning_Msg'Last) := Msg;
-
-            Error_Msg (Warning_Msg);
-         end;
+         Error_Msg ('?' & Msg);
 
       --  Otherwise the consistency error is a true error
 
@@ -817,5 +1158,28 @@ package body Bcheck is
          Error_Msg (Msg);
       end if;
    end Consistency_Error_Msg;
+
+   ---------------
+   -- Same_Unit --
+   ---------------
+
+   function Same_Unit (U1 : Unit_Name_Type; U2 : Name_Id) return Boolean is
+   begin
+      --  Note, the string U1 has a terminating %s or %b, U2 does not
+
+      if Length_Of_Name (U1) - 2 = Length_Of_Name (U2) then
+         Get_Name_String (U1);
+
+         declare
+            U1_Str : constant String := Name_Buffer (1 .. Name_Len - 2);
+         begin
+            Get_Name_String (U2);
+            return U1_Str = Name_Buffer (1 .. Name_Len);
+         end;
+
+      else
+         return False;
+      end if;
+   end Same_Unit;
 
 end Bcheck;

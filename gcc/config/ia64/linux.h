@@ -1,4 +1,28 @@
-/* Definitions for ia64-linux target.  */
+/* Definitions for ia64-linux target.
+
+Copyright (C) 2000, 2001, 2002, 2003, 2004, 2006,
+2009, 2010 Free Software Foundation, Inc.
+
+This file is part of GCC.
+
+GCC is free software; you can redistribute it and/or modify it under
+the terms of the GNU General Public License as published by the Free
+Software Foundation; either version 3, or (at your option) any later
+version.
+
+GCC is distributed in the hope that it will be useful, but WITHOUT ANY
+WARRANTY; without even the implied warranty of MERCHANTABILITY or
+FITNESS FOR A PARTICULAR PURPOSE.  See the GNU General Public License
+for more details.
+
+Under Section 7 of GPL version 3, you are granted additional
+permissions described in the GCC Runtime Library Exception, version
+3.1, as published by the Free Software Foundation.
+
+You should have received a copy of the GNU General Public License and
+a copy of the GCC Runtime Library Exception along with this program;
+see the files COPYING3 and COPYING.RUNTIME respectively.  If not, see
+<http://www.gnu.org/licenses/>.  */
 
 /* This macro is a C statement to print on `stderr' a string describing the
    particular machine description choice.  */
@@ -31,11 +55,13 @@ do {						\
 /* Similar to standard Linux, but adding -ffast-math support.  */
 #undef  ENDFILE_SPEC
 #define ENDFILE_SPEC \
-  "%{ffast-math|funsafe-math-optimizations:crtfastmath.o%s} \
+  "%{Ofast|ffast-math|funsafe-math-optimizations:crtfastmath.o%s} \
    %{shared|pie:crtendS.o%s;:crtend.o%s} crtn.o%s"
 
 /* Define this for shared library support because it isn't in the main
    linux.h file.  */
+
+#define GLIBC_DYNAMIC_LINKER "/lib/ld-linux-ia64.so.2"
 
 #undef LINK_SPEC
 #define LINK_SPEC "\
@@ -43,9 +69,10 @@ do {						\
   %{!shared: \
     %{!static: \
       %{rdynamic:-export-dynamic} \
-      %{!dynamic-linker:-dynamic-linker /lib/ld-linux-ia64.so.2}} \
+      -dynamic-linker " LINUX_DYNAMIC_LINKER "} \
       %{static:-static}}"
 
+#define CPP_SPEC "%{posix:-D_POSIX_SOURCE} %{pthread:-D_REENTRANT}"
 
 #define JMP_BUF_SIZE  76
 
@@ -55,161 +82,14 @@ do {						\
 #undef LINK_EH_SPEC
 #define LINK_EH_SPEC ""
 
-/* Do code reading to identify a signal frame, and set the frame
-   state data appropriately.  See unwind-dw2.c for the structs.  */
+#define MD_UNWIND_SUPPORT "config/ia64/linux-unwind.h"
 
-/* This works only for glibc-2.3 and later, because sigcontext is different
-   in glibc-2.2.4.  */
+/* Put all *tf routines in libgcc.  */
+#undef LIBGCC2_HAS_TF_MODE
+#define LIBGCC2_HAS_TF_MODE 1
+#undef LIBGCC2_TF_CEXT
+#define LIBGCC2_TF_CEXT q
+#define TF_SIZE 113
 
-#if __GLIBC__ > 2 || (__GLIBC__ == 2 && __GLIBC_MINOR__ >= 3)
-
-#ifdef IN_LIBGCC2
-#include <signal.h>
-#include <sys/ucontext.h>
-
-#define IA64_GATE_AREA_START 0xa000000000000100LL
-#define IA64_GATE_AREA_END   0xa000000000030000LL
-
-#define MD_FALLBACK_FRAME_STATE_FOR(CONTEXT, FS, SUCCESS)		\
-  if ((CONTEXT)->rp >= IA64_GATE_AREA_START				\
-      && (CONTEXT)->rp < IA64_GATE_AREA_END)				\
-    {									\
-      struct sigframe {							\
-	char scratch[16];						\
-	unsigned long sig_number;					\
-	struct siginfo *info;						\
-	struct sigcontext *sc;						\
-      } *frame_ = (struct sigframe *)(CONTEXT)->psp;			\
-      struct sigcontext *sc_ = frame_->sc;				\
-									\
-      /* Restore scratch registers in case the unwinder needs to	\
-	 refer to a value stored in one of them.  */			\
-      {									\
-	int i_;								\
-									\
-	for (i_ = 2; i_ < 4; i_++)					\
-	  (CONTEXT)->ireg[i_ - 2].loc = &sc_->sc_gr[i_];		\
-	for (i_ = 8; i_ < 12; i_++)					\
-	  (CONTEXT)->ireg[i_ - 2].loc = &sc_->sc_gr[i_];		\
-	for (i_ = 14; i_ < 32; i_++)					\
-	  (CONTEXT)->ireg[i_ - 2].loc = &sc_->sc_gr[i_];		\
-      }									\
-	  								\
-      (CONTEXT)->fpsr_loc = &(sc_->sc_ar_fpsr);				\
-      (CONTEXT)->pfs_loc = &(sc_->sc_ar_pfs);				\
-      (CONTEXT)->lc_loc = &(sc_->sc_ar_lc);				\
-      (CONTEXT)->unat_loc = &(sc_->sc_ar_unat);				\
-      (CONTEXT)->br_loc[0] = &(sc_->sc_br[0]);				\
-      (CONTEXT)->br_loc[6] = &(sc_->sc_br[6]);				\
-      (CONTEXT)->br_loc[7] = &(sc_->sc_br[7]);				\
-      (CONTEXT)->pr = sc_->sc_pr;					\
-      (CONTEXT)->psp = sc_->sc_gr[12];					\
-      (CONTEXT)->gp = sc_->sc_gr[1];					\
-      /* Signal frame doesn't have an associated reg. stack frame 	\
-         other than what we adjust for below.	  */			\
-      (FS) -> no_reg_stack_frame = 1;					\
-									\
-      if (sc_->sc_rbs_base)						\
-	{								\
-	  /* Need to switch from alternate register backing store.  */	\
-	  long ndirty, loadrs = sc_->sc_loadrs >> 16;			\
-	  unsigned long alt_bspstore = (CONTEXT)->bsp - loadrs;		\
-	  unsigned long bspstore;					\
-	  unsigned long *ar_bsp = (unsigned long *)(sc_->sc_ar_bsp);	\
-									\
-	  ndirty = ia64_rse_num_regs ((unsigned long *) alt_bspstore,	\
-				      (unsigned long *) (CONTEXT)->bsp);\
-	  bspstore = (unsigned long)					\
-		     ia64_rse_skip_regs (ar_bsp, -ndirty);		\
-	  ia64_copy_rbs ((CONTEXT), bspstore, alt_bspstore, loadrs,	\
-			 sc_->sc_ar_rnat);				\
-	}								\
-									\
-      /* Don't touch the branch registers o.t. b0, b6 and b7.		\
-	 The kernel doesn't pass the preserved branch registers		\
-	 in the sigcontext but leaves them intact, so there's no	\
-	 need to do anything with them here.  */			\
-      {									\
-	unsigned long sof = sc_->sc_cfm & 0x7f;				\
-	(CONTEXT)->bsp = (unsigned long)				\
-	  ia64_rse_skip_regs ((unsigned long *)(sc_->sc_ar_bsp), -sof); \
-      }									\
-									\
-      (FS)->curr.reg[UNW_REG_RP].where = UNW_WHERE_SPREL;		\
-      (FS)->curr.reg[UNW_REG_RP].val 					\
-	= (unsigned long)&(sc_->sc_ip) - (CONTEXT)->psp;		\
-      (FS)->curr.reg[UNW_REG_RP].when = -1;				\
-									\
-      goto SUCCESS;							\
-    }
-
-#define MD_HANDLE_UNWABI(CONTEXT, FS)					\
-  if ((FS)->unwabi == ((3 << 8) | 's')					\
-      || (FS)->unwabi == ((0 << 8) | 's'))				\
-    {									\
-      struct sigframe {							\
-	char scratch[16];						\
-	unsigned long sig_number;					\
-	struct siginfo *info;						\
-	struct sigcontext *sc;						\
-      } *frame_ = (struct sigframe *)(CONTEXT)->psp;			\
-      struct sigcontext *sc_ = frame_->sc;				\
-									\
-      /* Restore scratch registers in case the unwinder needs to	\
-	 refer to a value stored in one of them.  */			\
-      {									\
-	int i_;								\
-									\
-	for (i_ = 2; i_ < 4; i_++)					\
-	  (CONTEXT)->ireg[i_ - 2].loc = &sc_->sc_gr[i_];		\
-	for (i_ = 8; i_ < 12; i_++)					\
-	  (CONTEXT)->ireg[i_ - 2].loc = &sc_->sc_gr[i_];		\
-	for (i_ = 14; i_ < 32; i_++)					\
-	  (CONTEXT)->ireg[i_ - 2].loc = &sc_->sc_gr[i_];		\
-      }									\
-	  								\
-      (CONTEXT)->pfs_loc = &(sc_->sc_ar_pfs);				\
-      (CONTEXT)->lc_loc = &(sc_->sc_ar_lc);				\
-      (CONTEXT)->unat_loc = &(sc_->sc_ar_unat);				\
-      (CONTEXT)->br_loc[0] = &(sc_->sc_br[0]);				\
-      (CONTEXT)->br_loc[6] = &(sc_->sc_br[6]);				\
-      (CONTEXT)->br_loc[7] = &(sc_->sc_br[7]);				\
-      (CONTEXT)->pr = sc_->sc_pr;					\
-      (CONTEXT)->gp = sc_->sc_gr[1];					\
-      /* Signal frame doesn't have an associated reg. stack frame 	\
-         other than what we adjust for below.	  */			\
-      (FS) -> no_reg_stack_frame = 1;					\
-									\
-      if (sc_->sc_rbs_base)						\
-	{								\
-	  /* Need to switch from alternate register backing store.  */	\
-	  long ndirty, loadrs = sc_->sc_loadrs >> 16;			\
-	  unsigned long alt_bspstore = (CONTEXT)->bsp - loadrs;		\
-	  unsigned long bspstore;					\
-	  unsigned long *ar_bsp = (unsigned long *)(sc_->sc_ar_bsp);	\
-									\
-	  ndirty = ia64_rse_num_regs ((unsigned long *) alt_bspstore,	\
-				      (unsigned long *) (CONTEXT)->bsp);\
-	  bspstore = (unsigned long)					\
-		     ia64_rse_skip_regs (ar_bsp, -ndirty);		\
-	  ia64_copy_rbs ((CONTEXT), bspstore, alt_bspstore, loadrs,	\
-			 sc_->sc_ar_rnat);				\
-	}								\
-									\
-      /* Don't touch the branch registers o.t. b0, b6 and b7.		\
-	 The kernel doesn't pass the preserved branch registers		\
-	 in the sigcontext but leaves them intact, so there's no	\
-	 need to do anything with them here.  */			\
-      {									\
-	unsigned long sof = sc_->sc_cfm & 0x7f;				\
-	(CONTEXT)->bsp = (unsigned long)				\
-	  ia64_rse_skip_regs ((unsigned long *)(sc_->sc_ar_bsp), -sof); \
-      }									\
-									\
-      /* pfs_loc already set above.  Without this pfs_loc would point	\
-	 incorrectly to sc_cfm instead of sc_ar_pfs.  */		\
-      (FS)->curr.reg[UNW_REG_PFS].where = UNW_WHERE_NONE;		\
-    }
-
-#endif /* IN_LIBGCC2 */
-#endif /* glibc-2.3 or better */
+#undef TARGET_INIT_LIBFUNCS
+#define TARGET_INIT_LIBFUNCS ia64_soft_fp_init_libfuncs

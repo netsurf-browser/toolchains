@@ -1,12 +1,12 @@
 ------------------------------------------------------------------------------
 --                                                                          --
---                         GNAT RUNTIME COMPONENTS                          --
+--                         GNAT RUN-TIME COMPONENTS                         --
 --                                                                          --
 --                         G N A T . T H R E A D S                          --
 --                                                                          --
 --                                 S p e c                                  --
 --                                                                          --
---           Copyright (C) 1998-2003 Ada Core Technologies, Inc.            --
+--                     Copyright (C) 1998-2007, AdaCore                     --
 --                                                                          --
 -- GNAT is free software;  you can  redistribute it  and/or modify it under --
 -- terms of the  GNU General Public License as published  by the Free Soft- --
@@ -16,8 +16,8 @@
 -- or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU General Public License --
 -- for  more details.  You should have  received  a copy of the GNU General --
 -- Public License  distributed with GNAT;  see file COPYING.  If not, write --
--- to  the Free Software Foundation,  59 Temple Place - Suite 330,  Boston, --
--- MA 02111-1307, USA.                                                      --
+-- to  the  Free Software Foundation,  51  Franklin  Street,  Fifth  Floor, --
+-- Boston, MA 02110-1301, USA.                                              --
 --                                                                          --
 -- As a special exception,  if other files  instantiate  generics from this --
 -- unit, or you link  this unit with other files  to produce an executable, --
@@ -31,10 +31,19 @@
 --                                                                          --
 ------------------------------------------------------------------------------
 
---  This package provides facilities for creation of foreign threads for
---  use as Ada tasks. In order to execute general Ada code, the run-time
---  system must know about all tasks. This package allows foreign code,
---  e.g. a C program, to create a thread that the Ada run-time knows about.
+--  This package provides facilities for creation or registration of foreign
+--  threads for use as Ada tasks. In order to execute general Ada code, the
+--  run-time system must know about all tasks. This package allows foreign
+--  code, e.g. a C program, to create a thread that the Ada run-time knows
+--  about, or to register the current thread.
+
+--  For some implementations of GNAT Pro, the registration of foreign threads
+--  is automatic. However, in such implementations, if the Ada program has no
+--  tasks at all and no tasking constructs other than delay, then by default
+--  the non-tasking version of the Ada run-time will be loaded. If foreign
+--  threads are present, it is important to ensure that the tasking version
+--  of the Ada run time is loaded. This may be achieved by adding "with
+--  GNAT.Threads" to any unit in the partition.
 
 with System;
 with Ada.Task_Identification;
@@ -133,7 +142,7 @@ package GNAT.Threads is
    --  extern void __gnat_get_thread (void *id, pthread_t *thread);
 
    function To_Task_Id
-     (Id   : System.Address)
+     (Id : System.Address)
       return Ada.Task_Identification.Task_Id;
    --  Ada interface only.
    --  Given a low level Id, as returned by Create_Thread, return a Task_Id,

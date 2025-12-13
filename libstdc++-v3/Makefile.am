@@ -1,6 +1,6 @@
 ## Makefile for the toplevel directory of the GNU C++ Standard library.
 ##
-## Copyright (C) 1997, 1998, 1999, 2000, 2001, 2002, 2003
+## Copyright (C) 1997, 1998, 1999, 2000, 2001, 2002, 2003, 2008, 2009, 2010
 ## Free Software Foundation, Inc.
 ##
 ## This file is part of the libstdc++ version 3 distribution.
@@ -9,7 +9,7 @@
 ## This file is part of the GNU ISO C++ Library.  This library is free
 ## software; you can redistribute it and/or modify it under the
 ## terms of the GNU General Public License as published by the
-## Free Software Foundation; either version 2, or (at your option)
+## Free Software Foundation; either version 3, or (at your option)
 ## any later version.
 
 ## This library is distributed in the hope that it will be useful,
@@ -18,78 +18,115 @@
 ## GNU General Public License for more details.
 
 ## You should have received a copy of the GNU General Public License along
-## with this library; see the file COPYING.  If not, write to the Free
-## Software Foundation, 59 Temple Place - Suite 330, Boston, MA 02111-1307,
-## USA.
+## with this library; see the file COPYING3.  If not see
+## <http://www.gnu.org/licenses/>.
 
 include $(top_srcdir)/fragment.am
 
 if GLIBCXX_HOSTED
-  # Possibly libmath as well...
-  hosted_source = src po
+  hosted_source = doc src po testsuite
 endif
+
 ## Keep this list sync'd with acinclude.m4:GLIBCXX_CONFIGURE.
-SUBDIRS = include libmath libsupc++ $(hosted_source) testsuite
+## Note that python must come after src.
+SUBDIRS = include libsupc++ $(hosted_source) python
 
-# These rules are messy, but are hella worth it.
-doxygen:
-	-(srcdir=`cd ${top_srcdir}; ${PWD_COMMAND}`; \
-	  builddir=`${PWD_COMMAND}`; \
-	  ${SHELL} ${srcdir}/docs/doxygen/run_doxygen \
-	            --mode=user $${srcdir} $${builddir})
+ACLOCAL_AMFLAGS = -I . -I .. -I ../config
 
-doxygen-maint:
-	-(srcdir=`cd ${top_srcdir}; ${PWD_COMMAND}`; \
-	  builddir=`${PWD_COMMAND}`; \
-	  ${SHELL} ${srcdir}/docs/doxygen/run_doxygen \
-	            --mode=maint $${srcdir} $${builddir})
-
-doxygen-man:
-	-(srcdir=`cd ${top_srcdir}; ${PWD_COMMAND}`; \
-	  builddir=`${PWD_COMMAND}`; \
-	  ${SHELL} ${srcdir}/docs/doxygen/run_doxygen \
-	            --mode=man $${srcdir} $${builddir})
-
-.PHONY: doxygen doxygen-maint doxygen-man
-
-# Handy forwarding targets.
+# Testsuite/check forwarding targets.
 check-%:
 	cd testsuite && $(MAKE) $@
 
+# Documentation forwarding targets.
+doc-%:
+	cd doc && $(MAKE) $@
+
+# Documentation conditionals for output.
+if BUILD_XML
+STAMP_XML = doc-xml
+STAMP_INSTALL_XML = doc-install-xml
+else
+STAMP_XML =
+STAMP_INSTALL_XML =
+endif
+
+if BUILD_HTML
+STAMP_HTML = doc-html
+STAMP_INSTALL_HTML = doc-install-html
+else
+STAMP_HTML =
+STAMP_INSTALL_HTML =
+endif
+
+if BUILD_MAN
+STAMP_MAN = doc-man
+STAMP_INSTALL_MAN = doc-install-man
+else
+STAMP_MAN =
+STAMP_INSTALL_MAN =
+endif
+
+if BUILD_PDF
+STAMP_PDF = doc-pdf
+STAMP_INSTALL_PDF = doc-install-pdf
+else
+STAMP_PDF =
+STAMP_INSTALL_PDF =
+endif
+
+if BUILD_EPUB
+STAMP_EPUB = doc-epub
+STAMP_INSTALL_EPUB = doc-install-epub
+else
+STAMP_EPUB = doc-epub
+STAMP_INSTALL_EPUB = doc-install-epub
+endif
+
+# Documentation primary rules.
+#
+# xml:
+# html:
+# pdf:
+# man:
+# info:
+# ps:
+# dvi:
+# epub:
+# install-xml:
+# install-html:
+# install-pdf:
+# install-man:
+# install-info:
+# install-ps:
+# install-dvi:
+# install-epub:
+
+xml: $(STAMP_XML)
+install-xml: $(STAMP_INSTALL_XML)
+
+html: $(STAMP_HTML)
+install-html: $(STAMP_INSTALL_HTML)
+
+man: $(STAMP_MAN)
+install-man: $(STAMP_INSTALL_MAN)
+
+pdf: $(STAMP_PDF)
+install-pdf: $(STAMP_INSTALL_PDF)
+
+epub: $(STAMP_EPUB)
+install-epub: $(STAMP_INSTALL_EPUB)
+
+info:
+install-info:
+
+ps:
+install-ps:
+
+dvi:
+install-dvi:
+
 # Multilib support.
 MAKEOVERRIDES=
-
-# Multilib support variables.
-MULTISRCTOP =
-MULTIBUILDTOP =
-MULTIDIRS =
-MULTISUBDIR =
-MULTIDO = true
-MULTICLEAN = true
-
-# Multilib support.
-.PHONY: all-multi mostlyclean-multi clean-multi distclean-multi \
-	maintainer-clean-multi
-
-all-recursive: all-multi
-install-recursive: install-multi
-mostlyclean-recursive: mostlyclean-multi
-clean-recursive: clean-multi
-distclean-recursive: distclean-multi
-maintainer-clean-recursive: maintainer-clean-multi
-
-all-multi:
-	: $(MAKE) ; exec $(MULTIDO) $(AM_MAKEFLAGS) DO=all multi-do
-install-multi:
-	$(MULTIDO) $(AM_MAKEFLAGS) DO=install multi-do
-mostlyclean-multi:
-	$(MULTICLEAN) $(AM_MAKEFLAGS) DO=mostlyclean multi-clean
-clean-multi:
-	$(MULTICLEAN) $(AM_MAKEFLAGS) DO=clean multi-clean
-distclean-multi:
-	$(MULTICLEAN) $(AM_MAKEFLAGS) DO=distclean multi-clean
-maintainer-clean-multi:
-	$(MULTICLEAN) $(AM_MAKEFLAGS) DO=maintainer-clean multi-clean
 
 # All the machinations with string instantiations messes up the
 # automake-generated TAGS rule. Make a simple one here.
@@ -129,8 +166,6 @@ AM_MAKEFLAGS = \
 	"AR=$(AR)" \
 	"AS=$(AS)" \
 	"LD=$(LD)" \
-	"LIBCFLAGS=$(LIBCFLAGS)" \
-	"PICFLAG=$(PICFLAG)" \
 	"RANLIB=$(RANLIB)" \
 	"NM=$(NM)" \
 	"NM_FOR_BUILD=$(NM_FOR_BUILD)" \

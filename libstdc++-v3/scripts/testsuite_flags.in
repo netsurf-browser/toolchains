@@ -15,9 +15,11 @@ Usage:
     testsuite_flags --install-includes
 		    --build-includes
 		    --build-cxx
+		    --build-cc
 		    --install-cxx
 		    --cxxflags
 		    --cxxpchflags
+		    --cxxldflags
 EOF
 }
 
@@ -29,12 +31,12 @@ query=$1
 
 case ${query} in
     --install-includes)
-      INCLUDES="-I${SRC_DIR}/testsuite"
+      INCLUDES="-I${SRC_DIR}/testsuite/util"
       echo ${INCLUDES}
       ;;
     --build-includes)
-      INCLUDES="-nostdinc++ @GLIBCXX_INCLUDES@ -I${SRC_DIR}/libsupc++ 
-                -I${SRC_DIR}/include/backward -I${SRC_DIR}/testsuite"
+      INCLUDES="-nostdinc++ @GLIBCXX_INCLUDES@ 
+                -I${SRC_DIR}/include/backward -I${SRC_DIR}/testsuite/util"
       echo ${INCLUDES}
       ;;
     --install-cxx)
@@ -46,18 +48,33 @@ case ${query} in
       CXX=`echo "$CXX_build" | sed 's,gcc/xgcc ,gcc/g++ ,'`
       echo ${CXX}
       ;;
+    --build-cc)
+      CC_build="@CC@"
+      CC="$CC_build"
+      echo ${CC}
+      ;;
     --cxxflags)
-      CXXFLAGS_save="-g -O2 -D_GLIBCXX_ASSERT"
-      CXXFLAGS_config='@SECTION_FLAGS@ @SECTION_LDFLAGS@ -fmessage-length=0 
- 		      @EXTRA_CXX_FLAGS@ -DLOCALEDIR="@glibcxx_localedir@" '
-      echo ${CXXFLAGS_save} ${CXXFLAGS_config}
+      CXXFLAGS_default="-g -O2 -D_GLIBCXX_ASSERT -fmessage-length=0"
+      CXXFLAGS_config="@SECTION_FLAGS@ @CXXFLAGS@ @EXTRA_CXX_FLAGS@"
+      echo ${CXXFLAGS_default} ${CXXFLAGS_config}
+      ;;
+    --cxxparallelflags)
+      CXXFLAGS_parallel="-D_GLIBCXX_PARALLEL -fopenmp
+			 -B${BUILD_DIR}/../libgomp 
+                         -I${BUILD_DIR}/../libgomp 
+			 -L${BUILD_DIR}/../libgomp/.libs -lgomp"
+      echo ${CXXFLAGS_parallel}
       ;;
     --cxxpchflags)
       PCHFLAGS="@glibcxx_PCHFLAGS@"
       echo ${PCHFLAGS}
       ;;
+    --cxxldflags)
+      SECTIONLDFLAGS="@SECTION_LDFLAGS@ @LIBICONV@"
+      echo ${SECTIONLDFLAGS}
+      ;;
     *)
-      print_usagex
+      print_usage
       ;;
 esac
 

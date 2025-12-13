@@ -21,14 +21,14 @@ struct A
   operator int () { return a; }
 };
 
-extern "C" int atoi (char *);
+extern "C" int atoi (const char *);
 
-int (*fee)(char *) = atoi;
-int (**bar)(char *) = &fee;
+int (*fee)(const char *) = atoi;
+int (**bar)(const char *) = &fee;
 
-char *s = "4";
-char **sp = &s;
-char ***spp = &sp;
+const char* s = "4";
+const char** sp = &s;
+const char*** spp = &sp;
 
 int foo (int a = (**bar) (s))
 {
@@ -50,13 +50,13 @@ typedef int const * bart ();
 typedef bart const * const * bar2;
 typedef bart volatile * const * bar2v;
 
-bar2 baz (X::Y y)
-{				// { dg-error "" } in this context
+bar2 baz (X::Y y)	        // { dg-error "" } in this context
+{
   X::Y f;			// { dg-error "" } in this context
   bar2 wa [5];
   wa[0] = baz(f);
   undef2 (1); // { dg-error "" } implicit declaration
-}
+}				// { dg-warning "no return statement" }
 
 int ninny ()
 {
@@ -71,4 +71,7 @@ int ninny ()
 int darg (char X::*p)
 {
    undef3 (1); // { dg-error "" } implicit declaration
-}
+}				// { dg-warning "no return statement" }
+
+// { dg-message "warning: control reaches end of non-void function" "" { target *-*-* } 36 }
+// { dg-message "warning: control reaches end of non-void function" "" { target *-*-* } 65 }

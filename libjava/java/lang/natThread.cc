@@ -1,6 +1,6 @@
 // natThread.cc - Native part of Thread class.
 
-/* Copyright (C) 1998, 1999, 2000, 2001, 2002  Free Software Foundation
+/* Copyright (C) 1998, 1999, 2000, 2001, 2002, 2005, 2006, 2007  Free Software Foundation
 
    This file is part of libgcj.
 
@@ -16,39 +16,28 @@ details.  */
 #include <jvm.h>
 #include <java-threads.h>
 
+#include <gnu/gcj/RawDataManaged.h>
 #include <java/lang/Thread.h>
+#include <java/lang/Thread$State.h>
+#include <java/lang/Thread$UncaughtExceptionHandler.h>
 #include <java/lang/ThreadGroup.h>
 #include <java/lang/IllegalArgumentException.h>
-#include <java/lang/UnsupportedOperationException.h>
 #include <java/lang/IllegalThreadStateException.h>
 #include <java/lang/InterruptedException.h>
 #include <java/lang/NullPointerException.h>
 
 #include <jni.h>
 
+#ifdef INTERPRETER
+#include <jvmti.h>
+#include "jvmti-int.h"
+#endif
+
 #ifdef ENABLE_JVMPI
 #include <jvmpi.h>
 #endif
 
 
-
-// This structure is used to represent all the data the native side
-// needs.  An object of this type is assigned to the `data' member of
-// the Thread class.
-struct natThread
-{
-  // These are used to interrupt sleep and join calls.  We can share a
-  // condition variable here since it only ever gets notified when the thread
-  // exits.
-  _Jv_Mutex_t join_mutex;
-  _Jv_ConditionVariable_t join_cond;
-
-  // This is private data for the thread system layer.
-  _Jv_Thread_t *thread;
-
-  // Each thread has its own JNI object.
-  JNIEnv *jni_env;
-};
 
 static void finalize_native (jobject ptr);
 
@@ -59,17 +48,19 @@ java::lang::Thread::initialize_native (void)
 {
   natThread *nt = (natThread *) _Jv_AllocBytes (sizeof (natThread));
   
-  // The native thread data is kept in a Object field, not a RawData, so that
-  // the GC allocator can be used and a finalizer run after the thread becomes
-  // unreachable. Note that this relies on the GC's ability to finalize 
-  // non-Java objects. FIXME?
-  data = reinterpret_cast<jobject> (nt);
+  state = JV_NEW;
+  nt->alive_flag = THREAD_DEAD;
+
+  data = (gnu::gcj::RawDataManaged *) nt;
   
   // Register a finalizer to clean up the native thread resources.
   _Jv_RegisterFinalizer (data, finalize_native);
 
   _Jv_MutexInit (&nt->join_mutex);
   _Jv_CondInit (&nt->join_cond);
+
+  nt->park_helper.init();
+
   nt->thread = _Jv_ThreadInitData (this);
   // FIXME: if JNI_ENV is set we will want to free it.  It is
   // malloc()d.
@@ -81,14 +72,25 @@ finalize_native (jobject ptr)
 {
   natThread *nt = (natThread *) ptr;
   _Jv_ThreadDestroyData (nt->thread);
+#ifdef _Jv_HaveCondDestroy
+  _Jv_CondDestroy (&nt->join_cond);
+#endif
+#ifdef _Jv_HaveMutexDestroy
+  _Jv_MutexDestroy (&nt->join_mutex);
+#endif
+  _Jv_FreeJNIEnv((JNIEnv*)nt->jni_env);
+  
+  nt->park_helper.destroy();
 }
 
 jint
 java::lang::Thread::countStackFrames (void)
 {
   // NOTE: This is deprecated in JDK 1.2.
-  throw new UnsupportedOperationException
-    (JvNewStringLatin1 ("Thread.countStackFrames unimplemented"));
+
+  // Old applets still call this method.  Rather than throwing
+  // UnsupportedOperationException we simply fail silently.
+
   return 0;
 }
 
@@ -96,15 +98,6 @@ java::lang::Thread *
 java::lang::Thread::currentThread (void)
 {
   return _Jv_ThreadCurrent ();
-}
-
-void
-java::lang::Thread::destroy (void)
-{
-  // NOTE: This is marked as unimplemented in the JDK 1.2
-  // documentation.
-  throw new UnsupportedOperationException
-    (JvNewStringLatin1 ("Thread.destroy unimplemented"));
 }
 
 jboolean
@@ -115,11 +108,34 @@ java::lang::Thread::holdsLock (jobject obj)
   return !_Jv_ObjectCheckMonitor (obj);
 }
 
+jboolean
+java::lang::Thread::isAlive (void)
+{
+  natThread *nt = (natThread *) data;
+  return nt->alive_flag != (obj_addr_t)THREAD_DEAD;
+}
+
 void
 java::lang::Thread::interrupt (void)
 {
+  checkAccess ();
+
   natThread *nt = (natThread *) data;
-  _Jv_ThreadInterrupt (nt->thread);
+
+  // If a thread is in state ALIVE, we atomically set it to state
+  // SIGNALED and send it a signal.  Once we've sent it the signal, we
+  // set its state back to ALIVE.
+  if (compare_and_swap 
+      (&nt->alive_flag, Thread::THREAD_ALIVE, Thread::THREAD_SIGNALED))
+    {
+      _Jv_ThreadInterrupt (nt->thread);
+      compare_and_swap 
+	(&nt->alive_flag, THREAD_SIGNALED, Thread::THREAD_ALIVE);
+
+      // Even though we've interrupted this thread, it might still be
+      // parked.
+      nt->park_helper.unpark ();
+    }
 }
 
 void
@@ -152,8 +168,9 @@ void
 java::lang::Thread::resume (void)
 {
   checkAccess ();
-  throw new UnsupportedOperationException
-    (JvNewStringLatin1 ("Thread.resume unimplemented"));
+
+  // Old applets still call this method.  Rather than throwing
+  // UnsupportedOperationException we simply fail silently.
 }
 
 void
@@ -197,9 +214,16 @@ java::lang::Thread::sleep (jlong millis, jint nanos)
 void
 java::lang::Thread::finish_ ()
 {
+  __sync_synchronize();
   natThread *nt = (natThread *) data;
   
+  nt->park_helper.deactivate ();
   group->removeThread (this);
+
+#ifdef INTERPRETER
+  if (JVMTI_REQUESTED_EVENT (ThreadEnd))
+    _Jv_JVMTI_PostEvent (JVMTI_EVENT_THREAD_END, this, nt->jni_env);
+#endif
 
 #ifdef ENABLE_JVMPI  
   if (_Jv_JVMPI_Notify_THREAD_END)
@@ -215,11 +239,21 @@ java::lang::Thread::finish_ ()
     }
 #endif
 
-  group = NULL;
-  
+  // If a method cache was created, free it.
+  _Jv_FreeMethodCache();
+
+  // Clear out thread locals.
+  locals = NULL;
+
   // Signal any threads that are waiting to join() us.
   _Jv_MutexLock (&nt->join_mutex);
-  alive_flag = false;
+
+  {
+    JvSynchronize sync (this);
+    nt->alive_flag = THREAD_DEAD;
+    state = JV_TERMINATED;
+  }
+
   _Jv_CondNotifyAll (&nt->join_cond, &nt->join_mutex);
   _Jv_MutexUnlock (&nt->join_mutex);  
 }
@@ -229,6 +263,14 @@ java::lang::Thread::finish_ ()
 static void
 _Jv_NotifyThreadStart (java::lang::Thread* thread)
 {
+#ifdef INTERPRETER
+  if (JVMTI_REQUESTED_EVENT (ThreadStart))
+    {
+      natThread *nt = reinterpret_cast<natThread *> (thread->data);
+      _Jv_JVMTI_PostEvent (JVMTI_EVENT_THREAD_START, thread, nt->jni_env);
+    }
+#endif
+
 #ifdef ENABLE_JVMPI
       if (_Jv_JVMPI_Notify_THREAD_START)
 	{
@@ -298,7 +340,7 @@ _Jv_ThreadRun (java::lang::Thread* thread)
       // this results in an uncaught exception, that is ignored.
       try
 	{
-	  thread->group->uncaughtException (thread, t);
+	  thread->getUncaughtExceptionHandler()->uncaughtException (thread, t);
 	}
       catch (java::lang::Throwable *f)
 	{
@@ -307,6 +349,13 @@ _Jv_ThreadRun (java::lang::Thread* thread)
     }
 
   thread->finish_ ();
+}
+
+_Jv_Thread_t*
+_Jv_ThreadGetData (java::lang::Thread* thread)
+{
+  natThread* nt = (natThread*) thread->data;
+  return nt->thread;
 }
 
 void
@@ -318,25 +367,29 @@ java::lang::Thread::start (void)
   if (!startable_flag)
     throw new IllegalThreadStateException;
 
-  alive_flag = true;
-  startable_flag = false;
   natThread *nt = (natThread *) data;
+  nt->alive_flag = THREAD_ALIVE;
+  startable_flag = false;
+  state = JV_RUNNABLE;
   _Jv_ThreadStart (this, nt->thread, (_Jv_ThreadStartFunc *) &_Jv_ThreadRun);
 }
 
 void
 java::lang::Thread::stop (java::lang::Throwable *)
 {
-  throw new UnsupportedOperationException
-    (JvNewStringLatin1 ("Thread.stop unimplemented"));
+  checkAccess ();
+
+  // Old applets still call this method.  Rather than throwing
+  // UnsupportedOperationException we simply fail silently.
 }
 
 void
 java::lang::Thread::suspend (void)
 {
   checkAccess ();
-  throw new UnsupportedOperationException 
-    (JvNewStringLatin1 ("Thread.suspend unimplemented"));
+
+  // Old applets still call this method.  Rather than throwing
+  // UnsupportedOperationException we simply fail silently.
 }
 
 static int nextThreadNumber = 0;
@@ -373,6 +426,33 @@ java::lang::Thread::yield (void)
   _Jv_ThreadYield ();
 }
 
+::java::lang::Thread$State *
+java::lang::Thread::getState()
+{
+  _Jv_InitClass(&::java::lang::Thread$State::class$);
+
+  switch (state)
+    {
+    case JV_BLOCKED:
+      return ::java::lang::Thread$State::BLOCKED;
+    case JV_NEW:
+      return ::java::lang::Thread$State::NEW;
+
+    case JV_RUNNABLE:
+      return ::java::lang::Thread$State::RUNNABLE;
+    case JV_TERMINATED:
+      return ::java::lang::Thread$State::TERMINATED;
+    case JV_TIMED_WAITING:
+      return ::java::lang::Thread$State::TIMED_WAITING;
+    case JV_WAITING:
+      return ::java::lang::Thread$State::WAITING;
+    }
+
+  // We don't really need a default, but this makes the compiler
+  // happy.
+  return ::java::lang::Thread$State::RUNNABLE;
+}
+
 JNIEnv *
 _Jv_GetCurrentJNIEnv ()
 {
@@ -391,15 +471,18 @@ _Jv_SetCurrentJNIEnv (JNIEnv *env)
 }
 
 // Attach the current native thread to an existing (but unstarted) Thread 
-// object. Returns -1 on failure, 0 upon success.
+// object. Does not register thread with the garbage collector.
+// Returns -1 on failure, 0 upon success.
 jint
 _Jv_AttachCurrentThread(java::lang::Thread* thread)
 {
+  JvSynchronize sync (thread);
   if (thread == NULL || thread->startable_flag == false)
     return -1;
   thread->startable_flag = false;
-  thread->alive_flag = true;
   natThread *nt = (natThread *) thread->data;
+  nt->alive_flag = ::java::lang::Thread::THREAD_ALIVE;
+  thread->state = JV_RUNNABLE;
   _Jv_ThreadRegister (nt->thread);
   return 0;
 }
@@ -407,12 +490,14 @@ _Jv_AttachCurrentThread(java::lang::Thread* thread)
 java::lang::Thread*
 _Jv_AttachCurrentThread(jstring name, java::lang::ThreadGroup* group)
 {
+  // Register thread with GC before attempting any allocations.
+  _Jv_GCAttachThread ();
   java::lang::Thread *thread = _Jv_ThreadCurrent ();
   if (thread != NULL)
     return thread;
   if (name == NULL)
     name = java::lang::Thread::gen_name ();
-  thread = new java::lang::Thread (NULL, group, NULL, name);
+  thread = new java::lang::Thread (NULL, group, NULL, name, false);
   _Jv_AttachCurrentThread (thread);
   _Jv_NotifyThreadStart (thread);
   return thread;
@@ -426,7 +511,7 @@ _Jv_AttachCurrentThreadAsDaemon(jstring name, java::lang::ThreadGroup* group)
     return thread;
   if (name == NULL)
     name = java::lang::Thread::gen_name ();
-  thread = new java::lang::Thread (NULL, group, NULL, name);
+  thread = new java::lang::Thread (NULL, group, NULL, name, false);
   thread->setDaemon (true);
   _Jv_AttachCurrentThread (thread);
   _Jv_NotifyThreadStart (thread);
@@ -441,6 +526,7 @@ _Jv_DetachCurrentThread (void)
     return -1;
 
   _Jv_ThreadUnRegister ();
+  _Jv_GCDetachThread ();
   // Release the monitors.
   t->finish_ ();
 

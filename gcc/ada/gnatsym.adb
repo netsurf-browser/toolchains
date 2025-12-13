@@ -6,18 +6,17 @@
 --                                                                          --
 --                                 B o d y                                  --
 --                                                                          --
---          Copyright (C) 2003-2004 Free Software Foundation, Inc.          --
+--          Copyright (C) 2003-2010, Free Software Foundation, Inc.         --
 --                                                                          --
 -- GNAT is free software;  you can  redistribute it  and/or modify it under --
 -- terms of the  GNU General Public License as published  by the Free Soft- --
--- ware  Foundation;  either version 2,  or (at your option) any later ver- --
+-- ware  Foundation;  either version 3,  or (at your option) any later ver- --
 -- sion.  GNAT is distributed in the hope that it will be useful, but WITH- --
 -- OUT ANY WARRANTY;  without even the  implied warranty of MERCHANTABILITY --
 -- or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU General Public License --
 -- for  more details.  You should have  received  a copy of the GNU General --
--- Public License  distributed with GNAT;  see file COPYING.  If not, write --
--- to  the Free Software Foundation,  59 Temple Place - Suite 330,  Boston, --
--- MA 02111-1307, USA.                                                      --
+-- Public License  distributed with GNAT; see file COPYING3.  If not, go to --
+-- http://www.gnu.org/licenses for a complete copy of the license.          --
 --                                                                          --
 -- GNAT was originally developed  by the GNAT team at  New York University. --
 -- Extensive contributions were provided by Ada Core Technologies Inc.      --
@@ -42,15 +41,18 @@
 --    - (optional) the name of the reference symbol file
 --    - the names of one or more object files where the symbols are found
 
-with GNAT.Command_Line; use GNAT.Command_Line;
-with GNAT.OS_Lib;       use GNAT.OS_Lib;
-
 with Gnatvsn; use Gnatvsn;
 with Osint;   use Osint;
 with Output;  use Output;
-
 with Symbols; use Symbols;
 with Table;
+
+with Ada.Exceptions; use Ada.Exceptions;
+with Ada.Text_IO;    use Ada.Text_IO;
+
+with GNAT.Command_Line;         use GNAT.Command_Line;
+with GNAT.Directory_Operations; use GNAT.Directory_Operations;
+with GNAT.OS_Lib;               use GNAT.OS_Lib;
 
 procedure Gnatsym is
 
@@ -78,14 +80,19 @@ procedure Gnatsym is
    --  The name of the reference symbol file
 
    Version_String : String_Access := Empty;
-   --  The version of the library. Used on VMS.
+   --  The version of the library (used on VMS)
+
+   type Object_File_Data is record
+      Path : String_Access;
+      Name : String_Access;
+   end record;
 
    package Object_Files is new Table.Table
-     (Table_Component_Type => String_Access,
+     (Table_Component_Type => Object_File_Data,
       Table_Index_Type     => Natural,
       Table_Low_Bound      => 0,
       Table_Initial        => 10,
-      Table_Increment      => 10,
+      Table_Increment      => 100,
       Table_Name           => "Gnatsymb.Object_Files");
    --  A table to store the object file names
 
@@ -111,7 +118,8 @@ procedure Gnatsym is
          Write_Eol;
          Write_Str ("GNATSYMB ");
          Write_Str (Gnat_Version_String);
-         Write_Str (" Copyright 2003-2004 Free Software Foundation, Inc");
+         Write_Eol;
+         Write_Str ("Copyright 2003-2004 Free Software Foundation, Inc");
          Write_Eol;
          Copyright_Displayed := True;
       end if;
@@ -124,7 +132,7 @@ procedure Gnatsym is
    procedure Parse_Cmd_Line is
    begin
       loop
-         case GNAT.Command_Line.Getopt ("c C q r: s: v V:") is
+         case GNAT.Command_Line.Getopt ("c C D q r: R s: v V:") is
             when ASCII.NUL =>
                exit;
 
@@ -134,12 +142,18 @@ procedure Gnatsym is
             when 'C' =>
                Symbol_Policy := Controlled;
 
+            when 'D' =>
+               Symbol_Policy := Direct;
+
             when 'q' =>
                Quiet := True;
 
             when 'r' =>
                Reference_Symbol_File_Name :=
                  new String'(GNAT.Command_Line.Parameter);
+
+            when 'R' =>
+               Symbol_Policy := Restricted;
 
             when 's' =>
                Symbol_File_Name := new String'(GNAT.Command_Line.Parameter);
@@ -151,11 +165,12 @@ procedure Gnatsym is
                Version_String := new String'(GNAT.Command_Line.Parameter);
 
             when others =>
-               Fail ("invalid switch: ", Full_Switch);
+               Fail ("invalid switch: " & Full_Switch);
          end case;
       end loop;
 
-      --  Get the file names
+      --  Get the object file names and put them in the table in alphabetical
+      --  order of base names.
 
       loop
          declare
@@ -166,13 +181,32 @@ procedure Gnatsym is
             exit when S'Length = 0;
 
             Object_Files.Increment_Last;
-            Object_Files.Table (Object_Files.Last) := S;
+
+            declare
+               Base : constant String := Base_Name (S.all);
+               Last : constant Positive := Object_Files.Last;
+               J    : Positive;
+
+            begin
+               J := 1;
+               while J < Last loop
+                  if Object_Files.Table (J).Name.all > Base then
+                     Object_Files.Table (J + 1 .. Last) :=
+                       Object_Files.Table (J .. Last - 1);
+                     exit;
+                  end if;
+
+                  J := J + 1;
+               end loop;
+
+               Object_Files.Table (J) := (S, new String'(Base));
+            end;
          end;
       end loop;
    exception
       when Invalid_Switch =>
          Usage;
-         Fail ("invalid switch : ", Full_Switch);
+         Fail ("invalid switch : " & Full_Switch);
    end Parse_Cmd_Line;
 
    -----------
@@ -183,10 +217,11 @@ procedure Gnatsym is
    begin
       Write_Line ("gnatsym [options] object_file {object_file}");
       Write_Eol;
-      Write_Line ("   -c       Compliant policy");
-      Write_Line ("   -C       Controlled policy");
+      Write_Line ("   -c       Compliant symbol policy");
+      Write_Line ("   -C       Controlled symbol policy");
       Write_Line ("   -q       Quiet mode");
       Write_Line ("   -r<ref>  Reference symbol file name");
+      Write_Line ("   -R       Restricted symbol policy");
       Write_Line ("   -s<sym>  Symbol file name");
       Write_Line ("   -v       Verbose mode");
       Write_Line ("   -V<ver>  Version");
@@ -217,6 +252,56 @@ begin
       Usage;
       OS_Exit (1);
 
+   --  When symbol policy is direct, simply copy the reference symbol file to
+   --  the symbol file.
+
+   elsif Symbol_Policy = Direct then
+      declare
+         File_In  : Ada.Text_IO.File_Type;
+         File_Out : Ada.Text_IO.File_Type;
+         Line     : String (1 .. 1_000);
+         Last     : Natural;
+
+      begin
+         begin
+            Open (File_In, In_File, Reference_Symbol_File_Name.all);
+
+         exception
+            when X : others =>
+               if not Quiet then
+                  Put_Line
+                    ("could not open """ &
+                     Reference_Symbol_File_Name.all
+                     & """");
+                  Put_Line (Exception_Message (X));
+               end if;
+
+               OS_Exit (1);
+         end;
+
+         begin
+            Create (File_Out, Out_File, Symbol_File_Name.all);
+
+         exception
+            when X : others =>
+               if not Quiet then
+                  Put_Line
+                    ("could not create """ & Symbol_File_Name.all & """");
+                  Put_Line (Exception_Message (X));
+               end if;
+
+               OS_Exit (1);
+         end;
+
+         while not End_Of_File (File_In) loop
+            Get_Line (File_In, Line, Last);
+            Put_Line (File_Out, Line (1 .. Last));
+         end loop;
+
+         Close (File_In);
+         Close (File_Out);
+      end;
+
    else
       if Verbose then
          Write_Str ("Initializing symbol file """);
@@ -244,14 +329,16 @@ begin
 
          if Verbose then
             Write_Str ("Processing object file """);
-            Write_Str (Object_Files.Table (Object_File).all);
+            Write_Str (Object_Files.Table (Object_File).Path.all);
             Write_Line ("""");
          end if;
 
-         Process (Object_Files.Table (Object_File).all, Success);
+         Processing.Process
+           (Object_Files.Table (Object_File).Path.all,
+            Success);
       end loop;
 
-      --  Finalize the object file
+      --  Finalize the symbol file
 
       if Success then
          if Verbose then

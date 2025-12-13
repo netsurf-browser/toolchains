@@ -6,25 +6,23 @@
 --                                                                          --
 --                                 B o d y                                  --
 --                                                                          --
---          Copyright (C) 1992-2002 Free Software Foundation, Inc.          --
+--          Copyright (C) 1992-2009, Free Software Foundation, Inc.         --
 --                                                                          --
 -- GNAT is free software;  you can  redistribute it  and/or modify it under --
 -- terms of the  GNU General Public License as published  by the Free Soft- --
--- ware  Foundation;  either version 2,  or (at your option) any later ver- --
+-- ware  Foundation;  either version 3,  or (at your option) any later ver- --
 -- sion.  GNAT is distributed in the hope that it will be useful, but WITH- --
 -- OUT ANY WARRANTY;  without even the  implied warranty of MERCHANTABILITY --
--- or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU General Public License --
--- for  more details.  You should have  received  a copy of the GNU General --
--- Public License  distributed with GNAT;  see file COPYING.  If not, write --
--- to  the Free Software Foundation,  59 Temple Place - Suite 330,  Boston, --
--- MA 02111-1307, USA.                                                      --
+-- or FITNESS FOR A PARTICULAR PURPOSE.                                     --
 --                                                                          --
--- As a special exception,  if other files  instantiate  generics from this --
--- unit, or you link  this unit with other files  to produce an executable, --
--- this  unit  does not  by itself cause  the resulting  executable  to  be --
--- covered  by the  GNU  General  Public  License.  This exception does not --
--- however invalidate  any other reasons why  the executable file  might be --
--- covered by the  GNU Public License.                                      --
+-- As a special exception under Section 7 of GPL version 3, you are granted --
+-- additional permissions described in the GCC Runtime Library Exception,   --
+-- version 3.1, as published by the Free Software Foundation.               --
+--                                                                          --
+-- You should have received a copy of the GNU General Public License and    --
+-- a copy of the GCC Runtime Library Exception along with this program;     --
+-- see the files COPYING3 and COPYING.RUNTIME respectively.  If not, see    --
+-- <http://www.gnu.org/licenses/>.                                          --
 --                                                                          --
 -- GNAT was originally developed  by the GNAT team at  New York University. --
 -- Extensive contributions were provided by Ada Core Technologies Inc.      --
@@ -53,7 +51,7 @@ package body Ada.Wide_Text_IO.Editing is
    -- Blank_When_Zero --
    ---------------------
 
-   function Blank_When_Zero (Pic : in Picture) return Boolean is
+   function Blank_When_Zero (Pic : Picture) return Boolean is
    begin
       return Pic.Contents.Original_BWZ;
    end Blank_When_Zero;
@@ -69,13 +67,12 @@ package body Ada.Wide_Text_IO.Editing is
       -----------
 
       function Image
-        (Item       : in Num;
-         Pic        : in Picture;
-         Currency   : in Wide_String    := Default_Currency;
-         Fill       : in Wide_Character := Default_Fill;
-         Separator  : in Wide_Character := Default_Separator;
-         Radix_Mark : in Wide_Character := Default_Radix_Mark)
-         return       Wide_String
+        (Item       : Num;
+         Pic        : Picture;
+         Currency   : Wide_String    := Default_Currency;
+         Fill       : Wide_Character := Default_Fill;
+         Separator  : Wide_Character := Default_Separator;
+         Radix_Mark : Wide_Character := Default_Radix_Mark) return Wide_String
       is
       begin
          return Format_Number
@@ -88,9 +85,8 @@ package body Ada.Wide_Text_IO.Editing is
       ------------
 
       function Length
-        (Pic      : in Picture;
-         Currency : in Wide_String := Default_Currency)
-         return     Natural
+        (Pic      : Picture;
+         Currency : Wide_String := Default_Currency) return Natural
       is
          Picstr     : constant String := Pic_String (Pic);
          V_Adjust   : Integer := 0;
@@ -122,13 +118,13 @@ package body Ada.Wide_Text_IO.Editing is
       ---------
 
       procedure Put
-        (File       : in Wide_Text_IO.File_Type;
-         Item       : in Num;
-         Pic        : in Picture;
-         Currency   : in Wide_String    := Default_Currency;
-         Fill       : in Wide_Character := Default_Fill;
-         Separator  : in Wide_Character := Default_Separator;
-         Radix_Mark : in Wide_Character := Default_Radix_Mark)
+        (File       : Wide_Text_IO.File_Type;
+         Item       : Num;
+         Pic        : Picture;
+         Currency   : Wide_String    := Default_Currency;
+         Fill       : Wide_Character := Default_Fill;
+         Separator  : Wide_Character := Default_Separator;
+         Radix_Mark : Wide_Character := Default_Radix_Mark)
       is
       begin
          Wide_Text_IO.Put (File, Image (Item, Pic,
@@ -136,12 +132,12 @@ package body Ada.Wide_Text_IO.Editing is
       end Put;
 
       procedure Put
-        (Item       : in Num;
-         Pic        : in Picture;
-         Currency   : in Wide_String    := Default_Currency;
-         Fill       : in Wide_Character := Default_Fill;
-         Separator  : in Wide_Character := Default_Separator;
-         Radix_Mark : in Wide_Character := Default_Radix_Mark)
+        (Item       : Num;
+         Pic        : Picture;
+         Currency   : Wide_String    := Default_Currency;
+         Fill       : Wide_Character := Default_Fill;
+         Separator  : Wide_Character := Default_Separator;
+         Radix_Mark : Wide_Character := Default_Radix_Mark)
       is
       begin
          Wide_Text_IO.Put (Image (Item, Pic,
@@ -150,12 +146,12 @@ package body Ada.Wide_Text_IO.Editing is
 
       procedure Put
         (To         : out Wide_String;
-         Item       : in Num;
-         Pic        : in Picture;
-         Currency   : in Wide_String    := Default_Currency;
-         Fill       : in Wide_Character := Default_Fill;
-         Separator  : in Wide_Character := Default_Separator;
-         Radix_Mark : in Wide_Character := Default_Radix_Mark)
+         Item       : Num;
+         Pic        : Picture;
+         Currency   : Wide_String    := Default_Currency;
+         Fill       : Wide_Character := Default_Fill;
+         Separator  : Wide_Character := Default_Separator;
+         Radix_Mark : Wide_Character := Default_Radix_Mark)
       is
          Result : constant Wide_String :=
            Image (Item, Pic, Currency, Fill, Separator, Radix_Mark);
@@ -175,15 +171,13 @@ package body Ada.Wide_Text_IO.Editing is
 
       function Valid
         (Item     : Num;
-         Pic      : in Picture;
-         Currency : in Wide_String := Default_Currency)
-         return     Boolean
+         Pic      : Picture;
+         Currency : Wide_String := Default_Currency) return Boolean
       is
       begin
          declare
             Temp : constant Wide_String := Image (Item, Pic, Currency);
             pragma Warnings (Off, Temp);
-
          begin
             return True;
          end;
@@ -192,14 +186,13 @@ package body Ada.Wide_Text_IO.Editing is
          when Layout_Error => return False;
 
       end Valid;
-
    end Decimal_Output;
 
    ------------
    -- Expand --
    ------------
 
-   function Expand (Picture : in String) return String is
+   function Expand (Picture : String) return String is
       Result        : String (1 .. MAX_PICSIZE);
       Picture_Index : Integer := Picture'First;
       Result_Index  : Integer := Result'First;
@@ -220,11 +213,11 @@ package body Ada.Wide_Text_IO.Editing is
 
             when '(' =>
 
-               --  We now need to scan out the count after a left paren.
-               --  In the non-wide version we used Integer_IO.Get, but
-               --  that is not convenient here, since we don't want to
-               --  drag in normal Text_IO just for this purpose. So we
-               --  do the scan ourselves, with the normal validity checks.
+               --  We now need to scan out the count after a left paren. In
+               --  the non-wide version we used Integer_IO.Get, but that is
+               --  not convenient here, since we don't want to drag in normal
+               --  Text_IO just for this purpose. So we do the scan ourselves,
+               --  with the normal validity checks.
 
                Last := Picture_Index + 1;
                Count := 0;
@@ -262,7 +255,7 @@ package body Ada.Wide_Text_IO.Editing is
                end loop;
 
                --  In what follows note that one copy of the repeated
-               --  character has already been made, so a count of one is a
+               --  character has already been made, so a count of one is
                --  no-op, and a count of zero erases a character.
 
                for J in 2 .. Count loop
@@ -271,7 +264,7 @@ package body Ada.Wide_Text_IO.Editing is
 
                Result_Index := Result_Index + Count - 1;
 
-               --  Last was a ')' throw it away too.
+               --  Last was a ')' throw it away too
 
                Picture_Index := Last + 1;
 
@@ -293,7 +286,6 @@ package body Ada.Wide_Text_IO.Editing is
    exception
       when others =>
          raise Picture_Error;
-
    end Expand;
 
    -------------------
@@ -306,8 +298,7 @@ package body Ada.Wide_Text_IO.Editing is
       Currency_Symbol     : Wide_String;
       Fill_Character      : Wide_Character;
       Separator_Character : Wide_Character;
-      Radix_Point         : Wide_Character)
-      return                Wide_String
+      Radix_Point         : Wide_Character) return Wide_String
    is
       Attrs    : Number_Attributes := Parse_Number_String (Number);
       Position : Integer;
@@ -315,15 +306,15 @@ package body Ada.Wide_Text_IO.Editing is
 
       Sign_Position : Integer := Pic.Sign_Position; --  may float.
 
-      Answer        : Wide_String (1 .. Pic.Picture.Length);
-      Last          : Integer;
-      Currency_Pos  : Integer := Pic.Start_Currency;
+      Answer       : Wide_String (1 .. Pic.Picture.Length);
+      Last         : Integer;
+      Currency_Pos : Integer := Pic.Start_Currency;
 
       Dollar : Boolean := False;
-      --  Overridden immediately if necessary.
+      --  Overridden immediately if necessary
 
       Zero : Boolean := True;
-      --  Set to False when a non-zero digit is output.
+      --  Set to False when a non-zero digit is output
 
    begin
 
@@ -368,8 +359,8 @@ package body Ada.Wide_Text_IO.Editing is
                      end loop;
 
                      --  The rounding may add a digit in front. Either the
-                     --  leading blank or the sign (already captured) can
-                     --  be overwritten.
+                     --  leading blank or the sign (already captured) can be
+                     --  overwritten.
 
                      if R_Pos = 1 then
                         Rounded (R_Pos) := '1';
@@ -421,7 +412,7 @@ package body Ada.Wide_Text_IO.Editing is
       for J in reverse Last .. Answer'Last loop
          exit when J = Pic.Radix_Position;
 
-         --  Do this test First, Separator_Character can equal Pic.Floater.
+         --  Do this test First, Separator_Character can equal Pic.Floater
 
          if Answer (J) = Pic.Floater then
             exit;
@@ -486,20 +477,17 @@ package body Ada.Wide_Text_IO.Editing is
          raise Layout_Error;
       end if;
 
-      if Pic.Radix_Position = Invalid_Position then
-         Position := Answer'Last;
-      else
-         Position := Pic.Radix_Position - 1;
-      end if;
+      Position :=
+        (if Pic.Radix_Position = Invalid_Position then Answer'Last
+         else Pic.Radix_Position - 1);
 
       for J in reverse Attrs.Start_Of_Int .. Attrs.End_Of_Int loop
-
          while Answer (Position) /= '9'
-           and Answer (Position) /= Pic.Floater
+                 and then
+               Answer (Position) /= Pic.Floater
          loop
             if Answer (Position) = '_' then
                Answer (Position) := Separator_Character;
-
             elsif Answer (Position) = 'b' then
                Answer (Position) := ' ';
             end if;
@@ -547,7 +535,7 @@ package body Ada.Wide_Text_IO.Editing is
               or else
             Pic.Floater = '-'
       then
-         for J in Pic.End_Float .. Position loop --  May be null range.
+         for J in Pic.End_Float .. Position loop --  May be null range
             if Answer (J) = '9' then
                Answer (J) := '0';
 
@@ -573,12 +561,12 @@ package body Ada.Wide_Text_IO.Editing is
 
       elsif Pic.Floater = '$' then
 
-         for J in Pic.End_Float .. Position loop --  May be null range.
+         for J in Pic.End_Float .. Position loop --  May be null range
             if Answer (J) = '9' then
                Answer (J) := '0';
 
             elsif Answer (J) = '_' then
-               Answer (J) := ' ';   --  no separator before leftmost digit.
+               Answer (J) := ' ';   --  no separator before leftmost digit
 
             elsif Answer (J) = 'b' then
                Answer (J) := ' ';
@@ -598,7 +586,7 @@ package body Ada.Wide_Text_IO.Editing is
 
       elsif Pic.Floater = '*' then
 
-         for J in Pic.End_Float .. Position loop --  May be null range.
+         for J in Pic.End_Float .. Position loop --  May be null range
             if Answer (J) = '9' then
                Answer (J) := '0';
 
@@ -737,7 +725,7 @@ package body Ada.Wide_Text_IO.Editing is
 
             for J in Last .. Answer'Last loop
 
-               if Answer (J) = '9' or Answer (J) = Pic.Floater then
+               if Answer (J) = '9' or else Answer (J) = Pic.Floater then
                   Answer (J) := To_Wide (Rounded (Position));
 
                   if Rounded (Position) /= '0' then
@@ -798,25 +786,22 @@ package body Ada.Wide_Text_IO.Editing is
          --  No trailing digits, but now J may need to stick in a currency
          --  symbol or sign.
 
-         if Pic.Start_Currency = Invalid_Position then
-            Position := Answer'Last + 1;
-         else
-            Position := Pic.Start_Currency;
-         end if;
+         Position :=
+           (if Pic.Start_Currency = Invalid_Position then Answer'Last + 1
+            else Pic.Start_Currency);
       end if;
 
       for J in Position .. Answer'Last loop
-
          if Pic.Start_Currency /= Invalid_Position and then
             Answer (Pic.Start_Currency) = '#' then
             Currency_Pos := 1;
          end if;
 
-         --  Note: There are some weird cases J can imagine with 'b' or '#'
-         --  in currency strings where the following code will cause
-         --  glitches. The trick is to tell when the character in the
-         --  answer should be checked, and when to look at the original
-         --  string. Some other time. RIE 11/26/96 ???
+         --  Note: There are some weird cases J can imagine with 'b' or '#' in
+         --  currency strings where the following code will cause glitches. The
+         --  trick is to tell when the character in the answer should be
+         --  checked, and when to look at the original string. Some other time.
+         --  RIE 11/26/96 ???
 
          case Answer (J) is
             when '*' =>
@@ -863,11 +848,11 @@ package body Ada.Wide_Text_IO.Editing is
          end case;
       end loop;
 
-      --  Now get rid of Blank_when_Zero and complete Star fill.
+      --  Now get rid of Blank_when_Zero and complete Star fill
 
-      if Zero and Pic.Blank_When_Zero then
+      if Zero and then Pic.Blank_When_Zero then
 
-         --  Value is zero, and blank it.
+         --  Value is zero, and blank it
 
          Last := Answer'Last;
 
@@ -882,7 +867,7 @@ package body Ada.Wide_Text_IO.Editing is
 
          return Wide_String'(1 .. Last => ' ');
 
-      elsif Zero and Pic.Star_Fill then
+      elsif Zero and then Pic.Star_Fill then
          Last := Answer'Last;
 
          if Dollar then
@@ -950,8 +935,9 @@ package body Ada.Wide_Text_IO.Editing is
 
                --  1) Expand $, replace '.' with Radix_Point
 
-               return Answer (1 .. Currency_Pos - 1) & Currency_Symbol &
-                  Answer (Currency_Pos + 1 .. Answer'Last);
+               return
+                 Answer (1 .. Currency_Pos - 1) & Currency_Symbol &
+                 Answer (Currency_Pos + 1 .. Answer'Last);
 
             else
                --  2) No currency expansion, replace '.' with Radix_Point
@@ -1013,7 +999,6 @@ package body Ada.Wide_Text_IO.Editing is
 
          return Answer;
       end if;
-
    end Format_Number;
 
    -------------------------
@@ -1071,7 +1056,7 @@ package body Ada.Wide_Text_IO.Editing is
                   raise Picture_Error;
                end if;
 
-               --  Two decimal points is a no-no.
+               --  Two decimal points is a no-no
 
                Answer.Has_Fraction    := True;
                Answer.End_Of_Fraction := J;
@@ -1091,10 +1076,9 @@ package body Ada.Wide_Text_IO.Editing is
          Answer.Start_Of_Int := Answer.End_Of_Int + 1;
       end if;
 
-      --  No significant (intger) digits needs a null range.
+      --  No significant (intger) digits needs a null range
 
       return Answer;
-
    end Parse_Number_String;
 
    ----------------
@@ -1104,12 +1088,14 @@ package body Ada.Wide_Text_IO.Editing is
    --  The following ensures that we return B and not b being careful not
    --  to break things which expect lower case b for blank. See CXF3A02.
 
-   function Pic_String (Pic : in Picture) return String is
+   function Pic_String (Pic : Picture) return String is
       Temp : String (1 .. Pic.Contents.Picture.Length) :=
                               Pic.Contents.Picture.Expanded;
    begin
       for J in Temp'Range loop
-         if Temp (J) = 'b' then Temp (J) := 'B'; end if;
+         if Temp (J) = 'b' then
+            Temp (J) := 'B';
+         end if;
       end loop;
 
       return Temp;
@@ -1125,7 +1111,7 @@ package body Ada.Wide_Text_IO.Editing is
 
       type Legality is  (Okay, Reject);
       State : Legality := Reject;
-      --  Start in reject, which will reject null strings.
+      --  Start in reject, which will reject null strings
 
       Index : Pic_Index := Pic.Picture.Expanded'First;
 
@@ -1435,7 +1421,7 @@ package body Ada.Wide_Text_IO.Editing is
 
       procedure Leading_Dollar is
       begin
-         --  Treat as a floating dollar, and unwind otherwise.
+         --  Treat as a floating dollar, and unwind otherwise
 
          Pic.Floater := '$';
          Pic.Start_Currency := Index;
@@ -1504,7 +1490,7 @@ package body Ada.Wide_Text_IO.Editing is
                      Pic.End_Float := Invalid_Position;
                   end if;
 
-                  --  A single dollar does not a floating make.
+                  --  A single dollar does not a floating make
 
                   Number_Completion;
                   return;
@@ -1516,8 +1502,8 @@ package body Ada.Wide_Text_IO.Editing is
                      Pic.End_Float := Invalid_Position;
                   end if;
 
-                  --  Only one dollar before the sign is okay,
-                  --  but doesn't float.
+                  --  Only one dollar before the sign is okay, but doesn't
+                  --  float.
 
                   Pic.Radix_Position := Index;
                   Skip;
@@ -1552,7 +1538,7 @@ package body Ada.Wide_Text_IO.Editing is
          --  Set to True if a '_', '0', '/', 'B', or 'b' is encountered
 
          Must_Float : Boolean := False;
-         --  Set to true if a '#' occurs after an insert.
+         --  Set to true if a '#' occurs after an insert
 
       begin
          --  Treat as a floating currency. If it isn't, this will be
@@ -1628,7 +1614,7 @@ package body Ada.Wide_Text_IO.Editing is
                when '9' =>
                   if State /= Okay then
 
-                     --  A single '#' doesn't float.
+                     --  A single '#' doesn't float
 
                      Pic.Floater := '!';
                      Pic.Start_Float := Invalid_Position;
@@ -1645,8 +1631,8 @@ package body Ada.Wide_Text_IO.Editing is
                      Pic.End_Float := Invalid_Position;
                   end if;
 
-                  --  Only one pound before the sign is okay,
-                  --  but doesn't float.
+                  --  Only one pound before the sign is okay, but doesn't
+                  --  float.
 
                   Pic.Radix_Position := Index;
                   Skip;
@@ -1709,7 +1695,7 @@ package body Ada.Wide_Text_IO.Editing is
                return;
             end if;
 
-            --  Will return in Okay state if a '9' was seen.
+            --  Will return in Okay state if a '9' was seen
 
          end loop;
       end Number;
@@ -2093,7 +2079,7 @@ package body Ada.Wide_Text_IO.Editing is
                Pic.Picture.Expanded (Index) := 'C';
                Skip;
 
-               if Look = 'R' or Look = 'r' then
+               if Look = 'R' or else Look = 'r' then
                   Pic.Second_Sign := Index;
                   Pic.Picture.Expanded (Index) := 'R';
                   Skip;
@@ -2109,7 +2095,7 @@ package body Ada.Wide_Text_IO.Editing is
                Pic.Picture.Expanded (Index) := 'D';
                Skip;
 
-               if Look = 'B' or Look = 'b' then
+               if Look = 'B' or else Look = 'b' then
                   Pic.Second_Sign := Index;
                   Pic.Picture.Expanded (Index) := 'B';
                   Skip;
@@ -2139,7 +2125,7 @@ package body Ada.Wide_Text_IO.Editing is
       -- Picture --
       -------------
 
-      --  Note that Picture can be called in either State.
+      --  Note that Picture can be called in either State
 
       --  It will set state to Valid only if a 9 is encountered or floating
       --  currency is called.
@@ -2197,7 +2183,7 @@ package body Ada.Wide_Text_IO.Editing is
          Pic.Sign_Position := Index;
          Pic.Sign_Position := Index;
 
-         --  Treat as a floating sign, and unwind otherwise.
+         --  Treat as a floating sign, and unwind otherwise
 
          Pic.Floater := '<';
          Pic.Start_Float := Index;
@@ -2267,7 +2253,7 @@ package body Ada.Wide_Text_IO.Editing is
       begin
          Pic.Sign_Position := Index;
 
-         --  Treat as a floating sign, and unwind otherwise.
+         --  Treat as a floating sign, and unwind otherwise
 
          Pic.Floater := '-';
          Pic.Start_Float := Index;
@@ -2294,7 +2280,7 @@ package body Ada.Wide_Text_IO.Editing is
                   Pic.Max_Leading_Digits := Pic.Max_Leading_Digits + 1;
                   Pic.End_Float := Index;
                   Skip;
-                  Set_State (Okay);  --  "-- " is enough.
+                  Set_State (Okay);  --  "-- " is enough
                   Floating_Minus;
                   Trailing_Currency;
                   return;
@@ -2312,7 +2298,7 @@ package body Ada.Wide_Text_IO.Editing is
 
                when 'Z' | 'z' =>
 
-                  --  Can't have Z and a floating sign.
+                  --  Can't have Z and a floating sign
 
                   if State = Okay then
                      Set_State (Reject);
@@ -2331,7 +2317,7 @@ package body Ada.Wide_Text_IO.Editing is
                      Pic.End_Float := Invalid_Position;
                   end if;
 
-                  --  Don't assume that state is okay, haven't seen a digit.
+                  --  Don't assume that state is okay, haven't seen a digit
 
                   Picture;
                   return;
@@ -2351,7 +2337,7 @@ package body Ada.Wide_Text_IO.Editing is
       begin
          Pic.Sign_Position := Index;
 
-         --  Treat as a floating sign, and unwind otherwise.
+         --  Treat as a floating sign, and unwind otherwise
 
          Pic.Floater := '+';
          Pic.Start_Float := Index;
@@ -2378,7 +2364,7 @@ package body Ada.Wide_Text_IO.Editing is
                   Pic.Max_Leading_Digits := Pic.Max_Leading_Digits + 1;
                   Pic.End_Float := Index;
                   Skip;
-                  Set_State (Okay);  --  "++" is enough.
+                  Set_State (Okay);  --  "++" is enough
                   Floating_Plus;
                   Trailing_Currency;
                   return;
@@ -2399,7 +2385,7 @@ package body Ada.Wide_Text_IO.Editing is
                      Set_State (Reject);
                   end if;
 
-                  --  Can't have Z and a floating sign.
+                  --  Can't have Z and a floating sign
 
                   Pic.Picture.Expanded (Index) := 'Z'; -- consistency
 
@@ -2419,7 +2405,7 @@ package body Ada.Wide_Text_IO.Editing is
                      Pic.End_Float := Invalid_Position;
                   end if;
 
-                  --  Don't assume that state is okay, haven't seen a digit.
+                  --  Don't assume that state is okay, haven't seen a digit
 
                   Picture;
                   return;
@@ -2478,14 +2464,15 @@ package body Ada.Wide_Text_IO.Editing is
          end case;
 
          --  Blank when zero either if the PIC does not contain a '9' or if
-         --  requested by the user and no '*'
+         --  requested by the user and no '*'.
 
          Pic.Blank_When_Zero :=
-           (Computed_BWZ or Pic.Blank_When_Zero) and not Pic.Star_Fill;
+           (Computed_BWZ or else Pic.Blank_When_Zero)
+             and then not Pic.Star_Fill;
 
-         --  Star fill if '*' and no '9'.
+         --  Star fill if '*' and no '9'
 
-         Pic.Star_Fill := Pic.Star_Fill and Computed_BWZ;
+         Pic.Star_Fill := Pic.Star_Fill and then Computed_BWZ;
 
          if not At_End then
             Set_State (Reject);
@@ -2702,7 +2689,7 @@ package body Ada.Wide_Text_IO.Editing is
 
       when Constraint_Error =>
 
-         --  To deal with special cases like null strings.
+      --  To deal with special cases like null strings
 
       raise Picture_Error;
 
@@ -2713,9 +2700,8 @@ package body Ada.Wide_Text_IO.Editing is
    ----------------
 
    function To_Picture
-     (Pic_String      : in String;
-      Blank_When_Zero : in Boolean := False)
-      return            Picture
+     (Pic_String      : String;
+      Blank_When_Zero : Boolean := False) return Picture
    is
       Result : Picture;
 
@@ -2751,9 +2737,8 @@ package body Ada.Wide_Text_IO.Editing is
    -----------
 
    function Valid
-     (Pic_String      : in String;
-      Blank_When_Zero : in Boolean := False)
-      return            Boolean
+     (Pic_String      : String;
+      Blank_When_Zero : Boolean := False) return Boolean
    is
    begin
       declare
@@ -2768,16 +2753,14 @@ package body Ada.Wide_Text_IO.Editing is
          Format_Rec.Original_BWZ := Blank_When_Zero;
          Precalculate (Format_Rec);
 
-         --  False only if Blank_When_0 is True but the pic string
-         --  has a '*'
+         --  False only if Blank_When_0 is True but the pic string has a '*'
 
-         return not Blank_When_Zero or
-           Strings_Fixed.Index (Expanded_Pic, "*") = 0;
+         return not Blank_When_Zero
+           or else Strings_Fixed.Index (Expanded_Pic, "*") = 0;
       end;
 
    exception
       when others => return False;
-
    end Valid;
 
 end Ada.Wide_Text_IO.Editing;

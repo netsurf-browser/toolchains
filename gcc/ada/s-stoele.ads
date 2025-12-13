@@ -6,7 +6,7 @@
 --                                                                          --
 --                                 S p e c                                  --
 --                                                                          --
---          Copyright (C) 2002-2003 Free Software Foundation, Inc.          --
+--          Copyright (C) 2002-2009, Free Software Foundation, Inc.         --
 --                                                                          --
 -- This specification is derived from the Ada Reference Manual for use with --
 -- GNAT. The copyright notice above, and the license provisions that follow --
@@ -14,21 +14,19 @@
 --                                                                          --
 -- GNAT is free software;  you can  redistribute it  and/or modify it under --
 -- terms of the  GNU General Public License as published  by the Free Soft- --
--- ware  Foundation;  either version 2,  or (at your option) any later ver- --
+-- ware  Foundation;  either version 3,  or (at your option) any later ver- --
 -- sion.  GNAT is distributed in the hope that it will be useful, but WITH- --
 -- OUT ANY WARRANTY;  without even the  implied warranty of MERCHANTABILITY --
--- or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU General Public License --
--- for  more details.  You should have  received  a copy of the GNU General --
--- Public License  distributed with GNAT;  see file COPYING.  If not, write --
--- to  the Free Software Foundation,  59 Temple Place - Suite 330,  Boston, --
--- MA 02111-1307, USA.                                                      --
+-- or FITNESS FOR A PARTICULAR PURPOSE.                                     --
 --                                                                          --
--- As a special exception,  if other files  instantiate  generics from this --
--- unit, or you link  this unit with other files  to produce an executable, --
--- this  unit  does not  by itself cause  the resulting  executable  to  be --
--- covered  by the  GNU  General  Public  License.  This exception does not --
--- however invalidate  any other reasons why  the executable file  might be --
--- covered by the  GNU Public License.                                      --
+-- As a special exception under Section 7 of GPL version 3, you are granted --
+-- additional permissions described in the GCC Runtime Library Exception,   --
+-- version 3.1, as published by the Free Software Foundation.               --
+--                                                                          --
+-- You should have received a copy of the GNU General Public License and    --
+-- a copy of the GCC Runtime Library Exception along with this program;     --
+-- see the files COPYING3 and COPYING.RUNTIME respectively.  If not, see    --
+-- <http://www.gnu.org/licenses/>.                                          --
 --                                                                          --
 -- GNAT was originally developed  by the GNAT team at  New York University. --
 -- Extensive contributions were provided by Ada Core Technologies Inc.      --
@@ -39,29 +37,35 @@
 --  extra declarations that can be introduced into System using Extend_System.
 --  It is a good idea to avoid use clauses for this package!
 
-package System.Storage_Elements is
-pragma Pure (Storage_Elements);
---  Note that we take advantage of the implementation permission to make
---  this unit Pure instead of Preelaborable; see RM 13.7.1(15).
+pragma Compiler_Unit;
 
---  We also add the pragma Pure_Function to the operations in this package,
---  because otherwise functions with parameters derived from Address are
---  treated as non-pure by the back-end (see exp_ch6.adb). This is because
---  in many cases such a parameter is used to hide read/out access to objects,
---  and it would be unsafe to treat such functions as pure.
+package System.Storage_Elements is
+   pragma Pure;
+   --  Note that we take advantage of the implementation permission to make
+   --  this unit Pure instead of Preelaborable; see RM 13.7.1(15). In Ada 2005,
+   --  this is Pure in any case (AI-362).
+
+   --  We also add the pragma Pure_Function to the operations in this package,
+   --  because otherwise functions with parameters derived from Address are
+   --  treated as non-pure by the back-end (see exp_ch6.adb). This is because
+   --  in many cases such a parameter is used to hide read/out access to
+   --  objects, and it would be unsafe to treat such functions as pure.
 
    type Storage_Offset is range
-     -(2 ** (Standard."-" (Standard'Address_Size, 1))) ..
-     +(2 ** (Standard."-" (Standard'Address_Size, 1))) - 1;
-
-   --  Note: the reason for the qualification of "-" here by Standard is
-   --  that we have a current bug in GNAT that otherwise causes a bogus
-   --  ambiguity when this unit is analyzed in an Rtsfind context.
+     -(2 ** (Integer'(Standard'Address_Size) - 1)) ..
+     +(2 ** (Integer'(Standard'Address_Size) - 1)) - Long_Long_Integer'(1);
+   --  Note: the reason for the Long_Long_Integer qualification here is to
+   --  avoid a bogus ambiguity when this unit is analyzed in an rtsfind
+   --  context. It may be possible to remove this in the future, but it is
+   --  certainly harmless in any case ???
 
    subtype Storage_Count is Storage_Offset range 0 .. Storage_Offset'Last;
 
    type Storage_Element is mod 2 ** Storage_Unit;
    for Storage_Element'Size use Storage_Unit;
+
+   pragma Universal_Aliasing (Storage_Element);
+   --  This type is used by the expander to implement aggregate copy
 
    type Storage_Array is
      array (Storage_Offset range <>) of aliased Storage_Element;
@@ -82,7 +86,7 @@ pragma Pure (Storage_Elements);
    function "-" (Left : Address; Right : Storage_Offset) return Address;
    pragma Convention (Intrinsic, "-");
    pragma Inline_Always ("-");
-   pragma Pure_Function ("+");
+   pragma Pure_Function ("-");
 
    function "-" (Left, Right : Address) return Storage_Offset;
    pragma Convention (Intrinsic, "-");
@@ -91,8 +95,7 @@ pragma Pure (Storage_Elements);
 
    function "mod"
      (Left  : Address;
-      Right : Storage_Offset)
-      return  Storage_Offset;
+      Right : Storage_Offset) return  Storage_Offset;
    pragma Convention (Intrinsic, "mod");
    pragma Inline_Always ("mod");
    pragma Pure_Function ("mod");

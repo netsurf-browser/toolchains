@@ -1,8 +1,8 @@
-# Copyright (C) 2001, 2003 Free Software Foundation, Inc.
+# Copyright (C) 2001, 2003, 2004, 2007, 2010 Free Software Foundation, Inc.
 
 # This program is free software; you can redistribute it and/or modify
 # it under the terms of the GNU General Public License as published by
-# the Free Software Foundation; either version 2 of the License, or
+# the Free Software Foundation; either version 3 of the License, or
 # (at your option) any later version.
 # 
 # This program is distributed in the hope that it will be useful,
@@ -11,8 +11,12 @@
 # GNU General Public License for more details.
 # 
 # You should have received a copy of the GNU General Public License
-# along with this program; if not, write to the Free Software
-# Foundation, 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
+# along with GCC; see the file COPYING3.  If not see
+# <http://www.gnu.org/licenses/>.
+
+load_lib target-libpath.exp
+
+load_lib wrapper.exp
 
 #
 # ${tool}_check_compile -- Reports and returns pass/fail for a compilation
@@ -32,6 +36,11 @@ proc ${tool}_check_compile {testcase option objname gcc_output} {
 	return 0
     }
 
+    if [string match "*internal compiler error*" $gcc_output] then {
+	${tool}_fail $testcase "$option (internal compiler error)"
+	return 0
+    }
+
     # We shouldn't get these because of -w, but just in case.
     if [string match "*cc:*warning:*" $gcc_output] then {
 	warning "$testcase: (with warnings) $option"
@@ -41,6 +50,11 @@ proc ${tool}_check_compile {testcase option objname gcc_output} {
     }
 
     set gcc_output [prune_warnings $gcc_output]
+
+    if { [info proc ${tool}-dg-prune] != "" } {
+	global target_triplet
+	set gcc_output [${tool}-dg-prune $target_triplet $gcc_output]
+    }
 
     set unsupported_message [${tool}_check_unsupported_p $gcc_output]
     if { $unsupported_message != "" } {
@@ -101,7 +115,7 @@ proc ${tool}_fail { testcase cflags } {
 
 proc ${tool}_finish { } {
     # The testing harness apparently requires this.
-    global errorInfo;
+    global errorInfo
 
     if [info exists errorInfo] then {
 	unset errorInfo
@@ -119,11 +133,11 @@ proc ${tool}_finish { } {
 #
 
 proc ${tool}_exit { } {
-    global gluefile;
+    global gluefile
 
     if [info exists gluefile] {
-	file_on_build delete $gluefile;
-	unset gluefile;
+	file_on_build delete $gluefile
+	unset gluefile
     }
 }
     
@@ -141,6 +155,10 @@ proc ${tool}_exit { } {
 
 proc ${tool}_check_unsupported_p { output } {
     if [regexp "(^|\n)\[^\n\]*: region \[^\n\]* is full" $output] {
+	return "memory full"
+    }
+    if {[istarget spu-*-*] && \
+            [string match "*exceeds local store*" $output]} {
 	return "memory full"
     }
     return ""
@@ -232,11 +250,12 @@ proc gcc-set-multilib-library-path { compiler } {
     }
 
     set libpath ":${rootme}"
+    set options [lrange $compiler 1 end]
     set compiler [lindex $compiler 0]
     if { [is_remote host] == 0 && [which $compiler] != 0 } {
-	foreach i "[exec $compiler --print-multi-lib]" {
+	foreach i "[eval exec $compiler $options --print-multi-lib]" {
 	    set mldir ""
-	    regexp -- "\[a-z0-9=/\.-\]*;" $i mldir
+	    regexp -- "\[a-z0-9=_/\.-\]*;" $i mldir
 	    set mldir [string trimright $mldir "\;@"]
 	    if { "$mldir" == "." } {
 		continue

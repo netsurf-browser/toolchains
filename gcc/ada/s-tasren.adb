@@ -1,87 +1,44 @@
 ------------------------------------------------------------------------------
 --                                                                          --
---               GNU ADA RUN-TIME LIBRARY (GNARL) COMPONENTS                --
+--                GNAT RUN-TIME LIBRARY (GNARL) COMPONENTS                  --
 --                                                                          --
 --            S Y S T E M . T A S K I N G . R E N D E Z V O U S             --
 --                                                                          --
 --                                 B o d y                                  --
 --                                                                          --
---         Copyright (C) 1992-2003, Free Software Foundation, Inc.          --
+--         Copyright (C) 1992-2010, Free Software Foundation, Inc.          --
 --                                                                          --
 -- GNARL is free software; you can  redistribute it  and/or modify it under --
 -- terms of the  GNU General Public License as published  by the Free Soft- --
--- ware  Foundation;  either version 2,  or (at your option) any later ver- --
--- sion. GNARL is distributed in the hope that it will be useful, but WITH- --
+-- ware  Foundation;  either version 3,  or (at your option) any later ver- --
+-- sion.  GNAT is distributed in the hope that it will be useful, but WITH- --
 -- OUT ANY WARRANTY;  without even the  implied warranty of MERCHANTABILITY --
--- or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU General Public License --
--- for  more details.  You should have  received  a copy of the GNU General --
--- Public License  distributed with GNARL; see file COPYING.  If not, write --
--- to  the Free Software Foundation,  59 Temple Place - Suite 330,  Boston, --
--- MA 02111-1307, USA.                                                      --
+-- or FITNESS FOR A PARTICULAR PURPOSE.                                     --
 --                                                                          --
--- As a special exception,  if other files  instantiate  generics from this --
--- unit, or you link  this unit with other files  to produce an executable, --
--- this  unit  does not  by itself cause  the resulting  executable  to  be --
--- covered  by the  GNU  General  Public  License.  This exception does not --
--- however invalidate  any other reasons why  the executable file  might be --
--- covered by the  GNU Public License.                                      --
+-- As a special exception under Section 7 of GPL version 3, you are granted --
+-- additional permissions described in the GCC Runtime Library Exception,   --
+-- version 3.1, as published by the Free Software Foundation.               --
+--                                                                          --
+-- You should have received a copy of the GNU General Public License and    --
+-- a copy of the GCC Runtime Library Exception along with this program;     --
+-- see the files COPYING3 and COPYING.RUNTIME respectively.  If not, see    --
+-- <http://www.gnu.org/licenses/>.                                          --
 --                                                                          --
 -- GNARL was developed by the GNARL team at Florida State University.       --
 -- Extensive contributions were provided by Ada Core Technologies, Inc.     --
 --                                                                          --
 ------------------------------------------------------------------------------
 
-with Ada.Exceptions;
---  Used for Exception_ID
---           Null_Id
---           Transfer_Occurrence
---           Raise_Exception
-
 with System.Task_Primitives.Operations;
---  used for Get_Priority
---           Set_Priority
---           Write_Lock
---           Unlock
---           Sleep
---           Wakeup
---           Timed_Sleep
-
 with System.Tasking.Entry_Calls;
---  Used for Wait_For_Completion
---           Wait_For_Completion_With_Timeout
---           Wait_Until_Abortable
-
 with System.Tasking.Initialization;
---  used for Defer_Abort
---           Undefer_Abort
---           Poll_Base_Priority_Change
-
 with System.Tasking.Queuing;
---  used for Enqueue
---           Dequeue_Head
---           Select_Task_Entry_Call
---           Count_Waiting
-
 with System.Tasking.Utilities;
---  used for Check_Exception
---           Make_Passive
---           Wakeup_Entry_Caller
-
 with System.Tasking.Protected_Objects.Operations;
---  used for PO_Do_Or_Queue
---           PO_Service_Entries
---           Lock_Entries
---           Unlock_Entries
-
 with System.Tasking.Debug;
---  used for Trace
-
+with System.Restrictions;
 with System.Parameters;
---  used for Single_Lock
---           Runtime_Traces
-
 with System.Traces.Tasking;
---  used for Send_Trace_Info
 
 package body System.Tasking.Rendezvous is
 
@@ -101,6 +58,10 @@ package body System.Tasking.Rendezvous is
      Terminate_Selected,
      Accept_Alternative_Open,
      No_Alternative_Open);
+
+   ----------------
+   -- Local Data --
+   ----------------
 
    Default_Treatment : constant array (Select_Modes) of Select_Treatment :=
      (Simple_Mode         => No_Alternative_Open,
@@ -130,10 +91,10 @@ package body System.Tasking.Rendezvous is
    -- Local Subprograms --
    -----------------------
 
-   procedure Local_Defer_Abort (Self_Id : Task_ID) renames
+   procedure Local_Defer_Abort (Self_Id : Task_Id) renames
      System.Tasking.Initialization.Defer_Abort_Nestable;
 
-   procedure Local_Undefer_Abort (Self_Id : Task_ID) renames
+   procedure Local_Undefer_Abort (Self_Id : Task_Id) renames
      System.Tasking.Initialization.Undefer_Abort_Nestable;
 
    --  Florist defers abort around critical sections that
@@ -147,12 +108,12 @@ package body System.Tasking.Rendezvous is
    --  an earlier abort deferral. Thus, for debugging it may be
    --  wise to modify the above renamings to the non-nestable forms.
 
-   procedure Boost_Priority (Call : Entry_Call_Link; Acceptor : Task_ID);
+   procedure Boost_Priority (Call : Entry_Call_Link; Acceptor : Task_Id);
    pragma Inline (Boost_Priority);
-   --  Call this only with abort deferred and holding lock of Acceptor.
+   --  Call this only with abort deferred and holding lock of Acceptor
 
    procedure Call_Synchronous
-     (Acceptor              : Task_ID;
+     (Acceptor              : Task_Id;
       E                     : Task_Entry_Index;
       Uninterpreted_Data    : System.Address;
       Mode                  : Call_Modes;
@@ -163,7 +124,7 @@ package body System.Tasking.Rendezvous is
 
    procedure Setup_For_Rendezvous_With_Body
      (Entry_Call : Entry_Call_Link;
-      Acceptor   : Task_ID);
+      Acceptor   : Task_Id);
    pragma Inline (Setup_For_Rendezvous_With_Body);
    --  Call this only with abort deferred and holding lock of Acceptor.
    --  When a rendezvous selected (ready for rendezvous) we need to save
@@ -171,7 +132,7 @@ package body System.Tasking.Rendezvous is
    --  this call not Abortable (Cancellable) since the rendezvous has
    --  already been started.
 
-   procedure Wait_For_Call (Self_Id : Task_ID);
+   procedure Wait_For_Call (Self_Id : Task_Id);
    pragma Inline (Wait_For_Call);
    --  Call this only with abort deferred and holding lock of Self_Id.
    --  An accepting task goes into Sleep by calling this routine
@@ -186,8 +147,8 @@ package body System.Tasking.Rendezvous is
      (E                  : Task_Entry_Index;
       Uninterpreted_Data : out System.Address)
    is
-      Self_Id      : constant Task_ID := STPO.Self;
-      Caller       : Task_ID := null;
+      Self_Id      : constant Task_Id := STPO.Self;
+      Caller       : Task_Id := null;
       Open_Accepts : aliased Accept_List (1 .. 1);
       Entry_Call   : Entry_Call_Link;
 
@@ -250,7 +211,7 @@ package body System.Tasking.Rendezvous is
             Uninterpreted_Data :=
               Caller.Entry_Calls (Caller.ATC_Nesting_Level).Uninterpreted_Data;
          else
-            --  Case of an aborted task.
+            --  Case of an aborted task
 
             Uninterpreted_Data := System.Null_Address;
          end if;
@@ -277,8 +238,8 @@ package body System.Tasking.Rendezvous is
    --------------------
 
    procedure Accept_Trivial (E : Task_Entry_Index) is
-      Self_Id      : constant Task_ID := STPO.Self;
-      Caller       : Task_ID := null;
+      Self_Id      : constant Task_Id := STPO.Self;
+      Caller       : Task_Id := null;
       Open_Accepts : aliased Accept_List (1 .. 1);
       Entry_Call   : Entry_Call_Link;
 
@@ -366,8 +327,8 @@ package body System.Tasking.Rendezvous is
    -- Boost_Priority --
    --------------------
 
-   procedure Boost_Priority (Call : Entry_Call_Link; Acceptor : Task_ID) is
-      Caller        : constant Task_ID := Call.Self;
+   procedure Boost_Priority (Call : Entry_Call_Link; Acceptor : Task_Id) is
+      Caller        : constant Task_Id := Call.Self;
       Caller_Prio   : constant System.Any_Priority := Get_Priority (Caller);
       Acceptor_Prio : constant System.Any_Priority := Get_Priority (Acceptor);
 
@@ -386,12 +347,24 @@ package body System.Tasking.Rendezvous is
    -----------------
 
    procedure Call_Simple
-     (Acceptor           : Task_ID;
+     (Acceptor           : Task_Id;
       E                  : Task_Entry_Index;
       Uninterpreted_Data : System.Address)
    is
       Rendezvous_Successful : Boolean;
+      pragma Unreferenced (Rendezvous_Successful);
+
    begin
+      --  If pragma Detect_Blocking is active then Program_Error must be
+      --  raised if this potentially blocking operation is called from a
+      --  protected action.
+
+      if System.Tasking.Detect_Blocking
+        and then STPO.Self.Common.Protected_Action_Nesting > 0
+      then
+         raise Program_Error with "potentially blocking operation";
+      end if;
+
       Call_Synchronous
         (Acceptor, E, Uninterpreted_Data, Simple_Call, Rendezvous_Successful);
    end Call_Simple;
@@ -401,13 +374,13 @@ package body System.Tasking.Rendezvous is
    ----------------------
 
    procedure Call_Synchronous
-     (Acceptor              : Task_ID;
+     (Acceptor              : Task_Id;
       E                     : Task_Entry_Index;
       Uninterpreted_Data    : System.Address;
       Mode                  : Call_Modes;
       Rendezvous_Successful : out Boolean)
    is
-      Self_Id    : constant Task_ID := STPO.Self;
+      Self_Id    : constant Task_Id := STPO.Self;
       Level      : ATC_Level;
       Entry_Call : Entry_Call_Link;
 
@@ -432,17 +405,17 @@ package body System.Tasking.Rendezvous is
       --  If this is a call made inside of an abort deferred region,
       --  the call should be never abortable.
 
-      if Self_Id.Deferral_Level > 1 then
-         Entry_Call.State := Never_Abortable;
-      else
-         Entry_Call.State := Now_Abortable;
-      end if;
+      Entry_Call.State :=
+        (if Self_Id.Deferral_Level > 1
+         then Never_Abortable
+         else Now_Abortable);
 
       Entry_Call.E := Entry_Index (E);
       Entry_Call.Prio := Get_Priority (Self_Id);
       Entry_Call.Uninterpreted_Data := Uninterpreted_Data;
       Entry_Call.Called_Task := Acceptor;
       Entry_Call.Exception_To_Raise := Ada.Exceptions.Null_Id;
+      Entry_Call.With_Abort := True;
 
       --  Note: the caller will undefer abort on return (see WARNING above)
 
@@ -450,10 +423,10 @@ package body System.Tasking.Rendezvous is
          Lock_RTS;
       end if;
 
-      if not Task_Do_Or_Queue
-        (Self_Id, Entry_Call, With_Abort => True)
-      then
-         Self_Id.ATC_Nesting_Level := Self_Id.ATC_Nesting_Level - 1;
+      if not Task_Do_Or_Queue (Self_Id, Entry_Call) then
+         STPO.Write_Lock (Self_Id);
+         Utilities.Exit_One_ATC_Level (Self_Id);
+         STPO.Unlock (Self_Id);
 
          if Single_Lock then
             Unlock_RTS;
@@ -463,10 +436,7 @@ package body System.Tasking.Rendezvous is
             Send_Trace_Info (E_Missed, Acceptor);
          end if;
 
-         Initialization.Undefer_Abort (Self_Id);
-         pragma Debug
-           (Debug.Trace (Self_Id, "CS: exited to ATC level: " &
-            ATC_Level'Image (Self_Id.ATC_Nesting_Level), 'A'));
+         Local_Undefer_Abort (Self_Id);
          raise Tasking_Error;
       end if;
 
@@ -491,12 +461,12 @@ package body System.Tasking.Rendezvous is
    -- Callable --
    --------------
 
-   function Callable (T : Task_ID) return Boolean is
+   function Callable (T : Task_Id) return Boolean is
       Result  : Boolean;
-      Self_Id : constant Task_ID := STPO.Self;
+      Self_Id : constant Task_Id := STPO.Self;
 
    begin
-      Initialization.Defer_Abort (Self_Id);
+      Initialization.Defer_Abort_Nestable (Self_Id);
 
       if Single_Lock then
          Lock_RTS;
@@ -510,7 +480,7 @@ package body System.Tasking.Rendezvous is
          Unlock_RTS;
       end if;
 
-      Initialization.Undefer_Abort (Self_Id);
+      Initialization.Undefer_Abort_Nestable (Self_Id);
       return Result;
    end Callable;
 
@@ -539,10 +509,11 @@ package body System.Tasking.Rendezvous is
    procedure Exceptional_Complete_Rendezvous
      (Ex : Ada.Exceptions.Exception_Id)
    is
-      Self_Id    : constant Task_ID := STPO.Self;
-      Entry_Call : Entry_Call_Link := Self_Id.Common.Call;
-      Caller     : Task_ID;
-      Called_PO  : STPE.Protection_Entries_Access;
+      Self_Id                : constant Task_Id := STPO.Self;
+      Entry_Call             : Entry_Call_Link := Self_Id.Common.Call;
+      Caller                 : Task_Id;
+      Called_PO              : STPE.Protection_Entries_Access;
+      Acceptor_Prev_Priority : Integer;
 
       Exception_To_Raise : Ada.Exceptions.Exception_Id := Ex;
       Ceiling_Violation  : Boolean;
@@ -633,9 +604,7 @@ package body System.Tasking.Rendezvous is
                   Lock_RTS;
                end if;
 
-               if not Task_Do_Or_Queue
-                 (Self_Id, Entry_Call, Entry_Call.Requeue_With_Abort)
-               then
+               if not Task_Do_Or_Queue (Self_Id, Entry_Call) then
                   if Single_Lock then
                      Unlock_RTS;
                   end if;
@@ -674,11 +643,8 @@ package body System.Tasking.Rendezvous is
                   end if;
 
                else
-                  POO.PO_Do_Or_Queue
-                    (Self_Id, Called_PO, Entry_Call,
-                     Entry_Call.Requeue_With_Abort);
+                  POO.PO_Do_Or_Queue (Self_Id, Called_PO, Entry_Call);
                   POO.PO_Service_Entries (Self_Id, Called_PO);
-                  STPE.Unlock_Entries (Called_PO);
                end if;
             end if;
 
@@ -686,7 +652,7 @@ package body System.Tasking.Rendezvous is
               (Self_Id, Entry_Call.Acceptor_Prev_Priority);
 
          else
-            --  The call does not need to be requeued.
+            --  The call does not need to be requeued
 
             Self_Id.Common.Call := Entry_Call.Acceptor_Prev_Call;
             Entry_Call.Exception_To_Raise := Ex;
@@ -697,7 +663,7 @@ package body System.Tasking.Rendezvous is
 
             STPO.Write_Lock (Caller);
 
-            --  Done with Caller locked to make sure that Wakeup is not lost.
+            --  Done with Caller locked to make sure that Wakeup is not lost
 
             if Ex /= Ada.Exceptions.Null_Id then
                Transfer_Occurrence
@@ -705,15 +671,16 @@ package body System.Tasking.Rendezvous is
                   Self_Id.Common.Compiler_Data.Current_Excep);
             end if;
 
+            Acceptor_Prev_Priority := Entry_Call.Acceptor_Prev_Priority;
             Initialization.Wakeup_Entry_Caller (Self_Id, Entry_Call, Done);
+
             STPO.Unlock (Caller);
 
             if Single_Lock then
                Unlock_RTS;
             end if;
 
-            Entry_Calls.Reset_Priority
-              (Self_Id, Entry_Call.Acceptor_Prev_Priority);
+            Entry_Calls.Reset_Priority (Self_Id, Acceptor_Prev_Priority);
          end if;
       end if;
 
@@ -734,7 +701,7 @@ package body System.Tasking.Rendezvous is
 
    procedure Requeue_Protected_To_Task_Entry
      (Object     : STPE.Protection_Entries_Access;
-      Acceptor   : Task_ID;
+      Acceptor   : Task_Id;
       E          : Task_Entry_Index;
       With_Abort : Boolean)
    is
@@ -745,7 +712,7 @@ package body System.Tasking.Rendezvous is
       Entry_Call.E := Entry_Index (E);
       Entry_Call.Called_Task := Acceptor;
       Entry_Call.Called_PO := Null_Address;
-      Entry_Call.Requeue_With_Abort := With_Abort;
+      Entry_Call.With_Abort := With_Abort;
       Object.Call_In_Progress := null;
    end Requeue_Protected_To_Task_Entry;
 
@@ -754,17 +721,17 @@ package body System.Tasking.Rendezvous is
    ------------------------
 
    procedure Requeue_Task_Entry
-     (Acceptor   : Task_ID;
+     (Acceptor   : Task_Id;
       E          : Task_Entry_Index;
       With_Abort : Boolean)
    is
-      Self_Id    : constant Task_ID := STPO.Self;
+      Self_Id    : constant Task_Id := STPO.Self;
       Entry_Call : constant Entry_Call_Link := Self_Id.Common.Call;
 
    begin
       Initialization.Defer_Abort (Self_Id);
       Entry_Call.Needs_Requeue := True;
-      Entry_Call.Requeue_With_Abort := With_Abort;
+      Entry_Call.With_Abort := With_Abort;
       Entry_Call.E := Entry_Index (E);
       Entry_Call.Called_Task := Acceptor;
       Initialization.Undefer_Abort (Self_Id);
@@ -780,10 +747,10 @@ package body System.Tasking.Rendezvous is
       Uninterpreted_Data : out System.Address;
       Index              : out Select_Index)
    is
-      Self_Id          : constant Task_ID := STPO.Self;
+      Self_Id          : constant Task_Id := STPO.Self;
       Entry_Call       : Entry_Call_Link;
       Treatment        : Select_Treatment;
-      Caller           : Task_ID;
+      Caller           : Task_Id;
       Selection        : Select_Index;
       Open_Alternative : Boolean;
 
@@ -810,7 +777,9 @@ package body System.Tasking.Rendezvous is
          --  ??? In some cases abort is deferred more than once. Need to
          --  figure out why this happens.
 
-         Self_Id.Deferral_Level := 1;
+         if Self_Id.Deferral_Level > 1 then
+            Self_Id.Deferral_Level := 1;
+         end if;
 
          Initialization.Undefer_Abort (Self_Id);
 
@@ -827,7 +796,7 @@ package body System.Tasking.Rendezvous is
       Queuing.Select_Task_Entry_Call
         (Self_Id, Open_Accepts, Entry_Call, Selection, Open_Alternative);
 
-      --  Determine the kind and disposition of the select.
+      --  Determine the kind and disposition of the select
 
       Treatment := Default_Treatment (Select_Mode);
       Self_Id.Chosen_Index := No_Rendezvous;
@@ -848,7 +817,7 @@ package body System.Tasking.Rendezvous is
          end if;
       end if;
 
-      --  Handle the select according to the disposition selected above.
+      --  Handle the select according to the disposition selected above
 
       case Treatment is
          when Accept_Alternative_Selected =>
@@ -865,7 +834,8 @@ package body System.Tasking.Rendezvous is
             STPO.Unlock (Self_Id);
 
          when Accept_Alternative_Completed =>
-            --  Accept body is null, so rendezvous is over immediately.
+
+            --  Accept body is null, so rendezvous is over immediately
 
             if Parameters.Runtime_Traces then
                Send_Trace_Info (M_RDV_Complete, Entry_Call.Self);
@@ -879,7 +849,8 @@ package body System.Tasking.Rendezvous is
             STPO.Unlock (Caller);
 
          when Accept_Alternative_Open =>
-            --  Wait for caller.
+
+            --  Wait for caller
 
             Self_Id.Open_Accepts := Open_Accepts;
             pragma Debug
@@ -896,9 +867,9 @@ package body System.Tasking.Rendezvous is
 
             --  Self_Id.Common.Call should already be updated by the Caller if
             --  not aborted. It might also be ready to do rendezvous even if
-            --  this wakes up due to an abortion.
-            --  Therefore, if the call is not empty we need to do the
-            --  rendezvous if the accept body is not Null_Body.
+            --  this wakes up due to an abort. Therefore, if the call is not
+            --  empty we need to do the rendezvous if the accept body is not
+            --  Null_Body.
 
             --  Aren't the first two conditions below redundant???
 
@@ -908,7 +879,11 @@ package body System.Tasking.Rendezvous is
             then
                Uninterpreted_Data := Self_Id.Common.Call.Uninterpreted_Data;
 
-               pragma Assert (Self_Id.Deferral_Level = 1);
+               pragma Assert
+                 (Self_Id.Deferral_Level = 1
+                   or else
+                     (Self_Id.Deferral_Level = 0
+                       and then not Restrictions.Abort_Allowed));
 
                Initialization.Defer_Abort_Nestable (Self_Id);
 
@@ -932,7 +907,7 @@ package body System.Tasking.Rendezvous is
             Self_Id.Open_Accepts := Open_Accepts;
             Self_Id.Common.State := Acceptor_Sleep;
 
-            --  Notify ancestors that this task is on a terminate alternative.
+            --  Notify ancestors that this task is on a terminate alternative
 
             STPO.Unlock (Self_Id);
             Utilities.Make_Passive (Self_Id, Task_Completed => False);
@@ -956,8 +931,20 @@ package body System.Tasking.Rendezvous is
                pragma Assert (Self_Id.Pending_ATC_Level = 0);
                pragma Assert (Self_Id.Awake_Count = 0);
 
-               --  Trust that it is OK to fall through.
-               null;
+               STPO.Unlock (Self_Id);
+
+               if Single_Lock then
+                  Unlock_RTS;
+               end if;
+
+               Index := Self_Id.Chosen_Index;
+               Initialization.Undefer_Abort_Nestable (Self_Id);
+
+               if Self_Id.Pending_Action then
+                  Initialization.Do_Pending_Action (Self_Id);
+               end if;
+
+               return;
 
             else
                --  Self_Id.Common.Call and Self_Id.Chosen_Index
@@ -992,7 +979,6 @@ package body System.Tasking.Rendezvous is
                Self_Id.Common.State := Delay_Sleep;
 
                loop
-                  Initialization.Poll_Base_Priority_Change (Self_Id);
                   exit when
                     Self_Id.Pending_ATC_Level < Self_Id.ATC_Nesting_Level;
                   Sleep (Self_Id, Delay_Sleep);
@@ -1009,8 +995,7 @@ package body System.Tasking.Rendezvous is
                end if;
 
                Initialization.Undefer_Abort (Self_Id);
-               Ada.Exceptions.Raise_Exception
-                 (Program_Error'Identity, "Entry call not a delay mode");
+               raise Program_Error with "Entry call not a delay mode";
             end if;
       end case;
 
@@ -1035,7 +1020,7 @@ package body System.Tasking.Rendezvous is
 
    procedure Setup_For_Rendezvous_With_Body
      (Entry_Call : Entry_Call_Link;
-      Acceptor   : Task_ID) is
+      Acceptor   : Task_Id) is
    begin
       Entry_Call.Acceptor_Prev_Call := Acceptor.Common.Call;
       Acceptor.Common.Call := Entry_Call;
@@ -1052,7 +1037,7 @@ package body System.Tasking.Rendezvous is
    ----------------
 
    function Task_Count (E : Task_Entry_Index) return Natural is
-      Self_Id      : constant Task_ID := STPO.Self;
+      Self_Id      : constant Task_Id := STPO.Self;
       Return_Count : Natural;
 
    begin
@@ -1071,6 +1056,11 @@ package body System.Tasking.Rendezvous is
       end if;
 
       Initialization.Undefer_Abort (Self_Id);
+
+      --  Call Yield to let other tasks get a chance to run as this is a
+      --  potential dispatching point.
+
+      Yield (Do_Yield => False);
       return Return_Count;
    end Task_Count;
 
@@ -1079,20 +1069,20 @@ package body System.Tasking.Rendezvous is
    ----------------------
 
    function Task_Do_Or_Queue
-     (Self_ID    : Task_ID;
-      Entry_Call : Entry_Call_Link;
-      With_Abort : Boolean) return Boolean
+     (Self_ID    : Task_Id;
+      Entry_Call : Entry_Call_Link) return Boolean
    is
       E             : constant Task_Entry_Index :=
-        Task_Entry_Index (Entry_Call.E);
+                        Task_Entry_Index (Entry_Call.E);
       Old_State     : constant Entry_Call_State := Entry_Call.State;
-      Acceptor      : constant Task_ID := Entry_Call.Called_Task;
-      Parent        : constant Task_ID := Acceptor.Common.Parent;
+      Acceptor      : constant Task_Id := Entry_Call.Called_Task;
+      Parent        : constant Task_Id := Acceptor.Common.Parent;
       Parent_Locked : Boolean := False;
       Null_Body     : Boolean;
 
    begin
-      --  Find out whether Entry_Call can be accepted immediately.
+      --  Find out whether Entry_Call can be accepted immediately
+
       --  If the Acceptor is not callable, return False.
       --  If the rendezvous can start, initiate it.
       --  If the accept-body is trivial, also complete the rendezvous.
@@ -1125,7 +1115,7 @@ package body System.Tasking.Rendezvous is
 
       STPO.Write_Lock (Acceptor);
 
-      --  If the acceptor is not callable, abort the call and return False.
+      --  If the acceptor is not callable, abort the call and return False
 
       if not Acceptor.Callable then
          STPO.Unlock (Acceptor);
@@ -1147,35 +1137,35 @@ package body System.Tasking.Rendezvous is
          return False;
       end if;
 
-      --  Try to serve the call immediately.
+      --  Try to serve the call immediately
 
       if Acceptor.Open_Accepts /= null then
          for J in Acceptor.Open_Accepts'Range loop
             if Entry_Call.E = Entry_Index (Acceptor.Open_Accepts (J).S) then
 
-               --  Commit acceptor to rendezvous with us.
+               --  Commit acceptor to rendezvous with us
 
                Acceptor.Chosen_Index := J;
                Null_Body := Acceptor.Open_Accepts (J).Null_Body;
                Acceptor.Open_Accepts := null;
 
-               --  Prevent abort while call is being served.
+               --  Prevent abort while call is being served
 
                if Entry_Call.State = Now_Abortable then
                   Entry_Call.State := Was_Abortable;
                end if;
 
                if Acceptor.Terminate_Alternative then
-                  --  Cancel terminate alternative.
-                  --  See matching code in Selective_Wait and
-                  --  Vulnerable_Complete_Master.
+
+                  --  Cancel terminate alternative. See matching code in
+                  --  Selective_Wait and Vulnerable_Complete_Master.
 
                   Acceptor.Terminate_Alternative := False;
                   Acceptor.Awake_Count := Acceptor.Awake_Count + 1;
 
                   if Acceptor.Awake_Count = 1 then
 
-                     --  Notify parent that acceptor is awake.
+                     --  Notify parent that acceptor is awake
 
                      pragma Assert (Parent.Awake_Count > 0);
 
@@ -1191,7 +1181,8 @@ package body System.Tasking.Rendezvous is
                end if;
 
                if Null_Body then
-                  --  Rendezvous is over immediately.
+
+                  --  Rendezvous is over immediately
 
                   STPO.Wakeup (Acceptor, Acceptor_Sleep);
                   STPO.Unlock (Acceptor);
@@ -1208,8 +1199,8 @@ package body System.Tasking.Rendezvous is
                else
                   Setup_For_Rendezvous_With_Body (Entry_Call, Acceptor);
 
-                  --  For terminate_alternative, acceptor may not be
-                  --  asleep yet, so we skip the wakeup
+                  --  For terminate_alternative, acceptor may not be asleep
+                  --  yet, so we skip the wakeup
 
                   if Acceptor.Common.State /= Runnable then
                      STPO.Wakeup (Acceptor, Acceptor_Sleep);
@@ -1226,16 +1217,38 @@ package body System.Tasking.Rendezvous is
             end if;
          end loop;
 
-         --  The acceptor is accepting, but not this entry.
+         --  The acceptor is accepting, but not this entry
       end if;
 
       --  If the acceptor was ready to accept this call,
       --  we would not have gotten this far, so now we should
       --  (re)enqueue the call, if the mode permits that.
 
-      if Entry_Call.Mode /= Conditional_Call
-        or else not With_Abort
+      --  If the call is timed, it may have timed out before the requeue,
+      --  in the unusual case where the current accept has taken longer than
+      --  the given delay. In that case the requeue is cancelled, and the
+      --  outer timed call will be aborted.
+
+      if Entry_Call.Mode = Conditional_Call
+        or else
+          (Entry_Call.Mode = Timed_Call
+            and then Entry_Call.With_Abort
+            and then Entry_Call.Cancellation_Attempted)
       then
+         STPO.Unlock (Acceptor);
+
+         if Parent_Locked then
+            STPO.Unlock (Parent);
+         end if;
+
+         STPO.Write_Lock (Entry_Call.Self);
+
+         pragma Assert (Entry_Call.State >= Was_Abortable);
+
+         Initialization.Wakeup_Entry_Caller (Self_ID, Entry_Call, Cancelled);
+         STPO.Unlock (Entry_Call.Self);
+
+      else
          --  Timed_Call, Simple_Call, or Asynchronous_Call
 
          Queuing.Enqueue (Acceptor.Entry_Queues (E), Entry_Call);
@@ -1244,7 +1257,8 @@ package body System.Tasking.Rendezvous is
 
          pragma Assert (Old_State < Done);
 
-         Entry_Call.State := New_State (With_Abort, Entry_Call.State);
+         Entry_Call.State :=
+           New_State (Entry_Call.With_Abort, Entry_Call.State);
 
          STPO.Unlock (Acceptor);
 
@@ -1254,7 +1268,7 @@ package body System.Tasking.Rendezvous is
 
          if Old_State /= Entry_Call.State
            and then Entry_Call.State = Now_Abortable
-           and then Entry_Call.Mode > Simple_Call
+           and then Entry_Call.Mode /= Simple_Call
            and then Entry_Call.Self /= Self_ID
 
          --  Asynchronous_Call or Conditional_Call
@@ -1273,22 +1287,6 @@ package body System.Tasking.Rendezvous is
 
             STPO.Unlock (Entry_Call.Self);
          end if;
-
-      else
-         --  Conditional_Call and With_Abort
-
-         STPO.Unlock (Acceptor);
-
-         if Parent_Locked then
-            STPO.Unlock (Parent);
-         end if;
-
-         STPO.Write_Lock (Entry_Call.Self);
-
-         pragma Assert (Entry_Call.State >= Was_Abortable);
-
-         Initialization.Wakeup_Entry_Caller (Self_ID, Entry_Call, Cancelled);
-         STPO.Unlock (Entry_Call.Self);
       end if;
 
       return True;
@@ -1299,16 +1297,26 @@ package body System.Tasking.Rendezvous is
    ---------------------
 
    procedure Task_Entry_Call
-     (Acceptor              : Task_ID;
+     (Acceptor              : Task_Id;
       E                     : Task_Entry_Index;
       Uninterpreted_Data    : System.Address;
       Mode                  : Call_Modes;
       Rendezvous_Successful : out Boolean)
    is
-      Self_Id    : constant Task_ID := STPO.Self;
+      Self_Id    : constant Task_Id := STPO.Self;
       Entry_Call : Entry_Call_Link;
 
    begin
+      --  If pragma Detect_Blocking is active then Program_Error must be
+      --  raised if this potentially blocking operation is called from a
+      --  protected action.
+
+      if System.Tasking.Detect_Blocking
+        and then Self_Id.Common.Protected_Action_Nesting > 0
+      then
+         raise Program_Error with "potentially blocking operation";
+      end if;
+
       if Parameters.Runtime_Traces then
          Send_Trace_Info (W_Call, Acceptor, Entry_Index (E));
       end if;
@@ -1320,11 +1328,11 @@ package body System.Tasking.Rendezvous is
       else
          --  This is an asynchronous call
 
-         --  Abortion must already be deferred by the compiler-generated
-         --  code.  Without this, an abortion that occurs between the time
-         --  that this call is made and the time that the abortable part's
-         --  cleanup handler is set up might miss the cleanup handler and
-         --  leave the call pending.
+         --  Abort must already be deferred by the compiler-generated code.
+         --  Without this, an abort that occurs between the time that this
+         --  call is made and the time that the abortable part's cleanup
+         --  handler is set up might miss the cleanup handler and leave the
+         --  call pending.
 
          Self_Id.ATC_Nesting_Level := Self_Id.ATC_Nesting_Level + 1;
          pragma Debug
@@ -1341,18 +1349,16 @@ package body System.Tasking.Rendezvous is
          Entry_Call.Called_Task := Acceptor;
          Entry_Call.Called_PO := Null_Address;
          Entry_Call.Exception_To_Raise := Ada.Exceptions.Null_Id;
+         Entry_Call.With_Abort := True;
 
          if Single_Lock then
             Lock_RTS;
          end if;
 
-         if not Task_Do_Or_Queue
-           (Self_Id, Entry_Call, With_Abort => True)
-         then
-            Self_Id.ATC_Nesting_Level := Self_Id.ATC_Nesting_Level - 1;
-            pragma Debug
-              (Debug.Trace (Self_Id, "TEC: exited to ATC level: " &
-               ATC_Level'Image (Self_Id.ATC_Nesting_Level), 'A'));
+         if not Task_Do_Or_Queue (Self_Id, Entry_Call) then
+            STPO.Write_Lock (Self_Id);
+            Utilities.Exit_One_ATC_Level (Self_Id);
+            STPO.Unlock (Self_Id);
 
             if Single_Lock then
                Unlock_RTS;
@@ -1382,7 +1388,7 @@ package body System.Tasking.Rendezvous is
             Unlock_RTS;
          end if;
 
-         --  Note: following assignment needs to be atomic.
+         --  Note: following assignment needs to be atomic
 
          Rendezvous_Successful := Entry_Call.State = Done;
       end if;
@@ -1392,8 +1398,8 @@ package body System.Tasking.Rendezvous is
    -- Task_Entry_Caller --
    -----------------------
 
-   function Task_Entry_Caller (D : Task_Entry_Nesting_Depth) return Task_ID is
-      Self_Id    : constant Task_ID := STPO.Self;
+   function Task_Entry_Caller (D : Task_Entry_Nesting_Depth) return Task_Id is
+      Self_Id    : constant Task_Id := STPO.Self;
       Entry_Call : Entry_Call_Link;
 
    begin
@@ -1419,10 +1425,10 @@ package body System.Tasking.Rendezvous is
       Mode               : Delay_Modes;
       Index              : out Select_Index)
    is
-      Self_Id          : constant Task_ID := STPO.Self;
+      Self_Id          : constant Task_Id := STPO.Self;
       Treatment        : Select_Treatment;
       Entry_Call       : Entry_Call_Link;
-      Caller           : Task_ID;
+      Caller           : Task_Id;
       Selection        : Select_Index;
       Open_Alternative : Boolean;
       Timedout         : Boolean := False;
@@ -1467,7 +1473,7 @@ package body System.Tasking.Rendezvous is
       Queuing.Select_Task_Entry_Call
         (Self_Id, Open_Accepts, Entry_Call, Selection, Open_Alternative);
 
-      --  Determine the kind and disposition of the select.
+      --  Determine the kind and disposition of the select
 
       Treatment := Default_Treatment (Select_Mode);
       Self_Id.Chosen_Index := No_Rendezvous;
@@ -1489,7 +1495,7 @@ package body System.Tasking.Rendezvous is
          end if;
       end if;
 
-      --  Handle the select according to the disposition selected above.
+      --  Handle the select according to the disposition selected above
 
       case Treatment is
          when Accept_Alternative_Selected =>
@@ -1516,17 +1522,19 @@ package body System.Tasking.Rendezvous is
             STPO.Unlock (Caller);
 
          when Accept_Alternative_Open =>
-            --  Wait for caller.
+
+            --  Wait for caller
 
             Self_Id.Open_Accepts := Open_Accepts;
 
             --  Wait for a normal call and a pending action until the
             --  Wakeup_Time is reached.
 
+            Self_Id.Common.State := Acceptor_Delay_Sleep;
+
             --  Try to remove calls to Sleep in the loop below by letting the
-            --  caller a chance of getting ready immediately, using Unlock &
-            --  Yield.
-            --  See similar action in Wait_For_Completion & Wait_For_Call.
+            --  caller a chance of getting ready immediately, using Unlock
+            --  Yield. See similar action in Wait_For_Completion/Wait_For_Call.
 
             if Single_Lock then
                Unlock_RTS;
@@ -1550,14 +1558,11 @@ package body System.Tasking.Rendezvous is
                Self_Id.Open_Accepts := null;
             end if;
 
-            Self_Id.Common.State := Acceptor_Sleep;
-
             loop
-               Initialization.Poll_Base_Priority_Change (Self_Id);
                exit when Self_Id.Open_Accepts = null;
 
                if Timedout then
-                  Sleep (Self_Id, Acceptor_Sleep);
+                  Sleep (Self_Id, Acceptor_Delay_Sleep);
                else
                   if Parameters.Runtime_Traces then
                      Send_Trace_Info (WT_Select,
@@ -1567,7 +1572,7 @@ package body System.Tasking.Rendezvous is
                   end if;
 
                   STPO.Timed_Sleep (Self_Id, Timeout, Mode,
-                    Acceptor_Sleep, Timedout, Yielded);
+                    Acceptor_Delay_Sleep, Timedout, Yielded);
                end if;
 
                if Timedout then
@@ -1583,9 +1588,9 @@ package body System.Tasking.Rendezvous is
 
             --  Self_Id.Common.Call should already be updated by the Caller if
             --  not aborted. It might also be ready to do rendezvous even if
-            --  this wakes up due to an abortion.
-            --  Therefore, if the call is not empty we need to do the
-            --  rendezvous if the accept body is not Null_Body.
+            --  this wakes up due to an abort. Therefore, if the call is not
+            --  empty we need to do the rendezvous if the accept body is not
+            --  Null_Body.
 
             if Self_Id.Chosen_Index /= No_Rendezvous
               and then Self_Id.Common.Call /= null
@@ -1609,15 +1614,13 @@ package body System.Tasking.Rendezvous is
             --  for several reasons:
             --  1) Delay is expired
             --  2) Pending_Action needs to be checked
-            --     (Abortion, Priority change)
+            --     (Abort, Priority change)
             --  3) Spurious wakeup
 
             Self_Id.Open_Accepts := null;
-            Self_Id.Common.State := Acceptor_Sleep;
+            Self_Id.Common.State := Acceptor_Delay_Sleep;
 
-            Initialization.Poll_Base_Priority_Change (Self_Id);
-
-            STPO.Timed_Sleep (Self_Id, Timeout, Mode, Acceptor_Sleep,
+            STPO.Timed_Sleep (Self_Id, Timeout, Mode, Acceptor_Delay_Sleep,
               Timedout, Yielded);
 
             Self_Id.Common.State := Runnable;
@@ -1656,19 +1659,31 @@ package body System.Tasking.Rendezvous is
    ---------------------------
 
    procedure Timed_Task_Entry_Call
-     (Acceptor              : Task_ID;
+     (Acceptor              : Task_Id;
       E                     : Task_Entry_Index;
       Uninterpreted_Data    : System.Address;
       Timeout               : Duration;
       Mode                  : Delay_Modes;
       Rendezvous_Successful : out Boolean)
    is
-      Self_Id    : constant Task_ID := STPO.Self;
+      Self_Id    : constant Task_Id := STPO.Self;
       Level      : ATC_Level;
       Entry_Call : Entry_Call_Link;
-      Yielded    : Boolean;
+
+      Yielded : Boolean;
+      pragma Unreferenced (Yielded);
 
    begin
+      --  If pragma Detect_Blocking is active then Program_Error must be
+      --  raised if this potentially blocking operation is called from a
+      --  protected action.
+
+      if System.Tasking.Detect_Blocking
+        and then Self_Id.Common.Protected_Action_Nesting > 0
+      then
+         raise Program_Error with "potentially blocking operation";
+      end if;
+
       Initialization.Defer_Abort (Self_Id);
       Self_Id.ATC_Nesting_Level := Self_Id.ATC_Nesting_Level + 1;
 
@@ -1690,11 +1705,10 @@ package body System.Tasking.Rendezvous is
       --  If this is a call made inside of an abort deferred region,
       --  the call should be never abortable.
 
-      if Self_Id.Deferral_Level > 1 then
-         Entry_Call.State := Never_Abortable;
-      else
-         Entry_Call.State := Now_Abortable;
-      end if;
+      Entry_Call.State :=
+        (if Self_Id.Deferral_Level > 1
+         then Never_Abortable
+         else Now_Abortable);
 
       Entry_Call.E := Entry_Index (E);
       Entry_Call.Prio := Get_Priority (Self_Id);
@@ -1702,21 +1716,18 @@ package body System.Tasking.Rendezvous is
       Entry_Call.Called_Task := Acceptor;
       Entry_Call.Called_PO := Null_Address;
       Entry_Call.Exception_To_Raise := Ada.Exceptions.Null_Id;
+      Entry_Call.With_Abort := True;
 
-      --  Note: the caller will undefer abortion on return (see WARNING above)
+      --  Note: the caller will undefer abort on return (see WARNING above)
 
       if Single_Lock then
          Lock_RTS;
       end if;
 
-      if not Task_Do_Or_Queue
-       (Self_Id, Entry_Call, With_Abort => True)
-      then
-         Self_Id.ATC_Nesting_Level := Self_Id.ATC_Nesting_Level - 1;
-
-         pragma Debug
-           (Debug.Trace (Self_Id, "TTEC: exited to ATC level: " &
-            ATC_Level'Image (Self_Id.ATC_Nesting_Level), 'A'));
+      if not Task_Do_Or_Queue (Self_Id, Entry_Call) then
+         STPO.Write_Lock (Self_Id);
+         Utilities.Exit_One_ATC_Level (Self_Id);
+         STPO.Unlock (Self_Id);
 
          if Single_Lock then
             Unlock_RTS;
@@ -1750,11 +1761,13 @@ package body System.Tasking.Rendezvous is
    -- Wait_For_Call --
    -------------------
 
-   procedure Wait_For_Call (Self_Id : Task_ID) is
+   procedure Wait_For_Call (Self_Id : Task_Id) is
    begin
+      Self_Id.Common.State := Acceptor_Sleep;
+
       --  Try to remove calls to Sleep in the loop below by letting the caller
       --  a chance of getting ready immediately, using Unlock & Yield.
-      --  See similar action in Wait_For_Completion & Selective_Wait.
+      --  See similar action in Wait_For_Completion & Timed_Selective_Wait.
 
       if Single_Lock then
          Unlock_RTS;
@@ -1772,19 +1785,14 @@ package body System.Tasking.Rendezvous is
          Write_Lock (Self_Id);
       end if;
 
-      --  Check if this task has been aborted while the lock was released.
+      --  Check if this task has been aborted while the lock was released
 
       if Self_Id.Pending_ATC_Level < Self_Id.ATC_Nesting_Level then
          Self_Id.Open_Accepts := null;
       end if;
 
-      Self_Id.Common.State := Acceptor_Sleep;
-
       loop
-         Initialization.Poll_Base_Priority_Change (Self_Id);
-
          exit when Self_Id.Open_Accepts = null;
-
          Sleep (Self_Id, Acceptor_Sleep);
       end loop;
 

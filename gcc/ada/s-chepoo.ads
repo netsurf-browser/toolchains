@@ -6,25 +6,23 @@
 --                                                                          --
 --                                 S p e c                                  --
 --                                                                          --
---   Copyright (C) 1992,1993,1994,1995,1996 Free Software Foundation, Inc.  --
+--          Copyright (C) 1992-2009, Free Software Foundation, Inc.         --
 --                                                                          --
 -- GNAT is free software;  you can  redistribute it  and/or modify it under --
 -- terms of the  GNU General Public License as published  by the Free Soft- --
--- ware  Foundation;  either version 2,  or (at your option) any later ver- --
+-- ware  Foundation;  either version 3,  or (at your option) any later ver- --
 -- sion.  GNAT is distributed in the hope that it will be useful, but WITH- --
 -- OUT ANY WARRANTY;  without even the  implied warranty of MERCHANTABILITY --
--- or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU General Public License --
--- for  more details.  You should have  received  a copy of the GNU General --
--- Public License  distributed with GNAT;  see file COPYING.  If not, write --
--- to  the Free Software Foundation,  59 Temple Place - Suite 330,  Boston, --
--- MA 02111-1307, USA.                                                      --
+-- or FITNESS FOR A PARTICULAR PURPOSE.                                     --
 --                                                                          --
--- As a special exception,  if other files  instantiate  generics from this --
--- unit, or you link  this unit with other files  to produce an executable, --
--- this  unit  does not  by itself cause  the resulting  executable  to  be --
--- covered  by the  GNU  General  Public  License.  This exception does not --
--- however invalidate  any other reasons why  the executable file  might be --
--- covered by the  GNU Public License.                                      --
+-- As a special exception under Section 7 of GPL version 3, you are granted --
+-- additional permissions described in the GCC Runtime Library Exception,   --
+-- version 3.1, as published by the Free Software Foundation.               --
+--                                                                          --
+-- You should have received a copy of the GNU General Public License and    --
+-- a copy of the GCC Runtime Library Exception along with this program;     --
+-- see the files COPYING3 and COPYING.RUNTIME respectively.  If not, see    --
+-- <http://www.gnu.org/licenses/>.                                          --
 --                                                                          --
 -- GNAT was originally developed  by the GNAT team at  New York University. --
 -- Extensive contributions were provided by Ada Core Technologies Inc.      --
@@ -41,32 +39,18 @@ package System.Checked_Pools is
    --  called on each implicit or explicit dereference of a pointer which
    --  has such a storage pool
 
-   procedure Allocate
-     (Pool                     : in out Checked_Pool;
-      Storage_Address          : out Address;
-      Size_In_Storage_Elements : in System.Storage_Elements.Storage_Count;
-      Alignment                : in System.Storage_Elements.Storage_Count)
-   is abstract;
-
-   procedure Deallocate
-     (Pool                     : in out Checked_Pool;
-      Storage_Address          : in Address;
-      Size_In_Storage_Elements : in System.Storage_Elements.Storage_Count;
-      Alignment                : in System.Storage_Elements.Storage_Count)
-   is abstract;
-
-   function Storage_Size
-     (Pool : Checked_Pool)
-      return System.Storage_Elements.Storage_Count
-   is abstract;
-
    procedure Dereference
      (Pool                     : in out Checked_Pool;
-      Storage_Address          : in Address;
-      Size_In_Storage_Elements : in System.Storage_Elements.Storage_Count;
-      Alignment                : in System.Storage_Elements.Storage_Count)
+      Storage_Address          : Address;
+      Size_In_Storage_Elements : System.Storage_Elements.Storage_Count;
+      Alignment                : System.Storage_Elements.Storage_Count)
    is abstract;
-   --  Called each time a pointer to a checked pool is dereferenced
+   --  Called implicitly each time a pointer to a checked pool is dereferenced
+   --  All parameters in the profile are compatible with the profile of
+   --  Allocate/Deallocate: the Storage_Address corresponds to the address of
+   --  the dereferenced object, Size_in_Storage_Elements is its dynamic size
+   --  (and thus may involve an implicit dispatching call to size) and
+   --  Alignment is the alignment of the object.
 
 private
    type Checked_Pool is abstract

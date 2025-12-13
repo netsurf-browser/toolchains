@@ -1,11 +1,12 @@
 // Iostreams wrapper for stdio FILE* -*- C++ -*-
 
-// Copyright (C) 2003, 2004 Free Software Foundation, Inc.
+// Copyright (C) 2003, 2004, 2005, 2006, 2007, 2009, 2010
+// Free Software Foundation, Inc.
 //
 // This file is part of the GNU ISO C++ Library.  This library is free
 // software; you can redistribute it and/or modify it under the
 // terms of the GNU General Public License as published by the
-// Free Software Foundation; either version 2, or (at your option)
+// Free Software Foundation; either version 3, or (at your option)
 // any later version.
 
 // This library is distributed in the hope that it will be useful,
@@ -13,21 +14,16 @@
 // MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
 // GNU General Public License for more details.
 
-// You should have received a copy of the GNU General Public License along
-// with this library; see the file COPYING.  If not, write to the Free
-// Software Foundation, 59 Temple Place - Suite 330, Boston, MA 02111-1307,
-// USA.
+// Under Section 7 of GPL version 3, you are granted additional
+// permissions described in the GCC Runtime Library Exception, version
+// 3.1, as published by the Free Software Foundation.
 
-// As a special exception, you may use this file as part of a free software
-// library without restriction.  Specifically, if other files instantiate
-// templates or use macros or inline functions from this file, or you compile
-// this file and link it with other files to produce an executable, this
-// file does not by itself cause the resulting executable to be covered by
-// the GNU General Public License.  This exception does not however
-// invalidate any other reasons why the executable file might be covered by
-// the GNU General Public License.
+// You should have received a copy of the GNU General Public License and
+// a copy of the GCC Runtime Library Exception along with this program;
+// see the files COPYING3 and COPYING.RUNTIME respectively.  If not, see
+// <http://www.gnu.org/licenses/>.
 
-/** @file ext/stdiostream.h
+/** @file ext/stdio_sync_filebuf.h
  *  This file is a GNU extension to the Standard C++ Library.
  */
 
@@ -39,13 +35,24 @@
 #include <streambuf>
 #include <unistd.h>
 #include <cstdio>
+#include <bits/c++io.h>  // For __c_file
 
 #ifdef _GLIBCXX_USE_WCHAR_T
 #include <cwchar>
 #endif
 
-namespace __gnu_cxx
+namespace __gnu_cxx _GLIBCXX_VISIBILITY(default)
 {
+_GLIBCXX_BEGIN_NAMESPACE_VERSION
+
+  /**
+   *  @brief Provides a layer of compatibility for C.
+   *  @ingroup io
+   *
+   *  This GNU extension provides extensions for working with standard
+   *  C FILE*'s.  It must be instantiated by the user with the type of
+   *  character used in the file stream, e.g., stdio_filebuf<char>.
+  */
   template<typename _CharT, typename _Traits = std::char_traits<_CharT> >
     class stdio_sync_filebuf : public std::basic_streambuf<_CharT, _Traits>
     {
@@ -74,7 +81,7 @@ namespace __gnu_cxx
       /**
        *  @return  The underlying FILE*.
        *
-       *  This function can be used to access the underlying "C" file pointer.
+       *  This function can be used to access the underlying C file pointer.
        *  Note that there is no way for the library to track what you do
        *  with the file, so be careful.
        */
@@ -276,6 +283,8 @@ namespace __gnu_cxx
   extern template class stdio_sync_filebuf<wchar_t>;
 #endif
 #endif
-} // namespace __gnu_cxx
+
+_GLIBCXX_END_NAMESPACE_VERSION
+} // namespace
 
 #endif

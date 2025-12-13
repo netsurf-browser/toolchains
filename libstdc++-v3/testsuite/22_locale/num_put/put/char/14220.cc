@@ -1,11 +1,11 @@
 // 2004-04-30  Paolo Carlini  <pcarlini@suse.de>
 
-// Copyright (C) 2004 Free Software Foundation
+// Copyright (C) 2004, 2009, 2010, 2011 Free Software Foundation
 //
 // This file is part of the GNU ISO C++ Library.  This library is free
 // software; you can redistribute it and/or modify it under the
 // terms of the GNU General Public License as published by the
-// Free Software Foundation; either version 2, or (at your option)
+// Free Software Foundation; either version 3, or (at your option)
 // any later version.
 
 // This library is distributed in the hope that it will be useful,
@@ -14,11 +14,17 @@
 // GNU General Public License for more details.
 
 // You should have received a copy of the GNU General Public License along
-// with this library; see the file COPYING.  If not, write to the Free
-// Software Foundation, 59 Temple Place - Suite 330, Boston, MA 02111-1307,
-// USA.
+// with this library; see the file COPYING3.  If not see
+// <http://www.gnu.org/licenses/>.
 
 // 22.2.2.2.1  num_put members
+
+// On Solaris 9/x86 and 32-bit Solaris 10/x86, this test crashes in libc.
+// Inside libstdc++, we call sprintf like so:
+//   sprintf (buffer, "%.*f", 1000, 1.0)
+// which crashes.
+// { dg-xfail-run-if "" i?86-*-solaris2.9 }
+// { dg-xfail-run-if "" { i?86-*-solaris2.10 && ilp32 } }
 
 #include <locale>
 #include <sstream>

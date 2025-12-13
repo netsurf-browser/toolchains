@@ -1,11 +1,16 @@
+// { dg-require-namedlocale "en_US" }
+// { dg-require-namedlocale "is_IS" }
+// { dg-require-namedlocale "de_DE" }
+
 // 2001-01-17 Benjamin Kosnik  <bkoz@redhat.com>
 
-// Copyright (C) 2001, 2002, 2003 Free Software Foundation
+// Copyright (C) 2001, 2002, 2003, 2004, 2005, 2006, 2007, 2008, 2009
+// Free Software Foundation
 //
 // This file is part of the GNU ISO C++ Library.  This library is free
 // software; you can redistribute it and/or modify it under the
 // terms of the GNU General Public License as published by the
-// Free Software Foundation; either version 2, or (at your option)
+// Free Software Foundation; either version 3, or (at your option)
 // any later version.
 
 // This library is distributed in the hope that it will be useful,
@@ -14,9 +19,8 @@
 // GNU General Public License for more details.
 
 // You should have received a copy of the GNU General Public License along
-// with this library; see the file COPYING.  If not, write to the Free
-// Software Foundation, 59 Temple Place - Suite 330, Boston, MA 02111-1307,
-// USA.
+// with this library; see the file COPYING3.  If not see
+// <http://www.gnu.org/licenses/>.
 
 // 22.2.3.1.1 nunpunct members
 
@@ -31,18 +35,18 @@ void test02()
 
   // basic construction
   locale loc_c = locale::classic();
-  locale loc_us = __gnu_test::try_named_locale("en_US");
-  locale loc_fr = __gnu_test::try_named_locale("fr_FR");
-  locale loc_de = __gnu_test::try_named_locale("de_DE");
+  locale loc_us = locale("en_US");
+  locale loc_is = locale("is_IS");
+  locale loc_de = locale("de_DE");
   VERIFY( loc_c != loc_de );
-  VERIFY( loc_us != loc_fr );
+  VERIFY( loc_us != loc_is );
   VERIFY( loc_us != loc_de );
-  VERIFY( loc_de != loc_fr );
+  VERIFY( loc_de != loc_is );
 
   // cache the numpunct facets
   const numpunct<char>& nump_c = use_facet<numpunct<char> >(loc_c); 
   const numpunct<char>& nump_us = use_facet<numpunct<char> >(loc_us); 
-  const numpunct<char>& nump_fr = use_facet<numpunct<char> >(loc_fr); 
+  const numpunct<char>& nump_is = use_facet<numpunct<char> >(loc_is); 
   const numpunct<char>& nump_de = use_facet<numpunct<char> >(loc_de); 
 
   // sanity check the data is correct.
@@ -56,11 +60,11 @@ void test02()
   string t2 = nump_us.truename();
   string f2 = nump_us.falsename();
 
-  char dp3 = nump_fr.decimal_point();
-  char th3 = nump_fr.thousands_sep();
-  string g3 = nump_fr.grouping();
-  string t3 = nump_fr.truename();
-  string f3 = nump_fr.falsename();
+  char dp3 = nump_is.decimal_point();
+  char th3 = nump_is.thousands_sep();
+  string g3 = nump_is.grouping();
+  string t3 = nump_is.truename();
+  string f3 = nump_is.falsename();
 
   char dp4 = nump_de.decimal_point();
   char th4 = nump_de.thousands_sep();

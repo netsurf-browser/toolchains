@@ -1,5 +1,5 @@
 /* SocketChannelImpl.java -- 
-   Copyright (C) 2002, 2003, 2004 Free Software Foundation, Inc.
+   Copyright (C) 2002, 2003, 2004, 2006, 2007 Free Software Foundation, Inc.
 
 This file is part of GNU Classpath.
 
@@ -15,8 +15,8 @@ General Public License for more details.
 
 You should have received a copy of the GNU General Public License
 along with GNU Classpath; see the file COPYING.  If not, write to the
-Free Software Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA
-02111-1307 USA.
+Free Software Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA
+02110-1301 USA.
 
 Linking this library statically or dynamically with other modules is
 making a combined work based on this library.  Thus, the terms and
@@ -38,12 +38,12 @@ exception statement from your version. */
 
 package gnu.java.nio;
 
-import java.io.InputStream;
-import java.io.IOException;
-import java.io.OutputStream;
-import java.net.InetAddress;
-import java.net.InetSocketAddress;
 import gnu.java.net.PlainSocketImpl;
+
+import java.io.IOException;
+import java.io.InputStream;
+import java.io.OutputStream;
+import java.net.InetSocketAddress;
 import java.net.Socket;
 import java.net.SocketAddress;
 import java.net.SocketTimeoutException;
@@ -53,13 +53,12 @@ import java.nio.channels.ClosedChannelException;
 import java.nio.channels.ConnectionPendingException;
 import java.nio.channels.NoConnectionPendingException;
 import java.nio.channels.NotYetConnectedException;
+import java.nio.channels.SelectionKey;
+import java.nio.channels.Selector;
+import java.nio.channels.SocketChannel;
 import java.nio.channels.UnresolvedAddressException;
 import java.nio.channels.UnsupportedAddressTypeException;
-import java.nio.channels.SocketChannel;
-import java.nio.channels.Selector;
-import java.nio.channels.SelectionKey;
 import java.nio.channels.spi.SelectorProvider;
-import gnu.classpath.Configuration;
 
 public final class SocketChannelImpl extends SocketChannel
 {
@@ -72,6 +71,7 @@ public final class SocketChannelImpl extends SocketChannel
   {
     super (provider);
     impl = new PlainSocketImpl();
+    impl.create(true);
     socket = new NIOSocket (impl, this);
     configureBlocking(true);
   }
@@ -183,7 +183,7 @@ public final class SocketChannelImpl extends SocketChannel
     // FIXME: Handle blocking/non-blocking mode.
 
     Selector selector = provider().openSelector();
-    register (selector, SelectionKey.OP_CONNECT);
+    register(selector, SelectionKey.OP_CONNECT);
 
     if (isBlocking())
       {
@@ -217,7 +217,7 @@ public final class SocketChannelImpl extends SocketChannel
     return socket;
   }
 
-  public int read (ByteBuffer dst) throws IOException
+  public int read(ByteBuffer dst) throws IOException
   {
     if (!isConnected())
       throw new NotYetConnectedException();
@@ -226,14 +226,11 @@ public final class SocketChannelImpl extends SocketChannel
     int offset = 0;
     InputStream input = socket.getInputStream();
     int available = input.available();
-    int len = dst.capacity() - dst.position();
+    int len = dst.remaining();
 	
-    if (available == 0)
+    if ((! isBlocking()) && available == 0)
       return 0;
     
-    if (len > available)
-      len = available;
-
     if (dst.hasArray())
       {
         offset = dst.arrayOffset() + dst.position();
@@ -267,7 +264,7 @@ public final class SocketChannelImpl extends SocketChannel
 	}
       else
         {
-          dst.put (data, offset, len);
+          dst.put (data, offset, readBytes);
         }
 
     return readBytes;

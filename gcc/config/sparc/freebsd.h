@@ -1,12 +1,13 @@
 /* Definitions for Sun SPARC64 running FreeBSD using the ELF format
-   Copyright (C) 2001, 2002, 2004 Free Software Foundation, Inc.
+   Copyright (C) 2001, 2002, 2004, 2005, 2006, 2007, 2010, 2011
+   Free Software Foundation, Inc.
    Contributed by David E. O'Brien <obrien@FreeBSD.org> and BSDi.
 
 This file is part of GCC.
 
 GCC is free software; you can redistribute it and/or modify
 it under the terms of the GNU General Public License as published by
-the Free Software Foundation; either version 2, or (at your option)
+the Free Software Foundation; either version 3, or (at your option)
 any later version.
 
 GCC is distributed in the hope that it will be useful,
@@ -15,32 +16,41 @@ MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
 GNU General Public License for more details.
 
 You should have received a copy of the GNU General Public License
-along with GCC; see the file COPYING.  If not, write to
-the Free Software Foundation, 675 Mass Ave, Cambridge, MA 02139, USA.  */
-
+along with GCC; see the file COPYING3.  If not see
+<http://www.gnu.org/licenses/>.  */
 
 #undef  SUBTARGET_EXTRA_SPECS
 #define SUBTARGET_EXTRA_SPECS \
   { "fbsd_dynamic_linker", FBSD_DYNAMIC_LINKER }
 
 /* FreeBSD needs the platform name (sparc64) defined.
-   Emacs needs to know if the arch is 64 or 32-bits.  */
+   Emacs etc needs to know if the arch is 64 or 32-bits.
+   This also selects which targets are available via -mcpu.  */
 
-#undef  CPP_CPU64_DEFAULT_SPEC
-#define CPP_CPU64_DEFAULT_SPEC \
-  "-D__sparc64__ -D__sparc_v9__ -D__sparcv9 -D__arch64__"
+#undef  FBSD_TARGET_CPU_CPP_BUILTINS
+#define FBSD_TARGET_CPU_CPP_BUILTINS()		\
+  do						\
+    {						\
+      builtin_define ("__sparc64__");		\
+      builtin_define ("__sparc__");		\
+      builtin_define ("__sparc_v9__");		\
+      builtin_define ("__sparcv9");		\
+    }						\
+  while (0)
+
+#undef ASM_SPEC
+#define ASM_SPEC "%{fpic|fPIC|fpie|fPIE:-K PIC} %(asm_cpu)"
 
 #define LINK_SPEC "%(link_arch)						\
   %{!mno-relax:%{!r:-relax}}						\
-  %{p:%nconsider using `-pg' instead of `-p' with gprof(1)}				\
-  %{Wl,*:%*}								\
+  %{p:%nconsider using '-pg' instead of '-p' with gprof(1)}		\
   %{assert*} %{R*} %{rpath*} %{defsym*}					\
   %{shared:-Bshareable %{h*} %{soname*}}				\
   %{symbolic:-Bsymbolic}						\
   %{!shared:								\
     %{!static:								\
       %{rdynamic:-export-dynamic}					\
-      %{!dynamic-linker:-dynamic-linker %(fbsd_dynamic_linker) }}	\
+      -dynamic-linker %(fbsd_dynamic_linker) }	\
     %{static:-Bstatic}}"
 
 
@@ -62,10 +72,6 @@ the Free Software Foundation, 675 Mass Ave, Cambridge, MA 02139, USA.  */
 #undef  LONG_DOUBLE_TYPE_SIZE
 #define LONG_DOUBLE_TYPE_SIZE (TARGET_LONG_DOUBLE_128 ? 128 : 64)
 
-/* Constant which presents upper bound of the above value.  */
-#undef  MAX_LONG_DOUBLE_TYPE_SIZE
-#define MAX_LONG_DOUBLE_TYPE_SIZE 128
-
 /* Define this to set long double type size to use in libgcc2.c, which can
    not depend on target_flags.  */
 #if defined(__arch64__) || defined(__LONG_DOUBLE_128__)
@@ -75,11 +81,6 @@ the Free Software Foundation, 675 Mass Ave, Cambridge, MA 02139, USA.  */
 #endif
 
 /* Definitions for 64-bit SPARC running systems with ELF. */
-
-#undef  SUBTARGET_SWITCHES
-#define SUBTARGET_SWITCHES						    \
-  {"long-double-64", -MASK_LONG_DOUBLE_128, N_("Use 64 bit long doubles") },  \
-  {"long-double-128", MASK_LONG_DOUBLE_128, N_("Use 128 bit long doubles") },
 
 #undef  TARGET_VERSION
 #define TARGET_VERSION fprintf (stderr, " (FreeBSD/sparc64 ELF)");
@@ -132,14 +133,6 @@ the Free Software Foundation, 675 Mass Ave, Cambridge, MA 02139, USA.  */
 #define LOCAL_LABEL_PREFIX  "."
 
 /* XXX2 */
-/* This is how to output a reference to an internal numbered label where
-   PREFIX is the class of label and NUM is the number within the class.  */
-
-#undef  ASM_OUTPUT_INTERNAL_LABELREF
-#define ASM_OUTPUT_INTERNAL_LABELREF(FILE,PREFIX,NUM)			\
-  fprintf (FILE, ".L%s%d", PREFIX, NUM)
-
-/* XXX2 */
 /* This is how to store into the string LABEL
    the symbol_ref name of an internal numbered label where
    PREFIX is the class of label and NUM is the number within the class.
@@ -167,10 +160,17 @@ the Free Software Foundation, 675 Mass Ave, Cambridge, MA 02139, USA.  */
 
 /* #define DWARF_OFFSET_SIZE PTR_SIZE */
 
+#ifdef HAVE_AS_TLS
+#undef TARGET_SUN_TLS
+#undef TARGET_GNU_TLS
+#define TARGET_SUN_TLS 0
+#define TARGET_GNU_TLS 1
+#endif
+
 #undef ENDFILE_SPEC
-#define ENDFILE_SPEC \
-  	"%{ffast-math|funsafe-math-optimizations:crtfastmath.o%s}" \
-	FBSD_ENDFILE_SPEC
+#define ENDFILE_SPEC						\
+  "%{Ofast|ffast-math|funsafe-math-optimizations:crtfastmath.o%s} "	\
+  FBSD_ENDFILE_SPEC
 
 /* We use GNU ld so undefine this so that attribute((init_priority)) works.  */
 #undef CTORS_SECTION_ASM_OP

@@ -6,7 +6,7 @@
 --                                                                          --
 --                                 S p e c                                  --
 --                                                                          --
--- This specification is adapted from the Ada Reference Manual for use with --
+-- This specification is derived from the Ada Reference Manual for use with --
 -- GNAT.  In accordance with the copyright of that document, you can freely --
 -- copy and modify this specification,  provided that if you redistribute a --
 -- modified version,  any changes that you have made are clearly indicated. --
@@ -17,7 +17,7 @@ with Ada.Numerics.Generic_Complex_Types;
 pragma Elaborate_All (Ada.Numerics.Generic_Complex_Types);
 
 package Interfaces.Fortran is
-pragma Pure (Fortran);
+   pragma Pure;
 
    type Fortran_Integer  is new Integer;
    type Real             is new Float;
@@ -35,7 +35,12 @@ pragma Pure (Fortran);
    package Single_Precision_Complex_Types is
       new Ada.Numerics.Generic_Complex_Types (Real);
 
+   package Double_Precision_Complex_Types is
+      new Ada.Numerics.Generic_Complex_Types (Double_Precision);
+
    type Complex is new Single_Precision_Complex_Types.Complex;
+
+   type Double_Complex is new Double_Precision_Complex_Types.Complex;
 
    subtype Imaginary is Single_Precision_Complex_Types.Imaginary;
    i : Imaginary renames Single_Precision_Complex_Types.i;
@@ -45,19 +50,19 @@ pragma Pure (Fortran);
 
    type Fortran_Character is array (Positive range <>) of Character_Set;
 
-   function To_Fortran (Item : in Character)     return Character_Set;
-   function To_Ada     (Item : in Character_Set) return Character;
+   function To_Fortran (Item : Character)     return Character_Set;
+   function To_Ada     (Item : Character_Set) return Character;
 
-   function To_Fortran (Item : in String)            return Fortran_Character;
-   function To_Ada     (Item : in Fortran_Character) return String;
+   function To_Fortran (Item : String)            return Fortran_Character;
+   function To_Ada     (Item : Fortran_Character) return String;
 
    procedure To_Fortran
-     (Item   : in String;
+     (Item   : String;
       Target : out Fortran_Character;
       Last   : out Natural);
 
    procedure To_Ada
-     (Item   : in Fortran_Character;
+     (Item   : Fortran_Character;
       Target : out String;
       Last   : out Natural);
 

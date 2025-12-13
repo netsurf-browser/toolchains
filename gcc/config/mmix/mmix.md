@@ -1,12 +1,13 @@
 ;; GCC machine description for MMIX
-;; Copyright (C) 2000, 2001, 2002, 2003 Free Software Foundation, Inc.
+;; Copyright (C) 2000, 2001, 2002, 2003, 2004, 2005, 2007, 2010
+;; Free Software Foundation, Inc.
 ;; Contributed by Hans-Peter Nilsson (hp@bitrange.com)
 
 ;; This file is part of GCC.
 
 ;; GCC is free software; you can redistribute it and/or modify
 ;; it under the terms of the GNU General Public License as published by
-;; the Free Software Foundation; either version 2, or (at your option)
+;; the Free Software Foundation; either version 3, or (at your option)
 ;; any later version.
 
 ;; GCC is distributed in the hope that it will be useful,
@@ -15,9 +16,8 @@
 ;; GNU General Public License for more details.
 
 ;; You should have received a copy of the GNU General Public License
-;; along with GCC; see the file COPYING.  If not, write to
-;; the Free Software Foundation, 59 Temple Place - Suite 330,
-;; Boston, MA 02111-1307, USA.
+;; along with GCC; see the file COPYING3.  If not see
+;; <http://www.gnu.org/licenses/>.
 
 ;; The original PO technology requires these to be ordered by speed,
 ;; so that assigner will pick the fastest.
@@ -39,7 +39,11 @@
    (MMIX_rR_REGNUM 260)
    (MMIX_fp_rO_OFFSET -24)]
 )
+
+;; Operand and operator predicates.
 
+(include "predicates.md")
+
 ;; FIXME: Can we remove the reg-to-reg for smaller modes?  Shouldn't they
 ;; be synthesized ok?
 (define_insn "movqi"
@@ -329,7 +333,7 @@
 ;; The %2-is-%1-case is there just to make sure things don't fail.  Could
 ;; presumably happen with optimizations off; no evidence.
 (define_insn "*divdi3_nonknuth"
-  [(set (match_operand:DI 0 "register_operand" "=&r,r")
+  [(set (match_operand:DI 0 "register_operand" "=&r,&r")
 	(div:DI (match_operand:DI 1 "register_operand" "r,r")
 		(match_operand:DI 2 "register_operand" "1,r")))
    (clobber (match_scratch:DI 3 "=1,1"))
@@ -355,7 +359,7 @@ DIVU %0,%1,%2\;NEGU %1,0,%0\;CSN %0,$255,%1")
 ;; The %2-is-%1-case is there just to make sure things don't fail.  Could
 ;; presumably happen with optimizations off; no evidence.
 (define_insn "*moddi3_nonknuth"
-  [(set (match_operand:DI 0 "register_operand" "=&r,r")
+  [(set (match_operand:DI 0 "register_operand" "=&r,&r")
 	(mod:DI (match_operand:DI 1 "register_operand" "r,r")
 		(match_operand:DI 2 "register_operand" "1,r")))
    (clobber (match_scratch:DI 3 "=1,1"))
@@ -436,30 +440,6 @@ DIVU %1,%1,%2\;GET %0,:rR\;NEGU %2,0,%0\;CSNN %0,$255,%2")
   ""
   "NOR %0,%1,0")
 
-;; Since we don't have cc0, we do what is recommended in the manual;
-;; store away the operands for use in the branch, scc or movcc insn.
-(define_expand "cmpdi"
-  [(match_operand:DI 0 "register_operand" "")
-   (match_operand:DI 1 "mmix_reg_or_8bit_operand" "")]
-  ""
-  "
-{
-  mmix_compare_op0 = operands[0];
-  mmix_compare_op1 = operands[1];
-  DONE;
-}")
-
-(define_expand "cmpdf"
-  [(match_operand:DF 0 "register_operand" "")
-   (match_operand:DF 1 "register_operand" "")]
-  ""
-  "
-{
-  mmix_compare_op0 = operands[0];
-  mmix_compare_op1 = operands[1];
-  DONE;
-}")
-
 ;; When the user-patterns expand, the resulting insns will match the
 ;; patterns below.
 
@@ -470,17 +450,18 @@ DIVU %1,%1,%2\;GET %0,:rR\;NEGU %2,0,%0\;CSNN %0,$255,%2")
 ;; unsigned, so that has to be done another way.
 ;;  FIXME: Perhaps a peep2 changing CCcode to a new code, that
 ;; gets folded here.
-(define_insn "*cmpcc_folded"
+(define_insn "*cmpdi_folded"
   [(set (match_operand:CC 0 "register_operand" "=r")
 	(compare:CC
 	 (match_operand:DI 1 "register_operand" "r")
 	 (const_int 0)))]
   ;; FIXME: Can we test equivalence any other way?
   ;; FIXME: Can we fold any other way?
-  "REGNO (operands[1]) == REGNO (operands[0])"
+  "REG_P (operands[0]) && REG_P (operands[1])
+   && REGNO (operands[1]) == REGNO (operands[0])"
   "%% folded: cmp %0,%1,0")
 
-(define_insn "*cmpcc"
+(define_insn "*cmps"
   [(set (match_operand:CC 0 "register_operand" "=r")
 	(compare:CC
 	 (match_operand:DI 1 "register_operand" "r")
@@ -719,7 +700,8 @@ DIVU %1,%1,%2\;GET %0,:rR\;NEGU %2,0,%0\;CSNN %0,$255,%2")
 ;; 0 to use in movdfcc.
 
 (define_expand "movdfcc"
-  [(set (match_operand:DF 0 "register_operand" "")
+  [(set (match_dup 4) (match_dup 5))
+   (set (match_operand:DF 0 "register_operand" "")
 	(if_then_else:DF
 	 (match_operand 1 "comparison_operator" "")
 	 (match_operand:DF 2 "mmix_reg_or_0_operand" "")
@@ -728,15 +710,20 @@ DIVU %1,%1,%2\;GET %0,:rR\;NEGU %2,0,%0\;CSNN %0,$255,%2")
   "
 {
   enum rtx_code code = GET_CODE (operands[1]);
-  rtx cc_reg = mmix_gen_compare_reg (code, mmix_compare_op0,
-				     mmix_compare_op1);
-  if (cc_reg == NULL_RTX)
+  if (code == LE || code == GE)
     FAIL;
-  operands[1] = gen_rtx (code, VOIDmode, cc_reg, const0_rtx);
+
+  operands[4] = mmix_gen_compare_reg (code, XEXP (operands[1], 0),
+				      XEXP (operands[1], 1));
+  operands[5] = gen_rtx_COMPARE (GET_MODE (operands[4]),
+				 XEXP (operands[1], 0),
+				 XEXP (operands[1], 1));
+  operands[1] = gen_rtx_fmt_ee (code, VOIDmode, operands[4], const0_rtx);
 }")
 
 (define_expand "movdicc"
-  [(set (match_operand:DI 0 "register_operand" "")
+  [(set (match_dup 4) (match_dup 5))
+   (set (match_operand:DI 0 "register_operand" "")
 	(if_then_else:DI
 	 (match_operand 1 "comparison_operator" "")
 	 (match_operand:DI 2 "mmix_reg_or_8bit_operand" "")
@@ -745,11 +732,15 @@ DIVU %1,%1,%2\;GET %0,:rR\;NEGU %2,0,%0\;CSNN %0,$255,%2")
   "
 {
   enum rtx_code code = GET_CODE (operands[1]);
-  rtx cc_reg = mmix_gen_compare_reg (code, mmix_compare_op0,
-				     mmix_compare_op1);
-  if (cc_reg == NULL_RTX)
+  if (code == LE || code == GE)
     FAIL;
-  operands[1] = gen_rtx (code, VOIDmode, cc_reg, const0_rtx);
+
+  operands[4] = mmix_gen_compare_reg (code, XEXP (operands[1], 0),
+				      XEXP (operands[1], 1));
+  operands[5] = gen_rtx_COMPARE (GET_MODE (operands[4]),
+				 XEXP (operands[1], 0),
+				 XEXP (operands[1], 1));
+  operands[1] = gen_rtx_fmt_ee (code, VOIDmode, operands[4], const0_rtx);
 }")
 
 ;; FIXME: Is this the right way to do "folding" of CCmode -> DImode?
@@ -757,7 +748,7 @@ DIVU %1,%1,%2\;GET %0,:rR\;NEGU %2,0,%0\;CSNN %0,$255,%2")
   [(set (match_operand:DI 0 "register_operand" "=r,r,r,r")
 	(if_then_else:DI
 	 (match_operator 2 "mmix_foldable_comparison_operator"
-			 [(match_operand 3 "register_operand" "r,r,r,r")
+			 [(match_operand:DI 3 "register_operand" "r,r,r,r")
 			  (const_int 0)])
 	 (match_operand:DI 1 "mmix_reg_or_8bit_operand" "rI,0 ,rI,GM")
 	 (match_operand:DI 4 "mmix_reg_or_8bit_operand" "0 ,rI,GM,rI")))]
@@ -768,7 +759,7 @@ DIVU %1,%1,%2\;GET %0,:rR\;NEGU %2,0,%0\;CSNN %0,$255,%2")
    ZS%d2 %0,%3,%1
    ZS%D2 %0,%3,%4")
 
-(define_insn "*movdicc_real"
+(define_insn "*movdicc_real_reversible"
   [(set
     (match_operand:DI 0 "register_operand"	   "=r ,r ,r ,r")
     (if_then_else:DI
@@ -778,12 +769,27 @@ DIVU %1,%1,%2\;GET %0,:rR\;NEGU %2,0,%0\;CSNN %0,$255,%2")
       (const_int 0)])
      (match_operand:DI 1 "mmix_reg_or_8bit_operand" "rI,0 ,rI,GM")
      (match_operand:DI 4 "mmix_reg_or_8bit_operand" "0 ,rI,GM,rI")))]
-  ""
+  "REVERSIBLE_CC_MODE (GET_MODE (operands[3]))"
   "@
    CS%d2 %0,%3,%1
    CS%D2 %0,%3,%4
    ZS%d2 %0,%3,%1
    ZS%D2 %0,%3,%4")
+
+(define_insn "*movdicc_real_nonreversible"
+  [(set
+    (match_operand:DI 0 "register_operand"	   "=r ,r")
+    (if_then_else:DI
+     (match_operator
+      2 "mmix_comparison_operator"
+      [(match_operand 3 "mmix_reg_cc_operand"	    "r ,r")
+      (const_int 0)])
+     (match_operand:DI 1 "mmix_reg_or_8bit_operand" "rI,rI")
+     (match_operand:DI 4 "mmix_reg_or_0_operand" "0 ,GM")))]
+  "!REVERSIBLE_CC_MODE (GET_MODE (operands[3]))"
+  "@
+   CS%d2 %0,%3,%1
+   ZS%d2 %0,%3,%1")
 
 (define_insn "*movdfcc_real_foldable"
   [(set
@@ -791,7 +797,7 @@ DIVU %1,%1,%2\;GET %0,:rR\;NEGU %2,0,%0\;CSNN %0,$255,%2")
     (if_then_else:DF
      (match_operator
       2 "mmix_foldable_comparison_operator"
-      [(match_operand 3 "register_operand"	 "r  ,r  ,r  ,r")
+      [(match_operand:DI 3 "register_operand"	 "r  ,r  ,r  ,r")
       (const_int 0)])
      (match_operand:DF 1 "mmix_reg_or_0_operand" "rGM,0  ,rGM,GM")
      (match_operand:DF 4 "mmix_reg_or_0_operand" "0  ,rGM,GM ,rGM")))]
@@ -802,7 +808,7 @@ DIVU %1,%1,%2\;GET %0,:rR\;NEGU %2,0,%0\;CSNN %0,$255,%2")
    ZS%d2 %0,%3,%1
    ZS%D2 %0,%3,%4")
 
-(define_insn "*movdfcc_real"
+(define_insn "*movdfcc_real_reversible"
   [(set
     (match_operand:DF 0 "register_operand"	"=r  ,r  ,r  ,r")
     (if_then_else:DF
@@ -812,182 +818,87 @@ DIVU %1,%1,%2\;GET %0,:rR\;NEGU %2,0,%0\;CSNN %0,$255,%2")
       (const_int 0)])
      (match_operand:DF 1 "mmix_reg_or_0_operand" "rGM,0  ,rGM,GM")
      (match_operand:DF 4 "mmix_reg_or_0_operand" "0  ,rGM,GM ,rGM")))]
-  ""
+  "REVERSIBLE_CC_MODE (GET_MODE (operands[3]))"
   "@
    CS%d2 %0,%3,%1
    CS%D2 %0,%3,%4
    ZS%d2 %0,%3,%1
    ZS%D2 %0,%3,%4")
 
-;; FIXME: scc patterns will probably help, I just skip them
+(define_insn "*movdfcc_real_nonreversible"
+  [(set
+    (match_operand:DF 0 "register_operand"	"=r  ,r")
+    (if_then_else:DF
+     (match_operator
+      2 "mmix_comparison_operator"
+      [(match_operand 3 "mmix_reg_cc_operand"	 "r  ,r")
+      (const_int 0)])
+     (match_operand:DF 1 "mmix_reg_or_0_operand" "rGM,rGM")
+     (match_operand:DF 4 "mmix_reg_or_0_operand" "0  ,GM")))]
+  "!REVERSIBLE_CC_MODE (GET_MODE (operands[3]))"
+  "@
+   CS%d2 %0,%3,%1
+   ZS%d2 %0,%3,%1")
+
+;; FIXME: scc insns will probably help, I just skip them
 ;; right now.  Revisit.
 
-(define_expand "beq"
-  [(set (pc)
-	(if_then_else (eq (match_dup 1) (const_int 0))
-		      (label_ref (match_operand 0 "" ""))
-		      (pc)))]
+(define_expand "cbranchdi4"
+  [(set (match_dup 4)
+        (match_op_dup 5
+         [(match_operand:DI 1 "register_operand" "")
+          (match_operand:DI 2 "mmix_reg_or_8bit_operand" "")]))
+   (set (pc)
+        (if_then_else
+              (match_operator 0 "ordered_comparison_operator"
+               [(match_dup 4)
+                (const_int 0)])
+              (label_ref (match_operand 3 "" ""))
+              (pc)))]
   ""
   "
 {
-  operands[1]
-    = mmix_gen_compare_reg (EQ, mmix_compare_op0, mmix_compare_op1);
+  operands[4] = mmix_gen_compare_reg (GET_CODE (operands[0]),
+                                      operands[1], operands[2]);
+  operands[5] = gen_rtx_fmt_ee (COMPARE,
+                                GET_MODE (operands[4]),
+                                operands[1], operands[2]);
 }")
 
-(define_expand "bne"
-  [(set (pc)
-	(if_then_else (ne (match_dup 1) (const_int 0))
-		      (label_ref (match_operand 0 "" ""))
-		      (pc)))]
+(define_expand "cbranchdf4"
+  [(set (match_dup 4)
+        (match_op_dup 5
+         [(match_operand:DF 1 "register_operand" "")
+          (match_operand:DF 2 "register_operand" "")]))
+   (set (pc)
+        (if_then_else
+              (match_operator 0 "float_comparison_operator"
+               [(match_dup 4)
+                (const_int 0)])
+              (label_ref (match_operand 3 "" ""))
+              (pc)))]
   ""
   "
 {
-  operands[1]
-    = mmix_gen_compare_reg (NE, mmix_compare_op0, mmix_compare_op1);
-}")
-
-(define_expand "bgt"
-  [(set (pc)
-	(if_then_else (gt (match_dup 1) (const_int 0))
-		      (label_ref (match_operand 0 "" ""))
-		      (pc)))]
-  ""
-  "
-{
-  operands[1]
-    = mmix_gen_compare_reg (GT, mmix_compare_op0, mmix_compare_op1);
-}")
-
-(define_expand "ble"
-  [(set (pc)
-	(if_then_else (le (match_dup 1) (const_int 0))
-		      (label_ref (match_operand 0 "" ""))
-		      (pc)))]
-  ""
-  "
-{
-  operands[1]
-    = mmix_gen_compare_reg (LE, mmix_compare_op0, mmix_compare_op1);
-
   /* The head comment of optabs.c:can_compare_p says we're required to
-     implement this, so we have to clean up the mess here. */
-  if (operands[1] == NULL_RTX)
+     implement this, so we have to clean up the mess here.  */
+  if (GET_CODE (operands[0]) == LE || GET_CODE (operands[0]) == GE)
     {
-      /* FIXME: Watch out for sharing/unsharing of rtx:es.  */
-      emit_jump_insn ((*bcc_gen_fctn[(int) LT]) (operands[0]));
-      emit_jump_insn ((*bcc_gen_fctn[(int) EQ]) (operands[0]));
+      enum rtx_code ltgt_code = GET_CODE (operands[0]) == LE ? LT : GT;
+      emit_cmp_and_jump_insns (operands[1], operands[2], ltgt_code, NULL_RTX,
+			       DFmode, 0, operands[3]);
+      emit_cmp_and_jump_insns (operands[1], operands[2], EQ, NULL_RTX,
+			       DFmode, 0, operands[3]);
       DONE;
     }
+
+  operands[4] = mmix_gen_compare_reg (GET_CODE (operands[0]),
+                                      operands[1], operands[2]);
+  operands[5] = gen_rtx_fmt_ee (COMPARE,
+                                GET_MODE (operands[4]),
+                                operands[1], operands[2]);
 }")
 
-(define_expand "bge"
-  [(set (pc)
-	(if_then_else (ge (match_dup 1) (const_int 0))
-		      (label_ref (match_operand 0 "" ""))
-		      (pc)))]
-  ""
-  "
-{
-  operands[1]
-    = mmix_gen_compare_reg (GE, mmix_compare_op0, mmix_compare_op1);
-
-  /* The head comment of optabs.c:can_compare_p says we're required to
-     implement this, so we have to clean up the mess here. */
-  if (operands[1] == NULL_RTX)
-    {
-      /* FIXME: Watch out for sharing/unsharing of rtx:es.  */
-      emit_jump_insn ((*bcc_gen_fctn[(int) GT]) (operands[0]));
-      emit_jump_insn ((*bcc_gen_fctn[(int) EQ]) (operands[0]));
-      DONE;
-    }
-}")
-
-(define_expand "blt"
-  [(set (pc)
-	(if_then_else (lt (match_dup 1) (const_int 0))
-		      (label_ref (match_operand 0 "" ""))
-		      (pc)))]
-  ""
-  "
-{
-  operands[1]
-    = mmix_gen_compare_reg (LT, mmix_compare_op0, mmix_compare_op1);
-}")
-
-(define_expand "bgtu"
-  [(set (pc)
-	(if_then_else (gtu (match_dup 1) (const_int 0))
-		      (label_ref (match_operand 0 "" ""))
-		      (pc)))]
-  ""
-  "
-{
-  operands[1]
-    = mmix_gen_compare_reg (GTU, mmix_compare_op0, mmix_compare_op1);
-}")
-
-(define_expand "bleu"
-  [(set (pc)
-	(if_then_else (leu (match_dup 1) (const_int 0))
-		      (label_ref (match_operand 0 "" ""))
-		      (pc)))]
-  ""
-  "
-{
-  operands[1]
-    = mmix_gen_compare_reg (LEU, mmix_compare_op0, mmix_compare_op1);
-}")
-
-(define_expand "bgeu"
-  [(set (pc)
-	(if_then_else (geu (match_dup 1) (const_int 0))
-		      (label_ref (match_operand 0 "" ""))
-		      (pc)))]
-  ""
-  "
-{
-  operands[1]
-    = mmix_gen_compare_reg (GEU, mmix_compare_op0, mmix_compare_op1);
-}")
-
-(define_expand "bltu"
-  [(set (pc)
-	(if_then_else (ltu (match_dup 1) (const_int 0))
-		      (label_ref (match_operand 0 "" ""))
-		      (pc)))]
-  ""
-  "
-{
-  operands[1]
-    = mmix_gen_compare_reg (LTU, mmix_compare_op0, mmix_compare_op1);
-}")
-
-(define_expand "bunordered"
-  [(set (pc)
-	(if_then_else (unordered (match_dup 1) (const_int 0))
-		      (label_ref (match_operand 0 "" ""))
-		      (pc)))]
-  ""
-  "
-{
-  operands[1]
-    = mmix_gen_compare_reg (UNORDERED, mmix_compare_op0, mmix_compare_op1);
-
-  if (operands[1] == NULL_RTX)
-    FAIL;
-}")
-
-(define_expand "bordered"
-  [(set (pc)
-	(if_then_else (ordered (match_dup 1) (const_int 0))
-		      (label_ref (match_operand 0 "" ""))
-		      (pc)))]
-  ""
-  "
-{
-  operands[1]
-    = mmix_gen_compare_reg (ORDERED, mmix_compare_op0, mmix_compare_op1);
-}")
 
 ;; FIXME: we can emit an unordered-or-*not*-equal compare in one insn, but
 ;; there's no RTL code for it.  Maybe revisit in future.
@@ -997,7 +908,7 @@ DIVU %1,%1,%2\;GET %0,:rR\;NEGU %2,0,%0\;CSNN %0,$255,%2")
   [(set (pc)
 	(if_then_else
 	 (match_operator 1 "mmix_foldable_comparison_operator"
-			 [(match_operand 2 "register_operand" "r")
+			 [(match_operand:DI 2 "register_operand" "r")
 			  (const_int 0)])
 	 (label_ref (match_operand 0 "" ""))
 	 (pc)))]
@@ -1019,7 +930,7 @@ DIVU %1,%1,%2\;GET %0,:rR\;NEGU %2,0,%0\;CSNN %0,$255,%2")
   [(set (pc)
 	(if_then_else
 	 (match_operator 1 "mmix_foldable_comparison_operator"
-			 [(match_operand 2 "register_operand" "r")
+			 [(match_operand:DI 2 "register_operand" "r")
 			  (const_int 0)])
 		      (pc)
 		      (label_ref (match_operand 0 "" ""))))]
@@ -1047,6 +958,16 @@ DIVU %1,%1,%2\;GET %0,:rR\;NEGU %2,0,%0\;CSNN %0,$255,%2")
   ""
   "
 {
+  /* The caller checks that the operand is generally valid as an
+     address, but at -O0 nothing makes sure that it's also a valid
+     call address for a *call*; a mmix_symbolic_or_address_operand.
+     Force into a register if it isn't.  */
+  if (!mmix_symbolic_or_address_operand (XEXP (operands[0], 0),
+					 GET_MODE (XEXP (operands[0], 0))))
+    operands[0]
+      = replace_equiv_address (operands[0],
+			       force_reg (Pmode, XEXP (operands[0], 0)));
+
   /* Since the epilogue 'uses' the return address, and it is clobbered
      in the call, and we set it back after every call (all but one setting
      will be optimized away), integrity is maintained.  */
@@ -1074,6 +995,16 @@ DIVU %1,%1,%2\;GET %0,:rR\;NEGU %2,0,%0\;CSNN %0,$255,%2")
   ""
   "
 {
+  /* The caller checks that the operand is generally valid as an
+     address, but at -O0 nothing makes sure that it's also a valid
+     call address for a *call*; a mmix_symbolic_or_address_operand.
+     Force into a register if it isn't.  */
+  if (!mmix_symbolic_or_address_operand (XEXP (operands[1], 0),
+					 GET_MODE (XEXP (operands[1], 0))))
+    operands[1]
+      = replace_equiv_address (operands[1],
+			       force_reg (Pmode, XEXP (operands[1], 0)));
+
   /* Since the epilogue 'uses' the return address, and it is clobbered
      in the call, and we set it back after every call (all but one setting
      will be optimized away), integrity is maintained.  */
@@ -1185,7 +1116,7 @@ DIVU %1,%1,%2\;GET %0,:rR\;NEGU %2,0,%0\;CSNN %0,$255,%2")
 ;; the frame-pointer would be located).
 ;; In the nonlocal goto receiver, we unwind the register stack by a series
 ;; of "pop 0,0" until rO equals the saved value.  (If it goes lower, we
-;; should call abort.)
+;; should die with a trap.)
 (define_expand "nonlocal_goto_receiver"
   [(parallel [(unspec_volatile [(const_int 0)] 1)
 	      (clobber (scratch:DI))

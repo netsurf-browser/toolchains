@@ -6,7 +6,7 @@
 --                                                                          --
 --                                 S p e c                                  --
 --                                                                          --
---         Copyright (C) 1996-2000 Ada Core Technologies, Inc.              --
+--                      Copyright (C) 1996-2008, AdaCore                    --
 --                                                                          --
 -- GNAT is free software;  you can  redistribute it  and/or modify it under --
 -- terms of the  GNU General Public License as published  by the Free Soft- --
@@ -16,8 +16,8 @@
 -- or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU General Public License --
 -- for  more details.  You should have  received  a copy of the GNU General --
 -- Public License  distributed with GNAT;  see file COPYING.  If not, write --
--- to  the Free Software Foundation,  59 Temple Place - Suite 330,  Boston, --
--- MA 02111-1307, USA.                                                      --
+-- to  the  Free Software Foundation,  51  Franklin  Street,  Fifth  Floor, --
+-- Boston, MA 02110-1301, USA.                                              --
 --                                                                          --
 -- As a special exception,  if other files  instantiate  generics from this --
 -- unit, or you link  this unit with other files  to produce an executable, --
@@ -44,11 +44,13 @@
 --  from an exception handler.
 
 package GNAT.Current_Exception is
-pragma Pure (Current_Exception);
+   pragma Pure;
 
    -----------------
    -- Subprograms --
    -----------------
+
+   --  Note: the lower bound of returned String values is always one
 
    function Exception_Information return String;
    --  Returns the result of calling Ada.Exceptions.Exception_Information
@@ -93,7 +95,7 @@ pragma Pure (Current_Exception);
    --  For greater compatibility with existing legacy software, library
    --  level renaming may be used to create a function with a name matching
    --  one that is in use. For example, some versions of VADS Ada provided
-   --  a functin called Current_Exception whose semantics was identical to
+   --  a function called Current_Exception whose semantics was identical to
    --  that of GNAT. The following library level renaming declaration:
 
    --    with GNAT.Current_Exception;

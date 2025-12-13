@@ -5,7 +5,7 @@
    PR:		none.
    Originator:	<andreast@gcc.gnu.org> 20030828	 */
 
-/* { dg-do run { xfail mips*-*-* arm*-*-* strongarm*-*-* xscale*-*-* } } */
+/* { dg-do run } */
 #include "ffitest.h"
 
 typedef struct cls_struct_16byte {
@@ -29,7 +29,8 @@ cls_struct_16byte cls_struct_16byte_fn(struct cls_struct_16byte b1,
   return result;
 }
 
-static void cls_struct_16byte_gn(ffi_cif* cif, void* resp, void** args, void* userdata)
+static void cls_struct_16byte_gn(ffi_cif* cif __UNUSED__, void* resp,
+				 void** args, void* userdata __UNUSED__)
 {
   struct cls_struct_16byte b1, b2;
 
@@ -42,20 +43,12 @@ static void cls_struct_16byte_gn(ffi_cif* cif, void* resp, void** args, void* us
 int main (void)
 {
   ffi_cif cif;
-#ifndef USING_MMAP
-  static ffi_closure cl;
-#endif
-  ffi_closure *pcl;
+  void *code;
+  ffi_closure *pcl = ffi_closure_alloc(sizeof(ffi_closure), &code);
   void* args_dbl[5];
   ffi_type* cls_struct_fields[4];
   ffi_type cls_struct_type;
   ffi_type* dbl_arg_types[5];
-
-#ifdef USING_MMAP
-  pcl = allocate_mmap (sizeof(ffi_closure));
-#else
-  pcl = &cl;
-#endif
 
   cls_struct_type.size = 0;
   cls_struct_type.alignment = 0;
@@ -66,9 +59,9 @@ int main (void)
   struct cls_struct_16byte j_dbl = { 1, 9.0, 3 };
   struct cls_struct_16byte res_dbl;
 
-  cls_struct_fields[0] = &ffi_type_uint32;
+  cls_struct_fields[0] = &ffi_type_sint;
   cls_struct_fields[1] = &ffi_type_double;
-  cls_struct_fields[2] = &ffi_type_uint32;
+  cls_struct_fields[2] = &ffi_type_sint;
   cls_struct_fields[3] = NULL;
 
   dbl_arg_types[0] = &cls_struct_type;
@@ -87,9 +80,13 @@ int main (void)
   printf("res: %d %g %d\n", res_dbl.a, res_dbl.b, res_dbl.c);
   /* { dg-output "\nres: 8 17 12" } */
 
-  CHECK(ffi_prep_closure(pcl, &cif, cls_struct_16byte_gn, NULL) == FFI_OK);
+  res_dbl.a = 0;
+  res_dbl.b = 0.0;
+  res_dbl.c = 0;
 
-  res_dbl = ((cls_struct_16byte(*)(cls_struct_16byte, cls_struct_16byte))(pcl))(h_dbl, j_dbl);
+  CHECK(ffi_prep_closure_loc(pcl, &cif, cls_struct_16byte_gn, NULL, code) == FFI_OK);
+
+  res_dbl = ((cls_struct_16byte(*)(cls_struct_16byte, cls_struct_16byte))(code))(h_dbl, j_dbl);
   /* { dg-output "\n7 8 9 1 9 3: 8 17 12" } */
   printf("res: %d %g %d\n", res_dbl.a, res_dbl.b, res_dbl.c);
   /* { dg-output "\nres: 8 17 12" } */

@@ -1,15 +1,15 @@
 /* Scan linker error messages for missing template instantiations and provide
    them.
 
-   Copyright (C) 1995, 1998, 1999, 2000, 2001, 2003
-   Free Software Foundation, Inc.
+   Copyright (C) 1995, 1998, 1999, 2000, 2001, 2003, 2004, 2005, 2007, 2008,
+   2009, 2010 Free Software Foundation, Inc.
    Contributed by Jason Merrill (jason@cygnus.com).
 
 This file is part of GCC.
 
 GCC is free software; you can redistribute it and/or modify it under
 the terms of the GNU General Public License as published by the Free
-Software Foundation; either version 2, or (at your option) any later
+Software Foundation; either version 3, or (at your option) any later
 version.
 
 GCC is distributed in the hope that it will be useful, but WITHOUT ANY
@@ -18,9 +18,8 @@ FITNESS FOR A PARTICULAR PURPOSE.  See the GNU General Public License
 for more details.
 
 You should have received a copy of the GNU General Public License
-along with GCC; see the file COPYING.  If not, write to the Free
-Software Foundation, 59 Temple Place - Suite 330, Boston, MA
-02111-1307, USA.  */
+along with GCC; see the file COPYING3.  If not see
+<http://www.gnu.org/licenses/>.  */
 
 #include "config.h"
 #include "system.h"
@@ -32,12 +31,18 @@ Software Foundation, 59 Temple Place - Suite 330, Boston, MA
 #include "demangle.h"
 #include "collect2.h"
 
+/* TARGET_64BIT may be defined to use driver specific functionality. */
+#undef TARGET_64BIT
+#define TARGET_64BIT TARGET_64BIT_DEFAULT
+
 #define MAX_ITERATIONS 17
 
 /* Defined in the automatically-generated underscore.c.  */
 extern int prepends_underscore;
 
 static int tlink_verbose;
+
+static char *initial_cwd;
 
 /* Hash table boilerplate for working with htab_t.  We have hash tables
    for symbol names, file names, and demangled symbols.  */
@@ -96,7 +101,7 @@ static symbol * symbol_pop (void);
 static void file_push (file *);
 static file * file_pop (void);
 static void tlink_init (void);
-static int tlink_execute (const char *, char **, const char *);
+static int tlink_execute (const char *, char **, const char *, const char *);
 static char * frob_extension (const char *, const char *);
 static char * obstack_fgets (FILE *, struct obstack *);
 static char * tfgets (FILE *);
@@ -123,10 +128,10 @@ symbol_hash_lookup (const char *string, int create)
   if (*e == NULL)
     {
       struct symbol_hash_entry *v;
-      *e = v = xcalloc (1, sizeof (*v));
+      *e = v = XCNEW (struct symbol_hash_entry);
       v->key = xstrdup (string);
     }
-  return *e;
+  return (struct symbol_hash_entry *) *e;
 }
 
 static htab_t file_table;
@@ -143,10 +148,10 @@ file_hash_lookup (const char *string)
   if (*e == NULL)
     {
       struct file_hash_entry *v;
-      *e = v = xcalloc (1, sizeof (*v));
+      *e = v = XCNEW (struct file_hash_entry);
       v->key = xstrdup (string);
     }
-  return *e;
+  return (struct file_hash_entry *) *e;
 }
 
 static htab_t demangled_table;
@@ -165,10 +170,10 @@ demangled_hash_lookup (const char *string, int create)
   if (*e == NULL)
     {
       struct demangled_hash_entry *v;
-      *e = v = xcalloc (1, sizeof (*v));
+      *e = v = XCNEW (struct demangled_hash_entry);
       v->key = xstrdup (string);
     }
-  return *e;
+  return (struct demangled_hash_entry *) *e;
 }
 
 /* Stack code.  */
@@ -192,8 +197,8 @@ struct file_stack_entry *file_stack;
 static void
 symbol_push (symbol *p)
 {
-  struct symbol_stack_entry *ep = obstack_alloc
-    (&symbol_stack_obstack, sizeof (struct symbol_stack_entry));
+  struct symbol_stack_entry *ep
+    = XOBNEW (&symbol_stack_obstack, struct symbol_stack_entry);
   ep->value = p;
   ep->next = symbol_stack;
   symbol_stack = ep;
@@ -220,8 +225,7 @@ file_push (file *p)
   if (p->tweaking)
     return;
 
-  ep = obstack_alloc
-    (&file_stack_obstack, sizeof (struct file_stack_entry));
+  ep = XOBNEW (&file_stack_obstack, struct file_stack_entry);
   ep->value = p;
   ep->next = file_stack;
   file_stack = ep;
@@ -272,13 +276,18 @@ tlink_init (void)
       if (debug)
 	tlink_verbose = 3;
     }
+
+  initial_cwd = getpwd ();
 }
 
 static int
-tlink_execute (const char *prog, char **argv, const char *redir)
+tlink_execute (const char *prog, char **argv, const char *outname,
+	       const char *errname)
 {
-  collect_execute (prog, argv, redir);
-  return collect_wait (prog);
+  struct pex_obj *pex;
+
+  pex = collect_execute (prog, argv, outname, errname, PEX_LAST | PEX_SEARCH);
+  return collect_wait (prog, pex);
 }
 
 static char *
@@ -292,7 +301,7 @@ frob_extension (const char *s, const char *ext)
     p = s + strlen (s);
 
   obstack_grow (&temporary_obstack, s, p - s);
-  return obstack_copy0 (&temporary_obstack, ext, strlen (ext));
+  return (char *) obstack_copy0 (&temporary_obstack, ext, strlen (ext));
 }
 
 static char *
@@ -304,7 +313,7 @@ obstack_fgets (FILE *stream, struct obstack *ob)
   if (obstack_object_size (ob) == 0)
     return NULL;
   obstack_1grow (ob, '\0');
-  return obstack_finish (ob);
+  return XOBFINISH (ob, char *);
 }
 
 static char *
@@ -432,9 +441,7 @@ maybe_tweak (char *line, file *f)
 }
 
 /* Update the repo files for each of the object files we have adjusted and
-   recompile.
-
-   XXX Should this use collect_execute instead of system?  */
+   recompile.  */
 
 static int
 recompile_files (void)
@@ -446,7 +453,10 @@ recompile_files (void)
 
   while ((f = file_pop ()) != NULL)
     {
-      char *line, *command;
+      char *line;
+      const char *p, *q;
+      char **argv;
+      struct obstack arg_stack;
       FILE *stream = fopen (f->key, "r");
       const char *const outname = frob_extension (f->key, ".rnw");
       FILE *output = fopen (outname, "w");
@@ -463,27 +473,76 @@ recompile_files (void)
 	}
       fclose (stream);
       fclose (output);
-      rename (outname, f->key);
+      /* On Windows "rename" returns -1 and sets ERRNO to EACCESS if
+	 the new file name already exists.  Therefore, we explicitly
+	 remove the old file first.  */
+      if (remove (f->key) == -1)
+	fatal_perror ("removing .rpo file");
+      if (rename (outname, f->key) == -1)
+	fatal_perror ("renaming .rpo file");
 
-      obstack_grow (&temporary_obstack, "cd ", 3);
-      obstack_grow (&temporary_obstack, f->dir, strlen (f->dir));
-      obstack_grow (&temporary_obstack, "; ", 2);
-      obstack_grow (&temporary_obstack, c_file_name, strlen (c_file_name));
-      obstack_1grow (&temporary_obstack, ' ');
-      obstack_grow (&temporary_obstack, f->args, strlen (f->args));
-      obstack_1grow (&temporary_obstack, ' ');
-      command = obstack_copy0 (&temporary_obstack, f->main, strlen (f->main));
+      if (!f->args)
+	{
+	  error ("repository file '%s' does not contain command-line "
+		 "arguments", f->key);
+	  return 0;
+	}
+
+      /* Build a null-terminated argv array suitable for
+	 tlink_execute().  Manipulate arguments on the arg_stack while
+	 building argv on the temporary_obstack.  */
+
+      obstack_init (&arg_stack);
+      obstack_ptr_grow (&temporary_obstack, c_file_name);
+
+      for (p = f->args; *p != '\0'; p = q + 1)
+	{
+	  /* Arguments are delimited by single-quotes.  Find the
+	     opening quote.  */
+	  p = strchr (p, '\'');
+	  if (!p)
+	    goto done;
+
+	  /* Find the closing quote.  */
+	  q = strchr (p + 1, '\'');
+	  if (!q)
+	    goto done;
+
+	  obstack_grow (&arg_stack, p + 1, q - (p + 1));
+
+	  /* Replace '\'' with '.  This is how set_collect_gcc_options
+	     encodes a single-quote.  */
+	  while (q[1] == '\\' && q[2] == '\'' && q[3] == '\'')
+	    {
+	      const char *r;
+
+	      r = strchr (q + 4, '\'');
+	      if (!r)
+		goto done;
+
+	      obstack_grow (&arg_stack, q + 3, r - (q + 3));
+	      q = r;
+	    }
+
+	  obstack_1grow (&arg_stack, '\0');
+	  obstack_ptr_grow (&temporary_obstack, obstack_finish (&arg_stack));
+	}
+    done:
+      obstack_ptr_grow (&temporary_obstack, f->main);
+      obstack_ptr_grow (&temporary_obstack, NULL);
+      argv = XOBFINISH (&temporary_obstack, char **);
 
       if (tlink_verbose)
 	fprintf (stderr, _("collect: recompiling %s\n"), f->main);
-      if (tlink_verbose >= 3)
-	fprintf (stderr, "%s\n", command);
 
-      if (system (command) != 0)
+      if (chdir (f->dir) != 0
+	  || tlink_execute (c_file_name, argv, NULL, NULL) != 0
+	  || chdir (initial_cwd) != 0)
 	return 0;
 
       read_repo_file (f);
 
+      obstack_free (&arg_stack, NULL);
       obstack_free (&temporary_obstack, temporary_firstobj);
     }
   return 1;
@@ -550,12 +609,20 @@ scan_linker_output (const char *fname)
 {
   FILE *stream = fopen (fname, "r");
   char *line;
+  int skip_next_in_line = 0;
 
   while ((line = tfgets (stream)) != NULL)
     {
       char *p = line, *q;
       symbol *sym;
       int end;
+      int ok = 0;
+
+      /* On darwin9, we might have to skip " in " lines as well.  */
+      if (skip_next_in_line
+	  && strstr (p, " in "))
+	  continue;
+      skip_next_in_line = 0;
 
       while (*p && ISSPACE ((unsigned char) *p))
 	++p;
@@ -593,9 +660,24 @@ scan_linker_output (const char *fname)
       if (! sym && ! end)
 	/* Try a mangled name in quotes.  */
 	{
-	  const char *oldq = q + 1;
+	  char *oldq = q + 1;
 	  demangled *dem = 0;
 	  q = 0;
+
+	  /* On darwin9, we look for "foo" referenced from:\n\(.* in .*\n\)*  */
+	  if (strcmp (oldq, "referenced from:") == 0)
+	    {
+	      /* We have to remember that we found a symbol to tweak.  */
+	      ok = 1;
+
+	      /* We actually want to start from the first word on the
+		 line.  */
+	      oldq = p;
+
+	      /* Since the format is multiline, we have to skip
+		 following lines with " in ".  */
+	      skip_next_in_line = 1;
+	    }
 
 	  /* First try `GNU style'.  */
 	  p = strchr (oldq, '`');
@@ -604,6 +686,9 @@ scan_linker_output (const char *fname)
 	  /* Then try "double quotes".  */
 	  else if (p = strchr (oldq, '"'), p)
 	    p++, q = strchr (p, '"');
+	  /* Then try 'single quotes'.  */
+	  else if (p = strchr (oldq, '\''), p)
+	    p++, q = strchr (p, '\'');
 	  else {
 	    /* Then try entire line.  */
 	    q = strchr (oldq, 0);
@@ -624,7 +709,8 @@ scan_linker_output (const char *fname)
 
 	  /* We need to check for certain error keywords here, or we would
 	     mistakenly use GNU ld's "In function `foo':" message.  */
-	  if (q && (strstr (oldq, "ndefined")
+	  if (q && (ok
+		    || strstr (oldq, "ndefined")
 		    || strstr (oldq, "nresolved")
 		    || strstr (oldq, "nsatisfied")
 		    || strstr (oldq, "ultiple")))
@@ -645,6 +731,9 @@ scan_linker_output (const char *fname)
 
       if (sym && sym->tweaked)
 	{
+	  error ("'%s' was assigned to '%s', but was not defined "
+		 "during recompilation, or vice versa",
+		 sym->key, sym->file->key);
 	  fclose (stream);
 	  return 0;
 	}
@@ -676,7 +765,7 @@ scan_linker_output (const char *fname)
 void
 do_tlink (char **ld_argv, char **object_lst ATTRIBUTE_UNUSED)
 {
-  int exit = tlink_execute ("ld", ld_argv, ldout);
+  int exit = tlink_execute ("ld", ld_argv, ldout, lderrout);
 
   tlink_init ();
 
@@ -690,20 +779,26 @@ do_tlink (char **ld_argv, char **object_lst ATTRIBUTE_UNUSED)
 	while (exit && i++ < MAX_ITERATIONS)
 	  {
 	    if (tlink_verbose >= 3)
-	      dump_file (ldout);
+	      {
+		dump_file (ldout, stdout);
+		dump_file (lderrout, stderr);
+	      }
 	    demangle_new_symbols ();
-	    if (! scan_linker_output (ldout))
+	    if (! scan_linker_output (ldout)
+		&& ! scan_linker_output (lderrout))
 	      break;
 	    if (! recompile_files ())
 	      break;
 	    if (tlink_verbose)
 	      fprintf (stderr, _("collect: relinking\n"));
-	    exit = tlink_execute ("ld", ld_argv, ldout);
+	    exit = tlink_execute ("ld", ld_argv, ldout, lderrout);
 	  }
     }
 
-  dump_file (ldout);
+  dump_file (ldout, stdout);
   unlink (ldout);
+  dump_file (lderrout, stderr);
+  unlink (lderrout);
   if (exit)
     {
       error ("ld returned %d exit status", exit);

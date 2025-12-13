@@ -6,18 +6,17 @@
 --                                                                          --
 --                                 B o d y                                  --
 --                                                                          --
---          Copyright (C) 1992-2003 Free Software Foundation, Inc.          --
+--          Copyright (C) 1992-2010, Free Software Foundation, Inc.         --
 --                                                                          --
 -- GNAT is free software;  you can  redistribute it  and/or modify it under --
 -- terms of the  GNU General Public License as published  by the Free Soft- --
--- ware  Foundation;  either version 2,  or (at your option) any later ver- --
+-- ware  Foundation;  either version 3,  or (at your option) any later ver- --
 -- sion.  GNAT is distributed in the hope that it will be useful, but WITH- --
 -- OUT ANY WARRANTY;  without even the  implied warranty of MERCHANTABILITY --
 -- or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU General Public License --
 -- for  more details.  You should have  received  a copy of the GNU General --
--- Public License  distributed with GNAT;  see file COPYING.  If not, write --
--- to  the Free Software Foundation,  59 Temple Place - Suite 330,  Boston, --
--- MA 02111-1307, USA.                                                      --
+-- Public License  distributed with GNAT; see file COPYING3.  If not, go to --
+-- http://www.gnu.org/licenses for a complete copy of the license.          --
 --                                                                          --
 -- GNAT was originally developed  by the GNAT team at  New York University. --
 -- Extensive contributions were provided by Ada Core Technologies Inc.      --
@@ -30,13 +29,10 @@
 --  and parents of subunits. All these units are loaded and pointers installed
 --  in the tree as described in the spec of package Lib.
 
-with Fname;    use Fname;
 with Fname.UF; use Fname.UF;
 with Lib.Load; use Lib.Load;
+with Namet.Sp; use Namet.Sp;
 with Uname;    use Uname;
-with Namet;    use Namet;
-with Casing;   use Casing;
-with Opt;      use Opt;
 with Osint;    use Osint;
 with Sinput.L; use Sinput.L;
 with Stylesw;  use Stylesw;
@@ -87,18 +83,28 @@ procedure Load is
    Unum : Unit_Number_Type;
    --  Unit number of loaded unit
 
+   Limited_With_Found : Boolean := False;
+   --  We load the context items in two rounds: the first round handles normal
+   --  withed units and the second round handles Ada 2005 limited-withed units.
+   --  This is required to allow the low-level circuitry that detects circular
+   --  dependencies of units the correct notification of errors (see comment
+   --  bellow). This variable is used to indicate that the second round is
+   --  required.
+
    function Same_File_Name_Except_For_Case
      (Expected_File_Name : File_Name_Type;
-      Actual_File_Name   : File_Name_Type)
-      return               Boolean;
+      Actual_File_Name   : File_Name_Type) return Boolean;
    --  Given an actual file name and an expected file name (the latter being
    --  derived from the unit name), determine if they are the same except for
    --  possibly different casing of letters.
 
+   ------------------------------------
+   -- Same_File_Name_Except_For_Case --
+   ------------------------------------
+
    function Same_File_Name_Except_For_Case
      (Expected_File_Name : File_Name_Type;
-      Actual_File_Name   : File_Name_Type)
-      return               Boolean
+      Actual_File_Name   : File_Name_Type) return Boolean
    is
    begin
       Get_Name_String (Actual_File_Name);
@@ -141,14 +147,16 @@ begin
    --  If we have no unit name, things are seriously messed up by previous
    --  errors, and we should not try to continue compilation.
 
-   if Unit_Name (Cur_Unum) = No_Name then
+   if Unit_Name (Cur_Unum) = No_Unit_Name then
       raise Unrecoverable_Error;
    end if;
 
    --  Next step, make sure that the unit name matches the file name
    --  and issue a warning message if not. We only output this for the
    --  main unit, since for other units it is more serious and is
-   --  caught in a separate test below.
+   --  caught in a separate test below. We also inhibit the message in
+   --  multiple unit per file mode, because in this case the relation
+   --  between file name and unit name is broken.
 
    File_Name :=
      Get_File_Name
@@ -156,12 +164,13 @@ begin
         Subunit => Nkind (Unit (Cunit (Cur_Unum))) = N_Subunit);
 
    if Cur_Unum = Main_Unit
+     and then Multiple_Unit_Index = 0
      and then File_Name /= Unit_File_Name (Cur_Unum)
      and then (File_Names_Case_Sensitive
                 or not Same_File_Name_Except_For_Case
                          (File_Name, Unit_File_Name (Cur_Unum)))
    then
-      Error_Msg_Name_1 := File_Name;
+      Error_Msg_File_1 := File_Name;
       Error_Msg
         ("?file name does not match unit name, should be{", Sloc (Curunit));
    end if;
@@ -175,8 +184,8 @@ begin
      and then Expected_Unit (Cur_Unum) /= Unit_Name (Cur_Unum)
    then
       Loc := Error_Location (Cur_Unum);
-      Error_Msg_Name_1 := Unit_File_Name (Cur_Unum);
-      Get_Name_String (Error_Msg_Name_1);
+      Error_Msg_File_1 := Unit_File_Name (Cur_Unum);
+      Get_Name_String (Error_Msg_File_1);
 
       --  Check for predefined file case
 
@@ -191,12 +200,13 @@ begin
                   Name_Buffer (1) = 'g')
       then
          declare
-            Expect_Name : constant Name_Id := Expected_Unit (Cur_Unum);
-            Actual_Name : constant Name_Id := Unit_Name (Cur_Unum);
+            Expect_Name : constant Unit_Name_Type := Expected_Unit (Cur_Unum);
+            Actual_Name : constant Unit_Name_Type := Unit_Name (Cur_Unum);
 
          begin
-            Error_Msg_Name_1 := Expect_Name;
-            Error_Msg ("% is not a predefined library unit!", Loc);
+            Error_Msg_Unit_1 := Expect_Name;
+            Error_Msg -- CODEFIX
+              ("$$ is not a predefined library unit!", Loc);
 
             --  In the predefined file case, we know the user did not
             --  construct their own package, but we got the wrong one.
@@ -213,15 +223,15 @@ begin
             --  of misspelling of predefined unit names without needing
             --  a full list of them.
 
-            --  Before actually issinying the message, we will check that the
+            --  Before actually issuing the message, we will check that the
             --  unit name is indeed a plausible misspelling of the one we got.
 
             if Is_Bad_Spelling_Of
-              (Found  => Get_Name_String (Expect_Name),
-               Expect => Get_Name_String (Actual_Name))
+              (Name_Id (Expect_Name), Name_Id (Actual_Name))
             then
-               Error_Msg_Name_1 := Actual_Name;
-               Error_Msg ("possible misspelling of %!", Loc);
+               Error_Msg_Unit_1 := Actual_Name;
+               Error_Msg -- CODEFIX
+                 ("possible misspelling of $$!", Loc);
             end if;
          end;
 
@@ -233,9 +243,9 @@ begin
       else
          Error_Msg ("file { does not contain expected unit!", Loc);
          Error_Msg_Unit_1 := Expected_Unit (Cur_Unum);
-         Error_Msg ("expected unit $!", Loc);
+         Error_Msg ("\\expected unit $!", Loc);
          Error_Msg_Unit_1 := Unit_Name (Cur_Unum);
-         Error_Msg ("found unit $!", Loc);
+         Error_Msg ("\\found unit $!", Loc);
       end if;
 
       --  In both cases, remove the unit if it is the last unit (which it
@@ -256,20 +266,27 @@ begin
            Required   => False,
            Subunit    => False,
            Error_Node => Curunit,
-           Corr_Body  => Cur_Unum);
+           Corr_Body  => Cur_Unum,
+           PMES       => (Cur_Unum = Main_Unit));
 
-      --  If we successfully load the unit, then set the spec pointer. Once
-      --  again note that if the loaded unit has a fatal error, Load will
+      --  If we successfully load the unit, then set the spec/body pointers.
+      --  Once again note that if the loaded unit has a fatal error, Load will
       --  have set our Fatal_Error flag to propagate this condition.
 
       if Unum /= No_Unit then
          Set_Library_Unit (Curunit, Cunit (Unum));
+         Set_Library_Unit (Cunit (Unum), Curunit);
 
          --  If this is a separate spec for the main unit, then we reset
          --  Main_Unit_Entity to point to the entity for this separate spec
+         --  and this is also where we generate the SCO's for this spec.
 
          if Cur_Unum = Main_Unit then
             Main_Unit_Entity := Cunit_Entity (Unum);
+
+            if Generate_SCO then
+               SCO_Record (Unum);
+            end if;
          end if;
 
       --  If we don't find the spec, then if we have a subprogram body, we
@@ -292,9 +309,10 @@ begin
          return;
       end if;
 
-   --  If current unit is a child unit spec, load its parent
+   --  If current unit is a child unit spec, load its parent. If the child unit
+   --  is loaded through a limited with, the parent must be as well.
 
-   elsif Nkind (Unit (Curunit)) = N_Package_Declaration
+   elsif     Nkind (Unit (Curunit)) =  N_Package_Declaration
      or else Nkind (Unit (Curunit)) =  N_Subprogram_Declaration
      or else Nkind (Unit (Curunit)) in N_Generic_Declaration
      or else Nkind (Unit (Curunit)) in N_Generic_Instantiation
@@ -309,7 +327,7 @@ begin
 
       Spec_Name := Get_Parent_Spec_Name (Unit_Name (Cur_Unum));
 
-      if Spec_Name /= No_Name then
+      if Spec_Name /= No_Unit_Name then
          Unum :=
            Load_Unit
              (Load_Name  => Spec_Name,
@@ -330,13 +348,12 @@ begin
         Load_Unit
           (Load_Name  => Body_Name,
            Required   => True,
-           Subunit    => True,
+           Subunit    => False,
            Error_Node => Name (Unit (Curunit)));
 
       if Unum /= No_Unit then
          Set_Library_Unit (Curunit, Cunit (Unum));
       end if;
-
    end if;
 
    --  Now we load with'ed units, with style/validity checks turned off
@@ -346,81 +363,107 @@ begin
       Reset_Validity_Check_Options;
    end if;
 
-   --  Loop through context items
+   --  Load the context items in two rounds: the first round handles normal
+   --  withed units and the second round handles Ada 2005 limited-withed units.
+   --  This is required to allow the low-level circuitry that detects circular
+   --  dependencies of units the correct notification of the following error:
 
-   Context_Node := First (Context_Items (Curunit));
-   while Present (Context_Node) loop
+   --       limited with D;
+   --       with D;                  with C;
+   --       package C is ...         package D is ...
 
-      if Nkind (Context_Node) = N_With_Clause then
-         With_Node := Context_Node;
-         Spec_Name := Get_Unit_Name (With_Node);
+   for Round in 1 .. 2 loop
+      Context_Node := First (Context_Items (Curunit));
+      while Present (Context_Node) loop
 
-         Unum :=
-           Load_Unit
-             (Load_Name  => Spec_Name,
-              Required   => False,
-              Subunit    => False,
-              Error_Node => With_Node,
-              Renamings  => True);
+         --  During the first round we check if there is some limited-with
+         --  context clause; otherwise the second round will be skipped
 
-         --  If we find the unit, then set spec pointer in the N_With_Clause
-         --  to point to the compilation unit for the spec. Remember that
-         --  the Load routine itself sets our Fatal_Error flag if the loaded
-         --  unit gets a fatal error, so we don't need to worry about that.
+         if Nkind (Context_Node) = N_With_Clause
+           and then Round = 1
+           and then Limited_Present (Context_Node)
+         then
+            Limited_With_Found := True;
+         end if;
 
-         if Unum /= No_Unit then
-            Set_Library_Unit (With_Node, Cunit (Unum));
+         if Nkind (Context_Node) = N_With_Clause
+           and then ((Round = 1 and then not Limited_Present (Context_Node))
+                        or else
+                     (Round = 2 and then Limited_Present (Context_Node)))
+         then
+            With_Node := Context_Node;
+            Spec_Name := Get_Unit_Name (With_Node);
 
-         --  If the spec isn't found, then try finding the corresponding
-         --  body, since it is possible that we have a subprogram body
-         --  that is acting as a spec (since no spec is present).
-
-         else
-            Body_Name := Get_Body_Name (Spec_Name);
             Unum :=
               Load_Unit
-                (Load_Name  => Body_Name,
+                (Load_Name  => Spec_Name,
                  Required   => False,
                  Subunit    => False,
                  Error_Node => With_Node,
-                 Renamings  => True);
+                 Renamings  => True,
+                 With_Node  => Context_Node);
 
-            --  If we got a subprogram body, then mark that we are using
-            --  the body as a spec in the file table, and set the spec
-            --  pointer in the N_With_Clause to point to the body entity.
+            --  If we find the unit, then set spec pointer in the N_With_Clause
+            --  to point to the compilation unit for the spec. Remember that
+            --  the Load routine itself sets our Fatal_Error flag if the loaded
+            --  unit gets a fatal error, so we don't need to worry about that.
 
-            if Unum /= No_Unit
-              and then Nkind (Unit (Cunit (Unum))) = N_Subprogram_Body
-            then
-               With_Cunit := Cunit (Unum);
-               Set_Library_Unit (With_Node, With_Cunit);
-               Set_Acts_As_Spec (With_Cunit, True);
-               Set_Library_Unit (With_Cunit, With_Cunit);
+            if Unum /= No_Unit then
+               Set_Library_Unit (With_Node, Cunit (Unum));
 
-            --  If we couldn't find the body, or if it wasn't a body spec
-            --  then we are in trouble. We make one more call to Load to
-            --  require the spec. We know it will fail of course, the
-            --  purpose is to generate the required error message (we prefer
-            --  that this message refer to the missing spec, not the body)
+            --  If the spec isn't found, then try finding the corresponding
+            --  body, since it is possible that we have a subprogram body
+            --  that is acting as a spec (since no spec is present).
 
             else
+               Body_Name := Get_Body_Name (Spec_Name);
                Unum :=
                  Load_Unit
-                   (Load_Name  => Spec_Name,
-                    Required   => True,
+                   (Load_Name  => Body_Name,
+                    Required   => False,
                     Subunit    => False,
                     Error_Node => With_Node,
                     Renamings  => True);
 
-               --  Here we create a dummy package unit for the missing unit
+               --  If we got a subprogram body, then mark that we are using
+               --  the body as a spec in the file table, and set the spec
+               --  pointer in the N_With_Clause to point to the body entity.
 
-               Unum := Create_Dummy_Package_Unit (With_Node, Spec_Name);
-               Set_Library_Unit (With_Node, Cunit (Unum));
+               if Unum /= No_Unit
+                 and then Nkind (Unit (Cunit (Unum))) = N_Subprogram_Body
+               then
+                  With_Cunit := Cunit (Unum);
+                  Set_Library_Unit (With_Node, With_Cunit);
+                  Set_Acts_As_Spec (With_Cunit, True);
+                  Set_Library_Unit (With_Cunit, With_Cunit);
+
+               --  If we couldn't find the body, or if it wasn't a body spec
+               --  then we are in trouble. We make one more call to Load to
+               --  require the spec. We know it will fail of course, the
+               --  purpose is to generate the required error message (we prefer
+               --  that this message refer to the missing spec, not the body)
+
+               else
+                  Unum :=
+                    Load_Unit
+                      (Load_Name  => Spec_Name,
+                       Required   => True,
+                       Subunit    => False,
+                       Error_Node => With_Node,
+                       Renamings  => True);
+
+                  --  Here we create a dummy package unit for the missing unit
+
+                  Unum := Create_Dummy_Package_Unit (With_Node, Spec_Name);
+                  Set_Library_Unit (With_Node, Cunit (Unum));
+               end if;
             end if;
          end if;
-      end if;
 
-      Next (Context_Node);
+         Next (Context_Node);
+      end loop;
+
+      exit when not Limited_With_Found;
    end loop;
 
    --  Restore style/validity check mode for main unit

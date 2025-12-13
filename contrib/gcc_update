@@ -1,10 +1,11 @@
 #! /bin/sh
 #
-# Update a local Subversion tree from the GCC repository, with an emphasis
-# on treating generated files correctly, so that autoconf, gperf et
-# al are not required for the ``end'' user.
+# Update a local Subversion, Git or Mercurial tree from the GCC
+# repository, with an emphasis on treating generated files correctly, so
+# that autoconf, gperf et al are not required for the ``end'' user.
 #
-# (C) 1998, 1999, 2000, 2001, 2002, 2003, 2004, 2005 Free Software Foundation
+# (C) 1998, 1999, 2000, 2001, 2002, 2003, 2004, 2005, 2006, 2007, 2009, 2010
+# Free Software Foundation
 # Originally by Gerald Pfeifer <pfeifer@dbai.tuwien.ac.at>, August 1998.
 #
 # This script is Free Software, and it can be copied, distributed and
@@ -12,8 +13,8 @@
 # its license can be downloaded from http://www.gnu.org/copyleft/gpl.html
 #
 #
-# By default all command-line options are passed to `svn update` in
-# addition to $UPDATE_OPTIONS (defined below). If the first parameter
+# By default all command-line options are passed to `svn update` or `hg/git
+# pull` in addition to $UPDATE_OPTIONS (defined below). If the first parameter
 # reads --nostdflags, $UPDATE_OPTIONS as well as this parameter itself
 # are omitted.
 #
@@ -38,10 +39,14 @@
 # contrib/gcc_update --list
 
 
-# SVN command
-GCC_SVN=${GCC_SVN-${SVN-svn}}
-# Default options used when updating via SVN (none).
+# Default options used when updating (none).
 UPDATE_OPTIONS=""
+
+# Set the locale to C to make this script work for users with foreign
+# locale like e.g. French UTF-8.
+LANG=C
+LC_ALL=C
+export LANG LC_ALL
 
 ######## Anything below shouldn't be changed by regular users.
 
@@ -62,48 +67,70 @@ chat () {
 # colon is stripped from the output.
 files_and_dependencies () {
     sed -e 's/ *#.*//' -e '/^$/d' -e 's/://' <<\EOF
+# fixincludes
+fixincludes/configure: fixincludes/configure.ac fixincludes/aclocal.m4
+fixincludes/config.h.in: fixincludes/configure.ac fixincludes/aclocal.m4
 # intl library
 intl/plural.c: intl/plural.y
-intl/configure: intl/configure.in intl/aclocal.m4
-intl/config.h.in: intl/configure.in intl/aclocal.m4
+intl/configure: intl/configure.ac intl/aclocal.m4
+intl/config.h.in: intl/configure.ac intl/aclocal.m4
 # Now, proceed to gcc automatically generated files
 gcc/configure: gcc/configure.ac
 gcc/cstamp-h.in: gcc/configure.ac
 gcc/config.in: gcc/cstamp-h.in
 gcc/fixinc/fixincl.x: gcc/fixinc/fixincl.tpl gcc/fixinc/inclhack.def
+gcc/config/arm/arm-tune.md: gcc/config/arm/arm-cores.def gcc/config/arm/gentune.sh
 # And then, language-specific files
-gcc/f/intdoc.texi: gcc/f/intdoc.in gcc/f/intdoc.c gcc/f/intrin.h gcc/f/intrin.def
 gcc/cp/cfns.h: gcc/cp/cfns.gperf
 gcc/java/keyword.h: gcc/java/keyword.gperf
 # testsuite
 # Without this, _Pragma3.c can have a false negative.
 gcc/testsuite/gcc.dg/cpp/_Pragma3.c: gcc/testsuite/gcc.dg/cpp/mi1c.h
+# Similarly, without this, you will see:
+# direct2s.c:35: warning: current file is older than direct2.c
+gcc/testsuite/gcc.dg/cpp/direct2s.c: gcc/testsuite/gcc.dg/cpp/direct2.c
+# lto-plugin
+lto-plugin/configure: lto-plugin/configure.ac lto-plugin/aclocal.m4
+lto-plugin/Makefile.in: lto-plugin/Makefile.am lto-plugin/aclocal.m4
 # And libraries, at last
-libf2c/configure: libf2c/configure.in
-libf2c/libF77/configure: libf2c/libF77/configure.in
-libf2c/libI77/configure: libf2c/libI77/configure.in
-libf2c/libI77/stamp-h.in: libf2c/libI77/configure.in
-libf2c/libI77/config.h.in: libf2c/libI77/configure.in libf2c/libI77/stamp-h.in
-libf2c/libU77/configure: libf2c/libU77/configure.in
-libf2c/libU77/stamp-h.in: libf2c/libU77/configure.in libf2c/libU77/acconfig.h
-libobjc/configure: libobjc/configure.in
-# fastjar
+libbanshee/configure: libbanshee/configure.ac
+libmudflap/configure: libmudflap/configure.ac
+libobjc/configure: libobjc/configure.ac
+zlib/aclocal.m4: zlib/configure.ac zlib/acinclude.m4
+zlib/Makefile.in: zlib/Makefile.am zlib/configure.ac zlib/aclocal.m4
+zlib/configure: zlib/configure.ac zlib/aclocal.m4
 fastjar/aclocal.m4: fastjar/configure.ac
 fastjar/Makefile.in: fastjar/Makefile.am fastjar/configure.ac fastjar/aclocal.m4
 fastjar/configure: fastjar/configure.ac fastjar/aclocal.m4
-boehm-gc/aclocal.m4: boehm-gc/configure.in boehm-gc/acinclude.m4
-boehm-gc/Makefile.in: boehm-gc/Makefile.am boehm-gc/configure.in boehm-gc/aclocal.m4
-boehm-gc/configure: boehm-gc/configure.in boehm-gc/aclocal.m4
-libjava/aclocal.m4: libjava/configure.in libjava/acinclude.m4
-libjava/Makefile.in: libjava/Makefile.am libjava/configure.in libjava/aclocal.m4
-libjava/configure: libjava/configure.in libjava/aclocal.m4
+boehm-gc/aclocal.m4: boehm-gc/configure.ac
+boehm-gc/Makefile.in: boehm-gc/Makefile.am boehm-gc/configure.ac boehm-gc/aclocal.m4
+boehm-gc/configure: boehm-gc/configure.ac boehm-gc/aclocal.m4
+libada/configure: libada/configure.ac
+libffi/aclocal.m4: libffi/configure.ac libffi/acinclude.m4
+libffi/Makefile.in: libffi/Makefile.am libffi/configure.ac libffi/aclocal.m4
+libffi/configure: libffi/configure.ac libffi/aclocal.m4
+libffi/fficonfig.h.in: libffi/configure.ac libffi/aclocal.m4
+libgfortran/aclocal.m4: libgfortran/configure.ac libgfortran/acinclude.m4
+libgfortran/Makefile.in: libgfortran/Makefile.am libgfortran/configure.ac libgfortran/aclocal.m4
+libgfortran/configure: libgfortran/configure.ac libgfortran/aclocal.m4
+libjava/aclocal.m4: libjava/configure.ac
+libjava/Makefile.in: libjava/Makefile.am libjava/configure.ac libjava/aclocal.m4
+libjava/configure: libjava/configure.ac libjava/aclocal.m4
 libjava/libltdl/aclocal.m4: libjava/libltdl/configure.ac libjava/libltdl/acinclude.m4
 libjava/libltdl/Makefile.in: libjava/libltdl/Makefile.am libjava/libltdl/configure.ac libjava/libltdl/aclocal.m4
 libjava/libltdl/configure: libjava/libltdl/configure.ac libjava/libltdl/aclocal.m4
 libjava/libltdl/config-h.in: libjava/libltdl/configure.ac libjava/libltdl/aclocal.m4
+libcpp/aclocal.m4: libcpp/configure.ac
+libcpp/Makefile.in: libcpp/configure.ac libcpp/aclocal.m4
+libcpp/configure: libcpp/configure.ac libcpp/aclocal.m4
+libgomp/aclocal.m4: libgomp/configure.ac libgomp/acinclude.m4
+libgomp/Makefile.in: libgomp/Makefile.am libgomp/aclocal.m4
+libgomp/testsuite/Makefile.in: libgomp/Makefile.am libgomp/aclocal.m4
+libgomp/configure: libgomp/configure.ac libgomp/aclocal.m4
+libgomp/config.h.in: libgomp/configure.ac libgomp/aclocal.m4
 # Top level
 Makefile.in: Makefile.tpl Makefile.def
-configure: configure.in config/acx.m4
+configure: configure.ac config/acx.m4
 EOF
 }
 
@@ -123,7 +150,16 @@ touch_files () {
     chat '	echo Touching $@... 1>&2; \' >> Makefile.$$
     echo '	touch $@' >> Makefile.$$
     files_and_dependencies | sed 's,[^ ]* ,,;s,$, :,' >> Makefile.$$
-    while ${MAKE-make} -s -f Makefile.$$ all | grep . > /dev/null; do
+
+    # We would have to explicitly shut off the "Entering... Leaving..."
+    # messages through "--no-print-directory" to handle the case when
+    # we were called from a recursive invocation (i.e. "$(MAKE)" in a
+    # Makefile, not just make).  Passing only "-s" doesn't help then,
+    # because make has helpfully added "-w" to MAKEFLAGS automatically.
+    # Unfortunately we do not require GNU make other than for building
+    # and testing, so let's just grep known text explicitly echoed by
+    # the rule.
+    while ${MAKE-make} -s -f Makefile.$$ all | grep Touching > /dev/null; do
       sleep 1
     done 2>&1
     rm -f Makefile.$$
@@ -208,9 +244,18 @@ p
 
 esac
 
-# Check whether this indeed looks like a local SVN tree.
-if [ ! -d .svn ]; then
-    echo "This does not seem to be a GCC SVN tree!"
+# Check for known version control systems.
+if [ -d .git ]; then
+    GCC_GIT=${GCC_GIT-${GIT-git}}
+    vcs_type="git"
+elif [ -d .hg ]; then
+    GCC_HG=${GCC_HG-${HG-hg}}
+    vcs_type="hg"
+elif [ -d .svn ]; then
+    GCC_SVN=${GCC_SVN-${SVN-svn}}
+    vcs_type="svn"
+else
+    echo "This does not seem to be a GCC GIT/HG/SVN tree!"
     exit
 fi
 
@@ -221,17 +266,107 @@ else
     set -- $UPDATE_OPTIONS ${1+"$@"}
 fi
 
-chat "Updating SVN tree"
+case $vcs_type in
+    git)
+	chat "Updating GIT tree"
 
-$GCC_SVN ${silent+-q}  --non-interactive update ${1+"$@"}
-if [ $? -ne 0 ]; then
-    (touch_files_reexec)
-    echo "SVN update of full tree failed." >&2
-    exit 1
-fi
+	$GCC_GIT diff --quiet --exit-code HEAD
+	if [ $? -ne 0 ]; then
+            echo "Attempting to update a dirty git tree!" >&2
+            echo "Commit or stash your changes first and retry." >&2
+            exit 1
+	fi
 
+	$GCC_GIT pull ${silent+-q} --rebase ${1+"$@"}
+	if [ $? -ne 0 ]; then
+            (touch_files_reexec)
+            echo "git pull of full tree failed." >&2
+            exit 1
+	fi
+
+	revision=`$GCC_GIT log -n1 --pretty=%p:%t:%H`
+	branch=`$GCC_GIT name-rev --name-only HEAD || :`
+	;;    
+
+    hg)
+	chat "Updating HG tree"
+
+	# Add -q so untracked files aren't listed.
+	if [ `$GCC_HG status -q | wc -l` -gt 0 ]; then
+            echo "Attempting to update a dirty hg tree!" >&2
+            echo "Commit or revert your changes first and retry." >&2
+            exit 1
+	fi
+
+	# Check for mq extension.  mq patches must be popped so tip has
+	# been converted from the SVN tree.
+	if [ -d .hg/patches ] && [ `$GCC_HG qapplied | wc -l` -gt 0 ]; then
+	    # FIXME: Perhaps pop queue instead?  We could do that since we
+	    # know the tree is clean.
+	    echo "Attempting to update hg tree with mq patches applied!" >&2
+	    echo "Pop your patches first and retry." >&2
+	    exit 1
+	fi
+
+	# Update tree, but make sure to only pull the default branch.
+	# Otherwise all branches in the upstream repo are added, even if
+	# only a single one has been cloned.
+	$GCC_HG pull ${silent+-q} -r`$GCC_HG branch` ${1+"$@"}
+	if [ $? -ne 0 ]; then
+            (touch_files_reexec)
+            echo "hg pull of full tree failed." >&2
+            exit 1
+	fi
+
+	# Update tree.  Needs to be done separately from pull so
+	# gcc_update -rREV works.
+	$GCC_HG update ${silent+-q} ${1+"$@"}
+	if [ $? -ne 0 ]; then
+            (touch_files_reexec)
+            echo "hg update of full tree failed." >&2
+            exit 1
+	fi
+
+	# Extract SVN revision corresponding to parents, as stored by
+	# hg convert.  Before hg 1.4.3, there's no template keyword
+	# corresponding to the extra: tag, so need to use hg log --debug
+	# to extract the info.
+	parents=`$GCC_HG parents --template '{rev}'`
+	revision=`$GCC_HG log --debug -r$parents | \
+	    sed -ne "/^extra:.*convert_revision=svn:/ {
+	        s%^.*@%%
+		p
+	    }"`
+	branch=`$GCC_HG branch`
+	# trunk in SVN parlance shows up as default branch in hg.
+	[ x$branch = x"default" ] && branch="trunk"
+	;;
+
+    svn)
+	chat "Updating SVN tree"
+
+	$GCC_SVN ${silent+-q}  --non-interactive update ${1+"$@"}
+	if [ $? -ne 0 ]; then
+	    (touch_files_reexec)
+	    echo "SVN update of full tree failed." >&2
+	    exit 1
+	fi
+
+	revision=`svn info | awk '/Revision:/ { print $2 }'`
+	branch=`svn info | sed -ne "/URL:/ {
+	    s,.*/trunk,trunk,
+	    s,.*/branches/,,
+	    s,.*/tags/,,
+	    p
+	}"`
+	;;
+esac
+
+rm -f LAST_UPDATED gcc/REVISION
 {
-  date
-  echo "`TZ=UTC date` (revision `svnversion .`)"
+    date
+    echo "`TZ=UTC date` (revision $revision)"
 } > LAST_UPDATED
+echo "[$branch revision $revision]" > gcc/REVISION
+
 touch_files_reexec

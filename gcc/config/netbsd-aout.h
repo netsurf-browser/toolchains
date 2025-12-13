@@ -1,12 +1,12 @@
 /* Common configuration file for NetBSD a.out targets.
-   Copyright (C) 2002 Free Software Foundation, Inc.
+   Copyright (C) 2002, 2007, 2010 Free Software Foundation, Inc.
    Contributed by Wasabi Systems, Inc.
 
 This file is part of GCC.
 
 GCC is free software; you can redistribute it and/or modify
 it under the terms of the GNU General Public License as published by
-the Free Software Foundation; either version 2, or (at your option)
+the Free Software Foundation; either version 3, or (at your option)
 any later version.
 
 GCC is distributed in the hope that it will be useful,
@@ -15,9 +15,8 @@ MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
 GNU General Public License for more details.
 
 You should have received a copy of the GNU General Public License
-along with GCC; see the file COPYING.  If not, write to
-the Free Software Foundation, 59 Temple Place - Suite 330,
-Boston, MA 02111-1307, USA.  */
+along with GCC; see the file COPYING3.  If not see
+<http://www.gnu.org/licenses/>.  */
 
 /* TARGET_OS_CPP_BUILTINS() common to all NetBSD a.out targets.  */
 #define NETBSD_OS_CPP_BUILTINS_AOUT()		\
@@ -26,13 +25,6 @@ Boston, MA 02111-1307, USA.  */
       NETBSD_OS_CPP_BUILTINS_COMMON();		\
     }						\
   while (0)
-
-/* This defines which switch letters take arguments.  */
-
-#undef SWITCH_TAKES_ARG
-#define SWITCH_TAKES_ARG(CHAR)		\
-  (DEFAULT_SWITCH_TAKES_ARG(CHAR)	\
-   || (CHAR) == 'R')
 
 
 /* Provide an ASM_SPEC appropriate for NetBSD.  Currently we only deal
@@ -65,7 +57,7 @@ Boston, MA 02111-1307, USA.  */
   "%{nostdlib:-nostdlib}		\
    %{!shared:				\
      %{!nostdlib:			\
-       %{!r*:				\
+       %{!r:				\
 	 %{!e*:-e start}}}		\
      -dc -dp				\
      %{static:-Bstatic}}		\
@@ -76,8 +68,6 @@ Boston, MA 02111-1307, USA.  */
 /* Default LINK_SPEC.  */
 #undef LINK_SPEC
 #define LINK_SPEC NETBSD_LINK_SPEC_AOUT
-
-/* Some imports from svr4.h in support of shared libraries.  */
 
 /* Define the strings used for the .type, .size, and .set directives.
    These strings generally do not vary from one system running NetBSD
@@ -142,7 +132,7 @@ Boston, MA 02111-1307, USA.  */
     {									\
       ASM_OUTPUT_TYPE_DIRECTIVE (FILE, NAME, "function");		\
       ASM_DECLARE_RESULT (FILE, DECL_RESULT (DECL));			\
-      ASM_OUTPUT_LABEL(FILE, NAME);					\
+      ASM_OUTPUT_FUNCTION_LABEL (FILE, NAME, DECL);			\
     }									\
   while (0)
 

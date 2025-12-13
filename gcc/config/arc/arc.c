@@ -1,12 +1,12 @@
 /* Subroutines used for code generation on the Argonaut ARC cpu.
-   Copyright (C) 1994, 1995, 1997, 1998, 1999, 2000, 2001, 2002, 2003, 2004
-   Free Software Foundation, Inc.
+   Copyright (C) 1994, 1995, 1997, 1998, 1999, 2000, 2001, 2002, 2003,
+   2004, 2005, 2006, 2007, 2008, 2009, 2010 Free Software Foundation, Inc.
 
 This file is part of GCC.
 
 GCC is free software; you can redistribute it and/or modify
 it under the terms of the GNU General Public License as published by
-the Free Software Foundation; either version 2, or (at your option)
+the Free Software Foundation; either version 3, or (at your option)
 any later version.
 
 GCC is distributed in the hope that it will be useful,
@@ -15,9 +15,8 @@ MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
 GNU General Public License for more details.
 
 You should have received a copy of the GNU General Public License
-along with GCC; see the file COPYING.  If not, write to
-the Free Software Foundation, 59 Temple Place - Suite 330,
-Boston, MA 02111-1307, USA.  */
+along with GCC; see the file COPYING3.  If not see
+<http://www.gnu.org/licenses/>.  */
 
 /* ??? This is an old port, and is undoubtedly suffering from bit rot.  */
 
@@ -29,7 +28,6 @@ Boston, MA 02111-1307, USA.  */
 #include "rtl.h"
 #include "regs.h"
 #include "hard-reg-set.h"
-#include "real.h"
 #include "insn-config.h"
 #include "conditions.h"
 #include "output.h"
@@ -38,28 +36,18 @@ Boston, MA 02111-1307, USA.  */
 #include "function.h"
 #include "expr.h"
 #include "recog.h"
-#include "toplev.h"
+#include "diagnostic-core.h"
+#include "df.h"
 #include "tm_p.h"
 #include "target.h"
 #include "target-def.h"
 
-/* Which cpu we're compiling for (NULL(=base), ???).  */
-const char *arc_cpu_string;
+/* Which cpu we're compiling for.  */
 int arc_cpu_type;
 
 /* Name of mangle string to add to symbols to separate code compiled for each
    cpu (or NULL).  */
 const char *arc_mangle_cpu;
-
-/* Save the operands last given to a compare for use when we
-   generate a scc or bcc insn.  */
-rtx arc_compare_op0, arc_compare_op1;
-
-/* Name of text, data, and rodata sections, as specified on command line.
-   Selected by -m{text,data,rodata} flags.  */
-const char *arc_text_string = ARC_DEFAULT_TEXT_SECTION;
-const char *arc_data_string = ARC_DEFAULT_DATA_SECTION;
-const char *arc_rodata_string = ARC_DEFAULT_RODATA_SECTION;
 
 /* Name of text, data, and rodata sections used in varasm.c.  */
 const char *arc_text_section;
@@ -86,18 +74,43 @@ static int arc_ccfsm_target_label;
    arc_print_operand.  */
 static int last_insn_set_cc_p;
 static int current_insn_set_cc_p;
+static bool arc_handle_option (size_t, const char *, int);
 static void record_cc_ref (rtx);
 static void arc_init_reg_tables (void);
 static int get_arc_condition_code (rtx);
-const struct attribute_spec arc_attribute_table[];
 static tree arc_handle_interrupt_attribute (tree *, tree, tree, int, bool *);
 static bool arc_assemble_integer (rtx, unsigned int, int);
 static void arc_output_function_prologue (FILE *, HOST_WIDE_INT);
 static void arc_output_function_epilogue (FILE *, HOST_WIDE_INT);
 static void arc_file_start (void);
 static void arc_internal_label (FILE *, const char *, unsigned long);
-static bool arc_rtx_costs (rtx, int, int, int *);
-static int arc_address_cost (rtx);
+static void arc_va_start (tree, rtx);
+static void arc_setup_incoming_varargs (CUMULATIVE_ARGS *, enum machine_mode,
+					tree, int *, int);
+static bool arc_rtx_costs (rtx, int, int, int *, bool);
+static int arc_address_cost (rtx, bool);
+static void arc_external_libcall (rtx);
+static bool arc_return_in_memory (const_tree, const_tree);
+static bool arc_pass_by_reference (CUMULATIVE_ARGS *, enum machine_mode,
+				   const_tree, bool);
+static rtx arc_function_arg (CUMULATIVE_ARGS *, enum machine_mode,
+			     const_tree, bool);
+static void arc_function_arg_advance (CUMULATIVE_ARGS *, enum machine_mode,
+				      const_tree, bool);
+static unsigned int arc_function_arg_boundary (enum machine_mode, const_tree);
+static void arc_trampoline_init (rtx, tree, rtx);
+static void arc_option_override (void);
+static void arc_conditional_register_usage (void);
+
+
+/* ARC specific attributs.  */
+
+static const struct attribute_spec arc_attribute_table[] =
+{
+  /* { name, min_len, max_len, decl_req, type_req, fn_type_req, handler } */
+  { "interrupt", 1, 1, true,  false, false, arc_handle_interrupt_attribute },
+  { NULL,        0, 0, false, false, false, NULL }
+};
 
 /* Initialize the GCC target structure.  */
 #undef TARGET_ASM_ALIGNED_HI_OP
@@ -117,45 +130,81 @@ static int arc_address_cost (rtx);
 #define TARGET_ATTRIBUTE_TABLE arc_attribute_table
 #undef TARGET_ASM_INTERNAL_LABEL
 #define TARGET_ASM_INTERNAL_LABEL arc_internal_label
+#undef TARGET_ASM_EXTERNAL_LIBCALL
+#define TARGET_ASM_EXTERNAL_LIBCALL arc_external_libcall
+
+#undef TARGET_HANDLE_OPTION
+#define TARGET_HANDLE_OPTION arc_handle_option
+
+#undef TARGET_OPTION_OVERRIDE
+#define TARGET_OPTION_OVERRIDE arc_option_override
 
 #undef TARGET_RTX_COSTS
 #define TARGET_RTX_COSTS arc_rtx_costs
 #undef TARGET_ADDRESS_COST
 #define TARGET_ADDRESS_COST arc_address_cost
 
+#undef TARGET_PROMOTE_FUNCTION_MODE
+#define TARGET_PROMOTE_FUNCTION_MODE default_promote_function_mode_always_promote
+#undef TARGET_PROMOTE_PROTOTYPES
+#define TARGET_PROMOTE_PROTOTYPES hook_bool_const_tree_true
+
+#undef TARGET_RETURN_IN_MEMORY
+#define TARGET_RETURN_IN_MEMORY arc_return_in_memory
+#undef TARGET_PASS_BY_REFERENCE
+#define TARGET_PASS_BY_REFERENCE arc_pass_by_reference
+#undef TARGET_FUNCTION_ARG
+#define TARGET_FUNCTION_ARG arc_function_arg
+#undef TARGET_FUNCTION_ARG_ADVANCE
+#define TARGET_FUNCTION_ARG_ADVANCE arc_function_arg_advance
+#undef TARGET_FUNCTION_ARG_BOUNDARY
+#define TARGET_FUNCTION_ARG_BOUNDARY arc_function_arg_boundary
+#undef TARGET_CALLEE_COPIES
+#define TARGET_CALLEE_COPIES hook_bool_CUMULATIVE_ARGS_mode_tree_bool_true
+
+#undef TARGET_SETUP_INCOMING_VARARGS
+#define TARGET_SETUP_INCOMING_VARARGS arc_setup_incoming_varargs
+
+#undef TARGET_EXPAND_BUILTIN_VA_START
+#define TARGET_EXPAND_BUILTIN_VA_START arc_va_start
+
+#undef TARGET_TRAMPOLINE_INIT
+#define TARGET_TRAMPOLINE_INIT arc_trampoline_init
+
+#undef TARGET_CONDITIONAL_REGISTER_USAGE
+#define TARGET_CONDITIONAL_REGISTER_USAGE arc_conditional_register_usage
+
 struct gcc_target targetm = TARGET_INITIALIZER;
 
-/* Called by OVERRIDE_OPTIONS to initialize various things.  */
+/* Implement TARGET_HANDLE_OPTION.  */
 
-void
-arc_init (void)
+static bool
+arc_handle_option (size_t code, const char *arg, int value ATTRIBUTE_UNUSED)
+{
+  switch (code)
+    {
+    case OPT_mcpu_:
+      return strcmp (arg, "base") == 0 || ARC_EXTENSION_CPU (arg);
+
+    default:
+      return true;
+    }
+}
+
+/* Implement TARGET_OPTION_OVERRIDE.
+   These need to be done at start up.  It's convenient to do them here.  */
+
+static void
+arc_option_override (void)
 {
   char *tmp;
   
-  if (arc_cpu_string == 0
-      || !strcmp (arc_cpu_string, "base"))
-    {
-      /* Ensure we have a printable value for the .cpu pseudo-op.  */
-      arc_cpu_string = "base";
-      arc_cpu_type = 0;
-      arc_mangle_cpu = NULL;
-    }
-  else if (ARC_EXTENSION_CPU (arc_cpu_string))
-    ; /* nothing to do */
-  else
-    {
-      error ("bad value (%s) for -mcpu switch", arc_cpu_string);
-      arc_cpu_string = "base";
-      arc_cpu_type = 0;
-      arc_mangle_cpu = NULL;
-    }
-
   /* Set the pseudo-ops for the various standard sections.  */
-  arc_text_section = tmp = xmalloc (strlen (arc_text_string) + sizeof (ARC_SECTION_FORMAT) + 1);
+  arc_text_section = tmp = XNEWVEC (char, strlen (arc_text_string) + sizeof (ARC_SECTION_FORMAT) + 1);
   sprintf (tmp, ARC_SECTION_FORMAT, arc_text_string);
-  arc_data_section = tmp = xmalloc (strlen (arc_data_string) + sizeof (ARC_SECTION_FORMAT) + 1);
+  arc_data_section = tmp = XNEWVEC (char, strlen (arc_data_string) + sizeof (ARC_SECTION_FORMAT) + 1);
   sprintf (tmp, ARC_SECTION_FORMAT, arc_data_string);
-  arc_rodata_section = tmp = xmalloc (strlen (arc_rodata_string) + sizeof (ARC_SECTION_FORMAT) + 1);
+  arc_rodata_section = tmp = XNEWVEC (char, strlen (arc_rodata_string) + sizeof (ARC_SECTION_FORMAT) + 1);
   sprintf (tmp, ARC_SECTION_FORMAT, arc_rodata_string);
 
   arc_init_reg_tables ();
@@ -197,7 +246,7 @@ get_arc_condition_code (rtx comparison)
     case LEU : return 15;
     case LTU : return 6;
     case GEU : return 7;
-    default : abort ();
+    default : gcc_unreachable ();
     }
   /*NOTREACHED*/
   return (42);
@@ -242,7 +291,7 @@ arc_select_cc_mode (enum rtx_code op,
    indexed by hard register number, and one indexed by mode.  */
 
 /* The purpose of arc_mode_class is to shrink the range of modes so that
-   they all fit (as bit numbers) in a 32 bit word (again).  Each real mode is
+   they all fit (as bit numbers) in a 32-bit word (again).  Each real mode is
    mapped into one arc_mode_class mode.  */
 
 enum arc_mode_class {
@@ -346,13 +395,6 @@ arc_init_reg_tables (void)
    interrupt - for interrupt functions
 */
 
-const struct attribute_spec arc_attribute_table[] =
-{
-  /* { name, min_len, max_len, decl_req, type_req, fn_type_req, handler } */
-  { "interrupt", 1, 1, true,  false, false, arc_handle_interrupt_attribute },
-  { NULL,        0, 0, false, false, false, NULL }
-};
-
 /* Handle an "interrupt" attribute; arguments as in
    struct attribute_spec.handler.  */
 static tree
@@ -366,15 +408,17 @@ arc_handle_interrupt_attribute (tree *node ATTRIBUTE_UNUSED,
 
   if (TREE_CODE (value) != STRING_CST)
     {
-      warning ("argument of `%s' attribute is not a string constant",
-	       IDENTIFIER_POINTER (name));
+      warning (OPT_Wattributes,
+	       "argument of %qE attribute is not a string constant",
+	       name);
       *no_add_attrs = true;
     }
   else if (strcmp (TREE_STRING_POINTER (value), "ilink1")
 	   && strcmp (TREE_STRING_POINTER (value), "ilink2"))
     {
-      warning ("argument of `%s' attribute is not \"ilink1\" or \"ilink2\"",
-	       IDENTIFIER_POINTER (name));
+      warning (OPT_Wattributes,
+	       "argument of %qE attribute is not \"ilink1\" or \"ilink2\"",
+	       name);
       *no_add_attrs = true;
     }
 
@@ -457,7 +501,7 @@ long_immediate_operand (rtx op, enum machine_mode mode ATTRIBUTE_UNUSED)
     case CONST_INT :
       return !SMALL_INT (INTVAL (op));
     case CONST_DOUBLE :
-      /* These can happen because large unsigned 32 bit constants are
+      /* These can happen because large unsigned 32-bit constants are
 	 represented this way (the multiplication patterns can cause these
 	 to be generated).  They also occur for SFmode values.  */
       return 1;
@@ -494,7 +538,7 @@ long_immediate_loadstore_operand (rtx op,
 	 assume that it does.  */
       return 1;
     case CONST_DOUBLE :
-      /* These can happen because large unsigned 32 bit constants are
+      /* These can happen because large unsigned 32-bit constants are
 	 represented this way (the multiplication patterns can cause these
 	 to be generated).  They also occur for SFmode values.  */
       return 1;
@@ -528,10 +572,10 @@ move_src_operand (rtx op, enum machine_mode mode)
     case CONST_DOUBLE :
       /* We can handle DImode integer constants in SImode if the value
 	 (signed or unsigned) will fit in 32 bits.  This is needed because
-	 large unsigned 32 bit constants are represented as CONST_DOUBLEs.  */
+	 large unsigned 32-bit constants are represented as CONST_DOUBLEs.  */
       if (mode == SImode)
 	return arc_double_limm_p (op);
-      /* We can handle 32 bit floating point constants.  */
+      /* We can handle 32-bit floating point constants.  */
       if (mode == SFmode)
 	return GET_MODE (op) == SFmode;
       return 0;
@@ -690,11 +734,11 @@ const_uint32_operand (rtx op, enum machine_mode mode ATTRIBUTE_UNUSED)
 int
 proper_comparison_operator (rtx op, enum machine_mode mode ATTRIBUTE_UNUSED)
 {
-  enum rtx_code code = GET_CODE (op);
-
-  if (GET_RTX_CLASS (code) != '<')
+  enum rtx_code code;
+  if (!COMPARISON_P (op))
     return 0;
 
+  code = GET_CODE (op);
   if (GET_MODE (XEXP (op, 0)) == CCZNmode)
     return (code == EQ || code == NE);
   if (GET_MODE (XEXP (op, 0)) == CCZNCmode)
@@ -705,21 +749,14 @@ proper_comparison_operator (rtx op, enum machine_mode mode ATTRIBUTE_UNUSED)
 
 /* Misc. utilities.  */
 
-/* X and Y are two things to compare using CODE.  Emit the compare insn and
-   return the rtx for the cc reg in the proper mode.  */
+/* X and Y are two things to compare using CODE.  Return the rtx
+   for the cc reg in the proper mode.  */
 
 rtx
 gen_compare_reg (enum rtx_code code, rtx x, rtx y)
 {
   enum machine_mode mode = SELECT_CC_MODE (code, x, y);
-  rtx cc_reg;
-
-  cc_reg = gen_rtx_REG (mode, 61);
-
-  emit_insn (gen_rtx_SET (VOIDmode, cc_reg,
-			  gen_rtx_COMPARE (mode, x, y)));
-
-  return cc_reg;
+  return gen_rtx_REG (mode, 61);
 }
 
 /* Return 1 if VALUE, a const_double, will fit in a limm (4 byte number).
@@ -730,8 +767,7 @@ arc_double_limm_p (rtx value)
 {
   HOST_WIDE_INT low, high;
 
-  if (GET_CODE (value) != CONST_DOUBLE)
-    abort ();
+  gcc_assert (GET_CODE (value) == CONST_DOUBLE);
 
   low = CONST_DOUBLE_LOW (value);
   high = CONST_DOUBLE_HIGH (value);
@@ -761,7 +797,7 @@ arc_double_limm_p (rtx value)
    aligned.  So we round the space up if necessary, and leave it to va_start
    to compensate.  */
 
-void
+static void
 arc_setup_incoming_varargs (CUMULATIVE_ARGS *cum,
                             enum machine_mode mode,
                             tree type ATTRIBUTE_UNUSED,
@@ -771,8 +807,7 @@ arc_setup_incoming_varargs (CUMULATIVE_ARGS *cum,
   int first_anon_arg;
 
   /* All BLKmode values are passed by reference.  */
-  if (mode == BLKmode)
-    abort ();
+  gcc_assert (mode != BLKmode);
 
   first_anon_arg = *cum + ((GET_MODE_SIZE (mode) + UNITS_PER_WORD - 1)
 			   / UNITS_PER_WORD);
@@ -808,7 +843,8 @@ arc_setup_incoming_varargs (CUMULATIVE_ARGS *cum,
    scanned.  In either case, *TOTAL contains the cost result.  */
 
 static bool
-arc_rtx_costs (rtx x, int code, int outer_code ATTRIBUTE_UNUSED, int *total)
+arc_rtx_costs (rtx x, int code, int outer_code ATTRIBUTE_UNUSED, int *total,
+	       bool speed ATTRIBUTE_UNUSED)
 {
   switch (code)
     {
@@ -862,7 +898,7 @@ arc_rtx_costs (rtx x, int code, int outer_code ATTRIBUTE_UNUSED, int *total)
    If ADDR is not a valid address, its cost is irrelevant.  */
 
 static int
-arc_address_cost (rtx addr)
+arc_address_cost (rtx addr, bool speed ATTRIBUTE_UNUSED)
 {
   switch (GET_CODE (addr))
     {
@@ -885,7 +921,7 @@ arc_address_cost (rtx addr)
 	switch (GET_CODE (plus1))
 	  {
 	  case CONST_INT :
-	    return SMALL_INT (plus1) ? 1 : 2;
+	    return SMALL_INT (INTVAL (plus1)) ? 1 : 2;
 	  case CONST :
 	  case SYMBOL_REF :
 	  case LABEL_REF :
@@ -1017,7 +1053,7 @@ arc_compute_function_type (tree decl)
 	  else if (!strcmp (TREE_STRING_POINTER (value), "ilink2"))
 	    fn_type = ARC_FUNCTION_ILINK2;
 	  else
-	    abort ();
+	    gcc_unreachable ();
 	  break;
 	}
     }
@@ -1037,9 +1073,9 @@ arc_compute_function_type (tree decl)
    Don't consider them here.  */
 #define MUST_SAVE_REGISTER(regno, interrupt_p) \
 ((regno) != RETURN_ADDR_REGNUM && (regno) != FRAME_POINTER_REGNUM \
- && (regs_ever_live[regno] && (!call_used_regs[regno] || interrupt_p)))
+ && (df_regs_ever_live_p (regno) && (!call_used_regs[regno] || interrupt_p)))
 
-#define MUST_SAVE_RETURN_ADDR (regs_ever_live[RETURN_ADDR_REGNUM])
+#define MUST_SAVE_RETURN_ADDR (df_regs_ever_live_p (RETURN_ADDR_REGNUM))
 
 /* Return the bytes needed to compute the frame pointer from the current
    stack pointer.
@@ -1057,11 +1093,11 @@ arc_compute_frame_size (int size /* # of var. bytes allocated.  */)
   int interrupt_p;
 
   var_size	= size;
-  args_size	= current_function_outgoing_args_size;
-  pretend_size	= current_function_pretend_args_size;
+  args_size	= crtl->outgoing_args_size;
+  pretend_size	= crtl->args.pretend_args_size;
   extra_size	= FIRST_PARM_OFFSET (0);
   total_size	= extra_size + pretend_size + args_size + var_size;
-  reg_offset	= FIRST_PARM_OFFSET(0) + current_function_outgoing_args_size;
+  reg_offset	= FIRST_PARM_OFFSET(0) + crtl->outgoing_args_size;
   reg_size	= 0;
   gmask		= 0;
 
@@ -1185,8 +1221,7 @@ arc_output_function_prologue (FILE *file, HOST_WIDE_INT size)
 	   : current_frame_info.total_size);
 
   /* These cases shouldn't happen.  Catch them now.  */
-  if (size == 0 && gmask)
-    abort ();
+  gcc_assert (size || !gmask);
 
   /* Allocate space for register arguments if this is a variadic function.  */
   if (current_frame_info.pretend_size != 0)
@@ -1233,7 +1268,7 @@ arc_output_function_prologue (FILE *file, HOST_WIDE_INT size)
 static void
 arc_output_function_epilogue (FILE *file, HOST_WIDE_INT size)
 {
-  rtx epilogue_delay = current_function_epilogue_delay_list;
+  rtx epilogue_delay = crtl->epilogue_delay_list;
   int noepilogue = FALSE;
   enum arc_function_type fn_type = arc_compute_function_type (current_function_decl);
 
@@ -1262,7 +1297,7 @@ arc_output_function_epilogue (FILE *file, HOST_WIDE_INT size)
       unsigned int pretend_size = current_frame_info.pretend_size;
       unsigned int frame_size = size - pretend_size;
       int restored, fp_restored_p;
-      int can_trust_sp_p = !current_function_calls_alloca;
+      int can_trust_sp_p = !cfun->calls_alloca;
       const char *sp_str = reg_names[STACK_POINTER_REGNUM];
       const char *fp_str = reg_names[FRAME_POINTER_REGNUM];
 
@@ -1273,8 +1308,7 @@ arc_output_function_epilogue (FILE *file, HOST_WIDE_INT size)
 
       if (!can_trust_sp_p)
 	{
-	  if (!frame_pointer_needed)
-	    abort ();
+	  gcc_assert (frame_pointer_needed);
 	  fprintf (file,"\tsub %s,%s,%d\t\t%s sp not trusted here\n",
 		   sp_str, fp_str, frame_size, ASM_COMMENT_START);
 	}
@@ -1303,7 +1337,7 @@ arc_output_function_epilogue (FILE *file, HOST_WIDE_INT size)
       /* ??? If stack intactness is important, always emit now.  */
       if (MUST_SAVE_RETURN_ADDR && epilogue_delay != NULL_RTX)
 	{
-	  final_scan_insn (XEXP (epilogue_delay, 0), file, 1, -2, 1, NULL);
+	  final_scan_insn (XEXP (epilogue_delay, 0), file, 1, 1, NULL);
 	  epilogue_delay = NULL_RTX;
 	}
 
@@ -1335,8 +1369,7 @@ arc_output_function_epilogue (FILE *file, HOST_WIDE_INT size)
 	{
 	  if (epilogue_delay)
 	    {
-	      final_scan_insn (XEXP (epilogue_delay, 0), file, 1, -2, 1,
-			       NULL);
+	      final_scan_insn (XEXP (epilogue_delay, 0), file, 1, 1, NULL);
 	    }
 	}
 
@@ -1345,8 +1378,13 @@ arc_output_function_epilogue (FILE *file, HOST_WIDE_INT size)
 	static const int regs[4] = {
 	  0, RETURN_ADDR_REGNUM, ILINK1_REGNUM, ILINK2_REGNUM
 	};
-	fprintf (file, "\tj.d %s\n", reg_names[regs[fn_type]]);
-      }
+
+	/* Update the flags, if returning from an interrupt handler. */
+	if (ARC_INTERRUPT_P (fn_type))
+	  fprintf (file, "\tj.d.f %s\n", reg_names[regs[fn_type]]);
+	else
+	  fprintf (file, "\tj.d %s\n", reg_names[regs[fn_type]]);
+	}
 
       /* If the only register saved is the return address, we need a
 	 nop, unless we have an instruction to put into it.  Otherwise
@@ -1357,23 +1395,19 @@ arc_output_function_epilogue (FILE *file, HOST_WIDE_INT size)
 	fprintf (file, "\tadd %s,%s,16\n", sp_str, sp_str);
       else if (epilogue_delay != NULL_RTX)
 	{
-	  if (frame_pointer_needed && !fp_restored_p)
-	    abort ();
-	  if (restored < size)
-	    abort ();
-	  final_scan_insn (XEXP (epilogue_delay, 0), file, 1, -2, 1, NULL);
+	  gcc_assert (!frame_pointer_needed || fp_restored_p);
+	  gcc_assert (restored >= size);
+	  final_scan_insn (XEXP (epilogue_delay, 0), file, 1, 1, NULL);
 	}
       else if (frame_pointer_needed && !fp_restored_p)
 	{
-	  if (!SMALL_INT (frame_size))
-	    abort ();
+	  gcc_assert (SMALL_INT (frame_size));
 	  /* Note that we restore fp and sp here!  */
 	  fprintf (file, "\tld.a %s,[%s,%d]\n", fp_str, sp_str, frame_size);
 	}
       else if (restored < size)
 	{
-	  if (!SMALL_INT (size - restored))
-	    abort ();
+	  gcc_assert (SMALL_INT (size - restored));
 	  fprintf (file, "\tadd %s,%s," HOST_WIDE_INT_PRINT_DEC "\n",
 		   sp_str, sp_str, size - restored);
 	}
@@ -1413,8 +1447,7 @@ arc_delay_slots_for_epilogue (void)
 int
 arc_eligible_for_epilogue_delay (rtx trial, int slot)
 {
-  if (slot != 0)
-    abort ();
+  gcc_assert (!slot);
 
   if (get_attr_length (trial) == 1
       /* If registers where saved, presumably there's more than enough
@@ -1429,16 +1462,6 @@ arc_eligible_for_epilogue_delay (rtx trial, int slot)
       && ! reg_mentioned_p (frame_pointer_rtx, PATTERN (trial)))
     return 1;
   return 0;
-}
-
-/* PIC */
-
-/* Emit special PIC prologues and epilogues.  */
-
-void
-arc_finalize_pic (void)
-{
-  /* nothing to do */
 }
 
 /* Return true if OP is a shift operator.  */
@@ -1479,30 +1502,34 @@ output_shift (rtx *operands)
   enum rtx_code code = GET_CODE (shift);
   const char *shift_one;
 
-  if (mode != SImode)
-    abort ();
+  gcc_assert (mode == SImode);
 
   switch (code)
     {
     case ASHIFT:   shift_one = "asl %0,%0"; break;
     case ASHIFTRT: shift_one = "asr %0,%0"; break;
     case LSHIFTRT: shift_one = "lsr %0,%0"; break;
-    default:       abort ();
+    default:       gcc_unreachable ();
     }
 
   if (GET_CODE (operands[2]) != CONST_INT)
     {
       if (optimize)
-	output_asm_insn ("mov lp_count,%2", operands);
+	{
+	  output_asm_insn ("sub.f 0,%2,0", operands);
+      	  output_asm_insn ("mov lp_count,%2", operands);
+	  output_asm_insn ("bz 2f", operands);
+	}
       else
 	output_asm_insn ("mov %4,%2", operands);
       goto shiftloop;
     }
   else
     {
-      int n = INTVAL (operands[2]);
+      int n;
 
       /* If the count is negative, make it 0.  */
+      n = INTVAL (operands[2]);
       if (n < 0)
 	n = 0;
       /* If the count is too big, truncate it.
@@ -1567,6 +1594,8 @@ output_shift (rtx *operands)
 		fprintf (asm_out_file, "1:\t%s single insn loop\n",
 			 ASM_COMMENT_START);
 	      output_asm_insn (shift_one, operands);
+	      fprintf (asm_out_file, "2:\t%s end single insn loop\n",
+		       ASM_COMMENT_START);
 	    }
 	  else 
 	    {
@@ -1749,9 +1778,8 @@ arc_print_operand (FILE *file, rtx x, int code)
       {
 	char str[30];
 
-	if (GET_CODE (x) != CONST_DOUBLE
-	    || GET_MODE_CLASS (GET_MODE (x)) != MODE_FLOAT)
-	  abort ();
+	gcc_assert (GET_CODE (x) == CONST_DOUBLE
+		    && GET_MODE_CLASS (GET_MODE (x)) == MODE_FLOAT);
 
 	real_to_decimal (str, CONST_DOUBLE_REAL_VALUE (x), sizeof (str), 0, 1);
 	fprintf (file, "%s", str);
@@ -1853,26 +1881,33 @@ arc_print_operand_address (FILE *file, rtx addr)
 	offset = INTVAL (XEXP (addr, 1)), base = XEXP (addr, 0);
       else
 	base = XEXP (addr, 0), index = XEXP (addr, 1);
-      if (GET_CODE (base) != REG)
-	abort ();
+      gcc_assert (GET_CODE (base) == REG);
       fputs (reg_names[REGNO (base)], file);
       if (index == 0)
 	{
 	  if (offset != 0)
 	    fprintf (file, ",%d", offset);
 	}
-      else if (GET_CODE (index) == REG)
-	fprintf (file, ",%s", reg_names[REGNO (index)]);
-      else if (GET_CODE (index) == SYMBOL_REF)
-	fputc (',', file), output_addr_const (file, index);
       else
-	abort ();
+	{
+	  switch (GET_CODE (index))
+	    {
+	    case REG:
+	      fprintf (file, ",%s", reg_names[REGNO (index)]);
+	      break;
+	    case SYMBOL_REF:
+	      fputc (',', file), output_addr_const (file, index);
+	      break;
+	    default:
+	      gcc_unreachable ();
+	    }
+	}
       break;
     case PRE_INC :
     case PRE_DEC :
       /* We shouldn't get here as we've lost the mode of the memory object
 	 (which says how much to inc/dec by.  */
-      abort ();
+      gcc_unreachable ();
       break;
     default :
       output_addr_const (file, addr);
@@ -1946,7 +1981,7 @@ arc_final_prescan_insn (rtx insn,
   /* BODY will hold the body of INSN.  */
   register rtx body = PATTERN (insn);
 
-  /* This will be 1 if trying to repeat the trick (ie: do the `else' part of
+  /* This will be 1 if trying to repeat the trick (i.e.: do the `else' part of
      an if/then/else), and things need to be reversed.  */
   int reverse = 0;
 
@@ -2059,7 +2094,7 @@ arc_final_prescan_insn (rtx insn,
 	  then_not_else = FALSE;
         }
       else
-	abort ();
+	gcc_unreachable ();
 
       /* See how many insns this branch skips, and what kind of insns.  If all
 	 insns are okay, and the label or unconditional branch to the same
@@ -2178,14 +2213,15 @@ arc_final_prescan_insn (rtx insn,
 	{
 	  if ((!seeking_return) && (arc_ccfsm_state == 1 || reverse))
 	    arc_ccfsm_target_label = CODE_LABEL_NUMBER (label);
-	  else if (seeking_return || arc_ccfsm_state == 2)
+	  else
 	    {
+	      gcc_assert (seeking_return || arc_ccfsm_state == 2);
 	      while (this_insn && GET_CODE (PATTERN (this_insn)) == USE)
 	        {
 		  this_insn = next_nonnote_insn (this_insn);
-		  if (this_insn && (GET_CODE (this_insn) == BARRIER
-				    || GET_CODE (this_insn) == CODE_LABEL))
-		    abort ();
+		  gcc_assert (!this_insn
+			      || (GET_CODE (this_insn) != BARRIER
+				  && GET_CODE (this_insn) != CODE_LABEL));
 	        }
 	      if (!this_insn)
 	        {
@@ -2197,8 +2233,6 @@ arc_final_prescan_insn (rtx insn,
 	        }
 	      arc_ccfsm_target_insn = this_insn;
 	    }
-	  else
-	    abort ();
 
 	  /* If REVERSE is true, ARM_CURRENT_CC needs to be inverted from
 	     what it was.  */
@@ -2259,87 +2293,15 @@ arc_ccfsm_record_branch_deleted (void)
   current_insn_set_cc_p = last_insn_set_cc_p;
 }
 
-void
+static void
 arc_va_start (tree valist, rtx nextarg)
 {
   /* See arc_setup_incoming_varargs for reasons for this oddity.  */
-  if (current_function_args_info < 8
-      && (current_function_args_info & 1))
+  if (crtl->args.info < 8
+      && (crtl->args.info & 1))
     nextarg = plus_constant (nextarg, UNITS_PER_WORD);
 
   std_expand_builtin_va_start (valist, nextarg);
-}
-
-rtx
-arc_va_arg (tree valist, tree type)
-{
-  rtx addr_rtx;
-  tree addr, incr;
-  tree type_ptr = build_pointer_type (type);
-
-  /* All aggregates are passed by reference.  All scalar types larger
-     than 8 bytes are passed by reference.  */
-
-  if (AGGREGATE_TYPE_P (type) || int_size_in_bytes (type) > 8)
-    {
-      tree type_ptr_ptr = build_pointer_type (type_ptr);
-
-      addr = build1 (INDIRECT_REF, type_ptr,
-		    build1 (NOP_EXPR, type_ptr_ptr, valist));
-
-      incr = build (PLUS_EXPR, TREE_TYPE (valist),
-		    valist, build_int_2 (UNITS_PER_WORD, 0));
-    }
-  else
-    {
-      HOST_WIDE_INT align, rounded_size;
-
-      /* Compute the rounded size of the type.  */
-      align = PARM_BOUNDARY / BITS_PER_UNIT;
-      rounded_size = (((TREE_INT_CST_LOW (TYPE_SIZE (type)) / BITS_PER_UNIT
-			+ align - 1) / align) * align);
-
-      /* Align 8 byte operands.  */
-      addr = valist;
-      if (TYPE_ALIGN (type) > BITS_PER_WORD)
-	{
-	  /* AP = (TYPE *)(((int)AP + 7) & -8)  */
-
-	  addr = build1 (NOP_EXPR, integer_type_node, valist);
-	  addr = fold (build (PLUS_EXPR, integer_type_node, addr,
-			      build_int_2 (7, 0)));
-	  addr = fold (build (BIT_AND_EXPR, integer_type_node, addr,
-			      build_int_2 (-8, 0)));
-	  addr = fold (build1 (NOP_EXPR, TREE_TYPE (valist), addr));
-	}
-
-      /* The increment is always rounded_size past the aligned pointer.  */
-      incr = fold (build (PLUS_EXPR, TREE_TYPE (addr), addr,
-			  build_int_2 (rounded_size, 0)));
-
-      /* Adjust the pointer in big-endian mode.  */
-      if (BYTES_BIG_ENDIAN)
-	{
-	  HOST_WIDE_INT adj;
-	  adj = TREE_INT_CST_LOW (TYPE_SIZE (type)) / BITS_PER_UNIT;
-	  if (rounded_size > align)
-	    adj = rounded_size;
-
-	  addr = fold (build (PLUS_EXPR, TREE_TYPE (addr), addr,
-			      build_int_2 (rounded_size - adj, 0)));
-	}
-    }
-
-  /* Evaluate the data address.  */
-  addr_rtx = expand_expr (addr, NULL_RTX, Pmode, EXPAND_NORMAL);
-  addr_rtx = copy_to_reg (addr_rtx);
-  
-  /* Compute new value for AP.  */
-  incr = build (MODIFY_EXPR, TREE_TYPE (valist), valist, incr);
-  TREE_SIDE_EFFECTS (incr) = 1;
-  expand_expr (incr, const0_rtx, VOIDmode, EXPAND_NORMAL);
-
-  return addr_rtx;
 }
 
 /* This is how to output a definition of an internal numbered label where
@@ -2351,3 +2313,179 @@ arc_internal_label (FILE *stream, const char *prefix, unsigned long labelno)
   arc_ccfsm_at_label (prefix, labelno);
   default_internal_label (stream, prefix, labelno);
 }
+
+/* Worker function for TARGET_ASM_EXTERNAL_LIBCALL.  */
+
+static void
+arc_external_libcall (rtx fun ATTRIBUTE_UNUSED)
+{
+#if 0
+/* On the ARC we want to have libgcc's for multiple cpus in one binary.
+   We can't use `assemble_name' here as that will call ASM_OUTPUT_LABELREF
+   and we'll get another suffix added on if -mmangle-cpu.  */
+  if (TARGET_MANGLE_CPU_LIBGCC)
+    {
+      fprintf (FILE, "\t.rename\t_%s, _%s%s\n",
+	       XSTR (SYMREF, 0), XSTR (SYMREF, 0),
+	       arc_mangle_suffix);
+    }
+#endif
+}
+
+/* Worker function for TARGET_RETURN_IN_MEMORY.  */
+
+static bool
+arc_return_in_memory (const_tree type, const_tree fntype ATTRIBUTE_UNUSED)
+{
+  if (AGGREGATE_TYPE_P (type))
+    return true;
+  else
+    {
+      HOST_WIDE_INT size = int_size_in_bytes (type);
+      return (size == -1 || size > 8);
+    }
+}
+
+/* For ARC, All aggregates and arguments greater than 8 bytes are
+   passed by reference.  */
+
+static bool
+arc_pass_by_reference (CUMULATIVE_ARGS *ca ATTRIBUTE_UNUSED,
+		       enum machine_mode mode, const_tree type,
+		       bool named ATTRIBUTE_UNUSED)
+{
+  unsigned HOST_WIDE_INT size;
+
+  if (type)
+    {
+      if (AGGREGATE_TYPE_P (type))
+	return true;
+      size = int_size_in_bytes (type);
+    }
+  else
+    size = GET_MODE_SIZE (mode);
+
+  return size > 8;
+}
+
+/* Round SIZE up to a word boundary.  */
+#define ROUND_ADVANCE(SIZE) \
+(((SIZE) + UNITS_PER_WORD - 1) / UNITS_PER_WORD)
+
+/* Round arg MODE/TYPE up to the next word boundary.  */
+#define ROUND_ADVANCE_ARG(MODE, TYPE) \
+((MODE) == BLKmode				\
+ ? ROUND_ADVANCE (int_size_in_bytes (TYPE))	\
+ : ROUND_ADVANCE (GET_MODE_SIZE (MODE)))
+
+/* Round CUM up to the necessary point for argument MODE/TYPE.  */
+#define ROUND_ADVANCE_CUM(CUM, MODE, TYPE) \
+((((MODE) == BLKmode ? TYPE_ALIGN (TYPE) : GET_MODE_BITSIZE (MODE)) \
+  > BITS_PER_WORD)	\
+ ? (((CUM) + 1) & ~1)	\
+ : (CUM))
+
+/* Return boolean indicating arg of type TYPE and mode MODE will be passed in
+   a reg.  This includes arguments that have to be passed by reference as the
+   pointer to them is passed in a reg if one is available (and that is what
+   we're given).  */
+#define PASS_IN_REG_P(CUM, MODE, TYPE) \
+((CUM) < MAX_ARC_PARM_REGS						\
+ && ((ROUND_ADVANCE_CUM ((CUM), (MODE), (TYPE))				\
+      + ROUND_ADVANCE_ARG ((MODE), (TYPE))				\
+      <= MAX_ARC_PARM_REGS)))
+
+/* Determine where to put an argument to a function.
+   Value is zero to push the argument on the stack,
+   or a hard register in which to store the argument.
+
+   MODE is the argument's machine mode.
+   TYPE is the data type of the argument (as a tree).
+    This is null for libcalls where that information may
+    not be available.
+   CUM is a variable of type CUMULATIVE_ARGS which gives info about
+    the preceding args and about the function being called.
+   NAMED is nonzero if this argument is a named parameter
+    (otherwise it is an extra parameter matching an ellipsis).  */
+/* On the ARC the first MAX_ARC_PARM_REGS args are normally in registers
+   and the rest are pushed.  */
+
+static rtx
+arc_function_arg (CUMULATIVE_ARGS *cum, enum machine_mode mode,
+		  const_tree type, bool named ATTRIBUTE_UNUSED)
+{
+  return (PASS_IN_REG_P (*cum, mode, type)
+	  ? gen_rtx_REG (mode, ROUND_ADVANCE_CUM (*cum, mode, type))
+	  : NULL_RTX);
+}
+
+/* Worker function for TARGET_FUNCTION_ARG_ADVANCE.  */
+
+static void
+arc_function_arg_advance (CUMULATIVE_ARGS *cum, enum machine_mode mode,
+			  const_tree type, bool named ATTRIBUTE_UNUSED)
+{
+  *cum = (ROUND_ADVANCE_CUM (*cum, mode, type)
+	  + ROUND_ADVANCE_ARG (mode, type));
+}
+
+/* Worker function for TARGET_FUNCTION_ARG_BOUNDARY.  */
+
+static unsigned int
+arc_function_arg_boundary (enum machine_mode mode, const_tree type)
+{
+  return (type != NULL_TREE
+	  ? TYPE_ALIGN (type)
+	  : (GET_MODE_BITSIZE (mode) <= PARM_BOUNDARY
+	     ? PARM_BOUNDARY
+	     : 2 * PARM_BOUNDARY));
+}
+
+/* Trampolines.  */
+/* ??? This doesn't work yet because GCC will use as the address of a nested
+   function the address of the trampoline.  We need to use that address
+   right shifted by 2.  It looks like we'll need PSImode after all. :-( 
+
+   ??? The above comment sounds like it's doable via
+   TARGET_TRAMPOLINE_ADJUST_ADDRESS; no PSImode needed.
+
+   On the ARC, the trampoline is quite simple as we have 32-bit immediate
+   constants.
+
+	mov r24,STATIC
+	j.nd FUNCTION
+*/
+
+static void
+arc_trampoline_init (rtx m_tramp, tree fndecl, rtx chain_value)
+{
+  rtx fnaddr = XEXP (DECL_RTL (fndecl), 0);
+  rtx mem;
+
+  mem = adjust_address (m_tramp, SImode, 0);
+  emit_move_insn (mem, GEN_INT (0x631f7c00));
+
+  mem = adjust_address (m_tramp, SImode, 4);
+  emit_move_insn (mem, chain_value);
+
+  mem = adjust_address (m_tramp, SImode, 8);
+  emit_move_insn (mem, GEN_INT (0x381f0000));
+
+  mem = adjust_address (m_tramp, SImode, 12);
+  emit_move_insn (mem, fnaddr);
+
+  emit_insn (gen_flush_icache (m_tramp));
+}
+
+/* Worker function for TARGET_CONDITIONAL_REGISTER_USAGE.  */
+
+static void
+arc_conditional_register_usage (void)
+{
+  if (PIC_OFFSET_TABLE_REGNUM != INVALID_REGNUM)
+    {
+      fixed_regs[PIC_OFFSET_TABLE_REGNUM] = 1;
+      call_used_regs[PIC_OFFSET_TABLE_REGNUM] = 1;
+    }
+}
+

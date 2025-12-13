@@ -1,12 +1,13 @@
 // Iostreams base classes -*- C++ -*-
 
-// Copyright (C) 1997, 1998, 1999, 2000, 2001, 2002, 2003, 2004
+// Copyright (C) 1997, 1998, 1999, 2000, 2001, 2002, 2003, 2004, 2005,
+// 2006, 2007, 2008, 2009, 2010
 // Free Software Foundation, Inc.
 //
 // This file is part of the GNU ISO C++ Library.  This library is free
 // software; you can redistribute it and/or modify it under the
 // terms of the GNU General Public License as published by the
-// Free Software Foundation; either version 2, or (at your option)
+// Free Software Foundation; either version 3, or (at your option)
 // any later version.
 
 // This library is distributed in the hope that it will be useful,
@@ -14,40 +15,37 @@
 // MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
 // GNU General Public License for more details.
 
-// You should have received a copy of the GNU General Public License along
-// with this library; see the file COPYING.  If not, write to the Free
-// Software Foundation, 59 Temple Place - Suite 330, Boston, MA 02111-1307,
-// USA.
+// Under Section 7 of GPL version 3, you are granted additional
+// permissions described in the GCC Runtime Library Exception, version
+// 3.1, as published by the Free Software Foundation.
 
-// As a special exception, you may use this file as part of a free software
-// library without restriction.  Specifically, if other files instantiate
-// templates or use macros or inline functions from this file, or you compile
-// this file and link it with other files to produce an executable, this
-// file does not by itself cause the resulting executable to be covered by
-// the GNU General Public License.  This exception does not however
-// invalidate any other reasons why the executable file might be covered by
-// the GNU General Public License.
+// You should have received a copy of the GNU General Public License and
+// a copy of the GCC Runtime Library Exception along with this program;
+// see the files COPYING3 and COPYING.RUNTIME respectively.  If not, see
+// <http://www.gnu.org/licenses/>.
+
+/** @file bits/ios_base.h
+ *  This is an internal header file, included by other library headers.
+ *  Do not attempt to use it directly. @headername{ios}
+ */
 
 //
 // ISO C++ 14882: 27.4  Iostreams base classes
 //
-
-/** @file ios_base.h
- *  This is an internal header file, included by other library headers.
- *  You should not attempt to use it directly.
- */
 
 #ifndef _IOS_BASE_H
 #define _IOS_BASE_H 1
 
 #pragma GCC system_header
 
-#include <bits/atomicity.h>
+#include <ext/atomicity.h>
 #include <bits/localefwd.h>
 #include <bits/locale_classes.h>
 
-namespace std
+namespace std _GLIBCXX_VISIBILITY(default)
 {
+_GLIBCXX_BEGIN_NAMESPACE_VERSION
+
   // The following definitions of bitmask types are enums, not ints,
   // as permitted (but not required) in the standard, in order to provide
   // better type safety in iostream calls.  A side effect is that
@@ -75,33 +73,33 @@ namespace std
       _S_ios_fmtflags_end = 1L << 16 
     };
 
-  inline _Ios_Fmtflags
+  inline _GLIBCXX_CONSTEXPR _Ios_Fmtflags
   operator&(_Ios_Fmtflags __a, _Ios_Fmtflags __b)
   { return _Ios_Fmtflags(static_cast<int>(__a) & static_cast<int>(__b)); }
 
-  inline _Ios_Fmtflags
+  inline _GLIBCXX_CONSTEXPR _Ios_Fmtflags
   operator|(_Ios_Fmtflags __a, _Ios_Fmtflags __b)
   { return _Ios_Fmtflags(static_cast<int>(__a) | static_cast<int>(__b)); }
 
-  inline _Ios_Fmtflags
+  inline _GLIBCXX_CONSTEXPR _Ios_Fmtflags
   operator^(_Ios_Fmtflags __a, _Ios_Fmtflags __b)
   { return _Ios_Fmtflags(static_cast<int>(__a) ^ static_cast<int>(__b)); }
 
-  inline _Ios_Fmtflags&
+  inline _GLIBCXX_CONSTEXPR _Ios_Fmtflags
+  operator~(_Ios_Fmtflags __a)
+  { return _Ios_Fmtflags(~static_cast<int>(__a)); }
+
+  inline const _Ios_Fmtflags&
   operator|=(_Ios_Fmtflags& __a, _Ios_Fmtflags __b)
   { return __a = __a | __b; }
 
-  inline _Ios_Fmtflags&
+  inline const _Ios_Fmtflags&
   operator&=(_Ios_Fmtflags& __a, _Ios_Fmtflags __b)
   { return __a = __a & __b; }
 
-  inline _Ios_Fmtflags&
+  inline const _Ios_Fmtflags&
   operator^=(_Ios_Fmtflags& __a, _Ios_Fmtflags __b)
   { return __a = __a ^ __b; }
-
-  inline _Ios_Fmtflags
-  operator~(_Ios_Fmtflags __a)
-  { return _Ios_Fmtflags(~static_cast<int>(__a)); }
 
 
   enum _Ios_Openmode 
@@ -115,33 +113,33 @@ namespace std
       _S_ios_openmode_end = 1L << 16 
     };
 
-  inline _Ios_Openmode
+  inline _GLIBCXX_CONSTEXPR _Ios_Openmode
   operator&(_Ios_Openmode __a, _Ios_Openmode __b)
   { return _Ios_Openmode(static_cast<int>(__a) & static_cast<int>(__b)); }
 
-  inline _Ios_Openmode
+  inline _GLIBCXX_CONSTEXPR _Ios_Openmode
   operator|(_Ios_Openmode __a, _Ios_Openmode __b)
   { return _Ios_Openmode(static_cast<int>(__a) | static_cast<int>(__b)); }
 
-  inline _Ios_Openmode
+  inline _GLIBCXX_CONSTEXPR _Ios_Openmode
   operator^(_Ios_Openmode __a, _Ios_Openmode __b)
   { return _Ios_Openmode(static_cast<int>(__a) ^ static_cast<int>(__b)); }
 
-  inline _Ios_Openmode&
+  inline _GLIBCXX_CONSTEXPR _Ios_Openmode
+  operator~(_Ios_Openmode __a)
+  { return _Ios_Openmode(~static_cast<int>(__a)); }
+
+  inline const _Ios_Openmode&
   operator|=(_Ios_Openmode& __a, _Ios_Openmode __b)
   { return __a = __a | __b; }
 
-  inline _Ios_Openmode&
+  inline const _Ios_Openmode&
   operator&=(_Ios_Openmode& __a, _Ios_Openmode __b)
   { return __a = __a & __b; }
 
-  inline _Ios_Openmode&
+  inline const _Ios_Openmode&
   operator^=(_Ios_Openmode& __a, _Ios_Openmode __b)
   { return __a = __a ^ __b; }
-
-  inline _Ios_Openmode
-  operator~(_Ios_Openmode __a)
-  { return _Ios_Openmode(~static_cast<int>(__a)); }
 
 
   enum _Ios_Iostate
@@ -153,45 +151,47 @@ namespace std
       _S_ios_iostate_end = 1L << 16 
     };
 
-  inline _Ios_Iostate
+  inline _GLIBCXX_CONSTEXPR _Ios_Iostate
   operator&(_Ios_Iostate __a, _Ios_Iostate __b)
   { return _Ios_Iostate(static_cast<int>(__a) & static_cast<int>(__b)); }
 
-  inline _Ios_Iostate
+  inline _GLIBCXX_CONSTEXPR _Ios_Iostate
   operator|(_Ios_Iostate __a, _Ios_Iostate __b)
   { return _Ios_Iostate(static_cast<int>(__a) | static_cast<int>(__b)); }
 
-  inline _Ios_Iostate
+  inline _GLIBCXX_CONSTEXPR _Ios_Iostate
   operator^(_Ios_Iostate __a, _Ios_Iostate __b)
   { return _Ios_Iostate(static_cast<int>(__a) ^ static_cast<int>(__b)); }
 
-  inline _Ios_Iostate&
+  inline _GLIBCXX_CONSTEXPR _Ios_Iostate
+  operator~(_Ios_Iostate __a)
+  { return _Ios_Iostate(~static_cast<int>(__a)); }
+
+  inline const _Ios_Iostate&
   operator|=(_Ios_Iostate& __a, _Ios_Iostate __b)
   { return __a = __a | __b; }
 
-  inline _Ios_Iostate&
+  inline const _Ios_Iostate&
   operator&=(_Ios_Iostate& __a, _Ios_Iostate __b)
   { return __a = __a & __b; }
 
-  inline _Ios_Iostate&
+  inline const  _Ios_Iostate&
   operator^=(_Ios_Iostate& __a, _Ios_Iostate __b)
   { return __a = __a ^ __b; }
 
-  inline _Ios_Iostate
-  operator~(_Ios_Iostate __a)
-  { return _Ios_Iostate(~static_cast<int>(__a)); }
 
   enum _Ios_Seekdir 
     { 
       _S_beg = 0,
-      _S_cur = SEEK_CUR,
-      _S_end = SEEK_END,
+      _S_cur = _GLIBCXX_STDIO_SEEK_CUR,
+      _S_end = _GLIBCXX_STDIO_SEEK_END,
       _S_ios_seekdir_end = 1L << 16 
     };
 
   // 27.4.2  Class ios_base
   /**
-   *  @brief  The very top of the I/O class hierarchy.
+   *  @brief  The base of the I/O class hierarchy.
+   *  @ingroup io
    *
    *  This class defines everything that can be defined about I/O that does
    *  not depend on the type of characters being input or output.  Most
@@ -202,8 +202,12 @@ namespace std
   {
   public:
 
-    // 27.4.2.1.1  Class ios_base::failure
-    /// These are thrown to indicate problems.  Doc me.
+    /** 
+     *  @brief These are thrown to indicate problems with io.
+     *  @ingroup exceptions
+     *
+     *  27.4.2.1.1  Class ios_base::failure
+     */
     class failure : public exception
     {
     public:
@@ -213,7 +217,7 @@ namespace std
       failure(const string& __str) throw();
 
       // This declaration is not useless:
-      // http://gcc.gnu.org/onlinedocs/gcc-3.0.2/gcc_6.html#SEC118
+      // http://gcc.gnu.org/onlinedocs/gcc-4.3.2/gcc/Vague-Linkage.html
       virtual
       ~failure() throw();
 
@@ -228,7 +232,7 @@ namespace std
     /**
      *  @brief This is a bitmask type.
      *
-     *  @c "_Ios_Fmtflags" is implementation-defined, but it is valid to
+     *  @c @a _Ios_Fmtflags is implementation-defined, but it is valid to
      *  perform bitwise operations on these values and expect the Right
      *  Thing to happen.  Defined objects of type fmtflags are:
      *  - boolalpha
@@ -253,71 +257,71 @@ namespace std
     typedef _Ios_Fmtflags fmtflags;
 
     /// Insert/extract @c bool in alphabetic rather than numeric format.
-    static const fmtflags boolalpha =   fmtflags(__ios_flags::_S_boolalpha);
+    static const fmtflags boolalpha =   _S_boolalpha;
 
     /// Converts integer input or generates integer output in decimal base.
-    static const fmtflags dec =         fmtflags(__ios_flags::_S_dec);
+    static const fmtflags dec =         _S_dec;
 
     /// Generate floating-point output in fixed-point notation.
-    static const fmtflags fixed =       fmtflags(__ios_flags::_S_fixed);
+    static const fmtflags fixed =       _S_fixed;
 
     /// Converts integer input or generates integer output in hexadecimal base.
-    static const fmtflags hex =         fmtflags(__ios_flags::_S_hex);
+    static const fmtflags hex =         _S_hex;
 
     /// Adds fill characters at a designated internal point in certain
     /// generated output, or identical to @c right if no such point is
     /// designated.
-    static const fmtflags internal =    fmtflags(__ios_flags::_S_internal);
+    static const fmtflags internal =    _S_internal;
 
     /// Adds fill characters on the right (final positions) of certain
     /// generated output.  (I.e., the thing you print is flush left.)
-    static const fmtflags left =        fmtflags(__ios_flags::_S_left);
+    static const fmtflags left =        _S_left;
 
     /// Converts integer input or generates integer output in octal base.
-    static const fmtflags oct =         fmtflags(__ios_flags::_S_oct);
+    static const fmtflags oct =         _S_oct;
 
     /// Adds fill characters on the left (initial positions) of certain
     /// generated output.  (I.e., the thing you print is flush right.)
-    static const fmtflags right =       fmtflags(__ios_flags::_S_right);
+    static const fmtflags right =       _S_right;
 
     /// Generates floating-point output in scientific notation.
-    static const fmtflags scientific =  fmtflags(__ios_flags::_S_scientific);
+    static const fmtflags scientific =  _S_scientific;
 
     /// Generates a prefix indicating the numeric base of generated integer
     /// output.
-    static const fmtflags showbase =    fmtflags(__ios_flags::_S_showbase);
+    static const fmtflags showbase =    _S_showbase;
 
     /// Generates a decimal-point character unconditionally in generated
     /// floating-point output.
-    static const fmtflags showpoint =   fmtflags(__ios_flags::_S_showpoint);
+    static const fmtflags showpoint =   _S_showpoint;
 
     /// Generates a + sign in non-negative generated numeric output.
-    static const fmtflags showpos =     fmtflags(__ios_flags::_S_showpos);
+    static const fmtflags showpos =     _S_showpos;
 
     /// Skips leading white space before certain input operations.
-    static const fmtflags skipws =      fmtflags(__ios_flags::_S_skipws);
+    static const fmtflags skipws =      _S_skipws;
 
     /// Flushes output after each output operation.
-    static const fmtflags unitbuf =     fmtflags(__ios_flags::_S_unitbuf);
+    static const fmtflags unitbuf =     _S_unitbuf;
 
     /// Replaces certain lowercase letters with their uppercase equivalents
     /// in generated output.
-    static const fmtflags uppercase =   fmtflags(__ios_flags::_S_uppercase);
+    static const fmtflags uppercase =   _S_uppercase;
 
     /// A mask of left|right|internal.  Useful for the 2-arg form of @c setf.
-    static const fmtflags adjustfield = fmtflags(__ios_flags::_S_adjustfield);
+    static const fmtflags adjustfield = _S_adjustfield;
 
     /// A mask of dec|oct|hex.  Useful for the 2-arg form of @c setf.
-    static const fmtflags basefield =   fmtflags(__ios_flags::_S_basefield);
+    static const fmtflags basefield =   _S_basefield;
 
     /// A mask of scientific|fixed.  Useful for the 2-arg form of @c setf.
-    static const fmtflags floatfield =  fmtflags(__ios_flags::_S_floatfield);
+    static const fmtflags floatfield =  _S_floatfield;
 
     // 27.4.2.1.3  Type ios_base::iostate
     /**
      *  @brief This is a bitmask type.
      *
-     *  @c "_Ios_Iostate" is implementation-defined, but it is valid to
+     *  @c @a _Ios_Iostate is implementation-defined, but it is valid to
      *  perform bitwise operations on these values and expect the Right
      *  Thing to happen.  Defined objects of type iostate are:
      *  - badbit
@@ -329,24 +333,24 @@ namespace std
 
     /// Indicates a loss of integrity in an input or output sequence (such
     /// as an irrecoverable read error from a file).
-    static const iostate badbit =	iostate(__ios_flags::_S_badbit);
+    static const iostate badbit =	_S_badbit;
 
     /// Indicates that an input operation reached the end of an input sequence.
-    static const iostate eofbit =	iostate(__ios_flags::_S_eofbit);
+    static const iostate eofbit =	_S_eofbit;
 
     /// Indicates that an input operation failed to read the expected
     /// characters, or that an output operation failed to generate the
     /// desired characters.
-    static const iostate failbit =	iostate(__ios_flags::_S_failbit);
+    static const iostate failbit =	_S_failbit;
 
     /// Indicates all is well.
-    static const iostate goodbit =	iostate(0);
+    static const iostate goodbit =	_S_goodbit;
 
     // 27.4.2.1.4  Type ios_base::openmode
     /**
      *  @brief This is a bitmask type.
      *
-     *  @c "_Ios_Openmode" is implementation-defined, but it is valid to
+     *  @c @a _Ios_Openmode is implementation-defined, but it is valid to
      *  perform bitwise operations on these values and expect the Right
      *  Thing to happen.  Defined objects of type openmode are:
      *  - app
@@ -359,31 +363,30 @@ namespace std
     typedef _Ios_Openmode openmode;
 
     /// Seek to end before each write.
-    static const openmode app =		openmode(__ios_flags::_S_app);
+    static const openmode app =		_S_app;
 
     /// Open and seek to end immediately after opening.
-    static const openmode ate =		openmode(__ios_flags::_S_ate);
+    static const openmode ate =		_S_ate;
 
     /// Perform input and output in binary mode (as opposed to text mode).
     /// This is probably not what you think it is; see
-    /// http://gcc.gnu.org/onlinedocs/libstdc++/27_io/howto.html#3 and
-    /// http://gcc.gnu.org/onlinedocs/libstdc++/27_io/howto.html#7 for more.
-    static const openmode binary =	openmode(__ios_flags::_S_bin);
+    /// http://gcc.gnu.org/onlinedocs/libstdc++/manual/bk01pt11ch27s02.html
+    static const openmode binary =	_S_bin;
 
     /// Open for input.  Default for @c ifstream and fstream.
-    static const openmode in =		openmode(__ios_flags::_S_in);
+    static const openmode in =		_S_in;
 
     /// Open for output.  Default for @c ofstream and fstream.
-    static const openmode out =		openmode(__ios_flags::_S_out);
+    static const openmode out =		_S_out;
 
     /// Open for input.  Default for @c ofstream.
-    static const openmode trunc =	openmode(__ios_flags::_S_trunc);
+    static const openmode trunc =	_S_trunc;
 
     // 27.4.2.1.5  Type ios_base::seekdir
     /**
      *  @brief This is an enumerated type.
      *
-     *  @c "_Ios_Seekdir" is implementation-defined.  Defined values
+     *  @c @a _Ios_Seekdir is implementation-defined.  Defined values
      *  of type seekdir are:
      *  - beg
      *  - cur, equivalent to @c SEEK_CUR in the C standard library.
@@ -392,15 +395,14 @@ namespace std
     typedef _Ios_Seekdir seekdir;
 
     /// Request a seek relative to the beginning of the stream.
-    static const seekdir beg =		seekdir(0);
+    static const seekdir beg =		_S_beg;
 
     /// Request a seek relative to the current position within the sequence.
-    static const seekdir cur =		seekdir(SEEK_CUR);
+    static const seekdir cur =		_S_cur;
 
     /// Request a seek relative to the current end of the sequence.
-    static const seekdir end =		seekdir(SEEK_END);
+    static const seekdir end =		_S_end;
 
-#ifdef _GLIBCXX_DEPRECATED
     // Annex D.6
     typedef int io_state;
     typedef int open_mode;
@@ -408,7 +410,6 @@ namespace std
 
     typedef std::streampos streampos;
     typedef std::streamoff streamoff;
-#endif
 
     // Callbacks;
     /**
@@ -450,18 +451,11 @@ namespace std
     register_callback(event_callback __fn, int __index);
 
   protected:
-    //@{
-    /**
-     *  @if maint
-     *  ios_base data members (doc me)
-     *  @endif
-    */
     streamsize		_M_precision;
     streamsize		_M_width;
     fmtflags		_M_flags;
     iostate		_M_exception;
     iostate		_M_streambuf_state;
-    //@}
 
     // 27.4.2.6  Members for callbacks
     // 27.4.2.6  ios_base callbacks
@@ -478,12 +472,21 @@ namespace std
       : _M_next(__cb), _M_fn(__fn), _M_index(__index), _M_refcount(0) { }
 
       void
-      _M_add_reference() { __gnu_cxx::__atomic_add(&_M_refcount, 1); }
+      _M_add_reference() { __gnu_cxx::__atomic_add_dispatch(&_M_refcount, 1); }
 
       // 0 => OK to delete.
       int
       _M_remove_reference() 
-      { return __gnu_cxx::__exchange_and_add(&_M_refcount, -1); }
+      {
+        // Be race-detector-friendly.  For more info see bits/c++config.
+        _GLIBCXX_SYNCHRONIZATION_HAPPENS_BEFORE(&_M_refcount);
+        int __res = __gnu_cxx::__exchange_and_add_dispatch(&_M_refcount, -1);
+        if (__res == 0)
+          {
+            _GLIBCXX_SYNCHRONIZATION_HAPPENS_AFTER(&_M_refcount);
+          }
+        return __res;
+      }
     };
 
      _Callback_list*	_M_callbacks;
@@ -492,7 +495,7 @@ namespace std
     _M_call_callbacks(event __ev) throw();
 
     void
-    _M_dispose_callbacks(void);
+    _M_dispose_callbacks(void) throw();
 
     // 27.4.2.5  Members for iword/pword storage
     struct _Words
@@ -507,7 +510,7 @@ namespace std
 
     // Guaranteed storage.
     // The first 5 iword and pword slots are reserved for internal use.
-    static const int	_S_local_word_size = 8;
+    enum { _S_local_word_size = 8 };
     _Words		_M_local_word[_S_local_word_size];
 
     // Allocated storage.
@@ -521,7 +524,7 @@ namespace std
     locale		_M_ios_locale;
 
     void
-    _M_init();
+    _M_init() throw();
 
   public:
 
@@ -546,8 +549,9 @@ namespace std
      *  @brief  Access to format flags.
      *  @return  The format control flags for both input and output.
     */
-    inline fmtflags
-    flags() const { return _M_flags; }
+    fmtflags
+    flags() const
+    { return _M_flags; }
 
     /**
      *  @brief  Setting new format flags all at once.
@@ -556,7 +560,7 @@ namespace std
      *
      *  This function overwrites all the format flags with @a fmtfl.
     */
-    inline fmtflags
+    fmtflags
     flags(fmtflags __fmtfl)
     {
       fmtflags __old = _M_flags;
@@ -572,7 +576,7 @@ namespace std
      *  This function sets additional flags in format control.  Flags that
      *  were previously set remain set.
     */
-    inline fmtflags
+    fmtflags
     setf(fmtflags __fmtfl)
     {
       fmtflags __old = _M_flags;
@@ -589,7 +593,7 @@ namespace std
      *  This function clears @a mask in the format flags, then sets
      *  @a fmtfl @c & @a mask.  An example mask is @c ios_base::adjustfield.
     */
-    inline fmtflags
+    fmtflags
     setf(fmtflags __fmtfl, fmtflags __mask)
     {
       fmtflags __old = _M_flags;
@@ -604,27 +608,27 @@ namespace std
      *
      *  This function clears @a mask in the format flags.
     */
-    inline void
-    unsetf(fmtflags __mask) { _M_flags &= ~__mask; }
+    void
+    unsetf(fmtflags __mask)
+    { _M_flags &= ~__mask; }
 
     /**
      *  @brief  Flags access.
      *  @return  The precision to generate on certain output operations.
      *
-     *  @if maint
-     *  Be careful if you try to give a definition of "precision" here; see
+     *  Be careful if you try to give a definition of @a precision here; see
      *  DR 189.
-     *  @endif
     */
-    inline streamsize
-    precision() const { return _M_precision; }
+    streamsize
+    precision() const
+    { return _M_precision; }
 
     /**
      *  @brief  Changing flags.
      *  @param  prec  The new precision value.
      *  @return  The previous value of precision().
     */
-    inline streamsize
+    streamsize
     precision(streamsize __prec)
     {
       streamsize __old = _M_precision;
@@ -636,17 +640,18 @@ namespace std
      *  @brief  Flags access.
      *  @return  The minimum field width to generate on output operations.
      *
-     *  "Minimum field width" refers to the number of characters.
+     *  <em>Minimum field width</em> refers to the number of characters.
     */
-    inline streamsize
-    width() const { return _M_width; }
+    streamsize
+    width() const
+    { return _M_width; }
 
     /**
      *  @brief  Changing flags.
      *  @param  wide  The new width value.
      *  @return  The previous value of width().
     */
-    inline streamsize
+    streamsize
     width(streamsize __wide)
     {
       streamsize __old = _M_width;
@@ -663,7 +668,7 @@ namespace std
      *  The synchronization referred to is @e only that between the standard
      *  C facilities (e.g., stdout) and the standard C++ objects (e.g.,
      *  cout).  User-declared streams are unaffected.  See
-     *  http://gcc.gnu.org/onlinedocs/libstdc++/27_io/howto.html#8 for more.
+     *  http://gcc.gnu.org/onlinedocs/libstdc++/manual/bk01pt11ch28s02.html
     */
     static bool
     sync_with_stdio(bool __sync = true);
@@ -678,7 +683,7 @@ namespace std
      *  with imbue_event.
     */
     locale
-    imbue(const locale& __loc);
+    imbue(const locale& __loc) throw();
 
     /**
      *  @brief  Locale access
@@ -688,8 +693,9 @@ namespace std
      *  returns @c loc.  Otherwise, it returns a copy of @c std::locale(),
      *  the global C++ locale.
     */
-    inline locale
-    getloc() const { return _M_ios_locale; }
+    locale
+    getloc() const
+    { return _M_ios_locale; }
 
     /**
      *  @brief  Locale access
@@ -698,8 +704,9 @@ namespace std
      *  Like getloc above, but returns a reference instead of
      *  generating a copy.
     */
-    inline const locale&
-    _M_getloc() const { return _M_ios_locale; }
+    const locale&
+    _M_getloc() const
+    { return _M_ios_locale; }
 
     // [27.4.2.5] ios_base storage functions
     /**
@@ -732,7 +739,7 @@ namespace std
      *  obtain an index that is safe to use.  Also note that since the array
      *  can grow dynamically, it is not safe to hold onto the reference.
     */
-    inline long&
+    long&
     iword(int __ix)
     {
       _Words& __word = (__ix < _M_word_size)
@@ -753,7 +760,7 @@ namespace std
      *  obtain an index that is safe to use.  Also note that since the array
      *  can grow dynamically, it is not safe to hold onto the reference.
     */
-    inline void*&
+    void*&
     pword(int __ix)
     {
       _Words& __word = (__ix < _M_word_size)
@@ -773,7 +780,7 @@ namespace std
     virtual ~ios_base();
 
   protected:
-    ios_base();
+    ios_base() throw ();
 
   // _GLIBCXX_RESOLVE_LIB_DEFECTS
   // 50.  Copy constructor and assignment operator of ios_base
@@ -897,7 +904,7 @@ namespace std
      return __base;
   }
 
-  // [27.4.5.2] adjustfield anipulators
+  // [27.4.5.2] adjustfield manipulators
   /// Calls base.setf(ios_base::internal, ios_base::adjustfield).
   inline ios_base&
   internal(ios_base& __base)
@@ -922,7 +929,7 @@ namespace std
     return __base;
   }
 
-  // [27.4.5.3] basefield anipulators
+  // [27.4.5.3] basefield manipulators
   /// Calls base.setf(ios_base::dec, ios_base::basefield).
   inline ios_base&
   dec(ios_base& __base)
@@ -947,7 +954,7 @@ namespace std
     return __base;
   }
 
-  // [27.4.5.4] floatfield anipulators
+  // [27.4.5.4] floatfield manipulators
   /// Calls base.setf(ios_base::fixed, ios_base::floatfield).
   inline ios_base&
   fixed(ios_base& __base)
@@ -963,7 +970,8 @@ namespace std
     __base.setf(ios_base::scientific, ios_base::floatfield);
     return __base;
   }
-} // namespace std
+
+_GLIBCXX_END_NAMESPACE_VERSION
+} // namespace
 
 #endif /* _IOS_BASE_H */
-

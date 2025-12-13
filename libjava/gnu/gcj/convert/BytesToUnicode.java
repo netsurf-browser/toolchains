@@ -1,4 +1,4 @@
-/* Copyright (C) 1999, 2000, 2001  Free Software Foundation
+/* Copyright (C) 1999, 2000, 2001, 2005  Free Software Foundation
 
    This file is part of libgcj.
 
@@ -7,6 +7,8 @@ Libgcj License.  Please consult the file "LIBGCJ_LICENSE" for
 details.  */
 
 package gnu.gcj.convert;
+
+import java.nio.charset.Charset;
 
 public abstract class BytesToUnicode extends IOConverter
 {
@@ -75,13 +77,14 @@ public abstract class BytesToUnicode extends IOConverter
   {
     /* First hunt in our cache to see if we have a decoder that is
        already allocated. */
+    String canonicalEncoding = canonicalize(encoding);
     synchronized (BytesToUnicode.class)
       {
 	int i;
 	for (i = 0; i < decoderCache.length; ++i)
 	  {
 	    if (decoderCache[i] != null
-		&& encoding.equals(decoderCache[i].getName ()))
+		&& canonicalEncoding.equals(decoderCache[i].getName ()))
 	      {
 		BytesToUnicode rv = decoderCache[i];
 		decoderCache[i] = null;
@@ -91,7 +94,7 @@ public abstract class BytesToUnicode extends IOConverter
       }
 
     // It's not in the cache, so now we have to do real work.
-    String className = "gnu.gcj.convert.Input_" + canonicalize (encoding);
+    String className = "gnu.gcj.convert.Input_" + canonicalEncoding;
     Class decodingClass;
     try 
       { 
@@ -103,8 +106,17 @@ public abstract class BytesToUnicode extends IOConverter
 	try
 	  {
 	    // We pass the original name to iconv and let it handle
-	    // its own aliasing.
+	    // its own aliasing.  Note that we intentionally prefer
+	    // iconv over nio.
 	    return new Input_iconv (encoding);
+	  }
+	catch (Throwable _)
+	  {
+	    // Ignore, and try the next method.
+	  }
+	try
+	  {
+	    return new BytesToCharsetAdaptor(Charset.forName(encoding));
 	  }
 	catch (Throwable _)
 	  {

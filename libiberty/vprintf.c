@@ -1,8 +1,10 @@
 /*
 
 @deftypefn Supplemental int vprintf (const char *@var{format}, va_list @var{ap})
-@deftypefnx Supplemental int vfprintf (FILE *@var{stream}, const char *@var{format}, va_list @var{ap})
-@deftypefnx Supplemental int vsprintf (char *@var{str}, const char *@var{format}, va_list @var{ap})
+@deftypefnx Supplemental int vfprintf (FILE *@var{stream}, @
+  const char *@var{format}, va_list @var{ap})
+@deftypefnx Supplemental int vsprintf (char *@var{str}, @
+  const char *@var{format}, va_list @var{ap})
 
 These functions are the same as @code{printf}, @code{fprintf}, and
 @code{sprintf}, respectively, except that they are called with a
@@ -16,17 +18,11 @@ nonstandard but common function @code{_doprnt}.
 */
 
 #include <ansidecl.h>
-#ifdef ANSI_PROTOTYPES
 #include <stdarg.h>
-#else
-#include <varargs.h>
-#endif
 #include <stdio.h>
 #undef vprintf
 int
-vprintf (format, ap)
-     const char *format;
-     va_list ap;
+vprintf (const char *format, va_list ap)
 {
   return vfprintf (stdout, format, ap);
 }

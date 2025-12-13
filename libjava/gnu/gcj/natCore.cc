@@ -1,6 +1,6 @@
 // natCore -- C++ side of Core
 
-/* Copyright (C) 2001, 2002, 2003  Free Software Foundation
+/* Copyright (C) 2001, 2002, 2003, 2005, 2006  Free Software Foundation
 
    This file is part of libgcj.
 
@@ -96,11 +96,17 @@ _Jv_create_core (_Jv_core_chain *node, jstring name)
   gnu::gcj::Core *core = NULL;
   if (node)
     {
-      core = (gnu::gcj::Core *) _Jv_AllocObject(&gnu::gcj::Core::class$,
-						sizeof (gnu::gcj::Core));
+      core = new gnu::gcj::Core ();
       core->ptr = (gnu::gcj::RawData *) node->data;
       core->length = node->data_length;
     }
+  return core;
+}
+
+gnu::gcj::Core *
+gnu::gcj::Core::find (jstring name)
+{
+  gnu::gcj::Core *core = _Jv_create_core (root, name);
   return core;
 }
 
@@ -109,6 +115,6 @@ gnu::gcj::Core::create (jstring name)
 {
   gnu::gcj::Core *core = _Jv_create_core (root, name);
   if (core == NULL)
-    throw new java::io::IOException (JvNewStringLatin1 ("can't open core"));
+    throw new ::java::io::IOException (JvNewStringLatin1 ("can't open core"));
   return core;
 }

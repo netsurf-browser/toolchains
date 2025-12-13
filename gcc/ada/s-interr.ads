@@ -1,30 +1,28 @@
 ------------------------------------------------------------------------------
 --                                                                          --
---                GNU ADA RUN-TIME LIBRARY (GNARL) COMPONENTS               --
+--                 GNAT RUN-TIME LIBRARY (GNARL) COMPONENTS                 --
 --                                                                          --
 --                     S Y S T E M . I N T E R R U P T S                    --
 --                                                                          --
 --                                  S p e c                                 --
 --                                                                          --
---          Copyright (C) 1992-2003 Free Software Foundation, Inc.          --
+--          Copyright (C) 1992-2009, Free Software Foundation, Inc.         --
 --                                                                          --
 -- GNARL is free software; you can  redistribute it  and/or modify it under --
 -- terms of the  GNU General Public License as published  by the Free Soft- --
--- ware  Foundation;  either version 2,  or (at your option) any later ver- --
--- sion. GNARL is distributed in the hope that it will be useful, but WITH- --
+-- ware  Foundation;  either version 3,  or (at your option) any later ver- --
+-- sion.  GNAT is distributed in the hope that it will be useful, but WITH- --
 -- OUT ANY WARRANTY;  without even the  implied warranty of MERCHANTABILITY --
--- or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU General Public License --
--- for  more details.  You should have  received  a copy of the GNU General --
--- Public License  distributed with GNARL; see file COPYING.  If not, write --
--- to  the Free Software Foundation,  59 Temple Place - Suite 330,  Boston, --
--- MA 02111-1307, USA.                                                      --
+-- or FITNESS FOR A PARTICULAR PURPOSE.                                     --
 --                                                                          --
--- As a special exception,  if other files  instantiate  generics from this --
--- unit, or you link  this unit with other files  to produce an executable, --
--- this  unit  does not  by itself cause  the resulting  executable  to  be --
--- covered  by the  GNU  General  Public  License.  This exception does not --
--- however invalidate  any other reasons why  the executable file  might be --
--- covered by the  GNU Public License.                                      --
+-- As a special exception under Section 7 of GPL version 3, you are granted --
+-- additional permissions described in the GCC Runtime Library Exception,   --
+-- version 3.1, as published by the Free Software Foundation.               --
+--                                                                          --
+-- You should have received a copy of the GNU General Public License and    --
+-- a copy of the GCC Runtime Library Exception along with this program;     --
+-- see the files COPYING3 and COPYING.RUNTIME respectively.  If not, see    --
+-- <http://www.gnu.org/licenses/>.                                          --
 --                                                                          --
 -- GNARL was developed by the GNARL team at Florida State University.       --
 -- Extensive contributions were provided by Ada Core Technologies, Inc.     --
@@ -35,24 +33,19 @@
 --  Any changes to this interface may require corresponding compiler changes.
 
 --  This package encapsulates the implementation of interrupt or signal
---  handlers.  It is logically an extension of the body of Ada.Interrupts.
---  It is made a child of System to allow visibility of various
---  runtime system internal data and operations.
+--  handlers. It is logically an extension of the body of Ada.Interrupts. It
+--  is made a child of System to allow visibility of various runtime system
+--  internal data and operations.
 
---  See System.Interrupt_Management for core interrupt/signal interfaces.
+--  See System.Interrupt_Management for core interrupt/signal interfaces
 
---  These two packages are separated in order to allow
---  System.Interrupt_Management to be used without requiring the whole
---  tasking implementation to be linked and elaborated.
+--  These two packages are separated to allow System.Interrupt_Management to be
+--  used without requiring the whole tasking implementation to be linked and
+--  elaborated.
 
 with System.Tasking;
---  used for Task_ID
-
 with System.Tasking.Protected_Objects.Entries;
---  used for Protection_Entries
-
 with System.OS_Interface;
---  used for Max_Interrupt
 
 package System.Interrupts is
 
@@ -73,11 +66,9 @@ package System.Interrupts is
 
    type Interrupt_ID is range 0 .. System.OS_Interface.Max_Interrupt;
 
-   --  The following renaming is introduced so that the type is accessible
-   --  through rtsfind, otherwise the name clashes with its homonym in
-   --  ada.interrupts.
-
    subtype System_Interrupt_Id is Interrupt_ID;
+   --  This synonym is introduced so that the type is accessible through
+   --  rtsfind, otherwise the name clashes with its homonym in Ada.Interrupts.
 
    type Parameterless_Handler is access protected procedure;
 
@@ -95,13 +86,12 @@ package System.Interrupts is
    function Is_Handler_Attached (Interrupt : Interrupt_ID) return Boolean;
 
    function Current_Handler
-     (Interrupt : Interrupt_ID)
-      return Parameterless_Handler;
+     (Interrupt : Interrupt_ID) return Parameterless_Handler;
 
-   --  Calling the following procedures with New_Handler = null
-   --  and Static = true means that we want to modify the current handler
-   --  regardless of the previous handler's binding status.
-   --  (i.e. we do not care whether it is a dynamic or static handler)
+   --  Calling the following procedures with New_Handler = null and Static =
+   --  true means that we want to modify the current handler regardless of the
+   --  previous handler's binding status. (i.e. we do not care whether it is a
+   --  dynamic or static handler)
 
    procedure Attach_Handler
      (New_Handler : Parameterless_Handler;
@@ -119,28 +109,27 @@ package System.Interrupts is
       Static    : Boolean := False);
 
    function Reference
-     (Interrupt : Interrupt_ID)
-     return       System.Address;
+     (Interrupt : Interrupt_ID) return System.Address;
 
-   ---------------------------------
-   --  Interrupt entries services --
-   ---------------------------------
+   --------------------------------
+   -- Interrupt Entries Services --
+   --------------------------------
 
    --  Routines needed for Interrupt Entries
-   --  Attempt to bind an Entry to an Interrupt to which a Handler is
-   --  already attached will raise a Program_Error.
 
    procedure Bind_Interrupt_To_Entry
-     (T       : System.Tasking.Task_ID;
+     (T       : System.Tasking.Task_Id;
       E       : System.Tasking.Task_Entry_Index;
       Int_Ref : System.Address);
+   --  Bind the given interrupt to the given entry. If the interrupt is
+   --  already bound to another entry, Program_Error will be raised.
 
-   procedure Detach_Interrupt_Entries (T : System.Tasking.Task_ID);
-   --  This procedure detaches all the Interrupt Entries bound to a task.
+   procedure Detach_Interrupt_Entries (T : System.Tasking.Task_Id);
+   --  This procedure detaches all the Interrupt Entries bound to a task
 
-   -------------------------------
-   --  POSIX.5 signals services --
-   -------------------------------
+   ------------------------------
+   -- POSIX.5 Signals Services --
+   ------------------------------
 
    --  Routines needed for POSIX dot5 POSIX_Signals
 
@@ -150,17 +139,16 @@ package System.Interrupts is
    procedure Unblock_Interrupt (Interrupt : Interrupt_ID);
 
    function Unblocked_By
-     (Interrupt   : Interrupt_ID)
-      return System.Tasking.Task_ID;
+     (Interrupt : Interrupt_ID) return System.Tasking.Task_Id;
    --  It returns the ID of the last Task which Unblocked this Interrupt.
-   --  It returns Null_Task if no tasks have ever requested the
-   --  Unblocking operation or the Interrupt is currently Blocked.
+   --  It returns Null_Task if no tasks have ever requested the Unblocking
+   --  operation or the Interrupt is currently Blocked.
 
    function Is_Blocked (Interrupt : Interrupt_ID) return Boolean;
    --  Comment needed ???
 
    procedure Ignore_Interrupt (Interrupt : Interrupt_ID);
-   --  Set the sigacion for the interrupt to SIG_IGN.
+   --  Set the sigaction for the interrupt to SIG_IGN
 
    procedure Unignore_Interrupt (Interrupt : Interrupt_ID);
    --  Comment needed ???
@@ -172,12 +160,12 @@ package System.Interrupts is
    --  other low-level interface that changes the signal action or signal mask
    --  needs a careful thought.
 
-   --  One may acheive the effect of system calls first making RTS blocked
-   --  (by calling Block_Interrupt) for the signal under consideration.
-   --  This will make all the tasks in RTS blocked for the Interrupt.
+   --  One may achieve the effect of system calls first making RTS blocked (by
+   --  calling Block_Interrupt) for the signal under consideration. This will
+   --  make all the tasks in RTS blocked for the Interrupt.
 
    ----------------------
-   -- Protection types --
+   -- Protection Types --
    ----------------------
 
    --  Routines and types needed to implement Interrupt_Handler and
@@ -185,38 +173,36 @@ package System.Interrupts is
 
    --  There are two kinds of protected objects that deal with interrupts:
 
-   --  (1) Only Interrupt_Handler pragmas are used. We need to be able to
-   --  tell if an Interrupt_Handler applies to a given procedure, so
+   --  (1) Only Interrupt_Handler pragmas are used. We need to be able to tell
+   --  if an Interrupt_Handler applies to a given procedure, so
    --  Register_Interrupt_Handler has to be called for all the potential
-   --  handlers, it should be done by calling Register_Interrupt_Handler
-   --  with the handler code address. On finalization, which can happen only
-   --  has part of library level finalization since PO with
-   --  Interrupt_Handler pragmas can only be declared at library level,
-   --  nothing special needs to be done since the default handlers have been
-   --  restored as part of task completion which is done just before global
-   --  finalization.  Dynamic_Interrupt_Protection should be used in this
-   --  case.
+   --  handlers, it should be done by calling Register_Interrupt_Handler with
+   --  the handler code address. On finalization, which can happen only has
+   --  part of library level finalization since PO with Interrupt_Handler
+   --  pragmas can only be declared at library level, nothing special needs to
+   --  be done since the default handlers have been restored as part of task
+   --  completion which is done just before global finalization.
+   --  Dynamic_Interrupt_Protection should be used in this case.
 
    --  (2) Attach_Handler pragmas are used, and possibly Interrupt_Handler
-   --  pragma. We need to attach the handlers to the given interrupts when
-   --  the objet is elaborated. This should be done by constructing an array
-   --  of pairs (interrupt, handler) from the pragmas and calling
-   --  Install_Handlers with it (types to be used are New_Handler_Item and
-   --  New_Handler_Array). On finalization, we need to restore the handlers
-   --  that were installed before the elaboration of the PO, so we need to
-   --  store these previous handlers. This is also done by Install_Handlers,
-   --  the room for these informations is provided by adding a discriminant
-   --  which is the number of Attach_Handler pragmas and an array of this
-   --  size in the protection type, Static_Interrupt_Protection.
+   --  pragma. We need to attach the handlers to the given interrupts when the
+   --  object is elaborated. This should be done by constructing an array of
+   --  pairs (interrupt, handler) from the pragmas and calling Install_Handlers
+   --  with it (types to be used are New_Handler_Item and New_Handler_Array).
+   --  On finalization, we need to restore the handlers that were installed
+   --  before the elaboration of the PO, so we need to store these previous
+   --  handlers. This is also done by Install_Handlers, the room for these
+   --  informations is provided by adding a discriminant which is the number
+   --  of Attach_Handler pragmas and an array of this size in the protection
+   --  type, Static_Interrupt_Protection.
 
    procedure Register_Interrupt_Handler
      (Handler_Addr : System.Address);
-   --  This routine should be called by the compiler to allow the
-   --  handler be used as an Interrupt Handler. That means call this
-   --  procedure for each pragma Interrup_Handler providing the
-   --  address of the handler (not including the pointer to the
-   --  actual PO, this way this routine is called only once for
-   --  each type definition of PO).
+   --  This routine should be called by the compiler to allow the handler be
+   --  used as an Interrupt Handler. That means call this procedure for each
+   --  pragma Interrupt_Handler providing the address of the handler (not
+   --  including the pointer to the actual PO, this way this routine is called
+   --  only once for each type definition of PO).
 
    type Static_Handler_Index is range 0 .. Integer'Last;
    subtype Positive_Static_Handler_Index is
@@ -228,7 +214,7 @@ package System.Interrupts is
       Handler   : Parameterless_Handler;
       Static    : Boolean;
    end record;
-   --  Contains all the information needed to restore a previous handler.
+   --  Contains all the information needed to restore a previous handler
 
    type Previous_Handler_Array is array
      (Positive_Static_Handler_Index range <>) of Previous_Handler_Item;
@@ -237,7 +223,7 @@ package System.Interrupts is
       Interrupt : Interrupt_ID;
       Handler   : Parameterless_Handler;
    end record;
-   --  Contains all the information from an Attach_Handler pragma.
+   --  Contains all the information from an Attach_Handler pragma
 
    type New_Handler_Array is
      array (Positive_Static_Handler_Index range <>) of New_Handler_Item;
@@ -253,7 +239,7 @@ package System.Interrupts is
 
    function Has_Interrupt_Or_Attach_Handler
      (Object : access Dynamic_Interrupt_Protection) return Boolean;
-   --  Returns True.
+   --  Returns True
 
    --  Case (2)
 
@@ -267,9 +253,8 @@ package System.Interrupts is
      end record;
 
    function Has_Interrupt_Or_Attach_Handler
-     (Object : access Static_Interrupt_Protection)
-      return   Boolean;
-   --  Returns True.
+     (Object : access Static_Interrupt_Protection) return Boolean;
+   --  Returns True
 
    procedure Finalize (Object : in out Static_Interrupt_Protection);
    --  Restore previous handlers as required by C.3.1(12) then call
@@ -277,8 +262,15 @@ package System.Interrupts is
 
    procedure Install_Handlers
      (Object       : access Static_Interrupt_Protection;
-      New_Handlers : in New_Handler_Array);
+      New_Handlers : New_Handler_Array);
    --  Store the old handlers in Object.Previous_Handlers and install
    --  the new static handlers.
+
+   procedure Install_Restricted_Handlers (Handlers : New_Handler_Array);
+   --  Install the static Handlers for the given interrupts and do not store
+   --  previously installed handlers. This procedure is used when the Ravenscar
+   --  restrictions are in place since in that case there are only
+   --  library-level protected handlers that will be installed at
+   --  initialization and never be replaced.
 
 end System.Interrupts;

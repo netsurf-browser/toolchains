@@ -12,13 +12,14 @@
    The above copyright notice and this permission notice shall be included
    in all copies or substantial portions of the Software.
 
-   THE SOFTWARE IS PROVIDED ``AS IS'', WITHOUT WARRANTY OF ANY KIND, EXPRESS
-   OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF
-   MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.
-   IN NO EVENT SHALL CYGNUS SOLUTIONS BE LIABLE FOR ANY CLAIM, DAMAGES OR
-   OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE,
-   ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR
-   OTHER DEALINGS IN THE SOFTWARE.
+   THE SOFTWARE IS PROVIDED ``AS IS'', WITHOUT WARRANTY OF ANY KIND,
+   EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF
+   MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND
+   NONINFRINGEMENT.  IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT
+   HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY,
+   WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+   OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+   DEALINGS IN THE SOFTWARE.
    ----------------------------------------------------------------------- */
 
 #include <ffi.h>
@@ -31,7 +32,7 @@
 void ffi_stop_here(void)
 {
   /* This function is only useful for debugging purposes.
-     Place a breakpoint on ffi_stop_here to be notified of 
+     Place a breakpoint on ffi_stop_here to be notified of
      significant events. */
 }
 
@@ -50,10 +51,9 @@ void ffi_type_test(ffi_type *a, char *file, int line)
 {
   FFI_ASSERT_AT(a != NULL, file, line);
 
-  /*@-usedef@*/
   FFI_ASSERT_AT(a->type <= FFI_TYPE_LAST, file, line);
   FFI_ASSERT_AT(a->type == FFI_TYPE_VOID || a->size > 0, file, line);
   FFI_ASSERT_AT(a->type == FFI_TYPE_VOID || a->alignment > 0, file, line);
   FFI_ASSERT_AT(a->type != FFI_TYPE_STRUCT || a->elements != NULL, file, line);
-  /*@=usedef@*/
+
 }

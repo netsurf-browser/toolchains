@@ -6,25 +6,23 @@
 --                                                                          --
 --                                 B o d y                                  --
 --                                                                          --
---          Copyright (C) 2000-2002 Free Software Foundation, Inc.          --
+--          Copyright (C) 2000-2010, Free Software Foundation, Inc.         --
 --                                                                          --
 -- GNAT is free software;  you can  redistribute it  and/or modify it under --
 -- terms of the  GNU General Public License as published  by the Free Soft- --
--- ware  Foundation;  either version 2,  or (at your option) any later ver- --
+-- ware  Foundation;  either version 3,  or (at your option) any later ver- --
 -- sion.  GNAT is distributed in the hope that it will be useful, but WITH- --
 -- OUT ANY WARRANTY;  without even the  implied warranty of MERCHANTABILITY --
--- or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU General Public License --
--- for  more details.  You should have  received  a copy of the GNU General --
--- Public License  distributed with GNAT;  see file COPYING.  If not, write --
--- to  the Free Software Foundation,  59 Temple Place - Suite 330,  Boston, --
--- MA 02111-1307, USA.                                                      --
+-- or FITNESS FOR A PARTICULAR PURPOSE.                                     --
 --                                                                          --
--- As a special exception,  if other files  instantiate  generics from this --
--- unit, or you link  this unit with other files  to produce an executable, --
--- this  unit  does not  by itself cause  the resulting  executable  to  be --
--- covered  by the  GNU  General  Public  License.  This exception does not --
--- however invalidate  any other reasons why  the executable file  might be --
--- covered by the  GNU Public License.                                      --
+-- As a special exception under Section 7 of GPL version 3, you are granted --
+-- additional permissions described in the GCC Runtime Library Exception,   --
+-- version 3.1, as published by the Free Software Foundation.               --
+--                                                                          --
+-- You should have received a copy of the GNU General Public License and    --
+-- a copy of the GCC Runtime Library Exception along with this program;     --
+-- see the files COPYING3 and COPYING.RUNTIME respectively.  If not, see    --
+-- <http://www.gnu.org/licenses/>.                                          --
 --                                                                          --
 -- GNAT was originally developed  by the GNAT team at  New York University. --
 -- Extensive contributions were provided by Ada Core Technologies Inc.      --
@@ -39,11 +37,10 @@ package body SFN_Scan is
    --  Allow easy access to control character definitions
 
    EOF : constant Character := ASCII.SUB;
-   --  The character SUB (16#1A#) is used in DOS and other systems derived
-   --  from DOS (OS/2, NT etc) to signal the end of a text file. If this
-   --  character appears as the last character of a file scanned by a call
-   --  to Scan_SFN_Pragmas, then it is ignored, otherwise it is treated as
-   --  an illegal character.
+   --  The character SUB (16#1A#) is used in DOS-derived systems, such as
+   --  Windows to signal the end of a text file. If this character appears as
+   --  the last character of a file scanned by a call to Scan_SFN_Pragmas, then
+   --  it is ignored, otherwise it is treated as an illegal character.
 
    type String_Ptr is access String;
 
@@ -62,6 +59,11 @@ package body SFN_Scan is
    ----------------------
    -- Local Procedures --
    ----------------------
+
+   function Acquire_Integer return Natural;
+   --  This function skips white space, and then scans and returns
+   --  an unsigned integer. Raises Error if no integer is present
+   --  or if the integer is greater than 999.
 
    function Acquire_String (B : Natural; E : Natural) return String;
    --  This function takes a string scanned out by Scan_String, strips
@@ -127,6 +129,33 @@ package body SFN_Scan is
    procedure Skip_WS;
    --  Skips P past any white space characters (end of line
    --  characters, spaces, comments, horizontal tab characters).
+
+   ---------------------
+   -- Acquire_Integer --
+   ---------------------
+
+   function Acquire_Integer return Natural is
+      N : Natural := 0;
+
+   begin
+      Skip_WS;
+
+      if S (P) not in '0' .. '9' then
+         Error ("missing index parameter");
+      end if;
+
+      while S (P) in '0' .. '9' loop
+         N := N * 10 + Character'Pos (S (P)) - Character'Pos ('0');
+
+         if N > 999 then
+            Error ("index value greater than 999");
+         end if;
+
+         P := P + 1;
+      end loop;
+
+      return N;
+   end Acquire_Integer;
 
    --------------------
    -- Acquire_String --
@@ -310,6 +339,10 @@ package body SFN_Scan is
       procedure Add_Nat (N : Natural);
       --  Add chars of integer to error msg buffer
 
+      -------------
+      -- Add_Nat --
+      -------------
+
       procedure Add_Nat (N : Natural) is
       begin
          if N > 9 then
@@ -415,7 +448,10 @@ package body SFN_Scan is
 
          --  Source_File_Name pragma case
 
-         if Check_Token ("source_file_name") then
+         if Check_Token ("source_file_name")
+              or else
+             Check_Token ("source_file_name_project")
+         then
             Require_Token ("(");
 
             Typ := Check_File_Type;
@@ -443,11 +479,24 @@ package body SFN_Scan is
 
                   declare
                      F : constant String := Acquire_String (B, E);
+                     X : Natural;
 
                   begin
+                     --  Scan Index parameter if present
+
+                     if Check_Token (",") then
+                        if Check_Token ("index") then
+                           Require_Token ("=>");
+                        end if;
+
+                        X := Acquire_Integer;
+                     else
+                        X := 0;
+                     end if;
+
                      Require_Token (")");
                      Require_Token (";");
-                     SFN_Ptr.all (Typ, U, F);
+                     SFN_Ptr.all (Typ, U, F, X);
                   end;
                end;
 
@@ -549,7 +598,7 @@ package body SFN_Scan is
                end if;
             end loop Skip_Loop;
 
-            --  We successfuly skipped to semicolon, so skip past it
+            --  We successfully skipped to semicolon, so skip past it
 
             P := P + 1;
          end if;
@@ -587,7 +636,8 @@ package body SFN_Scan is
 
       loop
          if At_EOF or else S (P) = LF or else S (P) = CR then
-            Error ("missing string quote");
+            Error -- CODEFIX
+              ("missing string quote");
 
          elsif S (P) = HT then
             Error ("tab character in string");

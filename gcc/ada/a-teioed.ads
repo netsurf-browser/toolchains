@@ -6,7 +6,7 @@
 --                                                                          --
 --                                 S p e c                                  --
 --                                                                          --
---          Copyright (C) 1992-1997 Free Software Foundation, Inc.          --
+--          Copyright (C) 1992-2009, Free Software Foundation, Inc.         --
 --                                                                          --
 -- This specification is derived from the Ada Reference Manual for use with --
 -- GNAT. The copyright notice above, and the license provisions that follow --
@@ -14,21 +14,19 @@
 --                                                                          --
 -- GNAT is free software;  you can  redistribute it  and/or modify it under --
 -- terms of the  GNU General Public License as published  by the Free Soft- --
--- ware  Foundation;  either version 2,  or (at your option) any later ver- --
+-- ware  Foundation;  either version 3,  or (at your option) any later ver- --
 -- sion.  GNAT is distributed in the hope that it will be useful, but WITH- --
 -- OUT ANY WARRANTY;  without even the  implied warranty of MERCHANTABILITY --
--- or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU General Public License --
--- for  more details.  You should have  received  a copy of the GNU General --
--- Public License  distributed with GNAT;  see file COPYING.  If not, write --
--- to  the Free Software Foundation,  59 Temple Place - Suite 330,  Boston, --
--- MA 02111-1307, USA.                                                      --
+-- or FITNESS FOR A PARTICULAR PURPOSE.                                     --
 --                                                                          --
--- As a special exception,  if other files  instantiate  generics from this --
--- unit, or you link  this unit with other files  to produce an executable, --
--- this  unit  does not  by itself cause  the resulting  executable  to  be --
--- covered  by the  GNU  General  Public  License.  This exception does not --
--- however invalidate  any other reasons why  the executable file  might be --
--- covered by the  GNU Public License.                                      --
+-- As a special exception under Section 7 of GPL version 3, you are granted --
+-- additional permissions described in the GCC Runtime Library Exception,   --
+-- version 3.1, as published by the Free Software Foundation.               --
+--                                                                          --
+-- You should have received a copy of the GNU General Public License and    --
+-- a copy of the GCC Runtime Library Exception along with this program;     --
+-- see the files COPYING3 and COPYING.RUNTIME respectively.  If not, see    --
+-- <http://www.gnu.org/licenses/>.                                          --
 --                                                                          --
 -- GNAT was originally developed  by the GNAT team at  New York University. --
 -- Extensive contributions were provided by Ada Core Technologies Inc.      --
@@ -40,81 +38,76 @@ package Ada.Text_IO.Editing is
    type Picture is private;
 
    function Valid
-     (Pic_String      : in String;
-      Blank_When_Zero : in Boolean := False)
-      return            Boolean;
+     (Pic_String      : String;
+      Blank_When_Zero : Boolean := False) return Boolean;
 
    function To_Picture
-     (Pic_String      : in String;
-      Blank_When_Zero : in Boolean := False)
-      return            Picture;
+     (Pic_String      : String;
+      Blank_When_Zero : Boolean := False) return Picture;
 
-   function Pic_String      (Pic : in Picture) return String;
-   function Blank_When_Zero (Pic : in Picture) return Boolean;
+   function Pic_String      (Pic : Picture) return String;
+   function Blank_When_Zero (Pic : Picture) return Boolean;
 
    Max_Picture_Length : constant := 64;
 
    Picture_Error : exception;
 
    Default_Currency   : constant String    := "$";
-   Default_Fill       : constant Character := ' ';
+   Default_Fill       : constant Character := '*';
    Default_Separator  : constant Character := ',';
    Default_Radix_Mark : constant Character := '.';
 
    generic
       type Num is delta <> digits <>;
-      Default_Currency   : in String := Editing.Default_Currency;
-      Default_Fill       : in Character := Editing.Default_Fill;
-      Default_Separator  : in Character := Editing.Default_Separator;
-      Default_Radix_Mark : in Character := Editing.Default_Radix_Mark;
+      Default_Currency   : String := Editing.Default_Currency;
+      Default_Fill       : Character := Editing.Default_Fill;
+      Default_Separator  : Character := Editing.Default_Separator;
+      Default_Radix_Mark : Character := Editing.Default_Radix_Mark;
 
    package Decimal_Output is
 
       function Length
-        (Pic      : in Picture;
-         Currency : in String := Default_Currency)
-         return     Natural;
+        (Pic      : Picture;
+         Currency : String := Default_Currency) return Natural;
 
       function Valid
         (Item     : Num;
-         Pic      : in Picture;
-         Currency : in String := Default_Currency)
-         return     Boolean;
+         Pic      : Picture;
+         Currency : String := Default_Currency) return Boolean;
 
       function Image
         (Item       : Num;
-         Pic        : in Picture;
-         Currency   : in String    := Default_Currency;
-         Fill       : in Character := Default_Fill;
-         Separator  : in Character := Default_Separator;
-         Radix_Mark : in Character := Default_Radix_Mark)
-         return       String;
+         Pic        : Picture;
+         Currency   : String    := Default_Currency;
+         Fill       : Character := Default_Fill;
+         Separator  : Character := Default_Separator;
+         Radix_Mark : Character := Default_Radix_Mark) return String;
 
       procedure Put
-        (File       : in Ada.Text_IO.File_Type;
+        (File       : Ada.Text_IO.File_Type;
          Item       : Num;
-         Pic        : in Picture;
-         Currency   : in String    := Default_Currency;
-         Fill       : in Character := Default_Fill;
-         Separator  : in Character := Default_Separator;
-         Radix_Mark : in Character := Default_Radix_Mark);
+         Pic        : Picture;
+         Currency   : String    := Default_Currency;
+         Fill       : Character := Default_Fill;
+         Separator  : Character := Default_Separator;
+         Radix_Mark : Character := Default_Radix_Mark);
 
       procedure Put
         (Item       : Num;
-         Pic        : in Picture;
-         Currency   : in String    := Default_Currency;
-         Fill       : in Character := Default_Fill;
-         Separator  : in Character := Default_Separator;
-         Radix_Mark : in Character := Default_Radix_Mark);
+         Pic        : Picture;
+         Currency   : String    := Default_Currency;
+         Fill       : Character := Default_Fill;
+         Separator  : Character := Default_Separator;
+         Radix_Mark : Character := Default_Radix_Mark);
 
       procedure Put
         (To         : out String;
          Item       : Num;
-         Pic        : in Picture;
-         Currency   : in String    := Default_Currency;
-         Fill       : in Character := Default_Fill;
-         Separator  : in Character := Default_Separator;
-         Radix_Mark : in Character := Default_Radix_Mark);
+         Pic        : Picture;
+         Currency   : String    := Default_Currency;
+         Fill       : Character := Default_Fill;
+         Separator  : Character := Default_Separator;
+         Radix_Mark : Character := Default_Radix_Mark);
 
    end Decimal_Output;
 
@@ -193,10 +186,9 @@ private
       Currency_Symbol     : String;
       Fill_Character      : Character;
       Separator_Character : Character;
-      Radix_Point         : Character)
-      return                String;
+      Radix_Point         : Character) return String;
    --  Formats number according to Pic
 
-   function Expand (Picture : in String) return String;
+   function Expand (Picture : String) return String;
 
 end Ada.Text_IO.Editing;

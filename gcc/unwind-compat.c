@@ -1,34 +1,31 @@
 /* Backward compatibility unwind routines.
-   Copyright (C) 2004
+   Copyright (C) 2004, 2005, 2006, 2009
    Free Software Foundation, Inc.
 
    This file is part of GCC.
 
    GCC is free software; you can redistribute it and/or modify it
    under the terms of the GNU General Public License as published by
-   the Free Software Foundation; either version 2, or (at your option)
+   the Free Software Foundation; either version 3, or (at your option)
    any later version.
-
-   In addition to the permissions in the GNU General Public License, the
-   Free Software Foundation gives you unlimited permission to link the
-   compiled version of this file into combinations with other programs,
-   and to distribute those combinations without any restriction coming
-   from the use of this file.  (The General Public License restrictions
-   do apply in other respects; for example, they cover modification of
-   the file, and distribution when not linked into a combined
-   executable.)
 
    GCC is distributed in the hope that it will be useful, but WITHOUT
    ANY WARRANTY; without even the implied warranty of MERCHANTABILITY
    or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU General Public
    License for more details.
 
-   You should have received a copy of the GNU General Public License
-   along with GCC; see the file COPYING.  If not, write to the Free
-   Software Foundation, 59 Temple Place - Suite 330, Boston, MA
-   02111-1307, USA.  */
+   Under Section 7 of GPL version 3, you are granted additional
+   permissions described in the GCC Runtime Library Exception, version
+   3.1, as published by the Free Software Foundation.
+
+   You should have received a copy of the GNU General Public License and
+   a copy of the GCC Runtime Library Exception along with this program;
+   see the files COPYING3 and COPYING.RUNTIME respectively.  If not, see
+   <http://www.gnu.org/licenses/>.  */
 
 #if defined (USE_GAS_SYMVER) && defined (USE_LIBUNWIND_EXCEPTIONS)
+#include "tconfig.h"
+#include "tsystem.h"
 #include "unwind.h"
 #include "unwind-dw2-fde.h"
 #include "unwind-compat.h"
@@ -36,7 +33,7 @@
 extern _Unwind_Reason_Code __libunwind_Unwind_Backtrace
   (_Unwind_Trace_Fn, void *);
 
-_Unwind_Reason_Code
+_Unwind_Reason_Code LIBGCC2_UNWIND_ATTRIBUTE
 _Unwind_Backtrace (_Unwind_Trace_Fn trace, void *trace_argument)
 {
   return __libunwind_Unwind_Backtrace (trace, trace_argument);
@@ -65,7 +62,7 @@ symver (_Unwind_FindEnclosingFunction, GCC_3.3);
 extern _Unwind_Reason_Code __libunwind_Unwind_ForcedUnwind
   (struct _Unwind_Exception *, _Unwind_Stop_Fn, void *);
 
-_Unwind_Reason_Code
+_Unwind_Reason_Code LIBGCC2_UNWIND_ATTRIBUTE
 _Unwind_ForcedUnwind (struct _Unwind_Exception *exc,
 		      _Unwind_Stop_Fn stop, void * stop_argument)
 {
@@ -134,6 +131,13 @@ _Unwind_GetIP (struct _Unwind_Context *context)
 }
 symver (_Unwind_GetIP, GCC_3.0);
 
+_Unwind_Ptr
+_Unwind_GetIPInfo (struct _Unwind_Context *context, int *ip_before_insn)
+{
+  *ip_before_insn = 0;
+  return __libunwind_Unwind_GetIP (context);
+}
+
 extern void *__libunwind_Unwind_GetLanguageSpecificData
   (struct _Unwind_Context *);
 
@@ -157,7 +161,7 @@ symver (_Unwind_GetRegionStart, GCC_3.0);
 extern _Unwind_Reason_Code __libunwind_Unwind_RaiseException
   (struct _Unwind_Exception *);
 
-_Unwind_Reason_Code
+_Unwind_Reason_Code LIBGCC2_UNWIND_ATTRIBUTE
 _Unwind_RaiseException(struct _Unwind_Exception *exc)
 {
   return __libunwind_Unwind_RaiseException (exc);
@@ -166,7 +170,7 @@ symver (_Unwind_RaiseException, GCC_3.0);
 
 extern void __libunwind_Unwind_Resume (struct _Unwind_Exception *);
 
-void
+void LIBGCC2_UNWIND_ATTRIBUTE
 _Unwind_Resume (struct _Unwind_Exception *exc)
 {
   __libunwind_Unwind_Resume (exc);
@@ -176,7 +180,7 @@ symver (_Unwind_Resume, GCC_3.0);
 extern _Unwind_Reason_Code __libunwind_Unwind_Resume_or_Rethrow
    (struct _Unwind_Exception *);
 
-_Unwind_Reason_Code
+_Unwind_Reason_Code LIBGCC2_UNWIND_ATTRIBUTE
 _Unwind_Resume_or_Rethrow (struct _Unwind_Exception *exc)
 {
   return __libunwind_Unwind_Resume_or_Rethrow (exc);
@@ -188,7 +192,7 @@ extern void __libunwind_Unwind_SetGR
 
 void
 _Unwind_SetGR (struct _Unwind_Context *context, int index,
-	       _Unwind_Word val) 
+	       _Unwind_Word val)
 {
   __libunwind_Unwind_SetGR (context, index, val);
 }

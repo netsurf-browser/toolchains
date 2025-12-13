@@ -7,7 +7,7 @@
    PR:		none.
    Originator:	<andreast@gcc.gnu.org> 20030914	 */
 
-/* { dg-do run { xfail mips*-*-* arm*-*-* strongarm*-*-* xscale*-*-* } } */
+/* { dg-do run } */
 #include "ffitest.h"
 
 typedef struct cls_struct_9byte {
@@ -29,8 +29,8 @@ cls_struct_9byte cls_struct_9byte_fn(struct cls_struct_9byte b1,
   return result;
 }
 
-static void cls_struct_9byte_gn(ffi_cif* cif, void* resp, void** args,
-				void* userdata)
+static void cls_struct_9byte_gn(ffi_cif* cif __UNUSED__, void* resp,
+				void** args, void* userdata __UNUSED__)
 {
   struct cls_struct_9byte b1, b2;
 
@@ -43,20 +43,12 @@ static void cls_struct_9byte_gn(ffi_cif* cif, void* resp, void** args,
 int main (void)
 {
   ffi_cif cif;
-#ifndef USING_MMAP
-  static ffi_closure cl;
-#endif
-  ffi_closure *pcl;
+  void *code;
+  ffi_closure *pcl = ffi_closure_alloc(sizeof(ffi_closure), &code);
   void* args_dbl[3];
   ffi_type* cls_struct_fields[3];
   ffi_type cls_struct_type;
   ffi_type* dbl_arg_types[3];
-
-#ifdef USING_MMAP
-  pcl = allocate_mmap (sizeof(ffi_closure));
-#else
-  pcl = &cl;
-#endif
 
   cls_struct_type.size = 0;
   cls_struct_type.alignment = 0;
@@ -68,7 +60,7 @@ int main (void)
   struct cls_struct_9byte res_dbl;
 
   cls_struct_fields[0] = &ffi_type_double;
-  cls_struct_fields[1] = &ffi_type_uint32;
+  cls_struct_fields[1] = &ffi_type_sint;
   cls_struct_fields[2] = NULL;
 
   dbl_arg_types[0] = &cls_struct_type;
@@ -88,9 +80,9 @@ int main (void)
   /* { dg-output "\nres: 8 17" } */
 
 
-  CHECK(ffi_prep_closure(pcl, &cif, cls_struct_9byte_gn, NULL) == FFI_OK);
+  CHECK(ffi_prep_closure_loc(pcl, &cif, cls_struct_9byte_gn, NULL, code) == FFI_OK);
 
-  res_dbl = ((cls_struct_9byte(*)(cls_struct_9byte, cls_struct_9byte))(pcl))(h_dbl, j_dbl);
+  res_dbl = ((cls_struct_9byte(*)(cls_struct_9byte, cls_struct_9byte))(code))(h_dbl, j_dbl);
   /* { dg-output "\n7 8 1 9: 8 17" } */
   printf("res: %g %d\n", res_dbl.a, res_dbl.b);
   /* { dg-output "\nres: 8 17" } */

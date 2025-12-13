@@ -1,5 +1,5 @@
-@c Copyright (c) 1999, 2000, 2001, 2002, 2003, 2004
-@c Free Software Foundation, Inc.
+@c Copyright (c) 1999, 2000, 2001, 2002, 2003, 2004, 2005, 2006, 2007, 2008,
+@c 2010, Free Software Foundation, Inc.
 @c This is part of the CPP and GCC manuals.
 @c For copying conditions, see the file gcc.texi.
 
@@ -16,7 +16,6 @@
 Predefine @var{name} as a macro, with definition @code{1}.
 
 @item -D @var{name}=@var{definition}
-Predefine @var{name} as a macro, with definition @var{definition}.
 The contents of @var{definition} are tokenized and processed as if
 they appeared during translation phase three in a @samp{#define}
 directive.  In particular, the definition will be truncated by
@@ -66,6 +65,8 @@ of system headers are not defeated
 (@pxref{System Headers})
 @end ifset
 .
+If @var{dir} begins with @code{=}, then the @code{=} will be replaced
+by the sysroot prefix; see @option{--sysroot} and @option{-isysroot}.
 
 @item -o @var{file}
 @opindex o
@@ -114,10 +115,6 @@ equivalent, and problematic constructs which should be avoided.
 @xref{Traditional Mode}.
 @end ifset
 
-@item -Wimport
-@opindex Wimport
-Warn the first time @samp{#import} is used.
-
 @item -Wundef
 @opindex Wundef
 Warn whenever an identifier which is not a macro is encountered in an
@@ -134,7 +131,7 @@ time it is redefined or undefined.
 Built-in macros, macros defined on the command line, and macros
 defined in include files are not warned about.
 
-@strong{Note:} If a macro is actually used, but only used in skipped
+@emph{Note:} If a macro is actually used, but only used in skipped
 conditional blocks, then CPP will report it as unused.  To avoid the
 warning in such a case, you might improve the scope of the macro's
 definition by, for example, moving it into the first skipped block.
@@ -191,8 +188,8 @@ without @samp{-pedantic} but treats as warnings.
 
 @item -M
 @opindex M
-@cindex make
-@cindex dependencies, make
+@cindex @command{make}
+@cindex dependencies, @command{make}
 Instead of outputting the result of preprocessing, output a rule
 suitable for @command{make} describing the dependencies of the main
 source file.  The preprocessor outputs one @command{make} rule containing
@@ -201,10 +198,11 @@ the included files, including those coming from @option{-include} or
 @option{-imacros} command line options.
 
 Unless specified explicitly (with @option{-MT} or @option{-MQ}), the
-object file name consists of the basename of the source file with any
-suffix replaced with object file suffix.  If there are many included
-files then the rule is split into several lines using @samp{\}-newline.
-The rule has no commands.
+object file name consists of the name of the source file with any
+suffix replaced with object file suffix and with any leading directory
+parts removed.  If there are many included files then the rule is
+split into several lines using @samp{\}-newline.  The rule has no
+commands.
 
 This option does not suppress the preprocessor's debug output, such as
 @option{-dM}.  To avoid mixing such debug output with the dependency
@@ -269,9 +267,9 @@ test.h:
 @opindex MT
 
 Change the target of the rule emitted by dependency generation.  By
-default CPP takes the name of the main input file, including any path,
-deletes any file suffix such as @samp{.c}, and appends the platform's
-usual object suffix.  The result is the target.
+default CPP takes the name of the main input file, deletes any
+directory components and any file suffix such as @samp{.c}, and
+appends the platform's usual object suffix.  The result is the target.
 
 An @option{-MT} option will set the target to be exactly the string you
 specify.  If you want multiple targets, you can specify them as a single
@@ -301,12 +299,13 @@ The default target is automatically quoted, as if it were given with
 @option{-MD} is equivalent to @option{-M -MF @var{file}}, except that
 @option{-E} is not implied.  The driver determines @var{file} based on
 whether an @option{-o} option is given.  If it is, the driver uses its
-argument but with a suffix of @file{.d}, otherwise it take the
-basename of the input file and applies a @file{.d} suffix.
+argument but with a suffix of @file{.d}, otherwise it takes the name
+of the input file, removes any directory components and suffix, and
+applies a @file{.d} suffix.
 
 If @option{-MD} is used in conjunction with @option{-E}, any
 @option{-o} switch is understood to specify the dependency output file
-(but @pxref{dashMF,,-MF}), but if used without @option{-E}, each @option{-o}
+(@pxref{dashMF,,-MF}), but if used without @option{-E}, each @option{-o}
 is understood to specify a target object file.
 
 Since @option{-E} is not implied, @option{-MD} can be used to generate
@@ -315,7 +314,7 @@ a dependency output file as a side-effect of the compilation process.
 @item -MMD
 @opindex MMD
 Like @option{-MD} except mention only user header files, not system
--header files.
+header files.
 
 @ifclear cppmanual
 @item -fpch-deps
@@ -326,6 +325,24 @@ precompiled header's dependencies.  If not specified only the
 precompiled header would be listed and not the files that were used to
 create it because those files are not consulted when a precompiled
 header is used.
+
+@item -fpch-preprocess
+@opindex fpch-preprocess
+This option allows use of a precompiled header (@pxref{Precompiled
+Headers}) together with @option{-E}.  It inserts a special @code{#pragma},
+@code{#pragma GCC pch_preprocess "@var{filename}"} in the output to mark
+the place where the precompiled header was found, and its @var{filename}.
+When @option{-fpreprocessed} is in use, GCC recognizes this @code{#pragma}
+and loads the PCH@.
+
+This option is off by default, because the resulting preprocessed output
+is only really suitable as input to GCC@.  It is switched on by
+@option{-save-temps}.
+
+You should not write this @code{#pragma} in your own code, but it is
+safe to edit the filename if the PCH file is available in a different
+location.  The filename may be absolute or it may be relative to GCC's
+current directory.
 
 @end ifclear
 @item -x c
@@ -342,7 +359,7 @@ extensions for C++ and assembly are also recognized.  If cpp does not
 recognize the extension, it will treat the file as C; this is the most
 generic mode.
 
-@strong{Note:} Previous versions of cpp accepted a @option{-lang} option
+@emph{Note:} Previous versions of cpp accepted a @option{-lang} option
 which selected both the language and the standards conformance level.
 This option has been removed, because it conflicts with the @option{-l}
 option.
@@ -357,12 +374,13 @@ knows about C and C++ standards; others may be added in the future.
 @var{standard}
 may be one of:
 @table @code
-@item iso9899:1990
+@item c90
 @itemx c89
-The ISO C standard from 1990.  @samp{c89} is the customary shorthand for
+@itemx iso9899:1990
+The ISO C standard from 1990.  @samp{c90} is the customary shorthand for
 this version of the standard.
 
-The @option{-ansi} option is equivalent to @option{-std=c89}.
+The @option{-ansi} option is equivalent to @option{-std=c90}.
 
 @item iso9899:199409
 The 1990 C standard, as amended in 1994.
@@ -374,12 +392,20 @@ The 1990 C standard, as amended in 1994.
 The revised ISO C standard, published in December 1999.  Before
 publication, this was known as C9X@.
 
-@item gnu89
+@item c1x
+The next version of the ISO C standard, still under development.
+
+@item gnu90
+@itemx gnu89
 The 1990 C standard plus GNU extensions.  This is the default.
 
 @item gnu99
 @itemx gnu9x
 The 1999 C standard plus GNU extensions.
+
+@item gnu1x
+The next version of the ISO C standard, still under development, plus
+GNU extensions.
 
 @item c++98
 The 1998 ISO C++ standard plus amendments.
@@ -404,6 +430,7 @@ file directory as the first search directory for @code{@w{#include
 @ifset cppmanual
 @xref{Search Path}.
 @end ifset
+This option has been deprecated.
 
 @item -nostdinc
 @opindex nostdinc
@@ -444,6 +471,8 @@ specified by @option{-include}.
 Search @var{dir} for header files, but do it @emph{after} all
 directories specified with @option{-I} and the standard system directories
 have been exhausted.  @var{dir} is treated as a system include directory.
+If @var{dir} begins with @code{=}, then the @code{=} will be replaced
+by the sysroot prefix; see @option{--sysroot} and @option{-isysroot}.
 
 @item -iprefix @var{prefix}
 @opindex iprefix
@@ -460,6 +489,18 @@ Append @var{dir} to the prefix specified previously with
 path.  @option{-iwithprefixbefore} puts it in the same place @option{-I}
 would; @option{-iwithprefix} puts it where @option{-idirafter} would.
 
+@item -isysroot @var{dir}
+@opindex isysroot
+This option is like the @option{--sysroot} option, but applies only to
+header files (except for Darwin targets, where it applies to both header
+files and libraries).  See the @option{--sysroot} option for more
+information.
+
+@item -imultilib @var{dir}
+@opindex imultilib
+Use @var{dir} as a subdirectory of the directory containing
+target-specific C++ headers.
+
 @item -isystem @var{dir}
 @opindex isystem
 Search @var{dir} for header files, after all directories specified by
@@ -469,14 +510,56 @@ is applied to the standard system directories.
 @ifset cppmanual
 @xref{System Headers}.
 @end ifset
+If @var{dir} begins with @code{=}, then the @code{=} will be replaced
+by the sysroot prefix; see @option{--sysroot} and @option{-isysroot}.
+
+@item -iquote @var{dir}
+@opindex iquote
+Search @var{dir} only for header files requested with
+@code{@w{#include "@var{file}"}}; they are not searched for
+@code{@w{#include <@var{file}>}}, before all directories specified by
+@option{-I} and before the standard system directories.
+@ifset cppmanual
+@xref{Search Path}.
+@end ifset
+If @var{dir} begins with @code{=}, then the @code{=} will be replaced
+by the sysroot prefix; see @option{--sysroot} and @option{-isysroot}.
+
+@item -fdirectives-only
+@opindex fdirectives-only
+When preprocessing, handle directives, but do not expand macros.
+
+The option's behavior depends on the @option{-E} and @option{-fpreprocessed}
+options.
+
+With @option{-E}, preprocessing is limited to the handling of directives
+such as @code{#define}, @code{#ifdef}, and @code{#error}.  Other
+preprocessor operations, such as macro expansion and trigraph
+conversion are not performed.  In addition, the @option{-dD} option is
+implicitly enabled.
+
+With @option{-fpreprocessed}, predefinition of command line and most
+builtin macros is disabled.  Macros such as @code{__LINE__}, which are
+contextually dependent, are handled normally.  This enables compilation of
+files previously preprocessed with @code{-E -fdirectives-only}.
+
+With both @option{-E} and @option{-fpreprocessed}, the rules for
+@option{-fpreprocessed} take precedence.  This enables full preprocessing of
+files previously preprocessed with @code{-E -fdirectives-only}.
 
 @item -fdollars-in-identifiers
 @opindex fdollars-in-identifiers
 @anchor{fdollars-in-identifiers}
 Accept @samp{$} in identifiers.
 @ifset cppmanual
-  @xref{Identifier characters}.
+@xref{Identifier characters}.
 @end ifset
+
+@item -fextended-identifiers
+@opindex fextended-identifiers
+Accept universal character names in identifiers.  This option is
+experimental; in a future version of GCC, it will be enabled by
+default for C99 and C++.
 
 @item -fpreprocessed
 @opindex fpreprocessed
@@ -502,27 +585,30 @@ ignored.  The default is 8.
 
 @item -fexec-charset=@var{charset}
 @opindex fexec-charset
+@cindex character set, execution
 Set the execution character set, used for string and character
 constants.  The default is UTF-8.  @var{charset} can be any encoding
 supported by the system's @code{iconv} library routine.
 
 @item -fwide-exec-charset=@var{charset}
 @opindex fwide-exec-charset
+@cindex character set, wide execution
 Set the wide execution character set, used for wide string and
 character constants.  The default is UTF-32 or UTF-16, whichever
 corresponds to the width of @code{wchar_t}.  As with
-@option{-ftarget-charset}, @var{charset} can be any encoding supported
+@option{-fexec-charset}, @var{charset} can be any encoding supported
 by the system's @code{iconv} library routine; however, you will have
 problems with encodings that do not fit exactly in @code{wchar_t}.
 
 @item -finput-charset=@var{charset}
 @opindex finput-charset
+@cindex character set, input
 Set the input character set, used for translation from the character
-set of the input file to the source character set used by GCC. If the
+set of the input file to the source character set used by GCC@.  If the
 locale does not specify, or GCC cannot get this information from the
-locale, the default is UTF-8. This can be overridden by either the locale
-or this command line option. Currently the command line option takes
-precedence if there's a conflict. @var{charset} can be any encoding
+locale, the default is UTF-8.  This can be overridden by either the locale
+or this command line option.  Currently the command line option takes
+precedence if there's a conflict.  @var{charset} can be any encoding
 supported by the system's @code{iconv} library routine.
 
 @item -fworking-directory
@@ -554,7 +640,7 @@ Make an assertion with the predicate @var{predicate} and answer
 @var{predicate}(@var{answer})}, which is still supported, because
 it does not use shell special characters.
 @ifset cppmanual
-@xref{Assertions}.
+@xref{Obsolete Features}.
 @end ifset
 
 @item -A -@var{predicate}=@var{answer}
@@ -584,6 +670,10 @@ touch foo.h; cpp -dM foo.h
 @noindent
 will show all the predefined macros.
 
+If you use @option{-dM} without the @option{-E} option, @option{-dM} is
+interpreted as a synonym for @option{-fdump-rtl-mach}.
+@xref{Debugging Options, , ,gcc}.
+
 @item D
 @opindex dD
 Like @samp{M} except in two respects: it does @emph{not} include the
@@ -599,6 +689,14 @@ Like @samp{D}, but emit only the macro names, not their expansions.
 @opindex dI
 Output @samp{#include} directives in addition to the result of
 preprocessing.
+
+@item U
+@opindex dU
+Like @samp{D} except that only macros that are expanded, or whose
+definedness is tested in preprocessor directives, are output; the
+output is delayed until the use or test of the macro; and
+@samp{#undef} directives are also output for macros tested but
+undefined at the time.
 @end table
 
 @item -P
@@ -671,7 +769,7 @@ Replacement:      [    ]    @{    @}    #    \    ^    |    ~
 Enable special code to work around file systems which only permit very
 short file names, such as MS-DOS@.
 
-@itemx --help
+@item --help
 @itemx --target-help
 @opindex help
 @opindex target-help

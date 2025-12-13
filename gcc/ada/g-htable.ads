@@ -1,12 +1,12 @@
 ------------------------------------------------------------------------------
 --                                                                          --
---                         GNAT RUNTIME COMPONENTS                          --
+--                         GNAT RUN-TIME COMPONENTS                         --
 --                                                                          --
 --                          G N A T . H T A B L E                           --
 --                                                                          --
 --                                 S p e c                                  --
 --                                                                          --
---           Copyright (C) 1995-2002 Ada Core Technologies, Inc.            --
+--                     Copyright (C) 1995-2010, AdaCore                     --
 --                                                                          --
 -- GNAT is free software;  you can  redistribute it  and/or modify it under --
 -- terms of the  GNU General Public License as published  by the Free Soft- --
@@ -16,8 +16,8 @@
 -- or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU General Public License --
 -- for  more details.  You should have  received  a copy of the GNU General --
 -- Public License  distributed with GNAT;  see file COPYING.  If not, write --
--- to  the Free Software Foundation,  59 Temple Place - Suite 330,  Boston, --
--- MA 02111-1307, USA.                                                      --
+-- to  the  Free Software Foundation,  51  Franklin  Street,  Fifth  Floor, --
+-- Boston, MA 02110-1301, USA.                                              --
 --                                                                          --
 -- As a special exception,  if other files  instantiate  generics from this --
 -- unit, or you link  this unit with other files  to produce an executable, --
@@ -43,16 +43,17 @@
 --  this facility is accessed from run time routines, but clients should
 --  always access the version supplied via GNAT.HTable.
 
+pragma Compiler_Unit;
+
 with System.HTable;
 
 package GNAT.HTable is
-pragma Preelaborate (HTable);
-
-pragma Elaborate_Body;
---  The elaborate body is because we have a dummy body to deal with bootstrap
---  path problems (we used to have a real body, and now we don't need it any
---  more, but the bootstrap requires that we have a dummy body, since otherwise
---  the old body gets picked up.
+   pragma Preelaborate;
+   pragma Elaborate_Body;
+   --  The elaborate body is because we have a dummy body to deal with
+   --  bootstrap path problems (we used to have a real body, and now we don't
+   --  need it any more, but the bootstrap requires that we have a dummy body,
+   --  since otherwise the old body gets picked up.
 
    -------------------
    -- Simple_HTable --
@@ -102,7 +103,7 @@ pragma Elaborate_Body;
 
    --     function Get_First return Element;
    --     --  Returns No_Element if the HTable is empty, otherwise returns one
-   --     --  non specified element. There is no guarantee that 2 calls to
+   --     --  non specified element. There is no guarantee that two calls to
    --     --  this function will return the same element.
 
    --     function Get_Next return Element;
@@ -110,6 +111,20 @@ pragma Elaborate_Body;
    --     --  same function since the last call to Get_First or No_Element if
    --     --  there is no such element. If there is no call to 'Set' in between
    --     --  Get_Next calls, all the elements of the HTable will be traversed.
+
+   --     procedure Get_First (K : out Key; E : out Element);
+   --     --  This version of the iterator returns a key/element pair. A non-
+   --     --  specified entry is returned, and there is no guarantee that two
+   --     --  calls to this procedure will return the same element.
+
+   --     procedure Get_Next (K : out Key; E : out Element);
+   --     --  This version of the iterator returns a key/element pair. It
+   --     --  returns a non-specified element that has not been returned since
+   --     --  the last call to Get_First. If there is no remaining element,
+   --     --  then E is set to No_Element, and the value in K is undefined.
+   --     --  If there is no call to Set in between Get_Next calls, all the
+   --     --  elements of the HTable will be traversed.
+
    --  end Simple_HTable;
 
    -------------------
@@ -187,13 +202,13 @@ pragma Elaborate_Body;
 
    --     function Get_First return Elmt_Ptr;
    --     --  Returns Null_Ptr if the HTable is empty, otherwise returns one
-   --     --  non specified element. There is no guarantee that 2 calls to
+   --     --  non specified element. There is no guarantee that two calls to
    --     --  this function will return the same element.
 
    --     function Get_Next return Elmt_Ptr;
    --     --  Returns a non-specified element that has not been returned by
    --     --  the same function since the last call to Get_First or Null_Ptr
-   --     --  if there is no such element or Get_First has bever been called.
+   --     --  if there is no such element or Get_First has never been called.
    --     --  If there is no call to 'Set' in between Get_Next calls, all
    --     --  the elements of the HTable will be traversed.
 

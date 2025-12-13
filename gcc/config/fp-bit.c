@@ -1,37 +1,28 @@
 /* This is a software floating point library which can be used
    for targets without hardware floating point. 
-   Copyright (C) 1994, 1995, 1996, 1997, 1998, 2000, 2001, 2002, 2003, 2004
-   Free Software Foundation, Inc.
+   Copyright (C) 1994, 1995, 1996, 1997, 1998, 2000, 2001, 2002, 2003,
+   2004, 2005, 2008, 2009, 2010 Free Software Foundation, Inc.
 
-This file is free software; you can redistribute it and/or modify it
-under the terms of the GNU General Public License as published by the
-Free Software Foundation; either version 2, or (at your option) any
-later version.
+This file is part of GCC.
 
-In addition to the permissions in the GNU General Public License, the
-Free Software Foundation gives you unlimited permission to link the
-compiled version of this file with other programs, and to distribute
-those programs without any restriction coming from the use of this
-file.  (The General Public License restrictions do apply in other
-respects; for example, they cover modification of the file, and
-distribution when not linked into another program.)
+GCC is free software; you can redistribute it and/or modify it under
+the terms of the GNU General Public License as published by the Free
+Software Foundation; either version 3, or (at your option) any later
+version.
 
-This file is distributed in the hope that it will be useful, but
-WITHOUT ANY WARRANTY; without even the implied warranty of
-MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
-General Public License for more details.
+GCC is distributed in the hope that it will be useful, but WITHOUT ANY
+WARRANTY; without even the implied warranty of MERCHANTABILITY or
+FITNESS FOR A PARTICULAR PURPOSE.  See the GNU General Public License
+for more details.
 
-You should have received a copy of the GNU General Public License
-along with this program; see the file COPYING.  If not, write to
-the Free Software Foundation, 59 Temple Place - Suite 330,
-Boston, MA 02111-1307, USA.  */
+Under Section 7 of GPL version 3, you are granted additional
+permissions described in the GCC Runtime Library Exception, version
+3.1, as published by the Free Software Foundation.
 
-/* As a special exception, if you link this library with other files,
-   some of which are compiled with GCC, to produce an executable,
-   this library does not by itself cause the resulting executable
-   to be covered by the GNU General Public License.
-   This exception does not however invalidate any other reasons why
-   the executable file might be covered by the GNU General Public License.  */
+You should have received a copy of the GNU General Public License and
+a copy of the GCC Runtime Library Exception along with this program;
+see the files COPYING3 and COPYING.RUNTIME respectively.  If not, see
+<http://www.gnu.org/licenses/>.  */
 
 /* This implements IEEE 754 format arithmetic, but does not provide a
    mechanism for setting the rounding mode, or for generating or handling
@@ -57,8 +48,6 @@ Boston, MA 02111-1307, USA.  */
      8-bit processors.
    CMPtype: Specify the type that floating point compares should return.
      This defaults to SItype, aka int.
-   US_SOFTWARE_GOFAST: This makes all entry points use the same names as the
-     US Software goFast library.
    _DEBUG_BITFLOAT: This makes debugging the code a little easier, by adding
      two integers to the FLO_union_type.
    NO_DENORMALS: Disable handling of denormals.
@@ -143,38 +132,38 @@ extern const fp_number_type __thenan_df;
 #endif
 
 INLINE
-static fp_number_type *
-nan (void)
+static const fp_number_type *
+makenan (void)
 {
-  /* Discard the const qualifier...  */
 #ifdef TFLOAT
-  return (fp_number_type *) (& __thenan_tf);
+  return & __thenan_tf;
 #elif defined FLOAT  
-  return (fp_number_type *) (& __thenan_sf);
+  return & __thenan_sf;
 #else
-  return (fp_number_type *) (& __thenan_df);
+  return & __thenan_df;
 #endif
 }
 
 INLINE
 static int
-isnan ( fp_number_type *  x)
+isnan (const fp_number_type *x)
 {
-  return x->class == CLASS_SNAN || x->class == CLASS_QNAN;
+  return __builtin_expect (x->class == CLASS_SNAN || x->class == CLASS_QNAN,
+			   0);
 }
 
 INLINE
 static int
-isinf ( fp_number_type *  x)
+isinf (const fp_number_type *  x)
 {
-  return x->class == CLASS_INFINITY;
+  return __builtin_expect (x->class == CLASS_INFINITY, 0);
 }
 
 #endif /* NO_NANS */
 
 INLINE
 static int
-iszero ( fp_number_type *  x)
+iszero (const fp_number_type *  x)
 {
   return x->class == CLASS_ZERO;
 }
@@ -186,11 +175,27 @@ flip_sign ( fp_number_type *  x)
   x->sign = !x->sign;
 }
 
-extern FLO_type pack_d ( fp_number_type * );
+/* Count leading zeroes in N.  */
+INLINE
+static int
+clzusi (USItype n)
+{
+  extern int __clzsi2 (USItype);
+  if (sizeof (USItype) == sizeof (unsigned int))
+    return __builtin_clz (n);
+  else if (sizeof (USItype) == sizeof (unsigned long))
+    return __builtin_clzl (n);
+  else if (sizeof (USItype) == sizeof (unsigned long long))
+    return __builtin_clzll (n);
+  else
+    return __clzsi2 (n);
+}
+
+extern FLO_type pack_d (const fp_number_type * );
 
 #if defined(L_pack_df) || defined(L_pack_sf) || defined(L_pack_tf)
 FLO_type
-pack_d ( fp_number_type *  src)
+pack_d (const fp_number_type *src)
 {
   FLO_union_type dst;
   fractype fraction = src->fraction.ll;	/* wasn't unsigned before? */
@@ -233,7 +238,7 @@ pack_d ( fp_number_type *  src)
     }
   else
     {
-      if (src->normal_exp < NORMAL_EXPMIN)
+      if (__builtin_expect (src->normal_exp < NORMAL_EXPMIN, 0))
 	{
 #ifdef NO_DENORMALS
 	  /* Go straight to a zero representation if denormals are not
@@ -280,7 +285,7 @@ pack_d ( fp_number_type *  src)
 #endif /* NO_DENORMALS */
 	}
       else if (!LARGEST_EXPONENT_IS_NORMAL (FRAC_NBITS)
-	       && src->normal_exp > EXPBIAS)
+	       && __builtin_expect (src->normal_exp > EXPBIAS, 0))
 	{
 	  exp = EXPMAX;
 	  fraction = 0;
@@ -544,7 +549,8 @@ unpack_d (FLO_union_type * src, fp_number_type * dst)
 	  dst->fraction.ll = fraction;
 	}
     }
-  else if (!LARGEST_EXPONENT_IS_NORMAL (FRAC_NBITS) && exp == EXPMAX)
+  else if (!LARGEST_EXPONENT_IS_NORMAL (FRAC_NBITS)
+	   && __builtin_expect (exp == EXPMAX, 0))
     {
       /* Huge exponent*/
       if (fraction == 0)
@@ -582,7 +588,7 @@ unpack_d (FLO_union_type * src, fp_number_type * dst)
 #endif /* L_unpack_df || L_unpack_sf */
 
 #if defined(L_addsub_sf) || defined(L_addsub_df) || defined(L_addsub_tf)
-static fp_number_type *
+static const fp_number_type *
 _fpadd_parts (fp_number_type * a,
 	      fp_number_type * b,
 	      fp_number_type * tmp)
@@ -607,7 +613,7 @@ _fpadd_parts (fp_number_type * a,
     {
       /* Adding infinities with opposite signs yields a NaN.  */
       if (isinf (b) && a->sign != b->sign)
-	return nan ();
+	return makenan ();
       return a;
     }
   if (isinf (b))
@@ -633,6 +639,7 @@ _fpadd_parts (fp_number_type * a,
      they're the same */
   {
     int diff;
+    int sdiff;
 
     a_normal_exp = a->normal_exp;
     b_normal_exp = b->normal_exp;
@@ -640,21 +647,21 @@ _fpadd_parts (fp_number_type * a,
     b_fraction = b->fraction.ll;
 
     diff = a_normal_exp - b_normal_exp;
+    sdiff = diff;
 
     if (diff < 0)
       diff = -diff;
     if (diff < FRAC_NBITS)
       {
-	/* ??? This does shifts one bit at a time.  Optimize.  */
-	while (a_normal_exp > b_normal_exp)
+	if (sdiff > 0)
 	  {
-	    b_normal_exp++;
-	    LSHIFT (b_fraction);
+	    b_normal_exp += diff;
+	    LSHIFT (b_fraction, diff);
 	  }
-	while (b_normal_exp > a_normal_exp)
+	else if (sdiff < 0)
 	  {
-	    a_normal_exp++;
-	    LSHIFT (a_fraction);
+	    a_normal_exp += diff;
+	    LSHIFT (a_fraction, diff);
 	  }
       }
     else
@@ -715,11 +722,10 @@ _fpadd_parts (fp_number_type * a,
 
   if (tmp->fraction.ll >= IMPLICIT_2)
     {
-      LSHIFT (tmp->fraction.ll);
+      LSHIFT (tmp->fraction.ll, 1);
       tmp->normal_exp++;
     }
   return tmp;
-
 }
 
 FLO_type
@@ -728,7 +734,7 @@ add (FLO_type arg_a, FLO_type arg_b)
   fp_number_type a;
   fp_number_type b;
   fp_number_type tmp;
-  fp_number_type *res;
+  const fp_number_type *res;
   FLO_union_type au, bu;
 
   au.value = arg_a;
@@ -748,7 +754,7 @@ sub (FLO_type arg_a, FLO_type arg_b)
   fp_number_type a;
   fp_number_type b;
   fp_number_type tmp;
-  fp_number_type *res;
+  const fp_number_type *res;
   FLO_union_type au, bu;
 
   au.value = arg_a;
@@ -766,7 +772,7 @@ sub (FLO_type arg_a, FLO_type arg_b)
 #endif /* L_addsub_sf || L_addsub_df */
 
 #if defined(L_mul_sf) || defined(L_mul_df) || defined(L_mul_tf)
-static inline __attribute__ ((__always_inline__)) fp_number_type *
+static inline __attribute__ ((__always_inline__)) const fp_number_type *
 _fpmul_parts ( fp_number_type *  a,
 	       fp_number_type *  b,
 	       fp_number_type * tmp)
@@ -787,7 +793,7 @@ _fpmul_parts ( fp_number_type *  a,
   if (isinf (a))
     {
       if (iszero (b))
-	return nan ();
+	return makenan ();
       a->sign = a->sign != b->sign;
       return a;
     }
@@ -795,7 +801,7 @@ _fpmul_parts ( fp_number_type *  a,
     {
       if (iszero (a))
 	{
-	  return nan ();
+	  return makenan ();
 	}
       b->sign = a->sign != b->sign;
       return b;
@@ -899,32 +905,28 @@ _fpmul_parts ( fp_number_type *  a,
 	high |= 1;
       low <<= 1;
     }
-  /* rounding is tricky. if we only round if it won't make us round later.  */
-#if 0
-  if (low & FRACHIGH2)
-    {
-      if (((high & GARDMASK) != GARDMSB)
-	  && (((high + 1) & GARDMASK) == GARDMSB))
-	{
-	  /* don't round, it gets done again later.  */
-	}
-      else
-	{
-	  high++;
-	}
-    }
-#endif
+
   if (!ROUND_TOWARDS_ZERO && (high & GARDMASK) == GARDMSB)
     {
       if (high & (1 << NGARDS))
 	{
-	  /* half way, so round to even */
-	  high += GARDROUND + 1;
+	  /* Because we're half way, we would round to even by adding
+	     GARDROUND + 1, except that's also done in the packing
+	     function, and rounding twice will lose precision and cause
+	     the result to be too far off.  Example: 32-bit floats with
+	     bit patterns 0xfff * 0x3f800400 ~= 0xfff (less than 0.5ulp
+	     off), not 0x1000 (more than 0.5ulp off).  */
 	}
       else if (low)
 	{
-	  /* but we really weren't half way */
+	  /* We're a further than half way by a small amount corresponding
+	     to the bits set in "low".  Knowing that, we round here and
+	     not in pack_d, because there we don't have "low" available
+	     anymore.  */
 	  high += GARDROUND + 1;
+
+	  /* Avoid further rounding in pack_d.  */
+	  high &= ~(fractype) GARDMASK;
 	}
     }
   tmp->fraction.ll = high;
@@ -938,7 +940,7 @@ multiply (FLO_type arg_a, FLO_type arg_b)
   fp_number_type a;
   fp_number_type b;
   fp_number_type tmp;
-  fp_number_type *res;
+  const fp_number_type *res;
   FLO_union_type au, bu;
 
   au.value = arg_a;
@@ -951,10 +953,10 @@ multiply (FLO_type arg_a, FLO_type arg_b)
 
   return pack_d (res);
 }
-#endif /* L_mul_sf || L_mul_df */
+#endif /* L_mul_sf || L_mul_df || L_mul_tf */
 
 #if defined(L_div_sf) || defined(L_div_df) || defined(L_div_tf)
-static inline __attribute__ ((__always_inline__)) fp_number_type *
+static inline __attribute__ ((__always_inline__)) const fp_number_type *
 _fpdiv_parts (fp_number_type * a,
 	      fp_number_type * b)
 {
@@ -977,7 +979,7 @@ _fpdiv_parts (fp_number_type * a,
   if (isinf (a) || iszero (a))
     {
       if (a->class == b->class)
-	return nan ();
+	return makenan ();
       return a;
     }
 
@@ -1028,13 +1030,21 @@ _fpdiv_parts (fp_number_type * a,
       {
 	if (quotient & (1 << NGARDS))
 	  {
-	    /* half way, so round to even */
-	    quotient += GARDROUND + 1;
+	    /* Because we're half way, we would round to even by adding
+	       GARDROUND + 1, except that's also done in the packing
+	       function, and rounding twice will lose precision and cause
+	       the result to be too far off.  */
 	  }
 	else if (numerator)
 	  {
-	    /* but we really weren't half way, more bits exist */
+	    /* We're a further than half way by the small amount
+	       corresponding to the bits set in "numerator".  Knowing
+	       that, we round here and not in pack_d, because there we
+	       don't have "numerator" available anymore.  */
 	    quotient += GARDROUND + 1;
+
+	    /* Avoid further rounding in pack_d.  */
+	    quotient &= ~(fractype) GARDMASK;
 	  }
       }
 
@@ -1048,7 +1058,7 @@ divide (FLO_type arg_a, FLO_type arg_b)
 {
   fp_number_type a;
   fp_number_type b;
-  fp_number_type *res;
+  const fp_number_type *res;
   FLO_union_type au, bu;
 
   au.value = arg_a;
@@ -1166,8 +1176,6 @@ compare (FLO_type arg_a, FLO_type arg_b)
   return __fpcmp_parts (&a, &b);
 }
 #endif /* L_compare_sf || L_compare_df */
-
-#ifndef US_SOFTWARE_GOFAST
 
 /* These should be optimized for their specific tasks someday.  */
 
@@ -1296,8 +1304,6 @@ _le_f2 (FLO_type arg_a, FLO_type arg_b)
 }
 #endif /* L_le_sf || L_le_df */
 
-#endif /* ! US_SOFTWARE_GOFAST */
-
 #if defined(L_unord_sf) || defined(L_unord_df) || defined(L_unord_tf)
 CMPtype
 _unord_f2 (FLO_type arg_a, FLO_type arg_b)
@@ -1330,6 +1336,8 @@ si_to_float (SItype arg_a)
     }
   else
     {
+      USItype uarg;
+      int shift;
       in.normal_exp = FRACBITS + NGARDS;
       if (in.sign) 
 	{
@@ -1339,15 +1347,17 @@ si_to_float (SItype arg_a)
 	    {
 	      return (FLO_type)(- MAX_SI_INT - 1);
 	    }
-	  in.fraction.ll = (-arg_a);
+	  uarg = (-arg_a);
 	}
       else
-	in.fraction.ll = arg_a;
+	uarg = arg_a;
 
-      while (in.fraction.ll < ((fractype)1 << (FRACBITS + NGARDS)))
+      in.fraction.ll = uarg;
+      shift = clzusi (uarg) - (BITS_PER_SI - 1 - FRACBITS - NGARDS);
+      if (shift > 0)
 	{
-	  in.fraction.ll <<= 1;
-	  in.normal_exp -= 1;
+	  in.fraction.ll <<= shift;
+	  in.normal_exp -= shift;
 	}
     }
   return pack_d (&in);
@@ -1367,19 +1377,23 @@ usi_to_float (USItype arg_a)
     }
   else
     {
+      int shift;
       in.class = CLASS_NUMBER;
       in.normal_exp = FRACBITS + NGARDS;
       in.fraction.ll = arg_a;
 
-      while (in.fraction.ll > ((fractype)1 << (FRACBITS + NGARDS)))
-        {
-          in.fraction.ll >>= 1;
-          in.normal_exp += 1;
-        }
-      while (in.fraction.ll < ((fractype)1 << (FRACBITS + NGARDS)))
+      shift = clzusi (arg_a) - (BITS_PER_SI - 1 - FRACBITS - NGARDS);
+      if (shift < 0)
 	{
-	  in.fraction.ll <<= 1;
-	  in.normal_exp -= 1;
+	  fractype guard = in.fraction.ll & (((fractype)1 << -shift) - 1);
+	  in.fraction.ll >>= -shift;
+	  in.fraction.ll |= (guard != 0);
+	  in.normal_exp -= shift;
+	}
+      else if (shift > 0)
+	{
+	  in.fraction.ll <<= shift;
+	  in.normal_exp -= shift;
 	}
     }
   return pack_d (&in);
@@ -1414,14 +1428,7 @@ float_to_si (FLO_type arg_a)
 }
 #endif /* L_sf_to_si || L_df_to_si */
 
-#if defined(L_sf_to_usi) || defined(L_df_to_usi) || defined(L_tf_to_usi)
-#if defined US_SOFTWARE_GOFAST || defined(L_tf_to_usi)
-/* While libgcc2.c defines its own __fixunssfsi and __fixunsdfsi routines,
-   we also define them for GOFAST because the ones in libgcc2.c have the
-   wrong names and I'd rather define these here and keep GOFAST CYG-LOC's
-   out of libgcc2.c.  We can't define these here if not GOFAST because then
-   there'd be duplicate copies.  */
-
+#if defined(L_tf_to_usi)
 USItype
 float_to_usi (FLO_type arg_a)
 {
@@ -1451,8 +1458,7 @@ float_to_usi (FLO_type arg_a)
   else
     return a.fraction.ll >> ((FRACBITS + NGARDS) - a.normal_exp);
 }
-#endif /* US_SOFTWARE_GOFAST */
-#endif /* L_sf_to_usi || L_df_to_usi */
+#endif /* L_tf_to_usi */
 
 #if defined(L_negate_sf) || defined(L_negate_df) || defined(L_negate_tf)
 FLO_type

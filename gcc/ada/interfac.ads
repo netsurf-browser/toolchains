@@ -6,42 +6,35 @@
 --                                                                          --
 --                                 S p e c                                  --
 --                                                                          --
---          Copyright (C) 2002-2003 Free Software Foundation, Inc.          --
+--          Copyright (C) 2002-2009, Free Software Foundation, Inc.         --
 --                                                                          --
 -- This specification is derived from the Ada Reference Manual for use with --
 -- GNAT. The copyright notice above, and the license provisions that follow --
--- apply solely to the implementation dependent additions to thie file.     --
+-- apply solely to the implementation dependent sections of this file.      --
 --                                                                          --
 -- GNAT is free software;  you can  redistribute it  and/or modify it under --
 -- terms of the  GNU General Public License as published  by the Free Soft- --
--- ware  Foundation;  either version 2,  or (at your option) any later ver- --
+-- ware  Foundation;  either version 3,  or (at your option) any later ver- --
 -- sion.  GNAT is distributed in the hope that it will be useful, but WITH- --
 -- OUT ANY WARRANTY;  without even the  implied warranty of MERCHANTABILITY --
--- or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU General Public License --
--- for  more details.  You should have  received  a copy of the GNU General --
--- Public License  distributed with GNAT;  see file COPYING.  If not, write --
--- to  the Free Software Foundation,  59 Temple Place - Suite 330,  Boston, --
--- MA 02111-1307, USA.                                                      --
+-- or FITNESS FOR A PARTICULAR PURPOSE.                                     --
 --                                                                          --
--- As a special exception,  if other files  instantiate  generics from this --
--- unit, or you link  this unit with other files  to produce an executable, --
--- this  unit  does not  by itself cause  the resulting  executable  to  be --
--- covered  by the  GNU  General  Public  License.  This exception does not --
--- however invalidate  any other reasons why  the executable file  might be --
--- covered by the  GNU Public License.                                      --
+-- As a special exception under Section 7 of GPL version 3, you are granted --
+-- additional permissions described in the GCC Runtime Library Exception,   --
+-- version 3.1, as published by the Free Software Foundation.               --
+--                                                                          --
+-- You should have received a copy of the GNU General Public License and    --
+-- a copy of the GCC Runtime Library Exception along with this program;     --
+-- see the files COPYING3 and COPYING.RUNTIME respectively.  If not, see    --
+-- <http://www.gnu.org/licenses/>.                                          --
 --                                                                          --
 -- GNAT was originally developed  by the GNAT team at  New York University. --
 -- Extensive contributions were provided by Ada Core Technologies Inc.      --
 --                                                                          --
 ------------------------------------------------------------------------------
 
---  Assumes integer sizes of 8, 16, 32 and 64 are available, and that the
---  floating-point formats are IEEE compatible.
-
---  Note: There is a specialized version of this package for OpenVMS.
-
 package Interfaces is
-pragma Pure (Interfaces);
+   pragma Pure;
 
    type Integer_8  is range -2 **  7 .. 2 **  7 - 1;
    for Integer_8'Size use  8;
@@ -69,103 +62,83 @@ pragma Pure (Interfaces);
 
    function Shift_Left
      (Value  : Unsigned_8;
-      Amount : Natural)
-      return   Unsigned_8;
+      Amount : Natural) return Unsigned_8;
 
    function Shift_Right
      (Value  : Unsigned_8;
-      Amount : Natural)
-      return   Unsigned_8;
+      Amount : Natural) return Unsigned_8;
 
    function Shift_Right_Arithmetic
      (Value  : Unsigned_8;
-      Amount : Natural)
-      return   Unsigned_8;
+      Amount : Natural) return Unsigned_8;
 
    function Rotate_Left
      (Value  : Unsigned_8;
-      Amount : Natural)
-      return   Unsigned_8;
+      Amount : Natural) return Unsigned_8;
 
    function Rotate_Right
      (Value  : Unsigned_8;
-      Amount : Natural)
-      return   Unsigned_8;
+      Amount : Natural) return Unsigned_8;
 
    function Shift_Left
      (Value  : Unsigned_16;
-      Amount : Natural)
-     return    Unsigned_16;
+      Amount : Natural) return Unsigned_16;
 
    function Shift_Right
      (Value  : Unsigned_16;
-      Amount : Natural)
-      return   Unsigned_16;
+      Amount : Natural) return Unsigned_16;
 
    function Shift_Right_Arithmetic
      (Value  : Unsigned_16;
-      Amount : Natural)
-      return   Unsigned_16;
+      Amount : Natural) return Unsigned_16;
 
    function Rotate_Left
      (Value  : Unsigned_16;
-      Amount : Natural)
-      return   Unsigned_16;
+      Amount : Natural) return Unsigned_16;
 
    function Rotate_Right
      (Value  : Unsigned_16;
-      Amount : Natural)
-      return   Unsigned_16;
+      Amount : Natural) return Unsigned_16;
 
    function Shift_Left
      (Value  : Unsigned_32;
-      Amount : Natural)
-     return    Unsigned_32;
+      Amount : Natural) return Unsigned_32;
 
    function Shift_Right
      (Value  : Unsigned_32;
-      Amount : Natural)
-      return   Unsigned_32;
+      Amount : Natural) return Unsigned_32;
 
    function Shift_Right_Arithmetic
      (Value  : Unsigned_32;
-      Amount : Natural)
-      return   Unsigned_32;
+      Amount : Natural) return Unsigned_32;
 
    function Rotate_Left
      (Value  : Unsigned_32;
-      Amount : Natural)
-      return   Unsigned_32;
+      Amount : Natural) return Unsigned_32;
 
    function Rotate_Right
      (Value  : Unsigned_32;
-      Amount : Natural)
-      return   Unsigned_32;
+      Amount : Natural) return Unsigned_32;
 
    function Shift_Left
      (Value  : Unsigned_64;
-      Amount : Natural)
-     return    Unsigned_64;
+      Amount : Natural) return Unsigned_64;
 
    function Shift_Right
      (Value  : Unsigned_64;
-      Amount : Natural)
-      return   Unsigned_64;
+      Amount : Natural) return Unsigned_64;
 
    function Shift_Right_Arithmetic
      (Value  : Unsigned_64;
-      Amount : Natural)
-      return   Unsigned_64;
+      Amount : Natural) return Unsigned_64;
 
    function Rotate_Left
      (Value  : Unsigned_64;
-      Amount : Natural)
-      return   Unsigned_64;
+      Amount : Natural) return Unsigned_64;
 
    function Rotate_Right
      (Value  : Unsigned_64;
-      Amount : Natural)
-      return   Unsigned_64;
+      Amount : Natural) return Unsigned_64;
 
    pragma Import (Intrinsic, Shift_Left);
    pragma Import (Intrinsic, Shift_Right);
@@ -173,16 +146,26 @@ pragma Pure (Interfaces);
    pragma Import (Intrinsic, Rotate_Left);
    pragma Import (Intrinsic, Rotate_Right);
 
-   --  Floating point types. We assume that we are on an IEEE machine, and
-   --  that the types Short_Float and Long_Float in Standard refer to the
-   --  32-bit short and 64-bit long IEEE forms. Furthermore, if there is
-   --  an extended float, we assume that it is available as Long_Long_Float.
+   --  IEEE Floating point types. Note that the form of these definitions
+   --  ensures that the work on VMS, even if the standard library is compiled
+   --  using a Float_Representation pragma for Vax_Float.
+
+   pragma Warnings (Off);
+   --  Turn off warnings for targets not providing IEEE floating-point types
+
+   type IEEE_Float_32 is digits 6;
+   pragma Float_Representation (IEEE_Float, IEEE_Float_32);
+
+   type IEEE_Float_64 is digits 15;
+   pragma Float_Representation (IEEE_Float, IEEE_Float_64);
+
+   --  If there is an IEEE extended float available on the machine, we assume
+   --  that it is available as Long_Long_Float.
+
    --  Note: it is harmless, and explicitly permitted, to include additional
    --  types in interfaces, so it is not wrong to have IEEE_Extended_Float
    --  defined even if the extended format is not available.
 
-   type IEEE_Float_32       is new Short_Float;
-   type IEEE_Float_64       is new Long_Float;
    type IEEE_Extended_Float is new Long_Long_Float;
 
 end Interfaces;

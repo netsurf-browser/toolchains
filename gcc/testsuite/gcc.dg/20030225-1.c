@@ -3,10 +3,8 @@
    fixed register.
    Distilled from the xvid sources by Guillaume Morin <guillaume@morinfr.org>
    and Benjamin Herrenschmidt <benh@kernel.crashing.org>.  */
-/* { dg-do run } */
+/* { dg-do run { target fpic } } */
 /* { dg-options "-O2 -fPIC" } */
-/* { dg-warning "not supported" "PIC unsupported" { target cris-*-elf* mmix-*-* } 0 } */
-
 
 extern void exit (int);
 

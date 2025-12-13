@@ -1,11 +1,12 @@
 // std::time_get, std::time_put implementation, GNU version -*- C++ -*-
 
-// Copyright (C) 2001, 2002, 2003, 2004 Free Software Foundation, Inc.
+// Copyright (C) 2001, 2002, 2003, 2004, 2005, 2006, 2007, 2009, 2010
+// Free Software Foundation, Inc.
 //
 // This file is part of the GNU ISO C++ Library.  This library is free
 // software; you can redistribute it and/or modify it under the
 // terms of the GNU General Public License as published by the
-// Free Software Foundation; either version 2, or (at your option)
+// Free Software Foundation; either version 3, or (at your option)
 // any later version.
 
 // This library is distributed in the hope that it will be useful,
@@ -13,19 +14,14 @@
 // MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
 // GNU General Public License for more details.
 
-// You should have received a copy of the GNU General Public License along
-// with this library; see the file COPYING.  If not, write to the Free
-// Software Foundation, 59 Temple Place - Suite 330, Boston, MA 02111-1307,
-// USA.
+// Under Section 7 of GPL version 3, you are granted additional
+// permissions described in the GCC Runtime Library Exception, version
+// 3.1, as published by the Free Software Foundation.
 
-// As a special exception, you may use this file as part of a free software
-// library without restriction.  Specifically, if other files instantiate
-// templates or use macros or inline functions from this file, or you compile
-// this file and link it with other files to produce an executable, this
-// file does not by itself cause the resulting executable to be covered by
-// the GNU General Public License.  This exception does not however
-// invalidate any other reasons why the executable file might be covered by
-// the GNU General Public License.
+// You should have received a copy of the GNU General Public License and
+// a copy of the GCC Runtime Library Exception along with this program;
+// see the files COPYING3 and COPYING.RUNTIME respectively.  If not, see
+// <http://www.gnu.org/licenses/>.
 
 //
 // ISO C++ 14882: 22.2.5.1.2 - time_get virtual functions
@@ -37,23 +33,28 @@
 #include <locale>
 #include <bits/c++locale_internal.h>
 
-namespace std
+namespace std _GLIBCXX_VISIBILITY(default)
 {
+_GLIBCXX_BEGIN_NAMESPACE_VERSION
+
   template<>
     void
     __timepunct<char>::
     _M_put(char* __s, size_t __maxlen, const char* __format, 
-	   const tm* __tm) const
+	   const tm* __tm) const throw()
     {
 #if __GLIBC__ > 2 || (__GLIBC__ == 2 && __GLIBC_MINOR__ > 2)
       const size_t __len = __strftime_l(__s, __maxlen, __format, __tm,
 					_M_c_locale_timepunct);
 #else
-      char* __old = strdup(setlocale(LC_ALL, NULL));
+      char* __old = setlocale(LC_ALL, 0);
+      const size_t __llen = strlen(__old) + 1;  
+      char* __sav = new char[__llen];
+      memcpy(__sav, __old, __llen);
       setlocale(LC_ALL, _M_name_timepunct);
       const size_t __len = strftime(__s, __maxlen, __format, __tm);
-      setlocale(LC_ALL, __old);
-      free(__old);
+      setlocale(LC_ALL, __sav);
+      delete [] __sav;
 #endif
       // Make sure __s is null terminated.
       if (__len == 0)
@@ -137,7 +138,8 @@ namespace std
 	  _M_data->_M_time_format = __nl_langinfo_l(T_FMT, __cloc);
 	  _M_data->_M_time_era_format = __nl_langinfo_l(ERA_T_FMT, __cloc);
 	  _M_data->_M_date_time_format = __nl_langinfo_l(D_T_FMT, __cloc);
-	  _M_data->_M_date_time_era_format = __nl_langinfo_l(ERA_D_T_FMT, __cloc);
+	  _M_data->_M_date_time_era_format = __nl_langinfo_l(ERA_D_T_FMT,
+							     __cloc);
 	  _M_data->_M_am = __nl_langinfo_l(AM_STR, __cloc);
 	  _M_data->_M_pm = __nl_langinfo_l(PM_STR, __cloc);
 	  _M_data->_M_am_pm_format = __nl_langinfo_l(T_FMT_AMPM, __cloc);
@@ -195,17 +197,20 @@ namespace std
     void
     __timepunct<wchar_t>::
     _M_put(wchar_t* __s, size_t __maxlen, const wchar_t* __format, 
-	   const tm* __tm) const
+	   const tm* __tm) const throw()
     {
 #if __GLIBC__ > 2 || (__GLIBC__ == 2 && __GLIBC_MINOR__ > 2)
       const size_t __len = __wcsftime_l(__s, __maxlen, __format, __tm,
 					_M_c_locale_timepunct);
 #else
-      char* __old = strdup(setlocale(LC_ALL, NULL));
+      char* __old = setlocale(LC_ALL, 0);
+      const size_t __llen = strlen(__old) + 1;
+      char* __sav = new char[__llen];
+      memcpy(__sav, __old, __llen);
       setlocale(LC_ALL, _M_name_timepunct);
       const size_t __len = wcsftime(__s, __maxlen, __format, __tm);
-      setlocale(LC_ALL, __old);
-      free(__old);
+      setlocale(LC_ALL, __sav);
+      delete [] __sav;
 #endif
       // Make sure __s is null terminated.
       if (__len == 0)
@@ -284,62 +289,113 @@ namespace std
 	{
 	  _M_c_locale_timepunct = _S_clone_c_locale(__cloc); 
 
-	  _M_data->_M_date_format = reinterpret_cast<wchar_t*>(__nl_langinfo_l(_NL_WD_FMT, __cloc));
-	  _M_data->_M_date_era_format = reinterpret_cast<wchar_t*>(__nl_langinfo_l(_NL_WERA_D_FMT, __cloc));
-	  _M_data->_M_time_format = reinterpret_cast<wchar_t*>(__nl_langinfo_l(_NL_WT_FMT, __cloc));
-	  _M_data->_M_time_era_format = reinterpret_cast<wchar_t*>(__nl_langinfo_l(_NL_WERA_T_FMT, __cloc));
-	  _M_data->_M_date_time_format = reinterpret_cast<wchar_t*>(__nl_langinfo_l(_NL_WD_T_FMT, __cloc));
-	  _M_data->_M_date_time_era_format = reinterpret_cast<wchar_t*>(__nl_langinfo_l(_NL_WERA_D_T_FMT, __cloc));
-	  _M_data->_M_am = reinterpret_cast<wchar_t*>(__nl_langinfo_l(_NL_WAM_STR, __cloc));
-	  _M_data->_M_pm = reinterpret_cast<wchar_t*>(__nl_langinfo_l(_NL_WPM_STR, __cloc));
-	  _M_data->_M_am_pm_format = reinterpret_cast<wchar_t*>(__nl_langinfo_l(_NL_WT_FMT_AMPM, __cloc));
+	  union { char *__s; wchar_t *__w; } __u;
+
+	  __u.__s = __nl_langinfo_l(_NL_WD_FMT, __cloc);
+	  _M_data->_M_date_format = __u.__w;
+	  __u.__s = __nl_langinfo_l(_NL_WERA_D_FMT, __cloc);
+	  _M_data->_M_date_era_format = __u.__w;
+	  __u.__s = __nl_langinfo_l(_NL_WT_FMT, __cloc);
+	  _M_data->_M_time_format = __u.__w;
+	  __u.__s = __nl_langinfo_l(_NL_WERA_T_FMT, __cloc);
+	  _M_data->_M_time_era_format = __u.__w;
+	  __u.__s = __nl_langinfo_l(_NL_WD_T_FMT, __cloc);
+	  _M_data->_M_date_time_format = __u.__w;
+	  __u.__s = __nl_langinfo_l(_NL_WERA_D_T_FMT, __cloc);
+	  _M_data->_M_date_time_era_format = __u.__w;
+	  __u.__s = __nl_langinfo_l(_NL_WAM_STR, __cloc);
+	  _M_data->_M_am = __u.__w;
+	  __u.__s = __nl_langinfo_l(_NL_WPM_STR, __cloc);
+	  _M_data->_M_pm = __u.__w;
+	  __u.__s = __nl_langinfo_l(_NL_WT_FMT_AMPM, __cloc);
+	  _M_data->_M_am_pm_format = __u.__w;
 
 	  // Day names, starting with "C"'s Sunday.
-	  _M_data->_M_day1 = reinterpret_cast<wchar_t*>(__nl_langinfo_l(_NL_WDAY_1, __cloc));
-	  _M_data->_M_day2 = reinterpret_cast<wchar_t*>(__nl_langinfo_l(_NL_WDAY_2, __cloc));
-	  _M_data->_M_day3 = reinterpret_cast<wchar_t*>(__nl_langinfo_l(_NL_WDAY_3, __cloc));
-	  _M_data->_M_day4 = reinterpret_cast<wchar_t*>(__nl_langinfo_l(_NL_WDAY_4, __cloc));
-	  _M_data->_M_day5 = reinterpret_cast<wchar_t*>(__nl_langinfo_l(_NL_WDAY_5, __cloc));
-	  _M_data->_M_day6 = reinterpret_cast<wchar_t*>(__nl_langinfo_l(_NL_WDAY_6, __cloc));
-	  _M_data->_M_day7 = reinterpret_cast<wchar_t*>(__nl_langinfo_l(_NL_WDAY_7, __cloc));
+	  __u.__s = __nl_langinfo_l(_NL_WDAY_1, __cloc);
+	  _M_data->_M_day1 = __u.__w;
+	  __u.__s = __nl_langinfo_l(_NL_WDAY_2, __cloc);
+	  _M_data->_M_day2 = __u.__w;
+	  __u.__s = __nl_langinfo_l(_NL_WDAY_3, __cloc);
+	  _M_data->_M_day3 = __u.__w;
+	  __u.__s = __nl_langinfo_l(_NL_WDAY_4, __cloc);
+	  _M_data->_M_day4 = __u.__w;
+	  __u.__s = __nl_langinfo_l(_NL_WDAY_5, __cloc);
+	  _M_data->_M_day5 = __u.__w;
+	  __u.__s = __nl_langinfo_l(_NL_WDAY_6, __cloc);
+	  _M_data->_M_day6 = __u.__w;
+	  __u.__s = __nl_langinfo_l(_NL_WDAY_7, __cloc);
+	  _M_data->_M_day7 = __u.__w;
 
 	  // Abbreviated day names, starting with "C"'s Sun.
-	  _M_data->_M_aday1 = reinterpret_cast<wchar_t*>(__nl_langinfo_l(_NL_WABDAY_1, __cloc));
-	  _M_data->_M_aday2 = reinterpret_cast<wchar_t*>(__nl_langinfo_l(_NL_WABDAY_2, __cloc));
-	  _M_data->_M_aday3 = reinterpret_cast<wchar_t*>(__nl_langinfo_l(_NL_WABDAY_3, __cloc));
-	  _M_data->_M_aday4 = reinterpret_cast<wchar_t*>(__nl_langinfo_l(_NL_WABDAY_4, __cloc));
-	  _M_data->_M_aday5 = reinterpret_cast<wchar_t*>(__nl_langinfo_l(_NL_WABDAY_5, __cloc));
-	  _M_data->_M_aday6 = reinterpret_cast<wchar_t*>(__nl_langinfo_l(_NL_WABDAY_6, __cloc));
-	  _M_data->_M_aday7 = reinterpret_cast<wchar_t*>(__nl_langinfo_l(_NL_WABDAY_7, __cloc));
+	  __u.__s = __nl_langinfo_l(_NL_WABDAY_1, __cloc);
+	  _M_data->_M_aday1 = __u.__w;
+	  __u.__s = __nl_langinfo_l(_NL_WABDAY_2, __cloc);
+	  _M_data->_M_aday2 = __u.__w;
+	  __u.__s = __nl_langinfo_l(_NL_WABDAY_3, __cloc);
+	  _M_data->_M_aday3 = __u.__w;
+	  __u.__s = __nl_langinfo_l(_NL_WABDAY_4, __cloc);
+	  _M_data->_M_aday4 = __u.__w;
+	  __u.__s = __nl_langinfo_l(_NL_WABDAY_5, __cloc);
+	  _M_data->_M_aday5 = __u.__w;
+	  __u.__s = __nl_langinfo_l(_NL_WABDAY_6, __cloc);
+	  _M_data->_M_aday6 = __u.__w;
+	  __u.__s = __nl_langinfo_l(_NL_WABDAY_7, __cloc);
+	  _M_data->_M_aday7 = __u.__w;
 
 	  // Month names, starting with "C"'s January.
-	  _M_data->_M_month01 = reinterpret_cast<wchar_t*>(__nl_langinfo_l(_NL_WMON_1, __cloc));
-	  _M_data->_M_month02 = reinterpret_cast<wchar_t*>(__nl_langinfo_l(_NL_WMON_2, __cloc));
-	  _M_data->_M_month03 = reinterpret_cast<wchar_t*>(__nl_langinfo_l(_NL_WMON_3, __cloc));
-	  _M_data->_M_month04 = reinterpret_cast<wchar_t*>(__nl_langinfo_l(_NL_WMON_4, __cloc));
-	  _M_data->_M_month05 = reinterpret_cast<wchar_t*>(__nl_langinfo_l(_NL_WMON_5, __cloc));
-	  _M_data->_M_month06 = reinterpret_cast<wchar_t*>(__nl_langinfo_l(_NL_WMON_6, __cloc));
-	  _M_data->_M_month07 = reinterpret_cast<wchar_t*>(__nl_langinfo_l(_NL_WMON_7, __cloc));
-	  _M_data->_M_month08 = reinterpret_cast<wchar_t*>(__nl_langinfo_l(_NL_WMON_8, __cloc));
-	  _M_data->_M_month09 = reinterpret_cast<wchar_t*>(__nl_langinfo_l(_NL_WMON_9, __cloc));
-	  _M_data->_M_month10 = reinterpret_cast<wchar_t*>(__nl_langinfo_l(_NL_WMON_10, __cloc));
-	  _M_data->_M_month11 = reinterpret_cast<wchar_t*>(__nl_langinfo_l(_NL_WMON_11, __cloc));
-	  _M_data->_M_month12 = reinterpret_cast<wchar_t*>(__nl_langinfo_l(_NL_WMON_12, __cloc));
+	  __u.__s = __nl_langinfo_l(_NL_WMON_1, __cloc);
+	  _M_data->_M_month01 = __u.__w;
+	  __u.__s = __nl_langinfo_l(_NL_WMON_2, __cloc);
+	  _M_data->_M_month02 = __u.__w;
+	  __u.__s = __nl_langinfo_l(_NL_WMON_3, __cloc);
+	  _M_data->_M_month03 = __u.__w;
+	  __u.__s = __nl_langinfo_l(_NL_WMON_4, __cloc);
+	  _M_data->_M_month04 = __u.__w;
+	  __u.__s = __nl_langinfo_l(_NL_WMON_5, __cloc);
+	  _M_data->_M_month05 = __u.__w;
+	  __u.__s = __nl_langinfo_l(_NL_WMON_6, __cloc);
+	  _M_data->_M_month06 = __u.__w;
+	  __u.__s = __nl_langinfo_l(_NL_WMON_7, __cloc);
+	  _M_data->_M_month07 = __u.__w;
+	  __u.__s = __nl_langinfo_l(_NL_WMON_8, __cloc);
+	  _M_data->_M_month08 = __u.__w;
+	  __u.__s = __nl_langinfo_l(_NL_WMON_9, __cloc);
+	  _M_data->_M_month09 = __u.__w;
+	  __u.__s = __nl_langinfo_l(_NL_WMON_10, __cloc);
+	  _M_data->_M_month10 = __u.__w;
+	  __u.__s = __nl_langinfo_l(_NL_WMON_11, __cloc);
+	  _M_data->_M_month11 = __u.__w;
+	  __u.__s = __nl_langinfo_l(_NL_WMON_12, __cloc);
+	  _M_data->_M_month12 = __u.__w;
 
 	  // Abbreviated month names, starting with "C"'s Jan.
-	  _M_data->_M_amonth01 = reinterpret_cast<wchar_t*>(__nl_langinfo_l(_NL_WABMON_1, __cloc));
-	  _M_data->_M_amonth02 = reinterpret_cast<wchar_t*>(__nl_langinfo_l(_NL_WABMON_2, __cloc));
-	  _M_data->_M_amonth03 = reinterpret_cast<wchar_t*>(__nl_langinfo_l(_NL_WABMON_3, __cloc));
-	  _M_data->_M_amonth04 = reinterpret_cast<wchar_t*>(__nl_langinfo_l(_NL_WABMON_4, __cloc));
-	  _M_data->_M_amonth05 = reinterpret_cast<wchar_t*>(__nl_langinfo_l(_NL_WABMON_5, __cloc));
-	  _M_data->_M_amonth06 = reinterpret_cast<wchar_t*>(__nl_langinfo_l(_NL_WABMON_6, __cloc));
-	  _M_data->_M_amonth07 = reinterpret_cast<wchar_t*>(__nl_langinfo_l(_NL_WABMON_7, __cloc));
-	  _M_data->_M_amonth08 = reinterpret_cast<wchar_t*>(__nl_langinfo_l(_NL_WABMON_8, __cloc));
-	  _M_data->_M_amonth09 = reinterpret_cast<wchar_t*>(__nl_langinfo_l(_NL_WABMON_9, __cloc));
-	  _M_data->_M_amonth10 = reinterpret_cast<wchar_t*>(__nl_langinfo_l(_NL_WABMON_10, __cloc));
-	  _M_data->_M_amonth11 = reinterpret_cast<wchar_t*>(__nl_langinfo_l(_NL_WABMON_11, __cloc));
-	  _M_data->_M_amonth12 = reinterpret_cast<wchar_t*>(__nl_langinfo_l(_NL_WABMON_12, __cloc));
+	  __u.__s = __nl_langinfo_l(_NL_WABMON_1, __cloc);
+	  _M_data->_M_amonth01 = __u.__w;
+	  __u.__s = __nl_langinfo_l(_NL_WABMON_2, __cloc);
+	  _M_data->_M_amonth02 = __u.__w;
+	  __u.__s = __nl_langinfo_l(_NL_WABMON_3, __cloc);
+	  _M_data->_M_amonth03 = __u.__w;
+	  __u.__s = __nl_langinfo_l(_NL_WABMON_4, __cloc);
+	  _M_data->_M_amonth04 = __u.__w;
+	  __u.__s = __nl_langinfo_l(_NL_WABMON_5, __cloc);
+	  _M_data->_M_amonth05 = __u.__w;
+	  __u.__s = __nl_langinfo_l(_NL_WABMON_6, __cloc);
+	  _M_data->_M_amonth06 = __u.__w;
+	  __u.__s = __nl_langinfo_l(_NL_WABMON_7, __cloc);
+	  _M_data->_M_amonth07 = __u.__w;
+	  __u.__s = __nl_langinfo_l(_NL_WABMON_8, __cloc);
+	  _M_data->_M_amonth08 = __u.__w;
+	  __u.__s = __nl_langinfo_l(_NL_WABMON_9, __cloc);
+	  _M_data->_M_amonth09 = __u.__w;
+	  __u.__s = __nl_langinfo_l(_NL_WABMON_10, __cloc);
+	  _M_data->_M_amonth10 = __u.__w;
+	  __u.__s = __nl_langinfo_l(_NL_WABMON_11, __cloc);
+	  _M_data->_M_amonth11 = __u.__w;
+	  __u.__s = __nl_langinfo_l(_NL_WABMON_12, __cloc);
+	  _M_data->_M_amonth12 = __u.__w;
 	}
     }
 #endif
-}
+
+_GLIBCXX_END_NAMESPACE_VERSION
+} // namespace

@@ -6,7 +6,7 @@
 --                                                                          --
 --                                 S p e c                                  --
 --                                                                          --
---          Copyright (C) 1992-1998 Free Software Foundation, Inc.          --
+--          Copyright (C) 1992-2009, Free Software Foundation, Inc.         --
 --                                                                          --
 -- This specification is derived from the Ada Reference Manual for use with --
 -- GNAT. The copyright notice above, and the license provisions that follow --
@@ -14,21 +14,19 @@
 --                                                                          --
 -- GNAT is free software;  you can  redistribute it  and/or modify it under --
 -- terms of the  GNU General Public License as published  by the Free Soft- --
--- ware  Foundation;  either version 2,  or (at your option) any later ver- --
+-- ware  Foundation;  either version 3,  or (at your option) any later ver- --
 -- sion.  GNAT is distributed in the hope that it will be useful, but WITH- --
 -- OUT ANY WARRANTY;  without even the  implied warranty of MERCHANTABILITY --
--- or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU General Public License --
--- for  more details.  You should have  received  a copy of the GNU General --
--- Public License  distributed with GNAT;  see file COPYING.  If not, write --
--- to  the Free Software Foundation,  59 Temple Place - Suite 330,  Boston, --
--- MA 02111-1307, USA.                                                      --
+-- or FITNESS FOR A PARTICULAR PURPOSE.                                     --
 --                                                                          --
--- As a special exception,  if other files  instantiate  generics from this --
--- unit, or you link  this unit with other files  to produce an executable, --
--- this  unit  does not  by itself cause  the resulting  executable  to  be --
--- covered  by the  GNU  General  Public  License.  This exception does not --
--- however invalidate  any other reasons why  the executable file  might be --
--- covered by the  GNU Public License.                                      --
+-- As a special exception under Section 7 of GPL version 3, you are granted --
+-- additional permissions described in the GCC Runtime Library Exception,   --
+-- version 3.1, as published by the Free Software Foundation.               --
+--                                                                          --
+-- You should have received a copy of the GNU General Public License and    --
+-- a copy of the GCC Runtime Library Exception along with this program;     --
+-- see the files COPYING3 and COPYING.RUNTIME respectively.  If not, see    --
+-- <http://www.gnu.org/licenses/>.                                          --
 --                                                                          --
 -- GNAT was originally developed  by the GNAT team at  New York University. --
 -- Extensive contributions were provided by Ada Core Technologies Inc.      --
@@ -38,13 +36,14 @@
 with Ada.Finalization;
 
 package Ada.Strings.Wide_Maps is
-   pragma Preelaborate (Wide_Maps);
+   pragma Preelaborate;
 
    -------------------------------------
    -- Wide Character Set Declarations --
    -------------------------------------
 
    type Wide_Character_Set is private;
+   pragma Preelaborable_Initialization (Wide_Character_Set);
    --  Representation for a set of Wide_Character values:
 
    Null_Set : constant Wide_Character_Set;
@@ -63,85 +62,71 @@ package Ada.Strings.Wide_Maps is
      array (Positive range <>) of Wide_Character_Range;
 
    function To_Set
-     (Ranges : in Wide_Character_Ranges)
-      return   Wide_Character_Set;
+     (Ranges : Wide_Character_Ranges) return Wide_Character_Set;
 
    function To_Set
-     (Span : in Wide_Character_Range)
-      return Wide_Character_Set;
+     (Span : Wide_Character_Range) return Wide_Character_Set;
 
    function To_Ranges
-     (Set :  in Wide_Character_Set)
-      return Wide_Character_Ranges;
+     (Set : Wide_Character_Set) return Wide_Character_Ranges;
 
    ---------------------------------------
    -- Operations on Wide Character Sets --
    ---------------------------------------
 
-   function "=" (Left, Right : in Wide_Character_Set) return Boolean;
+   function "=" (Left, Right : Wide_Character_Set) return Boolean;
 
    function "not"
-     (Right  : in Wide_Character_Set)
-      return Wide_Character_Set;
+     (Right : Wide_Character_Set) return Wide_Character_Set;
 
    function "and"
-     (Left, Right : in Wide_Character_Set)
-      return        Wide_Character_Set;
+     (Left, Right : Wide_Character_Set) return Wide_Character_Set;
 
    function "or"
-     (Left, Right : in Wide_Character_Set)
-      return        Wide_Character_Set;
+     (Left, Right : Wide_Character_Set) return Wide_Character_Set;
 
    function "xor"
-     (Left, Right : in Wide_Character_Set)
-      return        Wide_Character_Set;
+     (Left, Right : Wide_Character_Set) return Wide_Character_Set;
 
    function "-"
-     (Left, Right : in Wide_Character_Set)
-      return        Wide_Character_Set;
+     (Left, Right : Wide_Character_Set) return Wide_Character_Set;
 
    function Is_In
-     (Element : in Wide_Character;
-      Set     : in Wide_Character_Set)
-      return    Boolean;
+     (Element : Wide_Character;
+      Set     : Wide_Character_Set) return Boolean;
 
    function Is_Subset
-     (Elements : in Wide_Character_Set;
-      Set      : in Wide_Character_Set)
-      return     Boolean;
+     (Elements : Wide_Character_Set;
+      Set      : Wide_Character_Set) return Boolean;
 
    function "<="
-     (Left  : in Wide_Character_Set;
-      Right : in Wide_Character_Set)
-      return  Boolean
+     (Left  : Wide_Character_Set;
+      Right : Wide_Character_Set) return Boolean
    renames Is_Subset;
 
    subtype Wide_Character_Sequence is Wide_String;
    --  Alternative representation for a set of character values
 
    function To_Set
-     (Sequence  : in Wide_Character_Sequence)
-      return      Wide_Character_Set;
+     (Sequence : Wide_Character_Sequence) return Wide_Character_Set;
 
    function To_Set
-     (Singleton : in Wide_Character)
-      return      Wide_Character_Set;
+     (Singleton : Wide_Character) return Wide_Character_Set;
 
    function To_Sequence
-     (Set  : in Wide_Character_Set)
-      return Wide_Character_Sequence;
+     (Set : Wide_Character_Set) return Wide_Character_Sequence;
 
    -----------------------------------------
    -- Wide Character Mapping Declarations --
    -----------------------------------------
 
    type Wide_Character_Mapping is private;
+   pragma Preelaborable_Initialization (Wide_Character_Mapping);
    --  Representation for a wide character to wide character mapping:
 
    function Value
-     (Map     : in Wide_Character_Mapping;
-      Element : in Wide_Character)
-      return    Wide_Character;
+     (Map     : Wide_Character_Mapping;
+      Element : Wide_Character) return Wide_Character;
 
    Identity : constant Wide_Character_Mapping;
 
@@ -150,19 +135,16 @@ package Ada.Strings.Wide_Maps is
    ---------------------------------
 
    function To_Mapping
-     (From, To : in Wide_Character_Sequence)
-      return     Wide_Character_Mapping;
+     (From, To : Wide_Character_Sequence) return Wide_Character_Mapping;
 
    function To_Domain
-     (Map  : in Wide_Character_Mapping)
-      return Wide_Character_Sequence;
+     (Map : Wide_Character_Mapping) return Wide_Character_Sequence;
 
    function To_Range
-     (Map  : in Wide_Character_Mapping)
-      return Wide_Character_Sequence;
+     (Map : Wide_Character_Mapping) return Wide_Character_Sequence;
 
    type Wide_Character_Mapping_Function is
-      access function (From : in Wide_Character) return Wide_Character;
+      access function (From : Wide_Character) return Wide_Character;
 
 private
    package AF renames Ada.Finalization;

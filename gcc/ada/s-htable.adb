@@ -1,12 +1,12 @@
 ------------------------------------------------------------------------------
 --                                                                          --
---                         GNAT RUNTIME COMPONENTS                          --
+--                         GNAT RUN-TIME COMPONENTS                         --
 --                                                                          --
 --                        S Y S T E M . H T A B L E                         --
 --                                                                          --
 --                                 B o d y                                  --
 --                                                                          --
---           Copyright (C) 1995-2002 Ada Core Technologies, Inc.            --
+--                    Copyright (C) 1995-2010, AdaCore                      --
 --                                                                          --
 -- GNAT is free software;  you can  redistribute it  and/or modify it under --
 -- terms of the  GNU General Public License as published  by the Free Soft- --
@@ -16,8 +16,8 @@
 -- or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU General Public License --
 -- for  more details.  You should have  received  a copy of the GNU General --
 -- Public License  distributed with GNAT;  see file COPYING.  If not, write --
--- to  the Free Software Foundation,  59 Temple Place - Suite 330,  Boston, --
--- MA 02111-1307, USA.                                                      --
+-- to  the  Free Software Foundation,  51  Franklin  Street,  Fifth  Floor, --
+-- Boston, MA 02110-1301, USA.                                              --
 --                                                                          --
 -- As a special exception,  if other files  instantiate  generics from this --
 -- unit, or you link  this unit with other files  to produce an executable, --
@@ -31,13 +31,16 @@
 --                                                                          --
 ------------------------------------------------------------------------------
 
+pragma Compiler_Unit;
+
 with Ada.Unchecked_Deallocation;
+with System.String_Hash;
 
 package body System.HTable is
 
-   --------------------
-   --  Static_HTable --
-   --------------------
+   -------------------
+   -- Static_HTable --
+   -------------------
 
    package body Static_HTable is
 
@@ -48,9 +51,9 @@ package body System.HTable is
       Iterator_Started : Boolean := False;
 
       function Get_Non_Null return Elmt_Ptr;
-      --  Returns Null_Ptr if Iterator_Started is false of the Table is
-      --  empty. Returns Iterator_Ptr if non null, or the next non null
-      --  element in table if any.
+      --  Returns Null_Ptr if Iterator_Started is false or the Table is empty.
+      --  Returns Iterator_Ptr if non null, or the next non null element in
+      --  table if any.
 
       ---------
       -- Get --
@@ -107,7 +110,7 @@ package body System.HTable is
 
       function Get_Non_Null return Elmt_Ptr is
       begin
-         while Iterator_Ptr = Null_Ptr  loop
+         while Iterator_Ptr = Null_Ptr loop
             if Iterator_Index = Table'Last then
                Iterator_Started := False;
                return Null_Ptr;
@@ -182,9 +185,9 @@ package body System.HTable is
 
    end Static_HTable;
 
-   --------------------
-   --  Simple_HTable --
-   --------------------
+   -------------------
+   -- Simple_HTable --
+   -------------------
 
    package body Simple_HTable is
 
@@ -221,7 +224,6 @@ package body System.HTable is
 
       function  Get (K : Key) return Element is
          Tmp : constant Elmt_Ptr := Tab.Get (K);
-
       begin
          if Tmp = null then
             return No_Element;
@@ -236,12 +238,22 @@ package body System.HTable is
 
       function Get_First return Element is
          Tmp : constant Elmt_Ptr := Tab.Get_First;
-
       begin
          if Tmp = null then
             return No_Element;
          else
             return Tmp.E;
+         end if;
+      end Get_First;
+
+      procedure Get_First (K : in out Key; E : out Element) is
+         Tmp : constant Elmt_Ptr := Tab.Get_First;
+      begin
+         if Tmp = null then
+            E := No_Element;
+         else
+            K := Tmp.K;
+            E := Tmp.E;
          end if;
       end Get_First;
 
@@ -260,12 +272,22 @@ package body System.HTable is
 
       function Get_Next return Element is
          Tmp : constant Elmt_Ptr := Tab.Get_Next;
-
       begin
          if Tmp = null then
             return No_Element;
          else
             return Tmp.E;
+         end if;
+      end Get_Next;
+
+      procedure Get_Next (K : in out Key; E : out Element) is
+         Tmp : constant Elmt_Ptr := Tab.Get_Next;
+      begin
+         if Tmp = null then
+            E := No_Element;
+         else
+            K := Tmp.K;
+            E := Tmp.E;
          end if;
       end Get_Next;
 
@@ -318,7 +340,6 @@ package body System.HTable is
 
       procedure Set (K : Key; E : Element) is
          Tmp : constant Elmt_Ptr := Tab.Get (K);
-
       begin
          if Tmp = null then
             Tab.Set (new Element_Wrapper'(K, E, null));
@@ -342,21 +363,14 @@ package body System.HTable is
    ----------
 
    function Hash (Key : String) return Header_Num is
-
       type Uns is mod 2 ** 32;
 
-      function Rotate_Left (Value : Uns; Amount : Natural) return Uns;
-      pragma Import (Intrinsic, Rotate_Left);
-
-      Tmp : Uns := 0;
+      function Hash_Fun is
+         new System.String_Hash.Hash (Character, String, Uns);
 
    begin
-      for J in Key'Range loop
-         Tmp := Rotate_Left (Tmp, 1) + Character'Pos (Key (J));
-      end loop;
-
       return Header_Num'First +
-               Header_Num'Base (Tmp mod Header_Num'Range_Length);
+        Header_Num'Base (Hash_Fun (Key) mod Header_Num'Range_Length);
    end Hash;
 
 end System.HTable;

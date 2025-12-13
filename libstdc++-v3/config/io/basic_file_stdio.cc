@@ -1,11 +1,12 @@
 // Wrapper of C-language FILE struct -*- C++ -*-
 
-// Copyright (C) 2000, 2001, 2002, 2003, 2004 Free Software Foundation, Inc.
+// Copyright (C) 2000, 2001, 2002, 2003, 2004, 2006, 2007, 2009, 2010
+// Free Software Foundation, Inc.
 //
 // This file is part of the GNU ISO C++ Library.  This library is free
 // software; you can redistribute it and/or modify it under the
 // terms of the GNU General Public License as published by the
-// Free Software Foundation; either version 2, or (at your option)
+// Free Software Foundation; either version 3, or (at your option)
 // any later version.
 
 // This library is distributed in the hope that it will be useful,
@@ -13,19 +14,14 @@
 // MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
 // GNU General Public License for more details.
 
-// You should have received a copy of the GNU General Public License along
-// with this library; see the file COPYING.  If not, write to the Free
-// Software Foundation, 59 Temple Place - Suite 330, Boston, MA 02111-1307,
-// USA.
+// Under Section 7 of GPL version 3, you are granted additional
+// permissions described in the GCC Runtime Library Exception, version
+// 3.1, as published by the Free Software Foundation.
 
-// As a special exception, you may use this file as part of a free software
-// library without restriction.  Specifically, if other files instantiate
-// templates or use macros or inline functions from this file, or you compile
-// this file and link it with other files to produce an executable, this
-// file does not by itself cause the resulting executable to be covered by
-// the GNU General Public License.  This exception does not however
-// invalidate any other reasons why the executable file might be covered by
-// the GNU General Public License.
+// You should have received a copy of the GNU General Public License and
+// a copy of the GCC Runtime Library Exception along with this program;
+// see the files COPYING3 and COPYING.RUNTIME respectively.  If not, see
+// <http://www.gnu.org/licenses/>.
 
 //
 // ISO C++ 14882: 27.8  File-based streams
@@ -68,9 +64,9 @@
 # endif
 #endif
 
-#include <limits> // For <off_t>::max() and min()
+#include <limits> // For <off_t>::max() and min() and <streamsize>::max()
 
-namespace __gnu_internal
+namespace 
 {
   // Map ios_base::openmode flags to a string for use in fopen().
   // Table of valid combinations as given in [lib.filebuf.members]/2.
@@ -85,23 +81,31 @@ namespace __gnu_internal
 	app    = std::ios_base::app,
 	binary = std::ios_base::binary
       };
-    
+
+    // _GLIBCXX_RESOLVE_LIB_DEFECTS
+    // 596. 27.8.1.3 Table 112 omits "a+" and "a+b" modes.
     switch (mode & (in|out|trunc|app|binary))
       {
-      case (   out                 ): return "w";  
-      case (   out      |app       ): return "a";  
-      case (   out|trunc           ): return "w";  
-      case (in                     ): return "r";  
-      case (in|out                 ): return "r+"; 
-      case (in|out|trunc           ): return "w+"; 
-	
-      case (   out          |binary): return "wb"; 
-      case (   out      |app|binary): return "ab"; 
-      case (   out|trunc    |binary): return "wb"; 
-      case (in              |binary): return "rb"; 
+      case (   out                 ): return "w";
+      case (   out      |app       ): return "a";
+      case (             app       ): return "a";
+      case (   out|trunc           ): return "w";
+      case (in                     ): return "r";
+      case (in|out                 ): return "r+";
+      case (in|out|trunc           ): return "w+";
+      case (in|out      |app       ): return "a+";
+      case (in          |app       ): return "a+";
+
+      case (   out          |binary): return "wb";
+      case (   out      |app|binary): return "ab";
+      case (             app|binary): return "ab";
+      case (   out|trunc    |binary): return "wb";
+      case (in              |binary): return "rb";
       case (in|out          |binary): return "r+b";
       case (in|out|trunc    |binary): return "w+b";
-	
+      case (in|out      |app|binary): return "a+b";
+      case (in          |app|binary): return "a+b";
+
       default: return 0; // invalid
       }
   }
@@ -172,12 +176,15 @@ namespace __gnu_internal
     return __n1 + __n2 - __nleft;
   }
 #endif
-} // namespace __gnu_internal
+} // anonymous namespace
 
-namespace std 
+
+namespace std _GLIBCXX_VISIBILITY(default)
 {
+_GLIBCXX_BEGIN_NAMESPACE_VERSION
+
   // Definitions for __basic_file<char>.
-  __basic_file<char>::__basic_file(__c_lock* /*__lock*/) 
+  __basic_file<char>::__basic_file(__c_lock* /*__lock*/) throw()
   : _M_cfile(NULL), _M_cfile_created(false) { }
 
   __basic_file<char>::~__basic_file()
@@ -205,10 +212,10 @@ namespace std
   }
   
   __basic_file<char>*
-  __basic_file<char>::sys_open(int __fd, ios_base::openmode __mode)
+  __basic_file<char>::sys_open(int __fd, ios_base::openmode __mode) throw ()
   {
     __basic_file* __ret = NULL;
-    const char* __c_mode = __gnu_internal::fopen_mode(__mode);
+    const char* __c_mode = fopen_mode(__mode);
     if (__c_mode && !this->is_open() && (_M_cfile = fdopen(__fd, __c_mode)))
       {
 	char* __buf = NULL;
@@ -225,7 +232,7 @@ namespace std
 			   int /*__prot*/)
   {
     __basic_file* __ret = NULL;
-    const char* __c_mode = __gnu_internal::fopen_mode(__mode);
+    const char* __c_mode = fopen_mode(__mode);
     if (__c_mode && !this->is_open())
       {
 #ifdef _GLIBCXX_USE_LFS
@@ -242,15 +249,15 @@ namespace std
   }
   
   bool 
-  __basic_file<char>::is_open() const 
+  __basic_file<char>::is_open() const throw ()
   { return _M_cfile != 0; }
   
   int 
-  __basic_file<char>::fd() 
+  __basic_file<char>::fd() throw ()
   { return fileno(_M_cfile); }
   
   __c_file*
-  __basic_file<char>::file() 
+  __basic_file<char>::file() throw ()
   { return _M_cfile; }
   
   __basic_file<char>* 
@@ -290,7 +297,7 @@ namespace std
 
   streamsize 
   __basic_file<char>::xsputn(const char* __s, streamsize __n)
-  { return __gnu_internal::xwrite(this->fd(), __s, __n); }
+  { return xwrite(this->fd(), __s, __n); }
 
   streamsize 
   __basic_file<char>::xsputn_2(const char* __s1, streamsize __n1,
@@ -298,25 +305,25 @@ namespace std
   {
     streamsize __ret = 0;
 #ifdef _GLIBCXX_HAVE_WRITEV
-    __ret = __gnu_internal::xwritev(this->fd(), __s1, __n1, __s2, __n2);
+    __ret = xwritev(this->fd(), __s1, __n1, __s2, __n2);
 #else
     if (__n1)
-      __ret = __gnu_internal::xwrite(this->fd(), __s1, __n1);
+      __ret = xwrite(this->fd(), __s1, __n1);
 
     if (__ret == __n1)
-      __ret += __gnu_internal::xwrite(this->fd(), __s2, __n2);
+      __ret += xwrite(this->fd(), __s2, __n2);
 #endif
     return __ret;
   }
 
   streamoff
-  __basic_file<char>::seekoff(streamoff __off, ios_base::seekdir __way)
+  __basic_file<char>::seekoff(streamoff __off, ios_base::seekdir __way) throw ()
   {
 #ifdef _GLIBCXX_USE_LFS
     return lseek64(this->fd(), __off, __way);
 #else
-    if (__off > std::numeric_limits<off_t>::max()
-	|| __off < std::numeric_limits<off_t>::min())
+    if (__off > numeric_limits<off_t>::max()
+	|| __off < numeric_limits<off_t>::min())
       return -1L;
     return lseek(this->fd(), __off, __way);
 #endif
@@ -329,6 +336,7 @@ namespace std
   streamsize
   __basic_file<char>::showmanyc()
   {
+#ifndef _GLIBCXX_NO_IOCTL
 #ifdef FIONREAD
     // Pipes and sockets.    
 #ifdef _GLIBCXX_FIONREAD_TAKES_OFF_T
@@ -339,7 +347,8 @@ namespace std
     int __r = ioctl(this->fd(), FIONREAD, &__num);
     if (!__r && __num >= 0)
       return __num; 
-#endif    
+#endif
+#endif
 
 #ifdef _GLIBCXX_HAVE_POLL
     // Cheap test.
@@ -352,11 +361,25 @@ namespace std
 
 #if defined(_GLIBCXX_HAVE_S_ISREG) || defined(_GLIBCXX_HAVE_S_IFREG)
     // Regular files.
+#ifdef _GLIBCXX_USE_LFS
+    struct stat64 __buffer;
+    const int __err = fstat64(this->fd(), &__buffer);
+    if (!__err && _GLIBCXX_ISREG(__buffer.st_mode))
+      {
+	const streamoff __off = __buffer.st_size - lseek64(this->fd(), 0,
+							   ios_base::cur);
+	return std::min(__off, streamoff(numeric_limits<streamsize>::max()));
+      }
+#else
     struct stat __buffer;
-    int __ret = fstat(this->fd(), &__buffer);
-    if (!__ret && _GLIBCXX_ISREG(__buffer.st_mode))
-	return __buffer.st_size - lseek(this->fd(), 0, ios_base::cur);
+    const int __err = fstat(this->fd(), &__buffer);
+    if (!__err && _GLIBCXX_ISREG(__buffer.st_mode))
+      return __buffer.st_size - lseek(this->fd(), 0, ios_base::cur);
+#endif
 #endif
     return 0;
   }
-}  // namespace std
+
+_GLIBCXX_END_NAMESPACE_VERSION
+} // namespace
+

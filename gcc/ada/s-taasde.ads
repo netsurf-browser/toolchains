@@ -1,38 +1,36 @@
 ------------------------------------------------------------------------------
 --                                                                          --
---                GNU ADA RUN-TIME LIBRARY (GNARL) COMPONENTS               --
+--                 GNAT RUN-TIME LIBRARY (GNARL) COMPONENTS                 --
 --                                                                          --
 --           S Y S T E M . T A S K I N G . A S Y N C _ D E L A Y S          --
 --                                                                          --
 --                                  S p e c                                 --
 --                                                                          --
---          Copyright (C) 1998-2001 Free Software Foundation, Inc.          --
+--          Copyright (C) 1998-2009, Free Software Foundation, Inc.         --
 --                                                                          --
 -- GNARL is free software; you can  redistribute it  and/or modify it under --
 -- terms of the  GNU General Public License as published  by the Free Soft- --
--- ware  Foundation;  either version 2,  or (at your option) any later ver- --
--- sion. GNARL is distributed in the hope that it will be useful, but WITH- --
+-- ware  Foundation;  either version 3,  or (at your option) any later ver- --
+-- sion.  GNAT is distributed in the hope that it will be useful, but WITH- --
 -- OUT ANY WARRANTY;  without even the  implied warranty of MERCHANTABILITY --
--- or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU General Public License --
--- for  more details.  You should have  received  a copy of the GNU General --
--- Public License  distributed with GNARL; see file COPYING.  If not, write --
--- to  the Free Software Foundation,  59 Temple Place - Suite 330,  Boston, --
--- MA 02111-1307, USA.                                                      --
+-- or FITNESS FOR A PARTICULAR PURPOSE.                                     --
 --                                                                          --
--- As a special exception,  if other files  instantiate  generics from this --
--- unit, or you link  this unit with other files  to produce an executable, --
--- this  unit  does not  by itself cause  the resulting  executable  to  be --
--- covered  by the  GNU  General  Public  License.  This exception does not --
--- however invalidate  any other reasons why  the executable file  might be --
--- covered by the  GNU Public License.                                      --
+-- As a special exception under Section 7 of GPL version 3, you are granted --
+-- additional permissions described in the GCC Runtime Library Exception,   --
+-- version 3.1, as published by the Free Software Foundation.               --
+--                                                                          --
+-- You should have received a copy of the GNU General Public License and    --
+-- a copy of the GCC Runtime Library Exception along with this program;     --
+-- see the files COPYING3 and COPYING.RUNTIME respectively.  If not, see    --
+-- <http://www.gnu.org/licenses/>.                                          --
 --                                                                          --
 -- GNARL was developed by the GNARL team at Florida State University.       --
 -- Extensive contributions were provided by Ada Core Technologies, Inc.     --
 --                                                                          --
 ------------------------------------------------------------------------------
 
---  This package contains the procedures to implements timeouts (delays)
---  for asynchronous select statements.
+--  This package contains the procedures to implements timeouts (delays) for
+--  asynchronous select statements.
 
 --  Note: the compiler generates direct calls to this interface, via Rtsfind.
 --  Any changes to this interface may require corresponding compiler changes.
@@ -97,11 +95,11 @@ package System.Tasking.Async_Delays is
    type Delay_Block_Access is access all Delay_Block;
 
    function Enqueue_Duration
-     (T : in Duration;
+     (T : Duration;
       D : Delay_Block_Access) return Boolean;
    --  Enqueue the specified relative delay. Returns True if the delay has
-   --  been enqueued, False if it has already expired.
-   --  If the delay has been enqueued, abortion is deferred.
+   --  been enqueued, False if it has already expired. If the delay has been
+   --  enqueued, abort is deferred.
 
    procedure Cancel_Async_Delay (D : Delay_Block_Access);
    --  Cancel the specified asynchronous delay
@@ -117,10 +115,10 @@ package System.Tasking.Async_Delays is
 private
 
    type Delay_Block is record
-      Self_Id     : Task_ID;
+      Self_Id : Task_Id;
       --  ID of the calling task
 
-      Level       : ATC_Level_Base;
+      Level : ATC_Level_Base;
       --  Normally Level is the ATC nesting level of the
       --  async. select statement to which this delay belongs, but
       --  after a call has been dequeued we set it to
@@ -130,10 +128,10 @@ private
       Resume_Time : Duration;
       --  The absolute wake up time, represented as Duration
 
-      Timed_Out   : Boolean := False;
+      Timed_Out : Boolean := False;
       --  Set to true if the delay has timed out
 
-      Succ, Pred  : Delay_Block_Access;
+      Succ, Pred : Delay_Block_Access;
       --  A double linked list
    end record;
 

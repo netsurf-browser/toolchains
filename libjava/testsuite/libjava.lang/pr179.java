@@ -4,8 +4,7 @@
 // Class.isInstance() and Class.isAssignableFrom(), and isAssignableFrom()
 // functionality in the event that an interface argument that is not 
 // implemented by any loaded class is given.
-//
-// Bryce McKinlay <bryce@albatross.co.nz>
+// Note that the desired output changed from 1.4 to 1.5.
 
 class A
 {
@@ -48,14 +47,3 @@ public class pr179
     System.out.println (C.class.isInstance (c));
   }
 }
-
-/* Expected Output:
-A initialized
-false
-B initialized
-false
-true
-C initialized
-false
-true
-*/

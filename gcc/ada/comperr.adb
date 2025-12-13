@@ -6,21 +6,20 @@
 --                                                                          --
 --                                 B o d y                                  --
 --                                                                          --
---          Copyright (C) 1992-2003 Free Software Foundation, Inc.          --
+--          Copyright (C) 1992-2009, Free Software Foundation, Inc.         --
 --                                                                          --
 -- GNAT is free software;  you can  redistribute it  and/or modify it under --
 -- terms of the  GNU General Public License as published  by the Free Soft- --
--- ware  Foundation;  either version 2,  or (at your option) any later ver- --
+-- ware  Foundation;  either version 3,  or (at your option) any later ver- --
 -- sion.  GNAT is distributed in the hope that it will be useful, but WITH- --
 -- OUT ANY WARRANTY;  without even the  implied warranty of MERCHANTABILITY --
 -- or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU General Public License --
 -- for  more details.  You should have  received  a copy of the GNU General --
--- Public License  distributed with GNAT;  see file COPYING.  If not, write --
--- to  the Free Software Foundation,  59 Temple Place - Suite 330,  Boston, --
--- MA 02111-1307, USA.                                                      --
+-- Public License  distributed with GNAT; see file COPYING3.  If not, go to --
+-- http://www.gnu.org/licenses for a complete copy of the license.          --
 --                                                                          --
 -- GNAT was originally developed  by the GNAT team at  New York University. --
--- Extensive contributions were provided by Ada Core Technologies Inc.      --
+-- Extensive contributions were provided by AdaCore.                         --
 --                                                                          --
 ------------------------------------------------------------------------------
 
@@ -31,15 +30,15 @@
 with Atree;    use Atree;
 with Debug;    use Debug;
 with Errout;   use Errout;
-with Fname;    use Fname;
 with Gnatvsn;  use Gnatvsn;
-with Lib;      use Lib;
 with Namet;    use Namet;
+with Opt;      use Opt;
 with Osint;    use Osint;
 with Output;   use Output;
 with Sinput;   use Sinput;
 with Sprint;   use Sprint;
 with Sdefault; use Sdefault;
+with Targparm; use Targparm;
 with Treepr;   use Treepr;
 with Types;    use Types;
 
@@ -71,14 +70,18 @@ package body Comperr is
    --------------------
 
    procedure Compiler_Abort
-     (X    : String;
-      Code : Integer := 0)
+     (X            : String;
+      Code         : Integer := 0;
+      Fallback_Loc : String := "")
    is
       --  The procedures below output a "bug box" with information about
       --  the cause of the compiler abort and about the preferred method
       --  of reporting bugs. The default is a bug box appropriate for
       --  the FSF version of GNAT, but there are specializations for
-      --  the GNATPRO and Public releases by Ada Core Technologies.
+      --  the GNATPRO and Public releases by AdaCore.
+
+      XF : constant Positive := X'First;
+      --  Start index, usually 1, but we won't assume this
 
       procedure End_Line;
       --  Add blanks up to column 76, and then a final vertical bar
@@ -93,19 +96,53 @@ package body Comperr is
          Write_Eol;
       end End_Line;
 
-      Is_Public_Version : constant Boolean := Get_Gnat_Build_Type = Public;
-      Is_FSF_Version    : constant Boolean := Get_Gnat_Build_Type = FSF;
+      Is_GPL_Version : constant Boolean := Gnatvsn.Build_Type = GPL;
+      Is_FSF_Version : constant Boolean := Gnatvsn.Build_Type = FSF;
 
    --  Start of processing for Compiler_Abort
 
    begin
-      --  Prevent recursion through Compiler_Abort, e.g. via SIGSEGV.
+      Cancel_Special_Output;
+
+      --  Prevent recursion through Compiler_Abort, e.g. via SIGSEGV
 
       if Abort_In_Progress then
          Exit_Program (E_Abort);
       end if;
 
       Abort_In_Progress := True;
+
+      --  Generate a "standard" error message instead of a bug box in case of
+      --  .NET compiler, since we do not support all constructs of the
+      --  language. Of course ideally, we should detect this before bombing
+      --  on e.g. an assertion error, but in practice most of these bombs
+      --  are due to a legitimate case of a construct not being supported (in
+      --  a sense they all are, since for sure we are not supporting something
+      --  if we bomb!) By giving this message, we provide a more reasonable
+      --  practical interface, since giving scary bug boxes on unsupported
+      --  features is definitely not helpful.
+
+      --  Similarly if we are generating SCIL, an error message is sufficient
+      --  instead of generating a bug box.
+
+      --  Note that the call to Error_Msg_N below sets Serious_Errors_Detected
+      --  to 1, so we use the regular mechanism below in order to display a
+      --  "compilation abandoned" message and exit, so we still know we have
+      --  this case (and -gnatdk can still be used to get the bug box).
+
+      if (VM_Target = CLI_Target or else CodePeer_Mode)
+        and then Serious_Errors_Detected = 0
+        and then not Debug_Flag_K
+        and then Sloc (Current_Error_Node) > No_Location
+      then
+         if VM_Target = CLI_Target then
+            Error_Msg_N
+              ("unsupported construct in this context",
+               Current_Error_Node);
+         else
+            Error_Msg_N ("cannot generate 'S'C'I'L", Current_Error_Node);
+         end if;
+      end if;
 
       --  If any errors have already occurred, then we guess that the abort
       --  may well be caused by previous errors, and we don't make too much
@@ -114,7 +151,8 @@ package body Comperr is
       --  Debug flag K disables this behavior (useful for debugging)
 
       if Serious_Errors_Detected /= 0 and then not Debug_Flag_K then
-         Errout.Finalize;
+         Errout.Finalize (Last_Call => True);
+         Errout.Output_Messages;
 
          Set_Standard_Error;
          Write_Str ("compilation abandoned due to previous error");
@@ -173,16 +211,16 @@ package body Comperr is
                Last_Blank : Integer := 70;
 
             begin
-               for P in 40 .. 69 loop
-                  if X (P) = ' ' then
+               for P in 39 .. 68 loop
+                  if X (XF + P) = ' ' then
                      Last_Blank := P;
                   end if;
                end loop;
 
-               Write_Str (X (1 .. Last_Blank));
+               Write_Str (X (XF .. XF - 1 + Last_Blank));
                End_Line;
                Write_Str ("|    ");
-               Write_Str (X (Last_Blank + 1 .. X'Length));
+               Write_Str (X (XF + Last_Blank .. X'Last));
             end;
          else
             Write_Str (X);
@@ -208,10 +246,14 @@ package body Comperr is
 
          --  Output source location information
 
-         if Sloc (Current_Error_Node) <= Standard_Location
-           or else Sloc (Current_Error_Node) = No_Location
-         then
-            Write_Str ("| No source file position information available");
+         if Sloc (Current_Error_Node) <= No_Location then
+            if Fallback_Loc'Length > 0 then
+               Write_Str ("| Error detected around ");
+               Write_Str (Fallback_Loc);
+            else
+               Write_Str ("| No source file position information available");
+            end if;
+
             End_Line;
          else
             Write_Str ("| Error detected at ");
@@ -267,24 +309,52 @@ package body Comperr is
                      " http://gcc.gnu.org/bugs.html.");
                   End_Line;
 
+               elsif Is_GPL_Version then
+
+                  Write_Str
+                    ("| Please submit a bug report by email " &
+                     "to report@adacore.com.");
+                  End_Line;
+
+                  Write_Str
+                    ("| GAP members can alternatively use GNAT Tracker:");
+                  End_Line;
+
+                  Write_Str
+                    ("| http://www.adacore.com/ " &
+                     "section 'send a report'.");
+                  End_Line;
+
+                  Write_Str
+                    ("| See gnatinfo.txt for full info on procedure " &
+                     "for submitting bugs.");
+                  End_Line;
+
                else
                   Write_Str
-                    ("| Please submit bug report by email " &
-                     "to report@gnat.com.");
+                    ("| Please submit a bug report using GNAT Tracker:");
                   End_Line;
 
                   Write_Str
-                    ("| Use a subject line meaningful to you" &
-                     " and us to track the bug.");
+                    ("| http://www.adacore.com/gnattracker/ " &
+                     "section 'send a report'.");
+                  End_Line;
+
+                  Write_Str
+                    ("| alternatively submit a bug report by email " &
+                     "to report@adacore.com,");
+                  End_Line;
+
+                  Write_Str
+                    ("| including your customer number #nnn " &
+                     "in the subject line.");
                   End_Line;
                end if;
 
-               if not (Is_Public_Version or Is_FSF_Version) then
-                  Write_Str
-                    ("| (include your customer number #nnn " &
-                     "in the subject line).");
-                  End_Line;
-               end if;
+               Write_Str
+                 ("| Use a subject line meaningful to you" &
+                  " and us to track the bug.");
+               End_Line;
 
                Write_Str
                  ("| Include the entire contents of this bug " &
@@ -304,25 +374,9 @@ package body Comperr is
                  ("| (concatenated together with no headers between files).");
                End_Line;
 
-               if Is_Public_Version then
+               if not Is_FSF_Version then
                   Write_Str
-                    ("| (use plain ASCII or MIME attachment).");
-                  End_Line;
-
-                  Write_Str
-                    ("| See gnatinfo.txt for full info on procedure " &
-                     "for submitting bugs.");
-                  End_Line;
-
-               elsif not Is_FSF_Version then
-                  Write_Str
-                    ("| (use plain ASCII or MIME attachment, or FTP "
-                     & "to your customer directory).");
-                  End_Line;
-
-                  Write_Str
-                    ("| See README.GNATPRO for full info on procedure " &
-                     "for submitting bugs.");
+                    ("| Use plain ASCII or MIME attachment.");
                   End_Line;
                end if;
             end if;
@@ -347,26 +401,19 @@ package body Comperr is
          Write_Line ("Note that list may not be accurate in some cases, ");
          Write_Line ("so please double check that the problem can still ");
          Write_Line ("be reproduced with the set of files listed.");
+         Write_Line ("Consider also -gnatd.n switch (see debug.adb).");
          Write_Eol;
 
-         for U in Main_Unit .. Last_Unit loop
-            begin
-               if not Is_Internal_File_Name
-                        (File_Name (Source_Index (U)))
-               then
-                  Write_Name (Full_File_Name (Source_Index (U)));
-                  Write_Eol;
-               end if;
+         begin
+            Dump_Source_File_Names;
 
-            --  No point in double bug box if we blow up trying to print
-            --  the list of file names! Output informative msg and quit.
+         --  If we blow up trying to print the list of file names, just output
+         --  informative msg and continue.
 
-            exception
-               when others =>
-                  Write_Str ("list may be incomplete");
-                  exit;
-            end;
-         end loop;
+         exception
+            when others =>
+               Write_Str ("list may be incomplete");
+         end;
 
          Write_Eol;
          Set_Standard_Output;

@@ -6,7 +6,7 @@
 --                                                                          --
 --                                 B o d y                                  --
 --                                                                          --
---            Copyright (C) 1998-2002 Ada Core Technologies, Inc.           --
+--                     Copyright (C) 1998-2009, AdaCore                     --
 --                                                                          --
 -- GNAT is free software;  you can  redistribute it  and/or modify it under --
 -- terms of the  GNU General Public License as published  by the Free Soft- --
@@ -16,8 +16,8 @@
 -- or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU General Public License --
 -- for  more details.  You should have  received  a copy of the GNU General --
 -- Public License  distributed with GNAT;  see file COPYING.  If not, write --
--- to  the Free Software Foundation,  59 Temple Place - Suite 330,  Boston, --
--- MA 02111-1307, USA.                                                      --
+-- to  the  Free Software Foundation,  51  Franklin  Street,  Fifth  Floor, --
+-- Boston, MA 02110-1301, USA.                                              --
 --                                                                          --
 -- As a special exception,  if other files  instantiate  generics from this --
 -- unit, or you link  this unit with other files  to produce an executable, --
@@ -37,7 +37,9 @@ with Ada.Strings.Unbounded.Aux; use Ada.Strings.Unbounded.Aux;
 with GNAT.Debug_Utilities;      use GNAT.Debug_Utilities;
 with GNAT.IO;                   use GNAT.IO;
 
-with Unchecked_Deallocation;
+with System.String_Hash;
+
+with Ada.Unchecked_Deallocation;
 
 package body GNAT.Spitbol is
 
@@ -79,10 +81,9 @@ package body GNAT.Spitbol is
    ----------
 
    function Lpad
-     (Str  : VString;
-      Len  : Natural;
-      Pad  : Character := ' ')
-      return VString
+     (Str : VString;
+      Len : Natural;
+      Pad : Character := ' ') return VString
    is
    begin
       if Length (Str) >= Len then
@@ -93,10 +94,9 @@ package body GNAT.Spitbol is
    end Lpad;
 
    function Lpad
-     (Str  : String;
-      Len  : Natural;
-      Pad  : Character := ' ')
-      return VString
+     (Str : String;
+      Len : Natural;
+      Pad : Character := ' ') return VString
    is
    begin
       if Str'Length >= Len then
@@ -135,8 +135,11 @@ package body GNAT.Spitbol is
    -------
 
    function N (Str : VString) return Integer is
+      S : Big_String_Access;
+      L : Natural;
    begin
-      return Integer'Value (Get_String (Str).all);
+      Get_String (Str, S, L);
+      return Integer'Value (S (1 .. L));
    end N;
 
    --------------------
@@ -144,16 +147,22 @@ package body GNAT.Spitbol is
    --------------------
 
    function Reverse_String (Str : VString) return VString is
-      Len    : constant Natural       := Length (Str);
-      Chars  : constant String_Access := Get_String (Str);
-      Result : String (1 .. Len);
+      S : Big_String_Access;
+      L : Natural;
 
    begin
-      for J in 1 .. Len loop
-         Result (J) := Chars (Len + 1 - J);
-      end loop;
+      Get_String (Str, S, L);
 
-      return V (Result);
+      declare
+         Result : String (1 .. L);
+
+      begin
+         for J in 1 .. L loop
+            Result (J) := S (L + 1 - J);
+         end loop;
+
+         return V (Result);
+      end;
    end Reverse_String;
 
    function Reverse_String (Str : String) return VString is
@@ -168,16 +177,22 @@ package body GNAT.Spitbol is
    end Reverse_String;
 
    procedure Reverse_String (Str : in out VString) is
-      Len    : constant Natural := Length (Str);
-      Chars  : constant String_Access := Get_String (Str);
-      Temp   : Character;
+      S : Big_String_Access;
+      L : Natural;
 
    begin
-      for J in 1 .. Len / 2 loop
-         Temp := Chars (J);
-         Chars (J) := Chars (Len + 1 - J);
-         Chars (Len + 1 - J) := Temp;
-      end loop;
+      Get_String (Str, S, L);
+
+      declare
+         Result : String (1 .. L);
+
+      begin
+         for J in 1 .. L loop
+            Result (J) := S (L + 1 - J);
+         end loop;
+
+         Set_Unbounded_String (Str, Result);
+      end;
    end Reverse_String;
 
    ----------
@@ -185,10 +200,9 @@ package body GNAT.Spitbol is
    ----------
 
    function Rpad
-     (Str  : VString;
-      Len  : Natural;
-      Pad  : Character := ' ')
-      return VString
+     (Str : VString;
+      Len : Natural;
+      Pad : Character := ' ') return VString
    is
    begin
       if Length (Str) >= Len then
@@ -199,10 +213,9 @@ package body GNAT.Spitbol is
    end Rpad;
 
    function Rpad
-     (Str  : String;
-      Len  : Natural;
-      Pad  : Character := ' ')
-      return VString
+     (Str : String;
+      Len : Natural;
+      Pad : Character := ' ') return VString
    is
    begin
       if Str'Length >= Len then
@@ -269,34 +282,33 @@ package body GNAT.Spitbol is
    function Substr
      (Str   : VString;
       Start : Positive;
-      Len   : Natural)
-      return  VString
+      Len   : Natural) return VString
    is
+      S : Big_String_Access;
+      L : Natural;
+
    begin
-      if Start > Length (Str) then
+      Get_String (Str, S, L);
+
+      if Start > L then
          raise Index_Error;
-
-      elsif Start + Len - 1 > Length (Str) then
+      elsif Start + Len - 1 > L then
          raise Length_Error;
-
       else
-         return V (Get_String (Str).all (Start .. Start + Len - 1));
+         return V (S (Start .. Start + Len - 1));
       end if;
    end Substr;
 
    function Substr
      (Str   : String;
       Start : Positive;
-      Len   : Natural)
-      return  VString
+      Len   : Natural) return VString
    is
    begin
       if Start > Str'Length then
          raise Index_Error;
-
       elsif Start + Len > Str'Length then
          raise Length_Error;
-
       else
          return
            V (Str (Str'First + Start - 1 .. Str'First + Start + Len - 2));
@@ -310,14 +322,14 @@ package body GNAT.Spitbol is
    package body Table is
 
       procedure Free is new
-        Unchecked_Deallocation (Hash_Element, Hash_Element_Ptr);
+        Ada.Unchecked_Deallocation (Hash_Element, Hash_Element_Ptr);
 
       -----------------------
       -- Local Subprograms --
       -----------------------
 
-      function Hash (Str : String) return Unsigned_32;
-      --  Compute hash function for given String
+      function Hash is new System.String_Hash.Hash
+        (Character, String, Unsigned_32);
 
       ------------
       -- Adjust --
@@ -401,7 +413,7 @@ package body GNAT.Spitbol is
 
                if Elmt.Name /= null then
                   loop
-                     Set_String (TA (P).Name, Elmt.Name.all);
+                     Set_Unbounded_String (TA (P).Name, Elmt.Name.all);
                      TA (P).Value := Elmt.Value;
                      P := P + 1;
                      Elmt := Elmt.Next;
@@ -418,7 +430,7 @@ package body GNAT.Spitbol is
       -- Copy --
       ----------
 
-      procedure Copy (From : in Table; To : in out Table) is
+      procedure Copy (From : Table; To : in out Table) is
          Elmt : Hash_Element_Ptr;
 
       begin
@@ -446,8 +458,11 @@ package body GNAT.Spitbol is
       end Delete;
 
       procedure Delete (T : in out Table; Name  : VString) is
+         S : Big_String_Access;
+         L : Natural;
       begin
-         Delete (T, Get_String (Name).all);
+         Get_String (Name, S, L);
+         Delete (T, S (1 .. L));
       end Delete;
 
       procedure Delete (T : in out Table; Name  : String) is
@@ -569,8 +584,11 @@ package body GNAT.Spitbol is
       end Get;
 
       function Get (T : Table; Name : VString) return Value_Type is
+         S : Big_String_Access;
+         L : Natural;
       begin
-         return Get (T, Get_String (Name).all);
+         Get_String (Name, S, L);
+         return Get (T, S (1 .. L));
       end Get;
 
       function Get (T : Table; Name : String) return Value_Type is
@@ -597,22 +615,6 @@ package body GNAT.Spitbol is
          end if;
       end Get;
 
-      ----------
-      -- Hash --
-      ----------
-
-      function Hash (Str : String) return Unsigned_32 is
-         Result : Unsigned_32 := Str'Length;
-
-      begin
-         for J in Str'Range loop
-            Result := Rotate_Left (Result, 1) +
-                      Unsigned_32 (Character'Pos (Str (J)));
-         end loop;
-
-         return Result;
-      end Hash;
-
       -------------
       -- Present --
       -------------
@@ -623,8 +625,11 @@ package body GNAT.Spitbol is
       end Present;
 
       function Present (T : Table; Name : VString) return Boolean is
+         S : Big_String_Access;
+         L : Natural;
       begin
-         return Present (T, Get_String (Name).all);
+         Get_String (Name, S, L);
+         return Present (T, S (1 .. L));
       end Present;
 
       function Present (T : Table; Name : String) return Boolean is
@@ -656,8 +661,11 @@ package body GNAT.Spitbol is
       ---------
 
       procedure Set (T : in out Table; Name : VString; Value : Value_Type) is
+         S : Big_String_Access;
+         L : Natural;
       begin
-         Set (T, Get_String (Name).all, Value);
+         Get_String (Name, S, L);
+         Set (T, S (1 .. L), Value);
       end Set;
 
       procedure Set (T : in out Table; Name : Character; Value : Value_Type) is

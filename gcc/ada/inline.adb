@@ -6,18 +6,17 @@
 --                                                                          --
 --                                 B o d y                                  --
 --                                                                          --
---          Copyright (C) 1992-2003 Free Software Foundation, Inc.          --
+--          Copyright (C) 1992-2010, Free Software Foundation, Inc.         --
 --                                                                          --
 -- GNAT is free software;  you can  redistribute it  and/or modify it under --
 -- terms of the  GNU General Public License as published  by the Free Soft- --
--- ware  Foundation;  either version 2,  or (at your option) any later ver- --
+-- ware  Foundation;  either version 3,  or (at your option) any later ver- --
 -- sion.  GNAT is distributed in the hope that it will be useful, but WITH- --
 -- OUT ANY WARRANTY;  without even the  implied warranty of MERCHANTABILITY --
 -- or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU General Public License --
 -- for  more details.  You should have  received  a copy of the GNU General --
--- Public License  distributed with GNAT;  see file COPYING.  If not, write --
--- to  the Free Software Foundation,  59 Temple Place - Suite 330,  Boston, --
--- MA 02111-1307, USA.                                                      --
+-- Public License  distributed with GNAT; see file COPYING3.  If not, go to --
+-- http://www.gnu.org/licenses for a complete copy of the license.          --
 --                                                                          --
 -- GNAT was originally developed  by the GNAT team at  New York University. --
 -- Extensive contributions were provided by Ada Core Technologies Inc.      --
@@ -29,13 +28,13 @@ with Einfo;    use Einfo;
 with Elists;   use Elists;
 with Errout;   use Errout;
 with Exp_Ch7;  use Exp_Ch7;
-with Exp_Ch11; use Exp_Ch11;
 with Exp_Tss;  use Exp_Tss;
 with Fname;    use Fname;
 with Fname.UF; use Fname.UF;
 with Lib;      use Lib;
+with Namet;    use Namet;
 with Nlists;   use Nlists;
-with Opt;      use Opt;
+with Sem_Aux;  use Sem_Aux;
 with Sem_Ch8;  use Sem_Ch8;
 with Sem_Ch10; use Sem_Ch10;
 with Sem_Ch12; use Sem_Ch12;
@@ -89,7 +88,7 @@ package body Inline is
    type Subp_Index is new Nat;
    No_Subp : constant Subp_Index := 0;
 
-   --  The subprogram entities are hashed into the Inlined table.
+   --  The subprogram entities are hashed into the Inlined table
 
    Num_Hash_Headers : constant := 512;
 
@@ -139,8 +138,7 @@ package body Inline is
    -----------------------
 
    function Scope_In_Main_Unit (Scop : Entity_Id) return Boolean;
-   --  Return True if Scop is in the main unit or its spec, or in a
-   --  parent of the main unit if it is a child unit.
+   --  Return True if Scop is in the main unit or its spec
 
    procedure Add_Call (Called : Entity_Id; Caller : Entity_Id := Empty);
    --  Make two entries in Inlined table, for an inlined subprogram being
@@ -183,10 +181,10 @@ package body Inline is
    To_Clean : Elist_Id;
 
    procedure Add_Scope_To_Clean (Inst : Entity_Id);
-   --  Build set of scopes on which cleanup actions must be performed.
+   --  Build set of scopes on which cleanup actions must be performed
 
    procedure Cleanup_Scopes;
-   --  Complete cleanup actions on scopes that need it.
+   --  Complete cleanup actions on scopes that need it
 
    --------------
    -- Add_Call --
@@ -206,9 +204,7 @@ package body Inline is
          --  one needs to be recorded.
 
          J := Inlined.Table (P1).First_Succ;
-
          while J /= No_Succ loop
-
             if Successors.Table (J).Subp = P2 then
                return;
             end if;
@@ -216,7 +212,7 @@ package body Inline is
             J := Successors.Table (J).Next;
          end loop;
 
-         --  On exit, make a successor entry for P2.
+         --  On exit, make a successor entry for P2
 
          Successors.Increment_Last;
          Successors.Table (Successors.Last).Subp := P2;
@@ -247,11 +243,23 @@ package body Inline is
       -----------------
 
       function Must_Inline return Boolean is
-         Scop : Entity_Id := Current_Scope;
+         Scop : Entity_Id;
          Comp : Node_Id;
 
       begin
          --  Check if call is in main unit
+
+         Scop := Current_Scope;
+
+         --  Do not try to inline if scope is standard. This could happen, for
+         --  example, for a call to Add_Global_Declaration, and it causes
+         --  trouble to try to inline at this level.
+
+         if Scop = Standard_Standard then
+            return False;
+         end if;
+
+         --  Otherwise lookup scope stack to outer scope
 
          while Scope (Scop) /= Standard_Standard
            and then not Is_Child_Unit (Scop)
@@ -260,7 +268,6 @@ package body Inline is
          end loop;
 
          Comp := Parent (Scop);
-
          while Nkind (Comp) /= N_Compilation_Unit loop
             Comp := Parent (Comp);
          end loop;
@@ -272,8 +279,7 @@ package body Inline is
             return True;
          end if;
 
-         --  Call is not in main unit. See if it's in some inlined
-         --  subprogram.
+         --  Call is not in main unit. See if it's in some inlined subprogram
 
          Scop := Current_Scope;
          while Scope (Scop) /= Standard_Standard
@@ -290,7 +296,6 @@ package body Inline is
          end loop;
 
          return False;
-
       end Must_Inline;
 
    --  Start of processing for Add_Inlined_Body
@@ -309,7 +314,7 @@ package body Inline is
       --  no enclosing package to retrieve. In this case, it is the body of
       --  the function that will have to be loaded.
 
-      if not Is_Abstract (E) and then not Is_Nested (E)
+      if not Is_Abstract_Subprogram (E) and then not Is_Nested (E)
         and then Convention (E) /= Convention_Protected
       then
          Pack := Scope (E);
@@ -321,7 +326,7 @@ package body Inline is
 
             if Pack = Standard_Standard then
 
-               --  Library-level inlined function. Add function iself to
+               --  Library-level inlined function. Add function itself to
                --  list of needed units.
 
                Inlined_Bodies.Increment_Last;
@@ -332,7 +337,6 @@ package body Inline is
 
             elsif not Is_Inlined (Pack)
               and then not Has_Completion (E)
-              and then not Scope_In_Main_Unit (Pack)
             then
                Set_Is_Inlined (Pack);
                Inlined_Bodies.Increment_Last;
@@ -348,6 +352,7 @@ package body Inline is
 
    procedure Add_Inlined_Subprogram (Index : Subp_Index) is
       E    : constant Entity_Id := Inlined.Table (Index).Name;
+      Pack : constant Entity_Id := Cunit_Entity (Get_Code_Unit (E));
       Succ : Succ_Index;
       Subp : Subp_Index;
 
@@ -360,10 +365,16 @@ package body Inline is
       --    mode it will lead to undefined symbols at link time.
       --
       --    b) If a body contains inlined function instances, it cannot be
-      --    inlined under ZCX because the numerix suffix generated by gigi
+      --    inlined under ZCX because the numeric suffix generated by gigi
       --    will be different in the body and the place of the inlined call.
       --
-      --  This procedure must be carefully coordinated with the back end
+      --  If the body to be inlined contains calls to subprograms declared
+      --  in the same body that have no previous spec, the back-end cannot
+      --  inline either because the bodies to be inlined are processed before
+      --  the rest of the enclosing package body, and gigi will then find
+      --  references to entities that have not been elaborated yet.
+      --
+      --  This procedure must be carefully coordinated with the back end.
 
       ----------------------------
       -- Back_End_Cannot_Inline --
@@ -373,6 +384,41 @@ package body Inline is
          Decl     : constant Node_Id := Unit_Declaration_Node (Subp);
          Body_Ent : Entity_Id;
          Ent      : Entity_Id;
+         Bad_Call : Node_Id;
+
+         function Process (N : Node_Id) return Traverse_Result;
+         --  Look for calls to subprograms with no previous spec, declared
+         --  in the same enclosing package body.
+
+         -------------
+         -- Process --
+         -------------
+
+         function Process (N : Node_Id) return Traverse_Result is
+         begin
+            if Nkind (N) = N_Procedure_Call_Statement
+              or else Nkind (N) = N_Function_Call
+            then
+               if Is_Entity_Name (Name (N))
+                 and then Comes_From_Source (Entity (Name (N)))
+                 and then
+                    Nkind (Unit_Declaration_Node (Entity (Name (N))))
+                      = N_Subprogram_Body
+                 and then In_Same_Extended_Unit (Subp, Entity (Name (N)))
+               then
+                  Bad_Call := N;
+                  return Abandon;
+               else
+                  return OK;
+               end if;
+            else
+               return OK;
+            end if;
+         end Process;
+
+         function Has_Exposed_Call is new Traverse_Func (Process);
+
+      --  Start of processing for Back_End_Cannot_Inline
 
       begin
          if Nkind (Decl) = N_Subprogram_Declaration
@@ -385,20 +431,19 @@ package body Inline is
 
          --  If subprogram is marked Inline_Always, inlining is mandatory
 
-         if Is_Always_Inlined (Subp) then
+         if Has_Pragma_Inline_Always (Subp) then
             return False;
          end if;
 
          if Present
           (Exception_Handlers
             (Handled_Statement_Sequence
-                 (Unit_Declaration_Node (Corresponding_Body (Decl)))))
+              (Unit_Declaration_Node (Corresponding_Body (Decl)))))
          then
             return True;
          end if;
 
          Ent := First_Entity (Body_Ent);
-
          while Present (Ent) loop
             if Is_Subprogram (Ent)
               and then Is_Generic_Instance (Ent)
@@ -408,16 +453,31 @@ package body Inline is
 
             Next_Entity (Ent);
          end loop;
-         return False;
+
+         if Has_Exposed_Call
+              (Unit_Declaration_Node (Corresponding_Body (Decl))) = Abandon
+         then
+            if Ineffective_Inline_Warnings then
+               Error_Msg_N
+                 ("?call to subprogram with no separate spec"
+                  & " prevents inlining!!", Bad_Call);
+            end if;
+
+            return True;
+         else
+            return False;
+         end if;
       end Back_End_Cannot_Inline;
 
    --  Start of processing for Add_Inlined_Subprogram
 
    begin
-      --  Insert the current subprogram in the list of inlined subprograms,
-      --  if it can actually be inlined by the back-end.
+      --  Insert the current subprogram in the list of inlined subprograms, if
+      --  it can actually be inlined by the back-end, and if its unit is known
+      --  to be inlined, or is an instance whose body will be analyzed anyway.
 
-      if not Scope_In_Main_Unit (E)
+      if (Is_Inlined (Pack) or else Is_Generic_Instance (Pack))
+        and then not Scope_In_Main_Unit (E)
         and then Is_Inlined (E)
         and then not Is_Nested (E)
         and then not Has_Initialized_Type (E)
@@ -437,13 +497,22 @@ package body Inline is
       end if;
 
       Inlined.Table (Index).Listed := True;
-      Succ := Inlined.Table (Index).First_Succ;
 
+      --  Now add to the list those callers of the current subprogram that
+      --  are themselves called. They may appear on the graph as callers
+      --  of the current one, even if they are themselves not called, and
+      --  there is no point in including them in the list for the backend.
+      --  Furthermore, they might not even be public, in which case the
+      --  back-end cannot handle them at all.
+
+      Succ := Inlined.Table (Index).First_Succ;
       while Succ /= No_Succ loop
          Subp := Successors.Table (Succ).Subp;
          Inlined.Table (Subp).Count := Inlined.Table (Subp).Count - 1;
 
-         if Inlined.Table (Subp).Count = 0 then
+         if Inlined.Table (Subp).Count = 0
+           and then Is_Called (Inlined.Table (Subp).Name)
+         then
             Add_Inlined_Subprogram (Subp);
          end if;
 
@@ -467,10 +536,25 @@ package body Inline is
          return;
       end if;
 
+      --  If the instance appears within a generic subprogram there is nothing
+      --  to finalize either.
+
+      declare
+         S : Entity_Id;
+
+      begin
+         S := Scope (Inst);
+         while Present (S) and then S /= Standard_Standard loop
+            if Is_Generic_Subprogram (S) then
+               return;
+            end if;
+
+            S := Scope (S);
+         end loop;
+      end;
+
       Elmt := First_Elmt (To_Clean);
-
       while Present (Elmt) loop
-
          if Node (Elmt) = Scop then
             return;
          end if;
@@ -490,7 +574,7 @@ package body Inline is
       J     : Subp_Index;
 
       procedure New_Entry;
-      --  Initialize entry in Inlined table.
+      --  Initialize entry in Inlined table
 
       procedure New_Entry is
       begin
@@ -514,9 +598,7 @@ package body Inline is
 
       else
          J := Hash_Headers (Index);
-
          while J /= No_Subp loop
-
             if Inlined.Table (J).Name = E then
                return J;
             else
@@ -544,18 +626,70 @@ package body Inline is
       Pack      : Entity_Id;
       S         : Succ_Index;
 
+      function Is_Ancestor_Of_Main
+        (U_Name : Entity_Id;
+         Nam    : Node_Id) return Boolean;
+      --  Determine whether the unit whose body is loaded is an ancestor of
+      --  the main unit, and has a with_clause on it. The body is not
+      --  analyzed yet, so the check is purely lexical: the name of the with
+      --  clause is a selected component, and names of ancestors must match.
+
+      -------------------------
+      -- Is_Ancestor_Of_Main --
+      -------------------------
+
+      function Is_Ancestor_Of_Main
+        (U_Name : Entity_Id;
+         Nam    : Node_Id) return Boolean
+      is
+         Pref : Node_Id;
+
+      begin
+         if Nkind (Nam) /= N_Selected_Component then
+            return False;
+
+         else
+            if Chars (Selector_Name (Nam)) /=
+               Chars (Cunit_Entity (Main_Unit))
+            then
+               return False;
+            end if;
+
+            Pref := Prefix (Nam);
+            if Nkind (Pref) = N_Identifier then
+
+               --  Par is an ancestor of Par.Child.
+
+               return Chars (Pref) = Chars (U_Name);
+
+            elsif Nkind (Pref) = N_Selected_Component
+              and then Chars (Selector_Name (Pref)) = Chars (U_Name)
+            then
+               --  Par.Child is an ancestor of Par.Child.Grand.
+
+               return True;   --  should check that ancestor match
+
+            else
+               --  A is an ancestor of A.B.C if it is an ancestor of A.B
+
+               return Is_Ancestor_Of_Main (U_Name, Pref);
+            end if;
+         end if;
+      end Is_Ancestor_Of_Main;
+
+   --  Start of processing for  Analyze_Inlined_Bodies
+
    begin
       Analyzing_Inlined_Bodies := False;
 
       if Serious_Errors_Detected = 0 then
-         New_Scope (Standard_Standard);
+         Push_Scope (Standard_Standard);
 
          J := 0;
          while J <= Inlined_Bodies.Last
            and then Serious_Errors_Detected = 0
          loop
             Pack := Inlined_Bodies.Table (J);
-
             while Present (Pack)
               and then Scope (Pack) /= Standard_Standard
               and then not Is_Child_Unit (Pack)
@@ -564,15 +698,14 @@ package body Inline is
             end loop;
 
             Comp_Unit := Parent (Pack);
-
             while Present (Comp_Unit)
               and then Nkind (Comp_Unit) /= N_Compilation_Unit
             loop
                Comp_Unit := Parent (Comp_Unit);
             end loop;
 
-            --  Load the body, unless it the main unit, or is an instance
-            --  whose body has already been analyzed.
+            --  Load the body, unless it the main unit, or is an instance whose
+            --  body has already been analyzed.
 
             if Present (Comp_Unit)
               and then Comp_Unit /= Cunit (Main_Unit)
@@ -588,17 +721,58 @@ package body Inline is
 
                begin
                   if not Is_Loaded (Bname) then
-                     Load_Needed_Body (Comp_Unit, OK);
+                     Style_Check := False;
+                     Load_Needed_Body (Comp_Unit, OK, Do_Analyze => False);
 
                      if not OK then
+
+                        --  Warn that a body was not available for inlining
+                        --  by the back-end.
+
                         Error_Msg_Unit_1 := Bname;
                         Error_Msg_N
-                          ("one or more inlined subprograms accessed in $!",
+                          ("one or more inlined subprograms accessed in $!?",
                            Comp_Unit);
-                        Error_Msg_Name_1 :=
+                        Error_Msg_File_1 :=
                           Get_File_Name (Bname, Subunit => False);
-                        Error_Msg_N ("\but file{ was not found!", Comp_Unit);
-                        raise Unrecoverable_Error;
+                        Error_Msg_N ("\but file{ was not found!?", Comp_Unit);
+
+                     else
+                        --  If the package to be inlined is an ancestor unit of
+                        --  the main unit, and it has a semantic dependence on
+                        --  it, the inlining cannot take place to prevent an
+                        --  elaboration circularity. The desired body is not
+                        --  analyzed yet, to prevent the completion of Taft
+                        --  amendment types that would lead to elaboration
+                        --  circularities in gigi.
+
+                        declare
+                           U_Id      : constant Entity_Id :=
+                                         Defining_Entity (Unit (Comp_Unit));
+                           Body_Unit : constant Node_Id :=
+                                         Library_Unit (Comp_Unit);
+                           Item      : Node_Id;
+
+                        begin
+                           Item := First (Context_Items (Body_Unit));
+                           while Present (Item) loop
+                              if Nkind (Item) = N_With_Clause
+                                and then
+                                  Is_Ancestor_Of_Main (U_Id, Name (Item))
+                              then
+                                 Set_Is_Inlined (U_Id, False);
+                                 exit;
+                              end if;
+
+                              Next (Item);
+                           end loop;
+
+                           --  If no suspicious with_clauses, analyze the body.
+
+                           if Is_Inlined (U_Id) then
+                              Semantics (Body_Unit);
+                           end if;
+                        end;
                      end if;
                   end if;
                end;
@@ -615,14 +789,14 @@ package body Inline is
 
          Instantiate_Bodies;
 
-         --  The list of inlined subprograms is an overestimate, because
-         --  it includes inlined functions called from functions that are
-         --  compiled as part of an inlined package, but are not themselves
-         --  called. An accurate computation of just those subprograms that
-         --  are needed requires that we perform a transitive closure over
-         --  the call graph, starting from calls in the main program. Here
-         --  we do one step of the inverse transitive closure, and reset
-         --  the Is_Called flag on subprograms all of whose callers are not.
+         --  The list of inlined subprograms is an overestimate, because it
+         --  includes inlined functions called from functions that are compiled
+         --  as part of an inlined package, but are not themselves called. An
+         --  accurate computation of just those subprograms that are needed
+         --  requires that we perform a transitive closure over the call graph,
+         --  starting from calls in the main program. Here we do one step of
+         --  the inverse transitive closure, and reset the Is_Called flag on
+         --  subprograms all of whose callers are not.
 
          for Index in Inlined.First .. Inlined.Last loop
             S := Inlined.Table (Index).First_Succ;
@@ -633,7 +807,6 @@ package body Inline is
                Set_Is_Called (Inlined.Table (Index).Name, False);
 
                while S /= No_Succ loop
-
                   if Is_Called
                     (Inlined.Table (Successors.Table (S).Subp).Name)
                    or else Inlined.Table (Successors.Table (S).Subp).Main_Call
@@ -677,7 +850,8 @@ package body Inline is
             then
                Error_Msg_N
                  ("& cannot be inlined?", Inlined.Table (Index).Name);
-               --  A warning on the first one might be sufficient.
+
+               --  A warning on the first one might be sufficient ???
             end if;
          end loop;
 
@@ -685,9 +859,9 @@ package body Inline is
       end if;
    end Analyze_Inlined_Bodies;
 
-   --------------------------------
-   --  Check_Body_For_Inlining --
-   --------------------------------
+   -----------------------------
+   -- Check_Body_For_Inlining --
+   -----------------------------
 
    procedure Check_Body_For_Inlining (N : Node_Id; P : Entity_Id) is
       Bname : Unit_Name_Type;
@@ -699,10 +873,10 @@ package body Inline is
         and then not Is_Generic_Instance (P)
       then
          Bname := Get_Body_Name (Get_Unit_Name (Unit (N)));
-         E := First_Entity (P);
 
+         E := First_Entity (P);
          while Present (E) loop
-            if Is_Always_Inlined (E)
+            if Has_Pragma_Inline_Always (E)
               or else (Front_End_Inlining and then Has_Pragma_Inline (E))
             then
                if not Is_Loaded (Bname) then
@@ -710,11 +884,11 @@ package body Inline is
 
                   if OK then
 
-                     --  Check that we are not trying to inline a parent
-                     --  whose body depends on a child, when we are compiling
-                     --  the body of the child. Otherwise we have a potential
-                     --  elaboration circularity with inlined subprograms and
-                     --  with Taft-Amendment types.
+                     --  Check we are not trying to inline a parent whose body
+                     --  depends on a child, when we are compiling the body of
+                     --  the child. Otherwise we have a potential elaboration
+                     --  circularity with inlined subprograms and with
+                     --  Taft-Amendment types.
 
                      declare
                         Comp        : Node_Id;      --  Body just compiled
@@ -727,18 +901,17 @@ package body Inline is
                           and then Present (Body_Entity (P))
                         then
                            Child_Spec :=
-                             Defining_Entity (
-                               (Unit (Library_Unit (Cunit (Main_Unit)))));
+                             Defining_Entity
+                               ((Unit (Library_Unit (Cunit (Main_Unit)))));
 
                            Comp :=
                              Parent (Unit_Declaration_Node (Body_Entity (P)));
-
-                           With_Clause := First (Context_Items (Comp));
 
                            --  Check whether the context of the body just
                            --  compiled includes a child of itself, and that
                            --  child is the spec of the main compilation.
 
+                           With_Clause := First (Context_Items (Comp));
                            while Present (With_Clause) loop
                               if Nkind (With_Clause) = N_With_Clause
                                 and then
@@ -758,7 +931,6 @@ package body Inline is
                                  --  and keep Taft-amendment types incomplete.
 
                                  Ent := First_Entity (P);
-
                                  while Present (Ent) loop
                                     if Is_Type (Ent)
                                        and then Has_Completion_In_Body (Ent)
@@ -808,7 +980,6 @@ package body Inline is
 
    begin
       Elmt := First_Elmt (To_Clean);
-
       while Present (Elmt) loop
          Scop := Node (Elmt);
 
@@ -823,11 +994,15 @@ package body Inline is
             --  cleanup operations have been delayed, and the subprogram
             --  has been rewritten in the expansion of the enclosing
             --  protected body. It is the corresponding subprogram that
-            --  may require the cleanup operations.
+            --  may require the cleanup operations, so propagate the
+            --  information that triggers cleanup activity.
 
             Set_Uses_Sec_Stack
               (Protected_Body_Subprogram (Scop),
                 Uses_Sec_Stack (Scop));
+            Set_Finalization_Chain_Entity
+              (Protected_Body_Subprogram (Scop),
+                Finalization_Chain_Entity (Scop));
             Scop := Protected_Body_Subprogram (Scop);
          end if;
 
@@ -845,7 +1020,7 @@ package body Inline is
             end if;
          end if;
 
-         New_Scope (Scop);
+         Push_Scope (Scop);
          Expand_Cleanup_Actions (Decl);
          End_Scope;
 
@@ -867,7 +1042,6 @@ package body Inline is
 
       else
          Decl := First (Declarations (E_Body));
-
          while Present (Decl) loop
 
             if Nkind (Decl) = N_Full_Type_Declaration
@@ -920,7 +1094,7 @@ package body Inline is
       if Serious_Errors_Detected = 0 then
 
          Expander_Active := (Operating_Mode = Opt.Generate_Code);
-         New_Scope (Standard_Standard);
+         Push_Scope (Standard_Standard);
          To_Clean := New_Elmt_List;
 
          if Is_Generic_Unit (Cunit_Entity (Main_Unit)) then
@@ -932,7 +1106,6 @@ package body Inline is
          --  set (that's why we can't simply use a FOR loop here).
 
          J := 0;
-
          while J <= Pending_Instantiations.Last
            and then Serious_Errors_Detected = 0
          loop
@@ -970,29 +1143,6 @@ package body Inline is
            and then not Is_Generic_Unit (Main_Unit_Entity)
          then
             Cleanup_Scopes;
-
-            --  Also generate subprogram descriptors that were delayed
-
-            for J in Pending_Descriptor.First .. Pending_Descriptor.Last loop
-               declare
-                  Ent : constant Entity_Id := Pending_Descriptor.Table (J);
-
-               begin
-                  if Is_Subprogram (Ent) then
-                     Generate_Subprogram_Descriptor_For_Subprogram
-                       (Get_Subprogram_Body (Ent), Ent);
-
-                  elsif Ekind (Ent) = E_Package then
-                     Generate_Subprogram_Descriptor_For_Package
-                       (Parent (Declaration_Node (Ent)), Ent);
-
-                  elsif Ekind (Ent) = E_Package_Body then
-                     Generate_Subprogram_Descriptor_For_Package
-                       (Declaration_Node (Ent), Ent);
-                  end if;
-               end;
-            end loop;
-
          elsif Is_Generic_Unit (Cunit_Entity (Main_Unit)) then
             End_Generic;
          end if;
@@ -1006,9 +1156,10 @@ package body Inline is
    ---------------
 
    function Is_Nested (E : Entity_Id) return Boolean is
-      Scop : Entity_Id := Scope (E);
+      Scop : Entity_Id;
 
    begin
+      Scop := Scope (E);
       while Scop /= Standard_Standard loop
          if Ekind (Scop) in Subprogram_Kind then
             return True;
@@ -1046,13 +1197,11 @@ package body Inline is
    --------------------------
 
    procedure Remove_Dead_Instance (N : Node_Id) is
-      J    : Int;
+      J : Int;
 
    begin
       J := 0;
-
       while J <= Pending_Instantiations.Last loop
-
          if Pending_Instantiations.Table (J).Inst_Node = N then
             Pending_Instantiations.Table (J).Inst_Node := Empty;
             return;
@@ -1067,43 +1216,14 @@ package body Inline is
    ------------------------
 
    function Scope_In_Main_Unit (Scop : Entity_Id) return Boolean is
-      Comp : Node_Id;
-      S    : Entity_Id := Scop;
-      Ent  : Entity_Id := Cunit_Entity (Main_Unit);
+      Comp : constant Node_Id := Cunit (Get_Code_Unit (Scop));
 
    begin
-      --  The scope may be within the main unit, or it may be an ancestor
-      --  of the main unit, if the main unit is a child unit. In both cases
-      --  it makes no sense to process the body before the main unit. In
-      --  the second case, this may lead to circularities if a parent body
-      --  depends on a child spec, and we are analyzing the child.
-
-      while Scope (S) /= Standard_Standard
-        and then not Is_Child_Unit (S)
-      loop
-         S := Scope (S);
-      end loop;
-
-      Comp := Parent (S);
-
-      while Present (Comp)
-        and then Nkind (Comp) /= N_Compilation_Unit
-      loop
-         Comp := Parent (Comp);
-      end loop;
-
-      if Is_Child_Unit (Ent) then
-
-         while Present (Ent)
-           and then Is_Child_Unit (Ent)
-         loop
-            if Scope (Ent) = S then
-               return True;
-            end if;
-
-            Ent := Scope (Ent);
-         end loop;
-      end if;
+      --  Check whether the scope of the subprogram to inline is within the
+      --  main unit or within its spec. In either case there are no additional
+      --  bodies to process. If the subprogram appears in a parent of the
+      --  current unit, the check on whether inlining is possible is done in
+      --  Analyze_Inlined_Bodies.
 
       return
         Comp = Cunit (Main_Unit)

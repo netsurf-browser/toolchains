@@ -6,26 +6,27 @@
 --                                                                          --
 --                                 B o d y                                  --
 --                                                                          --
---          Copyright (C) 1992-2003, Free Software Foundation, Inc.         --
+--          Copyright (C) 1992-2010, Free Software Foundation, Inc.         --
 --                                                                          --
 -- GNAT is free software;  you can  redistribute it  and/or modify it under --
 -- terms of the  GNU General Public License as published  by the Free Soft- --
--- ware  Foundation;  either version 2,  or (at your option) any later ver- --
+-- ware  Foundation;  either version 3,  or (at your option) any later ver- --
 -- sion.  GNAT is distributed in the hope that it will be useful, but WITH- --
 -- OUT ANY WARRANTY;  without even the  implied warranty of MERCHANTABILITY --
 -- or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU General Public License --
 -- for  more details.  You should have  received  a copy of the GNU General --
--- Public License  distributed with GNAT;  see file COPYING.  If not, write --
--- to  the Free Software Foundation,  59 Temple Place - Suite 330,  Boston, --
--- MA 02111-1307, USA.                                                      --
+-- Public License  distributed with GNAT; see file COPYING3.  If not, go to --
+-- http://www.gnu.org/licenses for a complete copy of the license.          --
 --                                                                          --
 -- GNAT was originally developed  by the GNAT team at  New York University. --
 -- Extensive contributions were provided by Ada Core Technologies Inc.      --
 --                                                                          --
 ------------------------------------------------------------------------------
 
-with Csets; use Csets;
-with Uintp; use Uintp;
+with Csets;    use Csets;
+with Namet.Sp; use Namet.Sp;
+with Stylesw;  use Stylesw;
+with Uintp;    use Uintp;
 
 with GNAT.Spelling_Checker; use GNAT.Spelling_Checker;
 
@@ -60,7 +61,7 @@ package body Util is
       end if;
 
       for J in S'Range loop
-         S (J) := Fold_Lower (Tname (Integer (J) + 4));
+         S (J) := Fold_Lower (Tname (J + 4));
       end loop;
 
       Get_Name_String (Token_Name);
@@ -71,11 +72,12 @@ package body Util is
         and then Name_Len = 7
         and then Name_Buffer (1 .. 7) = "program"
       then
-         Error_Msg_SC ("PROCEDURE expected");
+         Error_Msg_SC -- CODEFIX
+           ("PROCEDURE expected");
          Token := T;
          return True;
 
-      --  A special check for an illegal abbrevation
+      --  A special check for an illegal abbreviation
 
       elsif Name_Len < S'Length
         and then Name_Len >= 4
@@ -108,25 +110,24 @@ package body Util is
         and then S = Name_Buffer (1 .. SL)
       then
          Scan_Ptr := Token_Ptr + S'Length;
-         Error_Msg_S ("missing space");
+         Error_Msg_S ("|missing space");
          Token := T;
          return True;
       end if;
 
       if Is_Bad_Spelling_Of (Name_Buffer (1 .. Name_Len), S) then
-
          for J in 1 .. S'Last loop
             M1 (P1 + J - 1) := Fold_Upper (S (J));
          end loop;
 
-         Error_Msg_SC (M1 (1 .. P1 - 1 + S'Last));
+         Error_Msg_SC -- CODFIX
+           (M1 (1 .. P1 - 1 + S'Last));
          Token := T;
          return True;
 
       else
          return False;
       end if;
-
    end Bad_Spelling_Of;
 
    ----------------------
@@ -159,10 +160,11 @@ package body Util is
 
    procedure Check_Bad_Layout is
    begin
-      if Style.RM_Column_Check and then Token_Is_At_Start_Of_Line
+      if RM_Column_Check and then Token_Is_At_Start_Of_Line
         and then Start_Column <= Scope.Table (Scope.Last).Ecol
       then
-         Error_Msg_BC ("(style) incorrect layout");
+         Error_Msg_BC -- CODEFIX
+           ("(style) incorrect layout");
       end if;
    end Check_Bad_Layout;
 
@@ -195,7 +197,7 @@ package body Util is
    procedure Check_Simple_Expression_In_Ada_83 (E : Node_Id) is
    begin
       if Expr_Form = EF_Non_Simple then
-         if Ada_83 then
+         if Ada_Version = Ada_83 then
             Error_Msg_N ("(Ada 83) this expression must be parenthesized!", E);
          end if;
       end if;
@@ -332,7 +334,8 @@ package body Util is
 
          <<Assume_Comma>>
             Restore_Scan_State (Scan_State);
-            Error_Msg_SC (""";"" illegal here, replaced by "",""");
+            Error_Msg_SC -- CODEFIX
+              ("|"";"" should be "",""");
             Scan; -- past the semicolon
             return True;
 
@@ -360,7 +363,6 @@ package body Util is
 
    procedure Discard_Junk_List (L : List_Id) is
       pragma Warnings (Off, L);
-
    begin
       null;
    end Discard_Junk_List;
@@ -371,7 +373,6 @@ package body Util is
 
    procedure Discard_Junk_Node (N : Node_Id) is
       pragma Warnings (Off, N);
-
    begin
       null;
    end Discard_Junk_Node;
@@ -382,38 +383,37 @@ package body Util is
 
    procedure Ignore (T : Token_Type) is
    begin
-      if Token = T then
+      while Token = T loop
          if T = Tok_Comma then
-            Error_Msg_SC ("unexpected "","" ignored");
+            Error_Msg_SC -- CODEFIX
+              ("|extra "","" ignored");
 
          elsif T = Tok_Left_Paren then
-            Error_Msg_SC ("unexpected ""("" ignored");
+            Error_Msg_SC -- CODEFIX
+              ("|extra ""("" ignored");
 
          elsif T = Tok_Right_Paren then
-            Error_Msg_SC ("unexpected "")"" ignored");
+            Error_Msg_SC -- CODEFIX
+              ("|extra "")"" ignored");
 
          elsif T = Tok_Semicolon then
-            Error_Msg_SC ("unexpected "";"" ignored");
+            Error_Msg_SC -- CODEFIX
+              ("|extra "";"" ignored");
+
+         elsif T = Tok_Colon then
+            Error_Msg_SC -- CODEFIX
+              ("|extra "":"" ignored");
 
          else
             declare
                Tname : constant String := Token_Type'Image (Token);
-               Msg   : String := "unexpected keyword ????????????????????????";
-
             begin
-               --  Loop to copy characters of keyword name (ignoring Tok_)
-
-               for J in 5 .. Tname'Last loop
-                  Msg (J + 14) := Fold_Upper (Tname (J));
-               end loop;
-
-               Msg (Tname'Last + 15 .. Tname'Last + 22) := " ignored";
-               Error_Msg_SC (Msg (1 .. Tname'Last + 22));
+               Error_Msg_SC ("|extra " & Tname (5 .. Tname'Last) & "ignored");
             end;
          end if;
 
          Scan; -- Scan past ignored token
-      end if;
+      end loop;
    end Ignore;
 
    ----------------------------
@@ -429,7 +429,6 @@ package body Util is
          declare
             Ident_Casing : constant Casing_Type :=
                              Identifier_Casing (Current_Source_File);
-
             Key_Casing   : constant Casing_Type :=
                              Keyword_Casing (Current_Source_File);
 
@@ -573,10 +572,24 @@ package body Util is
       end;
 
       Error_Msg_Node_1 := Prev;
-      Error_Msg_SC
-        ("unexpected identifier, possibly & was meant here");
+      Error_Msg_SC ("unexpected identifier, possibly & was meant here");
       Scan;
    end Merge_Identifier;
+
+   -------------------
+   -- Next_Token_Is --
+   -------------------
+
+   function Next_Token_Is (Tok : Token_Type) return Boolean is
+      Scan_State : Saved_Scan_State;
+      Result     : Boolean;
+   begin
+      Save_Scan_State (Scan_State);
+      Scan;
+      Result := (Token = Tok);
+      Restore_Scan_State (Scan_State);
+      return Result;
+   end Next_Token_Is;
 
    -------------------
    -- No_Constraint --
@@ -589,21 +602,6 @@ package body Util is
          Discard_Junk_Node (P_Constraint_Opt);
       end if;
    end No_Constraint;
-
-   --------------------
-   -- No_Right_Paren --
-   --------------------
-
-   function No_Right_Paren (Expr : Node_Id) return Node_Id is
-   begin
-      if Token = Tok_Right_Paren then
-         Error_Msg_SC ("unexpected right parenthesis");
-         Resync_Expression;
-         return Error;
-      else
-         return Expr;
-      end if;
-   end No_Right_Paren;
 
    ---------------------
    -- Pop_Scope_Stack --
@@ -627,6 +625,15 @@ package body Util is
    procedure Push_Scope_Stack is
    begin
       Scope.Increment_Last;
+
+      if Style_Check_Max_Nesting_Level
+        and then Scope.Last = Style_Max_Nesting_Level + 1
+      then
+         Error_Msg
+           ("(style) maximum nesting level exceeded",
+            First_Non_Blank_Location);
+      end if;
+
       Scope.Table (Scope.Last).Junk := False;
       Scope.Table (Scope.Last).Node := Empty;
 
@@ -675,27 +682,16 @@ package body Util is
 
       --  Check for possible misspelling
 
-      Get_Name_String (Token_Name);
+      Error_Msg_Name_1 := First_Attribute_Name;
+      while Error_Msg_Name_1 <= Last_Attribute_Name loop
+         if Is_Bad_Spelling_Of (Token_Name, Error_Msg_Name_1) then
+            Error_Msg_N -- CODEFIX
+              ("\possible misspelling of %", Token_Node);
+            exit;
+         end if;
 
-      declare
-         AN : constant String := Name_Buffer (1 .. Name_Len);
-
-      begin
-         Error_Msg_Name_1 := First_Attribute_Name;
-         while Error_Msg_Name_1 <= Last_Attribute_Name loop
-            Get_Name_String (Error_Msg_Name_1);
-
-            if Is_Bad_Spelling_Of
-                 (AN, Name_Buffer (1 .. Name_Len))
-            then
-               Error_Msg_N
-                 ("\possible misspelling of %", Token_Node);
-               exit;
-            end if;
-
-            Error_Msg_Name_1 := Error_Msg_Name_1 + 1;
-         end loop;
-      end;
+         Error_Msg_Name_1 := Error_Msg_Name_1 + 1;
+      end loop;
    end Signal_Bad_Attribute;
 
    -----------------------------

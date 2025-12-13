@@ -6,18 +6,17 @@
 --                                                                          --
 --                                 B o d y                                  --
 --                                                                          --
---          Copyright (C) 1998-2003 Free Software Foundation, Inc.          --
+--          Copyright (C) 1998-2010, Free Software Foundation, Inc.         --
 --                                                                          --
 -- GNAT is free software;  you can  redistribute it  and/or modify it under --
 -- terms of the  GNU General Public License as published  by the Free Soft- --
--- ware  Foundation;  either version 2,  or (at your option) any later ver- --
+-- ware  Foundation;  either version 3,  or (at your option) any later ver- --
 -- sion.  GNAT is distributed in the hope that it will be useful, but WITH- --
 -- OUT ANY WARRANTY;  without even the  implied warranty of MERCHANTABILITY --
 -- or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU General Public License --
 -- for  more details.  You should have  received  a copy of the GNU General --
--- Public License  distributed with GNAT;  see file COPYING.  If not, write --
--- to  the Free Software Foundation,  59 Temple Place - Suite 330,  Boston, --
--- MA 02111-1307, USA.                                                      --
+-- Public License  distributed with GNAT; see file COPYING3.  If not, go to --
+-- http://www.gnu.org/licenses for a complete copy of the license.          --
 --                                                                          --
 -- GNAT was originally developed  by the GNAT team at  New York University. --
 -- Extensive contributions were provided by Ada Core Technologies Inc.      --
@@ -50,7 +49,7 @@ package body Xr_Tabls is
    function  Get_Key (E : File_Reference) return Cst_String_Access;
    function  Hash (F : Cst_String_Access) return HTable_Headers;
    function  Equal (F1, F2 : Cst_String_Access) return Boolean;
-   --  The five subprograms above are used to instanciate the static
+   --  The five subprograms above are used to instantiate the static
    --  htable to store the files that should be processed.
 
    package File_HTable is new GNAT.HTable.Static_HTable
@@ -82,7 +81,7 @@ package body Xr_Tabls is
    function Next (E : Declaration_Reference) return Declaration_Reference;
    procedure Set_Next (E, Next : Declaration_Reference);
    function  Get_Key (E : Declaration_Reference) return Cst_String_Access;
-   --  The subprograms above are used to instanciate the static
+   --  The subprograms above are used to instantiate the static
    --  htable to store the entities that have been found in the application
 
    package Entities_HTable is new GNAT.HTable.Static_HTable
@@ -131,7 +130,7 @@ package body Xr_Tabls is
    --  Column. This key should be used for lookup in Entity_HTable
 
    function Is_Less_Than (Decl1, Decl2 : Declaration_Reference) return Boolean;
-   --  Compare two declarations. The comparison is case-insensitive.
+   --  Compare two declarations (the comparison is case-insensitive)
 
    function Is_Less_Than (Ref1, Ref2 : Reference) return Boolean;
    --  Compare two references
@@ -144,14 +143,12 @@ package body Xr_Tabls is
       Get_Declaration : Boolean := False;
       Arr             : in out Reference_Array;
       Index           : in out Natural);
-   --  Store in Arr, starting at Index, all the references to Decl.
-   --  The Get_* parameters can be used to indicate which references should be
-   --  stored.
+   --  Store in Arr, starting at Index, all the references to Decl. The Get_*
+   --  parameters can be used to indicate which references should be stored.
    --  Constraint_Error will be raised if Arr is not big enough.
 
    procedure Sort (Arr : in out Reference_Array);
-   --  Sort an array of references.
-   --  Arr'First must be 1.
+   --  Sort an array of references (Arr'First must be 1)
 
    --------------
    -- Set_Next --
@@ -398,7 +395,8 @@ package body Xr_Tabls is
 
    begin
       case Ref_Type is
-         when 'b' | 'c' | 'm' | 'r' | 'i' | ' ' | 'x' =>
+         when 'b' | 'c' | 'H' | 'm' | 'o' | 'r' | 'R' |
+              's' | 'i' | ' ' | 'x' =>
             null;
 
          when 'l' | 'w' =>
@@ -422,7 +420,12 @@ package body Xr_Tabls is
                  (Symbol_Length => 0,
                   Symbol        => "",
                   Key           => new String'(Key),
-                  Decl          => null,
+                  Decl          => new Reference_Record'
+                                     (File          => File_Ref,
+                                      Line          => Line,
+                                      Column        => Column,
+                                      Source_Line   => null,
+                                      Next          => null),
                   Is_Parameter  => True,
                   Decl_Type     => ' ',
                   Body_Ref      => null,
@@ -450,18 +453,17 @@ package body Xr_Tabls is
          Source_Line => null,
          Next        => null);
 
-      --  We can insert the reference in the list directly, since all
-      --  the references will appear only once in the ALI file
-      --  corresponding to the file where they are referenced.
-      --  This saves a lot of time compared to checking the list to check
-      --  if it exists.
+      --  We can insert the reference into the list directly, since all the
+      --  references will appear only once in the ALI file corresponding to the
+      --  file where they are referenced. This saves a lot of time compared to
+      --  checking the list to check if it exists.
 
       case Ref_Type is
          when 'b' | 'c' =>
             New_Ref.Next          := Declaration.Body_Ref;
             Declaration.Body_Ref  := New_Ref;
 
-         when 'r' | 'i' | 'l' | ' ' | 'x' | 'w' =>
+         when 'r' | 'R' | 's' | 'H' | 'i' | 'l' | 'o' | ' ' | 'x' | 'w' =>
             New_Ref.Next          := Declaration.Ref_Ref;
             Declaration.Ref_Ref   := New_Ref;
 
@@ -498,9 +500,10 @@ package body Xr_Tabls is
 
    begin
       if Index /= 0 then
-         return Ada_File_Name (Ada_File_Name'First .. Index) & "ali";
+         return Ada_File_Name (Ada_File_Name'First .. Index)
+           & Osint.ALI_Suffix.all;
       else
-         return Ada_File_Name & ".ali";
+         return Ada_File_Name & "." & Osint.ALI_Suffix.all;
       end if;
    end ALI_File_Name;
 
@@ -556,8 +559,6 @@ package body Xr_Tabls is
    -------------------------
 
    procedure Create_Project_File (Name : String) is
-      use Ada.Strings.Unbounded;
-
       Obj_Dir     : Unbounded_String := Null_Unbounded_String;
       Src_Dir     : Unbounded_String := Null_Unbounded_String;
       Build_Dir   : GNAT.OS_Lib.String_Access := new String'("");
@@ -765,7 +766,7 @@ package body Xr_Tabls is
 
    function Get_File
      (File     : File_Reference;
-      With_Dir : in Boolean := False;
+      With_Dir : Boolean := False;
       Strip    : Natural    := 0) return String
    is
       Tmp : GNAT.OS_Lib.String_Access;
@@ -828,12 +829,14 @@ package body Xr_Tabls is
       end if;
 
       if File.Dir = null then
-         if Ada.Strings.Fixed.Tail (File.File.all, 3) = "ali" then
+         if Ada.Strings.Fixed.Tail (File.File.all, 3) =
+                                               Osint.ALI_Suffix.all
+         then
             Tmp := Locate_Regular_File
-              (Internal_Strip (File.File.all), Directories.Obj_Dir);
+                     (Internal_Strip (File.File.all), Directories.Obj_Dir);
          else
             Tmp := Locate_Regular_File
-              (File.File.all, Directories.Src_Dir);
+                     (File.File.all, Directories.Src_Dir);
          end if;
 
          if Tmp = null then
@@ -1394,10 +1397,10 @@ package body Xr_Tabls is
       File_Ref.Visited := False;
 
       --  ??? Do not add a source file to the list. This is true at
-      --  least for gnatxref, and probably for gnatfind as wel
+      --  least for gnatxref, and probably for gnatfind as well
 
       if F'Length > 4
-        and then F (F'Last - 3 .. F'Last) = ".ali"
+        and then F (F'Last - 3 .. F'Last) = "." & Osint.ALI_Suffix.all
       then
          Unvisited_Files := new Unvisited_Files_Record'
            (File => File_Ref,
@@ -1413,7 +1416,7 @@ package body Xr_Tabls is
      (Sorted : Boolean := True)
       return   Declaration_Array_Access
    is
-      Arr   : Declaration_Array_Access :=
+      Arr   : constant Declaration_Array_Access :=
                 new Declaration_Array (1 .. Entities_Count);
       Decl  : Declaration_Reference := Entities_HTable.Get_First;
       Index : Natural               := Arr'First;

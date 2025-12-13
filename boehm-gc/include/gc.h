@@ -3,6 +3,7 @@
  * Copyright (c) 1991-1995 by Xerox Corporation.  All rights reserved.
  * Copyright 1996-1999 by Silicon Graphics.  All rights reserved.
  * Copyright 1999 by Hewlett-Packard Company.  All rights reserved.
+ * Copyright (C) 2007 Free Software Foundation, Inc
  *
  * THIS MATERIAL IS PROVIDED AS IS, WITH ABSOLUTELY NO WARRANTY EXPRESSED
  * OR IMPLIED.  ANY USE IS AT YOUR OWN RISK.
@@ -30,9 +31,32 @@
 
 # define _GC_H
 
+/* 
+ * As this header includes gc_config.h, preprocessor conflicts can occur with 
+ * clients that include their own autoconf headers. The following #undef's 
+ * work around some likely conflicts.
+ */
+
+# ifdef PACKAGE_NAME
+#   undef PACKAGE_NAME
+# endif
+# ifdef PACKAGE_BUGREPORT
+#  undef PACKAGE_BUGREPORT
+# endif
+# ifdef PACKAGE_STRING
+#  undef PACKAGE_STRING
+# endif
+# ifdef PACKAGE_TARNAME
+#  undef PACKAGE_TARNAME
+# endif
+# ifdef PACKAGE_VERSION
+#  undef PACKAGE_VERSION
+# endif
+
+# include <gc_config.h>
 # include "gc_config_macros.h"
 
-# if defined(__STDC__) || defined(__cplusplus)
+# if defined(__STDC__) || defined(__cplusplus) || defined(_AIX)
 #   define GC_PROTO(args) args
     typedef void * GC_PTR;
 #   define GC_CONST const
@@ -46,17 +70,23 @@
     extern "C" {
 # endif
 
-
 /* Define word and signed_word to be unsigned and signed types of the 	*/
 /* size as char * or void *.  There seems to be no way to do this	*/
 /* even semi-portably.  The following is probably no better/worse 	*/
 /* than almost anything else.						*/
 /* The ANSI standard suggests that size_t and ptr_diff_t might be 	*/
-/* better choices.  But those appear to have incorrect definitions	*/
-/* on may systems.  Notably "typedef int size_t" seems to be both	*/
-/* frequent and WRONG.							*/
-typedef unsigned long GC_word;
-typedef long GC_signed_word;
+/* better choices.  But those had incorrect definitions on some older	*/
+/* systems.  Notably "typedef int size_t" is WRONG.			*/
+#ifndef _WIN64
+  typedef unsigned long GC_word;
+  typedef long GC_signed_word;
+#else
+  /* Win64 isn't really supported yet, but this is the first step. And	*/
+  /* it might cause error messages to show up in more plausible places.	*/
+  /* This needs basetsd.h, which is included by windows.h.	 	*/
+  typedef ULONG_PTR GC_word;
+  typedef LONG_PTR GC_word;
+#endif
 
 /* Public read-only variables */
 
@@ -122,7 +152,7 @@ GC_API int GC_java_finalization;
 			/* ordered finalization.  Default value is	*/
 			/* determined by JAVA_FINALIZATION macro.	*/
 
-GC_API void (* GC_finalizer_notifier)();
+GC_API void (* GC_finalizer_notifier) GC_PROTO((void));
 			/* Invoked by the collector when there are 	*/
 			/* objects to be finalized.  Invoked at most	*/
 			/* once per GC cycle.  Never invoked unless 	*/
@@ -184,7 +214,7 @@ GC_API GC_word GC_free_space_divisor;
 			/* least N/GC_free_space_divisor bytes between	*/
 			/* collections, where N is the heap size plus	*/
 			/* a rough estimate of the root set size.	*/
-			/* Initially, GC_free_space_divisor = 4.	*/
+			/* Initially, GC_free_space_divisor = 3.	*/
 			/* Increasing its value will use less space	*/
 			/* but more collection time.  Decreasing it	*/
 			/* will appreciably decrease collection time	*/
@@ -247,6 +277,7 @@ GC_API unsigned long GC_time_limit;
  * allocation, since unlike the regular allocation routines, GC_local_malloc
  * is not self-initializing.  If you use GC_local_malloc you should arrange
  * to call this somehow (e.g. from a constructor) before doing any allocation.
+ * For win32 threads, it needs to be called explicitly.
  */
 GC_API void GC_init GC_PROTO((void));
 
@@ -309,6 +340,9 @@ GC_API void GC_end_stubborn_change GC_PROTO((GC_PTR));
 /* the base of the user object.						*/
 /* Return 0 if displaced_pointer doesn't point to within a valid	*/
 /* object.								*/
+/* Note that a deallocated object in the garbage collected heap		*/
+/* may be considered valid, even if it has been deallocated with	*/
+/* GC_free.  								*/
 GC_API GC_PTR GC_base GC_PROTO((GC_PTR displaced_pointer));
 
 /* Given a pointer to the base of an object, return its size in bytes.	*/
@@ -466,16 +500,21 @@ GC_API GC_PTR GC_malloc_atomic_ignore_off_page GC_PROTO((size_t lb));
 #   define GC_RETURN_ADDR (GC_word)__return_address
 #endif
 
-#ifdef __linux__
+#if defined(__linux__) || defined(__GLIBC__)
 # include <features.h>
 # if (__GLIBC__ == 2 && __GLIBC_MINOR__ >= 1 || __GLIBC__ > 2) \
      && !defined(__ia64__)
-#   define GC_HAVE_BUILTIN_BACKTRACE
-#   define GC_CAN_SAVE_CALL_STACKS
+#   ifndef GC_HAVE_BUILTIN_BACKTRACE
+#     define GC_HAVE_BUILTIN_BACKTRACE
+#   endif
 # endif
 # if defined(__i386__) || defined(__x86_64__)
 #   define GC_CAN_SAVE_CALL_STACKS
 # endif
+#endif
+
+#if defined(GC_HAVE_BUILTIN_BACKTRACE) && !defined(GC_CAN_SAVE_CALL_STACKS)
+# define GC_CAN_SAVE_CALL_STACKS
 #endif
 
 #if defined(__sparc__)
@@ -564,6 +603,8 @@ GC_API GC_PTR GC_debug_realloc_replacement
 	GC_debug_register_finalizer_ignore_self(p, f, d, of, od)
 #   define GC_REGISTER_FINALIZER_NO_ORDER(p, f, d, of, od) \
 	GC_debug_register_finalizer_no_order(p, f, d, of, od)
+#   define GC_REGISTER_FINALIZER_UNREACHABLE(p, f, d, of, od) \
+	GC_debug_register_finalizer_unreachable(p, f, d, of, od)
 #   define GC_MALLOC_STUBBORN(sz) GC_debug_malloc_stubborn(sz, GC_EXTRAS);
 #   define GC_CHANGE_STUBBORN(p) GC_debug_change_stubborn(p)
 #   define GC_END_STUBBORN_CHANGE(p) GC_debug_end_stubborn_change(p)
@@ -586,6 +627,8 @@ GC_API GC_PTR GC_debug_realloc_replacement
 	GC_register_finalizer_ignore_self(p, f, d, of, od)
 #   define GC_REGISTER_FINALIZER_NO_ORDER(p, f, d, of, od) \
 	GC_register_finalizer_no_order(p, f, d, of, od)
+#   define GC_REGISTER_FINALIZER_UNREACHABLE(p, f, d, of, od) \
+	GC_register_finalizer_unreachable(p, f, d, of, od)
 #   define GC_MALLOC_STUBBORN(sz) GC_malloc_stubborn(sz)
 #   define GC_CHANGE_STUBBORN(p) GC_change_stubborn(p)
 #   define GC_END_STUBBORN_CHANGE(p) GC_end_stubborn_change(p)
@@ -604,7 +647,7 @@ GC_API GC_PTR GC_debug_realloc_replacement
 
 /* Finalization.  Some of these primitives are grossly unsafe.		*/
 /* The idea is to make them both cheap, and sufficient to build		*/
-/* a safer layer, closer to PCedar finalization.			*/
+/* a safer layer, closer to Modula-3, Java, or PCedar finalization.	*/
 /* The interface represents my conclusions from a long discussion	*/
 /* with Alan Demers, Dan Greene, Carl Hauser, Barry Hayes, 		*/
 /* Christian Jacobi, and Russ Atkinson.  It's not perfect, and		*/
@@ -678,6 +721,19 @@ GC_API void GC_debug_register_finalizer_no_order
 	GC_PROTO((GC_PTR obj, GC_finalization_proc fn, GC_PTR cd,
 		  GC_finalization_proc *ofn, GC_PTR *ocd));
 
+/* This is a special finalizer that is useful when an object's  */
+/* finalizer must be run when the object is known to be no      */
+/* longer reachable, not even from other finalizable objects.   */
+/* This can be used in combination with finalizer_no_order so   */
+/* as to release resources that must not be released while an   */
+/* object can still be brought back to life by other            */
+/* finalizers.                                                  */
+GC_API void GC_register_finalizer_unreachable
+	GC_PROTO((GC_PTR obj, GC_finalization_proc fn, GC_PTR cd,
+		  GC_finalization_proc *ofn, GC_PTR *ocd));
+GC_API void GC_debug_register_finalizer_unreachable
+	GC_PROTO((GC_PTR obj, GC_finalization_proc fn, GC_PTR cd,
+		  GC_finalization_proc *ofn, GC_PTR *ocd));
 
 /* The following routine may be used to break cycles between	*/
 /* finalizable objects, thus causing cyclic finalizable		*/
@@ -774,6 +830,7 @@ GC_API GC_PTR GC_call_with_alloc_lock
 
 /* The following routines are primarily intended for use with a 	*/
 /* preprocessor which inserts calls to check C pointer arithmetic.	*/
+/* They indicate failure by invoking the corresponding _print_proc.	*/
 
 /* Check that p and q point to the same object.  		*/
 /* Fail conspicuously if they don't.				*/
@@ -840,7 +897,7 @@ GC_API GC_PTR GC_is_valid_displacement GC_PROTO((GC_PTR	p));
 
 /* Safer assignment of a pointer to a nonstack location.	*/
 #ifdef GC_DEBUG
-# ifdef __STDC__
+# if defined(__STDC__) || defined(_AIX)
 #   define GC_PTR_STORE(p, q) \
 	(*(void **)GC_is_visible(p) = GC_is_valid_displacement(q))
 # else
@@ -851,7 +908,7 @@ GC_API GC_PTR GC_is_valid_displacement GC_PROTO((GC_PTR	p));
 #   define GC_PTR_STORE(p, q) *((p) = (q))
 #endif
 
-/* Fynctions called to report pointer checking errors */
+/* Functions called to report pointer checking errors */
 GC_API void (*GC_same_obj_print_proc) GC_PROTO((GC_PTR p, GC_PTR q));
 
 GC_API void (*GC_is_valid_displacement_print_proc)
@@ -872,6 +929,25 @@ GC_API void (*GC_is_visible_print_proc)
 # if defined(PCR) || defined(GC_SOLARIS_THREADS) || \
      defined(GC_PTHREADS) || defined(GC_WIN32_THREADS)
    	/* Any flavor of threads except SRC_M3.	*/
+
+/* Register the current thread as a new thread whose stack(s) should    */
+/* be traced by the GC.  						*/
+/* If a platform does not implicitly do so, this must be called before  */
+/* a thread can allocate garbage collected memory, or assign pointers	*/
+/* to the garbage collected heap.  Once registered, a thread will be	*/
+/* stopped during garbage collections.					*/
+GC_API void GC_register_my_thread GC_PROTO((void));
+
+/* Register the current thread, with the indicated stack base, as	*/
+/* a new thread whose stack(s) should be traced by the GC.  If a 	*/
+/* platform does not implicitly do so, this must be called before a	*/
+/* thread can allocate garbage collected memory, or assign pointers	*/
+/* to the garbage collected heap.  Once registered, a thread will be	*/
+/* stopped during garbage collections.					*/
+GC_API void GC_unregister_my_thread GC_PROTO((void));
+
+GC_API GC_PTR GC_get_thread_stack_base GC_PROTO((void));
+
 /* This returns a list of objects, linked through their first		*/
 /* word.  Its use can greatly reduce lock contention problems, since	*/
 /* the allocation lock can be acquired and released many fewer times.	*/
@@ -881,9 +957,18 @@ GC_API void (*GC_is_visible_print_proc)
 GC_PTR GC_malloc_many(size_t lb);
 #define GC_NEXT(p) (*(GC_PTR *)(p)) 	/* Retrieve the next element	*/
 					/* in returned list.		*/
-extern void GC_thr_init();	/* Needed for Solaris/X86	*/
+extern void GC_thr_init GC_PROTO((void));/* Needed for Solaris/X86	*/
 
 #endif /* THREADS && !SRC_M3 */
+
+/* Register a callback to control the scanning of dynamic libraries.
+   When the GC scans the static data of a dynamic library, it will
+   first call a user-supplied routine with filename of the library and
+   the address and length of the memory region.  This routine should
+   return nonzero if that region should be scanned.  */
+GC_API void GC_register_has_static_roots_callback 
+  (int (*callback)(const char *, void *, size_t));
+
 
 #if defined(GC_WIN32_THREADS) && !defined(__CYGWIN32__) && !defined(__CYGWIN__)
 # include <windows.h>
@@ -919,30 +1004,56 @@ extern void GC_thr_init();	/* Needed for Solaris/X86	*/
 
 #endif /* defined(GC_WIN32_THREADS)  && !cygwin */
 
-/*
- * If you are planning on putting
- * the collector in a SunOS 5 dynamic library, you need to call GC_INIT()
- * from the statically loaded program section.
- * This circumvents a Solaris 2.X (X<=4) linker bug.
- */
-#if defined(sparc) || defined(__sparc)
+ /*
+  * Fully portable code should call GC_INIT() from the main program
+  * before making any other GC_ calls.  On most platforms this is a
+  * no-op and the collector self-initializes.  But a number of platforms
+  * make that too hard.
+  */
+#if (defined(sparc) || defined(__sparc)) && defined(sun)
+    /*
+     * If you are planning on putting
+     * the collector in a SunOS 5 dynamic library, you need to call GC_INIT()
+     * from the statically loaded program section.
+     * This circumvents a Solaris 2.X (X<=4) linker bug.
+     */
 #   define GC_INIT() { extern end, etext; \
 		       GC_noop(&end, &etext); }
 #else
-# if defined(__CYGWIN32__) && defined(GC_DLL) || defined (_AIX)
+# if defined(__CYGWIN32__) || defined (_AIX)
     /*
      * Similarly gnu-win32 DLLs need explicit initialization from
      * the main program, as does AIX.
      */
-#   define GC_INIT() { GC_add_roots(DATASTART, DATAEND); }
+#   ifdef __CYGWIN32__
+      extern int _data_start__[];
+      extern int _data_end__[];
+      extern int _bss_start__[];
+      extern int _bss_end__[];
+#     define GC_MAX(x,y) ((x) > (y) ? (x) : (y))
+#     define GC_MIN(x,y) ((x) < (y) ? (x) : (y))
+#     define GC_DATASTART ((GC_PTR) GC_MIN(_data_start__, _bss_start__))
+#     define GC_DATAEND	 ((GC_PTR) GC_MAX(_data_end__, _bss_end__))
+#     ifdef GC_DLL
+#       define GC_INIT() { GC_add_roots(GC_DATASTART, GC_DATAEND); }
+#     else
+#       define GC_INIT()
+#     endif
+#   endif
+#   if defined(_AIX)
+      extern int _data[], _end[];
+#     define GC_DATASTART ((GC_PTR)((ulong)_data))
+#     define GC_DATAEND ((GC_PTR)((ulong)_end))
+#     define GC_INIT() { GC_add_roots(GC_DATASTART, GC_DATAEND); }
+#   endif
 # else
-#  if defined(__APPLE__) && defined(__MACH__)
+#  if defined(__APPLE__) && defined(__MACH__) || defined(GC_WIN32_THREADS)
 #   define GC_INIT() { GC_init(); }
 #  else
 #   define GC_INIT()
-#  endif
-# endif
-#endif
+#  endif /* !__MACH && !GC_WIN32_THREADS */
+# endif /* !AIX && !cygwin */
+#endif /* !sparc */
 
 #if !defined(_WIN32_WCE) \
     && ((defined(_MSDOS) || defined(_MSC_VER)) && (_M_IX86 >= 300) \
@@ -965,4 +1076,15 @@ extern void GC_thr_init();	/* Needed for Solaris/X86	*/
     }  /* end of extern "C" */
 #endif
 
+/* External thread suspension support. These functions do not implement
+ * suspension counts or any other higher-level abstraction. Threads which
+ * have been suspended numerous times will resume with the very first call
+ * to GC_resume_thread.
+ */
+#if defined(GC_PTHREADS) && !defined(GC_SOLARIS_THREADS) \
+  && !defined(GC_WIN32_THREADS) && !defined(GC_DARWIN_THREADS)
+GC_API void GC_suspend_thread GC_PROTO((pthread_t));
+GC_API void GC_resume_thread GC_PROTO((pthread_t));
+GC_API int GC_is_thread_suspended GC_PROTO((pthread_t));
+#endif
 #endif /* _GC_H */

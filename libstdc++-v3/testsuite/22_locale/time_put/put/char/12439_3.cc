@@ -1,9 +1,9 @@
-// Copyright (C) 2003 Free Software Foundation
+// Copyright (C) 2003, 2009, 2010 Free Software Foundation
 //
 // This file is part of the GNU ISO C++ Library.  This library is free
 // software; you can redistribute it and/or modify it under the
 // terms of the GNU General Public License as published by the
-// Free Software Foundation; either version 2, or (at your option)
+// Free Software Foundation; either version 3, or (at your option)
 // any later version.
 
 // This library is distributed in the hope that it will be useful,
@@ -12,11 +12,12 @@
 // GNU General Public License for more details.
 
 // You should have received a copy of the GNU General Public License along
-// with this library; see the file COPYING.  If not, write to the Free
-// Software Foundation, 59 Temple Place - Suite 330, Boston, MA 02111-1307,
-// USA.
+// with this library; see the file COPYING3.  If not see
+// <http://www.gnu.org/licenses/>.
 
 // 22.2.5.3.1 time_put members
+
+// { dg-require-time "" }
 
 #include <locale>
 #include <sstream>
@@ -29,8 +30,8 @@ public:
   mutable std::string format_chars;
 
 protected:
-  iter_type do_put(iter_type s, std::ios_base&, char_type fill,
-		   const std::tm* t, char format, char modifier) const
+  iter_type do_put(iter_type s, std::ios_base&, char_type,
+		   const std::tm*, char format, char) const
   {
     format_chars.push_back(format);
     return s;
@@ -45,7 +46,7 @@ void test03()
   bool test __attribute__((unused)) = true;
   
   ostringstream stream;
-  time_t tt = time(NULL);
+  time_t tt = time(0);
   
   const char* fmt = "%c";
   

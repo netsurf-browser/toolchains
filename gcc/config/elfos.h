@@ -1,14 +1,14 @@
 /* elfos.h  --  operating system specific defines to be used when
    targeting GCC for some generic ELF system
-   Copyright (C) 1991, 1994, 1995, 1999, 2000, 2001, 2002, 2003
-   Free Software Foundation, Inc.
+   Copyright (C) 1991, 1994, 1995, 1999, 2000, 2001, 2002, 2003, 2004,
+   2007, 2009, 2010 Free Software Foundation, Inc.
    Based on svr4.h contributed by Ron Guilmette (rfg@netcom.com).
 
 This file is part of GCC.
 
 GCC is free software; you can redistribute it and/or modify
 it under the terms of the GNU General Public License as published by
-the Free Software Foundation; either version 2, or (at your option)
+the Free Software Foundation; either version 3, or (at your option)
 any later version.
 
 GCC is distributed in the hope that it will be useful,
@@ -16,10 +16,14 @@ but WITHOUT ANY WARRANTY; without even the implied warranty of
 MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
 GNU General Public License for more details.
 
-You should have received a copy of the GNU General Public License
-along with GCC; see the file COPYING.  If not, write to
-the Free Software Foundation, 59 Temple Place - Suite 330,
-Boston, MA 02111-1307, USA.  */
+Under Section 7 of GPL version 3, you are granted additional
+permissions described in the GCC Runtime Library Exception, version
+3.1, as published by the Free Software Foundation.
+
+You should have received a copy of the GNU General Public License and
+a copy of the GCC Runtime Library Exception along with this program;
+see the files COPYING3 and COPYING.RUNTIME respectively.  If not, see
+<http://www.gnu.org/licenses/>.  */
 
 #define TARGET_OBJFMT_CPP_BUILTINS()		\
   do						\
@@ -40,12 +44,15 @@ Boston, MA 02111-1307, USA.  */
 #undef  USER_LABEL_PREFIX
 #define USER_LABEL_PREFIX ""
 
-/* Biggest alignment supported by the object file format of this
-   machine.  Use this macro to limit the alignment which can be
-   specified using the `__attribute__ ((aligned (N)))' construct.  If
-   not defined, the default value is `BIGGEST_ALIGNMENT'.  */
+/* The biggest alignment supported by ELF in bits. 32-bit ELF 
+   supports section alignment up to (0x80000000 * 8), while 
+   64-bit ELF supports (0x8000000000000000 * 8). If this macro 
+   is not defined, the default is the largest alignment supported 
+   by 32-bit ELF and representable on a 32-bit host. Use this
+   macro to limit the alignment which can be specified using
+   the `__attribute__ ((aligned (N)))' construct.  */
 #ifndef MAX_OFILE_ALIGNMENT
-#define MAX_OFILE_ALIGNMENT (32768 * 8)
+#define MAX_OFILE_ALIGNMENT (((unsigned int) 1 << 28) * 8)
 #endif
 
 /* Use periods rather than dollar signs in special g++ assembler names.  */
@@ -57,14 +64,6 @@ Boston, MA 02111-1307, USA.  */
 #ifndef PCC_BITFIELD_TYPE_MATTERS
 #define PCC_BITFIELD_TYPE_MATTERS 1
 #endif
-
-/* Implicit library calls should use memcpy, not bcopy, etc.  */
-
-#define TARGET_MEM_FUNCTIONS
-
-/* Handle #pragma weak and #pragma pack.  */
-
-#define HANDLE_SYSV_PRAGMA 1
 
 /* All ELF targets can support DWARF-2.  */
 
@@ -225,6 +224,8 @@ Boston, MA 02111-1307, USA.  */
 #define TARGET_ASM_SELECT_RTX_SECTION default_elf_select_rtx_section
 #undef	TARGET_ASM_SELECT_SECTION
 #define TARGET_ASM_SELECT_SECTION default_elf_select_section
+#undef  TARGET_HAVE_SWITCHABLE_BSS_SECTIONS
+#define TARGET_HAVE_SWITCHABLE_BSS_SECTIONS true
 
 /* Define the strings used for the special svr4 .type and .size directives.
    These strings generally do not vary from one system running svr4 to
@@ -277,31 +278,46 @@ Boston, MA 02111-1307, USA.  */
     {								\
       ASM_OUTPUT_TYPE_DIRECTIVE (FILE, NAME, "function");	\
       ASM_DECLARE_RESULT (FILE, DECL_RESULT (DECL));		\
-      ASM_OUTPUT_LABEL (FILE, NAME);				\
+      ASM_OUTPUT_FUNCTION_LABEL (FILE, NAME, DECL);		\
     }								\
   while (0)
 #endif
 
 /* Write the extra assembler code needed to declare an object properly.  */
 
-#define ASM_DECLARE_OBJECT_NAME(FILE, NAME, DECL)		\
-  do								\
-    {								\
-      HOST_WIDE_INT size;					\
-								\
-      ASM_OUTPUT_TYPE_DIRECTIVE (FILE, NAME, "object");		\
-								\
-      size_directive_output = 0;				\
-      if (!flag_inhibit_size_directive				\
-	  && (DECL) && DECL_SIZE (DECL))			\
-	{							\
-	  size_directive_output = 1;				\
-	  size = int_size_in_bytes (TREE_TYPE (DECL));		\
-	  ASM_OUTPUT_SIZE_DIRECTIVE (FILE, NAME, size);		\
-	}							\
-								\
-      ASM_OUTPUT_LABEL (FILE, NAME);				\
-    }								\
+#ifdef HAVE_GAS_GNU_UNIQUE_OBJECT
+#define USE_GNU_UNIQUE_OBJECT 1
+#else
+#define USE_GNU_UNIQUE_OBJECT 0
+#endif
+
+#define ASM_DECLARE_OBJECT_NAME(FILE, NAME, DECL)			\
+  do									\
+    {									\
+      HOST_WIDE_INT size;						\
+									\
+      /* For template static data member instantiations or		\
+	 inline fn local statics and their guard variables, use		\
+	 gnu_unique_object so that they will be combined even under	\
+	 RTLD_LOCAL.  Don't use gnu_unique_object for typeinfo,		\
+	 vtables and other read-only artificial decls.  */		\
+      if (USE_GNU_UNIQUE_OBJECT && DECL_ONE_ONLY (DECL)			\
+	  && (!DECL_ARTIFICIAL (DECL) || !TREE_READONLY (DECL)))	\
+	ASM_OUTPUT_TYPE_DIRECTIVE (FILE, NAME, "gnu_unique_object");	\
+      else								\
+	ASM_OUTPUT_TYPE_DIRECTIVE (FILE, NAME, "object");		\
+									\
+      size_directive_output = 0;					\
+      if (!flag_inhibit_size_directive					\
+	  && (DECL) && DECL_SIZE (DECL))				\
+	{								\
+	  size_directive_output = 1;					\
+	  size = int_size_in_bytes (TREE_TYPE (DECL));			\
+	  ASM_OUTPUT_SIZE_DIRECTIVE (FILE, NAME, size);			\
+	}								\
+									\
+      ASM_OUTPUT_LABEL (FILE, NAME);					\
+    }									\
   while (0)
 
 /* Output the size directive for a decl in rest_of_decl_compilation
@@ -431,14 +447,15 @@ Boston, MA 02111-1307, USA.  */
 #define ASM_OUTPUT_ASCII(FILE, STR, LENGTH)				\
   do									\
     {									\
-      register const unsigned char *_ascii_bytes =			\
+      const unsigned char *_ascii_bytes =				\
 	(const unsigned char *) (STR);					\
-      register const unsigned char *limit = _ascii_bytes + (LENGTH);	\
-      register unsigned bytes_in_chunk = 0;				\
+      const unsigned char *limit = _ascii_bytes + (LENGTH);		\
+      const unsigned char *last_null = NULL;				\
+      unsigned bytes_in_chunk = 0;					\
 									\
       for (; _ascii_bytes < limit; _ascii_bytes++)			\
         {								\
-	  register const unsigned char *p;				\
+	  const unsigned char *p;					\
 									\
 	  if (bytes_in_chunk >= 60)					\
 	    {								\
@@ -446,8 +463,14 @@ Boston, MA 02111-1307, USA.  */
 	      bytes_in_chunk = 0;					\
 	    }								\
 									\
-	  for (p = _ascii_bytes; p < limit && *p != '\0'; p++)		\
-	    continue;							\
+	  if (_ascii_bytes > last_null)					\
+	    {								\
+	      for (p = _ascii_bytes; p < limit && *p != '\0'; p++)	\
+		continue;						\
+	      last_null = p;						\
+	    }								\
+	  else								\
+	    p = last_null;						\
 									\
 	  if (p < limit && (p - _ascii_bytes) <= (long)STRING_LIMIT)	\
 	    {								\
@@ -491,3 +514,18 @@ Boston, MA 02111-1307, USA.  */
         fprintf ((FILE), "\"\n");					\
     }									\
   while (0)
+
+/* Allow the use of the -frecord-gcc-switches switch via the
+   elf_record_gcc_switches function defined in varasm.c.  */
+#undef  TARGET_ASM_RECORD_GCC_SWITCHES
+#define TARGET_ASM_RECORD_GCC_SWITCHES elf_record_gcc_switches
+
+/* A C statement (sans semicolon) to output to the stdio stream STREAM
+   any text necessary for declaring the name of an external symbol
+   named NAME which is referenced in this compilation but not defined.
+   It is needed to properly support non-default visibility.  */
+
+#ifndef ASM_OUTPUT_EXTERNAL
+#define ASM_OUTPUT_EXTERNAL(FILE, DECL, NAME) \
+  default_elf_asm_output_external (FILE, DECL, NAME)
+#endif

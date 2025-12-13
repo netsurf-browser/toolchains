@@ -4,27 +4,25 @@
 --                                                                          --
 --                      S Y S T E M . V A L _ R E A L                       --
 --                                                                          --
---                                 S p e c                                  --
+--                                 B o d y                                  --
 --                                                                          --
---          Copyright (C) 1992-2003 Free Software Foundation, Inc.          --
+--          Copyright (C) 1992-2009, Free Software Foundation, Inc.         --
 --                                                                          --
 -- GNAT is free software;  you can  redistribute it  and/or modify it under --
 -- terms of the  GNU General Public License as published  by the Free Soft- --
--- ware  Foundation;  either version 2,  or (at your option) any later ver- --
+-- ware  Foundation;  either version 3,  or (at your option) any later ver- --
 -- sion.  GNAT is distributed in the hope that it will be useful, but WITH- --
 -- OUT ANY WARRANTY;  without even the  implied warranty of MERCHANTABILITY --
--- or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU General Public License --
--- for  more details.  You should have  received  a copy of the GNU General --
--- Public License  distributed with GNAT;  see file COPYING.  If not, write --
--- to  the Free Software Foundation,  59 Temple Place - Suite 330,  Boston, --
--- MA 02111-1307, USA.                                                      --
+-- or FITNESS FOR A PARTICULAR PURPOSE.                                     --
 --                                                                          --
--- As a special exception,  if other files  instantiate  generics from this --
--- unit, or you link  this unit with other files  to produce an executable, --
--- this  unit  does not  by itself cause  the resulting  executable  to  be --
--- covered  by the  GNU  General  Public  License.  This exception does not --
--- however invalidate  any other reasons why  the executable file  might be --
--- covered by the  GNU Public License.                                      --
+-- As a special exception under Section 7 of GPL version 3, you are granted --
+-- additional permissions described in the GCC Runtime Library Exception,   --
+-- version 3.1, as published by the Free Software Foundation.               --
+--                                                                          --
+-- You should have received a copy of the GNU General Public License and    --
+-- a copy of the GCC Runtime Library Exception along with this program;     --
+-- see the files COPYING3 and COPYING.RUNTIME respectively.  If not, see    --
+-- <http://www.gnu.org/licenses/>.                                          --
 --                                                                          --
 -- GNAT was originally developed  by the GNAT team at  New York University. --
 -- Extensive contributions were provided by Ada Core Technologies Inc.      --
@@ -41,10 +39,9 @@ package body System.Val_Real is
    ---------------
 
    function Scan_Real
-     (Str  : String;
-      Ptr  : access Integer;
-      Max  : Integer)
-      return Long_Long_Float
+     (Str : String;
+      Ptr : not null access Integer;
+      Max : Integer) return Long_Long_Float
    is
       procedure Reset;
       pragma Import (C, Reset, "__gnat_init_float");
@@ -57,7 +54,7 @@ package body System.Val_Real is
       P : Integer;
       --  Local copy of string pointer
 
-      Base   : Long_Long_Float;
+      Base : Long_Long_Float;
       --  Base value
 
       Uval : Long_Long_Float;
@@ -83,7 +80,7 @@ package body System.Val_Real is
 
       Num_Saved_Zeroes : Natural := 0;
       --  This counts zeroes after the decimal point. A non-zero value means
-      --  that this number of previously scanned digits are zero. if the end
+      --  that this number of previously scanned digits are zero. If the end
       --  of the number is reached, these zeroes are simply discarded, which
       --  ensures that trailing zeroes after the point never affect the value
       --  (which might otherwise happen as a result of rounding). With this
@@ -91,6 +88,10 @@ package body System.Val_Real is
       --  same exact result from 1.0E+49 and 1.0000000E+49. This is not
       --  necessarily required in a case like this where the result is not
       --  a machine number, but it is certainly a desirable behavior.
+
+      procedure Bad_Based_Value;
+      pragma No_Return (Bad_Based_Value);
+      --  Raise exception for bad based value
 
       procedure Scanf;
       --  Scans integer literal value starting at current character position.
@@ -100,6 +101,20 @@ package body System.Val_Real is
       --  longest possible syntactically valid numeral is scanned out, and on
       --  return P points past the last character. On entry, the current
       --  character is known to be a digit, so a numeral is definitely present.
+
+      ---------------------
+      -- Bad_Based_Value --
+      ---------------------
+
+      procedure Bad_Based_Value is
+      begin
+         raise Constraint_Error with
+           "invalid based literal for 'Value";
+      end Bad_Based_Value;
+
+      -----------
+      -- Scanf --
+      -----------
 
       procedure Scanf is
          Digit : Natural;
@@ -111,7 +126,7 @@ package body System.Val_Real is
 
             --  Save up trailing zeroes after the decimal point
 
-            if Digit = 0 and After_Point = 1 then
+            if Digit = 0 and then After_Point = 1 then
                Num_Saved_Zeroes := Num_Saved_Zeroes + 1;
 
             --  Here for a non-zero digit
@@ -180,7 +195,8 @@ package body System.Val_Real is
       --  Any other initial character is an error
 
       else
-         raise Constraint_Error;
+         raise Constraint_Error with
+           "invalid character in 'Value string";
       end if;
 
       --  Deal with based case
@@ -218,7 +234,7 @@ package body System.Val_Real is
 
             loop
                if P > Max then
-                  raise Constraint_Error;
+                  Bad_Based_Value;
 
                elsif Str (P) in Digs then
                   Digit := Character'Pos (Str (P)) - Character'Pos ('0');
@@ -232,12 +248,12 @@ package body System.Val_Real is
                     Character'Pos (Str (P)) - (Character'Pos ('a') - 10);
 
                else
-                  raise Constraint_Error;
+                  Bad_Based_Value;
                end if;
 
                --  Save up trailing zeroes after the decimal point
 
-               if Digit = 0 and After_Point = 1 then
+               if Digit = 0 and then After_Point = 1 then
                   Num_Saved_Zeroes := Num_Saved_Zeroes + 1;
 
                --  Here for a non-zero digit
@@ -266,7 +282,7 @@ package body System.Val_Real is
                P := P + 1;
 
                if P > Max then
-                  raise Constraint_Error;
+                  Bad_Based_Value;
 
                elsif Str (P) = '_' then
                   Scan_Underscore (Str, P, Ptr, Max, True);
@@ -281,7 +297,7 @@ package body System.Val_Real is
                      After_Point := 1;
 
                      if P > Max then
-                        raise Constraint_Error;
+                        Bad_Based_Value;
                      end if;
                   end if;
 
@@ -331,7 +347,7 @@ package body System.Val_Real is
       if Base /= 10.0 then
          Uval := Uval * Base ** Scale;
 
-      --  For base 10, use power of ten table, repeatedly if necessary.
+      --  For base 10, use power of ten table, repeatedly if necessary
 
       elsif Scale > 0 then
          while Scale > Maxpow loop
@@ -357,7 +373,7 @@ package body System.Val_Real is
       --  Here is where we check for a bad based number
 
       if Bad_Base then
-         raise Constraint_Error;
+         Bad_Based_Value;
 
       --  If OK, then deal with initial minus sign, note that this processing
       --  is done even if Uval is zero, so that -0.0 is correctly interpreted.
@@ -369,7 +385,6 @@ package body System.Val_Real is
             return Uval;
          end if;
       end if;
-
    end Scan_Real;
 
    ----------------
@@ -379,12 +394,10 @@ package body System.Val_Real is
    function Value_Real (Str : String) return Long_Long_Float is
       V : Long_Long_Float;
       P : aliased Integer := Str'First;
-
    begin
       V := Scan_Real (Str, P'Access, Str'Last);
       Scan_Trailing_Blanks (Str, P);
       return V;
-
    end Value_Real;
 
 end System.Val_Real;

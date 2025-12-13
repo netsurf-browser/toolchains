@@ -1,7 +1,7 @@
 /* Implementation of W32-specific threads compatibility routines for
    libgcc2.  */
 
-/* Copyright (C) 1999, 2000, 2002, 2004 Free Software Foundation, Inc.
+/* Copyright (C) 1999, 2000, 2002, 2004, 2008, 2009 Free Software Foundation, Inc.
    Contributed by Mumit Khan <khan@xraylith.wisc.edu>.
    Modified and moved to separate file by Danny Smith
    <dannysmith@users.sourceforge.net>.
@@ -10,7 +10,7 @@ This file is part of GCC.
 
 GCC is free software; you can redistribute it and/or modify it under
 the terms of the GNU General Public License as published by the Free
-Software Foundation; either version 2, or (at your option) any later
+Software Foundation; either version 3, or (at your option) any later
 version.
 
 GCC is distributed in the hope that it will be useful, but WITHOUT ANY
@@ -18,18 +18,14 @@ WARRANTY; without even the implied warranty of MERCHANTABILITY or
 FITNESS FOR A PARTICULAR PURPOSE.  See the GNU General Public License
 for more details.
 
-You should have received a copy of the GNU General Public License
-along with GCC; see the file COPYING.  If not, write to the Free
-Software Foundation, 59 Temple Place - Suite 330, Boston, MA
-02111-1307, USA.  */
+Under Section 7 of GPL version 3, you are granted additional
+permissions described in the GCC Runtime Library Exception, version
+3.1, as published by the Free Software Foundation.
 
-/* As a special exception, if you link this library with other files,
-   some of which are compiled with GCC, to produce an executable,
-   this library does not by itself cause the resulting executable
-   to be covered by the GNU General Public License.
-   This exception does not however invalidate any other reasons why
-   the executable file might be covered by the GNU General Public License.  */
-
+You should have received a copy of the GNU General Public License and
+a copy of the GCC Runtime Library Exception along with this program;
+see the files COPYING3 and COPYING.RUNTIME respectively.  If not, see
+<http://www.gnu.org/licenses/>.  */
 
 #include <windows.h>
 #ifndef __GTHREAD_HIDE_WIN32API
@@ -102,7 +98,8 @@ __gthr_win32_once (__gthread_once_t *once, void (*func) (void))
    C++ EH. Mingw uses a thread-support DLL to work-around this problem.  */
 
 int
-__gthr_win32_key_create (__gthread_key_t *key, void (*dtor) (void *))
+__gthr_win32_key_create (__gthread_key_t *key,
+			 void (*dtor) (void *) __attribute__((unused)))
 {
   int status = 0;
   DWORD tls_index = TlsAlloc ();
@@ -140,7 +137,10 @@ __gthr_win32_getspecific (__gthread_key_t key)
 int
 __gthr_win32_setspecific (__gthread_key_t key, const void *ptr)
 {
-  return (TlsSetValue (key, (void*) ptr) != 0) ? 0 : (int) GetLastError ();
+  if (TlsSetValue (key, CONST_CAST2(void *, const void *, ptr)) != 0)
+    return 0;
+  else
+    return GetLastError ();
 }
 
 void
@@ -148,6 +148,12 @@ __gthr_win32_mutex_init_function (__gthread_mutex_t *mutex)
 {
   mutex->counter = -1;
   mutex->sema = CreateSemaphore (NULL, 0, 65535, NULL);
+}
+
+void
+__gthr_win32_mutex_destroy (__gthread_mutex_t *mutex)
+{
+  CloseHandle ((HANDLE) mutex->sema);
 }
 
 int
@@ -181,4 +187,74 @@ __gthr_win32_mutex_unlock (__gthread_mutex_t *mutex)
     return ReleaseSemaphore (mutex->sema, 1, NULL) ? 0 : 1;
   else
     return 0;
+}
+
+void
+__gthr_win32_recursive_mutex_init_function (__gthread_recursive_mutex_t *mutex)
+{
+  mutex->counter = -1;
+  mutex->depth = 0;
+  mutex->owner = 0;
+  mutex->sema = CreateSemaphore (NULL, 0, 65535, NULL);
+}
+
+int
+__gthr_win32_recursive_mutex_lock (__gthread_recursive_mutex_t *mutex)
+{
+  DWORD me = GetCurrentThreadId();
+  if (InterlockedIncrement (&mutex->counter) == 0)
+    {
+      mutex->depth = 1;
+      mutex->owner = me;
+    }
+  else if (mutex->owner == me)
+    {
+      InterlockedDecrement (&mutex->counter);
+      ++(mutex->depth);
+    }
+  else if (WaitForSingleObject (mutex->sema, INFINITE) == WAIT_OBJECT_0)
+    {
+      mutex->depth = 1;
+      mutex->owner = me;
+    }
+  else
+    {
+      /* WaitForSingleObject returns WAIT_FAILED, and we can only do
+         some best-effort cleanup here.  */
+      InterlockedDecrement (&mutex->counter);
+      return 1;
+    }
+  return 0;
+}
+
+int
+__gthr_win32_recursive_mutex_trylock (__gthread_recursive_mutex_t *mutex)
+{
+  DWORD me = GetCurrentThreadId();
+  if (__GTHR_W32_InterlockedCompareExchange (&mutex->counter, 0, -1) < 0)
+    {
+      mutex->depth = 1;
+      mutex->owner = me;
+    }
+  else if (mutex->owner == me)
+    ++(mutex->depth);
+  else
+    return 1;
+
+  return 0;
+}
+
+int
+__gthr_win32_recursive_mutex_unlock (__gthread_recursive_mutex_t *mutex)
+{
+  --(mutex->depth);
+  if (mutex->depth == 0)
+    {
+      mutex->owner = 0;
+
+      if (InterlockedDecrement (&mutex->counter) >= 0)
+	return ReleaseSemaphore (mutex->sema, 1, NULL) ? 0 : 1;
+    }
+
+  return 0;
 }

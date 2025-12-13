@@ -6,18 +6,17 @@
 --                                                                          --
 --                                 B o d y                                  --
 --                                                                          --
---          Copyright (C) 2003-2004 Free Software Foundation, Inc.          --
+--          Copyright (C) 2003-2008, Free Software Foundation, Inc.         --
 --                                                                          --
 -- GNAT is free software;  you can  redistribute it  and/or modify it under --
 -- terms of the  GNU General Public License as published  by the Free Soft- --
--- ware  Foundation;  either version 2,  or (at your option) any later ver- --
+-- ware  Foundation;  either version 3,  or (at your option) any later ver- --
 -- sion.  GNAT is distributed in the hope that it will be useful, but WITH- --
 -- OUT ANY WARRANTY;  without even the  implied warranty of MERCHANTABILITY --
 -- or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU General Public License --
 -- for  more details.  You should have  received  a copy of the GNU General --
--- Public License  distributed with GNAT;  see file COPYING.  If not, write --
--- to  the Free Software Foundation,  59 Temple Place - Suite 330,  Boston, --
--- MA 02111-1307, USA.                                                      --
+-- Public License  distributed with GNAT; see file COPYING3.  If not, go to --
+-- http://www.gnu.org/licenses for a complete copy of the license.          --
 --                                                                          --
 ------------------------------------------------------------------------------
 
@@ -65,7 +64,7 @@
 --       appropriate vms equivalents. Note that replacements do not occur
 --       within ^alpha^beta^ sequences.
 
---       Any occurence of [filename].extension, where extension one of the
+--       Any occurrence of [filename].extension, where extension one of the
 --       following:
 
 --           "o", "ads", "adb", "ali", "ada", "atb", "ats", "adc", "c"
@@ -86,8 +85,11 @@
 --       output. A line containing this escape sequence may not also contain
 --       a ^alpha^beta^ sequence.
 
---       Recognize @ifset and @ifclear (this is because we have menu problems
---       if we let makeinfo handle the ifset/ifclear pairs
+--       Process @ifset and @ifclear for the target flags (unw, vms);
+--       this is because we have menu problems if we let makeinfo handle
+--       these ifset/ifclear pairs.
+--       Note: @ifset/@ifclear commands for the edition flags (FSFEDITION,
+--       PROEDITION, GPLEDITION) are passed through unchanged
 
 with Ada.Command_Line;           use Ada.Command_Line;
 with Ada.Strings;                use Ada.Strings;
@@ -95,6 +97,7 @@ with Ada.Strings.Fixed;          use Ada.Strings.Fixed;
 with Ada.Strings.Unbounded;      use Ada.Strings.Unbounded;
 with Ada.Strings.Maps;           use Ada.Strings.Maps;
 with Ada.Strings.Maps.Constants; use Ada.Strings.Maps.Constants;
+with Ada.Streams.Stream_IO;      use Ada.Streams.Stream_IO;
 with Ada.Text_IO;                use Ada.Text_IO;
 
 with GNAT.Spitbol;               use GNAT.Spitbol;
@@ -106,12 +109,14 @@ procedure Xgnatugn is
    --  Print usage information. Invoked if an invalid command line is
    --  encountered.
 
-   Output_File : File_Type;
+   subtype Sfile is Ada.Streams.Stream_IO.File_Type;
+
+   Output_File : Sfile;
    --  The preprocessed output is written to this file
 
    type Input_File is record
       Name : VString;
-      Data : File_Type;
+      Data : Ada.Text_IO.File_Type;
       Line : Natural := 0;
    end record;
    --  Records information on an input file. Name and Line are used
@@ -120,6 +125,9 @@ procedure Xgnatugn is
    function Get_Line (Input : access Input_File) return String;
    --  Returns a line from Input and performs the necessary
    --  line-oriented checks (length, character set, trailing spaces).
+
+   procedure Put_Line (F : Sfile; S : String);
+   --  Local version of Put_Line ensures Unix style line endings
 
    Number_Of_Warnings : Natural := 0;
    Number_Of_Errors   : Natural := 0;
@@ -143,7 +151,7 @@ procedure Xgnatugn is
    procedure Warning
      (Input        : Input_File;
       Message      : String);
-   --  Like Error, but just print a warning message.
+   --  Like Error, but just print a warning message
 
    Dictionary_File : aliased Input_File;
    procedure Read_Dictionary_File;
@@ -158,14 +166,27 @@ procedure Xgnatugn is
    --  It contains the Texinfo source code. Process_Source_File
    --  performs the necessary replacements.
 
-   type Target_Type is (UNW, VMS);
-   Target : Target_Type;
-   --  The target for which preprocessing is performed:
-   --  UNW (Unix and Windows) or VMS
-   --  The Target variable is initialized using the command line.
+   type Flag_Type is (UNW, VMS, FSFEDITION, PROEDITION, GPLEDITION);
+   --  The flags permitted in @ifset or @ifclear commands:
+   --
+   --  Targets for preprocessing
+   --    UNW (Unix and Windows) or VMS
+   --
+   --  Editions of the manual
+   --    FSFEDITION, PROEDITION, or GPLEDITION
+   --
+   --  Conditional commands for target are processed by xgnatugn
+   --
+   --  Conditional commands for edition are passed through unchanged
 
-   Valid_Characters : constant Character_Set
-     := To_Set (Span => (' ',  '~'));
+   subtype Target_Type is Flag_Type range UNW .. VMS;
+   subtype Edition_Type is Flag_Type range FSFEDITION .. GPLEDITION;
+
+   Target : Target_Type;
+   --  The Target variable is initialized using the command line
+
+   Valid_Characters : constant Character_Set :=
+                        To_Set (Span => (' ',  '~'));
    --  This array controls which characters are permitted in the input
    --  file (after line breaks have been removed). Valid characters
    --  are all printable ASCII characters and the space character.
@@ -191,7 +212,7 @@ procedure Xgnatugn is
    --  execution terminates with a Fatal_Line_Length exception.
 
    VMS_Escape_Character : constant Character := '^';
-   --  The character used to mark VMS alternatives (^alpha^beta^).
+   --  The character used to mark VMS alternatives (^alpha^beta^)
 
    Extensions : GNAT.Spitbol.Table_VString.Table (20);
    procedure Initialize_Extensions;
@@ -231,7 +252,7 @@ procedure Xgnatugn is
    --  Target.
 
    function In_VMS_Section return Boolean;
-   --  Returns True if in an "@ifset vms" section.
+   --  Returns True if in an "@ifset vms" section
 
    procedure Check_No_Pending_Conditional;
    --  Checks that all preprocessing directives have been properly matched by
@@ -244,7 +265,7 @@ procedure Xgnatugn is
    type Conditional_Context is record
       Starting_Line : Positive;
       Cond          : Conditional;
-      Flag          : Target_Type;
+      Flag          : Flag_Type;
       Excluding     : Boolean;
    end record;
 
@@ -254,7 +275,7 @@ procedure Xgnatugn is
      array (1 .. Conditional_Stack_Depth) of Conditional_Context;
 
    Conditional_TOS : Natural := 0;
-   --  Pointer to the Top Of Stack for Conditional_Stack.
+   --  Pointer to the Top Of Stack for Conditional_Stack
 
    -----------
    -- Usage --
@@ -263,7 +284,7 @@ procedure Xgnatugn is
    procedure Usage is
    begin
       Put_Line (Standard_Error,
-              "usage: xgnatug TARGET SOURCE DICTIONARY [OUTFILE [WARNINGS]]");
+            "usage: xgnatugn TARGET SOURCE DICTIONARY [OUTFILE [WARNINGS]]");
       New_Line;
       Put_Line (Standard_Error, "TARGET is one of:");
 
@@ -337,13 +358,23 @@ procedure Xgnatugn is
       end;
    end Get_Line;
 
+   --------------
+   -- Put_Line --
+   --------------
+
+   procedure Put_Line (F : Sfile; S : String) is
+   begin
+      String'Write (Stream (F), S);
+      Character'Write (Stream (F), ASCII.LF);
+   end Put_Line;
+
    -----------
    -- Error --
    -----------
 
    procedure Error
-     (Input        : Input_File;
-      Message      : String)
+     (Input   : Input_File;
+      Message : String)
    is
    begin
       Error (Input, 0, Message);
@@ -461,7 +492,7 @@ procedure Xgnatugn is
                   Non_Word_Character : constant Natural :=
                                          Index (Source,
                                                 Word_Characters or
-                                                  To_Set (" "),
+                                                  To_Set (" ."),
                                                 Outside);
 
                begin
@@ -586,7 +617,7 @@ procedure Xgnatugn is
             return;
          end if;
 
-         --  ^alpha^beta^, the VMS_Alternative case.
+         --  ^alpha^beta^, the VMS_Alternative case
 
          if Remaining_Line (Remaining_Line'First) = VMS_Escape_Character then
             declare
@@ -732,7 +763,7 @@ procedure Xgnatugn is
 
                      else
 
-                        --  Extend Seq to cover the current (known) word.
+                        --  Extend Seq to cover the current (known) word
 
                         Seq.Last := Token.Span.Last;
                         Next_Token;
@@ -786,8 +817,7 @@ procedure Xgnatugn is
                        (Line (Token.Span.First .. Token.Span.Last)));
                Next_Token;
             else
-               --  We already have: Word ".", followed by an unknown
-               --  token.
+               --  We already have: Word ".", followed by an unknown token
 
                Append (Rewritten_Line, First_Word & '.');
 
@@ -894,7 +924,7 @@ procedure Xgnatugn is
       Ifset       : constant String := "@ifset ";
       Ifclear     : constant String := "@ifclear ";
       Endsetclear : constant String := "@end ";
-      --  Strings to be recognized for conditional processing.
+      --  Strings to be recognized for conditional processing
 
    begin
       while not End_Of_File (Source_File.Data) loop
@@ -910,14 +940,14 @@ procedure Xgnatugn is
             --  directive.
 
             Cond : Conditional;
-            --  The kind of the directive.
+            --  The kind of the directive
 
-            Flag : Target_Type;
-            --  Its flag.
+            Flag : Flag_Type;
+            --  Its flag
 
          begin
             --  If the line starts with @ifset or @ifclear, we try to convert
-            --  the following flag to one of our target types. If we fail,
+            --  the following flag to one of our flag types. If we fail,
             --  Have_Conditional remains False.
 
             if Line'Length >= Ifset'Length
@@ -930,16 +960,21 @@ procedure Xgnatugn is
                           Trim (Line (Ifset'Length + 1 .. Line'Last), Both);
 
                begin
-                  Flag := Target_Type'Value (Arg);
-
-                  if Translate (Target_Type'Image (Flag), Lower_Case_Map)
-                                                                    /= Arg
-                  then
-                     Error (Source_File, "flag has to be lowercase");
-                  end if;
-
+                  Flag := Flag_Type'Value (Arg);
                   Have_Conditional := True;
 
+                  case Flag is
+                     when Target_Type =>
+                        if Translate (Target_Type'Image (Flag),
+                                      Lower_Case_Map)
+                                                      /= Arg
+                        then
+                           Error (Source_File, "flag has to be lowercase");
+                        end if;
+
+                     when Edition_Type =>
+                        null;
+                  end case;
                exception
                   when Constraint_Error =>
                      Error (Source_File, "unknown flag for '@ifset'");
@@ -955,22 +990,28 @@ procedure Xgnatugn is
                           Trim (Line (Ifclear'Length + 1 .. Line'Last), Both);
 
                begin
-                  Flag := Target_Type'Value (Arg);
-                  if Translate (Target_Type'Image (Flag), Lower_Case_Map)
-                                                                     /= Arg
-                  then
-                     Error (Source_File, "flag has to be lowercase");
-                  end if;
-
+                  Flag := Flag_Type'Value (Arg);
                   Have_Conditional := True;
 
+                  case Flag is
+                     when Target_Type =>
+                        if Translate (Target_Type'Image (Flag),
+                                      Lower_Case_Map)
+                                                      /= Arg
+                        then
+                           Error (Source_File, "flag has to be lowercase");
+                        end if;
+
+                     when Edition_Type =>
+                        null;
+                  end case;
                exception
                   when Constraint_Error =>
                      Error (Source_File, "unknown flag for '@ifclear'");
                end;
             end if;
 
-            if Have_Conditional then
+            if Have_Conditional and (Flag in Target_Type) then
 
                --  We create a new conditional context and suppress the
                --  directive in the output.
@@ -979,6 +1020,7 @@ procedure Xgnatugn is
 
             elsif Line'Length >= Endsetclear'Length
               and then Line (1 .. Endsetclear'Length) = Endsetclear
+              and then (Flag in Target_Type)
             then
                --  The '@end ifset'/'@end ifclear' case is handled here. We
                --  have to pop the conditional context.
@@ -1016,9 +1058,9 @@ procedure Xgnatugn is
                end;
             end if;                     --  Have_Conditional
 
-            if not Have_Conditional then
+            if (not Have_Conditional) or (Flag in Edition_Type) then
 
-               --  The ordinary case.
+               --  The ordinary case
 
                if not Currently_Excluding then
                   Put_Line (Output_File, Rewritten);
@@ -1041,7 +1083,7 @@ procedure Xgnatugn is
       --  case).
 
       procedure Add (Extension, Replacement : String);
-      --  Adds an extension with a custom replacement.
+      --  Adds an extension with a custom replacement
 
       ---------
       -- Add --
@@ -1252,23 +1294,24 @@ procedure Xgnatugn is
       end loop;
    end Check_No_Pending_Conditional;
 
-   ------------------
-   -- Main Program --
-   ------------------
+--  Start of processing for Xgnatugn
 
    Valid_Command_Line : Boolean;
    Output_File_Name   : VString;
 
 begin
    Initialize_Extensions;
-
    Valid_Command_Line := Argument_Count in 3 .. 5;
 
-   --  First argument: Target.
+   --  First argument: Target
 
    if Valid_Command_Line then
       begin
-         Target := Target_Type'Value (Argument (1));
+         Target := Flag_Type'Value (Argument (1));
+
+         if not Target'Valid then
+            Valid_Command_Line := False;
+         end if;
 
       exception
          when Constraint_Error =>
@@ -1276,7 +1319,7 @@ begin
       end;
    end if;
 
-   --  Second argument: Source_File.
+   --  Second argument: Source_File
 
    if Valid_Command_Line then
       begin
@@ -1284,12 +1327,12 @@ begin
          Open (Source_File.Data, In_File, Argument (2));
 
       exception
-         when Name_Error =>
+         when Ada.Text_IO.Name_Error =>
             Valid_Command_Line := False;
       end;
    end if;
 
-   --  Third argument: Dictionary_File.
+   --  Third argument: Dictionary_File
 
    if Valid_Command_Line then
       begin
@@ -1297,12 +1340,12 @@ begin
          Open (Dictionary_File.Data, In_File, Argument (3));
 
       exception
-         when Name_Error =>
+         when Ada.Text_IO.Name_Error =>
             Valid_Command_Line := False;
       end;
    end if;
 
-   --  Fourth argument: Output_File.
+   --  Fourth argument: Output_File
 
    if Valid_Command_Line then
       if Argument_Count in 4 .. 5 then
@@ -1322,7 +1365,7 @@ begin
          Create (Output_File, Out_File, S (Output_File_Name));
 
       exception
-         when Name_Error | Use_Error =>
+         when Ada.Text_IO.Name_Error | Ada.Text_IO.Use_Error =>
             Valid_Command_Line := False;
       end;
    end if;
@@ -1335,7 +1378,7 @@ begin
       Read_Dictionary_File;
       Close (Dictionary_File.Data);
 
-      --  Main processing starts here.
+      --  Main processing starts here
 
       Process_Source_File;
       Close (Output_File);

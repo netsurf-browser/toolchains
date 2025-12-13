@@ -1,5 +1,5 @@
 /* FileInputStream.java -- An input stream that reads from disk files.
-   Copyright (C) 1998, 2002, 2003 Free Software Foundation, Inc.
+   Copyright (C) 1998, 2002, 2003, 2004, 2005  Free Software Foundation, Inc.
 
 This file is part of GNU Classpath.
 
@@ -15,8 +15,8 @@ General Public License for more details.
 
 You should have received a copy of the GNU General Public License
 along with GNU Classpath; see the file COPYING.  If not, write to the
-Free Software Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA
-02111-1307 USA.
+Free Software Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA
+02110-1301 USA.
 
 Linking this library statically or dynamically with other modules is
 making a combined work based on this library.  Thus, the terms and
@@ -38,8 +38,9 @@ exception statement from your version. */
 
 package java.io;
 
+import gnu.java.nio.channels.FileChannelImpl;
+
 import java.nio.channels.FileChannel;
-import java.nio.channels.FileChannelImpl;
 
 /* Written using "Java Class Libraries", 2nd edition, ISBN 0-201-31002-3
  * "The Java Language Specification", ISBN 0-201-63451-1
@@ -50,8 +51,8 @@ import java.nio.channels.FileChannelImpl;
 /**
  * This class is a stream that reads its bytes from a file. 
  *
- * @author Aaron M. Renn <arenn@urbanophile.com>
- * @author Warren Levy <warrenl@cygnus.com>
+ * @author Aaron M. Renn (arenn@urbanophile.com)
+ * @author Warren Levy (warrenl@cygnus.com)
  */
 public class FileInputStream extends InputStream
 {
@@ -60,7 +61,7 @@ public class FileInputStream extends InputStream
    */
   private FileDescriptor fd;
 
-  private FileChannel ch;  /* cached associated file-channel */
+  private FileChannelImpl ch;
 
   /**
    * This method initializes a <code>FileInputStream</code> to read from the
@@ -75,7 +76,8 @@ public class FileInputStream extends InputStream
    * @param name The name of the file this stream should read from
    *
    * @exception SecurityException If read access to the file is not allowed
-   * @exception FileNotFoundException If the file does not exist.
+   * @exception FileNotFoundException If the file does not exist 
+   * or if it is a directory
    */
   public FileInputStream(String name) throws FileNotFoundException
   {
@@ -96,7 +98,8 @@ public class FileInputStream extends InputStream
    * @param file The <code>File</code> object this stream should read from
    *
    * @exception SecurityException If read access to the file is not allowed
-   * @exception FileNotFoundException If the file does not exist.
+   * @exception FileNotFoundException If the file does not exist
+   * or if it is a directory.
    */
   public FileInputStream(File file) throws FileNotFoundException
   {
@@ -104,10 +107,7 @@ public class FileInputStream extends InputStream
     if (s != null)
       s.checkRead(file.getPath());
 
-    if (file.isDirectory())
-      throw new FileNotFoundException(file.getPath() + " is a directory");
-
-    fd = new FileDescriptor(file.getPath(), FileDescriptor.READ);
+    ch = FileChannelImpl.create(file, FileChannelImpl.READ);
   }
 
   /**
@@ -121,7 +121,7 @@ public class FileInputStream extends InputStream
    * An exception is 
    * thrown if reading is not allowed.
    *
-   * @param fd The <code>FileDescriptor</code> object this stream 
+   * @param fdObj The <code>FileDescriptor</code> object this stream 
    * should read from
    *
    * @exception SecurityException If read access to the file is not allowed
@@ -133,6 +133,12 @@ public class FileInputStream extends InputStream
       s.checkRead(fdObj);
 
     fd = fdObj;
+    ch = (FileChannelImpl) fdObj.channel;
+  }
+
+  FileInputStream(FileChannelImpl ch)
+  {
+    this.ch = ch;
   }
 
   /**
@@ -156,7 +162,7 @@ public class FileInputStream extends InputStream
    */
   public int available() throws IOException
   {
-    return fd.available();
+    return ch.available();
   }
 
   /**
@@ -168,8 +174,7 @@ public class FileInputStream extends InputStream
    */
   public void close() throws IOException
   {
-    if (fd.valid())
-      fd.close();
+    ch.close();
   }
 
   protected void finalize() throws IOException
@@ -189,9 +194,12 @@ public class FileInputStream extends InputStream
    */
   public final FileDescriptor getFD() throws IOException
   {
-    if (!fd.valid())
-      throw new IOException();
-    return fd;
+    synchronized (this)
+      {
+	if (fd == null)
+	  fd = new FileDescriptor (ch);
+	return fd;
+      }
   }
 
   /**
@@ -207,7 +215,7 @@ public class FileInputStream extends InputStream
    */
   public int read() throws IOException
   {
-    return fd.read();
+    return ch.read();
   }
 
   /**
@@ -258,7 +266,7 @@ public class FileInputStream extends InputStream
         || offset + len > buf.length)
       throw new ArrayIndexOutOfBoundsException();
 
-    return fd.read(buf, offset, len);
+    return ch.read(buf, offset, len);
   }
 
   /**
@@ -281,9 +289,9 @@ public class FileInputStream extends InputStream
     if (numBytes == 0)
       return 0;
 
-    long curPos = fd.getFilePointer ();
-    long newPos = fd.seek (numBytes, FileDescriptor.CUR, true);
-    return newPos - curPos;
+    long oldPos = ch.position ();
+    ch.position(oldPos + numBytes);
+    return ch.position() - oldPos;
   }
 
   /**
@@ -294,9 +302,6 @@ public class FileInputStream extends InputStream
    */
   public synchronized FileChannel getChannel () 
   {
-    if (ch == null)
-      ch = new FileChannelImpl (fd, false, this);
-    
     return ch;
   }
 

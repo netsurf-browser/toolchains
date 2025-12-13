@@ -1,12 +1,13 @@
 /* Definitions of target machine for GNU compiler, for MMIX.
-   Copyright (C) 2000, 2001, 2002, 2003, 2004 Free Software Foundation, Inc.
+   Copyright (C) 2000, 2001, 2002, 2004, 2005, 2007, 2008, 2009, 2010
+   Free Software Foundation, Inc.
    Contributed by Hans-Peter Nilsson (hp@bitrange.com)
 
 This file is part of GCC.
 
 GCC is free software; you can redistribute it and/or modify
 it under the terms of the GNU General Public License as published by
-the Free Software Foundation; either version 2, or (at your option)
+the Free Software Foundation; either version 3, or (at your option)
 any later version.
 
 GCC is distributed in the hope that it will be useful,
@@ -15,9 +16,8 @@ MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
 GNU General Public License for more details.
 
 You should have received a copy of the GNU General Public License
-along with GCC; see the file COPYING.  If not, write to
-the Free Software Foundation, 59 Temple Place - Suite 330,
-Boston, MA 02111-1307, USA.  */
+along with GCC; see the file COPYING3.  If not see
+<http://www.gnu.org/licenses/>.  */
 
 #ifndef GCC_MMIX_H
 #define GCC_MMIX_H
@@ -81,15 +81,10 @@ Boston, MA 02111-1307, USA.  */
 #define MMIX_FUNCTION_ARG_SIZE(MODE, TYPE) \
  ((MODE) != BLKmode ? GET_MODE_SIZE (MODE) : int_size_in_bytes (TYPE))
 
-/* Declarations for helper variables that are not tied to a particular
-   target macro.  */
-extern GTY(()) rtx mmix_compare_op0;
-extern GTY(()) rtx mmix_compare_op1;
-
 /* Per-function machine data.  This is normally an opaque type just
    defined and used in the tm.c file, but we need to see the definition in
    mmix.md too.  */
-struct machine_function GTY(())
+struct GTY(()) machine_function
  {
    int has_landing_pad;
    int highest_saved_stack_register;
@@ -124,15 +119,6 @@ struct machine_function GTY(())
      %{!r:--defsym __.MMIX.start..text=0x100}}}\
   %{!melf:%{!r:-m mmo}}%{melf|r:-m elf64mmix}"
 
-/* Put unused option values here.  */
-extern const char *mmix_cc1_ignored_option;
-
-#define TARGET_OPTIONS					\
-   {{"set-program-start=", &mmix_cc1_ignored_option,	\
-  N_("Set start-address of the program"), 0},		\
-    {"set-data-start=", &mmix_cc1_ignored_option,	\
-  N_("Set start-address of data"), 0} }
-
 /* FIXME: There's no provision for profiling here.  */
 #define STARTFILE_SPEC  \
   "crti%O%s crtbegin%O%s"
@@ -154,106 +140,12 @@ extern const char *mmix_cc1_ignored_option;
     }								\
   while (0)
 
-extern int target_flags;
-
-#define TARGET_MASK_LIBFUNCS 1
-#define TARGET_MASK_ABI_GNU 2
-#define TARGET_MASK_FCMP_EPSILON 4
-#define TARGET_MASK_ZERO_EXTEND 8
-#define TARGET_MASK_KNUTH_DIVISION 16
-#define TARGET_MASK_TOPLEVEL_SYMBOLS 32
-#define TARGET_MASK_BRANCH_PREDICT 64
-#define TARGET_MASK_USE_RETURN_INSN 128
-
-/* We use the term "base address" since that's what Knuth uses.  The base
-   address goes in a global register.  When addressing, it's more like
-   "base address plus offset", with the offset being 0..255 from the base,
-   which itself can be a symbol plus an offset.  The effect is like having
-   a constant pool in global registers, code offsetting from those
-   registers (automatically causing a request for a suitable constant base
-   address register) without having to know the specific register or the
-   specific offset.  The setback is that there's a limited number of
-   registers, and you'll not find out until link time whether you
-   should've compiled with -mno-base-addresses.  */
-#define TARGET_MASK_BASE_ADDRESSES 128
-
-/* FIXME: Get rid of this one.  */
-#define TARGET_LIBFUNC (target_flags & TARGET_MASK_LIBFUNCS)
-#define TARGET_ABI_GNU (target_flags & TARGET_MASK_ABI_GNU)
-#define TARGET_FCMP_EPSILON (target_flags & TARGET_MASK_FCMP_EPSILON)
-#define TARGET_ZERO_EXTEND (target_flags & TARGET_MASK_ZERO_EXTEND)
-#define TARGET_KNUTH_DIVISION (target_flags & TARGET_MASK_KNUTH_DIVISION)
-#define TARGET_TOPLEVEL_SYMBOLS (target_flags & TARGET_MASK_TOPLEVEL_SYMBOLS)
-#define TARGET_BRANCH_PREDICT (target_flags & TARGET_MASK_BRANCH_PREDICT)
-#define TARGET_BASE_ADDRESSES (target_flags & TARGET_MASK_BASE_ADDRESSES)
-#define TARGET_USE_RETURN_INSN (target_flags & TARGET_MASK_USE_RETURN_INSN)
-
 #define TARGET_DEFAULT \
- (TARGET_MASK_BRANCH_PREDICT | TARGET_MASK_BASE_ADDRESSES \
-  | TARGET_MASK_USE_RETURN_INSN)
-
-/* FIXME: Provide a way to *load* the epsilon register.  */
-#define TARGET_SWITCHES							\
- {{"libfuncs",		TARGET_MASK_LIBFUNCS,				\
-   N_("For intrinsics library: pass all parameters in registers")},	\
-  {"no-libfuncs",	-TARGET_MASK_LIBFUNCS, ""},			\
-  {"abi=mmixware",	-TARGET_MASK_ABI_GNU,				\
-   N_("Use register stack for parameters and return value")},		\
-  {"abi=gnu",		TARGET_MASK_ABI_GNU,				\
-   N_("Use call-clobbered registers for parameters and return value")},	\
-  {"epsilon",		TARGET_MASK_FCMP_EPSILON,			\
-   N_("Use epsilon-respecting floating point compare instructions")},	\
-  {"no-epsilon",	-TARGET_MASK_FCMP_EPSILON, ""},			\
-  {"zero-extend",	TARGET_MASK_ZERO_EXTEND,			\
-   N_("Use zero-extending memory loads, not sign-extending ones")},	\
-  {"no-zero-extend",	-TARGET_MASK_ZERO_EXTEND,  ""},			\
-  {"knuthdiv",		TARGET_MASK_KNUTH_DIVISION,			\
-   N_("Generate divide results with reminder having the same sign as the\
- divisor (not the dividend)")},						\
-  {"no-knuthdiv",	-TARGET_MASK_KNUTH_DIVISION, ""},		\
-  {"toplevel-symbols",	TARGET_MASK_TOPLEVEL_SYMBOLS,			\
-   N_("Prepend global symbols with \":\" (for use with PREFIX)")},	\
-  {"no-toplevel-symbols", -TARGET_MASK_TOPLEVEL_SYMBOLS,		\
-   N_("Do not provide a default start-address 0x100 of the program")},	\
-  {"elf", 0,								\
-   N_("Link to emit program in ELF format (rather than mmo)")},		\
-  {"branch-predict",	TARGET_MASK_BRANCH_PREDICT,			\
-   N_("Use P-mnemonics for branches statically predicted as taken")},	\
-  {"no-branch-predict",	-TARGET_MASK_BRANCH_PREDICT,			\
-   N_("Don't use P-mnemonics for branches")},				\
-  {"base-addresses",	TARGET_MASK_BASE_ADDRESSES,			\
-   N_("Use addresses that allocate global registers")},			\
-  {"no-base-addresses",	-TARGET_MASK_BASE_ADDRESSES,			\
-   N_("Do not use addresses that allocate global registers")},		\
-  {"single-exit",	-TARGET_MASK_USE_RETURN_INSN,			\
-   N_("Generate a single exit point for each function")},		\
-  {"no-single-exit",	TARGET_MASK_USE_RETURN_INSN,			\
-   N_("Do not generate a single exit point for each function")},	\
-  {"",			TARGET_DEFAULT, ""}}
+ (MASK_BRANCH_PREDICT | MASK_BASE_ADDRESSES | MASK_USE_RETURN_INSN)
 
 /* Unfortunately, this must not reference anything in "mmix.c".  */
 #define TARGET_VERSION \
   fprintf (stderr, " (MMIX)")
-
-#define OVERRIDE_OPTIONS mmix_override_options ()
-
-#define OPTIMIZATION_OPTIONS(LEVEL, SIZE)	\
-  do						\
-    {						\
-      if (LEVEL >= 1)				\
-	flag_regmove = TRUE;			\
-      						\
-      if (SIZE || LEVEL > 1)			\
-	{					\
-	  flag_omit_frame_pointer = TRUE;	\
-	  flag_strength_reduce = FALSE;		\
-	}					\
-    }						\
-  while (0)
-
-/* This one will have to wait a little bit; right now we can't debug
-   neither with or without a frame-pointer.  */
-/* #define CAN_DEBUG_WITHOUT_FP */
 
 
 /* Node: Per-Function Data */
@@ -268,33 +160,6 @@ extern int target_flags;
 #define WORDS_BIG_ENDIAN 1
 #define FLOAT_WORDS_BIG_ENDIAN 1
 #define UNITS_PER_WORD 8
-
-/* FIXME: Promotion of modes currently generates slow code, extending
-   before every operation.  */
-
-#define PROMOTE_MODE(MODE, UNSIGNEDP, TYPE)	\
- do {						\
-  if (GET_MODE_CLASS (MODE) == MODE_INT		\
-      && GET_MODE_SIZE (MODE) < 8)		\
-   {						\
-     (MODE) = DImode;				\
-     /* Do the following some time later,	\
-	scrutinizing differences.  */		\
-     if (0) (UNSIGNEDP) = 0;			\
-   }						\
- } while (0)
-
-#define PROMOTE_FUNCTION_ARGS
-
-#if 0
-/* Apparently not doing TRT if int < register-size.  FIXME: Perhaps
-   FUNCTION_VALUE and LIBCALL_VALUE needs tweaking as some ports say.  */
-#define PROMOTE_FUNCTION_RETURN
-#endif
-
-/* I'm a little bit undecided about this one.  It might be beneficial to
-   promote all operations.  */
-#define PROMOTE_FOR_CALL_ONLY
 
 /* We need to align everything to 64 bits that can affect the alignment
    of other types.  Since address N is interpreted in MMIX as (N modulo
@@ -410,15 +275,9 @@ extern int target_flags;
    1, 1, 1, 1, 1, 1, 1 \
  }
 
-#define CONDITIONAL_REGISTER_USAGE mmix_conditional_register_usage ()
+#define INCOMING_REGNO(OUT) mmix_opposite_regno (OUT, 0)
 
-/* No INCOMING_REGNO or OUTGOING_REGNO, since those macros are not usable
-   for MMIX: it doesn't have a fixed register window size.  FIXME: Perhaps
-   we should say something about $0..$15 may sometimes be the incoming
-   $16..$31.  Those macros need better documentation; it looks like
-   they're just bogus and that FUNCTION_INCOMING_ARG_REGNO_P and
-   FUNCTION_OUTGOING_VALUE should be used where they're used.  For the
-   moment, do nothing; things seem to work anyway.  */
+#define OUTGOING_REGNO(IN) mmix_opposite_regno (IN, 1)
 
 /* Defining LOCAL_REGNO is necessary in presence of prologue/epilogue,
    else GCC will be confused that those registers aren't saved and
@@ -625,7 +484,7 @@ enum reg_class
 /* Node: Frame Layout */
 
 #define STACK_GROWS_DOWNWARD
-#define FRAME_GROWS_DOWNWARD
+#define FRAME_GROWS_DOWNWARD 1
 
 #define STARTING_FRAME_OFFSET \
   mmix_starting_frame_offset ()
@@ -686,9 +545,6 @@ enum reg_class
 
 
 /* Node: Elimination */
-/* FIXME: Is this requirement built-in?  Anyway, we should try to get rid
-   of it; we can deduce the value.  */
-#define FRAME_POINTER_REQUIRED (nonlocal_goto_stack_level != NULL_RTX)
 
 /* The frame-pointer is stored in a location that either counts to the
    offset of incoming parameters, or that counts to the offset of the
@@ -699,10 +555,6 @@ enum reg_class
   {ARG_POINTER_REGNUM, FRAME_POINTER_REGNUM},	\
   {FRAME_POINTER_REGNUM, STACK_POINTER_REGNUM}}
 
-/* We need not worry about when the frame-pointer is required for other
-   reasons; GCC takes care of those cases.  */
-#define CAN_ELIMINATE(FROM, TO) 1
-
 #define INITIAL_ELIMINATION_OFFSET(FROM, TO, OFFSET) \
  (OFFSET) = mmix_initial_elimination_offset (FROM, TO)
 
@@ -711,68 +563,16 @@ enum reg_class
 
 #define ACCUMULATE_OUTGOING_ARGS 1
 
-#define RETURN_POPS_ARGS(FUNDECL, FUNTYPE, STACKSIZE) 0
-
 
 /* Node: Register Arguments */
-#define FUNCTION_ARG(CUM, MODE, TYPE, NAMED)	\
- mmix_function_arg (&(CUM), MODE, TYPE, NAMED, 0)
-
-#define FUNCTION_INCOMING_ARG(CUM, MODE, TYPE, NAMED)	\
- mmix_function_arg (&(CUM), MODE, TYPE, NAMED, 1)
-
-#define FUNCTION_ARG_PASS_BY_REFERENCE(CUM, MODE, TYPE, NAMED)	\
- mmix_function_arg_pass_by_reference (&(CUM), MODE, TYPE, NAMED)
-
-/* This *sounds* good, but does not seem to be implemented correctly to
-   be a win; at least it wasn't in 2.7.2.  FIXME: Check and perhaps
-   replace with a big comment.
-   The definition needs to match or be a subset of
-   FUNCTION_ARG_PASS_BY_REFERENCE, since not all callers check that before
-   usage.  Watch lots of C++ testcases fail if set to 1, for example
-   g++.dg/init/byval1.C.  */
-#define FUNCTION_ARG_CALLEE_COPIES(CUM, MODE, TYPE, NAMED) \
- mmix_function_arg_pass_by_reference (&(CUM), MODE, TYPE, NAMED)
 
 typedef struct { int regs; int lib; } CUMULATIVE_ARGS;
 
-#define INIT_CUMULATIVE_ARGS(CUM, FNTYPE, LIBNAME, FNDECL, N_NAMED_ARGS) \
+#define INIT_CUMULATIVE_ARGS(CUM, FNTYPE, LIBNAME, INDIRECT, N_NAMED_ARGS) \
  ((CUM).regs = 0, (CUM).lib = ((LIBNAME) != 0))
-
-#define FUNCTION_ARG_ADVANCE(CUM, MODE, TYPE, NAMED)		\
- ((CUM).regs							\
-  = ((MUST_PASS_IN_STACK (MODE, TYPE))				\
-     || (MMIX_FUNCTION_ARG_SIZE (MODE, TYPE) > 8		\
-	 && !TARGET_LIBFUNC && !(CUM).lib))			\
-  ? (MMIX_MAX_ARGS_IN_REGS) + 1					\
-  : (CUM).regs + (7 + (MMIX_FUNCTION_ARG_SIZE (MODE, TYPE))) / 8)
 
 #define FUNCTION_ARG_REGNO_P(REGNO)		\
  mmix_function_arg_regno_p (REGNO, 0)
-
-#define FUNCTION_INCOMING_ARG_REGNO_P(REGNO)		\
- mmix_function_arg_regno_p (REGNO, 1)
-
-
-/* Node: Register Arguments */
-
-#define FUNCTION_VALUE(VALTYPE, FUNC)  \
- gen_rtx_REG (TYPE_MODE (VALTYPE), MMIX_RETURN_VALUE_REGNUM)
-
-/* This needs to take care of the register hole for complex return values.  */
-#define FUNCTION_OUTGOING_VALUE(VALTYPE, FUNC)  \
- mmix_function_outgoing_value (VALTYPE, FUNC)
-
-#define LIBCALL_VALUE(MODE) \
- gen_rtx_REG (MODE, MMIX_RETURN_VALUE_REGNUM)
-
-#define FUNCTION_VALUE_REGNO_P(REGNO) \
- mmix_function_value_regno_p (REGNO)
-
-
-/* Node: Aggregate Return */
-
-#define STRUCT_VALUE_REGNUM MMIX_STRUCT_VALUE_REGNUM
 
 
 /* Node: Caller Saves */
@@ -795,33 +595,10 @@ typedef struct { int regs; int lib; } CUMULATIVE_ARGS;
 #define FUNCTION_PROFILER(FILE, LABELNO)	\
  mmix_function_profiler (FILE, LABELNO)
 
-/* Node: Varargs */
-
-/* For the moment, let's stick to pushing argument registers on the stack.
-   Later, we can parse all arguments in registers, to improve
-   performance.  */
-#define SETUP_INCOMING_VARARGS(A, M, T, P, S)	\
- mmix_setup_incoming_varargs(&(A), M, T, &(P), S)
-
-/* FIXME: This and other EXPAND_BUILTIN_VA_... target macros are not
-   documented, although used by several targets.  */
-#define EXPAND_BUILTIN_VA_ARG(VALIST, TYPE) \
- mmix_expand_builtin_va_arg (VALIST, TYPE)
-
 /* Node: Trampolines */
 
-#define TRAMPOLINE_TEMPLATE(FILE) \
- mmix_trampoline_template (FILE)
-
-#define TRAMPOLINE_SIZE mmix_trampoline_size
-#define INITIALIZE_TRAMPOLINE(ADDR, FNADDR, STATIC_CHAIN) \
- mmix_initialize_trampoline (ADDR, FNADDR, STATIC_CHAIN)
-
-
-/* Node: Library Calls */
-
-#define TARGET_MEM_FUNCTIONS
-
+#define TRAMPOLINE_SIZE		(4*UNITS_PER_WORD)
+#define TRAMPOLINE_ALIGNMENT	BITS_PER_WORD
 
 /* Node: Addressing Modes */
 
@@ -829,10 +606,6 @@ typedef struct { int regs; int lib; } CUMULATIVE_ARGS;
  mmix_constant_address_p (X)
 
 #define MAX_REGS_PER_ADDRESS 2
-
-#define GO_IF_LEGITIMATE_ADDRESS(MODE, X, LABEL)		\
- if (mmix_legitimate_address (MODE, X, MMIX_REG_OK_STRICT))	\
-   goto LABEL
 
 #ifndef REG_OK_STRICT
 # define REG_OK_FOR_BASE_P(X)			\
@@ -844,10 +617,6 @@ typedef struct { int regs; int lib; } CUMULATIVE_ARGS;
 #endif /* REG_OK_STRICT */
 
 #define REG_OK_FOR_INDEX_P(X) REG_OK_FOR_BASE_P (X)
-
-#define LEGITIMIZE_ADDRESS(X, OLDX, MODE, WIN)
-
-#define GO_IF_MODE_DEPENDENT_ADDRESS(ADDR, LABEL)
 
 #define LEGITIMATE_CONSTANT_P(X) \
  mmix_legitimate_constant_p (X)
@@ -921,17 +690,10 @@ typedef struct { int regs; int lib; } CUMULATIVE_ARGS;
 #define ASM_APP_ON "%APP\n"
 #define ASM_APP_OFF "%NO_APP\n"
 
-#define ASM_OUTPUT_SOURCE_FILENAME(STREAM, NAME) \
- mmix_asm_output_source_filename (STREAM, NAME)
-
 #define OUTPUT_QUOTED_STRING(STREAM, STRING) \
  mmix_output_quoted_string (STREAM, STRING, strlen (STRING))
 
-#define ASM_OUTPUT_SOURCE_LINE(STREAM, LINE, COUNTER) \
- mmix_asm_output_source_line  (STREAM, LINE)
-
 #define TARGET_ASM_NAMED_SECTION default_elf_asm_named_section
-
 
 /* Node: Data Output */
 
@@ -951,6 +713,9 @@ typedef struct { int regs; int lib; } CUMULATIVE_ARGS;
 
 #define ASM_OUTPUT_LABEL(STREAM, NAME) \
  mmix_asm_output_label (STREAM, NAME)
+
+#define ASM_OUTPUT_INTERNAL_LABEL(STREAM, NAME) \
+ mmix_asm_output_internal_label (STREAM, NAME)
 
 #define ASM_DECLARE_REGISTER_GLOBAL(STREAM, DECL, REGNO, NAME) \
  mmix_asm_declare_register_global (STREAM, DECL, REGNO, NAME)
@@ -1094,27 +859,6 @@ typedef struct { int regs; int lib; } CUMULATIVE_ARGS;
 
 /* Node: Misc */
 
-#define PREDICATE_CODES				\
- {"mmix_reg_cc_operand", {SUBREG, REG}},	\
- {"mmix_foldable_comparison_operator",		\
-  {NE, EQ, GE, GT, LE, LT}},			\
- /* All '<', actually.  */			\
- {"mmix_comparison_operator",			\
-  {NE, EQ, GE, GT, LE, LT, GEU, GTU, LEU,	\
-   LTU, UNORDERED, ORDERED, UNEQ, UNGE, UNLE,	\
-   UNLT, LTGT}},				\
- {"mmix_symbolic_or_address_operand",		\
-  {SYMBOL_REF, LABEL_REF, CONST,		\
-   SUBREG, REG, PLUS}},				\
- {"mmix_reg_or_constant_operand",		\
-  {CONST_INT, CONST_DOUBLE, SUBREG, REG}},	\
- {"mmix_reg_or_8bit_operand",			\
-  {CONST_INT, CONST_DOUBLE, SUBREG, REG}},	\
- {"mmix_reg_or_0_operand",			\
-  {CONST_INT, CONST_DOUBLE, SUBREG, REG}},
-
-#define SPECIAL_MODE_PREDICATES "mmix_symbolic_or_address_operand",
-
 /* There's no way to get a PC-relative offset into tables for SImode, so
    for the moment we have absolute entries in DImode.
    When we're going ELF, these should be SImode and 1.  */
@@ -1140,8 +884,6 @@ typedef struct { int regs; int lib; } CUMULATIVE_ARGS;
 #define FUNCTION_MODE QImode
 
 #define NO_IMPLICIT_EXTERN_C
-
-#define HANDLE_SYSV_PRAGMA 1
 
 /* These are checked.  */
 #define DOLLARS_IN_IDENTIFIERS 0

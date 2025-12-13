@@ -6,23 +6,24 @@
 --                                                                          --
 --                                 B o d y                                  --
 --                                                                          --
---          Copyright (C) 1992-1999 Free Software Foundation, Inc.          --
+--          Copyright (C) 1992-2009, Free Software Foundation, Inc.         --
 --                                                                          --
 -- GNAT is free software;  you can  redistribute it  and/or modify it under --
 -- terms of the  GNU General Public License as published  by the Free Soft- --
--- ware  Foundation;  either version 2,  or (at your option) any later ver- --
+-- ware  Foundation;  either version 3,  or (at your option) any later ver- --
 -- sion.  GNAT is distributed in the hope that it will be useful, but WITH- --
 -- OUT ANY WARRANTY;  without even the  implied warranty of MERCHANTABILITY --
 -- or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU General Public License --
 -- for  more details.  You should have  received  a copy of the GNU General --
--- Public License  distributed with GNAT;  see file COPYING.  If not, write --
--- to  the Free Software Foundation,  59 Temple Place - Suite 330,  Boston, --
--- MA 02111-1307, USA.                                                      --
+-- Public License  distributed with GNAT; see file COPYING3.  If not, go to --
+-- http://www.gnu.org/licenses for a complete copy of the license.          --
 --                                                                          --
 -- GNAT was originally developed  by the GNAT team at  New York University. --
 -- Extensive contributions were provided by Ada Core Technologies Inc.      --
 --                                                                          --
 ------------------------------------------------------------------------------
+
+with Uintp; use Uintp;
 
 package Lib.Util is
 
@@ -46,15 +47,26 @@ package Lib.Util is
    --  if the host system needs a write for each line.
 
    procedure Write_Info_Initiate (Key : Character);
-   --  Initiates write of new line to info file, the parameter is the
-   --  keyword character for the line. The caller is responsible for
-   --  writing the required blank after the key character.
+   --  Initiates write of new line to info file, the parameter is the keyword
+   --  character for the line. The caller is responsible for writing the
+   --  required blank after the key character if needed.
 
    procedure Write_Info_Nat (N : Nat);
    --  Adds image of N to Info_Buffer with no leading or trailing blanks
 
+   procedure Write_Info_Int (N : Int);
+   --  Adds image of N to Info_Buffer with no leading or trailing blanks. A
+   --  minus sign is prepended for negative values.
+
    procedure Write_Info_Name (Name : Name_Id);
-   --  Adds characters of Name to Info_Buffer
+   procedure Write_Info_Name (Name : File_Name_Type);
+   procedure Write_Info_Name (Name : Unit_Name_Type);
+   --  Adds characters of Name to Info_Buffer. Note that in all cases, the
+   --  name is written literally from the names table entry without modifying
+   --  the case, using simply Get_Name_String.
+
+   procedure Write_Info_Slit (S : String_Id);
+   --  Write string literal value in format required for L/N lines in ali file
 
    procedure Write_Info_Str (Val : String);
    --  Adds characters of Val to Info_Buffer surrounded by quotes
@@ -66,5 +78,9 @@ package Lib.Util is
 
    procedure Write_Info_Terminate;
    --  Terminate current info line and output lines built in Info_Buffer
+
+   procedure Write_Info_Uint (N : Uint);
+   --  Adds decimal image of N to Info_Buffer with no leading or trailing
+   --  blanks. A minus sign is prepended for negative values.
 
 end Lib.Util;

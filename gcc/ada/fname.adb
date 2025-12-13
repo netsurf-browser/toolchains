@@ -6,25 +6,23 @@
 --                                                                          --
 --                                 B o d y                                  --
 --                                                                          --
---          Copyright (C) 1992-2003, Free Software Foundation, Inc.         --
+--          Copyright (C) 1992-2009, Free Software Foundation, Inc.         --
 --                                                                          --
 -- GNAT is free software;  you can  redistribute it  and/or modify it under --
 -- terms of the  GNU General Public License as published  by the Free Soft- --
--- ware  Foundation;  either version 2,  or (at your option) any later ver- --
+-- ware  Foundation;  either version 3,  or (at your option) any later ver- --
 -- sion.  GNAT is distributed in the hope that it will be useful, but WITH- --
 -- OUT ANY WARRANTY;  without even the  implied warranty of MERCHANTABILITY --
--- or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU General Public License --
--- for  more details.  You should have  received  a copy of the GNU General --
--- Public License  distributed with GNAT;  see file COPYING.  If not, write --
--- to  the Free Software Foundation,  59 Temple Place - Suite 330,  Boston, --
--- MA 02111-1307, USA.                                                      --
+-- or FITNESS FOR A PARTICULAR PURPOSE.                                     --
 --                                                                          --
--- As a special exception,  if other files  instantiate  generics from this --
--- unit, or you link  this unit with other files  to produce an executable, --
--- this  unit  does not  by itself cause  the resulting  executable  to  be --
--- covered  by the  GNU  General  Public  License.  This exception does not --
--- however invalidate  any other reasons why  the executable file  might be --
--- covered by the  GNU Public License.                                      --
+-- As a special exception under Section 7 of GPL version 3, you are granted --
+-- additional permissions described in the GCC Runtime Library Exception,   --
+-- version 3.1, as published by the Free Software Foundation.               --
+--                                                                          --
+-- You should have received a copy of the GNU General Public License and    --
+-- a copy of the GCC Runtime Library Exception along with this program;     --
+-- see the files COPYING3 and COPYING.RUNTIME respectively.  If not, see    --
+-- <http://www.gnu.org/licenses/>.                                          --
 --                                                                          --
 -- GNAT was originally developed  by the GNAT team at  New York University. --
 -- Extensive contributions were provided by Ada Core Technologies Inc.      --
@@ -33,8 +31,8 @@
 
 with Alloc;
 with Hostparm; use Hostparm;
-with Namet;    use Namet;
 with Table;
+with Types;    use Types;
 
 package body Fname is
 
@@ -59,31 +57,6 @@ package body Fname is
      Table_Initial        => Alloc.SFN_Table_Initial,
      Table_Increment      => Alloc.SFN_Table_Increment,
      Table_Name           => "Fname_Dummy_Table");
-   ----------------------------
-   -- Get_Expected_Unit_Type --
-   ----------------------------
-
-   --  We assume that a file name whose last character is a lower case b is
-   --  a body and a file name whose last character is a lower case s is a
-   --  spec. If any other character is found (e.g. when we are in syntax
-   --  checking only mode, where the file name conventions are not set),
-   --  then we return Unknown.
-
-   function Get_Expected_Unit_Type
-     (Fname : File_Name_Type)
-      return  Expected_Unit_Type
-   is
-   begin
-      Get_Name_String (Fname);
-
-      if Name_Buffer (Name_Len) = 'b' then
-         return Expect_Body;
-      elsif Name_Buffer (Name_Len) = 's' then
-         return Expect_Spec;
-      else
-         return Unknown;
-      end if;
-   end Get_Expected_Unit_Type;
 
    ---------------------------
    -- Is_Internal_File_Name --
@@ -91,8 +64,7 @@ package body Fname is
 
    function Is_Internal_File_Name
      (Fname              : File_Name_Type;
-      Renamings_Included : Boolean := True)
-      return               Boolean
+      Renamings_Included : Boolean := True) return Boolean
    is
    begin
       if Is_Predefined_File_Name (Fname, Renamings_Included) then
@@ -132,8 +104,7 @@ package body Fname is
 
    function Is_Predefined_File_Name
      (Fname              : File_Name_Type;
-      Renamings_Included : Boolean := True)
-      return               Boolean
+      Renamings_Included : Boolean := True) return Boolean
    is
    begin
       Get_Name_String (Fname);
@@ -141,29 +112,28 @@ package body Fname is
    end Is_Predefined_File_Name;
 
    function Is_Predefined_File_Name
-     (Renamings_Included : Boolean := True)
-      return               Boolean
+     (Renamings_Included : Boolean := True) return Boolean
    is
       subtype Str8 is String (1 .. 8);
 
       Predef_Names : constant array (1 .. 11) of Str8 :=
         ("ada     ",       -- Ada
-         "calendar",       -- Calendar
          "interfac",       -- Interfaces
          "system  ",       -- System
-         "machcode",       -- Machine_Code
-         "unchconv",       -- Unchecked_Conversion
-         "unchdeal",       -- Unchecked_Deallocation
 
          --  Remaining entries are only considered if Renamings_Included true
 
+         "calendar",       -- Calendar
+         "machcode",       -- Machine_Code
+         "unchconv",       -- Unchecked_Conversion
+         "unchdeal",       -- Unchecked_Deallocation
          "directio",       -- Direct_IO
          "ioexcept",       -- IO_Exceptions
          "sequenio",       -- Sequential_IO
          "text_io ");      -- Text_IO
 
          Num_Entries : constant Natural :=
-                         7 + 4 * Boolean'Pos (Renamings_Included);
+                         3 + 8 * Boolean'Pos (Renamings_Included);
 
    begin
       --  Remove extension (if present)
@@ -177,13 +147,18 @@ package body Fname is
       if Name_Len > 8 then
          return False;
 
-      --  Definitely predefined if prefix is a- i- or s-
+      --  Definitely predefined if prefix is a- i- or s- followed by letter
 
-      elsif Name_Len > 2
+      elsif Name_Len >=  3
         and then Name_Buffer (2) = '-'
-        and then (Name_Buffer (1) = 'a' or else
-                  Name_Buffer (1) = 'i' or else
+        and then (Name_Buffer (1) = 'a'
+                    or else
+                  Name_Buffer (1) = 'i'
+                    or else
                   Name_Buffer (1) = 's')
+        and then (Name_Buffer (3) in 'a' .. 'z'
+                    or else
+                  Name_Buffer (3) in 'A' .. 'Z')
       then
          return True;
       end if;

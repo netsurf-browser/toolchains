@@ -1,11 +1,12 @@
 // 2000-08-17 Benjamin Kosnik <bkoz@cygnus.com>
 
-// Copyright (C) 2000, 2002, 2003 Free Software Foundation
+// Copyright (C) 2000, 2001, 2002, 2003, 2004, 2005, 2006, 2007, 2009
+// Free Software Foundation
 //
 // This file is part of the GNU ISO C++ Library.  This library is free
 // software; you can redistribute it and/or modify it under the
 // terms of the GNU General Public License as published by the
-// Free Software Foundation; either version 2, or (at your option)
+// Free Software Foundation; either version 3, or (at your option)
 // any later version.
 
 // This library is distributed in the hope that it will be useful,
@@ -14,13 +15,13 @@
 // GNU General Public License for more details.
 
 // You should have received a copy of the GNU General Public License along
-// with this library; see the file COPYING.  If not, write to the Free
-// Software Foundation, 59 Temple Place - Suite 330, Boston, MA 02111-1307,
-// USA.
+// with this library; see the file COPYING3.  If not see
+// <http://www.gnu.org/licenses/>.
 
 // 22.2.1.5 - Template class codecvt [lib.locale.codecvt]
 
 #include <locale>
+#include <cstring>
 #include <testsuite_hooks.h>
 
 // Need to explicitly set the state(mbstate_t) to zero.
@@ -53,11 +54,11 @@ void test01()
   const ext_type* 	e_lit = "black pearl jasmine tea";
   const ext_type*       efrom_next;
   const int_type* 	i_lit = L"black pearl jasmine tea";
-  int 			size = strlen(e_lit);
+  size_t 		size = strlen(e_lit);
   int_type* 		i_arr = new int_type[size + 1];
   int_type* 		i_ref = new int_type[size + 1];
-  wmemset(i_arr, 0xdeadbeef, size + 1);
-  wmemset(i_ref, 0xdeadbeef, size + 1);
+  wmemset(i_arr, static_cast<wchar_t>(0xdeadbeef), size + 1);
+  wmemset(i_ref, static_cast<wchar_t>(0xdeadbeef), size + 1);
   int_type*		ito_next;
 
   locale 		loc;

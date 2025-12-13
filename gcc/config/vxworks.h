@@ -1,64 +1,138 @@
-/* Common VxWorks target definitions for GCC.
-   Copyright (C) 1999, 2000, 2001, 2002 Free Software Foundation, Inc.
+/* Common VxWorks target definitions for GNU compiler.
+   Copyright (C) 1999, 2000, 2001, 2002, 2003, 2004, 2005, 2007, 2010
+   Free Software Foundation, Inc.
    Contributed by Wind River Systems.
+   Rewritten by CodeSourcery, LLC.
 
 This file is part of GCC.
 
-GCC is free software; you can redistribute it and/or modify
-it under the terms of the GNU General Public License as published by
-the Free Software Foundation; either version 2, or (at your option)
-any later version.
+GCC is free software; you can redistribute it and/or modify it under
+the terms of the GNU General Public License as published by the Free
+Software Foundation; either version 3, or (at your option) any later
+version.
 
-GCC is distributed in the hope that it will be useful,
-but WITHOUT ANY WARRANTY; without even the implied warranty of
-MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-GNU General Public License for more details.
+GCC is distributed in the hope that it will be useful, but WITHOUT ANY
+WARRANTY; without even the implied warranty of MERCHANTABILITY or
+FITNESS FOR A PARTICULAR PURPOSE.  See the GNU General Public License
+for more details.
 
 You should have received a copy of the GNU General Public License
-along with GCC; see the file COPYING.  If not, write to
-the Free Software Foundation, 59 Temple Place - Suite 330,
-Boston, MA 02111-1307, USA.  */
+along with GCC; see the file COPYING3.  If not see
+<http://www.gnu.org/licenses/>.  */
 
-/* Specify what to link with.  */
-/* VxWorks does all the library stuff itself.  */
-#undef	LIB_SPEC
-#define	LIB_SPEC ""
+/* Assert that we are targetting VxWorks.  */
+#undef TARGET_VXWORKS
+#define TARGET_VXWORKS 1
 
-#undef LINK_SPEC
-#define LINK_SPEC "-r"
+/* In kernel mode, VxWorks provides all the libraries itself, as well as
+   the functionality of startup files, etc.  In RTP mode, it behaves more
+   like a traditional Unix, with more external files.  Most of our specs
+   must be aware of the difference.  */
 
-/* VxWorks provides the functionality of crt0.o and friends itself.  */
-#undef  STARTFILE_SPEC
-#define	STARTFILE_SPEC ""
+/* We look for the VxWorks header files using the environment
+   variables that are set in VxWorks to indicate the location of the
+   system header files.  We use -idirafter so that the GCC's own
+   header-file directories (containing <stddef.h>, etc.) come before
+   the VxWorks system header directories.  */
 
-#undef ENDFILE_SPEC
-#define ENDFILE_SPEC ""
+/* Since we provide a default -isystem, expand -isystem on the command
+   line early.  */
+#undef VXWORKS_ADDITIONAL_CPP_SPEC
+#define VXWORKS_ADDITIONAL_CPP_SPEC		\
+ "%{!nostdinc:					\
+    %{isystem*} -idirafter			\
+    %{mrtp: %:getenv(WIND_USR /h)		\
+      ;:    %:getenv(WIND_BASE /target/h)}}"
 
-/* VxWorks cannot have dots in constructor labels, because it uses a
-   mutant variation of collect2 that generates C code instead of
-   assembly.  Thus each constructor label must be a legitimate C
-   symbol.  FIXME: Have VxWorks use real collect2 instead.  */
+/* The references to __init and __fini will be satisfied by
+   libc_internal.a.  */
+#undef VXWORKS_LIB_SPEC
+#define	VXWORKS_LIB_SPEC						\
+"%{mrtp:%{shared:-u " USER_LABEL_PREFIX "__init -u " USER_LABEL_PREFIX "__fini} \
+	%{!shared:%{non-static:-u " USER_LABEL_PREFIX "_STI__6__rtld -ldl} \
+		  --start-group -lc -lgcc -lc_internal -lnet -ldsi	\
+		  --end-group}}"
 
-#undef NO_DOLLAR_IN_LABEL
-#define NO_DOT_IN_LABEL
+/* The no-op spec for "-shared" below is present because otherwise GCC
+   will treat it as an unrecognized option.  */
+#undef VXWORKS_LINK_SPEC
+#define VXWORKS_LINK_SPEC				\
+"%{!mrtp:-r}						\
+ %{!shared:						\
+   %{mrtp:-q %{h*}					\
+          %{R*} %{!T*: %(link_start) }			\
+          %(link_target) %(link_os)}}			\
+ %{v:-v}						\
+ %{shared:-shared}					\
+ %{Bstatic:-Bstatic}					\
+ %{Bdynamic:-Bdynamic}					\
+ %{!Xbind-lazy:-z now}					\
+ %{Xbind-now:%{Xbind-lazy:				\
+   %e-Xbind-now and -Xbind-lazy are incompatible}}	\
+ %{mrtp:%{!shared:%{!non-static:-static}		\
+ 		  %{non-static:--force-dynamic --export-dynamic}}}"
 
-/* enable #pragma pack(n) */
-#define HANDLE_SYSV_PRAGMA
+/* For VxWorks, the system provides libc_internal.a.  This is a superset
+   of libgcc.a; we want to use it.  Make sure not to dynamically export
+   any of its symbols, though.  Always look for libgcc.a first so that
+   we get the latest versions of the GNU intrinsics during our builds.  */
+#undef VXWORKS_LIBGCC_SPEC
+#define VXWORKS_LIBGCC_SPEC \
+  "-lgcc %{mrtp:--exclude-libs=libc_internal,libgcc -lc_internal}"
 
-/* No underscore is prepended to any C symbol name.  */
-#undef USER_LABEL_PREFIX
-#define USER_LABEL_PREFIX ""
+#undef VXWORKS_STARTFILE_SPEC
+#define	VXWORKS_STARTFILE_SPEC "%{mrtp:%{!shared:-l:crt0.o}}"
+#define VXWORKS_ENDFILE_SPEC ""
 
-/* VxWorks uses wchar_t == unsigned short (UCS2) on all architectures.  */
-#undef WCHAR_TYPE
-#define WCHAR_TYPE "short unsigned int"
-#undef WCHAR_TYPE_SIZE
-#define WCHAR_TYPE_SIZE 16
+/* Do VxWorks-specific parts of TARGET_OPTION_OVERRIDE.  */
+#undef VXWORKS_OVERRIDE_OPTIONS
+#define VXWORKS_OVERRIDE_OPTIONS vxworks_override_options ()
+extern void vxworks_override_options (void);
 
-/* Dwarf2 unwind info is not supported.  */
-#define DWARF2_UNWIND_INFO 0
-/* Weak symbols and link-once sections are not enabled by default.  */
-#define DEFAULT_USE_WEAK 0
+/* Only RTPs support prioritized constructors and destructors:
+   the implementation relies on numbered .ctors* sections.  */
+#define SUPPORTS_INIT_PRIORITY TARGET_VXWORKS_RTP
 
-/* Only supported debug format is Dwarf2.  */
-#undef DBX_DEBUGGING_INFO
+/* VxWorks requires special handling of constructors and destructors.
+   All VxWorks configurations must use these functions.  */
+#undef TARGET_ASM_CONSTRUCTOR
+#define TARGET_ASM_CONSTRUCTOR vxworks_asm_out_constructor
+#undef TARGET_ASM_DESTRUCTOR
+#define TARGET_ASM_DESTRUCTOR vxworks_asm_out_destructor
+extern void vxworks_asm_out_constructor (rtx symbol, int priority);
+extern void vxworks_asm_out_destructor (rtx symbol, int priority);
+
+/* Override the vxworks-dummy.h definitions.  TARGET_VXWORKS_RTP
+   is defined by vxworks.opt.  */
+#undef VXWORKS_GOTT_BASE
+#define VXWORKS_GOTT_BASE "__GOTT_BASE__"
+#undef VXWORKS_GOTT_INDEX
+#define VXWORKS_GOTT_INDEX "__GOTT_INDEX__"
+
+#undef PTRDIFF_TYPE
+#define PTRDIFF_TYPE "int"
+
+#undef SIZE_TYPE
+#define SIZE_TYPE "unsigned int"
+
+/* Both kernels and RTPs have the facilities required by this macro.  */
+#define TARGET_POSIX_IO
+
+/* A VxWorks implementation of TARGET_OS_CPP_BUILTINS.  */
+#define VXWORKS_OS_CPP_BUILTINS()					\
+  do									\
+    {									\
+      builtin_define ("__vxworks");					\
+      builtin_define ("__VXWORKS__");					\
+      builtin_assert ("system=unix");					\
+      if (TARGET_VXWORKS_RTP)						\
+	builtin_define ("__RTP__");					\
+      else								\
+	builtin_define ("_WRS_KERNEL");					\
+    }									\
+  while (0)
+
+#define VXWORKS_KIND VXWORKS_KIND_NORMAL
+
+/* The diab linker does not handle .gnu_attribute sections.  */
+#undef HAVE_AS_GNU_ATTRIBUTE

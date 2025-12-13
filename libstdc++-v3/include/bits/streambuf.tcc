@@ -1,12 +1,12 @@
 // Stream buffer classes -*- C++ -*-
 
-// Copyright (C) 1997, 1998, 1999, 2000, 2001, 2002, 2003
-// Free Software Foundation, Inc.
+// Copyright (C) 1997, 1998, 1999, 2000, 2001, 2002, 2003, 2004, 2005,
+// 2006, 2007, 2008, 2009, 2010, 2011  Free Software Foundation, Inc.
 //
 // This file is part of the GNU ISO C++ Library.  This library is free
 // software; you can redistribute it and/or modify it under the
 // terms of the GNU General Public License as published by the
-// Free Software Foundation; either version 2, or (at your option)
+// Free Software Foundation; either version 3, or (at your option)
 // any later version.
 
 // This library is distributed in the hope that it will be useful,
@@ -14,19 +14,19 @@
 // MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
 // GNU General Public License for more details.
 
-// You should have received a copy of the GNU General Public License along
-// with this library; see the file COPYING.  If not, write to the Free
-// Software Foundation, 59 Temple Place - Suite 330, Boston, MA 02111-1307,
-// USA.
+// Under Section 7 of GPL version 3, you are granted additional
+// permissions described in the GCC Runtime Library Exception, version
+// 3.1, as published by the Free Software Foundation.
 
-// As a special exception, you may use this file as part of a free software
-// library without restriction.  Specifically, if other files instantiate
-// templates or use macros or inline functions from this file, or you compile
-// this file and link it with other files to produce an executable, this
-// file does not by itself cause the resulting executable to be covered by
-// the GNU General Public License.  This exception does not however
-// invalidate any other reasons why the executable file might be covered by
-// the GNU General Public License.
+// You should have received a copy of the GNU General Public License and
+// a copy of the GCC Runtime Library Exception along with this program;
+// see the files COPYING3 and COPYING.RUNTIME respectively.  If not, see
+// <http://www.gnu.org/licenses/>.
+
+/** @file bits/streambuf.tcc
+ *  This is an internal header file, included by other library headers.
+ *  Do not attempt to use it directly. @headername{streambuf}
+ */
 
 //
 // ISO C++ 14882: 27.5  Stream buffers
@@ -37,8 +37,10 @@
 
 #pragma GCC system_header
 
-namespace std
+namespace std _GLIBCXX_VISIBILITY(default)
 {
+_GLIBCXX_BEGIN_NAMESPACE_VERSION
+
   template<typename _CharT, typename _Traits>
     streamsize
     basic_streambuf<_CharT, _Traits>::
@@ -47,15 +49,15 @@ namespace std
       streamsize __ret = 0;
       while (__ret < __n)
 	{
-	  const size_t __buf_len = this->egptr() - this->gptr();
+	  const streamsize __buf_len = this->egptr() - this->gptr();
 	  if (__buf_len)
 	    {
-	      const size_t __remaining = __n - __ret;
-	      const size_t __len = std::min(__buf_len, __remaining);
+	      const streamsize __remaining = __n - __ret;
+	      const streamsize __len = std::min(__buf_len, __remaining);
 	      traits_type::copy(__s, this->gptr(), __len);
 	      __ret += __len;
 	      __s += __len;
-	      this->gbump(__len);
+	      this->__safe_gbump(__len);
 	    }
 
 	  if (__ret < __n)
@@ -81,15 +83,15 @@ namespace std
       streamsize __ret = 0;
       while (__ret < __n)
 	{
-	  const size_t __buf_len = this->epptr() - this->pptr();
+	  const streamsize __buf_len = this->epptr() - this->pptr();
 	  if (__buf_len)
 	    {
-	      const size_t __remaining = __n - __ret;
-	      const size_t __len = std::min(__buf_len, __remaining);
+	      const streamsize __remaining = __n - __ret;
+	      const streamsize __len = std::min(__buf_len, __remaining);
 	      traits_type::copy(this->pptr(), __s, __len);
 	      __ret += __len;
 	      __s += __len;
-	      this->pbump(__len);
+	      this->__safe_pbump(__len);
 	    }
 
 	  if (__ret < __n)
@@ -109,55 +111,66 @@ namespace std
 
   // Conceivably, this could be used to implement buffer-to-buffer
   // copies, if this was ever desired in an un-ambiguous way by the
-  // standard. If so, then checks for __ios being zero would be
-  // necessary.
+  // standard.
   template<typename _CharT, typename _Traits>
     streamsize
-    __copy_streambufs(basic_streambuf<_CharT, _Traits>* __sbin,
-		      basic_streambuf<_CharT, _Traits>* __sbout)
+    __copy_streambufs_eof(basic_streambuf<_CharT, _Traits>* __sbin,
+			  basic_streambuf<_CharT, _Traits>* __sbout,
+			  bool& __ineof)
     {
       streamsize __ret = 0;
+      __ineof = true;
       typename _Traits::int_type __c = __sbin->sgetc();
       while (!_Traits::eq_int_type(__c, _Traits::eof()))
 	{
-	  const size_t __n = __sbin->egptr() - __sbin->gptr();
-	  if (__n > 1)
+	  __c = __sbout->sputc(_Traits::to_char_type(__c));
+	  if (_Traits::eq_int_type(__c, _Traits::eof()))
 	    {
-	      const size_t __wrote = __sbout->sputn(__sbin->gptr(), __n);
-	      __sbin->gbump(__wrote);
-	      __ret += __wrote;
-	      if (__wrote < __n)
-		break;
-	      __c = __sbin->underflow();
+	      __ineof = false;
+	      break;
 	    }
-	  else
-	    {
-	      __c = __sbout->sputc(_Traits::to_char_type(__c));
-	      if (_Traits::eq_int_type(__c, _Traits::eof()))
-		break;
-	      ++__ret;
-	      __c = __sbin->snextc();
-	    }
+	  ++__ret;
+	  __c = __sbin->snextc();
 	}
       return __ret;
     }
 
+  template<typename _CharT, typename _Traits>
+    inline streamsize
+    __copy_streambufs(basic_streambuf<_CharT, _Traits>* __sbin,
+		      basic_streambuf<_CharT, _Traits>* __sbout)
+    {
+      bool __ineof;
+      return __copy_streambufs_eof(__sbin, __sbout, __ineof);
+    }
+
   // Inhibit implicit instantiations for required instantiations,
   // which are defined via explicit instantiations elsewhere.
-  // NB:  This syntax is a GNU extension.
 #if _GLIBCXX_EXTERN_TEMPLATE
   extern template class basic_streambuf<char>;
   extern template
     streamsize
-    __copy_streambufs(basic_streambuf<char>*, basic_streambuf<char>*);
+    __copy_streambufs(basic_streambuf<char>*,
+		      basic_streambuf<char>*);
+  extern template
+    streamsize
+    __copy_streambufs_eof(basic_streambuf<char>*,
+			  basic_streambuf<char>*, bool&);
 
 #ifdef _GLIBCXX_USE_WCHAR_T
   extern template class basic_streambuf<wchar_t>;
   extern template
     streamsize
-    __copy_streambufs(basic_streambuf<wchar_t>*, basic_streambuf<wchar_t>*);
+    __copy_streambufs(basic_streambuf<wchar_t>*,
+		      basic_streambuf<wchar_t>*);
+  extern template
+    streamsize
+    __copy_streambufs_eof(basic_streambuf<wchar_t>*,
+			  basic_streambuf<wchar_t>*, bool&);
 #endif
 #endif
+
+_GLIBCXX_END_NAMESPACE_VERSION
 } // namespace std
 
 #endif

@@ -6,36 +6,56 @@
 --                                                                          --
 --                                 B o d y                                  --
 --                                                                          --
---          Copyright (C) 1992-2003 Free Software Foundation, Inc.          --
+--          Copyright (C) 1992-2010, Free Software Foundation, Inc.         --
 --                                                                          --
 -- GNAT is free software;  you can  redistribute it  and/or modify it under --
 -- terms of the  GNU General Public License as published  by the Free Soft- --
--- ware  Foundation;  either version 2,  or (at your option) any later ver- --
+-- ware  Foundation;  either version 3,  or (at your option) any later ver- --
 -- sion.  GNAT is distributed in the hope that it will be useful, but WITH- --
 -- OUT ANY WARRANTY;  without even the  implied warranty of MERCHANTABILITY --
 -- or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU General Public License --
 -- for  more details.  You should have  received  a copy of the GNU General --
--- Public License  distributed with GNAT;  see file COPYING.  If not, write --
--- to  the Free Software Foundation,  59 Temple Place - Suite 330,  Boston, --
--- MA 02111-1307, USA.                                                      --
+-- Public License  distributed with GNAT; see file COPYING3.  If not, go to --
+-- http://www.gnu.org/licenses for a complete copy of the license.          --
 --                                                                          --
 -- GNAT was originally developed  by the GNAT team at  New York University. --
 -- Extensive contributions were provided by Ada Core Technologies Inc.      --
 --                                                                          --
 ------------------------------------------------------------------------------
 
-with Butil;    use Butil;
-with Debug;    use Debug;
-with Fname;    use Fname;
-with Namet;    use Namet;
-with Opt;      use Opt;
-with Osint;    use Osint;
-with Output;   use Output;
+with Butil;  use Butil;
+with Debug;  use Debug;
+with Fname;  use Fname;
+with Opt;    use Opt;
+with Osint;  use Osint;
+with Output; use Output;
 
 package body ALI is
 
    use ASCII;
    --  Make control characters visible
+
+   --  The following variable records which characters currently are
+   --  used as line type markers in the ALI file. This is used in
+   --  Scan_ALI to detect (or skip) invalid lines.
+
+   Known_ALI_Lines : constant array (Character range 'A' .. 'Z') of Boolean :=
+     ('V'    => True,   -- version
+      'M'    => True,   -- main program
+      'A'    => True,   -- argument
+      'P'    => True,   -- program
+      'R'    => True,   -- restriction
+      'I'    => True,   -- interrupt
+      'U'    => True,   -- unit
+      'W'    => True,   -- with
+      'L'    => True,   -- linker option
+      'N'    => True,   -- notes
+      'E'    => True,   -- external
+      'D'    => True,   -- dependency
+      'X'    => True,   -- xref
+      'S'    => True,   -- specific dispatching
+      'Y'    => True,   -- limited_with
+      others => False);
 
    --------------------
    -- Initialize_ALI --
@@ -65,18 +85,21 @@ package body ALI is
       --  Initialize all tables
 
       ALIs.Init;
+      No_Deps.Init;
       Units.Init;
       Withs.Init;
       Sdep.Init;
       Linker_Options.Init;
+      Notes.Init;
       Xref_Section.Init;
       Xref_Entity.Init;
       Xref.Init;
       Version_Ref.Reset;
 
-      --  Add dummy zero'th item in Linker_Options for the sort function
+      --  Add dummy zero'th item in Linker_Options and Notes for sort calls
 
       Linker_Options.Increment_Last;
+      Notes.Increment_Last;
 
       --  Initialize global variables recording cumulative options in all
       --  ALI files that are read for a given processing run in gnatbind.
@@ -99,14 +122,15 @@ package body ALI is
    --------------
 
    function Scan_ALI
-     (F            : File_Name_Type;
-      T            : Text_Buffer_Ptr;
-      Ignore_ED    : Boolean;
-      Err          : Boolean;
-      Read_Xref    : Boolean := False;
-      Read_Lines   : String := "";
-      Ignore_Lines : String := "X")
-      return         ALI_Id
+     (F                : File_Name_Type;
+      T                : Text_Buffer_Ptr;
+      Ignore_ED        : Boolean;
+      Err              : Boolean;
+      Read_Xref        : Boolean := False;
+      Read_Lines       : String  := "";
+      Ignore_Lines     : String  := "X";
+      Ignore_Errors    : Boolean := False;
+      Directly_Scanned : Boolean := False) return ALI_Id
    is
       P         : Text_Ptr := T'First;
       Line      : Logical_Line_Number := 1;
@@ -135,42 +159,92 @@ package body ALI is
       procedure Checkc (C : Character);
       --  Check next character is C. If so bump past it, if not fatal error
 
+      procedure Check_Unknown_Line;
+      --  If Ignore_Errors mode, then checks C to make sure that it is not
+      --  an unknown ALI line type characters, and if so, skips lines
+      --  until the first character of the line is one of these characters,
+      --  at which point it does a Getc to put that character in C. The
+      --  call has no effect if C is already an appropriate character.
+      --  If not in Ignore_Errors mode, a fatal error is signalled if the
+      --  line is unknown. Note that if C is an EOL on entry, the line is
+      --  skipped (it is assumed that blank lines are never significant).
+      --  If C is EOF on entry, the call has no effect (it is assumed that
+      --  the caller will properly handle this case).
+
       procedure Fatal_Error;
       --  Generate fatal error message for badly formatted ALI file if
       --  Err is false, or raise Bad_ALI_Format if Err is True.
 
+      procedure Fatal_Error_Ignore;
+      pragma Inline (Fatal_Error_Ignore);
+      --  In Ignore_Errors mode, has no effect, otherwise same as Fatal_Error
+
       function Getc return Character;
       --  Get next character, bumping P past the character obtained
 
+      function Get_File_Name (Lower : Boolean := False) return File_Name_Type;
+      --  Skip blanks, then scan out a file name (name is left in Name_Buffer
+      --  with length in Name_Len, as well as returning a File_Name_Type value.
+      --  If lower is false, the case is unchanged, if Lower is True then the
+      --  result is forced to all lower case for systems where file names are
+      --  not case sensitive. This ensures that gnatbind works correctly
+      --  regardless of the case of the file name on all systems. The scan
+      --  is terminated by a end of line, space or horizontal tab. Any other
+      --  special characters are included in the returned name.
+
       function Get_Name
-        (Lower         : Boolean := False;
-         Ignore_Spaces : Boolean := False) return Name_Id;
+        (Ignore_Spaces  : Boolean := False;
+         Ignore_Special : Boolean := False) return Name_Id;
       --  Skip blanks, then scan out a name (name is left in Name_Buffer with
       --  length in Name_Len, as well as being returned in Name_Id form).
       --  If Lower is set to True then the Name_Buffer will be converted to
       --  all lower case, for systems where file names are not case sensitive.
       --  This ensures that gnatbind works correctly regardless of the case
-      --  of the file name on all systems. The name is terminated by a either
-      --  white space (when Ignore_Spaces is False) or a typeref bracket or
-      --  an equal sign except for the special case of an operator name
-      --  starting with a double quite which is terminated by another double
-      --  quote.
+      --  of the file name on all systems. The termination condition depends
+      --  on the settings of Ignore_Spaces and Ignore_Special:
+      --
+      --    If Ignore_Spaces is False (normal case), then scan is terminated
+      --    by the normal end of field condition (EOL, space, horizontal tab)
+      --
+      --    If Ignore_Special is False (normal case), the scan is terminated by
+      --    a typeref bracket or an equal sign except for the special case of
+      --    an operator name starting with a double quote which is terminated
+      --    by another double quote.
+      --
+      --  It is an error to set both Ignore_Spaces and Ignore_Special to True.
+      --  This function handles wide characters properly.
 
       function Get_Nat return Nat;
-      --  Skip blanks, then scan out an unsigned integer value in Nat range.
+      --  Skip blanks, then scan out an unsigned integer value in Nat range
+      --  raises ALI_Reading_Error if the encoutered type is not natural.
 
       function Get_Stamp return Time_Stamp_Type;
       --  Skip blanks, then scan out a time stamp
 
+      function Get_Unit_Name return Unit_Name_Type;
+      --  Skip blanks, then scan out a file name (name is left in Name_Buffer
+      --  with length in Name_Len, as well as returning a Unit_Name_Type value.
+      --  The case is unchanged and terminated by a normal end of field.
+
       function Nextc return Character;
       --  Return current character without modifying pointer P
+
+      procedure Get_Typeref
+        (Current_File_Num : Sdep_Id;
+         Ref             : out Tref_Kind;
+         File_Num        : out Sdep_Id;
+         Line            : out Nat;
+         Ref_Type        : out Character;
+         Col             : out Nat;
+         Standard_Entity : out Name_Id);
+      --  Parse the definition of a typeref (<...>, {...} or (...))
 
       procedure Skip_Eol;
       --  Skip past spaces, then skip past end of line (fatal error if not
       --  at end of line). Also skips past any following blank lines.
 
       procedure Skip_Line;
-      --  Skip rest of current line and any following blank lines.
+      --  Skip rest of current line and any following blank lines
 
       procedure Skip_Space;
       --  Skip past white space (blanks or horizontal tab)
@@ -204,9 +278,41 @@ package body ALI is
       procedure Check_At_End_Of_Field is
       begin
          if not At_End_Of_Field then
-            Fatal_Error;
+            if Ignore_Errors then
+               while Nextc > ' ' loop
+                  P := P + 1;
+               end loop;
+            else
+               Fatal_Error;
+            end if;
          end if;
       end Check_At_End_Of_Field;
+
+      ------------------------
+      -- Check_Unknown_Line --
+      ------------------------
+
+      procedure Check_Unknown_Line is
+      begin
+         while C not in 'A' .. 'Z'
+           or else not Known_ALI_Lines (C)
+         loop
+            if C = CR or else C = LF then
+               Skip_Line;
+               C := Nextc;
+
+            elsif C = EOF then
+               return;
+
+            elsif Ignore_Errors then
+               Skip_Line;
+               C := Getc;
+
+            else
+               Fatal_Error;
+            end if;
+         end loop;
+      end Check_Unknown_Line;
 
       ------------
       -- Checkc --
@@ -215,6 +321,8 @@ package body ALI is
       procedure Checkc (C : Character) is
       begin
          if Nextc = C then
+            P := P + 1;
+         elsif Ignore_Errors then
             P := P + 1;
          else
             Fatal_Error;
@@ -259,14 +367,19 @@ package body ALI is
          Write_Name (F);
          Write_Str (" is incorrectly formatted");
          Write_Eol;
-         Write_Str
-           ("make sure you are using consistent versions of gcc/gnatbind");
+
+         Write_Str ("make sure you are using consistent versions " &
+
+         --  Split the following line so that it can easily be transformed for
+         --  e.g. JVM/.NET back-ends where the compiler has a different name.
+
+                    "of gcc/gnatbind");
+
          Write_Eol;
 
          --  Find start of line
 
          Ptr1 := P;
-
          while Ptr1 > T'First
            and then T (Ptr1 - 1) /= CR
            and then T (Ptr1 - 1) /= LF
@@ -317,37 +430,28 @@ package body ALI is
          Exit_Program (E_Fatal);
       end Fatal_Error;
 
-      --------------
-      -- Get_Name --
-      --------------
+      ------------------------
+      -- Fatal_Error_Ignore --
+      ------------------------
 
-      function Get_Name (Lower : Boolean := False;
-                         Ignore_Spaces : Boolean := False) return Name_Id is
+      procedure Fatal_Error_Ignore is
       begin
-         Name_Len := 0;
-         Skip_Space;
-
-         if At_Eol then
+         if not Ignore_Errors then
             Fatal_Error;
          end if;
+      end Fatal_Error_Ignore;
 
-         loop
-            Name_Len := Name_Len + 1;
-            Name_Buffer (Name_Len) := Getc;
+      -------------------
+      -- Get_File_Name --
+      -------------------
 
-            exit when At_End_Of_Field and not Ignore_Spaces;
+      function Get_File_Name
+        (Lower : Boolean := False) return File_Name_Type
+      is
+         F : Name_Id;
 
-            if Name_Buffer (1) = '"' then
-               exit when Name_Len > 1 and then Name_Buffer (Name_Len) = '"';
-
-            else
-               exit when (At_End_Of_Field and not Ignore_Spaces)
-                 or else Nextc = '(' or else Nextc = ')'
-                 or else Nextc = '{' or else Nextc = '}'
-                 or else Nextc = '<' or else Nextc = '>'
-                 or else Nextc = '=';
-            end if;
-         end loop;
+      begin
+         F := Get_Name (Ignore_Special => True);
 
          --  Convert file name to all lower case if file names are not case
          --  sensitive. This ensures that we handle names in the canonical
@@ -355,10 +459,72 @@ package body ALI is
 
          if Lower and not File_Names_Case_Sensitive then
             Canonical_Case_File_Name (Name_Buffer (1 .. Name_Len));
+            return Name_Find;
+         else
+            return File_Name_Type (F);
          end if;
+      end Get_File_Name;
+
+      --------------
+      -- Get_Name --
+      --------------
+
+      function Get_Name
+        (Ignore_Spaces  : Boolean := False;
+         Ignore_Special : Boolean := False) return Name_Id
+      is
+      begin
+         Name_Len := 0;
+         Skip_Space;
+
+         if At_Eol then
+            if Ignore_Errors then
+               return Error_Name;
+            else
+               Fatal_Error;
+            end if;
+         end if;
+
+         loop
+            Add_Char_To_Name_Buffer (Getc);
+
+            exit when At_End_Of_Field and then not Ignore_Spaces;
+
+            if not Ignore_Special then
+               if Name_Buffer (1) = '"' then
+                  exit when Name_Len > 1 and then Name_Buffer (Name_Len) = '"';
+
+               else
+                  --  Terminate on parens or angle brackets or equal sign
+
+                  exit when Nextc = '(' or else Nextc = ')'
+                    or else Nextc = '{' or else Nextc = '}'
+                    or else Nextc = '<' or else Nextc = '>'
+                    or else Nextc = '=';
+
+                  --  Terminate if left bracket not part of wide char sequence
+                  --  Note that we only recognize brackets notation so far ???
+
+                  exit when Nextc = '[' and then T (P + 1) /= '"';
+
+                  --  Terminate if right bracket not part of wide char sequence
+
+                  exit when Nextc = ']' and then T (P - 1) /= '"';
+               end if;
+            end if;
+         end loop;
 
          return Name_Find;
       end Get_Name;
+
+      -------------------
+      -- Get_Unit_Name --
+      -------------------
+
+      function Get_Unit_Name return Unit_Name_Type is
+      begin
+         return Unit_Name_Type (Get_Name);
+      end Get_Unit_Name;
 
       -------------
       -- Get_Nat --
@@ -370,12 +536,19 @@ package body ALI is
       begin
          Skip_Space;
 
-         V := 0;
+         --  Check if we are on a number. In the case of bad ALI files, this
+         --  may not be true.
 
+         if not (Nextc in '0' .. '9') then
+            Fatal_Error;
+         end if;
+
+         V := 0;
          loop
             V := V * 10 + (Character'Pos (Getc) - Character'Pos ('0'));
+
             exit when At_End_Of_Field;
-            exit when Nextc < '0' or Nextc > '9';
+            exit when Nextc < '0' or else Nextc > '9';
          end loop;
 
          return V;
@@ -393,7 +566,11 @@ package body ALI is
          Skip_Space;
 
          if At_Eol then
-            Fatal_Error;
+            if Ignore_Errors then
+               return Dummy_Time_Stamp;
+            else
+               Fatal_Error;
+            end if;
          end if;
 
          --  Following reads old style time stamp missing first two digits
@@ -415,6 +592,94 @@ package body ALI is
 
          return T;
       end Get_Stamp;
+
+      -----------------
+      -- Get_Typeref --
+      -----------------
+
+      procedure Get_Typeref
+        (Current_File_Num : Sdep_Id;
+         Ref              : out Tref_Kind;
+         File_Num         : out Sdep_Id;
+         Line             : out Nat;
+         Ref_Type         : out Character;
+         Col              : out Nat;
+         Standard_Entity  : out Name_Id)
+      is
+         N : Nat;
+      begin
+         case Nextc is
+            when '<'    => Ref := Tref_Derived;
+            when '('    => Ref := Tref_Access;
+            when '{'    => Ref := Tref_Type;
+            when others => Ref := Tref_None;
+         end case;
+
+         --  Case of typeref field present
+
+         if Ref /= Tref_None then
+            P := P + 1; -- skip opening bracket
+
+            if Nextc in 'a' .. 'z' then
+               File_Num        := No_Sdep_Id;
+               Line            := 0;
+               Ref_Type        := ' ';
+               Col             := 0;
+               Standard_Entity := Get_Name (Ignore_Spaces => True);
+            else
+               N := Get_Nat;
+
+               if Nextc = '|' then
+                  File_Num := Sdep_Id (N + Nat (First_Sdep_Entry) - 1);
+                  P := P + 1;
+                  N := Get_Nat;
+               else
+                  File_Num := Current_File_Num;
+               end if;
+
+               Line            := N;
+               Ref_Type        := Getc;
+               Col             := Get_Nat;
+               Standard_Entity := No_Name;
+            end if;
+
+            --  ??? Temporary workaround for nested generics case:
+            --     4i4 Directories{1|4I9[4|6[3|3]]}
+            --  See C918-002
+
+            declare
+               Nested_Brackets : Natural := 0;
+
+            begin
+               loop
+                  case Nextc is
+                     when '['   =>
+                        Nested_Brackets := Nested_Brackets + 1;
+                     when ']' =>
+                        Nested_Brackets := Nested_Brackets - 1;
+                     when others =>
+                        if Nested_Brackets = 0 then
+                           exit;
+                        end if;
+                  end case;
+
+                  Skipc;
+               end loop;
+            end;
+
+            P := P + 1; -- skip closing bracket
+            Skip_Space;
+
+         --  No typeref entry present
+
+         else
+            File_Num        := No_Sdep_Id;
+            Line            := 0;
+            Ref_Type        := ' ';
+            Col             := 0;
+            Standard_Entity := No_Name;
+         end if;
+      end Get_Typeref;
 
       ----------
       -- Getc --
@@ -447,7 +712,15 @@ package body ALI is
       begin
          Skip_Space;
 
-         if not At_Eol then Fatal_Error; end if;
+         if not At_Eol then
+            if Ignore_Errors then
+               while not At_Eol loop
+                  P := P + 1;
+               end loop;
+            else
+               Fatal_Error;
+            end if;
+         end if;
 
          --  Loop to skip past blank lines (first time through skips this EOL)
 
@@ -498,10 +771,12 @@ package body ALI is
    --  Start of processing for Scan_ALI
 
    begin
+      First_Sdep_Entry := Sdep.Last + 1;
+
       --  Acquire lines to be ignored
 
       if Read_Xref then
-         Ignore := ('U' | 'W' | 'D' | 'X' => False, others => True);
+         Ignore := ('U' | 'W' | 'Y' | 'D' | 'X' => False, others => True);
 
       --  Read_Lines parameter given
 
@@ -534,27 +809,31 @@ package body ALI is
         Compile_Errors             => False,
         First_Interrupt_State      => Interrupt_States.Last + 1,
         First_Sdep                 => No_Sdep_Id,
+        First_Specific_Dispatching => Specific_Dispatching.Last + 1,
         First_Unit                 => No_Unit_Id,
         Float_Format               => 'I',
         Last_Interrupt_State       => Interrupt_States.Last,
         Last_Sdep                  => No_Sdep_Id,
+        Last_Specific_Dispatching  => Specific_Dispatching.Last,
         Last_Unit                  => No_Unit_Id,
         Locking_Policy             => ' ',
         Main_Priority              => -1,
+        Main_CPU                   => -1,
         Main_Program               => None,
         No_Object                  => False,
         Normalize_Scalars          => False,
         Ofile_Full_Name            => Full_Object_File_Name,
         Queuing_Policy             => ' ',
-        Restrictions               => (others => ' '),
-        Sfile                      => No_Name,
+        Restrictions               => No_Restrictions,
+        SAL_Interface              => False,
+        Sfile                      => No_File,
         Task_Dispatching_Policy    => ' ',
         Time_Slice_Value           => -1,
-        WC_Encoding                => '8',
+        Allocator_In_Body          => False,
+        WC_Encoding                => 'b',
         Unit_Exception_Table       => False,
         Ver                        => (others => ' '),
         Ver_Len                    => 0,
-        Interface                  => False,
         Zero_Cost_Exceptions       => False);
 
       --  Now we acquire the input lines from the ALI file. Note that the
@@ -562,10 +841,16 @@ package body ALI is
       --  C is set to contain the first character of the following line.
 
       C := Getc;
+      Check_Unknown_Line;
 
       --  Acquire library version
 
       if C /= 'V' then
+
+         --  The V line missing really indicates trouble, most likely it
+         --  means we don't have an ALI file at all, so here we give a
+         --  fatal error even if we are in Ignore_Errors mode.
+
          Fatal_Error;
 
       elsif Ignore ('V') then
@@ -587,6 +872,7 @@ package body ALI is
       end if;
 
       C := Getc;
+      Check_Unknown_Line;
 
       --  Acquire main program line if present
 
@@ -626,6 +912,22 @@ package body ALI is
 
                Skip_Space;
 
+               if Nextc = 'A' then
+                  P := P + 1;
+                  Checkc ('B');
+                  ALIs.Table (Id).Allocator_In_Body := True;
+               end if;
+
+               Skip_Space;
+
+               if Nextc = 'C' then
+                  P := P + 1;
+                  Checkc ('=');
+                  ALIs.Table (Id).Main_CPU := Get_Nat;
+               end if;
+
+               Skip_Space;
+
                Checkc ('W');
                Checkc ('=');
                ALIs.Table (Id).WC_Encoding := Getc;
@@ -641,18 +943,30 @@ package body ALI is
 
       First_Arg := Args.Last + 1;
 
-      Arg_Loop : while C = 'A' loop
+      A_Loop : loop
+         Check_Unknown_Line;
+         exit A_Loop when C /= 'A';
+
          if Ignore ('A') then
             Skip_Line;
 
          else
             Checkc (' ');
-            Name_Len := 0;
 
+            --  Scan out argument
+
+            Name_Len := 0;
             while not At_Eol loop
-               Name_Len := Name_Len + 1;
-               Name_Buffer (Name_Len) := Getc;
+               Add_Char_To_Name_Buffer (Getc);
             end loop;
+
+            --  If -fstack-check, record that it occurred
+
+            if Name_Buffer (1 .. Name_Len) = "-fstack-check" then
+               Stack_Check_Switch_Set := True;
+            end if;
+
+            --  Store the argument
 
             Args.Increment_Last;
             Args.Table (Args.Last) := new String'(Name_Buffer (1 .. Name_Len));
@@ -661,15 +975,29 @@ package body ALI is
          end if;
 
          C := Getc;
-      end loop Arg_Loop;
+      end loop A_Loop;
 
       --  Acquire P line
 
-      if C /= 'P' then
-         Fatal_Error;
+      Check_Unknown_Line;
 
-      elsif Ignore ('P') then
+      while C /= 'P' loop
+         if Ignore_Errors then
+            if C = EOF then
+               Fatal_Error;
+            else
+               Skip_Line;
+               C := Nextc;
+            end if;
+         else
+            Fatal_Error;
+         end if;
+      end loop;
+
+      if Ignore ('P') then
          Skip_Line;
+
+      --  Process P line
 
       else
          NS_Found := False;
@@ -684,6 +1012,12 @@ package body ALI is
             if C = 'C' then
                Checkc ('E');
                ALIs.Table (Id).Compile_Errors := True;
+
+            --  Processing for DB
+
+            elsif C = 'D' then
+               Checkc ('B');
+               Detect_Blocking := True;
 
             --  Processing for FD/FG/FI
 
@@ -724,7 +1058,7 @@ package body ALI is
                --  Invalid switch starting with N
 
                else
-                  Fatal_Error;
+                  Fatal_Error_Ignore;
                end if;
 
             --  Processing for Qx
@@ -733,7 +1067,7 @@ package body ALI is
                Queuing_Policy_Specified := Getc;
                ALIs.Table (Id).Queuing_Policy := Queuing_Policy_Specified;
 
-            --  Processing fir flags starting with S
+            --  Processing for flags starting with S
 
             elsif C = 'S' then
                C := Getc;
@@ -741,7 +1075,7 @@ package body ALI is
                --  Processing for SL
 
                if C = 'L' then
-                  ALIs.Table (Id).Interface := True;
+                  ALIs.Table (Id).SAL_Interface := True;
 
                --  Processing for SS
 
@@ -751,7 +1085,7 @@ package body ALI is
                --  Invalid switch starting with S
 
                else
-                  Fatal_Error;
+                  Fatal_Error_Ignore;
                end if;
 
             --  Processing for Tx
@@ -779,18 +1113,26 @@ package body ALI is
                --  Invalid switches starting with U
 
                else
-                  Fatal_Error;
+                  Fatal_Error_Ignore;
                end if;
 
             --  Processing for ZX
 
             elsif C = 'Z' then
-               Checkc ('X');
+               C := Getc;
+
+               if C = 'X' then
                   ALIs.Table (Id).Zero_Cost_Exceptions := True;
                   Zero_Cost_Exceptions_Specified := True;
+               else
+                  Fatal_Error_Ignore;
+               end if;
+
+            --  Invalid parameter
 
             else
-               Fatal_Error;
+               C := Getc;
+               Fatal_Error_Ignore;
             end if;
          end loop;
 
@@ -802,46 +1144,184 @@ package body ALI is
       end if;
 
       C := Getc;
+      Check_Unknown_Line;
 
-      --  Acquire restrictions line
+      --  Acquire first restrictions line
 
-      if C /= 'R' then
-         Fatal_Error;
+      while C /= 'R' loop
+         if Ignore_Errors then
+            if C = EOF then
+               Fatal_Error;
+            else
+               Skip_Line;
+               C := Nextc;
+            end if;
+         else
+            Fatal_Error;
+         end if;
+      end loop;
 
-      elsif Ignore ('R') then
+      if Ignore ('R') then
          Skip_Line;
 
+      --  Process restrictions line
+
       else
-         Checkc (' ');
-         Skip_Space;
+         Scan_Restrictions : declare
+            Save_R : constant Restrictions_Info := Cumulative_Restrictions;
+            --  Save cumulative restrictions in case we have a fatal error
 
-         for J in All_Restrictions loop
-            C := Getc;
-            ALIs.Table (Id).Restrictions (J) := C;
+            Bad_R_Line : exception;
+            --  Signal bad restrictions line (raised on unexpected character)
 
-            case C is
-               when 'v' =>
-                  Restrictions (J) := 'v';
+         begin
+            Checkc (' ');
+            Skip_Space;
 
-               when 'r' =>
-                  if Restrictions (J) = 'n' then
-                     Restrictions (J) := 'r';
-                  end if;
+            --  Acquire information for boolean restrictions
 
-               when 'n' =>
-                  null;
+            for R in All_Boolean_Restrictions loop
+               C := Getc;
 
-               when others =>
+               case C is
+                  when 'v' =>
+                     ALIs.Table (Id).Restrictions.Violated (R) := True;
+                     Cumulative_Restrictions.Violated (R) := True;
+
+                  when 'r' =>
+                     ALIs.Table (Id).Restrictions.Set (R) := True;
+                     Cumulative_Restrictions.Set (R) := True;
+
+                  when 'n' =>
+                     null;
+
+                  when others =>
+                     raise Bad_R_Line;
+               end case;
+            end loop;
+
+            --  Acquire information for parameter restrictions
+
+            for RP in All_Parameter_Restrictions loop
+
+               --  Acquire restrictions pragma information
+
+               case Getc is
+                  when 'n' =>
+                     null;
+
+                  when 'r' =>
+                     ALIs.Table (Id).Restrictions.Set (RP) := True;
+
+                     declare
+                        N : constant Integer := Integer (Get_Nat);
+                     begin
+                        ALIs.Table (Id).Restrictions.Value (RP) := N;
+
+                        if Cumulative_Restrictions.Set (RP) then
+                           Cumulative_Restrictions.Value (RP) :=
+                             Integer'Min
+                               (Cumulative_Restrictions.Value (RP), N);
+                        else
+                           Cumulative_Restrictions.Set (RP) := True;
+                           Cumulative_Restrictions.Value (RP) := N;
+                        end if;
+                     end;
+
+                  when others =>
+                     raise Bad_R_Line;
+               end case;
+
+               --  Acquire restrictions violations information
+
+               case Getc is
+                  when 'n' =>
+                     null;
+
+                  when 'v' =>
+                     ALIs.Table (Id).Restrictions.Violated (RP) := True;
+                     Cumulative_Restrictions.Violated (RP) := True;
+
+                     declare
+                        N : constant Integer := Integer (Get_Nat);
+                        pragma Unsuppress (Overflow_Check);
+
+                     begin
+                        ALIs.Table (Id).Restrictions.Count (RP) := N;
+
+                        if RP in Checked_Max_Parameter_Restrictions then
+                           Cumulative_Restrictions.Count (RP) :=
+                             Integer'Max
+                               (Cumulative_Restrictions.Count (RP), N);
+                        else
+                           Cumulative_Restrictions.Count (RP) :=
+                             Cumulative_Restrictions.Count (RP) + N;
+                        end if;
+
+                     exception
+                        when Constraint_Error =>
+
+                           --  A constraint error comes from the addition in
+                           --  the else branch. We reset to the maximum and
+                           --  indicate that the real value is now unknown.
+
+                           Cumulative_Restrictions.Value (RP) := Integer'Last;
+                           Cumulative_Restrictions.Unknown (RP) := True;
+                     end;
+
+                     if Nextc = '+' then
+                        Skipc;
+                        ALIs.Table (Id).Restrictions.Unknown (RP) := True;
+                        Cumulative_Restrictions.Unknown (RP) := True;
+                     end if;
+
+                  when others =>
+                     raise Bad_R_Line;
+               end case;
+            end loop;
+
+            Skip_Eol;
+
+         --  Here if error during scanning of restrictions line
+
+         exception
+            when Bad_R_Line =>
+
+               --  In Ignore_Errors mode, undo any changes to restrictions
+               --  from this unit, and continue on.
+
+               if Ignore_Errors then
+                  Cumulative_Restrictions := Save_R;
+                  ALIs.Table (Id).Restrictions := No_Restrictions;
+                  Skip_Eol;
+
+               --  In normal mode, this is a fatal error
+
+               else
                   Fatal_Error;
-            end case;
-         end loop;
+               end if;
 
-         Skip_Eol;
+         end Scan_Restrictions;
       end if;
 
+      --  Acquire additional restrictions (No_Dependence) lines if present
+
       C := Getc;
+      while C = 'R' loop
+         if Ignore ('R') then
+            Skip_Line;
+         else
+            Skip_Space;
+            No_Deps.Append ((Id, Get_Name));
+            Skip_Eol;
+         end if;
+
+         C := Getc;
+      end loop;
 
       --  Acquire 'I' lines if present
+
+      Check_Unknown_Line;
 
       while C = 'I' loop
          if Ignore ('I') then
@@ -872,9 +1352,52 @@ package body ALI is
          C := Getc;
       end loop;
 
+      --  Acquire 'S' lines if present
+
+      Check_Unknown_Line;
+
+      while C = 'S' loop
+         if Ignore ('S') then
+            Skip_Line;
+
+         else
+            declare
+               Policy     : Character;
+               First_Prio : Nat;
+               Last_Prio  : Nat;
+               Line_No    : Nat;
+
+            begin
+               Checkc (' ');
+               Skip_Space;
+
+               Policy := Getc;
+               Skip_Space;
+               First_Prio := Get_Nat;
+               Last_Prio := Get_Nat;
+               Line_No := Get_Nat;
+
+               Specific_Dispatching.Append (
+                 (Dispatching_Policy => Policy,
+                  First_Priority     => First_Prio,
+                  Last_Priority      => Last_Prio,
+                  PSD_Pragma_Line    => Line_No));
+
+               ALIs.Table (Id).Last_Specific_Dispatching :=
+                 Specific_Dispatching.Last;
+
+               Skip_Eol;
+            end;
+         end if;
+
+         C := Getc;
+      end loop;
+
       --  Loop to acquire unit entries
 
-      Unit_Loop : while C = 'U' loop
+      U_Loop : loop
+         Check_Unknown_Line;
+         exit U_Loop when C /= 'U';
 
          --  Note: as per spec, we never ignore U lines
 
@@ -886,40 +1409,49 @@ package body ALI is
             ALIs.Table (Id).First_Unit := Units.Last;
          end if;
 
-         Units.Table (Units.Last).Uname           := Get_Name;
-         Units.Table (Units.Last).Predefined      := Is_Predefined_Unit;
-         Units.Table (Units.Last).Internal        := Is_Internal_Unit;
-         Units.Table (Units.Last).My_ALI          := Id;
-         Units.Table (Units.Last).Sfile           := Get_Name (Lower => True);
-         Units.Table (Units.Last).Pure            := False;
-         Units.Table (Units.Last).Preelab         := False;
-         Units.Table (Units.Last).No_Elab         := False;
-         Units.Table (Units.Last).Shared_Passive  := False;
-         Units.Table (Units.Last).RCI             := False;
-         Units.Table (Units.Last).Remote_Types    := False;
-         Units.Table (Units.Last).Has_RACW        := False;
-         Units.Table (Units.Last).Init_Scalars    := False;
-         Units.Table (Units.Last).Is_Generic      := False;
-         Units.Table (Units.Last).Icasing         := Mixed_Case;
-         Units.Table (Units.Last).Kcasing         := All_Lower_Case;
-         Units.Table (Units.Last).Dynamic_Elab    := False;
-         Units.Table (Units.Last).Elaborate_Body  := False;
-         Units.Table (Units.Last).Set_Elab_Entity := False;
-         Units.Table (Units.Last).Version         := "00000000";
-         Units.Table (Units.Last).First_With      := Withs.Last + 1;
-         Units.Table (Units.Last).First_Arg       := First_Arg;
-         Units.Table (Units.Last).Elab_Position   := 0;
-         Units.Table (Units.Last).Interface       := ALIs.Table (Id).Interface;
+         declare
+            UL : Unit_Record renames Units.Table (Units.Last);
 
-         if Debug_Flag_U then
-            Write_Str (" ----> reading unit ");
-            Write_Int (Int (Units.Last));
-            Write_Str ("  ");
-            Write_Unit_Name (Units.Table (Units.Last).Uname);
-            Write_Str (" from file ");
-            Write_Name (Units.Table (Units.Last).Sfile);
-            Write_Eol;
-         end if;
+         begin
+            UL.Uname                    := Get_Unit_Name;
+            UL.Predefined               := Is_Predefined_Unit;
+            UL.Internal                 := Is_Internal_Unit;
+            UL.My_ALI                   := Id;
+            UL.Sfile                    := Get_File_Name (Lower => True);
+            UL.Pure                     := False;
+            UL.Preelab                  := False;
+            UL.No_Elab                  := False;
+            UL.Shared_Passive           := False;
+            UL.RCI                      := False;
+            UL.Remote_Types             := False;
+            UL.Has_RACW                 := False;
+            UL.Init_Scalars             := False;
+            UL.Is_Generic               := False;
+            UL.Icasing                  := Mixed_Case;
+            UL.Kcasing                  := All_Lower_Case;
+            UL.Dynamic_Elab             := False;
+            UL.Elaborate_Body           := False;
+            UL.Set_Elab_Entity          := False;
+            UL.Version                  := "00000000";
+            UL.First_With               := Withs.Last + 1;
+            UL.First_Arg                := First_Arg;
+            UL.Elab_Position            := 0;
+            UL.SAL_Interface            := ALIs.Table (Id).SAL_Interface;
+            UL.Directly_Scanned         := Directly_Scanned;
+            UL.Body_Needed_For_SAL      := False;
+            UL.Elaborate_Body_Desirable := False;
+            UL.Optimize_Alignment       := 'O';
+
+            if Debug_Flag_U then
+               Write_Str (" ----> reading unit ");
+               Write_Int (Int (Units.Last));
+               Write_Str ("  ");
+               Write_Unit_Name (UL.Uname);
+               Write_Str (" from file ");
+               Write_Name (UL.Sfile);
+               Write_Eol;
+            end if;
+         end;
 
          --  Check for duplicated unit in different files
 
@@ -992,20 +1524,35 @@ package body ALI is
                   Units.Table (Units.Last).Version (J) := C;
                end loop;
 
-            --  BN parameter (Body needed)
+            --  BD/BN parameters
 
             elsif C = 'B' then
-               Checkc ('N');
-               Check_At_End_Of_Field;
-               Units.Table (Units.Last).Body_Needed_For_SAL := True;
+               C := Getc;
 
-            --  DE parameter (Dynamic elaboration checks
+               if C = 'D' then
+                  Check_At_End_Of_Field;
+                  Units.Table (Units.Last).Elaborate_Body_Desirable := True;
+
+               elsif C = 'N' then
+                  Check_At_End_Of_Field;
+                  Units.Table (Units.Last).Body_Needed_For_SAL := True;
+
+               else
+                  Fatal_Error_Ignore;
+               end if;
+
+            --  DE parameter (Dynamic elaboration checks)
 
             elsif C = 'D' then
-               Checkc ('E');
-               Check_At_End_Of_Field;
-               Units.Table (Units.Last).Dynamic_Elab := True;
-               Dynamic_Elaboration_Checks_Specified := True;
+               C := Getc;
+
+               if C = 'E' then
+                  Check_At_End_Of_Field;
+                  Units.Table (Units.Last).Dynamic_Elab := True;
+                  Dynamic_Elaboration_Checks_Specified := True;
+               else
+                  Fatal_Error_Ignore;
+               end if;
 
             --  EB/EE parameters
 
@@ -1014,12 +1561,10 @@ package body ALI is
 
                if C = 'B' then
                   Units.Table (Units.Last).Elaborate_Body := True;
-
                elsif C = 'E' then
                   Units.Table (Units.Last).Set_Elab_Entity := True;
-
                else
-                  Fatal_Error;
+                  Fatal_Error_Ignore;
                end if;
 
                Check_At_End_Of_Field;
@@ -1027,9 +1572,14 @@ package body ALI is
             --  GE parameter (generic)
 
             elsif C = 'G' then
-               Checkc ('E');
-               Check_At_End_Of_Field;
-               Units.Table (Units.Last).Is_Generic := True;
+               C := Getc;
+
+               if C = 'E' then
+                  Check_At_End_Of_Field;
+                  Units.Table (Units.Last).Is_Generic := True;
+               else
+                  Fatal_Error_Ignore;
+               end if;
 
             --  IL/IS/IU parameters
 
@@ -1038,16 +1588,13 @@ package body ALI is
 
                if C = 'L' then
                   Units.Table (Units.Last).Icasing := All_Lower_Case;
-
                elsif C = 'S' then
                   Units.Table (Units.Last).Init_Scalars := True;
                   Initialize_Scalars_Used := True;
-
                elsif C = 'U' then
                   Units.Table (Units.Last).Icasing := All_Upper_Case;
-
                else
-                  Fatal_Error;
+                  Fatal_Error_Ignore;
                end if;
 
                Check_At_End_Of_Field;
@@ -1059,12 +1606,10 @@ package body ALI is
 
                if C = 'M' then
                   Units.Table (Units.Last).Kcasing := Mixed_Case;
-
                elsif C = 'U' then
                   Units.Table (Units.Last).Kcasing := All_Upper_Case;
-
                else
-                  Fatal_Error;
+                  Fatal_Error_Ignore;
                end if;
 
                Check_At_End_Of_Field;
@@ -1072,32 +1617,41 @@ package body ALI is
             --  NE parameter
 
             elsif C = 'N' then
-               Checkc ('E');
-               Units.Table (Units.Last).No_Elab := True;
-               Check_At_End_Of_Field;
+               C := Getc;
+
+               if C = 'E' then
+                  Units.Table (Units.Last).No_Elab := True;
+                  Check_At_End_Of_Field;
+               else
+                  Fatal_Error_Ignore;
+               end if;
 
             --  PR/PU/PK parameters
 
             elsif C = 'P' then
                C := Getc;
 
-               --  PR parameter (preelaborate)
-
                if C = 'R' then
                   Units.Table (Units.Last).Preelab := True;
-
-               --  PU parameter (pure)
-
                elsif C = 'U' then
                   Units.Table (Units.Last).Pure := True;
-
-               --  PK indicates unit is package
-
                elsif C = 'K' then
                   Units.Table (Units.Last).Unit_Kind := 'p';
-
                else
-                  Fatal_Error;
+                  Fatal_Error_Ignore;
+               end if;
+
+               Check_At_End_Of_Field;
+
+            --  OL/OO/OS/OT parameters
+
+            elsif C = 'O' then
+               C := Getc;
+
+               if C = 'L' or else C = 'O' or else C = 'S' or else C = 'T' then
+                  Units.Table (Units.Last).Optimize_Alignment := C;
+               else
+                  Fatal_Error_Ignore;
                end if;
 
                Check_At_End_Of_Field;
@@ -1107,23 +1661,14 @@ package body ALI is
             elsif C = 'R' then
                C := Getc;
 
-               --  RC parameter (remote call interface)
-
                if C = 'C' then
                   Units.Table (Units.Last).RCI := True;
-
-               --  RT parameter (remote types)
-
                elsif C = 'T' then
                   Units.Table (Units.Last).Remote_Types := True;
-
-               --  RA parameter (remote access to class wide type)
-
                elsif C = 'A' then
                   Units.Table (Units.Last).Has_RACW := True;
-
                else
-                  Fatal_Error;
+                  Fatal_Error_Ignore;
                end if;
 
                Check_At_End_Of_Field;
@@ -1131,24 +1676,19 @@ package body ALI is
             elsif C = 'S' then
                C := Getc;
 
-               --  SP parameter (shared passive)
-
                if C = 'P' then
                   Units.Table (Units.Last).Shared_Passive := True;
-
-               --  SU parameter indicates unit is subprogram
-
                elsif C = 'U' then
                   Units.Table (Units.Last).Unit_Kind := 's';
-
                else
-                  Fatal_Error;
+                  Fatal_Error_Ignore;
                end if;
 
                Check_At_End_Of_Field;
 
             else
-               Fatal_Error;
+               C := Getc;
+               Fatal_Error_Ignore;
             end if;
          end loop;
 
@@ -1166,7 +1706,10 @@ package body ALI is
 
          --  Scan out With lines for this unit
 
-         With_Loop : while C = 'W' loop
+         With_Loop : loop
+            Check_Unknown_Line;
+            exit With_Loop when C /= 'W' and then C /= 'Y';
+
             if Ignore ('W') then
                Skip_Line;
 
@@ -1174,11 +1717,13 @@ package body ALI is
                Checkc (' ');
                Skip_Space;
                Withs.Increment_Last;
-               Withs.Table (Withs.Last).Uname              := Get_Name;
+               Withs.Table (Withs.Last).Uname              := Get_Unit_Name;
                Withs.Table (Withs.Last).Elaborate          := False;
                Withs.Table (Withs.Last).Elaborate_All      := False;
+               Withs.Table (Withs.Last).Elab_Desirable     := False;
                Withs.Table (Withs.Last).Elab_All_Desirable := False;
-               Withs.Table (Withs.Last).Interface          := False;
+               Withs.Table (Withs.Last).SAL_Interface      := False;
+               Withs.Table (Withs.Last).Limited_With       := (C = 'Y');
 
                --  Generic case with no object file available
 
@@ -1189,15 +1734,29 @@ package body ALI is
                --  Normal case
 
                else
-                  Withs.Table (Withs.Last).Sfile := Get_Name (Lower => True);
-                  Withs.Table (Withs.Last).Afile := Get_Name;
+                  Withs.Table (Withs.Last).Sfile := Get_File_Name
+                                                      (Lower => True);
+                  Withs.Table (Withs.Last).Afile := Get_File_Name
+                                                      (Lower => True);
 
-                  --  Scan out possible E, EA, and NE parameters
+                  --  Scan out possible E, EA, ED, and AD parameters
 
                   while not At_Eol loop
                      Skip_Space;
 
-                     if Nextc = 'E' then
+                     if Nextc = 'A' then
+                        P := P + 1;
+                        Checkc ('D');
+                        Check_At_End_Of_Field;
+
+                        --  Store AD indication unless ignore required
+
+                        if not Ignore_ED then
+                           Withs.Table (Withs.Last).Elab_All_Desirable :=
+                             True;
+                        end if;
+
+                     elsif Nextc = 'E' then
                         P := P + 1;
 
                         if At_End_Of_Field then
@@ -1215,10 +1774,13 @@ package body ALI is
                            --  Store ED indication unless ignore required
 
                            if not Ignore_ED then
-                              Withs.Table (Withs.Last).Elab_All_Desirable :=
+                              Withs.Table (Withs.Last).Elab_Desirable :=
                                 True;
                            end if;
                         end if;
+
+                     else
+                        Fatal_Error;
                      end if;
                   end loop;
                end if;
@@ -1236,7 +1798,9 @@ package body ALI is
 
          Name_Len := 0;
 
-         Linker_Options_Loop : while C = 'L' loop
+         Linker_Options_Loop : loop
+            Check_Unknown_Line;
+            exit Linker_Options_Loop when C /= 'L';
 
             if Ignore ('L') then
                Skip_Line;
@@ -1252,7 +1816,7 @@ package body ALI is
                   if C < Character'Val (16#20#)
                     or else C > Character'Val (16#7E#)
                   then
-                     Fatal_Error;
+                     Fatal_Error_Ignore;
 
                   elsif C = '{' then
                      C := Character'Val (0);
@@ -1277,7 +1841,7 @@ package body ALI is
                                          10;
 
                            else
-                              Fatal_Error;
+                              Fatal_Error_Ignore;
                            end if;
                         end loop;
 
@@ -1295,7 +1859,7 @@ package body ALI is
                   end if;
                end loop;
 
-               Add_Char_To_Name_Buffer (nul);
+               Add_Char_To_Name_Buffer (NUL);
                Skip_Eol;
             end if;
 
@@ -1319,7 +1883,46 @@ package body ALI is
             Linker_Options.Table (Linker_Options.Last).Original_Pos :=
               Linker_Options.Last;
          end if;
-      end loop Unit_Loop;
+
+         --  If there are notes present, scan them
+
+         Notes_Loop : loop
+            Check_Unknown_Line;
+            exit Notes_Loop when C /= 'N';
+
+            if Ignore ('N') then
+               Skip_Line;
+
+            else
+               Checkc (' ');
+
+               Notes.Increment_Last;
+               Notes.Table (Notes.Last).Pragma_Type := Getc;
+               Notes.Table (Notes.Last).Pragma_Line := Get_Nat;
+               Checkc (':');
+               Notes.Table (Notes.Last).Pragma_Col  := Get_Nat;
+               Notes.Table (Notes.Last).Unit        := Units.Last;
+
+               if At_Eol then
+                  Notes.Table (Notes.Last).Pragma_Args := No_Name;
+
+               else
+                  Checkc (' ');
+
+                  Name_Len := 0;
+                  while not At_Eol loop
+                     Add_Char_To_Name_Buffer (Getc);
+                  end loop;
+
+                  Notes.Table (Notes.Last).Pragma_Args := Name_Enter;
+               end if;
+
+               Skip_Eol;
+            end if;
+
+            C := Getc;
+         end loop Notes_Loop;
+      end loop U_Loop;
 
       --  End loop through units for one ALI file
 
@@ -1348,7 +1951,10 @@ package body ALI is
 
       --  Scan out external version references and put in hash table
 
-      while C = 'E' loop
+      E_Loop : loop
+         Check_Unknown_Line;
+         exit E_Loop when C /= 'E';
+
          if Ignore ('E') then
             Skip_Line;
 
@@ -1374,13 +1980,16 @@ package body ALI is
          end if;
 
          C := Getc;
-      end loop;
+      end loop E_Loop;
 
       --  Scan out source dependency lines for this ALI file
 
       ALIs.Table (Id).First_Sdep := Sdep.Last + 1;
 
-      while C = 'D' loop
+      D_Loop : loop
+         Check_Unknown_Line;
+         exit D_Loop when C /= 'D';
+
          if Ignore ('D') then
             Skip_Line;
 
@@ -1388,7 +1997,12 @@ package body ALI is
             Checkc (' ');
             Skip_Space;
             Sdep.Increment_Last;
-            Sdep.Table (Sdep.Last).Sfile := Get_Name (Lower => True);
+
+            --  In the following call, Lower is not set to True, this is either
+            --  a bug, or it deserves a special comment as to why this is so???
+
+            Sdep.Table (Sdep.Last).Sfile := Get_File_Name;
+
             Sdep.Table (Sdep.Last).Stamp := Get_Stamp;
             Sdep.Table (Sdep.Last).Dummy_Entry :=
               (Sdep.Table (Sdep.Last).Stamp = Dummy_Time_Stamp);
@@ -1445,13 +2059,16 @@ package body ALI is
 
                if Nextc not in '0' .. '9' then
                   Name_Len := 0;
-
                   while not At_End_Of_Field loop
-                     Name_Len := Name_Len + 1;
-                     Name_Buffer (Name_Len) := Getc;
+                     Add_Char_To_Name_Buffer (Getc);
                   end loop;
 
-                  Sdep.Table (Sdep.Last).Subunit_Name := Name_Enter;
+                  --  Set the subunit name. Note that we use Name_Find rather
+                  --  than Name_Enter here as the subunit name may already
+                  --  have been put in the name table by the Project Manager.
+
+                  Sdep.Table (Sdep.Last).Subunit_Name := Name_Find;
+
                   Skip_Space;
                end if;
 
@@ -1464,8 +2081,7 @@ package body ALI is
                   Name_Len := 0;
 
                   while not At_End_Of_Field loop
-                     Name_Len := Name_Len + 1;
-                     Name_Buffer (Name_Len) := Getc;
+                     Add_Char_To_Name_Buffer (Getc);
                   end loop;
 
                   Sdep.Table (Sdep.Last).Rfile := Name_Enter;
@@ -1476,13 +2092,19 @@ package body ALI is
          end if;
 
          C := Getc;
-      end loop;
+      end loop D_Loop;
 
       ALIs.Table (Id).Last_Sdep := Sdep.Last;
 
       --  We must at this stage be at an Xref line or the end of file
 
-      if C /= EOF and then C /= 'X' then
+      if C = EOF then
+         return Id;
+      end if;
+
+      Check_Unknown_Line;
+
+      if C /= 'X' then
          Fatal_Error;
       end if;
 
@@ -1495,7 +2117,9 @@ package body ALI is
 
       --  Loop through Xref sections
 
-      while C = 'X' loop
+      X_Loop : loop
+         Check_Unknown_Line;
+         exit X_Loop when C /= 'X';
 
          --  Make new entry in section table
 
@@ -1510,7 +2134,7 @@ package body ALI is
 
          begin
             XS.File_Num     := Sdep_Id (Get_Nat + Nat (First_Sdep_Entry) - 1);
-            XS.File_Name    := Get_Name;
+            XS.File_Name    := Get_File_Name;
             XS.First_Entity := Xref_Entity.Last + 1;
 
             Current_File_Num := XS.File_Num;
@@ -1540,6 +2164,8 @@ package body ALI is
                   ----------------------------------
 
                   procedure Read_Instantiation_Reference is
+                     Local_File_Num : Sdep_Id := Current_File_Num;
+
                   begin
                      Xref.Increment_Last;
 
@@ -1553,12 +2179,12 @@ package body ALI is
                         if Nextc = '|' then
                            XR.File_Num :=
                              Sdep_Id (N + Nat (First_Sdep_Entry) - 1);
-                           Current_File_Num := XR.File_Num;
+                           Local_File_Num := XR.File_Num;
                            P := P + 1;
                            N := Get_Nat;
 
                         else
-                           XR.File_Num := Current_File_Num;
+                           XR.File_Num := Local_File_Num;
                         end if;
 
                         XR.Line  := N;
@@ -1582,11 +2208,45 @@ package body ALI is
                --  Start of processing for Read_Refs_For_One_Entity
 
                begin
-                  XE.Line   := Get_Nat;
-                  XE.Etype  := Getc;
-                  XE.Col    := Get_Nat;
-                  XE.Lib    := (Getc = '*');
+                  XE.Line  := Get_Nat;
+                  XE.Etype := Getc;
+                  XE.Col   := Get_Nat;
+
+                  case Getc is
+                     when '*' =>
+                        XE.Visibility := Global;
+                     when '+' =>
+                        XE.Visibility := Static;
+                     when others =>
+                        XE.Visibility := Other;
+                  end case;
+
                   XE.Entity := Get_Name;
+
+                  --  Handle the information about generic instantiations
+
+                  if Nextc = '[' then
+                     Skipc; --  Opening '['
+                     N := Get_Nat;
+
+                     if Nextc /= '|' then
+                        XE.Iref_File_Num := Current_File_Num;
+                        XE.Iref_Line     := N;
+                     else
+                        XE.Iref_File_Num :=
+                          Sdep_Id (N + Nat (First_Sdep_Entry) - 1);
+                        Skipc;
+                        XE.Iref_Line := Get_Nat;
+                     end if;
+
+                     if Getc /= ']' then
+                        Fatal_Error;
+                     end if;
+
+                  else
+                     XE.Iref_File_Num := No_Sdep_Id;
+                     XE.Iref_Line     := 0;
+                  end if;
 
                   Current_File_Num := XS.File_Num;
 
@@ -1611,85 +2271,84 @@ package body ALI is
 
                   Skip_Space;
 
-                  --  See if type reference present
+                  XE.Oref_File_Num := No_Sdep_Id;
+                  XE.Tref_File_Num := No_Sdep_Id;
+                  XE.Tref          := Tref_None;
+                  XE.First_Xref    := Xref.Last + 1;
 
-                  case Nextc is
-                     when '<'    => XE.Tref := Tref_Derived;
-                     when '('    => XE.Tref := Tref_Access;
-                     when '{'    => XE.Tref := Tref_Type;
-                     when others => XE.Tref := Tref_None;
-                  end case;
+                  --  Loop to check for additional info present
 
-                  --  Case of typeref field present
-
-                  if XE.Tref /= Tref_None then
-                     P := P + 1; -- skip opening bracket
-
-                     if Nextc in 'a' .. 'z' then
-                        XE.Tref_File_Num        := No_Sdep_Id;
-                        XE.Tref_Line            := 0;
-                        XE.Tref_Type            := ' ';
-                        XE.Tref_Col             := 0;
-                        XE.Tref_Standard_Entity :=
-                          Get_Name (Ignore_Spaces => True);
-
-                     else
-                        N := Get_Nat;
-
-                        if Nextc = '|' then
-                           XE.Tref_File_Num :=
-                             Sdep_Id (N + Nat (First_Sdep_Entry) - 1);
-                           P := P + 1;
-                           N := Get_Nat;
-
-                        else
-                           XE.Tref_File_Num := Current_File_Num;
-                        end if;
-
-                        XE.Tref_Line            := N;
-                        XE.Tref_Type            := Getc;
-                        XE.Tref_Col             := Get_Nat;
-                        XE.Tref_Standard_Entity := No_Name;
-                     end if;
-
-                     --  ??? Temporary workaround for nested generics case:
-                     --     4i4 Directories{1|4I9[4|6[3|3]]}
-                     --  See C918-002
-
+                  loop
                      declare
-                        Nested_Brackets : Natural := 0;
+                        Ref  : Tref_Kind;
+                        File : Sdep_Id;
+                        Line : Nat;
+                        Typ  : Character;
+                        Col  : Nat;
+                        Std  : Name_Id;
 
                      begin
-                        loop
-                           case Nextc is
-                              when '['   =>
-                                 Nested_Brackets := Nested_Brackets + 1;
-                              when ']' =>
-                                 Nested_Brackets := Nested_Brackets - 1;
-                              when others =>
-                                 if Nested_Brackets = 0 then
-                                    exit;
-                                 end if;
-                           end case;
+                        Get_Typeref
+                          (Current_File_Num, Ref, File, Line, Typ, Col, Std);
+                        exit when Ref = Tref_None;
 
-                           Skipc;
-                        end loop;
+                        --  Do we have an overriding procedure?
+
+                        if Ref = Tref_Derived and then Typ = 'p' then
+                           XE.Oref_File_Num := File;
+                           XE.Oref_Line     := Line;
+                           XE.Oref_Col      := Col;
+
+                        --  Arrays never override anything, and <> points to
+                        --  the index types instead
+
+                        elsif Ref = Tref_Derived and then XE.Etype = 'A' then
+
+                           --  Index types are stored in the list of references
+
+                           Xref.Increment_Last;
+
+                           declare
+                              XR : Xref_Record renames Xref.Table (Xref.Last);
+                           begin
+                              XR.File_Num := File;
+                              XR.Line     := Line;
+                              XR.Rtype    := Array_Index_Reference;
+                              XR.Col      := Col;
+                              XR.Name     := Std;
+                           end;
+
+                        --  Interfaces are stored in the list of references,
+                        --  although the parent type itself is stored in XE.
+                        --  The first interface (when there are only
+                        --  interfaces) is stored in XE.Tref*)
+
+                        elsif Ref = Tref_Derived
+                          and then Typ = 'R'
+                          and then XE.Tref_File_Num /= No_Sdep_Id
+                        then
+                           Xref.Increment_Last;
+
+                           declare
+                              XR : Xref_Record renames Xref.Table (Xref.Last);
+                           begin
+                              XR.File_Num := File;
+                              XR.Line     := Line;
+                              XR.Rtype    := Interface_Reference;
+                              XR.Col      := Col;
+                              XR.Name     := Std;
+                           end;
+
+                        else
+                           XE.Tref                 := Ref;
+                           XE.Tref_File_Num        := File;
+                           XE.Tref_Line            := Line;
+                           XE.Tref_Type            := Typ;
+                           XE.Tref_Col             := Col;
+                           XE.Tref_Standard_Entity := Std;
+                        end if;
                      end;
-
-                     P := P + 1; -- skip closing bracket
-                     Skip_Space;
-
-                  --  No typeref entry present
-
-                  else
-                     XE.Tref_File_Num        := No_Sdep_Id;
-                     XE.Tref_Line            := 0;
-                     XE.Tref_Type            := ' ';
-                     XE.Tref_Col             := 0;
-                     XE.Tref_Standard_Entity := No_Name;
-                  end if;
-
-                  XE.First_Xref := Xref.Last + 1;
+                  end loop;
 
                   --  Loop through cross-references for this entity
 
@@ -1745,6 +2404,24 @@ package body ALI is
 
                   XE.Last_Xref := Xref.Last;
                   C := Nextc;
+
+               exception
+                  when Bad_ALI_Format =>
+
+                     --  If ignoring errors, then we skip a line with an
+                     --  unexpected error, and try to continue subsequent
+                     --  xref lines.
+
+                     if Ignore_Errors then
+                        Xref_Entity.Decrement_Last;
+                        Skip_Line;
+                        C := Nextc;
+
+                     --  Otherwise, we reraise the fatal exception
+
+                     else
+                        raise;
+                     end if;
                end Read_Refs_For_One_Entity;
             end loop;
 
@@ -1755,7 +2432,7 @@ package body ALI is
          end Read_Refs_For_One_File;
 
          C := Getc;
-      end loop;
+      end loop X_Loop;
 
       --  Here after dealing with xref sections
 
@@ -1768,7 +2445,6 @@ package body ALI is
    exception
       when Bad_ALI_Format =>
          return No_ALI_Id;
-
    end Scan_ALI;
 
    ---------

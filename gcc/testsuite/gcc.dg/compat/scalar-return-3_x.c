@@ -83,13 +83,15 @@ testit##NAME (void)						\
   DEBUG_NL;							\
 }
 
+#ifndef SKIP_COMPLEX
 #ifndef SKIP_COMPLEX_INT
-T(ci, _Complex int, (2,3))
-T(cl, _Complex long, (3,4))
-T(cll, _Complex long long, (4,5))
+T(ci, _Complex int, CINT (2, 3))
+T(cl, _Complex long, CINT (3, 4))
+T(cll, _Complex long long, CINT (4, 5))
 #endif
-T(cd, _Complex double, (2.0,3.0))
-T(cld, _Complex long double, (3.0,4.0))
+T(cd, _Complex double, CDBL (2.0, 3.0))
+T(cld, _Complex long double, CDBL (3.0, 4.0))
+#endif
 
 #undef T
 
@@ -100,6 +102,7 @@ DEBUG_INIT
 
 #define T(NAME) testit##NAME ();
 
+#ifndef SKIP_COMPLEX
 #ifndef SKIP_COMPLEX_INT
 T(ci)
 T(cl)
@@ -107,6 +110,7 @@ T(cll)
 #endif
 T(cd)
 T(cld)
+#endif
 
 DEBUG_FINI
 

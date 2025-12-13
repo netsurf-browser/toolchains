@@ -1,6 +1,9 @@
 /* { dg-do run } */
 /* { dg-options "-O2 -finstrument-functions" } */
 
+extern void abort (void);
+extern void exit (int);
+
 double
 foo (double a, double b)
 {
@@ -21,5 +24,19 @@ int main ()
   exit (0);
 }
 
-void __attribute__((no_instrument_function)) __cyg_profile_func_enter() { }
-void __attribute__((no_instrument_function)) __cyg_profile_func_exit() { } 
+/* Abort on non-NULL CALL_SITE to ensure that __builtin_return_address
+   was expanded properly.  */
+void __attribute__((no_instrument_function))
+__cyg_profile_func_enter(void *this_fn, void *call_site)
+{
+  if (call_site == (void *)0)
+    abort ();
+}
+
+void __attribute__((no_instrument_function))
+__cyg_profile_func_exit(void *this_fn, void *call_site)
+{
+  if (call_site == (void *)0)
+    abort ();
+}
+

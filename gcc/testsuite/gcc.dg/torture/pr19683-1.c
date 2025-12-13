@@ -16,7 +16,7 @@ extern void exit (int);
 
 union u { unsigned long long ll; unsigned int i[2]; };
 
-unsigned int
+unsigned int __attribute__ ((nomips16))
 foo (volatile unsigned int *ptr)
 {
   union u u;
@@ -29,7 +29,7 @@ foo (volatile unsigned int *ptr)
   return result;
 }
 
-int
+int __attribute__ ((nomips16))
 main (void)
 {
   unsigned int array[] = { 1000 * 1000 * 1000 };

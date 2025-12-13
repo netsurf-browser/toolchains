@@ -1,11 +1,12 @@
 /* Definitions for computing resource usage of specific insns.
-   Copyright (C) 1999, 2003 Free Software Foundation, Inc.
+   Copyright (C) 1999, 2003, 2004, 2006, 2007, 2009, 2010
+   Free Software Foundation, Inc.
 
 This file is part of GCC.
 
 GCC is free software; you can redistribute it and/or modify it under
 the terms of the GNU General Public License as published by the Free
-Software Foundation; either version 2, or (at your option) any later
+Software Foundation; either version 3, or (at your option) any later
 version.
 
 GCC is distributed in the hope that it will be useful, but WITHOUT ANY
@@ -14,9 +15,14 @@ FITNESS FOR A PARTICULAR PURPOSE.  See the GNU General Public License
 for more details.
 
 You should have received a copy of the GNU General Public License
-along with GCC; see the file COPYING.  If not, write to the Free
-Software Foundation, 59 Temple Place - Suite 330, Boston, MA
-02111-1307, USA.  */
+along with GCC; see the file COPYING3.  If not see
+<http://www.gnu.org/licenses/>.  */
+
+#ifndef GCC_RESOURCE_H
+#define GCC_RESOURCE_H
+
+#include "hard-reg-set.h"
+#include "df.h"
 
 /* Macro to clear all resources.  */
 #define CLEAR_RESOURCE(RES)	\
@@ -27,7 +33,7 @@ Software Foundation, 59 Temple Place - Suite 330, Boston, MA
 struct resources
 {
   char memory;		/* Insn sets or needs a memory location.  */
-  char unch_memory;	/* Insn sets of needs a "unchanging" MEM.  */
+  char unch_memory;	/* Insn sets or needs an "unchanging" MEM.  */
   char volatil;		/* Insn sets or needs a volatile memory loc.  */
   char cc;		/* Insn sets or needs the condition codes.  */
   HARD_REG_SET regs;	/* Which registers are set or needed.  */
@@ -43,9 +49,11 @@ enum mark_resource_type
 extern void mark_target_live_regs (rtx, rtx, struct resources *);
 extern void mark_set_resources (rtx, struct resources *, int,
 				enum mark_resource_type);
-extern void mark_referenced_resources (rtx, struct resources *, int);
+extern void mark_referenced_resources (rtx, struct resources *, bool);
 extern void clear_hashed_info_for_insn (rtx);
 extern void incr_ticks_for_insn (rtx);
-extern void mark_end_of_function_resources (rtx, int);
+extern void mark_end_of_function_resources (rtx, bool);
 extern void init_resource_info (rtx);
 extern void free_resource_info (void);
+
+#endif /* GCC_RESOURCE_H */

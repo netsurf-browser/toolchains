@@ -1,11 +1,12 @@
 // Set implementation -*- C++ -*-
 
-// Copyright (C) 2001, 2002, 2004 Free Software Foundation, Inc.
+// Copyright (C) 2001, 2002, 2003, 2004, 2005, 2006, 2007, 2008, 2009, 2010,
+// 2011 Free Software Foundation, Inc.
 //
 // This file is part of the GNU ISO C++ Library.  This library is free
 // software; you can redistribute it and/or modify it under the
 // terms of the GNU General Public License as published by the
-// Free Software Foundation; either version 2, or (at your option)
+// Free Software Foundation; either version 3, or (at your option)
 // any later version.
 
 // This library is distributed in the hope that it will be useful,
@@ -13,19 +14,14 @@
 // MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
 // GNU General Public License for more details.
 
-// You should have received a copy of the GNU General Public License along
-// with this library; see the file COPYING.  If not, write to the Free
-// Software Foundation, 59 Temple Place - Suite 330, Boston, MA 02111-1307,
-// USA.
+// Under Section 7 of GPL version 3, you are granted additional
+// permissions described in the GCC Runtime Library Exception, version
+// 3.1, as published by the Free Software Foundation.
 
-// As a special exception, you may use this file as part of a free software
-// library without restriction.  Specifically, if other files instantiate
-// templates or use macros or inline functions from this file, or you compile
-// this file and link it with other files to produce an executable, this
-// file does not by itself cause the resulting executable to be covered by
-// the GNU General Public License.  This exception does not however
-// invalidate any other reasons why the executable file might be covered by
-// the GNU General Public License.
+// You should have received a copy of the GNU General Public License and
+// a copy of the GCC Runtime Library Exception along with this program;
+// see the files COPYING3 and COPYING.RUNTIME respectively.  If not, see
+// <http://www.gnu.org/licenses/>.
 
 /*
  *
@@ -53,39 +49,26 @@
  * purpose.  It is provided "as is" without express or implied warranty.
  */
 
-/** @file stl_set.h
+/** @file bits/stl_set.h
  *  This is an internal header file, included by other library headers.
- *  You should not attempt to use it directly.
+ *  Do not attempt to use it directly. @headername{set}
  */
 
-#ifndef _SET_H
-#define _SET_H 1
+#ifndef _STL_SET_H
+#define _STL_SET_H 1
 
 #include <bits/concept_check.h>
+#include <initializer_list>
 
-namespace _GLIBCXX_STD
+namespace std _GLIBCXX_VISIBILITY(default)
 {
-  // Forward declarations of operators < and ==, needed for friend declaration.
-  template<class _Key, class _Compare = less<_Key>,
-	   class _Alloc = allocator<_Key> >
-    class set;
-
-  template<class _Key, class _Compare, class _Alloc>
-    inline bool
-    operator==(const set<_Key,_Compare,_Alloc>& __x,
-	       const set<_Key,_Compare,_Alloc>& __y);
-
-  template<class _Key, class _Compare, class _Alloc>
-    inline bool
-    operator<(const set<_Key,_Compare,_Alloc>& __x,
-	      const set<_Key,_Compare,_Alloc>& __y);
+_GLIBCXX_BEGIN_NAMESPACE_CONTAINER
 
   /**
    *  @brief A standard container made up of unique keys, which can be
    *  retrieved in logarithmic time.
    *
-   *  @ingroup Containers
-   *  @ingroup Assoc_containers
+   *  @ingroup associative_containers
    *
    *  Meets the requirements of a <a href="tables.html#65">container</a>, a
    *  <a href="tables.html#66">reversible container</a>, and an
@@ -97,19 +80,20 @@ namespace _GLIBCXX_STD
    *  @param  Compare  Comparison function object type, defaults to less<Key>.
    *  @param  Alloc  Allocator type, defaults to allocator<Key>.
    *
-   *  @if maint
    *  The private tree data is declared exactly the same way for set and
    *  multiset; the distinction is made entirely in how the tree functions are
    *  called (*_unique versus *_equal, same as the standard).
-   *  @endif
   */
-  template<class _Key, class _Compare, class _Alloc>
+  template<typename _Key, typename _Compare = std::less<_Key>,
+	   typename _Alloc = std::allocator<_Key> >
     class set
     {
       // concept requirements
+      typedef typename _Alloc::value_type                   _Alloc_value_type;
       __glibcxx_class_requires(_Key, _SGIAssignableConcept)
       __glibcxx_class_requires4(_Compare, bool, _Key, _Key,
 				_BinaryFunctionConcept)
+      __glibcxx_class_requires2(_Key, _Alloc_value_type, _SameTypeConcept)
 
     public:
       // typedefs:
@@ -119,45 +103,50 @@ namespace _GLIBCXX_STD
       typedef _Key     value_type;
       typedef _Compare key_compare;
       typedef _Compare value_compare;
+      typedef _Alloc   allocator_type;
       //@}
 
     private:
-      typedef _Rb_tree<key_type, value_type,
-		       _Identity<value_type>, key_compare, _Alloc> _Rep_type;
-      _Rep_type _M_t;  // red-black tree representing set
+      typedef typename _Alloc::template rebind<_Key>::other _Key_alloc_type;
+
+      typedef _Rb_tree<key_type, value_type, _Identity<value_type>,
+		       key_compare, _Key_alloc_type> _Rep_type;
+      _Rep_type _M_t;  // Red-black tree representing set.
+
     public:
       //@{
       ///  Iterator-related typedefs.
-      typedef typename _Alloc::pointer pointer;
-      typedef typename _Alloc::const_pointer const_pointer;
-      typedef typename _Alloc::reference reference;
-      typedef typename _Alloc::const_reference const_reference;
+      typedef typename _Key_alloc_type::pointer             pointer;
+      typedef typename _Key_alloc_type::const_pointer       const_pointer;
+      typedef typename _Key_alloc_type::reference           reference;
+      typedef typename _Key_alloc_type::const_reference     const_reference;
       // _GLIBCXX_RESOLVE_LIB_DEFECTS
       // DR 103. set::iterator is required to be modifiable,
       // but this allows modification of keys.
-      typedef typename _Rep_type::const_iterator iterator;
-      typedef typename _Rep_type::const_iterator const_iterator;
-      typedef typename _Rep_type::const_reverse_iterator reverse_iterator;
+      typedef typename _Rep_type::const_iterator            iterator;
+      typedef typename _Rep_type::const_iterator            const_iterator;
+      typedef typename _Rep_type::const_reverse_iterator    reverse_iterator;
       typedef typename _Rep_type::const_reverse_iterator const_reverse_iterator;
-      typedef typename _Rep_type::size_type size_type;
-      typedef typename _Rep_type::difference_type difference_type;
-      typedef typename _Rep_type::allocator_type allocator_type;
+      typedef typename _Rep_type::size_type                 size_type;
+      typedef typename _Rep_type::difference_type           difference_type;
       //@}
 
       // allocation/deallocation
-      ///  Default constructor creates no elements.
-      set()
-      : _M_t(_Compare(), allocator_type()) {}
-
       /**
        *  @brief  Default constructor creates no elements.
-       *
-       *  @param  comp  Comparator to use.
-       *  @param  a  Allocator to use.
        */
-      explicit set(const _Compare& __comp,
-		   const allocator_type& __a = allocator_type())
-      : _M_t(__comp, __a) {}
+      set()
+      : _M_t() { }
+
+      /**
+       *  @brief  Creates a %set with no elements.
+       *  @param  comp  Comparator to use.
+       *  @param  a  An allocator object.
+       */
+      explicit
+      set(const _Compare& __comp,
+	  const allocator_type& __a = allocator_type())
+      : _M_t(__comp, __a) { }
 
       /**
        *  @brief  Builds a %set from a range.
@@ -168,10 +157,10 @@ namespace _GLIBCXX_STD
        *  This is linear in N if the range is already sorted, and NlogN
        *  otherwise (where N is distance(first,last)).
        */
-      template<class _InputIterator>
-        set(_InputIterator __first, _InputIterator __last)
-        : _M_t(_Compare(), allocator_type())
-        { _M_t.insert_unique(__first, __last); }
+      template<typename _InputIterator>
+	set(_InputIterator __first, _InputIterator __last)
+	: _M_t()
+	{ _M_t._M_insert_unique(__first, __last); }
 
       /**
        *  @brief  Builds a %set from a range.
@@ -184,36 +173,102 @@ namespace _GLIBCXX_STD
        *  This is linear in N if the range is already sorted, and NlogN
        *  otherwise (where N is distance(first,last)).
        */
-      template<class _InputIterator>
-        set(_InputIterator __first, _InputIterator __last,
+      template<typename _InputIterator>
+	set(_InputIterator __first, _InputIterator __last,
 	    const _Compare& __comp,
 	    const allocator_type& __a = allocator_type())
 	: _M_t(__comp, __a)
-        { _M_t.insert_unique(__first, __last); }
+	{ _M_t._M_insert_unique(__first, __last); }
 
       /**
-       *  @brief  Set copy constructor.
+       *  @brief  %Set copy constructor.
        *  @param  x  A %set of identical element and allocator types.
        *
        *  The newly-created %set uses a copy of the allocation object used
        *  by @a x.
        */
-      set(const set<_Key,_Compare,_Alloc>& __x)
+      set(const set& __x)
       : _M_t(__x._M_t) { }
 
+#ifdef __GXX_EXPERIMENTAL_CXX0X__
+     /**
+       *  @brief %Set move constructor
+       *  @param x  A %set of identical element and allocator types.
+       *
+       *  The newly-created %set contains the exact contents of @a x.
+       *  The contents of @a x are a valid, but unspecified %set.
+       */
+      set(set&& __x)
+      : _M_t(std::move(__x._M_t)) { }
+
       /**
-       *  @brief  Set assignment operator.
+       *  @brief  Builds a %set from an initializer_list.
+       *  @param  l  An initializer_list.
+       *  @param  comp  A comparison functor.
+       *  @param  a  An allocator object.
+       *
+       *  Create a %set consisting of copies of the elements in the list.
+       *  This is linear in N if the list is already sorted, and NlogN
+       *  otherwise (where N is @a l.size()).
+       */
+      set(initializer_list<value_type> __l,
+	  const _Compare& __comp = _Compare(),
+	  const allocator_type& __a = allocator_type())
+      : _M_t(__comp, __a)
+      { _M_t._M_insert_unique(__l.begin(), __l.end()); }
+#endif
+
+      /**
+       *  @brief  %Set assignment operator.
        *  @param  x  A %set of identical element and allocator types.
        *
        *  All the elements of @a x are copied, but unlike the copy constructor,
        *  the allocator object is not copied.
        */
-      set<_Key,_Compare,_Alloc>&
-      operator=(const set<_Key, _Compare, _Alloc>& __x)
+      set&
+      operator=(const set& __x)
       {
 	_M_t = __x._M_t;
 	return *this;
       }
+
+#ifdef __GXX_EXPERIMENTAL_CXX0X__
+      /**
+       *  @brief %Set move assignment operator.
+       *  @param x  A %set of identical element and allocator types.
+       *
+       *  The contents of @a x are moved into this %set (without copying).
+       *  @a x is a valid, but unspecified %set.
+       */
+      set&
+      operator=(set&& __x)
+      {
+	// NB: DR 1204.
+	// NB: DR 675.
+	this->clear();
+	this->swap(__x);
+      	return *this;
+      }
+
+      /**
+       *  @brief  %Set list assignment operator.
+       *  @param  l  An initializer_list.
+       *
+       *  This function fills a %set with copies of the elements in the
+       *  initializer list @a l.
+       *
+       *  Note that the assignment completely changes the %set and
+       *  that the resulting %set's size is the same as the number
+       *  of elements assigned.  Old data may be lost.
+       */
+      set&
+      operator=(initializer_list<value_type> __l)
+      {
+	this->clear();
+	this->insert(__l.begin(), __l.end());
+	return *this;
+      }
+#endif
 
       // accessors:
 
@@ -231,25 +286,27 @@ namespace _GLIBCXX_STD
       { return _M_t.get_allocator(); }
 
       /**
-       *  Returns a read/write iterator that points to the first element in the
-       *  %set.  Iteration is done in ascending order according to the keys.
+       *  Returns a read-only (constant) iterator that points to the first
+       *  element in the %set.  Iteration is done in ascending order according
+       *  to the keys.
        */
       iterator
       begin() const
       { return _M_t.begin(); }
 
       /**
-       *  Returns a read/write iterator that points one past the last element in
-       *  the %set.  Iteration is done in ascending order according to the keys.
+       *  Returns a read-only (constant) iterator that points one past the last
+       *  element in the %set.  Iteration is done in ascending order according
+       *  to the keys.
        */
       iterator
       end() const
       { return _M_t.end(); }
 
       /**
-       *  Returns a read/write reverse iterator that points to the last element
-       *  in the %set.  Iteration is done in descending order according to the
-       *  keys.
+       *  Returns a read-only (constant) iterator that points to the last
+       *  element in the %set.  Iteration is done in descending order according
+       *  to the keys.
        */
       reverse_iterator
       rbegin() const
@@ -257,12 +314,50 @@ namespace _GLIBCXX_STD
 
       /**
        *  Returns a read-only (constant) reverse iterator that points to the
-       *  last pair in the %map.  Iteration is done in descending order
+       *  last pair in the %set.  Iteration is done in descending order
        *  according to the keys.
        */
       reverse_iterator
       rend() const
       { return _M_t.rend(); }
+
+#ifdef __GXX_EXPERIMENTAL_CXX0X__
+      /**
+       *  Returns a read-only (constant) iterator that points to the first
+       *  element in the %set.  Iteration is done in ascending order according
+       *  to the keys.
+       */
+      iterator
+      cbegin() const
+      { return _M_t.begin(); }
+
+      /**
+       *  Returns a read-only (constant) iterator that points one past the last
+       *  element in the %set.  Iteration is done in ascending order according
+       *  to the keys.
+       */
+      iterator
+      cend() const
+      { return _M_t.end(); }
+
+      /**
+       *  Returns a read-only (constant) iterator that points to the last
+       *  element in the %set.  Iteration is done in descending order according
+       *  to the keys.
+       */
+      reverse_iterator
+      crbegin() const
+      { return _M_t.rbegin(); }
+
+      /**
+       *  Returns a read-only (constant) reverse iterator that points to the
+       *  last pair in the %set.  Iteration is done in descending order
+       *  according to the keys.
+       */
+      reverse_iterator
+      crend() const
+      { return _M_t.rend(); }
+#endif
 
       ///  Returns true if the %set is empty.
       bool
@@ -291,7 +386,7 @@ namespace _GLIBCXX_STD
        *  std::swap(s1,s2) will feed to this function.
        */
       void
-      swap(set<_Key,_Compare,_Alloc>& __x)
+      swap(set& __x)
       { _M_t.swap(__x._M_t); }
 
       // insert/erase
@@ -308,12 +403,23 @@ namespace _GLIBCXX_STD
        *
        *  Insertion requires logarithmic time.
        */
-      pair<iterator,bool>
+      std::pair<iterator, bool>
       insert(const value_type& __x)
       {
-	pair<typename _Rep_type::iterator, bool> __p = _M_t.insert_unique(__x);
-	return pair<iterator, bool>(__p.first, __p.second);
+	std::pair<typename _Rep_type::iterator, bool> __p =
+	  _M_t._M_insert_unique(__x);
+	return std::pair<iterator, bool>(__p.first, __p.second);
       }
+
+#ifdef __GXX_EXPERIMENTAL_CXX0X__
+      std::pair<iterator, bool>
+      insert(value_type&& __x)
+      {
+	std::pair<typename _Rep_type::iterator, bool> __p =
+	  _M_t._M_insert_unique(std::move(__x));
+	return std::pair<iterator, bool>(__p.first, __p.second);
+      }
+#endif
 
       /**
        *  @brief Attempts to insert an element into the %set.
@@ -329,31 +435,68 @@ namespace _GLIBCXX_STD
        *  potentially improve the performance of the insertion process.  A bad
        *  hint would cause no gains in efficiency.
        *
-       *  See http://gcc.gnu.org/onlinedocs/libstdc++/23_containers/howto.html#4
-       *  for more on "hinting".
+       *  For more on @a hinting, see:
+       *  http://gcc.gnu.org/onlinedocs/libstdc++/manual/bk01pt07ch17.html
        *
        *  Insertion requires logarithmic time (if the hint is not taken).
        */
       iterator
-      insert(iterator __position, const value_type& __x)
-      {
-	typedef typename _Rep_type::iterator _Rep_iterator;
-	return _M_t.insert_unique((_Rep_iterator&)__position, __x);
-      }
+      insert(const_iterator __position, const value_type& __x)
+      { return _M_t._M_insert_unique_(__position, __x); }
+
+#ifdef __GXX_EXPERIMENTAL_CXX0X__
+      iterator
+      insert(const_iterator __position, value_type&& __x)
+      { return _M_t._M_insert_unique_(__position, std::move(__x)); }
+#endif
 
       /**
-       *  @brief A template function that attemps to insert a range of elements.
+       *  @brief A template function that attempts to insert a range
+       *  of elements.
        *  @param  first  Iterator pointing to the start of the range to be
        *                 inserted.
        *  @param  last  Iterator pointing to the end of the range.
        *
        *  Complexity similar to that of the range constructor.
        */
-      template<class _InputIterator>
-      void
-      insert(_InputIterator __first, _InputIterator __last)
-      { _M_t.insert_unique(__first, __last); }
+      template<typename _InputIterator>
+	void
+	insert(_InputIterator __first, _InputIterator __last)
+	{ _M_t._M_insert_unique(__first, __last); }
 
+#ifdef __GXX_EXPERIMENTAL_CXX0X__
+      /**
+       *  @brief Attempts to insert a list of elements into the %set.
+       *  @param  list  A std::initializer_list<value_type> of elements
+       *                to be inserted.
+       *
+       *  Complexity similar to that of the range constructor.
+       */
+      void
+      insert(initializer_list<value_type> __l)
+      { this->insert(__l.begin(), __l.end()); }
+#endif
+
+#ifdef __GXX_EXPERIMENTAL_CXX0X__
+      // _GLIBCXX_RESOLVE_LIB_DEFECTS
+      // DR 130. Associative erase should return an iterator.
+      /**
+       *  @brief Erases an element from a %set.
+       *  @param  position  An iterator pointing to the element to be erased.
+       *  @return An iterator pointing to the element immediately following
+       *          @a position prior to the element being erased. If no such
+       *          element exists, end() is returned.
+       *
+       *  This function erases an element, pointed to by the given iterator,
+       *  from a %set.  Note that this function only erases the element, and
+       *  that if the element is itself a pointer, the pointed-to memory is not
+       *  touched in any way.  Managing the pointer is the user's
+       *  responsibility.
+       */
+      iterator
+      erase(const_iterator __position)
+      { return _M_t.erase(__position); }
+#else
       /**
        *  @brief Erases an element from a %set.
        *  @param  position  An iterator pointing to the element to be erased.
@@ -361,14 +504,13 @@ namespace _GLIBCXX_STD
        *  This function erases an element, pointed to by the given iterator,
        *  from a %set.  Note that this function only erases the element, and
        *  that if the element is itself a pointer, the pointed-to memory is not
-       *  touched in any way.  Managing the pointer is the user's responsibilty.
+       *  touched in any way.  Managing the pointer is the user's
+       *  responsibility.
        */
       void
       erase(iterator __position)
-      {
-	typedef typename _Rep_type::iterator _Rep_iterator;
-	_M_t.erase((_Rep_iterator&)__position);
-      }
+      { _M_t.erase(__position); }
+#endif
 
       /**
        *  @brief Erases elements according to the provided key.
@@ -379,11 +521,31 @@ namespace _GLIBCXX_STD
        *  a %set.
        *  Note that this function only erases the element, and that if
        *  the element is itself a pointer, the pointed-to memory is not touched
-       *  in any way.  Managing the pointer is the user's responsibilty.
+       *  in any way.  Managing the pointer is the user's responsibility.
        */
       size_type
-      erase(const key_type& __x) { return _M_t.erase(__x); }
+      erase(const key_type& __x)
+      { return _M_t.erase(__x); }
 
+#ifdef __GXX_EXPERIMENTAL_CXX0X__
+      // _GLIBCXX_RESOLVE_LIB_DEFECTS
+      // DR 130. Associative erase should return an iterator.
+      /**
+       *  @brief Erases a [first,last) range of elements from a %set.
+       *  @param  first  Iterator pointing to the start of the range to be
+       *                 erased.
+       *  @param  last  Iterator pointing to the end of the range to be erased.
+       *  @return The iterator @a last.
+       *
+       *  This function erases a sequence of elements from a %set.
+       *  Note that this function only erases the element, and that if
+       *  the element is itself a pointer, the pointed-to memory is not touched
+       *  in any way.  Managing the pointer is the user's responsibility.
+       */
+      iterator
+      erase(const_iterator __first, const_iterator __last)
+      { return _M_t.erase(__first, __last); }
+#else
       /**
        *  @brief Erases a [first,last) range of elements from a %set.
        *  @param  first  Iterator pointing to the start of the range to be
@@ -393,20 +555,18 @@ namespace _GLIBCXX_STD
        *  This function erases a sequence of elements from a %set.
        *  Note that this function only erases the element, and that if
        *  the element is itself a pointer, the pointed-to memory is not touched
-       *  in any way.  Managing the pointer is the user's responsibilty.
+       *  in any way.  Managing the pointer is the user's responsibility.
        */
       void
       erase(iterator __first, iterator __last)
-      {
-	typedef typename _Rep_type::iterator _Rep_iterator;
-	_M_t.erase((_Rep_iterator&)__first, (_Rep_iterator&)__last);
-      }
+      { _M_t.erase(__first, __last); }
+#endif
 
       /**
        *  Erases all elements in a %set.  Note that this function only erases
        *  the elements, and that if the elements themselves are pointers, the
        *  pointed-to memory is not touched in any way.  Managing the pointer is
-       *  the user's responsibilty.
+       *  the user's responsibility.
        */
       void
       clear()
@@ -502,22 +662,22 @@ namespace _GLIBCXX_STD
        *
        *  This function probably only makes sense for multisets.
        */
-      pair<iterator,iterator>
+      std::pair<iterator, iterator>
       equal_range(const key_type& __x)
       { return _M_t.equal_range(__x); }
 
-      pair<const_iterator,const_iterator>
+      std::pair<const_iterator, const_iterator>
       equal_range(const key_type& __x) const
       { return _M_t.equal_range(__x); }
       //@}
 
-      template<class _K1, class _C1, class _A1>
-        friend bool
-        operator== (const set<_K1,_C1,_A1>&, const set<_K1,_C1,_A1>&);
+      template<typename _K1, typename _C1, typename _A1>
+	friend bool
+	operator==(const set<_K1, _C1, _A1>&, const set<_K1, _C1, _A1>&);
 
-      template<class _K1, class _C1, class _A1>
-        friend bool
-        operator< (const set<_K1,_C1,_A1>&, const set<_K1,_C1,_A1>&);
+      template<typename _K1, typename _C1, typename _A1>
+	friend bool
+	operator<(const set<_K1, _C1, _A1>&, const set<_K1, _C1, _A1>&);
     };
 
 
@@ -531,10 +691,10 @@ namespace _GLIBCXX_STD
    *  Sets are considered equivalent if their sizes are equal, and if
    *  corresponding elements compare equal.
   */
-  template<class _Key, class _Compare, class _Alloc>
+  template<typename _Key, typename _Compare, typename _Alloc>
     inline bool
-    operator==(const set<_Key,_Compare,_Alloc>& __x,
-	       const set<_Key,_Compare,_Alloc>& __y)
+    operator==(const set<_Key, _Compare, _Alloc>& __x,
+	       const set<_Key, _Compare, _Alloc>& __y)
     { return __x._M_t == __y._M_t; }
 
   /**
@@ -548,46 +708,46 @@ namespace _GLIBCXX_STD
    *
    *  See std::lexicographical_compare() for how the determination is made.
   */
-  template<class _Key, class _Compare, class _Alloc>
+  template<typename _Key, typename _Compare, typename _Alloc>
     inline bool
-    operator<(const set<_Key,_Compare,_Alloc>& __x,
-	      const set<_Key,_Compare,_Alloc>& __y)
+    operator<(const set<_Key, _Compare, _Alloc>& __x,
+	      const set<_Key, _Compare, _Alloc>& __y)
     { return __x._M_t < __y._M_t; }
 
   ///  Returns !(x == y).
-  template<class _Key, class _Compare, class _Alloc>
+  template<typename _Key, typename _Compare, typename _Alloc>
     inline bool
-    operator!=(const set<_Key,_Compare,_Alloc>& __x,
-	       const set<_Key,_Compare,_Alloc>& __y)
+    operator!=(const set<_Key, _Compare, _Alloc>& __x,
+	       const set<_Key, _Compare, _Alloc>& __y)
     { return !(__x == __y); }
 
   ///  Returns y < x.
-  template<class _Key, class _Compare, class _Alloc>
+  template<typename _Key, typename _Compare, typename _Alloc>
     inline bool
-    operator>(const set<_Key,_Compare,_Alloc>& __x,
-	      const set<_Key,_Compare,_Alloc>& __y)
+    operator>(const set<_Key, _Compare, _Alloc>& __x,
+	      const set<_Key, _Compare, _Alloc>& __y)
     { return __y < __x; }
 
   ///  Returns !(y < x)
-  template<class _Key, class _Compare, class _Alloc>
+  template<typename _Key, typename _Compare, typename _Alloc>
     inline bool
-    operator<=(const set<_Key,_Compare,_Alloc>& __x,
-	       const set<_Key,_Compare,_Alloc>& __y)
+    operator<=(const set<_Key, _Compare, _Alloc>& __x,
+	       const set<_Key, _Compare, _Alloc>& __y)
     { return !(__y < __x); }
 
   ///  Returns !(x < y)
-  template<class _Key, class _Compare, class _Alloc>
+  template<typename _Key, typename _Compare, typename _Alloc>
     inline bool
-    operator>=(const set<_Key,_Compare,_Alloc>& __x,
-	       const set<_Key,_Compare,_Alloc>& __y)
+    operator>=(const set<_Key, _Compare, _Alloc>& __x,
+	       const set<_Key, _Compare, _Alloc>& __y)
     { return !(__x < __y); }
 
   /// See std::set::swap().
-  template<class _Key, class _Compare, class _Alloc>
+  template<typename _Key, typename _Compare, typename _Alloc>
     inline void
-    swap(set<_Key,_Compare,_Alloc>& __x, set<_Key,_Compare,_Alloc>& __y)
+    swap(set<_Key, _Compare, _Alloc>& __x, set<_Key, _Compare, _Alloc>& __y)
     { __x.swap(__y); }
 
-} // namespace std
-
-#endif /* _SET_H */
+_GLIBCXX_END_NAMESPACE_CONTAINER
+} //namespace std
+#endif /* _STL_SET_H */

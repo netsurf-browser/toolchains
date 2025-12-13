@@ -1,6 +1,6 @@
 // jvm.h - Header file for private implementation information. -*- c++ -*-
 
-/* Copyright (C) 1998, 1999, 2000, 2001, 2002, 2003  Free Software Foundation
+/* Copyright (C) 1998, 1999, 2000, 2001, 2002, 2003, 2004, 2005, 2006, 2007, 2008  Free Software Foundation
 
    This file is part of libgcj.
 
@@ -29,6 +29,13 @@ details.  */
 // Include cni.h before field.h to enable all definitions.  FIXME.
 #include <gcj/cni.h>
 #include <gcj/field.h>
+
+#include <java/lang/Thread.h>
+
+#include <sysdep/locks.h>
+
+/* Macro for possible unused arguments.  */
+#define MAYBE_UNUSED __attribute__((__unused__))
 
 /* Structure of the virtual table.  */
 struct _Jv_VTable
@@ -69,17 +76,8 @@ struct _Jv_VTable
   {
     return (2 * sizeof (void *)) + (index * vtable_elt_size ());
   }
+
   static _Jv_VTable *new_vtable (int count);
-};
-
-// Number of virtual methods on object.  FIXME: it sucks that we have
-// to keep this up to date by hand.
-#define NUM_OBJECT_METHODS 5
-
-// This structure is the type of an array's vtable.
-struct _Jv_ArrayVTable : public _Jv_VTable
-{
-  vtable_elt extra_method[NUM_OBJECT_METHODS - 1];
 };
 
 union _Jv_word
@@ -111,18 +109,16 @@ union _Jv_word2
   jdouble d;
 };                              
 
-// An instance of this type is used to represent a single frame in a
-// backtrace.  If the interpreter has been built, we also include
-// information about the interpreted method.
-struct _Jv_frame_info
+union _Jv_value
 {
-  // PC value.
-  void *addr;
-#ifdef INTERPRETER
-  // Actually a _Jv_InterpMethod, but we don't want to include
-  // java-interp.h everywhere.
-  void *interp;
-#endif // INTERPRETER
+  jbyte byte_value;
+  jshort short_value;
+  jchar char_value;
+  jint int_value;
+  jlong long_value;
+  jfloat float_value;
+  jdouble double_value;
+  jobject object_value;
 };
 
 /* Extract a character from a Java-style Utf8 string.
@@ -140,11 +136,15 @@ struct _Jv_frame_info
    ? (((PTR)[-3]&0x0F) << 12) + (((PTR)[-2]&0x3F) << 6) + ((PTR)[-1]&0x3F) \
    : ((PTR)++, -1))
 
-extern int _Jv_strLengthUtf8(char* str, int len);
+extern int _Jv_strLengthUtf8(const char* str, int len);
 
 typedef struct _Jv_Utf8Const Utf8Const;
-_Jv_Utf8Const *_Jv_makeUtf8Const (char *s, int len);
+_Jv_Utf8Const *_Jv_makeUtf8Const (const char *s, int len);
 _Jv_Utf8Const *_Jv_makeUtf8Const (jstring string);
+static inline _Jv_Utf8Const *_Jv_makeUtf8Const (const char *s)
+{
+  return _Jv_makeUtf8Const (s, strlen (s));
+}
 extern jboolean _Jv_equalUtf8Consts (const _Jv_Utf8Const *, const _Jv_Utf8Const *);
 extern jboolean _Jv_equal (_Jv_Utf8Const *, jstring, jint);
 extern jboolean _Jv_equaln (_Jv_Utf8Const *, jstring, jint);
@@ -222,9 +222,6 @@ inline _Jv_TempUTFString::~_Jv_TempUTFString ()
   char utfstr##_buf[utfstr##_len <= 256 ? utfstr##_len : 0]; \
   _Jv_TempUTFString utfstr(utfstr##thejstr, sizeof(utfstr##_buf)==0 ? 0 : utfstr##_buf)
 
-// FIXME: remove this define.
-#define StringClass java::lang::String::class$
-
 namespace gcj
 {
   /* Some constants used during lookup of special class methods.  */
@@ -235,7 +232,124 @@ namespace gcj
   
   /* Set to true by _Jv_CreateJavaVM. */
   extern bool runtimeInitialized;
+
+  /* Print out class names as they are initialized. */
+  extern bool verbose_class_flag;
+  
+  /* When true, enable the bytecode verifier and BC-ABI verification. */
+  extern bool verifyClasses;
+
+  /* Thread stack size specified by the -Xss runtime argument. */
+  extern size_t stack_size;
+
+  /* The start time */
+  extern jlong startTime;
+  
+  /* The VM arguments */
+  extern JArray<jstring>* vmArgs;
+
+  // Currently loaded classes
+  extern jint loadedClasses;
+
+  // Unloaded classes
+  extern jlong unloadedClasses;
 }
+
+// This class handles all aspects of class preparation and linking.
+class _Jv_Linker
+{
+private:
+  typedef unsigned int uaddr __attribute__ ((mode (pointer)));
+
+  static _Jv_Field *find_field_helper(jclass, _Jv_Utf8Const *, _Jv_Utf8Const *,
+				      jclass, jclass *);
+  static _Jv_Field *find_field(jclass, jclass, jclass *, _Jv_Utf8Const *,
+			       _Jv_Utf8Const *);
+  static void check_loading_constraints (_Jv_Method *, jclass, jclass);
+  static void prepare_constant_time_tables(jclass);
+  static jshort get_interfaces(jclass, _Jv_ifaces *);
+  static void link_symbol_table(jclass);
+  static void link_exception_table(jclass);
+  static void layout_interface_methods(jclass);
+  static void set_vtable_entries(jclass, _Jv_VTable *);
+  static void make_vtable(jclass);
+  static void ensure_fields_laid_out(jclass);
+  static void ensure_class_linked(jclass);
+  static void ensure_supers_installed(jclass);
+  static void add_miranda_methods(jclass, jclass);
+  static void ensure_method_table_complete(jclass);
+  static void verify_class(jclass);
+  static jshort find_iindex(jclass *, jshort *, jshort);
+  static jshort indexof(void *, void **, jshort);
+  static int get_alignment_from_class(jclass);
+  static void generate_itable(jclass, _Jv_ifaces *, jshort *);
+  static jshort append_partial_itable(jclass, jclass, void **, jshort);
+  static _Jv_Method *search_method_in_superclasses (jclass cls, jclass klass, 
+						    _Jv_Utf8Const *method_name,
+ 						    _Jv_Utf8Const *method_signature,
+						    jclass *found_class,
+						    bool check_perms = true);
+  static void *create_error_method(_Jv_Utf8Const *, jclass);
+
+  /* The least significant bit of the signature pointer in a symbol
+     table is set to 1 by the compiler if the reference is "special",
+     i.e. if it is an access to a private field or method.  Extract
+     that bit, clearing it in the address and setting the LSB of
+     SPECIAL accordingly.  */
+  static void maybe_adjust_signature (_Jv_Utf8Const *&s, uaddr &special)
+  {
+    union {
+      _Jv_Utf8Const *signature;
+      uaddr signature_bits;
+    };
+    signature = s;
+    special = signature_bits & 1;
+    signature_bits -= special;
+    s = signature;
+  }  
+
+  static _Jv_Mutex_t resolve_mutex;
+  static void init (void) __attribute__((constructor));
+
+public:
+
+  static bool has_field_p (jclass, _Jv_Utf8Const *);
+  static void print_class_loaded (jclass);
+  static void resolve_class_ref (jclass, jclass *);
+  static void wait_for_state(jclass, int);
+  static _Jv_Method *resolve_method_entry (jclass, jclass &,
+					   int, int,
+					   bool, bool);
+  static _Jv_word resolve_pool_entry (jclass, int, bool =false);
+  static void resolve_field (_Jv_Field *, java::lang::ClassLoader *);
+  static void verify_type_assertions (jclass);
+  static _Jv_Method *search_method_in_class (jclass, jclass,
+					     _Jv_Utf8Const *,
+					     _Jv_Utf8Const *,
+					     bool check_perms = true);
+  static void layout_vtable_methods(jclass);
+
+  static jbyte read_cpool_entry (_Jv_word *data,
+				 const _Jv_Constants *const pool,
+				 int index)
+  {
+    _Jv_MutexLock (&resolve_mutex);
+    jbyte tags = pool->tags[index];
+    *data = pool->data[index];
+    _Jv_MutexUnlock (&resolve_mutex);
+    return tags;
+  }
+
+  static void write_cpool_entry (_Jv_word data, jbyte tags,
+				 _Jv_Constants *pool,
+				 int index)
+  {
+    _Jv_MutexLock (&resolve_mutex);
+    pool->data[index] = data;
+    pool->tags[index] = tags;
+    _Jv_MutexUnlock (&resolve_mutex);
+  }
+};
 
 /* Type of pointer used as finalizer.  */
 typedef void _Jv_FinalizerFunc (jobject);
@@ -252,6 +366,10 @@ void *_Jv_AllocBytes (jsize size) __attribute__((__malloc__));
 /* Allocate space for a new non-Java object, which does not have the usual 
    Java object header but may contain pointers to other GC'ed objects.  */
 void *_Jv_AllocRawObj (jsize size) __attribute__((__malloc__));
+/* Allocate a double-indirect pointer to a _Jv_ClosureList such that
+   the _Jv_ClosureList gets automatically finalized when it is no
+   longer reachable, not even by other finalizable objects.  */
+_Jv_ClosureList **_Jv_ClosureListFinalizer (void) __attribute__((__malloc__));
 /* Explicitly throw an out-of-memory exception.	*/
 void _Jv_ThrowNoMemory() __attribute__((__noreturn__));
 /* Allocate an object with a single pointer.  The first word is reserved
@@ -319,20 +437,33 @@ void _Jv_SetInitialHeapSize (const char *arg);
    _Jv_GCSetMaximumHeapSize.  */
 void _Jv_SetMaximumHeapSize (const char *arg);
 
+/* External interface for setting the GC_free_space_divisor.  Calls
+   GC_set_free_space_divisor and returns the old value.  */
+int _Jv_SetGCFreeSpaceDivisor (int div);
+
+/* Free the method cache, if one was allocated.  This is only called
+   during thread deregistration.  */
+void _Jv_FreeMethodCache ();
+
+/* Set the stack size for threads.  Parses ARG, a number which can 
+   optionally have "k" or "m" appended.  */
+void _Jv_SetStackSize (const char *arg);
+
 extern "C" void JvRunMain (jclass klass, int argc, const char **argv);
+extern "C" void JvRunMainName (const char *name, int argc, const char **argv);
+
 void _Jv_RunMain (jclass klass, const char *name, int argc, const char **argv, 
 		  bool is_jar);
 
-// Delayed until after _Jv_AllocBytes is declared.
-//
-// Note that we allocate this as unscanned memory -- the vtables
-// are handled specially by the GC.
+void _Jv_RunMain (struct _Jv_VMInitArgs *vm_args, jclass klass,
+                  const char *name, int argc, const char **argv, bool is_jar);
 
+// Delayed until after _Jv_AllocRawObj is declared.
 inline _Jv_VTable *
 _Jv_VTable::new_vtable (int count)
 {
   size_t size = sizeof(_Jv_VTable) + (count - 1) * vtable_elt_size ();
-  return (_Jv_VTable *) _Jv_AllocBytes (size);
+  return (_Jv_VTable *) _Jv_AllocRawObj (size);
 }
 
 // Determine if METH gets an entry in a VTable.
@@ -340,7 +471,7 @@ static inline jboolean _Jv_isVirtualMethod (_Jv_Method *meth)
 {
   using namespace java::lang::reflect;
   return (((meth->accflags & (Modifier::STATIC | Modifier::PRIVATE)) == 0)
-          && meth->name->data[0] != '<');
+          && meth->name->first() != '<');
 }
 
 // This function is used to determine the hash code of an object.
@@ -388,6 +519,10 @@ extern "C" void _Jv_ThrowBadArrayIndex (jint bad_index)
   __attribute__((noreturn));
 extern "C" void _Jv_ThrowNullPointerException (void)
   __attribute__((noreturn));
+extern "C" void _Jv_ThrowNoSuchMethodError (void)
+  __attribute__((noreturn));
+extern "C" void _Jv_ThrowNoSuchFieldError (int)
+  __attribute__((noreturn));
 extern "C" jobject _Jv_NewArray (jint type, jint size)
   __attribute__((__malloc__));
 extern "C" jobject _Jv_NewMultiArray (jclass klass, jint dims, ...)
@@ -399,15 +534,28 @@ extern "C" void *_Jv_LookupInterfaceMethodIdx (jclass klass, jclass iface,
                                                int meth_idx);
 extern "C" void _Jv_CheckArrayStore (jobject array, jobject obj);
 extern "C" void _Jv_RegisterClass (jclass klass);
-extern "C" void _Jv_RegisterClasses (jclass *classes);
+extern "C" void _Jv_RegisterClasses (const jclass *classes);
+extern "C" void _Jv_RegisterClasses_Counted (const jclass *classes,
+					     size_t count);
 extern "C" void _Jv_RegisterResource (void *vptr);
 extern void _Jv_UnregisterClass (_Jv_Utf8Const*, java::lang::ClassLoader*);
-extern void _Jv_ResolveField (_Jv_Field *, java::lang::ClassLoader*);
+
+extern "C" jobject _Jv_UnwrapJNIweakReference (jobject);
 
 extern jclass _Jv_FindClass (_Jv_Utf8Const *name,
 			     java::lang::ClassLoader *loader);
+
+extern jclass _Jv_FindClassNoException (_Jv_Utf8Const *name,
+			     java::lang::ClassLoader *loader);
+
 extern jclass _Jv_FindClassFromSignature (char *,
-					  java::lang::ClassLoader *loader);
+					  java::lang::ClassLoader *loader,
+					  char ** = NULL);
+
+extern jclass _Jv_FindClassFromSignatureNoException (char *,
+					  java::lang::ClassLoader *loader,
+					  char ** = NULL);
+
 extern void _Jv_GetTypesFromSignature (jmethodID method,
 				       jclass declaringClass,
 				       JArray<jclass> **arg_types_out,
@@ -419,7 +567,8 @@ extern jboolean _Jv_CheckAccess (jclass self_klass, jclass other_klass,
 extern jobject _Jv_CallAnyMethodA (jobject obj, jclass return_type,
 				   jmethodID meth, jboolean is_constructor,
 				   JArray<jclass> *parameter_types,
-				   jobjectArray args);
+				   jobjectArray args,
+				   jclass iface = NULL);
 
 union jvalue;
 extern void _Jv_CallAnyMethodA (jobject obj,
@@ -428,12 +577,18 @@ extern void _Jv_CallAnyMethodA (jobject obj,
 				jboolean is_constructor,
 				jboolean is_virtual_call,
 				JArray<jclass> *parameter_types,
-				jvalue *args,
+				const jvalue *args,
 				jvalue *result,
-				jboolean is_jni_call = true);
+				jboolean is_jni_call = true,
+				jclass iface = NULL);
+
+extern void _Jv_CheckOrCreateLoadingConstraint (jclass,
+						java::lang::ClassLoader *);
 
 extern jobject _Jv_NewMultiArray (jclass, jint ndims, jint* dims)
   __attribute__((__malloc__));
+
+extern "C" void _Jv_ThrowAbstractMethodError () __attribute__((__noreturn__));
 
 /* Checked divide subroutines. */
 extern "C"
@@ -470,8 +625,21 @@ extern void _Jv_JNI_Init (void);
 _Jv_JNIEnv *_Jv_GetCurrentJNIEnv ();
 void _Jv_SetCurrentJNIEnv (_Jv_JNIEnv *);
 
+/* Free a JNIEnv. */
+void _Jv_FreeJNIEnv (_Jv_JNIEnv *);
+
+extern "C" void _Jv_JNI_PopSystemFrame (_Jv_JNIEnv *);
+_Jv_JNIEnv *_Jv_GetJNIEnvNewFrameWithLoader (::java::lang::ClassLoader *);
+
 struct _Jv_JavaVM;
 _Jv_JavaVM *_Jv_GetJavaVM (); 
+
+/* Get a JVMTI environment */
+struct _Jv_JVMTIEnv;
+_Jv_JVMTIEnv *_Jv_GetJVMTIEnv (void);
+
+/* Initialize JVMTI */
+extern void _Jv_JVMTI_Init (void);
 
 // Some verification functions from defineclass.cc.
 bool _Jv_VerifyFieldSignature (_Jv_Utf8Const*sig);
@@ -505,5 +673,132 @@ extern void (*_Jv_JVMPI_Notify_OBJECT_ALLOC) (JVMPI_Event *event);
 extern void (*_Jv_JVMPI_Notify_THREAD_START) (JVMPI_Event *event);
 extern void (*_Jv_JVMPI_Notify_THREAD_END) (JVMPI_Event *event);
 #endif
+
+/* FIXME: this should really be defined in some more generic place */
+#define ROUND(V, A) (((((unsigned) (V))-1) | ((A)-1))+1)
+
+extern void _Jv_RegisterBootstrapPackages ();
+
+#define FLAG_BINARYCOMPAT_ABI (1<<31)  /* Class is built with the BC-ABI. */
+
+#define FLAG_BOOTSTRAP_LOADER (1<<30)  /* Used when defining a class that 
+					  should be loaded by the bootstrap
+					  loader.  */
+
+// These are used to find ABI versions we recognize.
+#define GCJ_CXX_ABI_VERSION (__GNUC__ * 100000 + __GNUC_MINOR__ * 1000)
+
+// This is the old-style BC version ID used by GCJ 4.0.0.
+#define OLD_GCJ_40_BC_ABI_VERSION (4 * 10000 + 0 * 10 + 5)
+
+// New style version IDs used by GCJ 4.0.1 and later.
+#define GCJ_40_BC_ABI_VERSION (4 * 100000 + 0 * 1000)
+
+void _Jv_CheckABIVersion (unsigned long value);
+
+
+inline bool
+_Jv_ClassForBootstrapLoader (unsigned long value)
+{
+  return (value & FLAG_BOOTSTRAP_LOADER);
+}
+
+// It makes the source cleaner if we simply always define this
+// function.  If the interpreter is not built, it will never return
+// 'true'.
+extern inline jboolean
+_Jv_IsInterpretedClass (jclass c)
+{
+  return (c->accflags & java::lang::reflect::Modifier::INTERPRETED) != 0;
+}
+
+// Return true if the class was compiled with the BC ABI.
+extern inline jboolean
+_Jv_IsBinaryCompatibilityABI (jclass c)
+{
+  // There isn't really a better test for the ABI type at this point,
+  // that will work once the class has been registered.
+  return c->otable_syms || c->atable_syms || c->itable_syms;
+}
+
+// Returns whether the given class does not really exists (ie. we have no
+// bytecode) but still allows us to do some very conservative actions.
+// E.g. throwing a NoClassDefFoundError with the name of the missing
+// class.
+extern inline jboolean
+_Jv_IsPhantomClass (jclass c)
+{
+  return c->state == JV_STATE_PHANTOM;
+}
+
+// A helper function defined in prims.cc.
+char* _Jv_PrependVersionedLibdir (char* libpath);
+
+
+// An enum for use with JvSetThreadState.  We use a C++ enum rather
+// than the Java enum to avoid problems with class initialization
+// during VM bootstrap.
+typedef enum
+{
+  JV_BLOCKED,
+  JV_NEW,
+  JV_RUNNABLE,
+  JV_TERMINATED,
+  JV_TIMED_WAITING,
+  JV_WAITING
+} JvThreadState;
+
+// Temporarily set the thread's state.
+class JvSetThreadState
+{
+private:
+  ::java::lang::Thread *thread;
+  jint saved;
+
+public:
+
+  // Note that 'cthread' could be NULL -- during VM startup there may
+  // not be a Thread available.
+  JvSetThreadState(::java::lang::Thread *cthread, JvThreadState nstate)
+    : thread (cthread),
+      saved (cthread ? cthread->state : (jint)JV_NEW)
+  {
+    if (thread)
+      thread->state = nstate;
+  }
+
+  ~JvSetThreadState()
+  {
+    if (thread)
+      thread->state = saved;
+  }
+};
+
+// This structure is used to represent all the data the native side
+// needs.  An object of this type is assigned to the `data' member of
+// the Thread class.
+struct natThread
+{
+  // A thread is either alive, dead, or being sent a signal; if it is
+  // being sent a signal, it is also alive.  Thus, if you want to know
+  // if a thread is alive, it is sufficient to test alive_status !=
+  // THREAD_DEAD.
+  volatile obj_addr_t alive_flag;
+
+  // These are used to interrupt sleep and join calls.  We can share a
+  // condition variable here since it only ever gets notified when the thread
+  // exits.
+  _Jv_Mutex_t join_mutex;
+  _Jv_ConditionVariable_t join_cond;
+
+  // These are used by Unsafe.park() and Unsafe.unpark().
+  ParkHelper park_helper;
+
+  // This is private data for the thread system layer.
+  _Jv_Thread_t *thread;
+
+  // Each thread has its own JNI object.
+  _Jv_JNIEnv *jni_env;
+};
 
 #endif /* __JAVA_JVM_H__ */

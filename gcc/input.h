@@ -1,12 +1,13 @@
 /* Declarations for variables relating to reading the source file.
    Used by parsers, lexical analyzers, and error message routines.
-   Copyright (C) 1993, 1997, 1998, 2000, 2003 Free Software Foundation, Inc.
+   Copyright (C) 1993, 1997, 1998, 2000, 2003, 2004, 2007, 2008, 2009, 2010
+   Free Software Foundation, Inc.
 
 This file is part of GCC.
 
 GCC is free software; you can redistribute it and/or modify it under
 the terms of the GNU General Public License as published by the Free
-Software Foundation; either version 2, or (at your option) any later
+Software Foundation; either version 3, or (at your option) any later
 version.
 
 GCC is distributed in the hope that it will be useful, but WITHOUT ANY
@@ -15,49 +16,55 @@ FITNESS FOR A PARTICULAR PURPOSE.  See the GNU General Public License
 for more details.
 
 You should have received a copy of the GNU General Public License
-along with GCC; see the file COPYING.  If not, write to the Free
-Software Foundation, 59 Temple Place - Suite 330, Boston, MA
-02111-1307, USA.  */
+along with GCC; see the file COPYING3.  If not see
+<http://www.gnu.org/licenses/>.  */
 
 #ifndef GCC_INPUT_H
 #define GCC_INPUT_H
 
-/* The data structure used to record a location in a translation unit.  */
-/* Long-term, we want to get rid of this and typedef fileline location_t.  */
-struct location_s GTY (())
+#include "line-map.h"
+
+extern GTY(()) struct line_maps *line_table;
+
+/* A value which will never be used to represent a real location.  */
+#define UNKNOWN_LOCATION ((source_location) 0)
+
+/* The location for declarations in "<built-in>" */
+#define BUILTINS_LOCATION ((source_location) 1)
+
+/* line-map.c reserves RESERVED_LOCATION_COUNT to the user.  Ensure
+   both UNKNOWN_LOCATION and BUILTINS_LOCATION fit into that.  */
+extern char builtins_location_check[(BUILTINS_LOCATION
+				     < RESERVED_LOCATION_COUNT) ? 1 : -1];
+
+typedef struct
 {
   /* The name of the source file involved.  */
   const char *file;
 
   /* The line-location in the source file.  */
   int line;
-};
-typedef struct location_s location_t;
 
-struct file_stack
-{
-  struct file_stack *next;
-  location_t location;
-};
+  int column;
 
-/* Top-level source file.  */
-extern const char *main_input_filename;
+  /* In a system header?. */
+  bool sysp;
+} expanded_location;
+
+extern expanded_location expand_location (source_location);
+
+/* Historically GCC used location_t, while cpp used source_location.
+   This could be removed but it hardly seems worth the effort.  */
+typedef source_location location_t;
 
 extern location_t input_location;
-#define input_line (input_location.line)
-#define input_filename (input_location.file)
 
-/* Stack of currently pending input files.
-   The line member is not accurate for the innermost file on the stack.  */
-extern struct file_stack *input_file_stack;
+#define LOCATION_FILE(LOC) ((expand_location (LOC)).file)
+#define LOCATION_LINE(LOC) ((expand_location (LOC)).line)
 
-/* Stack of EXPR_WITH_FILE_LOCATION nested expressions.  */
-extern struct file_stack *expr_wfl_stack;
-
-/* Incremented on each change to input_file_stack.  */
-extern int input_file_stack_tick;
-
-extern void push_srcloc (const char *name, int line);
-extern void pop_srcloc (void);
+#define input_line LOCATION_LINE (input_location)
+#define input_filename LOCATION_FILE (input_location)
+#define in_system_header_at(LOC) ((expand_location (LOC)).sysp != 0)
+#define in_system_header (in_system_header_at (input_location))
 
 #endif

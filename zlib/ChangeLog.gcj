@@ -1,3 +1,164 @@
+2011-02-13  Ralf Wildenhues  <Ralf.Wildenhues@gmx.de>
+
+	* configure: Regenerate.
+
+2010-04-02  Ralf Wildenhues  <Ralf.Wildenhues@gmx.de>
+
+	* Makefile.in: Regenerate.
+	* aclocal.m4: Regenerate.
+
+2009-12-05  Ralf Wildenhues  <Ralf.Wildenhues@gmx.de>
+
+	* Makefile.in: Regenerate.
+	* configure: Regenerate.
+
+2009-08-24  Ralf Wildenhues  <Ralf.Wildenhues@gmx.de>
+
+	* configure.ac (AC_PREREQ): Bump to 2.64.
+
+2009-08-22  Ralf Wildenhues  <Ralf.Wildenhues@gmx.de>
+
+	* Makefile.am (install-html, install-pdf, html): Remove.
+	* Makefile.in: Regenerate.
+
+	* Makefile.in: Regenerate.
+	* aclocal.m4: Regenerate.
+	* configure: Regenerate.
+
+2009-07-30  Ralf Wildenhues  <Ralf.Wildenhues@gmx.de>
+
+	* configure.ac (_AC_ARG_VAR_PRECIOUS): Use m4_rename_force.
+
+2009-03-01  Ralf Wildenhues  <Ralf.Wildenhues@gmx.de>
+
+	* configure: Regenerate.
+
+2008-12-18  Ralf Wildenhues  <Ralf.Wildenhues@gmx.de>
+
+	* configure: Regenerate.
+
+2008-09-26  Peter O'Gorman  <pogma@thewrittenword.com>
+            Steve Ellcey  <sje@cup.hp.com>
+
+	* configure: Regenerate for new libtool.
+	* Makefile.in: Ditto.
+
+2008-06-17  Ralf Wildenhues  <Ralf.Wildenhues@gmx.de>
+
+	* Makefile.in: Regenerate.
+	* configure: Regenerate.
+
+2008-03-16  Ralf Wildenhues  <Ralf.Wildenhues@gmx.de>
+
+	* aclocal.m4: Regenerate.
+	* configure: Likewise.
+	* Makefile.in: Likewise.
+
+2008-01-24  David Edelsohn  <edelsohn@gnu.org>
+
+	* configure: Regenerate.
+
+2007-07-05  H.J. Lu  <hongjiu.lu@intel.com>
+
+	* aclocal.m4: Regenerated.
+
+2007-05-23  Steve Ellcey  <sje@cup.hp.com>
+
+	* Makefile.in: Regenerate.
+	* configure: Regenerate.
+	* aclocal.m4: Regenerate.
+
+2007-04-14  Steve Ellcey  <sje@cup.hp.com>
+
+	* Makefile.am: Add -I .. to ACLOCAL_AMFLAGS.
+	* Makefile.in: Regenerate.
+
+2007-03-01  Brooks Moses  <brooks.moses@codesourcery.com>
+
+	* Makefile.am: Add dummy install-pdf target.
+	* Makefile.in: Regenerate
+
+2007-01-16  Jack Howarth  <howarth@bromo.med.uc.edu>
+
+	* Makefile.am: Add ACLOCAL_AMFLAGS to use multi.m4.
+	* aclocal.m4: Regenerate.
+	* configure: Regenerate.
+	* Makefile.in: Regenerate.
+
+2006-06-13  Carlos O'Donell  <carlos@codesourcery.com>
+
+	* Makefile.am: Add html and install-html stubs.
+	* Makefile.in: Regenerate.
+	* aclocal.m4: Regenerate.
+
+2005-06-14  Tom Tromey  <tromey@redhat.com>
+
+	* Imported zlib 1.2.3; merged local changes.
+
+2005-06-14  Tom Tromey  <tromey@redhat.com>
+
+	PR libgcj/19877:
+	* configure, aclocal.m4, Makefile.in: Rebuilt.
+
+2005-06-06  Rainer Orth  <ro@TechFak.Uni-Bielefeld.DE>
+
+	* zconf.h (NO_vsnprintf): Define on Tru64 UNIX V4.0.
+
+2005-05-09  Mike Stump  <mrs@apple.com>
+	
+	* configure: Regenerate.
+
+2005-04-12  Mike Stump  <mrs@apple.com>
+
+	* configure: Regenerate.
+
+2004-11-24  Kelley Cook  <kcook@gcc.gnu.org>
+
+	* configure: Regenerate for libtool change.
+
+2004-11-24  Kelley Cook  <kcook@gcc.gnu.org>
+
+	* Makefile.in, aclocal.m4: Regenerate with automake 1.9.3.
+
+2004-11-22  Eric Botcazou  <ebotcazou@libertysurf.fr>
+
+	* zconf.h: Define NO_vsnprintf on Solaris 2.5.1.
+
+2004-10-11  Tom Tromey  <tromey@redhat.com>
+
+	PR libgcj/14856:
+	* Imported zlib 1.2.1; merged local changes.
+
+2005-06-15  Paolo Bonzini  <bonzini@gnu.org>
+
+	* Makefile.am: Remove useless multilib rules.
+	* configure.ac: Rewrite multilib support to use
+	features of recent automakes.
+	* aclocal.m4: Regenerate with Automake 1.8.5.
+	* Makefile.in: Regenerate with Automake 1.8.5.
+	* configure: Regenerate.
+
+2004-04-12  Kelley Cook  <kcook@gcc.gnu.org>
+
+	* Makefile.am: Add in libz_a_CFLAGS as recommended by automake doc.
+	* Makefile.in: Regenerate with automake 1.7.9.
+	* aclocal.m4: Likewise.
+	* configure: Regenerate.
+
+2004-04-10  Kelley Cook  <kcook@gcc.gnu.org>
+
+	* configure.in: Rename file to ...
+	* configure.ac: ...this.
+	* Makefile.in: Regenerate.
+
+2004-04-09  Nathanael Nerode  <neroden@gcc.gnu.org>
+
+	* configure.in: Update to autoconf 2.59; clean up slightly.
+	* acinclude.m4: Update to autoconf 2.59.
+	* aclocal.m4: Regenerate. 
+	* Makefile.in: Regenerate.
+	* configure: Regenerate.
+
 2004-01-14  Kelley Cook  <kcook@gcc.gnu.org>
 
 	* configure.in: Add in AC_PREREQ(2.13)

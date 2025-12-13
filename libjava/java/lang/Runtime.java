@@ -1,5 +1,5 @@
 /* Runtime.java -- access to the VM process
-   Copyright (C) 1998, 2002, 2003 Free Software Foundation
+   Copyright (C) 1998, 2002, 2003, 2004, 2005, 2006 Free Software Foundation
 
 This file is part of GNU Classpath.
 
@@ -15,8 +15,8 @@ General Public License for more details.
 
 You should have received a copy of the GNU General Public License
 along with GNU Classpath; see the file COPYING.  If not, write to the
-Free Software Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA
-02111-1307 USA.
+Free Software Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA
+02110-1301 USA.
 
 Linking this library statically or dynamically with other modules is
 making a combined work based on this library.  Thus, the terms and
@@ -35,15 +35,17 @@ this exception to your version of the library, but you are not
 obligated to do so.  If you do not wish to do so, delete this
 exception statement from your version. */
 
+
 package java.lang;
 
+import gnu.classpath.SystemProperties;
+
 import java.io.File;
-import java.io.InputStream;
 import java.io.IOException;
+import java.io.InputStream;
 import java.io.OutputStream;
 import java.util.HashSet;
 import java.util.Iterator;
-import java.util.Properties;
 import java.util.Set;
 import java.util.StringTokenizer;
 
@@ -51,8 +53,8 @@ import java.util.StringTokenizer;
  * Runtime represents the Virtual Machine.
  *
  * @author John Keiser
- * @author Eric Blake <ebb9@email.byu.edu>
- * @status still missing 1.4 functionality
+ * @author Eric Blake (ebb9@email.byu.edu)
+ * @author Jeroen Frijters
  */
 // No idea why this class isn't final, since you can't build a subclass!
 public class Runtime
@@ -63,52 +65,9 @@ public class Runtime
    */
   private final String[] libpath;
 
-  /**
-   * The current security manager. This is located here instead of in
-   * System, to avoid security problems, as well as bootstrap issues.
-   * Make sure to access it in a thread-safe manner; it is package visible
-   * to avoid overhead in java.lang.
-   */
-  static SecurityManager securityManager;
-
-  /**
-   * The default properties defined by the system. This is likewise located
-   * here instead of in Runtime, to avoid bootstrap issues; it is package
-   * visible to avoid overhead in java.lang. Note that System will add a
-   * few more properties to this collection, but that after that, it is
-   * treated as read-only.
-   *
-   * No matter what class you start initialization with, it defers to the
-   * superclass, therefore Object.<clinit> will be the first Java code
-   * executed. From there, the bootstrap sequence, up to the point that
-   * native libraries are loaded (as of March 24, when I traced this
-   * manually) is as follows:
-   *
-   * Object.<clinit> uses a String literal, possibly triggering initialization
-   *  String.<clinit> calls WeakHashMap.<init>, triggering initialization
-   *   AbstractMap, WeakHashMap, WeakHashMap$1 have no dependencies
-   *  String.<clinit> calls CaseInsensitiveComparator.<init>, triggering
-   *      initialization
-   *   CaseInsensitiveComparator has no dependencies
-   * Object.<clinit> calls System.loadLibrary, triggering initialization
-   *  System.<clinit> calls System.loadLibrary
-   *  System.loadLibrary calls Runtime.getRuntime, triggering initialization
-   *   Runtime.<clinit> calls Properties.<init>, triggering initialization
-   *    Dictionary, Hashtable, and Properties have no dependencies
-   *   Runtime.<clinit> calls insertSystemProperties; the VM must make sure
-   *      that there are not any harmful dependencies
-   *   Runtime.<clinit> calls Runtime.<init>
-   *    Runtime.<init> calls StringTokenizer.<init>, triggering initialization
-   *     StringTokenizer has no dependencies
-   *  System.loadLibrary calls Runtime.loadLibrary
-   *   Runtime.loadLibrary should be able to load the library, although it
-   *       will probably set off another string of initializations from
-   *       ClassLoader first
-   */
-  static Properties defaultProperties = new Properties();
   static
   {
-    insertSystemProperties(defaultProperties);
+    init();
   }
 
   /**
@@ -130,8 +89,7 @@ public class Runtime
   private boolean finalizeOnExit;
 
   /**
-   * The one and only runtime instance. This must appear after the default
-   * properties have been initialized by the VM.
+   * The one and only runtime instance.
    */
   private static final Runtime current = new Runtime();
 
@@ -142,13 +100,11 @@ public class Runtime
   {
     if (current != null)
       throw new InternalError("Attempt to recreate Runtime");
-
+    
     // We don't use libpath in the libgcj implementation.  We still
     // set it to something to allow the various synchronizations to
     // work.
     libpath = new String[0];
-
-    init ();
   }
 
   /**
@@ -170,13 +126,13 @@ public class Runtime
    *
    * <p>First, all shutdown hooks are run, in unspecified order, and
    * concurrently. Next, if finalization on exit has been enabled, all pending
-   * finalizers are run. Finally, the system calls <code>halt</code>.
+   * finalizers are run. Finally, the system calls <code>halt</code>.</p>
    *
    * <p>If this is run a second time after shutdown has already started, there
    * are two actions. If shutdown hooks are still executing, it blocks
    * indefinitely. Otherwise, if the status is nonzero it halts immediately;
    * if it is zero, it blocks indefinitely. This is typically called by
-   * <code>System.exit</code>.
+   * <code>System.exit</code>.</p>
    *
    * @param status the status to exit with
    * @throws SecurityException if permission is denied
@@ -187,9 +143,70 @@ public class Runtime
    */
   public void exit(int status)
   {
-    SecurityManager sm = securityManager; // Be thread-safe!
+    SecurityManager sm = SecurityManager.current; // Be thread-safe!
     if (sm != null)
       sm.checkExit(status);
+    exitNoChecks(status);
+  }
+
+  // Accessor to avoid adding a vtable slot.
+  static void exitNoChecksAccessor(int status)
+  {
+    current.exitNoChecks(status);
+  }
+
+  // Private since we can't add a vtable slot in 4.1.x.
+  private void exitNoChecks(int status)
+  {
+    if (runShutdownHooks())
+      exitInternal(status);
+
+    // Someone else already called runShutdownHooks().
+    // Make sure we are not/no longer in the shutdownHooks set.
+    // And wait till the thread that is calling runShutdownHooks() finishes.
+    synchronized (libpath)
+      {
+        if (shutdownHooks != null)
+          {
+            shutdownHooks.remove(Thread.currentThread());
+            // Interrupt the exit sequence thread, in case it was waiting
+            // inside a join on our thread.
+            exitSequence.interrupt();
+            // Shutdown hooks are still running, so we clear status to
+	    // make sure we don't halt.
+	    status = 0;
+          }
+      }
+
+    // If exit() is called again after the shutdown hooks have run, but
+    // while finalization for exit is going on and the status is non-zero
+    // we halt immediately.
+    if (status != 0)
+      exitInternal(status);
+
+    while (true)
+      try
+        {
+          exitSequence.join();
+        }
+      catch (InterruptedException e)
+        {
+          // Ignore, we've suspended indefinitely to let all shutdown
+          // hooks complete, and to let any non-zero exits through, because
+          // this is a duplicate call to exit(0).
+        }
+  }
+
+  /**
+   * On first invocation, run all the shutdown hooks and return true.
+   * Any subsequent invocations will simply return false.
+   * Note that it is package accessible so that VMRuntime can call it
+   * when VM exit is not triggered by a call to Runtime.exit().
+   * 
+   * @return was the current thread the first one to call this method?
+   */
+  boolean runShutdownHooks()
+  {
     boolean first = false;
     synchronized (libpath) // Synch on libpath, not this, to avoid deadlock.
       {
@@ -221,7 +238,7 @@ public class Runtime
             // itself from the set, then waits indefinitely on the
             // exitSequence thread. Once the set is empty, set it to null to
             // signal all finalizer threads that halt may be called.
-            while (! shutdownHooks.isEmpty())
+            while (true)
               {
                 Thread[] hooks;
                 synchronized (libpath)
@@ -229,19 +246,27 @@ public class Runtime
                     hooks = new Thread[shutdownHooks.size()];
                     shutdownHooks.toArray(hooks);
                   }
-                for (int i = hooks.length; --i >= 0; )
-                  if (! hooks[i].isAlive())
-                    synchronized (libpath)
+                if (hooks.length == 0)
+                  break;
+                for (int i = 0; i < hooks.length; i++)
+                  {
+                    try
                       {
-                        shutdownHooks.remove(hooks[i]);
+                        synchronized (libpath)
+                          {
+                            if (!shutdownHooks.contains(hooks[i]))
+                              continue;
+                          }
+                        hooks[i].join();
+                        synchronized (libpath)
+                          {
+                            shutdownHooks.remove(hooks[i]);
+                          }
                       }
-                try
-                  {
-                    exitSequence.sleep(1); // Give other threads a chance.
-                  }
-                catch (InterruptedException e)
-                  {
-                    // Ignore, the next loop just starts sooner.
+                    catch (InterruptedException x)
+                      {
+                        // continue waiting on the next thread
+                      }
                   }
               }
             synchronized (libpath)
@@ -249,34 +274,11 @@ public class Runtime
                 shutdownHooks = null;
               }
           }
-        // XXX Right now, it is the VM that knows whether runFinalizersOnExit
-        // is true; so the VM must look at exitSequence to decide whether
-        // this should be run on every object.
-        runFinalization();
+	// Run finalization on all finalizable objects (even if they are
+	// still reachable).
+        runFinalizationForExit();
       }
-    else
-      synchronized (libpath)
-        {
-          if (shutdownHooks != null)
-            {
-              shutdownHooks.remove(Thread.currentThread());
-              status = 0; // Change status to enter indefinite wait.
-            }
-        }
-    
-    if (first || status > 0)
-      halt(status);
-    while (true)
-      try
-        {
-          exitSequence.join();
-        }
-      catch (InterruptedException e)
-        {
-          // Ignore, we've suspended indefinitely to let all shutdown
-          // hooks complete, and to let any non-zero exits through, because
-          // this is a duplicate call to exit(0).
-        }
+    return first;
   }
 
   /**
@@ -285,23 +287,23 @@ public class Runtime
    * <code>System.exit</code> was invoked), or when the user terminates
    * the virtual machine (such as by typing ^C, or logging off). There is
    * a security check to add hooks,
-   * <code>RuntimePermission("shutdownHooks")<code>.
+   * <code>RuntimePermission("shutdownHooks")</code>.
    *
    * <p>The hook must be an initialized, but unstarted Thread. The threads
    * are run concurrently, and started in an arbitrary order; and user
    * threads or daemons may still be running. Once shutdown hooks have
    * started, they must all complete, or else you must use <code>halt</code>,
    * to actually finish the shutdown sequence. Attempts to modify hooks
-   * after shutdown has started result in IllegalStateExceptions.
+   * after shutdown has started result in IllegalStateExceptions.</p>
    *
    * <p>It is imperative that you code shutdown hooks defensively, as you
    * do not want to deadlock, and have no idea what other hooks will be
    * running concurrently. It is also a good idea to finish quickly, as the
-   * virtual machine really wants to shut down!
+   * virtual machine really wants to shut down!</p>
    *
    * <p>There are no guarantees that such hooks will run, as there are ways
    * to forcibly kill a process. But in such a drastic case, shutdown hooks
-   * would do little for you in the first place.
+   * would do little for you in the first place.</p>
    *
    * @param hook an initialized, unstarted Thread
    * @throws IllegalArgumentException if the hook is already registered or run
@@ -315,26 +317,26 @@ public class Runtime
    */
   public void addShutdownHook(Thread hook)
   {
-    SecurityManager sm = securityManager; // Be thread-safe!
+    SecurityManager sm = SecurityManager.current; // Be thread-safe!
     if (sm != null)
       sm.checkPermission(new RuntimePermission("shutdownHooks"));
     if (hook.isAlive() || hook.getThreadGroup() == null)
-      throw new IllegalArgumentException();
+      throw new IllegalArgumentException("The hook thread " + hook + " must not have been already run or started");
     synchronized (libpath)
       {
         if (exitSequence != null)
-          throw new IllegalStateException();
+          throw new IllegalStateException("The Virtual Machine is exiting. It is not possible anymore to add any hooks");
         if (shutdownHooks == null)
           shutdownHooks = new HashSet(); // Lazy initialization.
         if (! shutdownHooks.add(hook))
-          throw new IllegalArgumentException();
+          throw new IllegalArgumentException(hook.toString() + " had already been inserted");
       }
   }
 
   /**
    * De-register a shutdown hook. As when you registered it, there is a
    * security check to remove hooks,
-   * <code>RuntimePermission("shutdownHooks")<code>.
+   * <code>RuntimePermission("shutdownHooks")</code>.
    *
    * @param hook the hook to remove
    * @return true if the hook was successfully removed, false if it was not
@@ -349,7 +351,7 @@ public class Runtime
    */
   public boolean removeShutdownHook(Thread hook)
   {
-    SecurityManager sm = securityManager; // Be thread-safe!
+    SecurityManager sm = SecurityManager.current; // Be thread-safe!
     if (sm != null)
       sm.checkPermission(new RuntimePermission("shutdownHooks"));
     synchronized (libpath)
@@ -376,7 +378,7 @@ public class Runtime
    */
   public void halt(int status)
   {
-    SecurityManager sm = securityManager; // Be thread-safe!
+    SecurityManager sm = SecurityManager.current; // Be thread-safe!
     if (sm != null)
       sm.checkExit(status);
     exitInternal(status);
@@ -400,7 +402,7 @@ public class Runtime
    */
   public static void runFinalizersOnExit(boolean finalizeOnExit)
   {
-    SecurityManager sm = securityManager; // Be thread-safe!
+    SecurityManager sm = SecurityManager.current; // Be thread-safe!
     if (sm != null)
       sm.checkExit(0);
     current.finalizeOnExit = finalizeOnExit;
@@ -408,7 +410,7 @@ public class Runtime
 
   /**
    * Create a new subprocess with the specified command line. Calls
-   * <code>exec(cmdline, null, null)<code>. A security check is performed,
+   * <code>exec(cmdline, null, null)</code>. A security check is performed,
    * <code>checkExec</code>.
    *
    * @param cmdline the command to call
@@ -530,7 +532,7 @@ public class Runtime
   public Process exec(String[] cmd, String[] env, File dir)
     throws IOException
   {
-    SecurityManager sm = securityManager; // Be thread-safe!
+    SecurityManager sm = SecurityManager.current; // Be thread-safe!
     if (sm != null)
       sm.checkExec(cmd[0]);
     return execInternal(cmd, env, dir);
@@ -617,7 +619,7 @@ public class Runtime
    */
   public void load(String filename)
   {
-    SecurityManager sm = securityManager; // Be thread-safe!
+    SecurityManager sm = SecurityManager.current; // Be thread-safe!
     if (sm != null)
       sm.checkLink(filename);
     _load(filename, false);
@@ -635,9 +637,11 @@ public class Runtime
    * <code>System.mapLibraryName(libname)</code>. There may be a security
    * check, of <code>checkLink</code>.
    *
-   * @param filename the file to load
+   * @param libname the library to load
+   *
    * @throws SecurityException if permission is denied
    * @throws UnsatisfiedLinkError if the library is not found
+   *
    * @see System#mapLibraryName(String)
    * @see ClassLoader#findLibrary(String)
    */
@@ -645,7 +649,7 @@ public class Runtime
   {
     // This is different from the Classpath implementation, but I
     // believe it is more correct.
-    SecurityManager sm = securityManager; // Be thread-safe!
+    SecurityManager sm = SecurityManager.current; // Be thread-safe!
     if (sm != null)
       sm.checkLink(libname);
     _load(libname, true);
@@ -704,10 +708,15 @@ public class Runtime
   native boolean loadLibraryInternal(String libname);
 
   /**
-   * A helper for the constructor which does some internal native
+   * A helper for Runtime static initializer which does some internal native
    * initialization.
    */
-  private native void init ();
+  private static native void init ();
+
+  /**
+   * Run finalizers when exiting.
+   */
+  private native void runFinalizationForExit();
 
   /**
    * Map a system-independent "short name" to the full file name, and append
@@ -731,49 +740,8 @@ public class Runtime
    * @param dir the directory to use, may be null
    * @return the newly created process
    * @throws NullPointerException if cmd or env have null elements
+   * @throws IOException if the exec fails
    */
-  native Process execInternal(String[] cmd, String[] env, File dir);
-
-  /**
-   * Get the system properties. This is done here, instead of in System,
-   * because of the bootstrap sequence. Note that the native code should
-   * not try to use the Java I/O classes yet, as they rely on the properties
-   * already existing. The only safe method to use to insert these default
-   * system properties is {@link Properties#setProperty(String, String)}.
-   *
-   * <p>These properties MUST include:
-   * <dl>
-   * <dt>java.version         <dd>Java version number
-   * <dt>java.vendor          <dd>Java vendor specific string
-   * <dt>java.vendor.url      <dd>Java vendor URL
-   * <dt>java.home            <dd>Java installation directory
-   * <dt>java.vm.specification.version <dd>VM Spec version
-   * <dt>java.vm.specification.vendor  <dd>VM Spec vendor
-   * <dt>java.vm.specification.name    <dd>VM Spec name
-   * <dt>java.vm.version      <dd>VM implementation version
-   * <dt>java.vm.vendor       <dd>VM implementation vendor
-   * <dt>java.vm.name         <dd>VM implementation name
-   * <dt>java.specification.version    <dd>Java Runtime Environment version
-   * <dt>java.specification.vendor     <dd>Java Runtime Environment vendor
-   * <dt>java.specification.name       <dd>Java Runtime Environment name
-   * <dt>java.class.version   <dd>Java class version number
-   * <dt>java.class.path      <dd>Java classpath
-   * <dt>java.library.path    <dd>Path for finding Java libraries
-   * <dt>java.io.tmpdir       <dd>Default temp file path
-   * <dt>java.compiler        <dd>Name of JIT to use
-   * <dt>java.ext.dirs        <dd>Java extension path
-   * <dt>os.name              <dd>Operating System Name
-   * <dt>os.arch              <dd>Operating System Architecture
-   * <dt>os.version           <dd>Operating System Version
-   * <dt>file.separator       <dd>File separator ("/" on Unix)
-   * <dt>path.separator       <dd>Path separator (":" on Unix)
-   * <dt>line.separator       <dd>Line separator ("\n" on Unix)
-   * <dt>user.name            <dd>User account name
-   * <dt>user.home            <dd>User home directory
-   * <dt>user.dir             <dd>User's current working directory
-   * </dl>
-   *
-   * @param p the Properties object to insert the system properties into
-   */
-  static native void insertSystemProperties(Properties p);
+  native Process execInternal(String[] cmd, String[] env, File dir)
+    throws IOException;
 } // class Runtime

@@ -1,5 +1,5 @@
 /* Target definitions for GCC for Intel 80386 using ELF
-   Copyright (C) 1988, 1991, 1995, 2000, 2001, 2002
+   Copyright (C) 1988, 1991, 1995, 2000, 2001, 2002, 2007, 2008, 2010
    Free Software Foundation, Inc.
 
    Derived from sysv4.h written by Ron Guilmette (rfg@netcom.com).
@@ -8,7 +8,7 @@ This file is part of GCC.
 
 GCC is free software; you can redistribute it and/or modify
 it under the terms of the GNU General Public License as published by
-the Free Software Foundation; either version 2, or (at your option)
+the Free Software Foundation; either version 3, or (at your option)
 any later version.
 
 GCC is distributed in the hope that it will be useful,
@@ -17,9 +17,8 @@ MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
 GNU General Public License for more details.
 
 You should have received a copy of the GNU General Public License
-along with GCC; see the file COPYING.  If not, write to
-the Free Software Foundation, 59 Temple Place - Suite 330,
-Boston, MA 02111-1307, USA.  */
+along with GCC; see the file COPYING3.  If not see
+<http://www.gnu.org/licenses/>.  */
 
 /* Use stabs instead of DWARF debug format.  */
 #undef  PREFERRED_DEBUGGING_TYPE
@@ -27,18 +26,12 @@ Boston, MA 02111-1307, USA.  */
 
 #define TARGET_VERSION fprintf (stderr, " (i386 bare ELF target)");
 
-/* By default, target has a 80387, uses IEEE compatible arithmetic,
-   and returns float values in the 387.  */
-
-#define TARGET_SUBTARGET_DEFAULT (MASK_80387 | MASK_IEEE_FP | MASK_FLOAT_RETURNS)
-
 /* The ELF ABI for the i386 says that records and unions are returned
    in memory.  */
 
-#undef RETURN_IN_MEMORY
-#define RETURN_IN_MEMORY(TYPE) \
-  (TYPE_MODE (TYPE) == BLKmode \
-   || (VECTOR_MODE_P (TYPE_MODE (TYPE)) && int_size_in_bytes (TYPE) == 8))
+#define SUBTARGET_RETURN_IN_MEMORY(TYPE, FNTYPE) \
+	(TYPE_MODE (TYPE) == BLKmode \
+	 || (VECTOR_MODE_P (TYPE_MODE (TYPE)) && int_size_in_bytes (TYPE) == 8))
 
 #undef CPP_SPEC
 #define CPP_SPEC ""
@@ -70,7 +63,7 @@ Boston, MA 02111-1307, USA.  */
       const unsigned char *limit = _ascii_bytes + (LENGTH);		\
       unsigned bytes_in_chunk = 0;					\
       for (; _ascii_bytes < limit; _ascii_bytes++)			\
-        {								\
+	{								\
 	  const unsigned char *p;					\
 	  if (bytes_in_chunk >= 64)					\
 	    {								\
@@ -92,15 +85,15 @@ Boston, MA 02111-1307, USA.  */
 	  else								\
 	    {								\
 	      if (bytes_in_chunk == 0)					\
-		fprintf ((FILE), "\t.byte\t");				\
+		fputs (ASM_BYTE, (FILE));				\
 	      else							\
 		fputc (',', (FILE));					\
-	      fprintf ((FILE), "0x%02x", *_ascii_bytes);		\
+	      fprintf ((FILE), "0x%02x", *_ascii_bytes);			\
 	      bytes_in_chunk += 5;					\
 	    }								\
 	}								\
       if (bytes_in_chunk > 0)						\
-        fprintf ((FILE), "\n");						\
+	fputc ('\n', (FILE));						\
     }									\
   while (0)
 

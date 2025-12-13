@@ -8,18 +8,15 @@
    In C, it's ok to redeclare a variable so this works for variables
    and functions.  In C++, it only works for functions.  */
 
-/* { dg-do compile { target arm*-*-pe* } } */
-/* { dg-do compile { target i?86-pc-cygwin } } */
-/* { dg-do compile { target i?86-pc-mingw* } } */
+/* { dg-require-dll "" } */
 
 __declspec (dllimport) int foo1 ();
-__declspec (dllexport) int foo1 ();
-
+__declspec (dllexport) int foo1 ();	/* { dg-warning "previous dllimport ignored" } */
 __declspec (dllexport) int foo2 ();
-__declspec (dllimport) int foo2 ();
+__declspec (dllimport) int foo2 ();	/* { dg-warning "dllimport ignored" } */
 
 __declspec (dllimport) int bar1;
-__declspec (dllexport) int bar1;
+__declspec (dllexport) int bar1;	/* { dg-warning "previous dllimport ignored" } */
 
 __declspec (dllexport) int bar2;
-__declspec (dllimport) int bar2;
+__declspec (dllimport) int bar2;	/* { dg-warning "dllimport ignored" } */

@@ -6,39 +6,40 @@
 --                                                                          --
 --                                 B o d y                                  --
 --                                                                          --
---         Copyright (C) 1998-2004 Free Software Foundation, Inc.           --
+--          Copyright (C) 1998-2009, Free Software Foundation, Inc.         --
 --                                                                          --
 -- GNAT is free software;  you can  redistribute it  and/or modify it under --
 -- terms of the  GNU General Public License as published  by the Free Soft- --
--- ware  Foundation;  either version 2,  or (at your option) any later ver- --
+-- ware  Foundation;  either version 3,  or (at your option) any later ver- --
 -- sion.  GNAT is distributed in the hope that it will be useful, but WITH- --
 -- OUT ANY WARRANTY;  without even the  implied warranty of MERCHANTABILITY --
 -- or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU General Public License --
 -- for  more details.  You should have  received  a copy of the GNU General --
--- Public License  distributed with GNAT;  see file COPYING.  If not, write --
--- to  the Free Software Foundation,  59 Temple Place - Suite 330,  Boston, --
--- MA 02111-1307, USA.                                                      --
+-- Public License  distributed with GNAT; see file COPYING3.  If not, go to --
+-- http://www.gnu.org/licenses for a complete copy of the license.          --
 --                                                                          --
 -- GNAT was originally developed  by the GNAT team at  New York University. --
 -- Extensive contributions were provided by Ada Core Technologies Inc.      --
 --                                                                          --
 ------------------------------------------------------------------------------
 
+with Opt;
+with Osint;    use Osint;
+with Switch;   use Switch;
+with Types;    use Types;
 with Xr_Tabls; use Xr_Tabls;
 with Xref_Lib; use Xref_Lib;
-with Osint;    use Osint;
-with Types;    use Types;
-
-with Gnatvsn;
-with Opt;
 
 with Ada.Strings.Fixed; use Ada.Strings.Fixed;
 with Ada.Text_IO;       use Ada.Text_IO;
+
 with GNAT.Command_Line; use GNAT.Command_Line;
-with GNAT.Strings;      use GNAT.Strings;
----------------
---  Gnatfind --
----------------
+
+with System.Strings;    use System.Strings;
+
+--------------
+-- Gnatfind --
+--------------
 
 procedure Gnatfind is
    Output_Ref      : Boolean := False;
@@ -63,22 +64,41 @@ procedure Gnatfind is
    RTS_Specified : String_Access := null;
    --  Used to detect multiple use of --RTS= switch
 
+   EXT_Specified : String_Access := null;
+   --  Used to detect multiple use of --ext= switch
+
    procedure Parse_Cmd_Line;
    --  Parse every switch on the command line
 
+   procedure Usage;
+   --  Display the usage
+
    procedure Write_Usage;
-   --  Print a small help page for program usage
+   --  Print a small help page for program usage and exit program
 
    --------------------
    -- Parse_Cmd_Line --
    --------------------
 
    procedure Parse_Cmd_Line is
+
+      procedure Check_Version_And_Help is new Check_Version_And_Help_G (Usage);
+
+      --  Start of processing for Parse_Cmd_Line
+
    begin
+      --  First check for --version or --help
+
+      Check_Version_And_Help ("GNATFIND", "1998");
+
+      --  Now scan the other switches
+
+      GNAT.Command_Line.Initialize_Option_Scan;
+
       loop
          case
            GNAT.Command_Line.Getopt
-             ("a aI: aO: d e f g h I: nostdinc nostdlib p: r s t -RTS=")
+             ("a aI: aO: d e f g h I: nostdinc nostdlib p: r s t -RTS= -ext=")
          is
             when ASCII.NUL =>
                exit;
@@ -86,10 +106,8 @@ procedure Gnatfind is
             when 'a'    =>
                if GNAT.Command_Line.Full_Switch = "a" then
                   Read_Only := True;
-
                elsif GNAT.Command_Line.Full_Switch = "aI" then
                   Osint.Add_Src_Search_Dir (GNAT.Command_Line.Parameter);
-
                else
                   Osint.Add_Lib_Search_Dir (GNAT.Command_Line.Parameter);
                end if;
@@ -116,15 +134,13 @@ procedure Gnatfind is
             when 'n'    =>
                if GNAT.Command_Line.Full_Switch = "nostdinc" then
                   Opt.No_Stdinc := True;
-
-               elsif GNAT.Command_Line.Full_Switch = "nostlib" then
+               elsif GNAT.Command_Line.Full_Switch = "nostdlib" then
                   Opt.No_Stdlib := True;
                end if;
 
             when 'p'    =>
                declare
                   S : constant String := GNAT.Command_Line.Parameter;
-
                begin
                   Prj_File_Length := S'Length;
                   Prj_File (1 .. Prj_File_Length) := S;
@@ -141,45 +157,74 @@ procedure Gnatfind is
 
             --  Only switch starting with -- recognized is --RTS
 
-            when '-'    =>
-               --  Check that it is the first time we see this switch
+            when '-' =>
+               if GNAT.Command_Line.Full_Switch = "-RTS" then
 
-               if RTS_Specified = null then
-                  RTS_Specified := new String'(GNAT.Command_Line.Parameter);
+                  --  Check that it is the first time we see this switch
 
-               elsif RTS_Specified.all /= GNAT.Command_Line.Parameter then
-                  Osint.Fail ("--RTS cannot be specified multiple times");
-               end if;
-
-               Opt.No_Stdinc := True;
-               Opt.RTS_Switch := True;
-
-               declare
-                  Src_Path_Name : constant String_Ptr :=
-                                    Get_RTS_Search_Dir
-                                      (GNAT.Command_Line.Parameter, Include);
-                  Lib_Path_Name : constant String_Ptr :=
-                                    Get_RTS_Search_Dir
-                                      (GNAT.Command_Line.Parameter, Objects);
-
-               begin
-                  if Src_Path_Name /= null and then Lib_Path_Name /= null then
-                     Add_Search_Dirs (Src_Path_Name, Include);
-                     Add_Search_Dirs (Lib_Path_Name, Objects);
-
-                  elsif Src_Path_Name = null and then Lib_Path_Name = null then
-                     Osint.Fail ("RTS path not valid: missing " &
-                                 "adainclude and adalib directories");
-
-                  elsif Src_Path_Name = null then
-                     Osint.Fail ("RTS path not valid: missing " &
-                                 "adainclude directory");
-
-                  elsif Lib_Path_Name = null then
-                     Osint.Fail ("RTS path not valid: missing " &
-                                 "adalib directory");
+                  if RTS_Specified = null then
+                     RTS_Specified := new String'(GNAT.Command_Line.Parameter);
+                  elsif RTS_Specified.all /= GNAT.Command_Line.Parameter then
+                     Osint.Fail ("--RTS cannot be specified multiple times");
                   end if;
-               end;
+
+                  Opt.No_Stdinc := True;
+                  Opt.RTS_Switch := True;
+
+                  declare
+                     Src_Path_Name : constant String_Ptr :=
+                                       Get_RTS_Search_Dir
+                                         (GNAT.Command_Line.Parameter,
+                                          Include);
+                     Lib_Path_Name : constant String_Ptr :=
+                                       Get_RTS_Search_Dir
+                                         (GNAT.Command_Line.Parameter,
+                                          Objects);
+
+                  begin
+                     if Src_Path_Name /= null
+                       and then Lib_Path_Name /= null
+                     then
+                        Add_Search_Dirs (Src_Path_Name, Include);
+                        Add_Search_Dirs (Lib_Path_Name, Objects);
+
+                     elsif Src_Path_Name = null
+                       and then Lib_Path_Name = null
+                     then
+                        Osint.Fail ("RTS path not valid: missing " &
+                                      "adainclude and adalib directories");
+
+                     elsif Src_Path_Name = null then
+                        Osint.Fail ("RTS path not valid: missing " &
+                                      "adainclude directory");
+
+                     elsif Lib_Path_Name = null then
+                        Osint.Fail ("RTS path not valid: missing " &
+                                      "adalib directory");
+                     end if;
+                  end;
+
+               --  Process -ext switch
+
+               elsif GNAT.Command_Line.Full_Switch = "-ext" then
+
+                  --  Check that it is the first time we see this switch
+
+                  if EXT_Specified = null then
+                     EXT_Specified := new String'(GNAT.Command_Line.Parameter);
+                  elsif EXT_Specified.all /= GNAT.Command_Line.Parameter then
+                     Osint.Fail ("--ext cannot be specified multiple times");
+                  end if;
+
+                  if
+                    EXT_Specified'Length = Osint.ALI_Default_Suffix'Length
+                  then
+                     Osint.ALI_Suffix := EXT_Specified.all'Access;
+                  else
+                     Osint.Fail ("--ext argument must have 3 characters");
+                  end if;
+
+               end if;
 
             when others =>
                Write_Usage;
@@ -208,6 +253,7 @@ procedure Gnatfind is
                end if;
 
             --  Next arguments are the files to search
+
             else
                Add_Xref_File (S);
                Wide_Search := False;
@@ -232,14 +278,12 @@ procedure Gnatfind is
          Write_Usage;
    end Parse_Cmd_Line;
 
-   -----------------
-   -- Write_Usage --
-   -----------------
+   -----------
+   -- Usage --
+   -----------
 
-   procedure Write_Usage is
+   procedure Usage is
    begin
-      Put_Line ("GNATFIND " & Gnatvsn.Gnat_Version_String
-                & " Copyright 1998-2004, Ada Core Technologies Inc.");
       Put_Line ("Usage: gnatfind pattern[:sourcefile[:line[:column]]] "
                 & "[file1 file2 ...]");
       New_Line;
@@ -269,6 +313,7 @@ procedure Gnatfind is
                 & " directory");
       Put_Line ("   -nostdlib Don't look for library files in the system"
                 & " default directory");
+      Put_Line ("   --ext=xxx Specify alternate ali file extension");
       Put_Line ("   --RTS=dir specify the default source and object search"
                 & " path");
       Put_Line ("   -p file   Use file as the default project file");
@@ -276,7 +321,18 @@ procedure Gnatfind is
                 & " only)");
       Put_Line ("   -s        Print source line");
       Put_Line ("   -t        Print type hierarchy");
+   end Usage;
+
+   -----------------
+   -- Write_Usage --
+   -----------------
+
+   procedure Write_Usage is
+   begin
+      Display_Version ("GNATFIND", "1998");
       New_Line;
+
+      Usage;
 
       raise Usage_Error;
    end Write_Usage;
@@ -291,8 +347,8 @@ begin
    end if;
 
    --  Special case to speed things up: if the user has a command line of the
-   --  form 'gnatfind entity:file', ie has specified a file and only wants the
-   --  bodies and specs, then we can restrict the search to the .ali file
+   --  form 'gnatfind entity:file', i.e. has specified a file and only wants
+   --  the bodies and specs, then we can restrict the search to the .ali file
    --  associated with 'file'.
 
    if Has_File_In_Entity

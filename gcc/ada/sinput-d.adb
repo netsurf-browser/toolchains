@@ -6,18 +6,17 @@
 --                                                                          --
 --                                 B o d y                                  --
 --                                                                          --
---          Copyright (C) 2002-2003, Free Software Foundation, Inc.         --
+--          Copyright (C) 2002-2007, Free Software Foundation, Inc.         --
 --                                                                          --
 -- GNAT is free software;  you can  redistribute it  and/or modify it under --
 -- terms of the  GNU General Public License as published  by the Free Soft- --
--- ware  Foundation;  either version 2,  or (at your option) any later ver- --
+-- ware  Foundation;  either version 3,  or (at your option) any later ver- --
 -- sion.  GNAT is distributed in the hope that it will be useful, but WITH- --
 -- OUT ANY WARRANTY;  without even the  implied warranty of MERCHANTABILITY --
 -- or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU General Public License --
 -- for  more details.  You should have  received  a copy of the GNU General --
--- Public License  distributed with GNAT;  see file COPYING.  If not, write --
--- to  the Free Software Foundation,  59 Temple Place - Suite 330,  Boston, --
--- MA 02111-1307, USA.                                                      --
+-- Public License  distributed with GNAT; see file COPYING3.  If not, go to --
+-- http://www.gnu.org/licenses for a complete copy of the license.          --
 --                                                                          --
 -- GNAT was originally developed  by the GNAT team at  New York University. --
 -- Extensive contributions were provided by Ada Core Technologies Inc.      --
@@ -40,17 +39,18 @@ package body Sinput.D is
       S    : Source_File_Record renames Source_File.Table (Dfile);
       Src  : Source_Buffer_Ptr;
 
+      pragma Warnings (Off, S);
+
    begin
       Trim_Lines_Table (Dfile);
       Close_Debug_File;
 
-      --  Now we need to read the file that we wrote and store it
-      --  in memory for subsequent access.
+      --  Now we need to read the file that we wrote and store it in memory for
+      --  subsequent access.
 
       Read_Source_File
         (S.Full_Debug_Name, S.Source_First, S.Source_Last, Src);
       S.Source_Text := Src;
-      Set_Source_File_Index_Table (Dfile);
    end Close_Debug_Source;
 
    -------------------------
@@ -63,14 +63,13 @@ package body Sinput.D is
    is
    begin
       Loc := Source_File.Table (Source_File.Last).Source_Last + 1;
-      Source_File.Increment_Last;
+      Source_File.Append (Source_File.Table (Source));
       Dfile := Source_File.Last;
 
       declare
          S : Source_File_Record renames Source_File.Table (Dfile);
 
       begin
-         S := Source_File.Table (Source);
          S.Full_Debug_Name   := Create_Debug_File (S.File_Name);
          S.Debug_Source_Name := Strip_Directory (S.Full_Debug_Name);
          S.Source_First      := Loc;
@@ -78,8 +77,8 @@ package body Sinput.D is
          S.Lines_Table       := null;
          S.Last_Source_Line  := 1;
 
-         --  Allocate lines table, guess that it needs to be three times
-         --  bigger than the original source (in number of lines).
+         --  Allocate lines table, guess that it needs to be three times bigger
+         --  than the original source (in number of lines).
 
          Alloc_Line_Tables
            (S, Int (Source_File.Table (Source).Last_Source_Line * 3));
@@ -100,15 +99,15 @@ package body Sinput.D is
       if Str'Length = 0 and then Loc = S.Source_First then
          return;
 
-      --  Here we write the line, compute the source location for the
-      --  following line, allocate its table entry, and update the source
-      --  record entry.
+      --  Here we write the line, compute the source location for the following
+      --  line, allocate its table entry, and update the source record entry.
 
       else
          Write_Debug_Info (Str (Str'First .. Str'Last - 1));
          Loc := Loc - 1 + Source_Ptr (Str'Length + Debug_File_Eol_Length);
          Add_Line_Tables_Entry (S, Loc);
          S.Source_Last := Loc;
+         Set_Source_File_Index_Table (Dfile);
       end if;
    end Write_Debug_Line;
 

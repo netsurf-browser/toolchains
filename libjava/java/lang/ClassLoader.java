@@ -1,5 +1,5 @@
 /* ClassLoader.java -- responsible for loading classes into the VM
-   Copyright (C) 1998, 1999, 2001, 2002, 2003 Free Software Foundation, Inc.
+   Copyright (C) 1998, 1999, 2001, 2002, 2003, 2004, 2005, 2006, 2007, 2008 Free Software Foundation, Inc.
 
 This file is part of GNU Classpath.
 
@@ -15,8 +15,8 @@ General Public License for more details.
 
 You should have received a copy of the GNU General Public License
 along with GNU Classpath; see the file COPYING.  If not, write to the
-Free Software Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA
-02111-1307 USA.
+Free Software Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA
+02110-1301 USA.
 
 Linking this library statically or dynamically with other modules is
 making a combined work based on this library.  Thus, the terms and
@@ -38,10 +38,16 @@ exception statement from your version. */
 
 package java.lang;
 
-import java.io.InputStream;
+import gnu.classpath.SystemProperties;
+import gnu.classpath.VMStackWalker;
+import gnu.java.util.DoubleEnumeration;
+import gnu.java.util.EmptyEnumeration;
+
 import java.io.IOException;
-import java.lang.reflect.Constructor;
+import java.io.InputStream;
+import java.lang.ref.WeakReference;
 import java.net.URL;
+import java.nio.ByteBuffer;
 import java.security.CodeSource;
 import java.security.PermissionCollection;
 import java.security.Policy;
@@ -49,8 +55,9 @@ import java.security.ProtectionDomain;
 import java.util.Enumeration;
 import java.util.HashMap;
 import java.util.Map;
-import gnu.java.util.DoubleEnumeration;
-import gnu.java.util.EmptyEnumeration;
+
+import java.util.concurrent.ConcurrentHashMap;
+import java.lang.annotation.Annotation;
 
 /**
  * The ClassLoader is a way of customizing the way Java gets its classes
@@ -109,10 +116,9 @@ import gnu.java.util.EmptyEnumeration;
  *
  * @author John Keiser
  * @author Mark Wielaard
- * @author Eric Blake <ebb9@email.byu.edu>
+ * @author Eric Blake (ebb9@email.byu.edu)
  * @see Class
  * @since 1.0
- * @status still missing 1.4 functionality
  */
 public abstract class ClassLoader
 {
@@ -122,13 +128,22 @@ public abstract class ClassLoader
    * is not private in order to allow native code (and trusted subclasses)
    * access to this field.
    */
-  final Map loadedClasses = new HashMap();
+  final HashMap loadedClasses = new HashMap();
+
+  /**
+   * Loading constraints registered with this classloader.  This maps
+   * a class name to a weak reference to a class.  When the reference
+   * is non-null, it means that a reference to the name must resolve
+   * to the indicated class.
+   */
+  final HashMap<String, WeakReference<Class>> loadingConstraints
+    = new HashMap<String, WeakReference<Class>>();
 
   /**
    * All packages defined by this classloader. It is not private in order to
    * allow native code (and trusted subclasses) access to this field.
    */
-  final Map definedPackages = new HashMap();
+  final HashMap definedPackages = new HashMap();
 
   /**
    * The classloader that is consulted before this classloader.
@@ -155,6 +170,118 @@ public abstract class ClassLoader
    */
   static final ClassLoader systemClassLoader =
     VMClassLoader.getSystemClassLoader();
+
+  /**
+   * This cache maps from a Class to its associated annotations.  It's
+   * declared here so that when this class loader becomes unreachable,
+   * so will the corresponding cache.
+   */
+
+  private final ConcurrentHashMap<AnnotationsKey,Object[]> 
+    declaredAnnotations 
+      = new ConcurrentHashMap<AnnotationsKey,Object[]>();
+  
+  static final class AnnotationsKey
+  {
+    final int /* jv_attr_type */ member_type;
+    final int member_index;
+    final int /* jv_attr_kind */ kind_req;
+    final Class declaringClass;
+    final int hashCode;
+
+    public AnnotationsKey (Class declaringClass,
+			   int member_type,
+			   int member_index,
+			   int kind_req)
+    {
+      this.member_type = member_type;
+      this.member_index = member_index;
+      this.kind_req = kind_req;
+      this.declaringClass = declaringClass;
+      hashCode = (member_type ^ member_index ^ kind_req
+		  ^ declaringClass.hashCode());
+    }
+
+    public boolean equals(Object obj)
+    {
+      AnnotationsKey other = (AnnotationsKey)obj;
+      return (this.member_type == other.member_type
+	      && this.member_index == other.member_index
+	      && this.kind_req == other.kind_req
+	      && this.declaringClass == other.declaringClass);
+    }
+
+    public int hashCode()
+    {
+      return hashCode;
+    }
+
+    public static final Annotation[] NIL = new Annotation[0];
+  }
+  
+  final Object[] getDeclaredAnnotations(Class declaringClass,
+					int member_type,
+					int member_index,
+					int kind_req)
+  {
+    Object[] result 
+      = declaredAnnotations.get (new AnnotationsKey
+				 (declaringClass,
+				  member_type,
+				  member_index,
+				  kind_req));
+    if (result != AnnotationsKey.NIL && result != null)
+      return (Object[])result.clone();
+    return null;
+  }
+
+  final Object[] putDeclaredAnnotations(Class declaringClass,
+					int member_type,
+					int member_index,
+					int kind_req,
+					Object[] annotations)
+  {
+    declaredAnnotations.put 
+      (new AnnotationsKey
+       (declaringClass,	member_type,
+	member_index, kind_req), 
+       annotations == null ? AnnotationsKey.NIL : annotations);
+
+    return annotations == null ? null : (Object[])annotations.clone();
+  }
+
+  static
+  {
+    // Find out if we have to install a default security manager. Note
+    // that this is done here because we potentially need the system
+    // class loader to load the security manager and note also that we
+    // don't need the security manager until the system class loader
+    // is created.  If the runtime chooses to use a class loader that
+    // doesn't have the system class loader as its parent, it is
+    // responsible for setting up a security manager before doing so.
+    String secman = SystemProperties.getProperty("java.security.manager");
+    if (secman != null && SecurityManager.current == null)
+    {
+      if (secman.equals("") || secman.equals("default"))
+      {
+	SecurityManager.current = new SecurityManager();
+      }
+      else
+      {
+	try
+	{
+	  Class cl = Class.forName(secman, false, systemClassLoader);
+	  SecurityManager.current = (SecurityManager) cl.newInstance();
+	}
+	catch (Exception x)
+	{
+	  throw (InternalError)
+	    new InternalError("Unable to create SecurityManager")
+	        .initCause(x);
+	}
+      }
+    }
+  }
 
   /**
    * The default protection domain, used when defining a class with a null
@@ -249,16 +376,19 @@ public abstract class ClassLoader
    * it. Calls <code>loadClass(name, false)</code>.
    *
    * <p>Subclasses should not override this method but should override
-   * <code>findClass()</code> which is called by this method.
+   * <code>findClass()</code> which is called by this method.</p>
    *
    * @param name the name of the class relative to this ClassLoader
    * @return the loaded class
    * @throws ClassNotFoundException if the class cannot be found
    */
-  public Class loadClass(String name) throws ClassNotFoundException
+  public Class<?> loadClass(String name) throws ClassNotFoundException
   {
     return loadClass(name, false);
   }
+
+  private native Class loadClassFromSig(String name)
+    throws ClassNotFoundException;
 
   /**
    * Load a class using this ClassLoader or its parent, possibly resolving
@@ -266,47 +396,62 @@ public abstract class ClassLoader
    * out if the class has already been loaded through this classloader by
    * calling <code>findLoadedClass()</code>. Then it calls
    * <code>loadClass()</code> on the parent classloader (or when there is
-   * no parent it uses the VM bootclassloader)</code>). If the class is still
+   * no parent it uses the VM bootclassloader). If the class is still
    * not loaded it tries to create a new class by calling
    * <code>findClass()</code>. Finally when <code>resolve</code> is
    * <code>true</code> it also calls <code>resolveClass()</code> on the
    * newly loaded class.
    *
    * <p>Subclasses should not override this method but should override
-   * <code>findClass()</code> which is called by this method.
+   * <code>findClass()</code> which is called by this method.</p>
    *
    * @param name the fully qualified name of the class to load
    * @param resolve whether or not to resolve the class
    * @return the loaded class
    * @throws ClassNotFoundException if the class cannot be found
    */
-  protected synchronized Class loadClass(String name, boolean resolve)
+  protected synchronized Class<?> loadClass(String name, boolean resolve)
     throws ClassNotFoundException
   {
-    // Have we already loaded this class?
-    Class c = findLoadedClass(name);
-    if (c != null)
-      return c;
+    SecurityManager sm = SecurityManager.current;
+    if (sm != null)
+      {
+	int lastDot = name.lastIndexOf('.');
+	if (lastDot != -1)
+	  sm.checkPackageAccess(name.substring(0, lastDot));
+      }
 
-    // Can the class be loaded by a parent?
-    try
+    // Arrays are handled specially.
+    Class c;
+    if (name.length() > 0 && name.charAt(0) == '[')
+      c = loadClassFromSig(name);
+    else
       {
-	if (parent == null)
+	// Have we already loaded this class?
+	c = findLoadedClass(name);
+	if (c == null)
 	  {
-	    c = VMClassLoader.loadClass(name, resolve);
-	    if (c != null)
-	      return c;
-	  }
-	else
-	  {
-	    return parent.loadClass(name, resolve);
+	    // Can the class be loaded by a parent?
+	    try
+	      {
+		if (parent == null)
+		  {
+		    c = VMClassLoader.loadClass(name, resolve);
+		    if (c != null)
+		      return c;
+		  }
+		else
+		  {
+		    return parent.loadClass(name, resolve);
+		  }
+	      }
+	    catch (ClassNotFoundException e)
+	      {
+	      }
+	    // Still not found, we have to do it ourself.
+	    c = findClass(name);
 	  }
       }
-    catch (ClassNotFoundException e)
-      {
-      }
-    // Still not found, we have to do it ourself.
-    c = findClass(name);
     if (resolve)
       resolveClass(c);
     return c;
@@ -335,7 +480,7 @@ public abstract class ClassLoader
    *   {
    *     String packageName = name.substring(0, lastDot);
    *     // Look if the package already exists
-   *     if (getPackage(pkg) == null)
+   *     if (getPackage(packageName) == null)
    *       {
    *         // define the package
    *         definePackage(packageName, ...);
@@ -354,7 +499,7 @@ public abstract class ClassLoader
    * @throws ClassNotFoundException when the class can not be found
    * @since 1.2
    */
-  protected Class findClass(String name) throws ClassNotFoundException
+  protected Class<?> findClass(String name) throws ClassNotFoundException
   {
     throw new ClassNotFoundException(name);
   }
@@ -372,7 +517,7 @@ public abstract class ClassLoader
    *         offset + len exceeds data
    * @deprecated use {@link #defineClass(String, byte[], int, int)} instead
    */
-  protected final Class defineClass(byte[] data, int offset, int len)
+  protected final Class<?> defineClass(byte[] data, int offset, int len)
     throws ClassFormatError
   {
     return defineClass(null, data, offset, len);
@@ -384,7 +529,7 @@ public abstract class ClassLoader
    * <code>findClass()</code> implementation. The name should use '.'
    * separators, and discard the trailing ".class".  The default protection
    * domain has the permissions of
-   * <code>Policy.getPolicy().getPermissions(new CodeSource(null, null))<code>.
+   * <code>Policy.getPolicy().getPermissions(new CodeSource(null, null))</code>.
    *
    * @param name the name to give the class, or null if unknown
    * @param data the data representing the classfile, in classfile format
@@ -397,8 +542,8 @@ public abstract class ClassLoader
    * @throws SecurityException if name starts with "java."
    * @since 1.1
    */
-  protected final Class defineClass(String name, byte[] data, int offset,
-                                    int len) throws ClassFormatError
+  protected final Class<?> defineClass(String name, byte[] data, int offset,
+				       int len) throws ClassFormatError
   {
     return defineClass(name, data, offset, len, null);
   }
@@ -407,7 +552,7 @@ public abstract class ClassLoader
    * Helper to define a class using a string of bytes. Subclasses should call
    * this method from their <code>findClass()</code> implementation. If the
    * domain is null, the default of
-   * <code>Policy.getPolicy().getPermissions(new CodeSource(null, null))<code>
+   * <code>Policy.getPolicy().getPermissions(new CodeSource(null, null))</code>
    * is used. Once a class has been defined in a package, all further classes
    * in that package must have the same set of certificates or a
    * SecurityException is thrown.
@@ -426,19 +571,48 @@ public abstract class ClassLoader
    *         do not match up
    * @since 1.2
    */
-  protected final synchronized Class defineClass(String name, byte[] data,
-						 int offset, int len,
-						 ProtectionDomain domain)
+  protected final synchronized Class<?> defineClass(String name, byte[] data,
+						    int offset, int len,
+						    ProtectionDomain domain)
     throws ClassFormatError
   {
+    checkInitialized();
     if (domain == null)
       domain = defaultProtectionDomain;
-    if (! initialized)
-      throw new SecurityException("attempt to define class from uninitialized class loader");
+    
     Class retval = VMClassLoader.defineClass(this, name, data,
-                                             offset, len, domain);
+					     offset, len, domain);
     loadedClasses.put(retval.getName(), retval);
     return retval;
+  }
+
+  /**
+   * Helper to define a class using the contents of a byte buffer. If
+   * the domain is null, the default of
+   * <code>Policy.getPolicy().getPermissions(new CodeSource(null,
+   * null))</code> is used. Once a class has been defined in a
+   * package, all further classes in that package must have the same
+   * set of certificates or a SecurityException is thrown.
+   *
+   * @param name the name to give the class.  null if unknown
+   * @param buf a byte buffer containing bytes that form a class.
+   * @param domain the ProtectionDomain to give to the class, null for the
+   *        default protection domain
+   * @return the class that was defined
+   * @throws ClassFormatError if data is not in proper classfile format
+   * @throws NoClassDefFoundError if the supplied name is not the same as
+   *                              the one specified by the byte buffer.
+   * @throws SecurityException if name starts with "java.", or if certificates
+   *         do not match up
+   * @since 1.5
+   */
+  protected final Class<?> defineClass(String name, ByteBuffer buf,
+				       ProtectionDomain domain)
+    throws ClassFormatError
+  {
+    byte[] data = new byte[buf.remaining()];
+    buf.get(data);
+    return defineClass(name, data, 0, data.length, domain);
   }
 
   /**
@@ -449,8 +623,9 @@ public abstract class ClassLoader
    * @throws NullPointerException if c is null
    * @throws LinkageError if linking fails
    */
-  protected final void resolveClass(Class c)
+  protected final void resolveClass(Class<?> c)
   {
+    checkInitialized();
     VMClassLoader.resolveClass(c);
   }
 
@@ -463,9 +638,10 @@ public abstract class ClassLoader
    * @return the found class
    * @throws ClassNotFoundException if the class cannot be found
    */
-  protected final Class findSystemClass(String name)
+  protected final Class<?> findSystemClass(String name)
     throws ClassNotFoundException
   {
+    checkInitialized();
     return Class.forName(name, false, systemClassLoader);
   }
 
@@ -475,6 +651,7 @@ public abstract class ClassLoader
    * <code>null</code>. A security check may be performed on
    * <code>RuntimePermission("getClassLoader")</code>.
    *
+   * @return the parent <code>ClassLoader</code>
    * @throws SecurityException if the security check fails
    * @since 1.2
    */
@@ -484,8 +661,7 @@ public abstract class ClassLoader
     SecurityManager sm = System.getSecurityManager();
     if (sm != null)
       {
-        Class c = VMSecurityManager.getClassContext()[1];
-        ClassLoader cl = c.getClassLoader();
+	ClassLoader cl = VMStackWalker.getCallingClassLoader();
 	if (cl != null && ! cl.isAncestorOf(this))
           sm.checkPermission(new RuntimePermission("getClassLoader"));
       }
@@ -500,8 +676,9 @@ public abstract class ClassLoader
    * @param signers the signers to set
    * @since 1.1
    */
-  protected final void setSigners(Class c, Object[] signers)
+  protected final void setSigners(Class<?> c, Object[] signers)
   {
+    checkInitialized();
     c.setSigners(signers);
   }
 
@@ -512,8 +689,9 @@ public abstract class ClassLoader
    * @return the found Class, or null if it is not found
    * @since 1.1
    */
-  protected final synchronized Class findLoadedClass(String name)
+  protected final synchronized Class<?> findLoadedClass(String name)
   {
+    checkInitialized();
     // NOTE: If the VM is keeping its own cache, it may make sense to have
     // this method be native.
     return (Class) loadedClasses.get(name);
@@ -554,27 +732,28 @@ public abstract class ClassLoader
    * multiple resources with the same name that come from multiple locations.
    * It can also occur that a parent classloader offers a resource with a
    * certain name and the child classloader also offers a resource with that
-   * same name. <code>getResource() only offers the first resource (of the
+   * same name. <code>getResource()</code> only offers the first resource (of the
    * parent) with a given name. This method lists all resources with the
    * same name. The name should use '/' as path separators.
    *
    * <p>The Enumeration is created by first calling <code>getResources()</code>
    * on the parent classloader and then calling <code>findResources()</code>
-   * on this classloader.
+   * on this classloader.</p>
    *
    * @param name the resource name
    * @return an enumaration of all resources found
    * @throws IOException if I/O errors occur in the process
    * @since 1.2
+   * @specnote this was <code>final</code> prior to 1.5
    */
-  public final Enumeration getResources(String name) throws IOException
+  public Enumeration<URL> getResources(String name) throws IOException
   {
-    Enumeration parentResources;
+    Enumeration<URL> parentResources;
     if (parent == null)
       parentResources = VMClassLoader.getResources(name);
     else
       parentResources = parent.getResources(name);
-    return new DoubleEnumeration(parentResources, findResources(name));
+    return new DoubleEnumeration<URL>(parentResources, findResources(name));
   }
 
   /**
@@ -594,9 +773,9 @@ public abstract class ClassLoader
    * @throws IOException if I/O errors occur in the process
    * @since 1.2
    */
-  protected Enumeration findResources(String name) throws IOException
+  protected Enumeration<URL> findResources(String name) throws IOException
   {
-    return EmptyEnumeration.getInstance();
+    return new EmptyEnumeration<URL>();
   }
 
   /**
@@ -641,7 +820,8 @@ public abstract class ClassLoader
    * @throws IOException if I/O errors occur in the process
    * @since 1.2
    */
-  public static Enumeration getSystemResources(String name) throws IOException
+  public static Enumeration<URL> getSystemResources(String name)
+    throws IOException
   {
     return systemClassLoader.getResources(name);
   }
@@ -698,14 +878,15 @@ public abstract class ClassLoader
 
   /**
    * Returns the system classloader. The system classloader (also called
-   * the application classloader) is the classloader that was used to
+   * the application classloader) is the classloader that is used to
    * load the application classes on the classpath (given by the system
    * property <code>java.class.path</code>. This is set as the context
    * class loader for a thread. The system property
    * <code>java.system.class.loader</code>, if defined, is taken to be the
    * name of the class to use as the system class loader, which must have
-   * a public constructor which takes a ClassLoader as a parent; otherwise this
-   * uses gnu.java.lang.SystemClassLoader.
+   * a public constructor which takes a ClassLoader as a parent. The parent
+   * class loader passed in the constructor is the default system class
+   * loader.
    *
    * <p>Note that this is different from the bootstrap classloader that
    * actually loads all the real "system" classes (the bootstrap classloader
@@ -727,8 +908,7 @@ public abstract class ClassLoader
     SecurityManager sm = System.getSecurityManager();
     if (sm != null)
       {
-	Class c = VMSecurityManager.getClassContext()[1];
-	ClassLoader cl = c.getClassLoader();
+	ClassLoader cl = VMStackWalker.getCallingClassLoader();
 	if (cl != null && cl != systemClassLoader)
 	  sm.checkPermission(new RuntimePermission("getClassLoader"));
       }
@@ -773,7 +953,7 @@ public abstract class ClassLoader
       throw new IllegalArgumentException("Package " + name
                                          + " already defined");
     Package p = new Package(name, specTitle, specVendor, specVersion,
-                            implTitle, implVendor, implVersion, sealed);
+                            implTitle, implVendor, implVersion, sealed, this);
     synchronized (definedPackages)
       {
         definedPackages.put(name, p);
@@ -852,7 +1032,7 @@ public abstract class ClassLoader
    *
    * @param name the (system specific) name of the requested library
    * @return the full pathname to the requested library, or null
-   * @see Runtime#loadLibrary()
+   * @see Runtime#loadLibrary(String)
    * @since 1.2
    */
   protected String findLibrary(String name)
@@ -882,7 +1062,7 @@ public abstract class ClassLoader
    *
    * @param name the package (and subpackages) to affect
    * @param enabled true to set the default to enabled
-   * @see #setDefaultAssertionStatus(String, boolean)
+   * @see #setDefaultAssertionStatus(boolean)
    * @see #setClassAssertionStatus(String, boolean)
    * @see #clearAssertionStatus()
    * @since 1.4
@@ -903,7 +1083,7 @@ public abstract class ClassLoader
    * @param name the class to affect
    * @param enabled true to set the default to enabled
    * @throws NullPointerException if name is null
-   * @see #setDefaultAssertionStatus(String, boolean)
+   * @see #setDefaultAssertionStatus(boolean)
    * @see #setPackageAssertionStatus(String, boolean)
    * @see #clearAssertionStatus()
    * @since 1.4
@@ -948,5 +1128,17 @@ public abstract class ClassLoader
 	loader = loader.parent;
       }
     return false;
+  }
+
+  /**
+   * Before doing anything "dangerous" please call this method to make sure
+   * this class loader instance was properly constructed (and not obtained
+   * by exploiting the finalizer attack)
+   * @see #initialized
+   */
+  private void checkInitialized()
+  {
+    if (! initialized)
+      throw new SecurityException("attempt to use uninitialized class loader");
   }
 }

@@ -6,25 +6,23 @@
 --                                                                          --
 --                                 B o d y                                  --
 --                                                                          --
---           Copyright (C) 1992-2002 Free Software Foundation, Inc.         --
+--          Copyright (C) 1992-2009, Free Software Foundation, Inc.         --
 --                                                                          --
 -- GNAT is free software;  you can  redistribute it  and/or modify it under --
 -- terms of the  GNU General Public License as published  by the Free Soft- --
--- ware  Foundation;  either version 2,  or (at your option) any later ver- --
+-- ware  Foundation;  either version 3,  or (at your option) any later ver- --
 -- sion.  GNAT is distributed in the hope that it will be useful, but WITH- --
 -- OUT ANY WARRANTY;  without even the  implied warranty of MERCHANTABILITY --
--- or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU General Public License --
--- for  more details.  You should have  received  a copy of the GNU General --
--- Public License  distributed with GNAT;  see file COPYING.  If not, write --
--- to  the Free Software Foundation,  59 Temple Place - Suite 330,  Boston, --
--- MA 02111-1307, USA.                                                      --
+-- or FITNESS FOR A PARTICULAR PURPOSE.                                     --
 --                                                                          --
--- As a special exception,  if other files  instantiate  generics from this --
--- unit, or you link  this unit with other files  to produce an executable, --
--- this  unit  does not  by itself cause  the resulting  executable  to  be --
--- covered  by the  GNU  General  Public  License.  This exception does not --
--- however invalidate  any other reasons why  the executable file  might be --
--- covered by the  GNU Public License.                                      --
+-- As a special exception under Section 7 of GPL version 3, you are granted --
+-- additional permissions described in the GCC Runtime Library Exception,   --
+-- version 3.1, as published by the Free Software Foundation.               --
+--                                                                          --
+-- You should have received a copy of the GNU General Public License and    --
+-- a copy of the GCC Runtime Library Exception along with this program;     --
+-- see the files COPYING3 and COPYING.RUNTIME respectively.  If not, see    --
+-- <http://www.gnu.org/licenses/>.                                          --
 --                                                                          --
 -- GNAT was originally developed  by the GNAT team at  New York University. --
 -- Extensive contributions were provided by Ada Core Technologies Inc.      --
@@ -32,31 +30,33 @@
 ------------------------------------------------------------------------------
 
 with System.Address_Image;
---  used for the function itself
-
-with System.Tasking;
---  used for Task_List
-
-with System.Tasking.Stages;
---  used for Terminated
---           Abort_Tasks
-
-with System.Tasking.Rendezvous;
---  used for Callable
-
+with System.Parameters;
+with System.Soft_Links;
+with System.Task_Primitives;
 with System.Task_Primitives.Operations;
---  used for Self
+with Ada.Unchecked_Conversion;
 
-with Unchecked_Conversion;
+pragma Warnings (Off);
+--  Allow withing of non-Preelaborated units in Ada 2005 mode where this
+--  package will be categorized as Preelaborate. See AI-362 for details.
+--  It is safe in the context of the run-time to violate the rules!
+
+with System.Tasking.Utilities;
+
+pragma Warnings (On);
 
 package body Ada.Task_Identification is
+
+   use System.Parameters;
+
+   package STPO renames System.Task_Primitives.Operations;
 
    -----------------------
    -- Local Subprograms --
    -----------------------
 
-   function Convert_Ids (T : Task_Id) return System.Tasking.Task_ID;
-   function Convert_Ids (T : System.Tasking.Task_ID) return Task_Id;
+   function Convert_Ids (T : Task_Id) return System.Tasking.Task_Id;
+   function Convert_Ids (T : System.Tasking.Task_Id) return Task_Id;
    pragma Inline (Convert_Ids);
    --  Conversion functions between different forms of Task_Id
 
@@ -64,7 +64,7 @@ package body Ada.Task_Identification is
    -- "=" --
    ---------
 
-   function  "=" (Left, Right : Task_Id) return Boolean is
+   function "=" (Left, Right : Task_Id) return Boolean is
    begin
       return System.Tasking."=" (Convert_Ids (Left), Convert_Ids (Right));
    end "=";
@@ -78,7 +78,7 @@ package body Ada.Task_Identification is
       if T = Null_Task_Id then
          raise Program_Error;
       else
-         System.Tasking.Stages.Abort_Tasks
+         System.Tasking.Utilities.Abort_Tasks
            (System.Tasking.Task_List'(1 => Convert_Ids (T)));
       end if;
    end Abort_Task;
@@ -87,12 +87,12 @@ package body Ada.Task_Identification is
    -- Convert_Ids --
    -----------------
 
-   function Convert_Ids (T : Task_Id) return System.Tasking.Task_ID is
+   function Convert_Ids (T : Task_Id) return System.Tasking.Task_Id is
    begin
-      return System.Tasking.Task_ID (T);
+      return System.Tasking.Task_Id (T);
    end Convert_Ids;
 
-   function Convert_Ids (T : System.Tasking.Task_ID) return Task_Id is
+   function Convert_Ids (T : System.Tasking.Task_Id) return Task_Id is
    begin
       return Task_Id (T);
    end Convert_Ids;
@@ -112,7 +112,8 @@ package body Ada.Task_Identification is
 
    function Image (T : Task_Id) return String is
       function To_Address is new
-        Unchecked_Conversion (Task_Id, System.Address);
+        Ada.Unchecked_Conversion
+          (Task_Id, System.Task_Primitives.Task_Address);
 
    begin
       if T = Null_Task_Id then
@@ -132,11 +133,28 @@ package body Ada.Task_Identification is
    -----------------
 
    function Is_Callable (T : Task_Id) return Boolean is
+      Result : Boolean;
+      Id     : constant System.Tasking.Task_Id := Convert_Ids (T);
    begin
       if T = Null_Task_Id then
          raise Program_Error;
       else
-         return System.Tasking.Rendezvous.Callable (Convert_Ids (T));
+         System.Soft_Links.Abort_Defer.all;
+
+         if Single_Lock then
+            STPO.Lock_RTS;
+         end if;
+
+         STPO.Write_Lock (Id);
+         Result := Id.Callable;
+         STPO.Unlock (Id);
+
+         if Single_Lock then
+            STPO.Unlock_RTS;
+         end if;
+
+         System.Soft_Links.Abort_Undefer.all;
+         return Result;
       end if;
    end Is_Callable;
 
@@ -145,11 +163,31 @@ package body Ada.Task_Identification is
    -------------------
 
    function Is_Terminated (T : Task_Id) return Boolean is
+      Result : Boolean;
+      Id     : constant System.Tasking.Task_Id := Convert_Ids (T);
+
+      use System.Tasking;
+
    begin
       if T = Null_Task_Id then
          raise Program_Error;
       else
-         return System.Tasking.Stages.Terminated (Convert_Ids (T));
+         System.Soft_Links.Abort_Defer.all;
+
+         if Single_Lock then
+            STPO.Lock_RTS;
+         end if;
+
+         STPO.Write_Lock (Id);
+         Result := Id.Common.State = Terminated;
+         STPO.Unlock (Id);
+
+         if Single_Lock then
+            STPO.Unlock_RTS;
+         end if;
+
+         System.Soft_Links.Abort_Undefer.all;
+         return Result;
       end if;
    end Is_Terminated;
 

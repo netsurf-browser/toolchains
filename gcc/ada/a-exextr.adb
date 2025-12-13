@@ -6,32 +6,30 @@
 --                                                                          --
 --                                 B o d y                                  --
 --                                                                          --
---          Copyright (C) 1992-2003 Free Software Foundation, Inc.          --
+--          Copyright (C) 1992-2010, Free Software Foundation, Inc.         --
 --                                                                          --
 -- GNAT is free software;  you can  redistribute it  and/or modify it under --
 -- terms of the  GNU General Public License as published  by the Free Soft- --
--- ware  Foundation;  either version 2,  or (at your option) any later ver- --
+-- ware  Foundation;  either version 3,  or (at your option) any later ver- --
 -- sion.  GNAT is distributed in the hope that it will be useful, but WITH- --
 -- OUT ANY WARRANTY;  without even the  implied warranty of MERCHANTABILITY --
--- or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU General Public License --
--- for  more details.  You should have  received  a copy of the GNU General --
--- Public License  distributed with GNAT;  see file COPYING.  If not, write --
--- to  the Free Software Foundation,  59 Temple Place - Suite 330,  Boston, --
--- MA 02111-1307, USA.                                                      --
+-- or FITNESS FOR A PARTICULAR PURPOSE.                                     --
 --                                                                          --
--- As a special exception,  if other files  instantiate  generics from this --
--- unit, or you link  this unit with other files  to produce an executable, --
--- this  unit  does not  by itself cause  the resulting  executable  to  be --
--- covered  by the  GNU  General  Public  License.  This exception does not --
--- however invalidate  any other reasons why  the executable file  might be --
--- covered by the  GNU Public License.                                      --
+-- As a special exception under Section 7 of GPL version 3, you are granted --
+-- additional permissions described in the GCC Runtime Library Exception,   --
+-- version 3.1, as published by the Free Software Foundation.               --
+--                                                                          --
+-- You should have received a copy of the GNU General Public License and    --
+-- a copy of the GCC Runtime Library Exception along with this program;     --
+-- see the files COPYING3 and COPYING.RUNTIME respectively.  If not, see    --
+-- <http://www.gnu.org/licenses/>.                                          --
 --                                                                          --
 -- GNAT was originally developed  by the GNAT team at  New York University. --
 -- Extensive contributions were provided by Ada Core Technologies Inc.      --
 --                                                                          --
 ------------------------------------------------------------------------------
 
-with Unchecked_Conversion;
+with Ada.Unchecked_Conversion;
 
 pragma Warnings (Off);
 with Ada.Exceptions.Last_Chance_Handler;
@@ -55,15 +53,13 @@ package body Exception_Traces is
    pragma Export
      (Ada, Raise_Hook_Initialized, "__gnat_exception_actions_initialized");
 
-   procedure Last_Chance_Handler
-     (Except :  Exception_Occurrence);
-   pragma Import
-     (C, Last_Chance_Handler, "__gnat_last_chance_handler");
+   procedure Last_Chance_Handler (Except : Exception_Occurrence);
+   pragma Import (C, Last_Chance_Handler, "__gnat_last_chance_handler");
    pragma No_Return (Last_Chance_Handler);
    --  Users can replace the default version of this routine,
    --  Ada.Exceptions.Last_Chance_Handler.
 
-   function To_Action is new Unchecked_Conversion
+   function To_Action is new Ada.Unchecked_Conversion
      (Raise_Action, Exception_Action);
 
    -----------------------
@@ -75,27 +71,6 @@ package body Exception_Traces is
    --  Notify_Unhandled_Exception. Is_Unhandled is set to True only in the
    --  latter case because Notify_Handled_Exception may be called for an
    --  actually unhandled occurrence in the Front-End-SJLJ case.
-
-   procedure To_Stderr (S : String);
-   pragma Export (Ada, To_Stderr, "__gnat_to_stderr");
-   --  Little routine to output string to stderr that is also used
-   --  in the tasking run time.
-
-   ---------------------------------
-   -- Debugger Interface Routines --
-   ---------------------------------
-
-   --  The routines here are null routines that normally have no effect.
-   --  They are provided for the debugger to place breakpoints on their
-   --  entry points to get control on an exception.
-
-   procedure Unhandled_Exception;
-   pragma Export (C, Unhandled_Exception, "__gnat_unhandled_exception");
-   --  Hook for GDB to support "break exception unhandled".
-
-   --  For "break exception", GDB uses __gnat_raise_nodefer_with_msg, which
-   --  is not in this section because it fullfills other purposes than a mere
-   --  debugger interface.
 
    --------------------------------
    -- Import Run-Time C Routines --
@@ -125,9 +100,13 @@ package body Exception_Traces is
 
       if not Excep.Id.Not_Handled_By_Others
         and then
-        (Exception_Trace = Every_Raise
-         or else (Exception_Trace = Unhandled_Raise and then Is_Unhandled))
+          (Exception_Trace = Every_Raise
+            or else (Exception_Trace = Unhandled_Raise and then Is_Unhandled))
       then
+         --  Exception trace messages need to be protected when several tasks
+         --  can issue them at the same time.
+
+         Lock_Task.all;
          To_Stderr (Nline);
 
          if Is_Unhandled then
@@ -137,6 +116,7 @@ package body Exception_Traces is
          To_Stderr ("Exception raised");
          To_Stderr (Nline);
          To_Stderr (Tailored_Exception_Information (Excep.all));
+         Unlock_Task.all;
       end if;
 
       --  Call the user-specific actions
@@ -167,25 +147,24 @@ package body Exception_Traces is
    --------------------------------
 
    procedure Notify_Unhandled_Exception is
+      Excep : constant EOA := Get_Current_Excep.all;
+
    begin
-      Notify_Exception (Get_Current_Excep.all, Is_Unhandled => True);
-      Unhandled_Exception;
+      --  Check whether there is any termination handler to be executed for
+      --  the environment task, and execute it if needed. Here we handle both
+      --  the Abnormal and Unhandled_Exception task termination. Normal
+      --  task termination routine is executed elsewhere (either in the
+      --  Task_Wrapper or in the Adafinal routine for the environment task).
+
+      Task_Termination_Handler.all (Excep.all);
+
+      Notify_Exception (Excep, Is_Unhandled => True);
+      Debug_Unhandled_Exception (SSL.Exception_Data_Ptr (Excep.Id));
    end Notify_Unhandled_Exception;
-
-   -------------------------
-   -- Unhandled_Exception --
-   -------------------------
-
-   procedure Unhandled_Exception is
-   begin
-      null;
-   end Unhandled_Exception;
 
    -----------------------------------
    -- Unhandled_Exception_Terminate --
    -----------------------------------
-
-   type int is new Integer;
 
    procedure Unhandled_Exception_Terminate is
       Excep : constant EOA := Save_Occurrence (Get_Current_Excep.all.all);
@@ -197,23 +176,6 @@ package body Exception_Traces is
    begin
       Last_Chance_Handler (Excep.all);
    end Unhandled_Exception_Terminate;
-
-   ---------------
-   -- To_Stderr --
-   ---------------
-
-   procedure To_Stderr (S : String) is
-      procedure put_char_stderr (C : int);
-      pragma Import (C, put_char_stderr, "put_char_stderr");
-
-   begin
-      for J in 1 .. S'Length loop
-         if S (J) /= ASCII.CR then
-            put_char_stderr (Character'Pos (S (J)));
-         end if;
-      end loop;
-   end To_Stderr;
-
 
    ------------------------------------
    -- Handling GNAT.Exception_Traces --
@@ -248,7 +210,7 @@ package body Exception_Traces is
    --  the termination routine. Avoiding the second output is possible but so
    --  far has been considered undesirable. It would mean changing the order
    --  of outputs between the two runs with or without exception traces, while
-   --  it seems preferrable to only have additional outputs in the former
+   --  it seems preferable to only have additional outputs in the former
    --  case.
 
 end Exception_Traces;

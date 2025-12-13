@@ -6,27 +6,28 @@
 --                                                                          --
 --                                 B o d y                                  --
 --                                                                          --
---          Copyright (C) 1996-2004 Free Software Foundation, Inc.          --
+--          Copyright (C) 1996-2010, Free Software Foundation, Inc.         --
 --                                                                          --
 -- GNAT is free software;  you can  redistribute it  and/or modify it under --
 -- terms of the  GNU General Public License as published  by the Free Soft- --
--- ware  Foundation;  either version 2,  or (at your option) any later ver- --
+-- ware  Foundation;  either version 3,  or (at your option) any later ver- --
 -- sion.  GNAT is distributed in the hope that it will be useful, but WITH- --
 -- OUT ANY WARRANTY;  without even the  implied warranty of MERCHANTABILITY --
 -- or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU General Public License --
 -- for  more details.  You should have  received  a copy of the GNU General --
--- Public License  distributed with GNAT;  see file COPYING.  If not, write --
--- to  the Free Software Foundation,  59 Temple Place - Suite 330,  Boston, --
--- MA 02111-1307, USA.                                                      --
+-- Public License  distributed with GNAT; see file COPYING3.  If not, go to --
+-- http://www.gnu.org/licenses for a complete copy of the license.          --
 --                                                                          --
 -- GNAT was originally developed  by the GNAT team at  New York University. --
 -- Extensive contributions were provided by Ada Core Technologies Inc.      --
 --                                                                          --
 ------------------------------------------------------------------------------
 
-with Gnatvsn;
+with Gnatvsn;  use Gnatvsn;
 with Hostparm;
-with Osint; use Osint;
+with Opt;
+with Osint;    use Osint;
+with Targparm; use Targparm;
 
 with Ada.Characters.Handling; use Ada.Characters.Handling;
 with Ada.Command_Line;        use Ada.Command_Line;
@@ -34,11 +35,151 @@ with Ada.Text_IO;             use Ada.Text_IO;
 
 package body VMS_Conv is
 
+   -------------------------
+   -- Internal Structures --
+   -------------------------
+
+   --  The switches and commands are defined by strings in the previous
+   --  section so that they are easy to modify, but internally, they are
+   --  kept in a more conveniently accessible form described in this
+   --  section.
+
+   --  Commands, command qualifiers and options have a similar common format
+   --  so that searching for matching names can be done in a common manner.
+
+   type Item_Id is (Id_Command, Id_Switch, Id_Option);
+
+   type Translation_Type is
+     (
+      T_Direct,
+      --  A qualifier with no options.
+      --  Example: GNAT MAKE /VERBOSE
+
+      T_Directories,
+      --  A qualifier followed by a list of directories
+      --  Example: GNAT COMPILE /SEARCH=([], [.FOO], [.BAR])
+
+      T_Directory,
+      --  A qualifier followed by one directory
+      --  Example: GNAT LIBRARY /SET=[.VAXFLOATLIB]
+
+      T_File,
+      --  A qualifier followed by a filename
+      --  Example: GNAT LINK /EXECUTABLE=FOO.EXE
+
+      T_No_Space_File,
+      --  A qualifier followed by a filename
+      --  Example: GNAT MAKE /PROJECT_FILE=PRJ.GPR
+
+      T_Numeric,
+      --  A qualifier followed by a numeric value.
+      --  Example: GNAT CHOP /FILE_NAME_MAX_LENGTH=39
+
+      T_String,
+      --  A qualifier followed by a quoted string. Only used by
+      --  /IDENTIFICATION qualifier.
+      --  Example: GNAT LINK /IDENTIFICATION="3.14a1 version"
+
+      T_Options,
+      --  A qualifier followed by a list of options.
+      --  Example: GNAT COMPILE /REPRESENTATION_INFO=(ARRAYS,OBJECTS)
+
+      T_Commands,
+      --  A qualifier followed by a list. Only used for
+      --  MAKE /COMPILER_QUALIFIERS /BINDER_QUALIFIERS /LINKER_QUALIFIERS
+      --  (gnatmake -cargs -bargs -largs )
+      --  Example: GNAT MAKE ... /LINKER_QUALIFIERS /VERBOSE FOOBAR.OBJ
+
+      T_Other,
+      --  A qualifier passed directly to the linker. Only used
+      --  for LINK and SHARED if no other match is found.
+      --  Example: GNAT LINK FOO.ALI /SYSSHR
+
+      T_Alphanumplus
+      --  A qualifier followed by a legal linker symbol prefix. Only used
+      --  for BIND /BUILD_LIBRARY (gnatbind -Lxyz).
+      --  Example: GNAT BIND /BUILD_LIBRARY=foobar
+      );
+
+   type Item (Id : Item_Id);
+   type Item_Ptr is access all Item;
+
+   type Item (Id : Item_Id) is record
+      Name : String_Ptr;
+      --  Name of the command, switch (with slash) or option
+
+      Next : Item_Ptr;
+      --  Pointer to next item on list, always has the same Id value
+
+      Command : Command_Type := Undefined;
+
+      Unix_String : String_Ptr := null;
+      --  Corresponding Unix string. For a command, this is the unix command
+      --  name and possible default switches. For a switch or option it is
+      --  the unix switch string.
+
+      case Id is
+
+         when Id_Command =>
+
+            Switches : Item_Ptr;
+            --  Pointer to list of switch items for the command, linked
+            --  through the Next fields with null terminating the list.
+
+            Usage : String_Ptr;
+            --  Usage information, used only for errors and the default
+            --  list of commands output.
+
+            Params : Parameter_Ref;
+            --  Array of parameters
+
+            Defext : String (1 .. 3);
+            --  Default extension. If non-blank, then this extension is
+            --  supplied by default as the extension for any file parameter
+            --  which does not have an extension already.
+
+         when Id_Switch =>
+
+            Translation : Translation_Type;
+            --  Type of switch translation. For all cases, except Options,
+            --  this is the only field needed, since the Unix translation
+            --  is found in Unix_String.
+
+            Options : Item_Ptr;
+            --  For the Options case, this field is set to point to a list
+            --  of options item (for this case Unix_String is null in the
+            --  main switch item). The end of the list is marked by null.
+
+         when Id_Option =>
+
+            null;
+            --  No special fields needed, since Name and Unix_String are
+            --  sufficient to completely described an option.
+
+      end case;
+   end record;
+
+   subtype Command_Item is Item (Id_Command);
+   subtype Switch_Item  is Item (Id_Switch);
+   subtype Option_Item  is Item (Id_Option);
+
+   Keep_Temps_Option : constant Item_Ptr :=
+                         new Item'
+                           (Id          => Id_Option,
+                            Name        =>
+                              new String'("/KEEP_TEMPORARY_FILES"),
+                            Next        => null,
+                            Command     => Undefined,
+                            Unix_String => null);
+
    Param_Count : Natural := 0;
    --  Number of parameter arguments so far
 
    Arg_Num : Natural;
    --  Argument number
+
+   Arg_File : Ada.Text_IO.File_Type;
+   --  A file where arguments are read from
 
    Commands : Item_Ptr;
    --  Pointer to head of list of command items, one for each command, with
@@ -55,13 +196,30 @@ package body VMS_Conv is
    --  if a COMMANDS_TRANSLATION switch has been encountered while processing
    --  a MAKE Command.
 
+   Output_File_Expected : Boolean := False;
+   --  True for GNAT LINK after -o switch, so that the ".ali" extension is
+   --  not added to the executable file name.
+
    package Buffer is new Table.Table
      (Table_Component_Type => Character,
       Table_Index_Type     => Integer,
       Table_Low_Bound      => 1,
       Table_Initial        => 4096,
-      Table_Increment      => 2,
+      Table_Increment      => 100,
       Table_Name           => "Buffer");
+   --  Table to store the command to be used
+
+   package Cargs_Buffer is new Table.Table
+     (Table_Component_Type => Character,
+      Table_Index_Type     => Integer,
+      Table_Low_Bound      => 1,
+      Table_Initial        => 4096,
+      Table_Increment      => 100,
+      Table_Name           => "Cargs_Buffer");
+   --  Table to store the compiler switches for GNAT COMPILE
+
+   Cargs : Boolean := False;
+   --  When True, commands should go to Cargs_Buffer instead of Buffer table
 
    function Init_Object_Dirs return Argument_List;
    --  Get the list of the object directories
@@ -72,10 +230,10 @@ package body VMS_Conv is
    --  the allocated result on the heap.
 
    function Is_Extensionless (F : String) return Boolean;
-   --  Returns true if the filename has no extension.
+   --  Returns true if the filename has no extension
 
    function Match (S1, S2 : String) return Boolean;
-   --  Determines whether S1 and S2 match. This is a case insensitive match.
+   --  Determines whether S1 and S2 match (this is a case insensitive match)
 
    function Match_Prefix (S1, S2 : String) return Boolean;
    --  Determines whether S1 matches a prefix of S2. This is also a case
@@ -116,8 +274,20 @@ package body VMS_Conv is
 
    procedure Place_Unix_Switches (S : VMS_Data.String_Ptr);
    --  Given a unix switch string, place corresponding switches in Buffer,
-   --  updating Ptr appropriatelly. Note that in the case of use of ! the
+   --  updating Ptr appropriately. Note that in the case of use of ! the
    --  result may be to remove a previously placed switch.
+
+   procedure Preprocess_Command_Data;
+   --  Preprocess the string form of the command and options list into the
+   --  internal form.
+
+   procedure Process_Argument (The_Command : in out Command_Type);
+   --  Process one argument from the command line, or one line from
+   --  from a command line file. For the first call, set The_Command.
+
+   procedure Process_Buffer (S : String);
+   --  Process the characters in the Buffer table or the Cargs_Buffer table
+   --  to convert these into arguments.
 
    procedure Validate_Command_Or_Option (N : VMS_Data.String_Ptr);
    --  Check that N is a valid command or option name, i.e. that it is of the
@@ -144,23 +314,23 @@ package body VMS_Conv is
       loop
          declare
             Dir : constant String_Access :=
-                    String_Access (Get_Next_Dir_In_Path (Object_Dir_Name));
+                    Get_Next_Dir_In_Path (Object_Dir_Name);
          begin
             exit when Dir = null;
             Object_Dirs := Object_Dirs + 1;
             Object_Dir (Object_Dirs) :=
               new String'("-L" &
                           To_Canonical_Dir_Spec
-                          (To_Host_Dir_Spec
-                           (Normalize_Directory_Name (Dir.all).all,
-                            True).all, True).all);
+                            (To_Host_Dir_Spec
+                              (Normalize_Directory_Name (Dir.all).all,
+                               True).all, True).all);
          end;
       end loop;
 
       Object_Dirs := Object_Dirs + 1;
       Object_Dir (Object_Dirs) := new String'("-lgnat");
 
-      if Hostparm.OpenVMS then
+      if OpenVMS_On_Target then
          Object_Dirs := Object_Dirs + 1;
          Object_Dir (Object_Dirs) := new String'("-ldecgnat");
       end if;
@@ -182,7 +352,7 @@ package body VMS_Conv is
             Unixcmd  => new S'("gnatbind"),
             Unixsws  => null,
             Switches => Bind_Switches'Access,
-            Params   => new Parameter_Array'(1 => File),
+            Params   => new Parameter_Array'(1 => Unlimited_Files),
             Defext   => "ali"),
 
          Chop =>
@@ -217,6 +387,26 @@ package body VMS_Conv is
             Params   => new Parameter_Array'(1 => Files_Or_Wildcard),
             Defext   => "   "),
 
+         Check =>
+           (Cname    => new S'("CHECK"),
+            Usage    => new S'("GNAT CHECK name /qualifiers"),
+            VMS_Only => False,
+            Unixcmd  => new S'("gnatcheck"),
+            Unixsws  => null,
+            Switches => Check_Switches'Access,
+            Params   => new Parameter_Array'(1 => Unlimited_Files),
+            Defext   => "   "),
+
+         Sync =>
+           (Cname    => new S'("SYNC"),
+            Usage    => new S'("GNAT SYNC name /qualifiers"),
+            VMS_Only => False,
+            Unixcmd  => new S'("gnatsync"),
+            Unixsws  => null,
+            Switches => Sync_Switches'Access,
+            Params   => new Parameter_Array'(1 => Unlimited_Files),
+            Defext   => "   "),
+
          Elim =>
            (Cname    => new S'("ELIM"),
             Usage    => new S'("GNAT ELIM name /qualifiers"),
@@ -247,17 +437,6 @@ package body VMS_Conv is
             Unixsws  => null,
             Switches => Krunch_Switches'Access,
             Params   => new Parameter_Array'(1 => File),
-            Defext   => "   "),
-
-         Library =>
-           (Cname    => new S'("LIBRARY"),
-            Usage    => new S'("GNAT LIBRARY /[CREATE | SET | DELETE]"
-                               & "=directory [/CONFIG=file]"),
-            VMS_Only => True,
-            Unixcmd  => new S'("gnatlbr"),
-            Unixsws  => null,
-            Switches => Lbr_Switches'Access,
-            Params   => new Parameter_Array'(1 .. 0 => File),
             Defext   => "   "),
 
          Link =>
@@ -293,6 +472,16 @@ package body VMS_Conv is
             Params   => new Parameter_Array'(1 => Unlimited_Files),
             Defext   => "   "),
 
+         Metric =>
+           (Cname    => new S'("METRIC"),
+            Usage    => new S'("GNAT METRIC /qualifiers source_file"),
+            VMS_Only => False,
+            Unixcmd  => new S'("gnatmetric"),
+            Unixsws  => null,
+            Switches => Metric_Switches'Access,
+            Params   => new Parameter_Array'(1 => Unlimited_Files),
+            Defext   => "   "),
+
          Name =>
            (Cname    => new S'("NAME"),
             Usage    => new S'("GNAT NAME /qualifiers naming-pattern "
@@ -322,7 +511,7 @@ package body VMS_Conv is
             Unixcmd  => new S'("gnatpp"),
             Unixsws  => null,
             Switches => Pretty_Switches'Access,
-            Params   => new Parameter_Array'(1 => File),
+            Params   => new Parameter_Array'(1 => Unlimited_Files),
             Defext   => "   "),
 
          Shared =>
@@ -336,6 +525,16 @@ package body VMS_Conv is
             Switches => Shared_Switches'Access,
             Params   => new Parameter_Array'(1 => Unlimited_Files),
             Defext   => "   "),
+
+         Stack =>
+           (Cname    => new S'("STACK"),
+            Usage    => new S'("GNAT STACK /qualifiers ci_files"),
+            VMS_Only => False,
+            Unixcmd  => new S'("gnatstack"),
+            Unixsws  => null,
+            Switches => Stack_Switches'Access,
+            Params   => new Parameter_Array'(1 => Unlimited_Files),
+            Defext   => "ci" & ASCII.NUL),
 
          Stub =>
            (Cname    => new S'("STUB"),
@@ -615,9 +814,16 @@ package body VMS_Conv is
 
    procedure Output_Version is
    begin
-      Put ("GNAT ");
-      Put (Gnatvsn.Gnat_Version_String);
-      Put_Line (" Copyright 1996-2004 Free Software Foundation, Inc.");
+      if AAMP_On_Target then
+         Put ("GNAAMP ");
+      else
+         Put ("GNAT ");
+      end if;
+
+      Put_Line (Gnatvsn.Gnat_Version_String);
+      Put_Line ("Copyright 1996-" &
+                Current_Year &
+                ", Free Software Foundation, Inc.");
    end Output_Version;
 
    -----------
@@ -626,8 +832,11 @@ package body VMS_Conv is
 
    procedure Place (C : Character) is
    begin
-      Buffer.Increment_Last;
-      Buffer.Table (Buffer.Last) := C;
+      if Cargs then
+         Cargs_Buffer.Append (C);
+      else
+         Buffer.Append (C);
+      end if;
    end Place;
 
    procedure Place (S : String) is
@@ -736,64 +945,15 @@ package body VMS_Conv is
       end loop;
    end Place_Unix_Switches;
 
-   --------------------------------
-   -- Validate_Command_Or_Option --
-   --------------------------------
+   -----------------------------
+   -- Preprocess_Command_Data --
+   -----------------------------
 
-   procedure Validate_Command_Or_Option (N : VMS_Data.String_Ptr) is
+   procedure Preprocess_Command_Data is
    begin
-      pragma Assert (N'Length > 0);
-
-      for J in N'Range loop
-         if N (J) = '_' then
-            pragma Assert (N (J - 1) /= '_');
-            null;
-         else
-            pragma Assert (Is_Upper (N (J)) or else Is_Digit (N (J)));
-            null;
-         end if;
-      end loop;
-   end Validate_Command_Or_Option;
-
-   --------------------------
-   -- Validate_Unix_Switch --
-   --------------------------
-
-   procedure Validate_Unix_Switch (S : VMS_Data.String_Ptr) is
-   begin
-      if S (S'First) = '`' then
-         return;
-      end if;
-
-      pragma Assert (S (S'First) = '-' or else S (S'First) = '!');
-
-      for J in S'First + 1 .. S'Last loop
-         pragma Assert (S (J) /= ' ');
-
-         if S (J) = '!' then
-            pragma Assert (S (J - 1) = ',' and then S (J + 1) = '-');
-            null;
-         end if;
-      end loop;
-   end Validate_Unix_Switch;
-
-   --------------------
-   -- VMS_Conversion --
-   --------------------
-
-   --  This function is *far* too long and *far* too heavily nested, it
-   --  needs procedural abstraction ???
-
-   procedure VMS_Conversion (The_Command : out Command_Type) is
-   begin
-      Buffer.Init;
-
-      --  First we must preprocess the string form of the command and options
-      --  list into the internal form that we use.
-
       for C in Real_Command_Type loop
          declare
-            Command : Item_Ptr := new Command_Item;
+            Command : constant Item_Ptr := new Command_Item;
 
             Last_Switch : Item_Ptr;
             --  Last switch in list
@@ -871,7 +1031,7 @@ package body VMS_Conv is
 
                   --  Process switch string, first get name
 
-                  while SS (P) /= ' ' and SS (P) /= '=' loop
+                  while SS (P) /= ' ' and then SS (P) /= '=' loop
                      P := P + 1;
                   end loop;
 
@@ -975,8 +1135,9 @@ package body VMS_Conv is
                      P := P + 1; -- bump past =
                      while P <= SS'Last loop
                         declare
-                           Opt : Item_Ptr := new Option_Item;
+                           Opt : constant Item_Ptr := new Option_Item;
                            Q   : Natural;
+
                         begin
                            --  Link new option item into options list
 
@@ -1015,290 +1176,498 @@ package body VMS_Conv is
             end loop;
          end;
       end loop;
+   end Preprocess_Command_Data;
 
-      --  If no parameters, give complete list of commands
+   ----------------------
+   -- Process_Argument --
+   ----------------------
 
-      if Argument_Count = 0 then
-         Output_Version;
-         New_Line;
-         Put_Line ("List of available commands");
-         New_Line;
+   procedure Process_Argument (The_Command : in out Command_Type) is
+      Argv    : String_Access;
+      Arg_Idx : Integer;
 
-         while Commands /= null loop
-            Put (Commands.Usage.all);
-            Set_Col (53);
-            Put_Line (Commands.Unix_String.all);
-            Commands := Commands.Next;
+      function Get_Arg_End
+        (Argv    : String;
+         Arg_Idx : Integer) return Integer;
+      --  Begins looking at Arg_Idx + 1 and returns the index of the
+      --  last character before a slash or else the index of the last
+      --  character in the string Argv.
+
+      -----------------
+      -- Get_Arg_End --
+      -----------------
+
+      function Get_Arg_End
+        (Argv    : String;
+         Arg_Idx : Integer) return Integer
+      is
+      begin
+         for J in Arg_Idx + 1 .. Argv'Last loop
+            if Argv (J) = '/' then
+               return J - 1;
+            end if;
          end loop;
 
-         raise Normal_Exit;
+         return Argv'Last;
+      end Get_Arg_End;
+
+      --  Start of processing for Process_Argument
+
+   begin
+      Cargs := False;
+
+      --  If an argument file is open, read the next non empty line
+
+      if Is_Open (Arg_File) then
+         declare
+            Line : String (1 .. 256);
+            Last : Natural;
+         begin
+            loop
+               Get_Line (Arg_File, Line, Last);
+               exit when Last /= 0 or else End_Of_File (Arg_File);
+            end loop;
+
+            --  If the end of the argument file has been reached, close it
+
+            if End_Of_File (Arg_File) then
+               Close (Arg_File);
+
+               --  If the last line was empty, return after increasing Arg_Num
+               --  to go to the next argument on the comment line.
+
+               if Last = 0 then
+                  Arg_Num := Arg_Num + 1;
+                  return;
+               end if;
+            end if;
+
+            Argv := new String'(Line (1 .. Last));
+            Arg_Idx := 1;
+
+            if Argv (1) = '@' then
+               Put_Line (Standard_Error, "argument file cannot contain @cmd");
+               raise Error_Exit;
+            end if;
+         end;
+
+      else
+         --  No argument file is open, get the argument on the command line
+
+         Argv := new String'(Argument (Arg_Num));
+         Arg_Idx := Argv'First;
+
+         --  Check if this is the specification of an argument file
+
+         if Argv (Arg_Idx) = '@' then
+            --  The first argument on the command line cannot be an argument
+            --  file.
+
+            if Arg_Num = 1 then
+               Put_Line
+                 (Standard_Error,
+                  "Cannot specify argument line before command");
+               raise Error_Exit;
+            end if;
+
+            --  Open the file, after conversion of the name to canonical form.
+            --  Fail if file is not found.
+
+            declare
+               Canonical_File_Name : String_Access :=
+                 To_Canonical_File_Spec (Argv (Arg_Idx + 1 .. Argv'Last));
+            begin
+               Open (Arg_File, In_File, Canonical_File_Name.all);
+               Free (Canonical_File_Name);
+               return;
+
+            exception
+               when others =>
+                  Put (Standard_Error, "Cannot open argument file """);
+                  Put (Standard_Error, Argv (Arg_Idx + 1 .. Argv'Last));
+                  Put_Line (Standard_Error, """");
+                  raise Error_Exit;
+            end;
+         end if;
       end if;
 
-      Arg_Num := 1;
-
-      --  Loop through arguments
-
-      while Arg_Num <= Argument_Count loop
-
-         Process_Argument : declare
-            Argv    : String_Access;
-            Arg_Idx : Integer;
-
-            function Get_Arg_End
-              (Argv    : String;
-               Arg_Idx : Integer) return Integer;
-            --  Begins looking at Arg_Idx + 1 and returns the index of the
-            --  last character before a slash or else the index of the last
-            --  character in the string Argv.
-
-            -----------------
-            -- Get_Arg_End --
-            -----------------
-
-            function Get_Arg_End
-              (Argv    : String;
-               Arg_Idx : Integer) return Integer
-            is
-            begin
-               for J in Arg_Idx + 1 .. Argv'Last loop
-                  if Argv (J) = '/' then
-                     return J - 1;
-                  end if;
-               end loop;
-
-               return Argv'Last;
-            end Get_Arg_End;
-
-         --  Start of processing for Process_Argument
+      <<Tryagain_After_Coalesce>>
+      loop
+         declare
+            Next_Arg_Idx : Integer;
+            Arg          : String_Access;
 
          begin
-            Argv := new String'(Argument (Arg_Num));
-            Arg_Idx := Argv'First;
+            Next_Arg_Idx := Get_Arg_End (Argv.all, Arg_Idx);
+            Arg := new String'(Argv (Arg_Idx .. Next_Arg_Idx));
 
-            <<Tryagain_After_Coalesce>>
-            loop
-               declare
-                  Next_Arg_Idx : Integer;
-                  Arg          : String_Access;
+            --  The first one must be a command name
 
-               begin
-                  Next_Arg_Idx := Get_Arg_End (Argv.all, Arg_Idx);
-                  Arg := new String'(Argv (Arg_Idx .. Next_Arg_Idx));
+            if Arg_Num = 1 and then Arg_Idx = Argv'First then
+               Command := Matching_Name (Arg.all, Commands);
 
-                  --  The first one must be a command name
+               if Command = null then
+                  raise Error_Exit;
+               end if;
 
-                  if Arg_Num = 1 and then Arg_Idx = Argv'First then
+               The_Command := Command.Command;
+               Output_File_Expected := False;
 
-                     Command := Matching_Name (Arg.all, Commands);
+               --  Give usage information if only command given
 
-                     if Command = null then
-                        raise Error_Exit;
-                     end if;
+               if Argument_Count = 1
+                 and then Next_Arg_Idx = Argv'Last
+               then
+                  Output_Version;
+                  New_Line;
+                  Put_Line
+                    ("List of available qualifiers and options");
+                  New_Line;
 
-                     The_Command := Command.Command;
+                  Put (Command.Usage.all);
+                  Set_Col (53);
+                  Put_Line (Command.Unix_String.all);
 
-                     --  Give usage information if only command given
+                  declare
+                     Sw : Item_Ptr := Command.Switches;
 
-                     if Argument_Count = 1
-                       and then Next_Arg_Idx = Argv'Last
-                     then
-                        Output_Version;
-                        New_Line;
-                        Put_Line
-                          ("List of available qualifiers and options");
-                        New_Line;
+                  begin
+                     while Sw /= null loop
+                        Put ("   ");
+                        Put (Sw.Name.all);
 
-                        Put (Command.Usage.all);
-                        Set_Col (53);
-                        Put_Line (Command.Unix_String.all);
+                        case Sw.Translation is
 
+                           when T_Other =>
+                              Set_Col (53);
+                              Put_Line (Sw.Unix_String.all &
+                                        "/<other>");
+
+                           when T_Direct =>
+                              Set_Col (53);
+                              Put_Line (Sw.Unix_String.all);
+
+                           when T_Directories =>
+                              Put ("=(direc,direc,..direc)");
+                              Set_Col (53);
+                              Put (Sw.Unix_String.all);
+                              Put (" direc ");
+                              Put (Sw.Unix_String.all);
+                              Put_Line (" direc ...");
+
+                           when T_Directory =>
+                              Put ("=directory");
+                              Set_Col (53);
+                              Put (Sw.Unix_String.all);
+
+                              if Sw.Unix_String (Sw.Unix_String'Last)
+                              /= '='
+                              then
+                                 Put (' ');
+                              end if;
+
+                              Put_Line ("directory ");
+
+                           when T_File | T_No_Space_File =>
+                              Put ("=file");
+                              Set_Col (53);
+                              Put (Sw.Unix_String.all);
+
+                              if Sw.Translation = T_File
+                                and then Sw.Unix_String
+                                  (Sw.Unix_String'Last) /= '='
+                              then
+                                 Put (' ');
+                              end if;
+
+                              Put_Line ("file ");
+
+                           when T_Numeric =>
+                              Put ("=nnn");
+                              Set_Col (53);
+
+                              if Sw.Unix_String
+                                (Sw.Unix_String'First) = '`'
+                              then
+                                 Put (Sw.Unix_String
+                                        (Sw.Unix_String'First + 1
+                                         .. Sw.Unix_String'Last));
+                              else
+                                 Put (Sw.Unix_String.all);
+                              end if;
+
+                              Put_Line ("nnn");
+
+                           when T_Alphanumplus =>
+                              Put ("=xyz");
+                              Set_Col (53);
+
+                              if Sw.Unix_String
+                                (Sw.Unix_String'First) = '`'
+                              then
+                                 Put (Sw.Unix_String
+                                        (Sw.Unix_String'First + 1
+                                         .. Sw.Unix_String'Last));
+                              else
+                                 Put (Sw.Unix_String.all);
+                              end if;
+
+                              Put_Line ("xyz");
+
+                           when T_String =>
+                              Put ("=");
+                              Put ('"');
+                              Put ("<string>");
+                              Put ('"');
+                              Set_Col (53);
+
+                              Put (Sw.Unix_String.all);
+
+                              if Sw.Unix_String
+                                (Sw.Unix_String'Last) /= '='
+                              then
+                                 Put (' ');
+                              end if;
+
+                              Put ("<string>");
+                              New_Line;
+
+                           when T_Commands =>
+                              Put (" (switches for ");
+                              Put (Sw.Unix_String
+                                     (Sw.Unix_String'First + 7
+                                      .. Sw.Unix_String'Last));
+                              Put (')');
+                              Set_Col (53);
+                              Put (Sw.Unix_String
+                                     (Sw.Unix_String'First
+                                      .. Sw.Unix_String'First + 5));
+                              Put_Line (" switches");
+
+                           when T_Options =>
+                              declare
+                                 Opt : Item_Ptr := Sw.Options;
+
+                              begin
+                                 Put_Line ("=(option,option..)");
+
+                                 while Opt /= null loop
+                                    Put ("      ");
+                                    Put (Opt.Name.all);
+
+                                    if Opt = Sw.Options then
+                                       Put (" (D)");
+                                    end if;
+
+                                    Set_Col (53);
+                                    Put_Line (Opt.Unix_String.all);
+                                    Opt := Opt.Next;
+                                 end loop;
+                              end;
+
+                        end case;
+
+                        Sw := Sw.Next;
+                     end loop;
+                  end;
+
+                  raise Normal_Exit;
+               end if;
+
+            --  Special handling for internal debugging switch /?
+
+            elsif Arg.all = "/?" then
+               Display_Command := True;
+               Output_File_Expected := False;
+
+            --  Special handling of internal option /KEEP_TEMPORARY_FILES
+
+            elsif Arg'Length >= 7
+              and then Matching_Name
+                         (Arg.all, Keep_Temps_Option, True) /= null
+            then
+               Opt.Keep_Temporary_Files := True;
+
+            --  Copy -switch unchanged, as well as +rule
+
+            elsif Arg (Arg'First) = '-' or else Arg (Arg'First) = '+' then
+               Place (' ');
+               Place (Arg.all);
+
+               --  Set Output_File_Expected for the next argument
+
+               Output_File_Expected :=
+                 Arg.all = "-o" and then The_Command = Link;
+
+               --  Copy quoted switch with quotes stripped
+
+            elsif Arg (Arg'First) = '"' then
+               if Arg (Arg'Last) /= '"' then
+                  Put (Standard_Error, "misquoted argument: ");
+                  Put_Line (Standard_Error, Arg.all);
+                  Errors := Errors + 1;
+
+               else
+                  Place (' ');
+                  Place (Arg (Arg'First + 1 .. Arg'Last - 1));
+               end if;
+
+               Output_File_Expected := False;
+
+               --  Parameter Argument
+
+            elsif Arg (Arg'First) /= '/'
+              and then Make_Commands_Active = null
+            then
+               Param_Count := Param_Count + 1;
+
+               if Param_Count <= Command.Params'Length then
+
+                  case Command.Params (Param_Count) is
+
+                     when File | Optional_File =>
                         declare
-                           Sw : Item_Ptr := Command.Switches;
+                           Normal_File : constant String_Access :=
+                             To_Canonical_File_Spec
+                               (Arg.all);
 
                         begin
-                           while Sw /= null loop
-                              Put ("   ");
-                              Put (Sw.Name.all);
+                           Place (' ');
+                           Place_Lower (Normal_File.all);
 
-                              case Sw.Translation is
-
-                                 when T_Other =>
-                                    Set_Col (53);
-                                    Put_Line (Sw.Unix_String.all &
-                                              "/<other>");
-
-                                 when T_Direct =>
-                                    Set_Col (53);
-                                    Put_Line (Sw.Unix_String.all);
-
-                                 when T_Directories =>
-                                    Put ("=(direc,direc,..direc)");
-                                    Set_Col (53);
-                                    Put (Sw.Unix_String.all);
-                                    Put (" direc ");
-                                    Put (Sw.Unix_String.all);
-                                    Put_Line (" direc ...");
-
-                                 when T_Directory =>
-                                    Put ("=directory");
-                                    Set_Col (53);
-                                    Put (Sw.Unix_String.all);
-
-                                    if Sw.Unix_String (Sw.Unix_String'Last)
-                                    /= '='
-                                    then
-                                       Put (' ');
-                                    end if;
-
-                                    Put_Line ("directory ");
-
-                                 when T_File | T_No_Space_File =>
-                                    Put ("=file");
-                                    Set_Col (53);
-                                    Put (Sw.Unix_String.all);
-
-                                    if Sw.Translation = T_File
-                                      and then Sw.Unix_String
-                                        (Sw.Unix_String'Last)
-                                    /= '='
-                                    then
-                                       Put (' ');
-                                    end if;
-
-                                    Put_Line ("file ");
-
-                                 when T_Numeric =>
-                                    Put ("=nnn");
-                                    Set_Col (53);
-
-                                    if Sw.Unix_String (Sw.Unix_String'First)
-                                    = '`'
-                                    then
-                                       Put (Sw.Unix_String
-                                              (Sw.Unix_String'First + 1
-                                               .. Sw.Unix_String'Last));
-                                    else
-                                       Put (Sw.Unix_String.all);
-                                    end if;
-
-                                    Put_Line ("nnn");
-
-                                 when T_Alphanumplus =>
-                                    Put ("=xyz");
-                                    Set_Col (53);
-
-                                    if Sw.Unix_String (Sw.Unix_String'First)
-                                    = '`'
-                                    then
-                                       Put (Sw.Unix_String
-                                              (Sw.Unix_String'First + 1
-                                               .. Sw.Unix_String'Last));
-                                    else
-                                       Put (Sw.Unix_String.all);
-                                    end if;
-
-                                    Put_Line ("xyz");
-
-                                 when T_String =>
-                                    Put ("=");
-                                    Put ('"');
-                                    Put ("<string>");
-                                    Put ('"');
-                                    Set_Col (53);
-
-                                    Put (Sw.Unix_String.all);
-
-                                    if Sw.Unix_String (Sw.Unix_String'Last)
-                                    /= '='
-                                    then
-                                       Put (' ');
-                                    end if;
-
-                                    Put ("<string>");
-                                    New_Line;
-
-                                 when T_Commands =>
-                                    Put (" (switches for ");
-                                    Put (Sw.Unix_String
-                                           (Sw.Unix_String'First + 7
-                                            .. Sw.Unix_String'Last));
-                                    Put (')');
-                                    Set_Col (53);
-                                    Put (Sw.Unix_String
-                                           (Sw.Unix_String'First
-                                            .. Sw.Unix_String'First + 5));
-                                    Put_Line (" switches");
-
-                                 when T_Options =>
-                                    declare
-                                       Opt : Item_Ptr := Sw.Options;
-
-                                    begin
-                                       Put_Line ("=(option,option..)");
-
-                                       while Opt /= null loop
-                                          Put ("      ");
-                                          Put (Opt.Name.all);
-
-                                          if Opt = Sw.Options then
-                                             Put (" (D)");
-                                          end if;
-
-                                          Set_Col (53);
-                                          Put_Line (Opt.Unix_String.all);
-                                          Opt := Opt.Next;
-                                       end loop;
-                                    end;
-
-                              end case;
-
-                              Sw := Sw.Next;
-                           end loop;
+                           if Is_Extensionless (Normal_File.all)
+                             and then Command.Defext /= "   "
+                           then
+                              Place ('.');
+                              Place (Command.Defext);
+                           end if;
                         end;
 
-                        raise Normal_Exit;
-                     end if;
+                     when Unlimited_Files =>
+                        declare
+                           Normal_File : constant String_Access :=
+                             To_Canonical_File_Spec
+                               (Arg.all);
 
-                     --  Special handling for internal debugging switch /?
+                           File_Is_Wild : Boolean := False;
+                           File_List    : String_Access_List_Access;
 
-                  elsif Arg.all = "/?" then
-                     Display_Command := True;
+                        begin
+                           for J in Arg'Range loop
+                              if Arg (J) = '*'
+                                or else Arg (J) = '%'
+                              then
+                                 File_Is_Wild := True;
+                              end if;
+                           end loop;
 
-                     --  Copy -switch unchanged
+                           if File_Is_Wild then
+                              File_List := To_Canonical_File_List
+                                (Arg.all, False);
 
-                  elsif Arg (Arg'First) = '-' then
-                     Place (' ');
-                     Place (Arg.all);
+                              for J in File_List.all'Range loop
+                                 Place (' ');
+                                 Place_Lower (File_List.all (J).all);
+                              end loop;
 
-                     --  Copy quoted switch with quotes stripped
+                           else
+                              Place (' ');
+                              Place_Lower (Normal_File.all);
 
-                  elsif Arg (Arg'First) = '"' then
-                     if Arg (Arg'Last) /= '"' then
-                        Put (Standard_Error, "misquoted argument: ");
-                        Put_Line (Standard_Error, Arg.all);
-                        Errors := Errors + 1;
+                              --  Add extension if not present, except after
+                              --  switch -o.
 
-                     else
+                              if Is_Extensionless (Normal_File.all)
+                                and then Command.Defext /= "   "
+                                and then not Output_File_Expected
+                              then
+                                 Place ('.');
+                                 Place (Command.Defext);
+                              end if;
+                           end if;
+
+                           Param_Count := Param_Count - 1;
+                        end;
+
+                     when Other_As_Is =>
                         Place (' ');
-                        Place (Arg (Arg'First + 1 .. Arg'Last - 1));
-                     end if;
+                        Place (Arg.all);
 
-                     --  Parameter Argument
+                     when Unlimited_As_Is =>
+                        Place (' ');
+                        Place (Arg.all);
+                        Param_Count := Param_Count - 1;
 
-                  elsif Arg (Arg'First) /= '/'
-                    and then Make_Commands_Active = null
-                  then
-                     Param_Count := Param_Count + 1;
+                     when Files_Or_Wildcard =>
 
-                     if Param_Count <= Command.Params'Length then
+                        --  Remove spaces from a comma separated list
+                        --  of file names and adjust control variables
+                        --  accordingly.
 
-                        case Command.Params (Param_Count) is
+                        while Arg_Num < Argument_Count and then
+                          (Argv (Argv'Last) = ',' xor
+                             Argument (Arg_Num + 1)
+                             (Argument (Arg_Num + 1)'First) = ',')
+                        loop
+                           Argv := new String'
+                             (Argv.all & Argument (Arg_Num + 1));
+                           Arg_Num := Arg_Num + 1;
+                           Arg_Idx := Argv'First;
+                           Next_Arg_Idx :=
+                             Get_Arg_End (Argv.all, Arg_Idx);
+                           Arg := new String'
+                             (Argv (Arg_Idx .. Next_Arg_Idx));
+                        end loop;
 
-                           when File | Optional_File =>
+                        --  Parse the comma separated list of VMS
+                        --  filenames and place them on the command
+                        --  line as space separated Unix style
+                        --  filenames. Lower case and add default
+                        --  extension as appropriate.
+
+                        declare
+                           Arg1_Idx : Integer := Arg'First;
+
+                           function Get_Arg1_End
+                             (Arg     : String;
+                              Arg_Idx : Integer) return Integer;
+                           --  Begins looking at Arg_Idx + 1 and
+                           --  returns the index of the last character
+                           --  before a comma or else the index of the
+                           --  last character in the string Arg.
+
+                           ------------------
+                           -- Get_Arg1_End --
+                           ------------------
+
+                           function Get_Arg1_End
+                             (Arg     : String;
+                              Arg_Idx : Integer) return Integer
+                           is
+                           begin
+                              for J in Arg_Idx + 1 .. Arg'Last loop
+                                 if Arg (J) = ',' then
+                                    return J - 1;
+                                 end if;
+                              end loop;
+
+                              return Arg'Last;
+                           end Get_Arg1_End;
+
+                        begin
+                           loop
                               declare
-                                 Normal_File : constant String_Access :=
-                                   To_Canonical_File_Spec
-                                     (Arg.all);
+                                 Next_Arg1_Idx :
+                                 constant Integer :=
+                                   Get_Arg1_End (Arg.all, Arg1_Idx);
+
+                                 Arg1 :
+                                 constant String :=
+                                   Arg (Arg1_Idx .. Next_Arg1_Idx);
+
+                                 Normal_File :
+                                 constant String_Access :=
+                                   To_Canonical_File_Spec (Arg1);
 
                               begin
                                  Place (' ');
@@ -1310,584 +1679,626 @@ package body VMS_Conv is
                                     Place ('.');
                                     Place (Command.Defext);
                                  end if;
+
+                                 Arg1_Idx := Next_Arg1_Idx + 1;
                               end;
 
-                           when Unlimited_Files =>
-                              declare
-                                 Normal_File :
-                                 constant String_Access :=
-                                   To_Canonical_File_Spec (Arg.all);
+                              exit when Arg1_Idx > Arg'Last;
 
-                                 File_Is_Wild  : Boolean := False;
-                                 File_List     : String_Access_List_Access;
+                              --  Don't allow two or more commas in
+                              --  a row
 
-                              begin
-                                 for J in Arg'Range loop
-                                    if Arg (J) = '*'
-                                      or else Arg (J) = '%'
-                                    then
-                                       File_Is_Wild := True;
-                                    end if;
-                                 end loop;
-
-                                 if File_Is_Wild then
-                                    File_List := To_Canonical_File_List
-                                      (Arg.all, False);
-
-                                    for J in File_List.all'Range loop
-                                       Place (' ');
-                                       Place_Lower (File_List.all (J).all);
-                                    end loop;
-
-                                 else
-                                    Place (' ');
-                                    Place_Lower (Normal_File.all);
-
-                                    if Is_Extensionless (Normal_File.all)
-                                      and then Command.Defext /= "   "
-                                    then
-                                       Place ('.');
-                                       Place (Command.Defext);
-                                    end if;
+                              if Arg (Arg1_Idx) = ',' then
+                                 Arg1_Idx := Arg1_Idx + 1;
+                                 if Arg1_Idx > Arg'Last or else
+                                   Arg (Arg1_Idx) = ','
+                                 then
+                                    Put_Line
+                                      (Standard_Error,
+                                       "Malformed Parameter: " &
+                                       Arg.all);
+                                    Put (Standard_Error, "usage: ");
+                                    Put_Line (Standard_Error,
+                                              Command.Usage.all);
+                                    raise Error_Exit;
                                  end if;
+                              end if;
 
-                                 Param_Count := Param_Count - 1;
-                              end;
+                           end loop;
+                        end;
+                  end case;
+               end if;
 
-                           when Other_As_Is =>
-                              Place (' ');
-                              Place (Arg.all);
+               --  Reset Output_File_Expected, in case it was True
 
-                           when Unlimited_As_Is =>
-                              Place (' ');
-                              Place (Arg.all);
-                              Param_Count := Param_Count - 1;
+               Output_File_Expected := False;
 
-                           when Files_Or_Wildcard =>
+               --  Qualifier argument
 
-                              --  Remove spaces from a comma separated list
-                              --  of file names and adjust control variables
-                              --  accordingly.
+            else
+               Output_File_Expected := False;
 
-                              while Arg_Num < Argument_Count and then
+               Cargs := Command.Name.all = "COMPILE";
+
+               --  This code is too heavily nested, should be
+               --  separated out as separate subprogram ???
+
+               declare
+                  Sw   : Item_Ptr;
+                  SwP  : Natural;
+                  P2   : Natural;
+                  Endp : Natural := 0; -- avoid warning!
+                  Opt  : Item_Ptr;
+
+               begin
+                  SwP := Arg'First;
+                  while SwP < Arg'Last
+                    and then Arg (SwP + 1) /= '='
+                  loop
+                     SwP := SwP + 1;
+                  end loop;
+
+                  --  At this point, the switch name is in
+                  --  Arg (Arg'First..SwP) and if that is not the
+                  --  whole switch, then there is an equal sign at
+                  --  Arg (SwP + 1) and the rest of Arg is what comes
+                  --  after the equal sign.
+
+                  --  If make commands are active, see if we have
+                  --  another COMMANDS_TRANSLATION switch belonging
+                  --  to gnatmake.
+
+                  if Make_Commands_Active /= null then
+                     Sw :=
+                       Matching_Name
+                         (Arg (Arg'First .. SwP),
+                          Command.Switches,
+                          Quiet => True);
+
+                     if Sw /= null
+                       and then Sw.Translation = T_Commands
+                     then
+                        null;
+
+                     else
+                        Sw :=
+                          Matching_Name
+                            (Arg (Arg'First .. SwP),
+                             Make_Commands_Active.Switches,
+                             Quiet => False);
+                     end if;
+
+                     --  For case of GNAT MAKE or CHOP, if we cannot
+                     --  find the switch, then see if it is a
+                     --  recognized compiler switch instead, and if
+                     --  so process the compiler switch.
+
+                  elsif Command.Name.all = "MAKE"
+                    or else Command.Name.all = "CHOP" then
+                     Sw :=
+                       Matching_Name
+                         (Arg (Arg'First .. SwP),
+                          Command.Switches,
+                          Quiet => True);
+
+                     if Sw = null then
+                        Sw :=
+                          Matching_Name
+                            (Arg (Arg'First .. SwP),
+                             Matching_Name
+                               ("COMPILE", Commands).Switches,
+                             Quiet => False);
+                     end if;
+
+                     --  For all other cases, just search the relevant
+                     --  command.
+
+                  else
+                     Sw :=
+                       Matching_Name
+                         (Arg (Arg'First .. SwP),
+                          Command.Switches,
+                          Quiet => False);
+                  end if;
+
+                  if Sw /= null then
+                     if Cargs
+                       and then Sw.Name /= null
+                       and then
+                         (Sw.Name.all = "/PROJECT_FILE"          or else
+                          Sw.Name.all = "/MESSAGES_PROJECT_FILE" or else
+                          Sw.Name.all = "/EXTERNAL_REFERENCE")
+                     then
+                        Cargs := False;
+                     end if;
+
+                     case Sw.Translation is
+                        when T_Direct =>
+                           Place_Unix_Switches (Sw.Unix_String);
+                           if SwP < Arg'Last
+                             and then Arg (SwP + 1) = '='
+                           then
+                              Put (Standard_Error,
+                                   "qualifier options ignored: ");
+                              Put_Line (Standard_Error, Arg.all);
+                           end if;
+
+                        when T_Directories =>
+                           if SwP + 1 > Arg'Last then
+                              Put (Standard_Error,
+                                   "missing directories for: ");
+                              Put_Line (Standard_Error, Arg.all);
+                              Errors := Errors + 1;
+
+                           elsif Arg (SwP + 2) /= '(' then
+                              SwP := SwP + 2;
+                              Endp := Arg'Last;
+
+                           elsif Arg (Arg'Last) /= ')' then
+
+                              --  Remove spaces from a comma separated
+                              --  list of file names and adjust
+                              --  control variables accordingly.
+
+                              if Arg_Num < Argument_Count and then
                                 (Argv (Argv'Last) = ',' xor
                                    Argument (Arg_Num + 1)
                                    (Argument (Arg_Num + 1)'First) = ',')
-                              loop
-                                 Argv := new String'
-                                   (Argv.all & Argument (Arg_Num + 1));
+                              then
+                                 Argv :=
+                                   new String'(Argv.all
+                                               & Argument
+                                                 (Arg_Num + 1));
                                  Arg_Num := Arg_Num + 1;
                                  Arg_Idx := Argv'First;
                                  Next_Arg_Idx :=
                                    Get_Arg_End (Argv.all, Arg_Idx);
                                  Arg := new String'
                                    (Argv (Arg_Idx .. Next_Arg_Idx));
-                              end loop;
+                                 goto Tryagain_After_Coalesce;
+                              end if;
 
-                              --  Parse the comma separated list of VMS
-                              --  filenames and place them on the command
-                              --  line as space separated Unix style
-                              --  filenames. Lower case and add default
-                              --  extension as appropriate.
-
-                              declare
-                                 Arg1_Idx : Integer := Arg'First;
-
-                                 function Get_Arg1_End
-                                   (Arg     : String;
-                                    Arg_Idx : Integer) return Integer;
-                                 --  Begins looking at Arg_Idx + 1 and
-                                 --  returns the index of the last character
-                                 --  before a comma or else the index of the
-                                 --  last character in the string Arg.
-
-                                 ------------------
-                                 -- Get_Arg1_End --
-                                 ------------------
-
-                                 function Get_Arg1_End
-                                   (Arg     : String;
-                                    Arg_Idx : Integer) return Integer
-                                 is
-                                 begin
-                                    for J in Arg_Idx + 1 .. Arg'Last loop
-                                       if Arg (J) = ',' then
-                                          return J - 1;
-                                       end if;
-                                    end loop;
-
-                                    return Arg'Last;
-                                 end Get_Arg1_End;
-
-                              begin
-                                 loop
-                                    declare
-                                       Next_Arg1_Idx :
-                                       constant Integer :=
-                                         Get_Arg1_End (Arg.all, Arg1_Idx);
-
-                                       Arg1 :
-                                       constant String :=
-                                         Arg (Arg1_Idx .. Next_Arg1_Idx);
-
-                                       Normal_File :
-                                       constant String_Access :=
-                                         To_Canonical_File_Spec (Arg1);
-
-                                    begin
-                                       Place (' ');
-                                       Place_Lower (Normal_File.all);
-
-                                       if Is_Extensionless (Normal_File.all)
-                                         and then Command.Defext /= "   "
-                                       then
-                                          Place ('.');
-                                          Place (Command.Defext);
-                                       end if;
-
-                                       Arg1_Idx := Next_Arg1_Idx + 1;
-                                    end;
-
-                                    exit when Arg1_Idx > Arg'Last;
-
-                                    --  Don't allow two or more commas in
-                                    --  a row
-
-                                    if Arg (Arg1_Idx) = ',' then
-                                       Arg1_Idx := Arg1_Idx + 1;
-                                       if Arg1_Idx > Arg'Last or else
-                                         Arg (Arg1_Idx) = ','
-                                       then
-                                          Put_Line
-                                            (Standard_Error,
-                                             "Malformed Parameter: " &
-                                             Arg.all);
-                                          Put (Standard_Error, "usage: ");
-                                          Put_Line (Standard_Error,
-                                                    Command.Usage.all);
-                                          raise Error_Exit;
-                                       end if;
-                                    end if;
-
-                                 end loop;
-                              end;
-                        end case;
-                     end if;
-
-                     --  Qualifier argument
-
-                  else
-                     --  This code is too heavily nested, should be
-                     --  separated out as separate subprogram ???
-
-                     declare
-                        Sw   : Item_Ptr;
-                        SwP  : Natural;
-                        P2   : Natural;
-                        Endp : Natural := 0; -- avoid warning!
-                        Opt  : Item_Ptr;
-
-                     begin
-                        SwP := Arg'First;
-                        while SwP < Arg'Last
-                          and then Arg (SwP + 1) /= '='
-                        loop
-                           SwP := SwP + 1;
-                        end loop;
-
-                        --  At this point, the switch name is in
-                        --  Arg (Arg'First..SwP) and if that is not the
-                        --  whole switch, then there is an equal sign at
-                        --  Arg (SwP + 1) and the rest of Arg is what comes
-                        --  after the equal sign.
-
-                        --  If make commands are active, see if we have
-                        --  another COMMANDS_TRANSLATION switch belonging
-                        --  to gnatmake.
-
-                        if Make_Commands_Active /= null then
-                           Sw :=
-                             Matching_Name
-                               (Arg (Arg'First .. SwP),
-                                Command.Switches,
-                                Quiet => True);
-
-                           if Sw /= null
-                             and then Sw.Translation = T_Commands
-                           then
-                              null;
+                              Put (Standard_Error,
+                                   "incorrectly parenthesized " &
+                                   "or malformed argument: ");
+                              Put_Line (Standard_Error, Arg.all);
+                              Errors := Errors + 1;
 
                            else
-                              Sw :=
-                                Matching_Name
-                                  (Arg (Arg'First .. SwP),
-                                   Make_Commands_Active.Switches,
-                                   Quiet => False);
+                              SwP := SwP + 3;
+                              Endp := Arg'Last - 1;
                            end if;
 
-                           --  For case of GNAT MAKE or CHOP, if we cannot
-                           --  find the switch, then see if it is a
-                           --  recognized compiler switch instead, and if
-                           --  so process the compiler switch.
+                           while SwP <= Endp loop
+                              declare
+                                 Dir_Is_Wild       : Boolean := False;
+                                 Dir_Maybe_Is_Wild : Boolean := False;
 
-                        elsif Command.Name.all = "MAKE"
-                          or else Command.Name.all = "CHOP" then
-                           Sw :=
-                             Matching_Name
-                               (Arg (Arg'First .. SwP),
-                                Command.Switches,
-                                Quiet => True);
+                                 Dir_List : String_Access_List_Access;
 
-                           if Sw = null then
-                              Sw :=
-                                Matching_Name
-                                  (Arg (Arg'First .. SwP),
-                                   Matching_Name
-                                     ("COMPILE", Commands).Switches,
-                                   Quiet => False);
-                           end if;
+                              begin
+                                 P2 := SwP;
 
-                           --  For all other cases, just search the relevant
-                           --  command.
+                                 while P2 < Endp
+                                   and then Arg (P2 + 1) /= ','
+                                 loop
+                                    --  A wildcard directory spec on
+                                    --  VMS will contain either * or
+                                    --  % or ...
 
-                        else
-                           Sw :=
-                             Matching_Name
-                               (Arg (Arg'First .. SwP),
-                                Command.Switches,
-                                Quiet => False);
-                        end if;
+                                    if Arg (P2) = '*' then
+                                       Dir_Is_Wild := True;
 
-                        if Sw /= null then
-                           case Sw.Translation is
+                                    elsif Arg (P2) = '%' then
+                                       Dir_Is_Wild := True;
 
-                              when T_Direct =>
-                                 Place_Unix_Switches (Sw.Unix_String);
-                                 if SwP < Arg'Last
-                                   and then Arg (SwP + 1) = '='
-                                 then
-                                    Put (Standard_Error,
-                                         "qualifier options ignored: ");
-                                    Put_Line (Standard_Error, Arg.all);
-                                 end if;
-
-                              when T_Directories =>
-                                 if SwP + 1 > Arg'Last then
-                                    Put (Standard_Error,
-                                         "missing directories for: ");
-                                    Put_Line (Standard_Error, Arg.all);
-                                    Errors := Errors + 1;
-
-                                 elsif Arg (SwP + 2) /= '(' then
-                                    SwP := SwP + 2;
-                                    Endp := Arg'Last;
-
-                                 elsif Arg (Arg'Last) /= ')' then
-
-                                    --  Remove spaces from a comma separated
-                                    --  list of file names and adjust
-                                    --  control variables accordingly.
-
-                                    if Arg_Num < Argument_Count and then
-                                      (Argv (Argv'Last) = ',' xor
-                                         Argument (Arg_Num + 1)
-                                         (Argument (Arg_Num + 1)'First) = ',')
+                                    elsif Dir_Maybe_Is_Wild
+                                      and then Arg (P2) = '.'
+                                      and then Arg (P2 + 1) = '.'
                                     then
-                                       Argv :=
-                                         new String'(Argv.all
-                                                     & Argument
-                                                       (Arg_Num + 1));
-                                       Arg_Num := Arg_Num + 1;
-                                       Arg_Idx := Argv'First;
-                                       Next_Arg_Idx
-                                       := Get_Arg_End (Argv.all, Arg_Idx);
-                                       Arg := new String'
-                                         (Argv (Arg_Idx .. Next_Arg_Idx));
-                                       goto Tryagain_After_Coalesce;
+                                       Dir_Is_Wild := True;
+                                       Dir_Maybe_Is_Wild := False;
+
+                                    elsif Dir_Maybe_Is_Wild then
+                                       Dir_Maybe_Is_Wild := False;
+
+                                    elsif Arg (P2) = '.'
+                                      and then Arg (P2 + 1) = '.'
+                                    then
+                                       Dir_Maybe_Is_Wild := True;
+
                                     end if;
 
-                                    Put (Standard_Error,
-                                         "incorrectly parenthesized " &
-                                         "or malformed argument: ");
-                                    Put_Line (Standard_Error, Arg.all);
-                                    Errors := Errors + 1;
-
-                                 else
-                                    SwP := SwP + 3;
-                                    Endp := Arg'Last - 1;
-                                 end if;
-
-                                 while SwP <= Endp loop
-                                    declare
-                                       Dir_Is_Wild       : Boolean := False;
-                                       Dir_Maybe_Is_Wild : Boolean := False;
-                                       Dir_List : String_Access_List_Access;
-                                    begin
-                                       P2 := SwP;
-
-                                       while P2 < Endp
-                                         and then Arg (P2 + 1) /= ','
-                                       loop
-
-                                          --  A wildcard directory spec on
-                                          --  VMS will contain either * or
-                                          --  % or ...
-
-                                          if Arg (P2) = '*' then
-                                             Dir_Is_Wild := True;
-
-                                          elsif Arg (P2) = '%' then
-                                             Dir_Is_Wild := True;
-
-                                          elsif Dir_Maybe_Is_Wild
-                                            and then Arg (P2) = '.'
-                                            and then Arg (P2 + 1) = '.'
-                                          then
-                                             Dir_Is_Wild := True;
-                                             Dir_Maybe_Is_Wild := False;
-
-                                          elsif Dir_Maybe_Is_Wild then
-                                             Dir_Maybe_Is_Wild := False;
-
-                                          elsif Arg (P2) = '.'
-                                            and then Arg (P2 + 1) = '.'
-                                          then
-                                             Dir_Maybe_Is_Wild := True;
-
-                                          end if;
-
-                                          P2 := P2 + 1;
-                                       end loop;
-
-                                       if Dir_Is_Wild then
-                                          Dir_List := To_Canonical_File_List
-                                            (Arg (SwP .. P2), True);
-
-                                          for J in Dir_List.all'Range loop
-                                             Place_Unix_Switches
-                                               (Sw.Unix_String);
-                                             Place_Lower
-                                               (Dir_List.all (J).all);
-                                          end loop;
-
-                                       else
-                                          Place_Unix_Switches
-                                            (Sw.Unix_String);
-                                          Place_Lower
-                                            (To_Canonical_Dir_Spec
-                                               (Arg (SwP .. P2), False).all);
-                                       end if;
-
-                                       SwP := P2 + 2;
-                                    end;
+                                    P2 := P2 + 1;
                                  end loop;
 
-                              when T_Directory =>
-                                 if SwP + 1 > Arg'Last then
-                                    Put (Standard_Error,
-                                         "missing directory for: ");
-                                    Put_Line (Standard_Error, Arg.all);
-                                    Errors := Errors + 1;
+                                 if Dir_Is_Wild then
+                                    Dir_List :=
+                                      To_Canonical_File_List
+                                        (Arg (SwP .. P2), True);
+
+                                    for J in Dir_List.all'Range loop
+                                       Place_Unix_Switches
+                                         (Sw.Unix_String);
+                                       Place_Lower
+                                         (Dir_List.all (J).all);
+                                    end loop;
 
                                  else
-                                    Place_Unix_Switches (Sw.Unix_String);
-
-                                    --  Some switches end in "=". No space
-                                    --  here
-
-                                    if Sw.Unix_String
-                                      (Sw.Unix_String'Last) /= '='
-                                    then
-                                       Place (' ');
-                                    end if;
-
+                                    Place_Unix_Switches
+                                      (Sw.Unix_String);
                                     Place_Lower
                                       (To_Canonical_Dir_Spec
-                                         (Arg (SwP + 2 .. Arg'Last),
-                                          False).all);
+                                         (Arg (SwP .. P2), False).all);
                                  end if;
 
-                              when T_File | T_No_Space_File =>
-                                 if SwP + 1 > Arg'Last then
-                                    Put (Standard_Error,
-                                         "missing file for: ");
-                                    Put_Line (Standard_Error, Arg.all);
-                                    Errors := Errors + 1;
+                                 SwP := P2 + 2;
+                              end;
+                           end loop;
 
-                                 else
-                                    Place_Unix_Switches (Sw.Unix_String);
+                        when T_Directory =>
+                           if SwP + 1 > Arg'Last then
+                              Put (Standard_Error,
+                                   "missing directory for: ");
+                              Put_Line (Standard_Error, Arg.all);
+                              Errors := Errors + 1;
 
-                                    --  Some switches end in "=". No space
-                                    --  here.
+                           else
+                              Place_Unix_Switches (Sw.Unix_String);
 
-                                    if Sw.Translation = T_File
-                                      and then Sw.Unix_String
-                                        (Sw.Unix_String'Last) /= '='
-                                    then
-                                       Place (' ');
-                                    end if;
+                              --  Some switches end in "=". No space
+                              --  here
 
-                                    Place_Lower
-                                      (To_Canonical_File_Spec
-                                         (Arg (SwP + 2 .. Arg'Last)).all);
-                                 end if;
-
-                              when T_Numeric =>
-                                 if
-                                   OK_Integer (Arg (SwP + 2 .. Arg'Last))
-                                 then
-                                    Place_Unix_Switches (Sw.Unix_String);
-                                    Place (Arg (SwP + 2 .. Arg'Last));
-
-                                 else
-                                    Put (Standard_Error, "argument for ");
-                                    Put (Standard_Error, Sw.Name.all);
-                                    Put_Line
-                                      (Standard_Error, " must be numeric");
-                                    Errors := Errors + 1;
-                                 end if;
-
-                              when T_Alphanumplus =>
-                                 if
-                                   OK_Alphanumerplus
-                                     (Arg (SwP + 2 .. Arg'Last))
-                                 then
-                                    Place_Unix_Switches (Sw.Unix_String);
-                                    Place (Arg (SwP + 2 .. Arg'Last));
-
-                                 else
-                                    Put (Standard_Error, "argument for ");
-                                    Put (Standard_Error, Sw.Name.all);
-                                    Put_Line (Standard_Error,
-                                              " must be alphanumeric");
-                                    Errors := Errors + 1;
-                                 end if;
-
-                              when T_String =>
-
-                                 --  A String value must be extended to the
-                                 --  end of the Argv, otherwise strings like
-                                 --  "foo/bar" get split at the slash.
-                                 --
-                                 --  The begining and ending of the string
-                                 --  are flagged with embedded nulls which
-                                 --  are removed when building the Spawn
-                                 --  call. Nulls are use because they won't
-                                 --  show up in a /? output. Quotes aren't
-                                 --  used because that would make it
-                                 --  difficult to embed them.
-
-                                 Place_Unix_Switches (Sw.Unix_String);
-                                 if Next_Arg_Idx /= Argv'Last then
-                                    Next_Arg_Idx := Argv'Last;
-                                    Arg := new String'
-                                      (Argv (Arg_Idx .. Next_Arg_Idx));
-
-                                    SwP := Arg'First;
-                                    while SwP < Arg'Last and then
-                                    Arg (SwP + 1) /= '=' loop
-                                       SwP := SwP + 1;
-                                    end loop;
-                                 end if;
-                                 Place (ASCII.NUL);
-                                 Place (Arg (SwP + 2 .. Arg'Last));
-                                 Place (ASCII.NUL);
-
-                              when T_Commands =>
-
-                                 --  Output -largs/-bargs/-cargs
-
+                              if Sw.Unix_String
+                                (Sw.Unix_String'Last) /= '='
+                              then
                                  Place (' ');
-                                 Place (Sw.Unix_String
-                                          (Sw.Unix_String'First ..
-                                             Sw.Unix_String'First + 5));
+                              end if;
 
-                                 if Sw.Unix_String
-                                   (Sw.Unix_String'First + 7 ..
-                                      Sw.Unix_String'Last) =
-                                     "MAKE"
-                                 then
-                                    Make_Commands_Active := null;
+                              Place_Lower
+                                (To_Canonical_Dir_Spec
+                                   (Arg (SwP + 2 .. Arg'Last),
+                                    False).all);
+                           end if;
 
-                                 else
-                                    --  Set source of new commands, also
-                                    --  setting this non-null indicates that
-                                    --  we are in the special commands mode
-                                    --  for processing the -xargs case.
+                        when T_File | T_No_Space_File =>
+                           if SwP + 1 > Arg'Last then
+                              Put (Standard_Error,
+                                   "missing file for: ");
+                              Put_Line (Standard_Error, Arg.all);
+                              Errors := Errors + 1;
 
-                                    Make_Commands_Active :=
-                                      Matching_Name
-                                        (Sw.Unix_String
-                                             (Sw.Unix_String'First + 7 ..
-                                                  Sw.Unix_String'Last),
-                                         Commands);
-                                 end if;
+                           else
+                              Place_Unix_Switches (Sw.Unix_String);
 
-                              when T_Options =>
-                                 if SwP + 1 > Arg'Last then
-                                    Place_Unix_Switches
-                                      (Sw.Options.Unix_String);
-                                    SwP := Endp + 1;
+                              --  Some switches end in "=". No space
+                              --  here.
 
-                                 elsif Arg (SwP + 2) /= '(' then
-                                    SwP := SwP + 2;
-                                    Endp := Arg'Last;
+                              if Sw.Translation = T_File
+                                and then Sw.Unix_String
+                                  (Sw.Unix_String'Last) /= '='
+                              then
+                                 Place (' ');
+                              end if;
 
-                                 elsif Arg (Arg'Last) /= ')' then
-                                    Put
-                                      (Standard_Error,
-                                       "incorrectly parenthesized " &
-                                       "argument: ");
-                                    Put_Line (Standard_Error, Arg.all);
-                                    Errors := Errors + 1;
-                                    SwP := Endp + 1;
+                              Place_Lower
+                                (To_Canonical_File_Spec
+                                   (Arg (SwP + 2 .. Arg'Last)).all);
+                           end if;
 
-                                 else
-                                    SwP := SwP + 3;
-                                    Endp := Arg'Last - 1;
-                                 end if;
+                        when T_Numeric =>
+                           if OK_Integer (Arg (SwP + 2 .. Arg'Last)) then
+                              Place_Unix_Switches (Sw.Unix_String);
+                              Place (Arg (SwP + 2 .. Arg'Last));
 
-                                 while SwP <= Endp loop
-                                    P2 := SwP;
+                           else
+                              Put (Standard_Error, "argument for ");
+                              Put (Standard_Error, Sw.Name.all);
+                              Put_Line
+                                (Standard_Error, " must be numeric");
+                              Errors := Errors + 1;
+                           end if;
 
-                                    while P2 < Endp
-                                      and then Arg (P2 + 1) /= ','
-                                    loop
-                                       P2 := P2 + 1;
-                                    end loop;
+                        when T_Alphanumplus =>
+                           if OK_Alphanumerplus
+                             (Arg (SwP + 2 .. Arg'Last))
+                           then
+                              Place_Unix_Switches (Sw.Unix_String);
+                              Place (Arg (SwP + 2 .. Arg'Last));
 
-                                    --  Option name is in Arg (SwP .. P2)
+                           else
+                              Put (Standard_Error, "argument for ");
+                              Put (Standard_Error, Sw.Name.all);
+                              Put_Line (Standard_Error,
+                                        " must be alphanumeric");
+                              Errors := Errors + 1;
+                           end if;
 
-                                    Opt := Matching_Name (Arg (SwP .. P2),
-                                                          Sw.Options);
+                        when T_String =>
 
-                                    if Opt /= null then
-                                       Place_Unix_Switches
-                                         (Opt.Unix_String);
-                                    end if;
+                           --  A String value must be extended to the
+                           --  end of the Argv, otherwise strings like
+                           --  "foo/bar" get split at the slash.
 
-                                    SwP := P2 + 2;
-                                 end loop;
+                           --  The beginning and ending of the string
+                           --  are flagged with embedded nulls which
+                           --  are removed when building the Spawn
+                           --  call. Nulls are use because they won't
+                           --  show up in a /? output. Quotes aren't
+                           --  used because that would make it
+                           --  difficult to embed them.
 
-                              when T_Other =>
+                           Place_Unix_Switches (Sw.Unix_String);
+
+                           if Next_Arg_Idx /= Argv'Last then
+                              Next_Arg_Idx := Argv'Last;
+                              Arg := new String'
+                                (Argv (Arg_Idx .. Next_Arg_Idx));
+
+                              SwP := Arg'First;
+                              while SwP < Arg'Last and then
+                              Arg (SwP + 1) /= '=' loop
+                                 SwP := SwP + 1;
+                              end loop;
+                           end if;
+
+                           Place (ASCII.NUL);
+                           Place (Arg (SwP + 2 .. Arg'Last));
+                           Place (ASCII.NUL);
+
+                        when T_Commands =>
+
+                           --  Output -largs/-bargs/-cargs
+
+                           Place (' ');
+                           Place (Sw.Unix_String
+                                    (Sw.Unix_String'First ..
+                                       Sw.Unix_String'First + 5));
+
+                           if Sw.Unix_String
+                             (Sw.Unix_String'First + 7 ..
+                                Sw.Unix_String'Last) = "MAKE"
+                           then
+                              Make_Commands_Active := null;
+
+                           else
+                              --  Set source of new commands, also
+                              --  setting this non-null indicates that
+                              --  we are in the special commands mode
+                              --  for processing the -xargs case.
+
+                              Make_Commands_Active :=
+                                Matching_Name
+                                  (Sw.Unix_String
+                                       (Sw.Unix_String'First + 7 ..
+                                            Sw.Unix_String'Last),
+                                   Commands);
+                           end if;
+
+                        when T_Options =>
+                           if SwP + 1 > Arg'Last then
+                              Place_Unix_Switches
+                                (Sw.Options.Unix_String);
+                              SwP := Endp + 1;
+
+                           elsif Arg (SwP + 2) /= '(' then
+                              SwP := SwP + 2;
+                              Endp := Arg'Last;
+
+                           elsif Arg (Arg'Last) /= ')' then
+                              Put (Standard_Error,
+                                   "incorrectly parenthesized argument: ");
+                              Put_Line (Standard_Error, Arg.all);
+                              Errors := Errors + 1;
+                              SwP := Endp + 1;
+
+                           else
+                              SwP := SwP + 3;
+                              Endp := Arg'Last - 1;
+                           end if;
+
+                           while SwP <= Endp loop
+                              P2 := SwP;
+
+                              while P2 < Endp
+                                and then Arg (P2 + 1) /= ','
+                              loop
+                                 P2 := P2 + 1;
+                              end loop;
+
+                              --  Option name is in Arg (SwP .. P2)
+
+                              Opt := Matching_Name (Arg (SwP .. P2),
+                                                    Sw.Options);
+
+                              if Opt /= null then
                                  Place_Unix_Switches
-                                   (new String'(Sw.Unix_String.all &
-                                                Arg.all));
+                                   (Opt.Unix_String);
+                              end if;
 
-                           end case;
-                        end if;
-                     end;
+                              SwP := P2 + 2;
+                           end loop;
+
+                        when T_Other =>
+                           Place_Unix_Switches
+                             (new String'(Sw.Unix_String.all &
+                                          Arg.all));
+
+                     end case;
                   end if;
-
-                  Arg_Idx := Next_Arg_Idx + 1;
                end;
+            end if;
 
-               exit when Arg_Idx > Argv'Last;
+            Arg_Idx := Next_Arg_Idx + 1;
+         end;
 
-            end loop;
-         end Process_Argument;
+         exit when Arg_Idx > Argv'Last;
 
+      end loop;
+
+      if not Is_Open (Arg_File) then
          Arg_Num := Arg_Num + 1;
+      end if;
+   end Process_Argument;
+
+   --------------------
+   -- Process_Buffer --
+   --------------------
+
+   procedure Process_Buffer (S : String) is
+      P1, P2     : Natural;
+      Inside_Nul : Boolean := False;
+      Arg        : String (1 .. 1024);
+      Arg_Ctr    : Natural;
+
+   begin
+      P1 := 1;
+      while P1 <= S'Last and then S (P1) = ' ' loop
+         P1 := P1 + 1;
+      end loop;
+
+      Arg_Ctr := 1;
+      Arg (Arg_Ctr) := S (P1);
+
+      while P1 <= S'Last loop
+         if S (P1) = ASCII.NUL then
+            if Inside_Nul then
+               Inside_Nul := False;
+            else
+               Inside_Nul := True;
+            end if;
+         end if;
+
+         if S (P1) = ' ' and then not Inside_Nul then
+            P1 := P1 + 1;
+            Arg_Ctr := Arg_Ctr + 1;
+            Arg (Arg_Ctr) := S (P1);
+
+         else
+            Last_Switches.Increment_Last;
+            P2 := P1;
+
+            while P2 < S'Last
+              and then (S (P2 + 1) /= ' ' or else
+                        Inside_Nul)
+            loop
+               P2 := P2 + 1;
+               Arg_Ctr := Arg_Ctr + 1;
+               Arg (Arg_Ctr) := S (P2);
+               if S (P2) = ASCII.NUL then
+                  Arg_Ctr := Arg_Ctr - 1;
+
+                  if Inside_Nul then
+                     Inside_Nul := False;
+                  else
+                     Inside_Nul := True;
+                  end if;
+               end if;
+            end loop;
+
+            Last_Switches.Table (Last_Switches.Last) :=
+              new String'(String (Arg (1 .. Arg_Ctr)));
+            P1 := P2 + 2;
+
+            exit when P1 > S'Last;
+
+            Arg_Ctr := 1;
+            Arg (Arg_Ctr) := S (P1);
+         end if;
+      end loop;
+   end Process_Buffer;
+
+   --------------------------------
+   -- Validate_Command_Or_Option --
+   --------------------------------
+
+   procedure Validate_Command_Or_Option (N : VMS_Data.String_Ptr) is
+   begin
+      pragma Assert (N'Length > 0);
+
+      for J in N'Range loop
+         if N (J) = '_' then
+            pragma Assert (N (J - 1) /= '_');
+            null;
+         else
+            pragma Assert (Is_Upper (N (J)) or else Is_Digit (N (J)));
+            null;
+         end if;
+      end loop;
+   end Validate_Command_Or_Option;
+
+   --------------------------
+   -- Validate_Unix_Switch --
+   --------------------------
+
+   procedure Validate_Unix_Switch (S : VMS_Data.String_Ptr) is
+   begin
+      if S (S'First) = '`' then
+         return;
+      end if;
+
+      pragma Assert (S (S'First) = '-' or else S (S'First) = '!');
+
+      for J in S'First + 1 .. S'Last loop
+         pragma Assert (S (J) /= ' ');
+
+         if S (J) = '!' then
+            pragma Assert (S (J - 1) = ',' and then S (J + 1) = '-');
+            null;
+         end if;
+      end loop;
+   end Validate_Unix_Switch;
+
+   --------------------
+   -- VMS_Conversion --
+   --------------------
+
+   procedure VMS_Conversion (The_Command : out Command_Type) is
+      Result     : Command_Type := Undefined;
+      Result_Set : Boolean      := False;
+
+   begin
+      Buffer.Init;
+
+      --  First we must preprocess the string form of the command and options
+      --  list into the internal form that we use.
+
+      Preprocess_Command_Data;
+
+      --  If no parameters, give complete list of commands
+
+      if Argument_Count = 0 then
+         Output_Version;
+         New_Line;
+         Put_Line ("List of available commands");
+         New_Line;
+
+         while Commands /= null loop
+
+            --  No usage for GNAT SYNC
+
+            if Commands.Command /= Sync then
+               Put (Commands.Usage.all);
+               Set_Col (53);
+               Put_Line (Commands.Unix_String.all);
+            end if;
+
+            Commands := Commands.Next;
+         end loop;
+
+         raise Normal_Exit;
+      end if;
+
+      --  Loop through arguments
+
+      Arg_Num := 1;
+      while Arg_Num <= Argument_Count loop
+         Process_Argument (Result);
+
+         if not Result_Set then
+            The_Command := Result;
+            Result_Set := True;
+         end if;
       end loop;
 
       --  Gross error checking that the number of parameters is correct.
@@ -1916,66 +2327,13 @@ package body VMS_Conv is
          --  Prepare arguments for a call to spawn, filtering out
          --  embedded nulls place there to delineate strings.
 
-         declare
-            P1, P2     : Natural;
-            Inside_Nul : Boolean := False;
-            Arg        : String (1 .. 1024);
-            Arg_Ctr    : Natural;
+         Process_Buffer (String (Buffer.Table (1 .. Buffer.Last)));
 
-         begin
-            P1 := 1;
-
-            while P1 <= Buffer.Last and then Buffer.Table (P1) = ' ' loop
-               P1 := P1 + 1;
-            end loop;
-
-            Arg_Ctr := 1;
-            Arg (Arg_Ctr) := Buffer.Table (P1);
-
-            while P1 <= Buffer.Last loop
-
-               if Buffer.Table (P1) = ASCII.NUL then
-                  if Inside_Nul then
-                     Inside_Nul := False;
-                  else
-                     Inside_Nul := True;
-                  end if;
-               end if;
-
-               if Buffer.Table (P1) = ' ' and then not Inside_Nul then
-                  P1 := P1 + 1;
-                  Arg_Ctr := Arg_Ctr + 1;
-                  Arg (Arg_Ctr) := Buffer.Table (P1);
-
-               else
-                  Last_Switches.Increment_Last;
-                  P2 := P1;
-
-                  while P2 < Buffer.Last
-                    and then (Buffer.Table (P2 + 1) /= ' ' or else
-                              Inside_Nul)
-                  loop
-                     P2 := P2 + 1;
-                     Arg_Ctr := Arg_Ctr + 1;
-                     Arg (Arg_Ctr) := Buffer.Table (P2);
-                     if Buffer.Table (P2) = ASCII.NUL then
-                        Arg_Ctr := Arg_Ctr - 1;
-                        if Inside_Nul then
-                           Inside_Nul := False;
-                        else
-                           Inside_Nul := True;
-                        end if;
-                     end if;
-                  end loop;
-
-                  Last_Switches.Table (Last_Switches.Last) :=
-                    new String'(String (Arg (1 .. Arg_Ctr)));
-                  P1 := P2 + 2;
-                  Arg_Ctr := 1;
-                  Arg (Arg_Ctr) := Buffer.Table (P1);
-               end if;
-            end loop;
-         end;
+         if Cargs_Buffer.Last > 1 then
+            Last_Switches.Append (new String'("-cargs"));
+            Process_Buffer
+              (String (Cargs_Buffer.Table (1 .. Cargs_Buffer.Last)));
+         end if;
       end if;
    end VMS_Conversion;
 

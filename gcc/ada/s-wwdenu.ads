@@ -6,44 +6,41 @@
 --                                                                          --
 --                                 S p e c                                  --
 --                                                                          --
---          Copyright (C) 1992-2000 Free Software Foundation, Inc.          --
+--          Copyright (C) 1992-2009, Free Software Foundation, Inc.         --
 --                                                                          --
 -- GNAT is free software;  you can  redistribute it  and/or modify it under --
 -- terms of the  GNU General Public License as published  by the Free Soft- --
--- ware  Foundation;  either version 2,  or (at your option) any later ver- --
+-- ware  Foundation;  either version 3,  or (at your option) any later ver- --
 -- sion.  GNAT is distributed in the hope that it will be useful, but WITH- --
 -- OUT ANY WARRANTY;  without even the  implied warranty of MERCHANTABILITY --
--- or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU General Public License --
--- for  more details.  You should have  received  a copy of the GNU General --
--- Public License  distributed with GNAT;  see file COPYING.  If not, write --
--- to  the Free Software Foundation,  59 Temple Place - Suite 330,  Boston, --
--- MA 02111-1307, USA.                                                      --
+-- or FITNESS FOR A PARTICULAR PURPOSE.                                     --
 --                                                                          --
--- As a special exception,  if other files  instantiate  generics from this --
--- unit, or you link  this unit with other files  to produce an executable, --
--- this  unit  does not  by itself cause  the resulting  executable  to  be --
--- covered  by the  GNU  General  Public  License.  This exception does not --
--- however invalidate  any other reasons why  the executable file  might be --
--- covered by the  GNU Public License.                                      --
+-- As a special exception under Section 7 of GPL version 3, you are granted --
+-- additional permissions described in the GCC Runtime Library Exception,   --
+-- version 3.1, as published by the Free Software Foundation.               --
+--                                                                          --
+-- You should have received a copy of the GNU General Public License and    --
+-- a copy of the GCC Runtime Library Exception along with this program;     --
+-- see the files COPYING3 and COPYING.RUNTIME respectively.  If not, see    --
+-- <http://www.gnu.org/licenses/>.                                          --
 --                                                                          --
 -- GNAT was originally developed  by the GNAT team at  New York University. --
 -- Extensive contributions were provided by Ada Core Technologies Inc.      --
 --                                                                          --
 ------------------------------------------------------------------------------
 
---  This package contains the routine used for Enumeration_Type'Wide_Width
+--  This package contains routines used for Enumeration_Type'Wide_[Wide_]Width
 
 with System.WCh_Con;
 
 package System.WWd_Enum is
-pragma Pure (WWd_Enum);
+   pragma Pure;
 
    function Wide_Width_Enumeration_8
      (Names   : String;
       Indexes : System.Address;
       Lo, Hi  : Natural;
-      EM      : System.WCh_Con.WC_Encoding_Method)
-      return    Natural;
+      EM      : System.WCh_Con.WC_Encoding_Method) return Natural;
    --  Used to compute Enum'Wide_Width where Enum is an enumeration subtype
    --  other than those defined in package Standard. Names is a string with
    --  a lower bound of 1 containing the characters of all the enumeration
@@ -65,8 +62,7 @@ pragma Pure (WWd_Enum);
      (Names   : String;
       Indexes : System.Address;
       Lo, Hi  : Natural;
-      EM      : System.WCh_Con.WC_Encoding_Method)
-      return    Natural;
+      EM      : System.WCh_Con.WC_Encoding_Method) return Natural;
    --  Identical to Wide_Width_Enumeration_8 except that it handles types
    --  using array (0 .. Num) of Natural_16 for the Indexes table.
 
@@ -74,9 +70,29 @@ pragma Pure (WWd_Enum);
      (Names   : String;
       Indexes : System.Address;
       Lo, Hi  : Natural;
-      EM      : System.WCh_Con.WC_Encoding_Method)
-      return    Natural;
+      EM      : System.WCh_Con.WC_Encoding_Method) return Natural;
    --  Identical to Wide_Width_Enumeration_8 except that it handles types
    --  using array (0 .. Num) of Natural_32 for the Indexes table.
+
+   function Wide_Wide_Width_Enumeration_8
+     (Names   : String;
+      Indexes : System.Address;
+      Lo, Hi  : Natural;
+      EM      : System.WCh_Con.WC_Encoding_Method) return Natural;
+   --  Same function for Wide_Wide_Width attribute
+
+   function Wide_Wide_Width_Enumeration_16
+     (Names   : String;
+      Indexes : System.Address;
+      Lo, Hi  : Natural;
+      EM      : System.WCh_Con.WC_Encoding_Method) return Natural;
+   --  Same function for Wide_Wide_Width attribute
+
+   function Wide_Wide_Width_Enumeration_32
+     (Names   : String;
+      Indexes : System.Address;
+      Lo, Hi  : Natural;
+      EM      : System.WCh_Con.WC_Encoding_Method) return Natural;
+   --  Same function for Wide_Wide_Width attribute
 
 end System.WWd_Enum;

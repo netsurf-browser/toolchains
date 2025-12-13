@@ -1,12 +1,13 @@
 /* Basic data types for Objective C.
-   Copyright (C) 1998, 2002 Free Software Foundation, Inc.
+   Copyright (C) 1998, 2002, 2004, 2005, 2006, 2009, 2010
+   Free Software Foundation, Inc.
    Contributed by Ovidiu Predescu.
 
 This file is part of GCC.
 
 GCC is free software; you can redistribute it and/or modify
 it under the terms of the GNU General Public License as published by
-the Free Software Foundation; either version 2, or (at your option)
+the Free Software Foundation; either version 3, or (at your option)
 any later version.
 
 GCC is distributed in the hope that it will be useful,
@@ -14,26 +15,25 @@ but WITHOUT ANY WARRANTY; without even the implied warranty of
 MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
 GNU General Public License for more details.
 
-You should have received a copy of the GNU General Public License
-along with GCC; see the file COPYING.  If not, write to
-the Free Software Foundation, 59 Temple Place - Suite 330,
-Boston, MA 02111-1307, USA.  */
+Under Section 7 of GPL version 3, you are granted additional
+permissions described in the GCC Runtime Library Exception, version
+3.1, as published by the Free Software Foundation.
 
-/* As a special exception, if you link this library with files
-   compiled with GCC to produce an executable, this does not cause
-   the resulting executable to be covered by the GNU General Public License.
-   This exception does not however invalidate any other reasons why
-   the executable file might be covered by the GNU General Public License.  */
+You should have received a copy of the GNU General Public License and
+a copy of the GCC Runtime Library Exception along with this program;
+see the files COPYING3 and COPYING.RUNTIME respectively.  If not, see
+<http://www.gnu.org/licenses/>.  */
+
+#include "objc-private/common.h"
+#include "objc/objc.h"
+
+#if OBJC_WITH_GC
 
 #include "tconfig.h"
-#include "objc.h"
-#include "encoding.h"
-
 #include <assert.h>
 #include <string.h>
 #include <stdlib.h>
-
-#if OBJC_WITH_GC
+#include "objc/encoding.h"
 
 #include <gc.h>
 #include <limits.h>
@@ -250,7 +250,7 @@ __objc_class_structure_encoding (Class class, char **type, int *size,
   if (! class)
     {
       strcat (*type, "{");
-      *current++;
+      (*current)++;
       return;
     }
 
@@ -397,32 +397,40 @@ class_ivar_set_gcinvisible (Class class, const char *ivarname,
       if (*type == _C_GCINVISIBLE)
 	{
 	  char *new_type;
+	  size_t len;
 
 	  if (gc_invisible || ! __objc_ivar_pointer (type))
 	    return;	/* The type of the variable already matches the
 			   requested gc_invisible type */
 
-	  /* The variable is gc_invisible and we have to reverse it */
-	  new_type = objc_atomic_malloc (strlen (ivar->ivar_type));
-	  strncpy (new_type, ivar->ivar_type,
-		   (size_t)(type - ivar->ivar_type));
+	  /* The variable is gc_invisible so we make it gc visible.  */
+	  new_type = objc_atomic_malloc (strlen(ivar->ivar_type));
+	  len = (type - ivar->ivar_type);
+	  memcpy (new_type, ivar->ivar_type, len);
+	  new_type[len] = 0;
 	  strcat (new_type, type + 1);
 	  ivar->ivar_type = new_type;
 	}
       else
 	{
 	  char *new_type;
+	  size_t len;
 
 	  if (! gc_invisible || ! __objc_ivar_pointer (type))
 	    return;	/* The type of the variable already matches the
 			   requested gc_invisible type */
 
-	  /* The variable is gc visible and we have to make it gc_invisible */
-	  new_type = objc_malloc (strlen (ivar->ivar_type) + 2);
-	  strncpy (new_type, ivar->ivar_type,
-		   (size_t)(type - ivar->ivar_type));
-	  strcat (new_type, "!");
-	  strcat (new_type, type);
+	  /* The variable is gc visible so we make it gc_invisible.  */
+	  new_type = objc_malloc (strlen(ivar->ivar_type) + 2);
+
+	  /* Copy the variable name.  */
+	  len = (type - ivar->ivar_type);
+	  memcpy (new_type, ivar->ivar_type, len);
+	  /* Add '!'.  */
+	  new_type[len++] = _C_GCINVISIBLE;
+	  /* Copy the original types.  */
+	  strcpy (new_type + len, type);
+
 	  ivar->ivar_type = new_type;
 	}
 

@@ -1,31 +1,27 @@
 /* libgcc routines for NEC V850.
-   Copyright (C) 1996, 1997, 2002 Free Software Foundation, Inc.
+   Copyright (C) 1996, 1997, 2002, 2005, 2009, 2010
+   Free Software Foundation, Inc.
 
 This file is part of GCC.
 
 GCC is free software; you can redistribute it and/or modify it
 under the terms of the GNU General Public License as published by the
-Free Software Foundation; either version 2, or (at your option) any
+Free Software Foundation; either version 3, or (at your option) any
 later version.
-
-In addition to the permissions in the GNU General Public License, the
-Free Software Foundation gives you unlimited permission to link the
-compiled version of this file into combinations with other programs,
-and to distribute those combinations without any restriction coming
-from the use of this file.  (The General Public License restrictions
-do apply in other respects; for example, they cover modification of
-the file, and distribution when not linked into a combine
-executable.)
 
 This file is distributed in the hope that it will be useful, but
 WITHOUT ANY WARRANTY; without even the implied warranty of
 MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
 General Public License for more details.
 
-You should have received a copy of the GNU General Public License
-along with this program; see the file COPYING.  If not, write to
-the Free Software Foundation, 59 Temple Place - Suite 330,
-Boston, MA 02111-1307, USA.  */
+Under Section 7 of GPL version 3, you are granted additional
+permissions described in the GCC Runtime Library Exception, version
+3.1, as published by the Free Software Foundation.
+
+You should have received a copy of the GNU General Public License and
+a copy of the GCC Runtime Library Exception along with this program;
+see the files COPYING3 and COPYING.RUNTIME respectively.  If not, see
+<http://www.gnu.org/licenses/>.  */
 
 #ifdef L_mulsi3
 	.text
@@ -85,7 +81,7 @@ ___mulsi3:
         add   r7,  r10
         jmp   [r31]
 #endif /* __v850__ */
-#if defined(__v850e__) || defined(__v850ea__)
+#if defined(__v850e__) || defined(__v850ea__) || defined(__v850e2__) || defined(__v850e2v3__)
         /* This routine is almost unneccesarry because gcc
            generates the MUL instruction for the RTX mulsi3.
            But if someone wants to link his application with
@@ -265,9 +261,10 @@ ___modsi3:
 	.align	2
 	.globl	__save_r2_r29
 	.type	__save_r2_r29,@function
-	/* Allocate space and save registers 2, 20 .. 29 on the stack */
-	/* Called via:	jalr __save_r2_r29,r10 */
+	/* Allocate space and save registers 2, 20 .. 29 on the stack.  */
+	/* Called via:	jalr __save_r2_r29,r10.  */
 __save_r2_r29:
+#ifdef __EP__
 	mov	ep,r1
 	addi	-44,sp,sp
 	mov	sp,ep
@@ -283,15 +280,30 @@ __save_r2_r29:
 	sst.w	r20,36[ep]
 	sst.w	r2,40[ep]
 	mov	r1,ep
+#else
+	addi	-44,sp,sp
+	st.w	r29,0[sp]
+	st.w	r28,4[sp]
+	st.w	r27,8[sp]
+	st.w	r26,12[sp]
+	st.w	r25,16[sp]
+	st.w	r24,20[sp]
+	st.w	r23,24[sp]
+	st.w	r22,28[sp]
+	st.w	r21,32[sp]
+	st.w	r20,36[sp]
+	st.w	r2,40[sp]
+#endif
 	jmp	[r10]
 	.size	__save_r2_r29,.-__save_r2_r29
 
-	/* Restore saved registers, deallocate stack and return to the user */
-	/* Called via:	jr __return_r2_r29 */
+	/* Restore saved registers, deallocate stack and return to the user.  */
+	/* Called via:	jr __return_r2_r29.  */
 	.align	2
 	.globl	__return_r2_r29
 	.type	__return_r2_r29,@function
 __return_r2_r29:
+#ifdef __EP__
 	mov	ep,r1
 	mov	sp,ep
 	sld.w	0[ep],r29
@@ -307,6 +319,20 @@ __return_r2_r29:
 	sld.w	40[ep],r2
 	addi	44,sp,sp
 	mov	r1,ep
+#else
+	ld.w	0[sp],r29
+	ld.w	4[sp],r28
+	ld.w	8[sp],r27
+	ld.w	12[sp],r26
+	ld.w	16[sp],r25
+	ld.w	20[sp],r24
+	ld.w	24[sp],r23
+	ld.w	28[sp],r22
+	ld.w	32[sp],r21
+	ld.w	36[sp],r20
+	ld.w	40[sp],r2
+	addi	44,sp,sp
+#endif
 	jmp	[r31]
 	.size	__return_r2_r29,.-__return_r2_r29
 #endif /* L_save_2 */
@@ -316,9 +342,10 @@ __return_r2_r29:
 	.align	2
 	.globl	__save_r20_r29
 	.type	__save_r20_r29,@function
-	/* Allocate space and save registers 20 .. 29 on the stack */
-	/* Called via:	jalr __save_r20_r29,r10 */
+	/* Allocate space and save registers 20 .. 29 on the stack.  */
+	/* Called via:	jalr __save_r20_r29,r10.  */
 __save_r20_r29:
+#ifdef __EP__
 	mov	ep,r1
 	addi	-40,sp,sp
 	mov	sp,ep
@@ -333,15 +360,29 @@ __save_r20_r29:
 	sst.w	r21,32[ep]
 	sst.w	r20,36[ep]
 	mov	r1,ep
+#else
+	addi	-40,sp,sp
+	st.w	r29,0[sp]
+	st.w	r28,4[sp]
+	st.w	r27,8[sp]
+	st.w	r26,12[sp]
+	st.w	r25,16[sp]
+	st.w	r24,20[sp]
+	st.w	r23,24[sp]
+	st.w	r22,28[sp]
+	st.w	r21,32[sp]
+	st.w	r20,36[sp]
+#endif
 	jmp	[r10]
 	.size	__save_r20_r29,.-__save_r20_r29
 
-	/* Restore saved registers, deallocate stack and return to the user */
-	/* Called via:	jr __return_r20_r29 */
+	/* Restore saved registers, deallocate stack and return to the user.  */
+	/* Called via:	jr __return_r20_r29.  */
 	.align	2
 	.globl	__return_r20_r29
 	.type	__return_r20_r29,@function
 __return_r20_r29:
+#ifdef __EP__
 	mov	ep,r1
 	mov	sp,ep
 	sld.w	0[ep],r29
@@ -356,6 +397,19 @@ __return_r20_r29:
 	sld.w	36[ep],r20
 	addi	40,sp,sp
 	mov	r1,ep
+#else
+	ld.w	0[sp],r29
+	ld.w	4[sp],r28
+	ld.w	8[sp],r27
+	ld.w	12[sp],r26
+	ld.w	16[sp],r25
+	ld.w	20[sp],r24
+	ld.w	24[sp],r23
+	ld.w	28[sp],r22
+	ld.w	32[sp],r21
+	ld.w	36[sp],r20
+	addi	40,sp,sp
+#endif
 	jmp	[r31]
 	.size	__return_r20_r29,.-__return_r20_r29
 #endif /* L_save_20 */
@@ -365,9 +419,10 @@ __return_r20_r29:
 	.align	2
 	.globl	__save_r21_r29
 	.type	__save_r21_r29,@function
-	/* Allocate space and save registers 21 .. 29 on the stack */
-	/* Called via:	jalr __save_r21_r29,r10 */
+	/* Allocate space and save registers 21 .. 29 on the stack.  */
+	/* Called via:	jalr __save_r21_r29,r10.  */
 __save_r21_r29:
+#ifdef __EP__
 	mov	ep,r1
 	addi	-36,sp,sp
 	mov	sp,ep
@@ -381,15 +436,28 @@ __save_r21_r29:
 	sst.w	r22,28[ep]
 	sst.w	r21,32[ep]
 	mov	r1,ep
+#else
+	addi	-36,sp,sp
+	st.w	r29,0[sp]
+	st.w	r28,4[sp]
+	st.w	r27,8[sp]
+	st.w	r26,12[sp]
+	st.w	r25,16[sp]
+	st.w	r24,20[sp]
+	st.w	r23,24[sp]
+	st.w	r22,28[sp]
+	st.w	r21,32[sp]
+#endif
 	jmp	[r10]
 	.size	__save_r21_r29,.-__save_r21_r29
 
-	/* Restore saved registers, deallocate stack and return to the user */
-	/* Called via:	jr __return_r21_r29 */
+	/* Restore saved registers, deallocate stack and return to the user.  */
+	/* Called via:	jr __return_r21_r29.  */
 	.align	2
 	.globl	__return_r21_r29
 	.type	__return_r21_r29,@function
 __return_r21_r29:
+#ifdef __EP__
 	mov	ep,r1
 	mov	sp,ep
 	sld.w	0[ep],r29
@@ -403,6 +471,18 @@ __return_r21_r29:
 	sld.w	32[ep],r21
 	addi	36,sp,sp
 	mov	r1,ep
+#else
+	ld.w	0[sp],r29
+	ld.w	4[sp],r28
+	ld.w	8[sp],r27
+	ld.w	12[sp],r26
+	ld.w	16[sp],r25
+	ld.w	20[sp],r24
+	ld.w	24[sp],r23
+	ld.w	28[sp],r22
+	ld.w	32[sp],r21
+	addi	36,sp,sp
+#endif
 	jmp	[r31]
 	.size	__return_r21_r29,.-__return_r21_r29
 #endif /* L_save_21 */
@@ -412,9 +492,10 @@ __return_r21_r29:
 	.align	2
 	.globl	__save_r22_r29
 	.type	__save_r22_r29,@function
-	/* Allocate space and save registers 22 .. 29 on the stack */
-	/* Called via:	jalr __save_r22_r29,r10 */
+	/* Allocate space and save registers 22 .. 29 on the stack.  */
+	/* Called via:	jalr __save_r22_r29,r10.  */
 __save_r22_r29:
+#ifdef __EP__
 	mov	ep,r1
 	addi	-32,sp,sp
 	mov	sp,ep
@@ -427,15 +508,27 @@ __save_r22_r29:
 	sst.w	r23,24[ep]
 	sst.w	r22,28[ep]
 	mov	r1,ep
+#else
+	addi	-32,sp,sp
+	st.w	r29,0[sp]
+	st.w	r28,4[sp]
+	st.w	r27,8[sp]
+	st.w	r26,12[sp]
+	st.w	r25,16[sp]
+	st.w	r24,20[sp]
+	st.w	r23,24[sp]
+	st.w	r22,28[sp]
+#endif
 	jmp	[r10]
 	.size	__save_r22_r29,.-__save_r22_r29
 
-	/* Restore saved registers, deallocate stack and return to the user */
-	/* Called via:	jr __return_r22_r29 */
+	/* Restore saved registers, deallocate stack and return to the user.  */
+	/* Called via:	jr __return_r22_r29.  */
 	.align	2
 	.globl	__return_r22_r29
 	.type	__return_r22_r29,@function
 __return_r22_r29:
+#ifdef __EP__
 	mov	ep,r1
 	mov	sp,ep
 	sld.w	0[ep],r29
@@ -448,6 +541,17 @@ __return_r22_r29:
 	sld.w	28[ep],r22
 	addi	32,sp,sp
 	mov	r1,ep
+#else
+	ld.w	0[sp],r29
+	ld.w	4[sp],r28
+	ld.w	8[sp],r27
+	ld.w	12[sp],r26
+	ld.w	16[sp],r25
+	ld.w	20[sp],r24
+	ld.w	24[sp],r23
+	ld.w	28[sp],r22
+	addi	32,sp,sp
+#endif
 	jmp	[r31]
 	.size	__return_r22_r29,.-__return_r22_r29
 #endif /* L_save_22 */
@@ -457,9 +561,10 @@ __return_r22_r29:
 	.align	2
 	.globl	__save_r23_r29
 	.type	__save_r23_r29,@function
-	/* Allocate space and save registers 23 .. 29 on the stack */
-	/* Called via:	jalr __save_r23_r29,r10 */
+	/* Allocate space and save registers 23 .. 29 on the stack.  */
+	/* Called via:	jalr __save_r23_r29,r10.  */
 __save_r23_r29:
+#ifdef __EP__
 	mov	ep,r1
 	addi	-28,sp,sp
 	mov	sp,ep
@@ -471,15 +576,26 @@ __save_r23_r29:
 	sst.w	r24,20[ep]
 	sst.w	r23,24[ep]
 	mov	r1,ep
+#else
+	addi	-28,sp,sp
+	st.w	r29,0[sp]
+	st.w	r28,4[sp]
+	st.w	r27,8[sp]
+	st.w	r26,12[sp]
+	st.w	r25,16[sp]
+	st.w	r24,20[sp]
+	st.w	r23,24[sp]
+#endif
 	jmp	[r10]
 	.size	__save_r23_r29,.-__save_r23_r29
 
-	/* Restore saved registers, deallocate stack and return to the user */
-	/* Called via:	jr __return_r23_r29 */
+	/* Restore saved registers, deallocate stack and return to the user.  */
+	/* Called via:	jr __return_r23_r29.  */
 	.align	2
 	.globl	__return_r23_r29
 	.type	__return_r23_r29,@function
 __return_r23_r29:
+#ifdef __EP__
 	mov	ep,r1
 	mov	sp,ep
 	sld.w	0[ep],r29
@@ -491,6 +607,16 @@ __return_r23_r29:
 	sld.w	24[ep],r23
 	addi	28,sp,sp
 	mov	r1,ep
+#else
+	ld.w	0[sp],r29
+	ld.w	4[sp],r28
+	ld.w	8[sp],r27
+	ld.w	12[sp],r26
+	ld.w	16[sp],r25
+	ld.w	20[sp],r24
+	ld.w	24[sp],r23
+	addi	28,sp,sp
+#endif
 	jmp	[r31]
 	.size	__return_r23_r29,.-__return_r23_r29
 #endif /* L_save_23 */
@@ -500,9 +626,10 @@ __return_r23_r29:
 	.align	2
 	.globl	__save_r24_r29
 	.type	__save_r24_r29,@function
-	/* Allocate space and save registers 24 .. 29 on the stack */
-	/* Called via:	jalr __save_r24_r29,r10 */
+	/* Allocate space and save registers 24 .. 29 on the stack.  */
+	/* Called via:	jalr __save_r24_r29,r10.  */
 __save_r24_r29:
+#ifdef __EP__
 	mov	ep,r1
 	addi	-24,sp,sp
 	mov	sp,ep
@@ -513,15 +640,25 @@ __save_r24_r29:
 	sst.w	r25,16[ep]
 	sst.w	r24,20[ep]
 	mov	r1,ep
+#else
+	addi	-24,sp,sp
+	st.w	r29,0[sp]
+	st.w	r28,4[sp]
+	st.w	r27,8[sp]
+	st.w	r26,12[sp]
+	st.w	r25,16[sp]
+	st.w	r24,20[sp]
+#endif
 	jmp	[r10]
 	.size	__save_r24_r29,.-__save_r24_r29
 
-	/* Restore saved registers, deallocate stack and return to the user */
-	/* Called via:	jr __return_r24_r29 */
+	/* Restore saved registers, deallocate stack and return to the user.  */
+	/* Called via:	jr __return_r24_r29.  */
 	.align	2
 	.globl	__return_r24_r29
 	.type	__return_r24_r29,@function
 __return_r24_r29:
+#ifdef __EP__
 	mov	ep,r1
 	mov	sp,ep
 	sld.w	0[ep],r29
@@ -532,6 +669,15 @@ __return_r24_r29:
 	sld.w	20[ep],r24
 	addi	24,sp,sp
 	mov	r1,ep
+#else
+	ld.w	0[sp],r29
+	ld.w	4[sp],r28
+	ld.w	8[sp],r27
+	ld.w	12[sp],r26
+	ld.w	16[sp],r25
+	ld.w	20[sp],r24
+	addi	24,sp,sp
+#endif
 	jmp	[r31]
 	.size	__return_r24_r29,.-__return_r24_r29
 #endif /* L_save_24 */
@@ -541,9 +687,10 @@ __return_r24_r29:
 	.align	2
 	.globl	__save_r25_r29
 	.type	__save_r25_r29,@function
-	/* Allocate space and save registers 25 .. 29 on the stack */
-	/* Called via:	jalr __save_r25_r29,r10 */
+	/* Allocate space and save registers 25 .. 29 on the stack.  */
+	/* Called via:	jalr __save_r25_r29,r10.  */
 __save_r25_r29:
+#ifdef __EP__
 	mov	ep,r1
 	addi	-20,sp,sp
 	mov	sp,ep
@@ -553,15 +700,24 @@ __save_r25_r29:
 	sst.w	r26,12[ep]
 	sst.w	r25,16[ep]
 	mov	r1,ep
+#else
+	addi	-20,sp,sp
+	st.w	r29,0[sp]
+	st.w	r28,4[sp]
+	st.w	r27,8[sp]
+	st.w	r26,12[sp]
+	st.w	r25,16[sp]
+#endif
 	jmp	[r10]
 	.size	__save_r25_r29,.-__save_r25_r29
 
-	/* Restore saved registers, deallocate stack and return to the user */
-	/* Called via:	jr __return_r25_r29 */
+	/* Restore saved registers, deallocate stack and return to the user.  */
+	/* Called via:	jr __return_r25_r29.  */
 	.align	2
 	.globl	__return_r25_r29
 	.type	__return_r25_r29,@function
 __return_r25_r29:
+#ifdef __EP__
 	mov	ep,r1
 	mov	sp,ep
 	sld.w	0[ep],r29
@@ -571,6 +727,14 @@ __return_r25_r29:
 	sld.w	16[ep],r25
 	addi	20,sp,sp
 	mov	r1,ep
+#else
+	ld.w	0[ep],r29
+	ld.w	4[ep],r28
+	ld.w	8[ep],r27
+	ld.w	12[ep],r26
+	ld.w	16[ep],r25
+	addi	20,sp,sp
+#endif
 	jmp	[r31]
 	.size	__return_r25_r29,.-__return_r25_r29
 #endif /* L_save_25 */
@@ -580,9 +744,10 @@ __return_r25_r29:
 	.align	2
 	.globl	__save_r26_r29
 	.type	__save_r26_r29,@function
-	/* Allocate space and save registers 26 .. 29 on the stack */
-	/* Called via:	jalr __save_r26_r29,r10 */
+	/* Allocate space and save registers 26 .. 29 on the stack.  */
+	/* Called via:	jalr __save_r26_r29,r10.  */
 __save_r26_r29:
+#ifdef __EP__
 	mov	ep,r1
 	add	-16,sp
 	mov	sp,ep
@@ -591,15 +756,23 @@ __save_r26_r29:
 	sst.w	r27,8[ep]
 	sst.w	r26,12[ep]
 	mov	r1,ep
+#else
+	add	-16,sp
+	st.w	r29,0[sp]
+	st.w	r28,4[sp]
+	st.w	r27,8[sp]
+	st.w	r26,12[sp]
+#endif
 	jmp	[r10]
 	.size	__save_r26_r29,.-__save_r26_r29
 
-	/* Restore saved registers, deallocate stack and return to the user */
-	/* Called via:	jr __return_r26_r29 */
+	/* Restore saved registers, deallocate stack and return to the user.  */
+	/* Called via:	jr __return_r26_r29.  */
 	.align	2
 	.globl	__return_r26_r29
 	.type	__return_r26_r29,@function
 __return_r26_r29:
+#ifdef __EP__
 	mov	ep,r1
 	mov	sp,ep
 	sld.w	0[ep],r29
@@ -608,6 +781,13 @@ __return_r26_r29:
 	sld.w	12[ep],r26
 	addi	16,sp,sp
 	mov	r1,ep
+#else
+	ld.w	0[sp],r29
+	ld.w	4[sp],r28
+	ld.w	8[sp],r27
+	ld.w	12[sp],r26
+	addi	16,sp,sp
+#endif
 	jmp	[r31]
 	.size	__return_r26_r29,.-__return_r26_r29
 #endif /* L_save_26 */
@@ -617,8 +797,8 @@ __return_r26_r29:
 	.align	2
 	.globl	__save_r27_r29
 	.type	__save_r27_r29,@function
-	/* Allocate space and save registers 27 .. 29 on the stack */
-	/* Called via:	jalr __save_r27_r29,r10 */
+	/* Allocate space and save registers 27 .. 29 on the stack.  */
+	/* Called via:	jalr __save_r27_r29,r10.  */
 __save_r27_r29:
 	add	-12,sp
 	st.w	r29,0[sp]
@@ -627,8 +807,8 @@ __save_r27_r29:
 	jmp	[r10]
 	.size	__save_r27_r29,.-__save_r27_r29
 
-	/* Restore saved registers, deallocate stack and return to the user */
-	/* Called via:	jr __return_r27_r29 */
+	/* Restore saved registers, deallocate stack and return to the user.  */
+	/* Called via:	jr __return_r27_r29.  */
 	.align	2
 	.globl	__return_r27_r29
 	.type	__return_r27_r29,@function
@@ -646,8 +826,8 @@ __return_r27_r29:
 	.align	2
 	.globl	__save_r28_r29
 	.type	__save_r28_r29,@function
-	/* Allocate space and save registers 28,29 on the stack */
-	/* Called via:	jalr __save_r28_r29,r10 */
+	/* Allocate space and save registers 28,29 on the stack.  */
+	/* Called via:	jalr __save_r28_r29,r10.  */
 __save_r28_r29:
 	add	-8,sp
 	st.w	r29,0[sp]
@@ -655,8 +835,8 @@ __save_r28_r29:
 	jmp	[r10]
 	.size	__save_r28_r29,.-__save_r28_r29
 
-	/* Restore saved registers, deallocate stack and return to the user */
-	/* Called via:	jr __return_r28_r29 */
+	/* Restore saved registers, deallocate stack and return to the user.  */
+	/* Called via:	jr __return_r28_r29.  */
 	.align	2
 	.globl	__return_r28_r29
 	.type	__return_r28_r29,@function
@@ -673,16 +853,16 @@ __return_r28_r29:
 	.align	2
 	.globl	__save_r29
 	.type	__save_r29,@function
-	/* Allocate space and save register 29 on the stack */
-	/* Called via:	jalr __save_r29,r10 */
+	/* Allocate space and save register 29 on the stack.  */
+	/* Called via:	jalr __save_r29,r10.  */
 __save_r29:
 	add	-4,sp
 	st.w	r29,0[sp]
 	jmp	[r10]
 	.size	__save_r29,.-__save_r29
 
-	/* Restore saved register 29, deallocate stack and return to the user */
-	/* Called via:	jr __return_r29 */
+	/* Restore saved register 29, deallocate stack and return to the user.  */
+	/* Called via:	jr __return_r29.  */
 	.align	2
 	.globl	__return_r29
 	.type	__return_r29,@function
@@ -698,51 +878,83 @@ __return_r29:
 	.align	2
 	.globl	__save_r2_r31
 	.type	__save_r2_r31,@function
-	/* Allocate space and save registers 20 .. 29, 31 on the stack */
-	/* Also allocate space for the argument save area */
-	/* Called via:	jalr __save_r2_r31,r10 */
+	/* Allocate space and save registers 20 .. 29, 31 on the stack.  */
+	/* Also allocate space for the argument save area.  */
+	/* Called via:	jalr __save_r2_r31,r10.  */
 __save_r2_r31:
+#ifdef __EP__
 	mov	ep,r1
-	addi	-64,sp,sp
+	addi	-48,sp,sp
 	mov	sp,ep
-	sst.w	r29,16[ep]
-	sst.w	r28,20[ep]
-	sst.w	r27,24[ep]
-	sst.w	r26,28[ep]
-	sst.w	r25,32[ep]
-	sst.w	r24,36[ep]
-	sst.w	r23,40[ep]
-	sst.w	r22,44[ep]
-	sst.w	r21,48[ep]
-	sst.w	r20,52[ep]
-	sst.w	r2,56[ep]
-	sst.w	r31,60[ep]
+	sst.w	r29,0[ep]
+	sst.w	r28,4[ep]
+	sst.w	r27,8[ep]
+	sst.w	r26,12[ep]
+	sst.w	r25,16[ep]
+	sst.w	r24,20[ep]
+	sst.w	r23,24[ep]
+	sst.w	r22,28[ep]
+	sst.w	r21,32[ep]
+	sst.w	r20,36[ep]
+	sst.w	r2,40[ep]
+	sst.w	r31,44[ep]
 	mov	r1,ep
+#else
+	addi	-48,sp,sp
+	st.w	r29,0[sp]
+	st.w	r28,4[sp]
+	st.w	r27,8[sp]
+	st.w	r26,12[sp]
+	st.w	r25,16[sp]
+	st.w	r24,20[sp]
+	st.w	r23,24[sp]
+	st.w	r22,28[sp]
+	st.w	r21,32[sp]
+	st.w	r20,36[sp]
+	st.w	r2,40[sp]
+	st.w	r31,44[sp]
+#endif
 	jmp	[r10]
 	.size	__save_r2_r31,.-__save_r2_r31
 
-	/* Restore saved registers, deallocate stack and return to the user */
-	/* Called via:	jr __return_r20_r31 */
+	/* Restore saved registers, deallocate stack and return to the user.  */
+	/* Called via:	jr __return_r20_r31.  */
 	.align	2
 	.globl	__return_r2_r31
 	.type	__return_r2_r31,@function
 __return_r2_r31:
+#ifdef __EP__
 	mov	ep,r1
 	mov	sp,ep
-	sld.w	16[ep],r29
-	sld.w	20[ep],r28
-	sld.w	24[ep],r27
-	sld.w	28[ep],r26
-	sld.w	32[ep],r25
-	sld.w	36[ep],r24
-	sld.w	40[ep],r23
-	sld.w	44[ep],r22
-	sld.w	48[ep],r21
-	sld.w	52[ep],r20
-	sld.w	56[ep],r2
-	sld.w	60[ep],r31
-	addi	64,sp,sp
+	sld.w	0[ep],r29
+	sld.w	4[ep],r28
+	sld.w	8[ep],r27
+	sld.w	12[ep],r26
+	sld.w	16[ep],r25
+	sld.w	20[ep],r24
+	sld.w	24[ep],r23
+	sld.w	28[ep],r22
+	sld.w	32[ep],r21
+	sld.w	36[ep],r20
+	sld.w	40[ep],r2
+	sld.w	44[ep],r31
+	addi	48,sp,sp
 	mov	r1,ep
+#else
+	ld.w	44[sp],r29
+	ld.w	40[sp],r28
+	ld.w	36[sp],r27
+	ld.w	32[sp],r26
+	ld.w	28[sp],r25
+	ld.w	24[sp],r24
+	ld.w	20[sp],r23
+	ld.w	16[sp],r22
+	ld.w	12[sp],r21
+	ld.w	8[sp],r20
+	ld.w	4[sp],r2
+	ld.w	0[sp],r31
+	addi	48,sp,sp
+#endif
 	jmp	[r31]
 	.size	__return_r2_r31,.-__return_r2_r31
 #endif /* L_save_2c */
@@ -752,49 +964,79 @@ __return_r2_r31:
 	.align	2
 	.globl	__save_r20_r31
 	.type	__save_r20_r31,@function
-	/* Allocate space and save registers 20 .. 29, 31 on the stack */
-	/* Also allocate space for the argument save area */
-	/* Called via:	jalr __save_r20_r31,r10 */
+	/* Allocate space and save registers 20 .. 29, 31 on the stack.  */
+	/* Also allocate space for the argument save area.  */
+	/* Called via:	jalr __save_r20_r31,r10.  */
 __save_r20_r31:
+#ifdef __EP__
 	mov	ep,r1
-	addi	-60,sp,sp
+	addi	-44,sp,sp
 	mov	sp,ep
-	sst.w	r29,16[ep]
-	sst.w	r28,20[ep]
-	sst.w	r27,24[ep]
-	sst.w	r26,28[ep]
-	sst.w	r25,32[ep]
-	sst.w	r24,36[ep]
-	sst.w	r23,40[ep]
-	sst.w	r22,44[ep]
-	sst.w	r21,48[ep]
-	sst.w	r20,52[ep]
-	sst.w	r31,56[ep]
+	sst.w	r29,0[ep]
+	sst.w	r28,4[ep]
+	sst.w	r27,8[ep]
+	sst.w	r26,12[ep]
+	sst.w	r25,16[ep]
+	sst.w	r24,20[ep]
+	sst.w	r23,24[ep]
+	sst.w	r22,28[ep]
+	sst.w	r21,32[ep]
+	sst.w	r20,36[ep]
+	sst.w	r31,40[ep]
 	mov	r1,ep
+#else
+	addi	-44,sp,sp
+	st.w	r29,0[sp]
+	st.w	r28,4[sp]
+	st.w	r27,8[sp]
+	st.w	r26,12[sp]
+	st.w	r25,16[sp]
+	st.w	r24,20[sp]
+	st.w	r23,24[sp]
+	st.w	r22,28[sp]
+	st.w	r21,32[sp]
+	st.w	r20,36[sp]
+	st.w	r31,40[sp]
+#endif
 	jmp	[r10]
 	.size	__save_r20_r31,.-__save_r20_r31
 
-	/* Restore saved registers, deallocate stack and return to the user */
-	/* Called via:	jr __return_r20_r31 */
+	/* Restore saved registers, deallocate stack and return to the user.  */
+	/* Called via:	jr __return_r20_r31.  */
 	.align	2
 	.globl	__return_r20_r31
 	.type	__return_r20_r31,@function
 __return_r20_r31:
+#ifdef __EP__
 	mov	ep,r1
 	mov	sp,ep
-	sld.w	16[ep],r29
-	sld.w	20[ep],r28
-	sld.w	24[ep],r27
-	sld.w	28[ep],r26
-	sld.w	32[ep],r25
-	sld.w	36[ep],r24
-	sld.w	40[ep],r23
-	sld.w	44[ep],r22
-	sld.w	48[ep],r21
-	sld.w	52[ep],r20
-	sld.w	56[ep],r31
-	addi	60,sp,sp
+	sld.w	0[ep],r29
+	sld.w	4[ep],r28
+	sld.w	8[ep],r27
+	sld.w	12[ep],r26
+	sld.w	16[ep],r25
+	sld.w	20[ep],r24
+	sld.w	24[ep],r23
+	sld.w	28[ep],r22
+	sld.w	32[ep],r21
+	sld.w	36[ep],r20
+	sld.w	40[ep],r31
+	addi	44,sp,sp
 	mov	r1,ep
+#else
+	ld.w	0[sp],r29
+	ld.w	4[sp],r28
+	ld.w	8[sp],r27
+	ld.w	12[sp],r26
+	ld.w	16[sp],r25
+	ld.w	20[sp],r24
+	ld.w	24[sp],r23
+	ld.w	28[sp],r22
+	ld.w	32[sp],r21
+	ld.w	36[sp],r20
+	ld.w	40[sp],r31
+	addi	44,sp,sp
+#endif
 	jmp	[r31]
 	.size	__return_r20_r31,.-__return_r20_r31
 #endif /* L_save_20c */
@@ -804,47 +1046,76 @@ __return_r20_r31:
 	.align	2
 	.globl	__save_r21_r31
 	.type	__save_r21_r31,@function
-	/* Allocate space and save registers 21 .. 29, 31 on the stack */
-	/* Also allocate space for the argument save area */
-	/* Called via:	jalr __save_r21_r31,r10 */
+	/* Allocate space and save registers 21 .. 29, 31 on the stack.  */
+	/* Also allocate space for the argument save area.  */
+	/* Called via:	jalr __save_r21_r31,r10.  */
 __save_r21_r31:
+#ifdef __EP__	
 	mov	ep,r1
-	addi	-56,sp,sp
+	addi	-40,sp,sp
 	mov	sp,ep
-	sst.w	r29,16[ep]
-	sst.w	r28,20[ep]
-	sst.w	r27,24[ep]
-	sst.w	r26,28[ep]
-	sst.w	r25,32[ep]
-	sst.w	r24,36[ep]
-	sst.w	r23,40[ep]
-	sst.w	r22,44[ep]
-	sst.w	r21,48[ep]
-	sst.w	r31,52[ep]
+	sst.w	r29,0[ep]
+	sst.w	r28,4[ep]
+	sst.w	r27,8[ep]
+	sst.w	r26,12[ep]
+	sst.w	r25,16[ep]
+	sst.w	r24,20[ep]
+	sst.w	r23,24[ep]
+	sst.w	r22,28[ep]
+	sst.w	r21,32[ep]
+	sst.w	r31,36[ep]
 	mov	r1,ep
 	jmp	[r10]
+#else	
+	addi	-40,sp,sp
+	st.w	r29,0[sp]
+	st.w	r28,4[sp]
+	st.w	r27,8[sp]
+	st.w	r26,12[sp]
+	st.w	r25,16[sp]
+	st.w	r24,20[sp]
+	st.w	r23,24[sp]
+	st.w	r22,28[sp]
+	st.w	r21,32[sp]
+	st.w	r31,36[sp]
+	jmp	[r10]
+#endif	
 	.size	__save_r21_r31,.-__save_r21_r31
 
-	/* Restore saved registers, deallocate stack and return to the user */
-	/* Called via:	jr __return_r21_r31 */
+	/* Restore saved registers, deallocate stack and return to the user.  */
+	/* Called via:	jr __return_r21_r31.  */
 	.align	2
 	.globl	__return_r21_r31
 	.type	__return_r21_r31,@function
 __return_r21_r31:
+#ifdef __EP__
 	mov	ep,r1
 	mov	sp,ep
-	sld.w	16[ep],r29
-	sld.w	20[ep],r28
-	sld.w	24[ep],r27
-	sld.w	28[ep],r26
-	sld.w	32[ep],r25
-	sld.w	36[ep],r24
-	sld.w	40[ep],r23
-	sld.w	44[ep],r22
-	sld.w	48[ep],r21
-	sld.w	52[ep],r31
-	addi	56,sp,sp
+	sld.w	0[ep],r29
+	sld.w	4[ep],r28
+	sld.w	8[ep],r27
+	sld.w	12[ep],r26
+	sld.w	16[ep],r25
+	sld.w	20[ep],r24
+	sld.w	24[ep],r23
+	sld.w	28[ep],r22
+	sld.w	32[ep],r21
+	sld.w	36[ep],r31
+	addi	40,sp,sp
 	mov	r1,ep
+#else
+	ld.w	0[sp],r29
+	ld.w	4[sp],r28
+	ld.w	8[sp],r27
+	ld.w	12[sp],r26
+	ld.w	16[sp],r25
+	ld.w	20[sp],r24
+	ld.w	24[sp],r23
+	ld.w	28[sp],r22
+	ld.w	32[sp],r21
+	ld.w	36[sp],r31
+	addi	40,sp,sp
+#endif
 	jmp	[r31]
 	.size	__return_r21_r31,.-__return_r21_r31
 #endif /* L_save_21c */
@@ -854,45 +1125,71 @@ __return_r21_r31:
 	.align	2
 	.globl	__save_r22_r31
 	.type	__save_r22_r31,@function
-	/* Allocate space and save registers 22 .. 29, 31 on the stack */
-	/* Also allocate space for the argument save area */
-	/* Called via:	jalr __save_r22_r31,r10 */
+	/* Allocate space and save registers 22 .. 29, 31 on the stack.  */
+	/* Also allocate space for the argument save area.  */
+	/* Called via:	jalr __save_r22_r31,r10.  */
 __save_r22_r31:
+#ifdef __EP__
 	mov	ep,r1
-	addi	-52,sp,sp
+	addi	-36,sp,sp
 	mov	sp,ep
-	sst.w	r29,16[ep]
-	sst.w	r28,20[ep]
-	sst.w	r27,24[ep]
-	sst.w	r26,28[ep]
-	sst.w	r25,32[ep]
-	sst.w	r24,36[ep]
-	sst.w	r23,40[ep]
-	sst.w	r22,44[ep]
-	sst.w	r31,48[ep]
+	sst.w	r29,0[ep]
+	sst.w	r28,4[ep]
+	sst.w	r27,8[ep]
+	sst.w	r26,12[ep]
+	sst.w	r25,16[ep]
+	sst.w	r24,20[ep]
+	sst.w	r23,24[ep]
+	sst.w	r22,28[ep]
+	sst.w	r31,32[ep]
 	mov	r1,ep
+#else
+	addi	-36,sp,sp
+	st.w	r29,0[sp]
+	st.w	r28,4[sp]
+	st.w	r27,8[sp]
+	st.w	r26,12[sp]
+	st.w	r25,16[sp]
+	st.w	r24,20[sp]
+	st.w	r23,24[sp]
+	st.w	r22,28[sp]
+	st.w	r31,32[sp]
+#endif
 	jmp	[r10]
 	.size	__save_r22_r31,.-__save_r22_r31
 
-	/* Restore saved registers, deallocate stack and return to the user */
-	/* Called via:	jr __return_r22_r31 */
+	/* Restore saved registers, deallocate stack and return to the user.  */
+	/* Called via:	jr __return_r22_r31.  */
 	.align	2
 	.globl	__return_r22_r31
 	.type	__return_r22_r31,@function
 __return_r22_r31:
+#ifdef __EP__
 	mov	ep,r1
 	mov	sp,ep
-	sld.w	16[ep],r29
-	sld.w	20[ep],r28
-	sld.w	24[ep],r27
-	sld.w	28[ep],r26
-	sld.w	32[ep],r25
-	sld.w	36[ep],r24
-	sld.w	40[ep],r23
-	sld.w	44[ep],r22
-	sld.w	48[ep],r31
-	addi	52,sp,sp
+	sld.w	0[ep],r29
+	sld.w	4[ep],r28
+	sld.w	8[ep],r27
+	sld.w	12[ep],r26
+	sld.w	16[ep],r25
+	sld.w	20[ep],r24
+	sld.w	24[ep],r23
+	sld.w	28[ep],r22
+	sld.w	32[ep],r31
+	addi	36,sp,sp
 	mov	r1,ep
+#else
+	ld.w	0[sp],r29
+	ld.w	4[sp],r28
+	ld.w	8[sp],r27
+	ld.w	12[sp],r26
+	ld.w	16[sp],r25
+	ld.w	20[sp],r24
+	ld.w	24[sp],r23
+	ld.w	28[sp],r22
+	ld.w	32[sp],r31
+	addi	36,sp,sp
+#endif
 	jmp	[r31]
 	.size	__return_r22_r31,.-__return_r22_r31
 #endif /* L_save_22c */
@@ -902,43 +1199,67 @@ __return_r22_r31:
 	.align	2
 	.globl	__save_r23_r31
 	.type	__save_r23_r31,@function
-	/* Allocate space and save registers 23 .. 29, 31 on the stack */
-	/* Also allocate space for the argument save area */
-	/* Called via:	jalr __save_r23_r31,r10 */
+	/* Allocate space and save registers 23 .. 29, 31 on the stack.  */
+	/* Also allocate space for the argument save area.  */
+	/* Called via:	jalr __save_r23_r31,r10.  */
 __save_r23_r31:
+#ifdef __EP__
 	mov	ep,r1
-	addi	-48,sp,sp
+	addi	-32,sp,sp
 	mov	sp,ep
-	sst.w	r29,16[ep]
-	sst.w	r28,20[ep]
-	sst.w	r27,24[ep]
-	sst.w	r26,28[ep]
-	sst.w	r25,32[ep]
-	sst.w	r24,36[ep]
-	sst.w	r23,40[ep]
-	sst.w	r31,44[ep]
+	sst.w	r29,0[ep]
+	sst.w	r28,4[ep]
+	sst.w	r27,8[ep]
+	sst.w	r26,12[ep]
+	sst.w	r25,16[ep]
+	sst.w	r24,20[ep]
+	sst.w	r23,24[ep]
+	sst.w	r31,28[ep]
 	mov	r1,ep
+#else
+	addi	-32,sp,sp
+	st.w	r29,0[sp]
+	st.w	r28,4[sp]
+	st.w	r27,8[sp]
+	st.w	r26,12[sp]
+	st.w	r25,16[sp]
+	st.w	r24,20[sp]
+	st.w	r23,24[sp]
+	st.w	r31,28[sp]
+#endif
 	jmp	[r10]
 	.size	__save_r23_r31,.-__save_r23_r31
 
-	/* Restore saved registers, deallocate stack and return to the user */
-	/* Called via:	jr __return_r23_r31 */
+	/* Restore saved registers, deallocate stack and return to the user.  */
+	/* Called via:	jr __return_r23_r31.  */
 	.align	2
 	.globl	__return_r23_r31
 	.type	__return_r23_r31,@function
 __return_r23_r31:
+#ifdef __EP__
 	mov	ep,r1
 	mov	sp,ep
-	sld.w	16[ep],r29
-	sld.w	20[ep],r28
-	sld.w	24[ep],r27
-	sld.w	28[ep],r26
-	sld.w	32[ep],r25
-	sld.w	36[ep],r24
-	sld.w	40[ep],r23
-	sld.w	44[ep],r31
-	addi	48,sp,sp
+	sld.w	0[ep],r29
+	sld.w	4[ep],r28
+	sld.w	8[ep],r27
+	sld.w	12[ep],r26
+	sld.w	16[ep],r25
+	sld.w	20[ep],r24
+	sld.w	24[ep],r23
+	sld.w	28[ep],r31
+	addi	32,sp,sp
 	mov	r1,ep
+#else
+	ld.w	0[sp],r29
+	ld.w	4[sp],r28
+	ld.w	8[sp],r27
+	ld.w	12[sp],r26
+	ld.w	16[sp],r25
+	ld.w	20[sp],r24
+	ld.w	24[sp],r23
+	ld.w	28[sp],r31
+	addi	32,sp,sp
+#endif
 	jmp	[r31]
 	.size	__return_r23_r31,.-__return_r23_r31
 #endif /* L_save_23c */
@@ -948,41 +1269,63 @@ __return_r23_r31:
 	.align	2
 	.globl	__save_r24_r31
 	.type	__save_r24_r31,@function
-	/* Allocate space and save registers 24 .. 29, 31 on the stack */
-	/* Also allocate space for the argument save area */
-	/* Called via:	jalr __save_r24_r31,r10 */
+	/* Allocate space and save registers 24 .. 29, 31 on the stack.  */
+	/* Also allocate space for the argument save area.  */
+	/* Called via:	jalr __save_r24_r31,r10.  */
 __save_r24_r31:
+#ifdef __EP__
 	mov	ep,r1
-	addi	-44,sp,sp
+	addi	-28,sp,sp
 	mov	sp,ep
-	sst.w	r29,16[ep]
-	sst.w	r28,20[ep]
-	sst.w	r27,24[ep]
-	sst.w	r26,28[ep]
-	sst.w	r25,32[ep]
-	sst.w	r24,36[ep]
-	sst.w	r31,40[ep]
+	sst.w	r29,0[ep]
+	sst.w	r28,4[ep]
+	sst.w	r27,8[ep]
+	sst.w	r26,12[ep]
+	sst.w	r25,16[ep]
+	sst.w	r24,20[ep]
+	sst.w	r31,24[ep]
 	mov	r1,ep
+#else
+	addi	-28,sp,sp
+	st.w	r29,0[sp]
+	st.w	r28,4[sp]
+	st.w	r27,8[sp]
+	st.w	r26,12[sp]
+	st.w	r25,16[sp]
+	st.w	r24,20[sp]
+	st.w	r31,24[sp]
+#endif
 	jmp	[r10]
 	.size	__save_r24_r31,.-__save_r24_r31
 
-	/* Restore saved registers, deallocate stack and return to the user */
-	/* Called via:	jr __return_r24_r31 */
+	/* Restore saved registers, deallocate stack and return to the user.  */
+	/* Called via:	jr __return_r24_r31.  */
 	.align	2
 	.globl	__return_r24_r31
 	.type	__return_r24_r31,@function
 __return_r24_r31:
+#ifdef __EP__
 	mov	ep,r1
 	mov	sp,ep
-	sld.w	16[ep],r29
-	sld.w	20[ep],r28
-	sld.w	24[ep],r27
-	sld.w	28[ep],r26
-	sld.w	32[ep],r25
-	sld.w	36[ep],r24
-	sld.w	40[ep],r31
-	addi	44,sp,sp
+	sld.w	0[ep],r29
+	sld.w	4[ep],r28
+	sld.w	8[ep],r27
+	sld.w	12[ep],r26
+	sld.w	16[ep],r25
+	sld.w	20[ep],r24
+	sld.w	24[ep],r31
+	addi	28,sp,sp
 	mov	r1,ep
+#else
+	ld.w	0[sp],r29
+	ld.w	4[sp],r28
+	ld.w	8[sp],r27
+	ld.w	12[sp],r26
+	ld.w	16[sp],r25
+	ld.w	20[sp],r24
+	ld.w	24[sp],r31
+	addi	28,sp,sp
+#endif
 	jmp	[r31]
 	.size	__return_r24_r31,.-__return_r24_r31
 #endif /* L_save_24c */
@@ -992,39 +1335,59 @@ __return_r24_r31:
 	.align	2
 	.globl	__save_r25_r31
 	.type	__save_r25_r31,@function
-	/* Allocate space and save registers 25 .. 29, 31 on the stack */
-	/* Also allocate space for the argument save area */
-	/* Called via:	jalr __save_r25_r31,r10 */
+	/* Allocate space and save registers 25 .. 29, 31 on the stack.  */
+	/* Also allocate space for the argument save area.  */
+	/* Called via:	jalr __save_r25_r31,r10.  */
 __save_r25_r31:
+#ifdef __EP__
 	mov	ep,r1
-	addi	-40,sp,sp
+	addi	-24,sp,sp
 	mov	sp,ep
-	sst.w	r29,16[ep]
-	sst.w	r28,20[ep]
-	sst.w	r27,24[ep]
-	sst.w	r26,28[ep]
-	sst.w	r25,32[ep]
-	sst.w	r31,36[ep]
+	sst.w	r29,0[ep]
+	sst.w	r28,4[ep]
+	sst.w	r27,8[ep]
+	sst.w	r26,12[ep]
+	sst.w	r25,16[ep]
+	sst.w	r31,20[ep]
 	mov	r1,ep
+#else
+	addi	-24,sp,sp
+	st.w	r29,0[sp]
+	st.w	r28,4[sp]
+	st.w	r27,8[sp]
+	st.w	r26,12[sp]
+	st.w	r25,16[sp]
+	st.w	r31,20[sp]
+#endif
 	jmp	[r10]
 	.size	__save_r25_r31,.-__save_r25_r31
 
-	/* Restore saved registers, deallocate stack and return to the user */
-	/* Called via:	jr __return_r25_r31 */
+	/* Restore saved registers, deallocate stack and return to the user.  */
+	/* Called via:	jr __return_r25_r31.  */
 	.align	2
 	.globl	__return_r25_r31
 	.type	__return_r25_r31,@function
 __return_r25_r31:
+#ifdef __EP__
 	mov	ep,r1
 	mov	sp,ep
-	sld.w	16[ep],r29
-	sld.w	20[ep],r28
-	sld.w	24[ep],r27
-	sld.w	28[ep],r26
-	sld.w	32[ep],r25
-	sld.w	36[ep],r31
-	addi	40,sp,sp
+	sld.w	0[ep],r29
+	sld.w	4[ep],r28
+	sld.w	8[ep],r27
+	sld.w	12[ep],r26
+	sld.w	16[ep],r25
+	sld.w	20[ep],r31
+	addi	24,sp,sp
 	mov	r1,ep
+#else
+	ld.w	0[sp],r29
+	ld.w	4[sp],r28
+	ld.w	8[sp],r27
+	ld.w	12[sp],r26
+	ld.w	16[sp],r25
+	ld.w	20[sp],r31
+	addi	24,sp,sp
+#endif
 	jmp	[r31]
 	.size	__return_r25_r31,.-__return_r25_r31
 #endif /* L_save_25c */
@@ -1034,37 +1397,55 @@ __return_r25_r31:
 	.align	2
 	.globl	__save_r26_r31
 	.type	__save_r26_r31,@function
-	/* Allocate space and save registers 26 .. 29, 31 on the stack */
-	/* Also allocate space for the argument save area */
-	/* Called via:	jalr __save_r26_r31,r10 */
+	/* Allocate space and save registers 26 .. 29, 31 on the stack.  */
+	/* Also allocate space for the argument save area.  */
+	/* Called via:	jalr __save_r26_r31,r10.  */
 __save_r26_r31:
+#ifdef __EP__
 	mov	ep,r1
-	addi	-36,sp,sp
+	addi	-20,sp,sp
 	mov	sp,ep
-	sst.w	r29,16[ep]
-	sst.w	r28,20[ep]
-	sst.w	r27,24[ep]
-	sst.w	r26,28[ep]
-	sst.w	r31,32[ep]
+	sst.w	r29,0[ep]
+	sst.w	r28,4[ep]
+	sst.w	r27,8[ep]
+	sst.w	r26,12[ep]
+	sst.w	r31,16[ep]
 	mov	r1,ep
+#else
+	addi	-20,sp,sp
+	st.w	r29,0[sp]
+	st.w	r28,4[sp]
+	st.w	r27,8[sp]
+	st.w	r26,12[sp]
+	st.w	r31,16[sp]
+#endif
 	jmp	[r10]
 	.size	__save_r26_r31,.-__save_r26_r31
 
-	/* Restore saved registers, deallocate stack and return to the user */
-	/* Called via:	jr __return_r26_r31 */
+	/* Restore saved registers, deallocate stack and return to the user.  */
+	/* Called via:	jr __return_r26_r31.  */
 	.align	2
 	.globl	__return_r26_r31
 	.type	__return_r26_r31,@function
 __return_r26_r31:
+#ifdef __EP__
 	mov	ep,r1
 	mov	sp,ep
-	sld.w	16[ep],r29
-	sld.w	20[ep],r28
-	sld.w	24[ep],r27
-	sld.w	28[ep],r26
-	sld.w	32[ep],r31
-	addi	36,sp,sp
+	sld.w	0[ep],r29
+	sld.w	4[ep],r28
+	sld.w	8[ep],r27
+	sld.w	12[ep],r26
+	sld.w	16[ep],r31
+	addi	20,sp,sp
 	mov	r1,ep
+#else
+	ld.w	0[sp],r29
+	ld.w	4[sp],r28
+	ld.w	8[sp],r27
+	ld.w	12[sp],r26
+	ld.w	16[sp],r31
+	addi	20,sp,sp
+#endif
 	jmp	[r31]
 	.size	__return_r26_r31,.-__return_r26_r31
 #endif /* L_save_26c */
@@ -1074,35 +1455,51 @@ __return_r26_r31:
 	.align	2
 	.globl	__save_r27_r31
 	.type	__save_r27_r31,@function
-	/* Allocate space and save registers 27 .. 29, 31 on the stack */
-	/* Also allocate space for the argument save area */
-	/* Called via:	jalr __save_r27_r31,r10 */
+	/* Allocate space and save registers 27 .. 29, 31 on the stack.  */
+	/* Also allocate space for the argument save area.  */
+	/* Called via:	jalr __save_r27_r31,r10.  */
 __save_r27_r31:
+#ifdef __EP__
 	mov	ep,r1
-	addi	-32,sp,sp
+	addi	-16,sp,sp
 	mov	sp,ep
-	sst.w	r29,16[ep]
-	sst.w	r28,20[ep]
-	sst.w	r27,24[ep]
-	sst.w	r31,28[ep]
+	sst.w	r29,0[ep]
+	sst.w	r28,4[ep]
+	sst.w	r27,8[ep]
+	sst.w	r31,12[ep]
 	mov	r1,ep
+#else
+	addi	-16,sp,sp
+	st.w	r29,0[sp]
+	st.w	r28,4[sp]
+	st.w	r27,8[sp]
+	st.w	r31,12[sp]
+#endif
 	jmp	[r10]
 	.size	__save_r27_r31,.-__save_r27_r31
 
-	/* Restore saved registers, deallocate stack and return to the user */
-	/* Called via:	jr __return_r27_r31 */
+	/* Restore saved registers, deallocate stack and return to the user.  */
+	/* Called via:	jr __return_r27_r31.  */
 	.align	2
 	.globl	__return_r27_r31
 	.type	__return_r27_r31,@function
 __return_r27_r31:
+#ifdef __EP__
 	mov	ep,r1
 	mov	sp,ep
-	sld.w	16[ep],r29
-	sld.w	20[ep],r28
-	sld.w	24[ep],r27
-	sld.w	28[ep],r31
-	addi	32,sp,sp
+	sld.w	0[ep],r29
+	sld.w	4[ep],r28
+	sld.w	8[ep],r27
+	sld.w	12[ep],r31
+	addi	16,sp,sp
 	mov	r1,ep
+#else
+	ld.w	0[sp],r29
+	ld.w	4[sp],r28
+	ld.w	8[sp],r27
+	ld.w	12[sp],r31
+	addi	16,sp,sp
+#endif
 	jmp	[r31]
 	.size	__return_r27_r31,.-__return_r27_r31
 #endif /* L_save_27c */
@@ -1112,27 +1509,27 @@ __return_r27_r31:
 	.align	2
 	.globl	__save_r28_r31
 	.type	__save_r28_r31,@function
-	/* Allocate space and save registers 28 .. 29, 31 on the stack */
-	/* Also allocate space for the argument save area */
-	/* Called via:	jalr __save_r28_r31,r10 */
+	/* Allocate space and save registers 28 .. 29, 31 on the stack.  */
+	/* Also allocate space for the argument save area.  */
+	/* Called via:	jalr __save_r28_r31,r10.  */
 __save_r28_r31:
-	addi	-28,sp,sp
-	st.w	r29,16[sp]
-	st.w	r28,20[sp]
-	st.w	r31,24[sp]
+	addi	-12,sp,sp
+	st.w	r29,0[sp]
+	st.w	r28,4[sp]
+	st.w	r31,8[sp]
 	jmp	[r10]
 	.size	__save_r28_r31,.-__save_r28_r31
 
-	/* Restore saved registers, deallocate stack and return to the user */
-	/* Called via:	jr __return_r28_r31 */
+	/* Restore saved registers, deallocate stack and return to the user.  */
+	/* Called via:	jr __return_r28_r31.  */
 	.align	2
 	.globl	__return_r28_r31
 	.type	__return_r28_r31,@function
 __return_r28_r31:
-	ld.w	16[sp],r29
-	ld.w	20[sp],r28
-	ld.w	24[sp],r31
-	addi	28,sp,sp
+	ld.w	0[sp],r29
+	ld.w	4[sp],r28
+	ld.w	8[sp],r31
+	addi	12,sp,sp
 	jmp	[r31]
 	.size	__return_r28_r31,.-__return_r28_r31
 #endif /* L_save_28c */
@@ -1142,25 +1539,25 @@ __return_r28_r31:
 	.align	2
 	.globl	__save_r29_r31
 	.type	__save_r29_r31,@function
-	/* Allocate space and save registers 29 & 31 on the stack */
-	/* Also allocate space for the argument save area */
-	/* Called via:	jalr __save_r29_r31,r10 */
+	/* Allocate space and save registers 29 & 31 on the stack.  */
+	/* Also allocate space for the argument save area.  */
+	/* Called via:	jalr __save_r29_r31,r10.  */
 __save_r29_r31:
-	addi	-24,sp,sp
-	st.w	r29,16[sp]
-	st.w	r31,20[sp]
+	addi	-8,sp,sp
+	st.w	r29,0[sp]
+	st.w	r31,4[sp]
 	jmp	[r10]
 	.size	__save_r29_r31,.-__save_r29_r31
 
-	/* Restore saved registers, deallocate stack and return to the user */
-	/* Called via:	jr __return_r29_r31 */
+	/* Restore saved registers, deallocate stack and return to the user.  */
+	/* Called via:	jr __return_r29_r31.  */
 	.align	2
 	.globl	__return_r29_r31
 	.type	__return_r29_r31,@function
 __return_r29_r31:
-	ld.w	16[sp],r29
-	ld.w	20[sp],r31
-	addi	24,sp,sp
+	ld.w	0[sp],r29
+	ld.w	4[sp],r31
+	addi	8,sp,sp
 	jmp	[r31]
 	.size	__return_r29_r31,.-__return_r29_r31
 #endif /* L_save_29c */
@@ -1172,43 +1569,24 @@ __return_r29_r31:
 	.type	__save_r31,@function
 	/* Allocate space and save register 31 on the stack.  */
 	/* Also allocate space for the argument save area.  */
-	/* Called via:	jalr __save_r31,r10 */
+	/* Called via:	jalr __save_r31,r10.  */
 __save_r31:
-	addi	-20,sp,sp
-	st.w	r31,16[sp]
+	addi	-4,sp,sp
+	st.w	r31,0[sp]
 	jmp	[r10]
 	.size	__save_r31,.-__save_r31
 
 	/* Restore saved registers, deallocate stack and return to the user.  */
-	/* Called via:	jr __return_r31 */
+	/* Called via:	jr __return_r31.  */
 	.align	2
 	.globl	__return_r31
 	.type	__return_r31,@function
 __return_r31:
-	ld.w	16[sp],r31
-	addi	20,sp,sp
+	ld.w	0[sp],r31
+	addi	4,sp,sp
 	jmp	[r31]
         .size   __return_r31,.-__return_r31
 #endif /* L_save_31c */
-
-#ifdef L_save_varargs
-	.text
-	.align	2
-	.globl	__save_r6_r9
-	.type	__save_r6_r9,@function
-	/* Save registers 6 .. 9 on the stack for variable argument functions.  */
-	/* Called via:	jalr __save_r6_r9,r10 */
-__save_r6_r9:
-	mov	ep,r1
-	mov	sp,ep
-	sst.w	r6,0[ep]
-	sst.w	r7,4[ep]
-	sst.w	r8,8[ep]
-	sst.w	r9,12[ep]
-	mov	r1,ep
-	jmp	[r10]
-	.size	__save_r6_r9,.-__save_r6_r9
-#endif /* L_save_varargs */
 
 #ifdef	L_save_interrupt
 	.text
@@ -1216,9 +1594,10 @@ __save_r6_r9:
 	.globl	__save_interrupt
 	.type	__save_interrupt,@function
 	/* Save registers r1, r4 on stack and load up with expected values.  */
-	/* Note, 12 bytes of stack have already been allocated.  */
-	/* Called via:	jalr __save_interrupt,r10 */
+	/* Note, 20 bytes of stack have already been allocated.  */
+	/* Called via:	jalr __save_interrupt,r10.  */
 __save_interrupt:
+       /* add -20,sp ; st.w r11,16[sp] ; st.w r10,12[sp] ; */
 	st.w	ep,0[sp]
 	st.w	gp,4[sp]
 	st.w	r1,8[sp]
@@ -1230,7 +1609,7 @@ __save_interrupt:
 	.size	__save_interrupt,.-__save_interrupt
 
 	/* Restore saved registers, deallocate stack and return from the interrupt.  */
-	/* Called via:	jr __return_interrupt */
+	/* Called via:	jr __return_interrupt.  */
 	.align	2
 	.globl	__return_interrupt
 	.type	__return_interrupt,@function
@@ -1239,7 +1618,8 @@ __return_interrupt:
 	ld.w	4[sp],gp
 	ld.w	8[sp],r1
 	ld.w	12[sp],r10
-	addi	16,sp,sp
+	ld.w    16[sp],r11
+	addi    20,sp,sp
 	reti
 	.size	__return_interrupt,.-__return_interrupt
 #endif /* L_save_interrupt */
@@ -1251,38 +1631,67 @@ __return_interrupt:
 	.type	__save_all_interrupt,@function
 	/* Save all registers except for those saved in __save_interrupt.  */
 	/* Allocate enough stack for all of the registers & 16 bytes of space.  */
-	/* Called via:	jalr __save_all_interrupt,r10 */
+	/* Called via:	jalr __save_all_interrupt,r10.  */
 __save_all_interrupt:
-	addi	-120,sp,sp
+	addi	-104,sp,sp
+#ifdef __EP__
 	mov	ep,r1
 	mov	sp,ep
-	sst.w	r31,116[ep]
-	sst.w	r2,112[ep]
-	sst.w	gp,108[ep]
-	sst.w	r6,104[ep]
-	sst.w	r7,100[ep]
-	sst.w	r8,96[ep]
-	sst.w	r9,92[ep]
-	sst.w	r11,88[ep]
-	sst.w	r12,84[ep]
-	sst.w	r13,80[ep]
-	sst.w	r14,76[ep]
-	sst.w	r15,72[ep]
-	sst.w	r16,68[ep]
-	sst.w	r17,64[ep]
-	sst.w	r18,60[ep]
-	sst.w	r19,56[ep]
-	sst.w	r20,52[ep]
-	sst.w	r21,48[ep]
-	sst.w	r22,44[ep]
-	sst.w	r23,40[ep]
-	sst.w	r24,36[ep]
-	sst.w	r25,32[ep]
-	sst.w	r26,28[ep]
-	sst.w	r27,24[ep]
-	sst.w	r28,20[ep]
-	sst.w	r29,16[ep]
+	sst.w	r31,100[ep]
+	sst.w	r2,96[ep]
+	sst.w	gp,92[ep]
+	sst.w	r6,88[ep]
+	sst.w	r7,84[ep]
+	sst.w	r8,80[ep]
+	sst.w	r9,76[ep]
+	sst.w	r11,72[ep]
+	sst.w	r12,68[ep]
+	sst.w	r13,64[ep]
+	sst.w	r14,60[ep]
+	sst.w	r15,56[ep]
+	sst.w	r16,52[ep]
+	sst.w	r17,48[ep]
+	sst.w	r18,44[ep]
+	sst.w	r19,40[ep]
+	sst.w	r20,36[ep]
+	sst.w	r21,32[ep]
+	sst.w	r22,28[ep]
+	sst.w	r23,24[ep]
+	sst.w	r24,20[ep]
+	sst.w	r25,16[ep]
+	sst.w	r26,12[ep]
+	sst.w	r27,8[ep]
+	sst.w	r28,4[ep]
+	sst.w	r29,0[ep]
 	mov	r1,ep
+#else
+	st.w	r31,100[sp]
+	st.w	r2,96[sp]
+	st.w	gp,92[sp]
+	st.w	r6,88[sp]
+	st.w	r7,84[sp]
+	st.w	r8,80[sp]
+	st.w	r9,76[sp]
+	st.w	r11,72[sp]
+	st.w	r12,68[sp]
+	st.w	r13,64[sp]
+	st.w	r14,60[sp]
+	st.w	r15,56[sp]
+	st.w	r16,52[sp]
+	st.w	r17,48[sp]
+	st.w	r18,44[sp]
+	st.w	r19,40[sp]
+	st.w	r20,36[sp]
+	st.w	r21,32[sp]
+	st.w	r22,28[sp]
+	st.w	r23,24[sp]
+	st.w	r24,20[sp]
+	st.w	r25,16[sp]
+	st.w	r26,12[sp]
+	st.w	r27,8[sp]
+	st.w	r28,4[sp]
+	st.w	r29,0[sp]
+#endif
 	jmp	[r10]
 	.size	__save_all_interrupt,.-__save_all_interrupt
 
@@ -1290,44 +1699,72 @@ __save_all_interrupt:
 	.type	__restore_all_interrupt,@function
 	/* Restore all registers saved in __save_all_interrupt and
 	   deallocate the stack space.  */
-	/* Called via:	jalr __restore_all_interrupt,r10 */
+	/* Called via:	jalr __restore_all_interrupt,r10.  */
 __restore_all_interrupt:
+#ifdef __EP__
 	mov	ep,r1
 	mov	sp,ep
-	sld.w	116[ep],r31
-	sld.w	112[ep],r2
-	sld.w	108[ep],gp
-	sld.w	104[ep],r6
-	sld.w	100[ep],r7
-	sld.w	96[ep],r8
-	sld.w	92[ep],r9
-	sld.w	88[ep],r11
-	sld.w	84[ep],r12
-	sld.w	80[ep],r13
-	sld.w	76[ep],r14
-	sld.w	72[ep],r15
-	sld.w	68[ep],r16
-	sld.w	64[ep],r17
-	sld.w	60[ep],r18
-	sld.w	56[ep],r19
-	sld.w	52[ep],r20
-	sld.w	48[ep],r21
-	sld.w	44[ep],r22
-	sld.w	40[ep],r23
-	sld.w	36[ep],r24
-	sld.w	32[ep],r25
-	sld.w	28[ep],r26
-	sld.w	24[ep],r27
-	sld.w	20[ep],r28
-	sld.w	16[ep],r29
+	sld.w	100[ep],r31
+	sld.w	96[ep],r2
+	sld.w	92[ep],gp
+	sld.w	88[ep],r6
+	sld.w	84[ep],r7
+	sld.w	80[ep],r8
+	sld.w	76[ep],r9
+	sld.w	72[ep],r11
+	sld.w	68[ep],r12
+	sld.w	64[ep],r13
+	sld.w	60[ep],r14
+	sld.w	56[ep],r15
+	sld.w	52[ep],r16
+	sld.w	48[ep],r17
+	sld.w	44[ep],r18
+	sld.w	40[ep],r19
+	sld.w	36[ep],r20
+	sld.w	32[ep],r21
+	sld.w	28[ep],r22
+	sld.w	24[ep],r23
+	sld.w	20[ep],r24
+	sld.w	16[ep],r25
+	sld.w	12[ep],r26
+	sld.w	8[ep],r27
+	sld.w	4[ep],r28
+	sld.w	0[ep],r29
 	mov	r1,ep
-	addi	120,sp,sp
+#else
+	ld.w	100[sp],r31
+	ld.w	96[sp],r2
+	ld.w	92[sp],gp
+	ld.w	88[sp],r6
+	ld.w	84[sp],r7
+	ld.w	80[sp],r8
+	ld.w	76[sp],r9
+	ld.w	72[sp],r11
+	ld.w	68[sp],r12
+	ld.w	64[sp],r13
+	ld.w	60[sp],r14
+	ld.w	56[sp],r15
+	ld.w	52[sp],r16
+	ld.w	48[sp],r17
+	ld.w	44[sp],r18
+	ld.w	40[sp],r19
+	ld.w	36[sp],r20
+	ld.w	32[sp],r21
+	ld.w	28[sp],r22
+	ld.w	24[sp],r23
+	ld.w	20[sp],r24
+	ld.w	16[sp],r25
+	ld.w	12[sp],r26
+	ld.w	8[sp],r27
+	ld.w	4[sp],r28
+	ld.w	0[sp],r29
+#endif
+	addi	104,sp,sp	
 	jmp	[r10]
 	.size	__restore_all_interrupt,.-__restore_all_interrupt
 #endif /* L_save_all_interrupt */
-
 	
-#if defined __v850e__
+#if defined(__v850e__) || defined(__v850e1__) || defined(__v850e2__) || defined(__v850e2v3__)
 #ifdef	L_callt_save_r2_r29
 	/* Put these functions into the call table area.  */
 	.call_table_text
@@ -1361,7 +1798,7 @@ __callt_save_r2_r29:	.short ctoff(.L_save_r2_r29)
 	.type	__callt_return_r2_r29,@function
 __callt_return_r2_r29:	.short ctoff(.L_return_r2_r29)
 	
-#endif /* L_callt_save_r2_r29 */
+#endif /* L_callt_save_r2_r29.  */
 
 #ifdef	L_callt_save_r2_r31
 	/* Put these functions into the call table area.  */
@@ -1374,14 +1811,14 @@ __callt_return_r2_r29:	.short ctoff(.L_return_r2_r29)
 .L_save_r2_r31:
 	add	-4, sp
 	st.w	r2, 0[sp]
-	prepare {r20 - r29, r31}, 4
+	prepare {r20 - r29, r31}, 0
 	ctret
 
 	/* Restore saved registers, deallocate stack and return to the user.  */
 	/* Called via:	callt ctoff(__callt_return_r2_r31).  */
 	.align	2
 .L_return_r2_r31:
-	dispose 4, {r20 - r29, r31}
+	dispose 0, {r20 - r29, r31}
 	ld.w    0[sp], r2
 	addi	4, sp, sp
 	jmp     [r31]
@@ -1399,36 +1836,8 @@ __callt_return_r2_r31:	.short ctoff(.L_return_r2_r31)
 	
 #endif /* L_callt_save_r2_r31 */
 
-
-#ifdef L_callt_save_r6_r9
-	/* Put these functions into the call table area.  */
-	.call_table_text
-	
-	/* Save registers r6 - r9 onto the stack in the space reserved for them.
-	   Use by variable argument functions. 
-	   Called via:	callt ctoff(__callt_save_r6_r9).  */
-	.align	2
-.L_save_r6_r9:
-	mov	ep,r1
-	mov	sp,ep
-	sst.w	r6,0[ep]
-	sst.w	r7,4[ep]
-	sst.w	r8,8[ep]
-	sst.w	r9,12[ep]
-	mov	r1,ep
-	ctret
-
-	/* Place the offsets of the start of this routines into the call table.  */
-	.call_table_data
-
-	.global	__callt_save_r6_r9
-	.type	__callt_save_r6_r9,@function
-__callt_save_r6_r9:	.short ctoff(.L_save_r6_r9)
-#endif /* L_callt_save_r6_r9 */
-
-	
 #ifdef	L_callt_save_interrupt
-	/* Put this functions into the call table area */
+	/* Put these functions into the call table area.  */
 	.call_table_text
 	
 	/* Save registers r1, ep, gp, r10 on stack and load up with expected values.  */
@@ -1436,44 +1845,47 @@ __callt_save_r6_r9:	.short ctoff(.L_save_r6_r9)
 	.align	2
 .L_save_interrupt:
         /* SP has already been moved before callt ctoff(_save_interrupt).  */
-        /* addi -24, sp, sp  */
+        /* R1,R10,R11,ctpc,ctpsw has alread been saved bofore callt ctoff(_save_interrupt).  */
+        /* addi -28, sp, sp  */
+        /* st.w r1,    24[sp] */
+        /* st.w r10,   12[sp] */
+        /* st.w r11,   16[sp] */
+        /* stsr ctpc,  r10    */
+        /* st.w r10,   20[sp] */
+        /* stsr ctpsw, r10    */
+        /* st.w r10,   24[sp] */
         st.w    ep,  0[sp]
         st.w    gp,  4[sp]
         st.w    r1,  8[sp]
-        /* R10 has alread been saved bofore callt ctoff(_save_interrupt).  */
-        /* st.w    r10, 12[sp]  */
 	mov	hilo(__ep),ep
 	mov	hilo(__gp),gp
 	ctret
 
-        /* Place the offsets of the start of the routine into the call table.  */
-        .call_table_data
-        .global __callt_save_interrupt
-        .type   __callt_save_interrupt,@function
-__callt_save_interrupt: .short ctoff(.L_save_interrupt)
-
         .call_table_text
-
 	/* Restore saved registers, deallocate stack and return from the interrupt.  */
-        /* Called via:  callt ctoff(__callt_restore_itnerrupt).  */
-	.text
+        /* Called via:  callt ctoff(__callt_restore_interrupt).  */
 	.align	2
 	.globl	__return_interrupt
 	.type	__return_interrupt,@function
 .L_return_interrupt:
-        ld.w    20[sp], r1
+        ld.w    24[sp], r1
         ldsr    r1,     ctpsw
-        ld.w    16[sp], r1
+        ld.w    20[sp], r1
         ldsr    r1,     ctpc
+        ld.w    16[sp], r11
         ld.w    12[sp], r10
         ld.w     8[sp], r1
         ld.w     4[sp], gp
         ld.w     0[sp], ep
-        addi    24, sp, sp
+        addi    28, sp, sp
         reti
 
-	/* Place the offsets of the start of the routine into the call table.  */
+	/* Place the offsets of the start of these routines into the call table.  */
 	.call_table_data
+
+        .global __callt_save_interrupt
+        .type   __callt_save_interrupt,@function
+__callt_save_interrupt:         .short ctoff(.L_save_interrupt)
 
         .global __callt_return_interrupt
         .type   __callt_return_interrupt,@function
@@ -1482,7 +1894,7 @@ __callt_return_interrupt:       .short ctoff(.L_return_interrupt)
 #endif /* L_callt_save_interrupt */
 
 #ifdef L_callt_save_all_interrupt
-	/* Put this functions into the call table area.  */
+	/* Put these functions into the call table area.  */
 	.call_table_text
 	
 	/* Save all registers except for those saved in __save_interrupt.  */
@@ -1491,6 +1903,7 @@ __callt_return_interrupt:       .short ctoff(.L_return_interrupt)
 	.align	2
 .L_save_all_interrupt:
 	addi	-60, sp, sp
+#ifdef __EP__
 	mov	ep,  r1
 	mov	sp,  ep
 	sst.w	r2,  56[ep]
@@ -1509,8 +1922,24 @@ __callt_return_interrupt:       .short ctoff(.L_return_interrupt)
 	sst.w	r18, 4[ep]
 	sst.w	r19, 0[ep]
 	mov	r1,  ep
-
-	prepare {r20 - r29, r31}, 4
+#else
+	st.w	r2,  56[sp]
+	st.w	r5,  52[sp]
+	st.w	r6,  48[sp]
+	st.w	r7,  44[sp]
+	st.w	r8,  40[sp]
+	st.w	r9,  36[sp]
+	st.w	r11, 32[sp]
+	st.w	r12, 28[sp]
+	st.w	r13, 24[sp]
+	st.w	r14, 20[sp]
+	st.w	r15, 16[sp]
+	st.w	r16, 12[sp]
+	st.w	r17, 8[sp]
+	st.w	r18, 4[sp]
+	st.w	r19, 0[sp]
+#endif
+	prepare {r20 - r29, r31}, 0
 	ctret	
 
 	/* Restore all registers saved in __save_all_interrupt
@@ -1518,8 +1947,8 @@ __callt_return_interrupt:       .short ctoff(.L_return_interrupt)
 	/* Called via:	callt ctoff(__callt_restore_all_interrupt).  */
 	.align 2
 .L_restore_all_interrupt:
-	dispose 4, {r20 - r29, r31}
-	
+	dispose 0, {r20 - r29, r31}
+#ifdef __EP__
 	mov	ep, r1
 	mov	sp, ep
 	sld.w	0 [ep], r19
@@ -1538,6 +1967,23 @@ __callt_return_interrupt:       .short ctoff(.L_return_interrupt)
 	sld.w	52[ep], r5
 	sld.w	56[ep], r2
 	mov	r1, ep
+#else
+	ld.w	0 [sp], r19
+	ld.w	4 [sp], r18
+	ld.w	8 [sp], r17
+	ld.w	12[sp], r16
+	ld.w	16[sp], r15
+	ld.w	20[sp], r14
+	ld.w	24[sp], r13
+	ld.w	28[sp], r12
+	ld.w	32[sp], r11
+	ld.w	36[sp], r9
+	ld.w	40[sp], r8
+	ld.w	44[sp], r7
+	ld.w	48[sp], r6
+	ld.w	52[sp], r5
+	ld.w	56[sp], r2
+#endif
 	addi	60, sp, sp
 	ctret
 
@@ -1565,7 +2011,7 @@ __callt_restore_all_interrupt:	.short ctoff(.L_restore_all_interrupt)
 	ctret									;\
 										;\
 	/* Restore saved registers, deallocate stack and return.  */		;\
-	/* Called via:	callt ctoff(__return_START_r29) */			;\
+	/* Called via:	callt ctoff(__return_START_r29).  */			;\
 	.align	2								;\
 .L_return_##START##_r29:							;\
 	dispose 0, { START - r29 }, r31						;\
@@ -1588,14 +2034,14 @@ __callt_return_##START##_r29:	.short ctoff(.L_return_##START##_r29 )
 	/* Allocate space and save registers START .. r31 on the stack.  */	;\
 	/* Called via:	callt ctoff(__callt_save_START_r31c).  */		;\
 .L_save_##START##_r31c:								;\
-	prepare { START - r29, r31}, 4						;\
+	prepare { START - r29, r31}, 0						;\
 	ctret									;\
 										;\
 	/* Restore saved registers, deallocate stack and return.  */		;\
 	/* Called via:	callt ctoff(__return_START_r31c).  */			;\
 	.align	2								;\
 .L_return_##START##_r31c:							;\
-	dispose 4, { START - r29, r31}, r31					;\
+	dispose 0, { START - r29, r31}, r31					;\
 										;\
 	/* Place the offsets of the start of these funcs into the call table.  */;\
 	.call_table_data							;\
@@ -1678,14 +2124,14 @@ __callt_return_##START##_r31c:  .short ctoff(.L_return_##START##_r31c )
 	/* Allocate space and save register r31 on the stack.  */
 	/* Called via:	callt ctoff(__callt_save_r31c).  */
 .L_callt_save_r31c:
-	prepare {r31}, 4
+	prepare {r31}, 0
 	ctret
 
 	/* Restore saved registers, deallocate stack and return.  */
 	/* Called via:	callt ctoff(__return_r31c).  */
 	.align	2
 .L_callt_return_r31c:
-	dispose 4, {r31}, r31
+	dispose 0, {r31}, r31
 	
 	/* Place the offsets of the start of these funcs into the call table.  */
 	.call_table_data
@@ -1747,7 +2193,7 @@ ___cmpdi2:
 	.type	___ucmpdi2,@function
 ___ucmpdi2:
 	cmp	r9, r7  # Check if each high word are same.
-	be	.L_ucmpdi_check_psw
+	bne	.L_ucmpdi_check_psw
 	cmp     r8, r6  # Compare the word.
 .L_ucmpdi_check_psw:
 	setf	nl, r10 # 
@@ -1868,8 +2314,7 @@ ___muldi3:
         mov   r26, r10
         mov   r27, r11
         jr    __return_r26_r31
-#endif /* __v850__ */
-#if defined(__v850e__) || defined(__v850ea__)
+#else /* defined(__v850e__) */
 	/*  (Ahi << 32 + Alo) * (Bhi << 32 + Blo) */
 	/*   r7           r6      r9         r8   */
 	mov  r8, r10
@@ -1879,7 +2324,7 @@ ___muldi3:
 	add  r8, r11
 	add  r9, r11
 	jmp  [r31]
-
-#endif /* defined(__v850e__)  || defined(__v850ea__) */
+#endif /* defined(__v850e__) */
 	.size ___muldi3, . - ___muldi3
 #endif
+	

@@ -1,9 +1,11 @@
-// Copyright (C) 2004 Free Software Foundation
+// { dg-do run { xfail broken_cplxf_arg } }
+
+// Copyright (C) 2004, 2009 Free Software Foundation
 //
 // This file is part of the GNU ISO C++ Library.  This library is free
 // software; you can redistribute it and/or modify it under the
 // terms of the GNU General Public License as published by the
-// Free Software Foundation; either version 2, or (at your option)
+// Free Software Foundation; either version 3, or (at your option)
 // any later version.
 
 // This library is distributed in the hope that it will be useful,
@@ -12,9 +14,8 @@
 // GNU General Public License for more details.
 
 // You should have received a copy of the GNU General Public License along
-// with this library; see the file COPYING.  If not, write to the Free
-// Software Foundation, 59 Temple Place - Suite 330, Boston, MA 02111-1307,
-// USA.
+// with this library; see the file COPYING3.  If not see
+// <http://www.gnu.org/licenses/>.
 
 // 26.2.8 complex transcendentals
 
@@ -59,6 +60,11 @@ void test01()
   d2 = 1.4;
   test01_do(d1, d2);
 
+#if __LDBL_MANT_DIG__ != 106
+  /* For IBM long double, epsilon is too small (since 1.0 plus any
+     double is representable) to be able to expect results within
+     epsilon * 100 (which may be much less than 1ulp for a particular
+     long double value).  */
   long double ld1 = -1.0l;
   long double ld2 = 0.5l;
   test01_do(ld1, ld2);
@@ -66,6 +72,7 @@ void test01()
   ld1 = -3.2l;
   ld2 = 1.4l;
   test01_do(ld1, ld2);
+#endif
 }
 
 int main()

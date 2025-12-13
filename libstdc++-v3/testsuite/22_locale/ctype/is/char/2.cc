@@ -1,10 +1,13 @@
-// { dg-do run { xfail *-*-![linux]* } }
-// Copyright (C) 2000, 2001, 2002, 2003, 2004 Free Software Foundation, Inc.
+// { dg-do run { xfail { ! { *-*-linux* } } } }
+// { dg-require-namedlocale "de_DE" }
+
+// Copyright (C) 2000, 2001, 2002, 2003, 2004, 2005, 2009
+// Free Software Foundation, Inc.
 //
 // This file is part of the GNU ISO C++ Library.  This library is free
 // software; you can redistribute it and/or modify it under the
 // terms of the GNU General Public License as published by the
-// Free Software Foundation; either version 2, or (at your option)
+// Free Software Foundation; either version 3, or (at your option)
 // any later version.
 
 // This library is distributed in the hope that it will be useful,
@@ -13,18 +16,9 @@
 // GNU General Public License for more details.
 
 // You should have received a copy of the GNU General Public License along
-// with this library; see the file COPYING.  If not, write to the Free
-// Software Foundation, 59 Temple Place - Suite 330, Boston, MA 02111-1307,
-// USA.
+// with this library; see the file COPYING3.  If not see
+// <http://www.gnu.org/licenses/>.
 
-// As a special exception, you may use this file as part of a free software
-// library without restriction.  Specifically, if other files instantiate
-// templates or use macros or inline functions from this file, or you compile
-// this file and link it with other files to produce an executable, this
-// file does not by itself cause the resulting executable to be covered by
-// the GNU General Public License.  This exception does not however
-// invalidate any other reasons why the executable file might be covered by
-// the GNU General Public License.
 
 // 22.2.1.3.2 ctype<char> members
 
@@ -67,7 +61,7 @@ void test02()
     }   
 
   // "de_DE"
-  locale loc_de = __gnu_test::try_named_locale("de_DE");
+  locale loc_de = locale("de_DE");
   const ctype<char>& ctype_de = use_facet<ctype<char> >(loc_de); 
   for (int i = 0; i < max; ++i)
     {
@@ -97,10 +91,6 @@ void test02()
   VERIFY( v_c != v_de );
 }
 
-#if !__GXX_WEAK__ && _MT_ALLOCATOR_H
-// Explicitly instantiate for systems with no COMDAT or weak support.
-template class __gnu_cxx::__mt_alloc<std::ctype_base::mask>;
-#endif
 int main() 
 {
   test02();

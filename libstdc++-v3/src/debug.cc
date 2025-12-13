@@ -1,12 +1,12 @@
 // Debugging mode support code -*- C++ -*-
 
-// Copyright (C) 2003, 2004
+// Copyright (C) 2003, 2004, 2005, 2006, 2007, 2008, 2009, 2010
 // Free Software Foundation, Inc.
 //
 // This file is part of the GNU ISO C++ Library.  This library is free
 // software; you can redistribute it and/or modify it under the
 // terms of the GNU General Public License as published by the
-// Free Software Foundation; either version 2, or (at your option)
+// Free Software Foundation; either version 3, or (at your option)
 // any later version.
 
 // This library is distributed in the hope that it will be useful,
@@ -14,37 +14,60 @@
 // MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
 // GNU General Public License for more details.
 
-// You should have received a copy of the GNU General Public License along
-// with this library; see the file COPYING.  If not, write to the Free
-// Software Foundation, 59 Temple Place - Suite 330, Boston, MA 02111-1307,
-// USA.
+// Under Section 7 of GPL version 3, you are granted additional
+// permissions described in the GCC Runtime Library Exception, version
+// 3.1, as published by the Free Software Foundation.
 
-// As a special exception, you may use this file as part of a free software
-// library without restriction.  Specifically, if other files instantiate
-// templates or use macros or inline functions from this file, or you compile
-// this file and link it with other files to produce an executable, this
-// file does not by itself cause the resulting executable to be covered by
-// the GNU General Public License.  This exception does not however
-// invalidate any other reasons why the executable file might be covered by
-// the GNU General Public License.
+// You should have received a copy of the GNU General Public License and
+// a copy of the GCC Runtime Library Exception along with this program;
+// see the files COPYING3 and COPYING.RUNTIME respectively.  If not, see
+// <http://www.gnu.org/licenses/>.
 
 #include <debug/debug.h>
 #include <debug/safe_sequence.h>
 #include <debug/safe_iterator.h>
 #include <algorithm>
-#include <cstdlib>
 #include <cassert>
 #include <cstring>
-#include <cstdio>
 #include <cctype>
-#include <bits/concurrence.h>
+#include <cstdio>
+#include <cstdlib>
+#include <functional>
 
 using namespace std;
 
-namespace __gnu_internal
+namespace
 {
-  __glibcxx_mutex_define_initialized(iterator_base_mutex);
-} // namespace __gnu_internal
+  /** Returns different instances of __mutex depending on the passed address
+   *  in order to limit contention without breaking current library binary
+   *  compatibility. */
+  __gnu_cxx::__mutex&
+  get_safe_base_mutex(void* __address)
+  {
+    const size_t mask = 0xf;
+    static __gnu_cxx::__mutex safe_base_mutex[mask + 1];
+    const size_t index = _Hash_impl::hash(__address) & mask;
+    return safe_base_mutex[index];
+  }
+
+  void
+  swap_seq(__gnu_debug::_Safe_sequence_base& __lhs,
+	   __gnu_debug::_Safe_sequence_base& __rhs)
+  {
+    swap(__lhs._M_iterators, __rhs._M_iterators);
+    swap(__lhs._M_const_iterators, __rhs._M_const_iterators);
+    swap(__lhs._M_version, __rhs._M_version);
+    __gnu_debug::_Safe_iterator_base* __iter;
+    for (__iter = __rhs._M_iterators; __iter; __iter = __iter->_M_next)
+      __iter->_M_sequence = &__rhs;
+    for (__iter = __lhs._M_iterators; __iter; __iter = __iter->_M_next)
+      __iter->_M_sequence = &__lhs;
+    for (__iter = __rhs._M_const_iterators; __iter; __iter = __iter->_M_next)
+      __iter->_M_sequence = &__rhs;
+    for (__iter = __lhs._M_const_iterators; __iter; __iter = __iter->_M_next)
+      __iter->_M_sequence = &__lhs;
+  }
+} // anonymous namespace
 
 namespace __gnu_debug
 {
@@ -106,86 +129,142 @@ namespace __gnu_debug
     "attempt to output via an ostream_iterator with no associated stream",
     "attempt to dereference an end-of-stream istreambuf_iterator"
     " (this is a GNU extension)",
-    "attempt to increment an end-of-stream istreambuf_iterator"
+    "attempt to increment an end-of-stream istreambuf_iterator",
+    "attempt to insert into container after an end iterator",
+    "attempt to erase from container after a %2.state; iterator not followed"
+    " by a dereferenceable one",
+    "function requires a valid iterator range (%2.name;, %3.name;)"
+    ", \"%2.name;\" shall be before and not equal to \"%3.name;\""
   };
 
-  void 
+  void
   _Safe_sequence_base::
   _M_detach_all()
   {
-    for (_Safe_iterator_base* __iter = _M_iterators; __iter; )
+    __gnu_cxx::__scoped_lock sentry(_M_get_mutex());
+    for (_Safe_iterator_base* __iter = _M_iterators; __iter;)
       {
 	_Safe_iterator_base* __old = __iter;
 	__iter = __iter->_M_next;
-	__old->_M_attach(0, false);
+	__old->_M_reset();
       }
+    _M_iterators = 0;
     
-    for (_Safe_iterator_base* __iter2 = _M_const_iterators; __iter2; )
+    for (_Safe_iterator_base* __iter2 = _M_const_iterators; __iter2;)
       {
 	_Safe_iterator_base* __old = __iter2;
 	__iter2 = __iter2->_M_next;
-	__old->_M_attach(0, true);
+	__old->_M_reset();
       }
+    _M_const_iterators = 0;
   }
 
-  void 
+  void
   _Safe_sequence_base::
   _M_detach_singular()
   {
-    for (_Safe_iterator_base* __iter = _M_iterators; __iter; )
+    __gnu_cxx::__scoped_lock sentry(_M_get_mutex());
+    for (_Safe_iterator_base* __iter = _M_iterators; __iter;)
       {
 	_Safe_iterator_base* __old = __iter;
 	__iter = __iter->_M_next;
 	if (__old->_M_singular())
-	  __old->_M_attach(0, false);
+	  __old->_M_detach_single();
       }
 
-    for (_Safe_iterator_base* __iter2 = _M_const_iterators; __iter2; )
+    for (_Safe_iterator_base* __iter2 = _M_const_iterators; __iter2;)
       {
 	_Safe_iterator_base* __old = __iter2;
 	__iter2 = __iter2->_M_next;
 	if (__old->_M_singular())
-	  __old->_M_attach(0, true);
-      }
-  }
-  
-  void 
-  _Safe_sequence_base::
-  _M_revalidate_singular()
-  {
-    _Safe_iterator_base* __iter;
-    for (__iter = _M_iterators; __iter; __iter = __iter->_M_next)
-      {
-	__iter->_M_version = _M_version;
-	__iter = __iter->_M_next;
-      }
-    
-    for (__iter = _M_const_iterators; __iter; __iter = __iter->_M_next)
-      {
-	__iter->_M_version = _M_version;
-	__iter = __iter->_M_next;
+	  __old->_M_detach_single();
       }
   }
 
-  void 
+  void
+  _Safe_sequence_base::
+  _M_revalidate_singular()
+  {
+    __gnu_cxx::__scoped_lock sentry(_M_get_mutex());
+    for (_Safe_iterator_base* __iter = _M_iterators; __iter;
+	 __iter = __iter->_M_next)
+      __iter->_M_version = _M_version;
+
+    for (_Safe_iterator_base* __iter2 = _M_const_iterators; __iter2;
+	 __iter2 = __iter2->_M_next)
+      __iter2->_M_version = _M_version;
+  }
+
+  void
   _Safe_sequence_base::
   _M_swap(_Safe_sequence_base& __x)
   {
-    swap(_M_iterators, __x._M_iterators);
-    swap(_M_const_iterators, __x._M_const_iterators);
-    swap(_M_version, __x._M_version);
-    _Safe_iterator_base* __iter;
-    for (__iter = _M_iterators; __iter; __iter = __iter->_M_next)
-      __iter->_M_sequence = this;
-    for (__iter = __x._M_iterators; __iter; __iter = __iter->_M_next)
-      __iter->_M_sequence = &__x;
-    for (__iter = _M_const_iterators; __iter; __iter = __iter->_M_next)
-      __iter->_M_sequence = this;
-    for (__iter = __x._M_const_iterators; __iter; __iter = __iter->_M_next)
-      __iter->_M_sequence = &__x;
+    // We need to lock both sequences to swap
+    using namespace __gnu_cxx;
+    __mutex *__this_mutex = &_M_get_mutex();
+    __mutex *__x_mutex = &__x._M_get_mutex();
+    if (__this_mutex == __x_mutex)
+      {
+	__scoped_lock __lock(*__this_mutex);
+	swap_seq(*this, __x);
+      }
+    else
+      {
+	__scoped_lock __l1(__this_mutex < __x_mutex
+			     ? *__this_mutex : *__x_mutex);
+	__scoped_lock __l2(__this_mutex < __x_mutex
+			     ? *__x_mutex : *__this_mutex);
+	swap_seq(*this, __x);
+      }
   }
-  
-  void 
+
+  __gnu_cxx::__mutex&
+  _Safe_sequence_base::
+  _M_get_mutex() throw ()
+  { return get_safe_base_mutex(this); }
+
+  void
+  _Safe_sequence_base::
+  _M_attach(_Safe_iterator_base* __it, bool __constant)
+  {
+    __gnu_cxx::__scoped_lock sentry(_M_get_mutex());
+    _M_attach_single(__it, __constant);
+  }
+
+  void
+  _Safe_sequence_base::
+  _M_attach_single(_Safe_iterator_base* __it, bool __constant) throw ()
+  {
+    _Safe_iterator_base*& __its =
+      __constant ? _M_const_iterators : _M_iterators;
+    __it->_M_next = __its;
+    if (__it->_M_next)
+      __it->_M_next->_M_prior = __it;
+    __its = __it;
+  }
+
+  void
+  _Safe_sequence_base::
+  _M_detach(_Safe_iterator_base* __it)
+  {
+    // Remove __it from this sequence's list
+    __gnu_cxx::__scoped_lock sentry(_M_get_mutex());
+    _M_detach_single(__it);
+  }
+
+  void
+  _Safe_sequence_base::
+  _M_detach_single(_Safe_iterator_base* __it) throw ()
+  {
+    // Remove __it from this sequence's list
+    __it->_M_unlink();
+    if (_M_const_iterators == __it)
+      _M_const_iterators = __it->_M_next;
+    if (_M_iterators == __it)
+      _M_iterators = __it->_M_next;
+  }
+
+  void
   _Safe_iterator_base::
   _M_attach(_Safe_sequence_base* __seq, bool __constant)
   {
@@ -194,64 +273,78 @@ namespace __gnu_debug
     // Attach to the new sequence (if there is one)
     if (__seq)
       {
-	__gnu_cxx::lock sentry(__gnu_internal::iterator_base_mutex);
 	_M_sequence = __seq;
 	_M_version = _M_sequence->_M_version;
-	_M_prior = 0;
-	if (__constant)
-	  {
-	    _M_next = _M_sequence->_M_const_iterators;
-	    if (_M_next)
-	      _M_next->_M_prior = this;
-	    _M_sequence->_M_const_iterators = this;
-	  }
-	else
-	  {
-	    _M_next = _M_sequence->_M_iterators;
-	    if (_M_next)
-	      _M_next->_M_prior = this;
-	    _M_sequence->_M_iterators = this;
-	  }
+	_M_sequence->_M_attach(this, __constant);
+      }
+  }
+  
+  void
+  _Safe_iterator_base::
+  _M_attach_single(_Safe_sequence_base* __seq, bool __constant) throw ()
+  {
+    _M_detach_single();
+    
+    // Attach to the new sequence (if there is one)
+    if (__seq)
+      {
+	_M_sequence = __seq;
+	_M_version = _M_sequence->_M_version;
+	_M_sequence->_M_attach_single(this, __constant);
       }
   }
 
-  void 
+  void
   _Safe_iterator_base::
   _M_detach()
   {
-    __gnu_cxx::lock sentry(__gnu_internal::iterator_base_mutex);
     if (_M_sequence)
       {
-	// Remove us from this sequence's list
-	if (_M_prior) 
-	  _M_prior->_M_next = _M_next;
-	if (_M_next)  
-	  _M_next->_M_prior = _M_prior;
-	
-	if (_M_sequence->_M_const_iterators == this)
-	  _M_sequence->_M_const_iterators = _M_next;
-	if (_M_sequence->_M_iterators == this)
-	  _M_sequence->_M_iterators = _M_next;
+	_M_sequence->_M_detach(this);
       }
 
+    _M_reset();
+  }
+
+  void
+  _Safe_iterator_base::
+  _M_detach_single() throw ()
+  {
+    if (_M_sequence)
+      {
+	_M_sequence->_M_detach_single(this);
+      }
+
+    _M_reset();
+  }
+
+  void
+  _Safe_iterator_base::
+  _M_reset() throw ()
+  {
     _M_sequence = 0;
     _M_version = 0;
     _M_prior = 0;
     _M_next = 0;
   }
-  
+
   bool
   _Safe_iterator_base::
-  _M_singular() const
+  _M_singular() const throw ()
   { return !_M_sequence || _M_version != _M_sequence->_M_version; }
     
   bool
   _Safe_iterator_base::
-  _M_can_compare(const _Safe_iterator_base& __x) const
+  _M_can_compare(const _Safe_iterator_base& __x) const throw ()
   {
-    return (!_M_singular() && !__x._M_singular() 
-	    && _M_sequence == __x._M_sequence);
+    return (!_M_singular() 
+	    && !__x._M_singular() && _M_sequence == __x._M_sequence);
   }
+
+  __gnu_cxx::__mutex&
+  _Safe_iterator_base::
+  _M_get_mutex() throw ()
+  { return get_safe_base_mutex(_M_sequence); }
 
   void
   _Error_formatter::_Parameter::
@@ -276,9 +369,12 @@ namespace __gnu_debug
 	  }
 	else if (strcmp(__name, "type") == 0)
 	  {
-	    assert(_M_variant._M_iterator._M_type);
-	    // TBD: demangle!
-	    __formatter->_M_print_word(_M_variant._M_iterator._M_type->name());
+	    if (!_M_variant._M_iterator._M_type)
+	      __formatter->_M_print_word("<unknown type>");
+	    else
+	      // TBD: demangle!
+	      __formatter->_M_print_word(_M_variant._M_iterator.
+					 _M_type->name());
 	  }
 	else if (strcmp(__name, "constness") == 0)
 	  {
@@ -288,7 +384,9 @@ namespace __gnu_debug
 		"constant",
 		"mutable"
 	      };
-	    __formatter->_M_print_word(__constness_names[_M_variant._M_iterator._M_constness]);
+	    __formatter->_M_print_word(__constness_names[_M_variant.
+							 _M_iterator.
+							 _M_constness]);
 	  }
 	else if (strcmp(__name, "state") == 0)
 	  {
@@ -298,9 +396,11 @@ namespace __gnu_debug
 		"singular",
 		"dereferenceable (start-of-sequence)",
 		"dereferenceable",
-		"past-the-end"
+		"past-the-end",
+		"before-begin"
 	      };
-	    __formatter->_M_print_word(__state_names[_M_variant._M_iterator._M_state]);
+	    __formatter->_M_print_word(__state_names[_M_variant.
+						     _M_iterator._M_state]);
 	  }
 	else if (strcmp(__name, "sequence") == 0)
 	  {
@@ -311,9 +411,12 @@ namespace __gnu_debug
 	  }
 	else if (strcmp(__name, "seq_type") == 0)
 	  {
-	    // TBD: demangle!
-	    assert(_M_variant._M_iterator._M_seq_type);
-	    __formatter->_M_print_word(_M_variant._M_iterator._M_seq_type->name());
+	    if (!_M_variant._M_iterator._M_seq_type)
+	      __formatter->_M_print_word("<unknown seq_type>");
+	    else
+	      // TBD: demangle!
+	      __formatter->_M_print_word(_M_variant._M_iterator.
+					 _M_seq_type->name());
 	  }
 	else
 	  assert(false);
@@ -334,9 +437,12 @@ namespace __gnu_debug
 	  }
 	else if (strcmp(__name, "type") == 0)
 	  {
-	    // TBD: demangle!
-	    assert(_M_variant._M_sequence._M_type);
-	    __formatter->_M_print_word(_M_variant._M_sequence._M_type->name());
+	    if (!_M_variant._M_sequence._M_type)
+	      __formatter->_M_print_word("<unknown type>");
+	    else
+	      // TBD: demangle!
+	      __formatter->_M_print_word(_M_variant._M_sequence.
+					 _M_type->name());
 	  }
 	else
 	  assert(false);
@@ -449,7 +555,7 @@ namespace __gnu_debug
   }
 
   const _Error_formatter&
-  _Error_formatter::_M_message(_Debug_msg_id __id) const
+  _Error_formatter::_M_message(_Debug_msg_id __id) const throw ()
   { return this->_M_message(_S_debug_messages[__id]); }
   
   void
@@ -475,7 +581,8 @@ namespace __gnu_debug
 	_M_column += strlen(__buf);
       }
     
-    _M_wordwrap = true;
+    if (_M_max_length)
+      _M_wordwrap = true;
     _M_print_word("error: ");
     
     // Print the error message
@@ -507,8 +614,8 @@ namespace __gnu_debug
   template<typename _Tp>
     void
     _Error_formatter::_M_format_word(char* __buf, 
-				     int __n __attribute__((__unused__)), 
-				     const char* __fmt, _Tp __s) const
+				     int __n __attribute__ ((__unused__)), 
+				     const char* __fmt, _Tp __s) const throw ()
     {
 #ifdef _GLIBCXX_USE_C99
       std::snprintf(__buf, __n, __fmt, __s);
@@ -567,7 +674,7 @@ namespace __gnu_debug
   _M_print_string(const char* __string) const
   {
     const char* __start = __string;
-    const char* __end = __start;
+    const char* __finish = __start;
     const int __bufsize = 128;
     char __buf[__bufsize];
 
@@ -575,21 +682,21 @@ namespace __gnu_debug
       {
 	if (*__start != '%')
 	  {
-	    // [__start, __end) denotes the next word
-	    __end = __start;
-	    while (isalnum(*__end))
-	      ++__end;
-	    if (__start == __end)
-	      ++__end;
-	    if (isspace(*__end))
-	      ++__end;
+	    // [__start, __finish) denotes the next word
+	    __finish = __start;
+	    while (isalnum(*__finish))
+	      ++__finish;
+	    if (__start == __finish)
+	      ++__finish;
+	    if (isspace(*__finish))
+	      ++__finish;
 	    
-	    const ptrdiff_t __len = __end - __start;
+	    const ptrdiff_t __len = __finish - __start;
 	    assert(__len < __bufsize);
 	    memcpy(__buf, __start, __len);
 	    __buf[__len] = '\0';
 	    _M_print_word(__buf);
-	    __start = __end;
+	    __start = __finish;
 	    
 	    // Skip extra whitespace
 	    while (*__start == ' ') 
@@ -650,24 +757,36 @@ namespace __gnu_debug
       }
   }
 
+  void
+  _Error_formatter::_M_get_max_length() const throw ()
+  {
+    const char* __nptr = std::getenv("GLIBCXX_DEBUG_MESSAGE_LENGTH");
+    if (__nptr)
+      {
+	char* __endptr;
+	const unsigned long __ret = std::strtoul(__nptr, &__endptr, 0);
+	if (*__nptr != '\0' && *__endptr == '\0')
+	  _M_max_length = __ret;
+      }
+  }
+
   // Instantiations.
   template
     void
-    _Error_formatter::_M_format_word(char* __buf, int __n, const char* __fmt, 
-				     const void* __s) const;
+    _Error_formatter::_M_format_word(char*, int, const char*, 
+				     const void*) const;
 
   template
     void
-    _Error_formatter::_M_format_word(char* __buf, int __n, const char* __fmt, 
-				     long __s) const;
+    _Error_formatter::_M_format_word(char*, int, const char*, long) const;
 
   template
     void
-    _Error_formatter::_M_format_word(char* __buf, int __n, const char* __fmt, 
-				     std::size_t __s) const;
+    _Error_formatter::_M_format_word(char*, int, const char*, 
+				     std::size_t) const;
 
   template
     void
-    _Error_formatter::_M_format_word(char* __buf, int __n, const char* __fmt, 
-				     const char* __s) const;
+    _Error_formatter::_M_format_word(char*, int, const char*, 
+				     const char*) const;
 } // namespace __gnu_debug

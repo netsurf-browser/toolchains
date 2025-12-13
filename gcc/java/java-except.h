@@ -1,12 +1,13 @@
 /* Definitions for exception handling for use by the GNU compiler
    for the Java(TM) language compiler.
-   Copyright (C) 1997, 1998, 1999, 2000, 2003 Free Software Foundation, Inc.
+   Copyright (C) 1997, 1998, 1999, 2000, 2003, 2004, 2005, 2007
+   Free Software Foundation, Inc.
 
 This file is part of GCC.
 
 GCC is free software; you can redistribute it and/or modify
 it under the terms of the GNU General Public License as published by
-the Free Software Foundation; either version 2, or (at your option)
+the Free Software Foundation; either version 3, or (at your option)
 any later version.
 
 GCC is distributed in the hope that it will be useful,
@@ -15,9 +16,8 @@ MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
 GNU General Public License for more details.
 
 You should have received a copy of the GNU General Public License
-along with GCC; see the file COPYING.  If not, write to
-the Free Software Foundation, 59 Temple Place - Suite 330,
-Boston, MA 02111-1307, USA.  
+along with GCC; see the file COPYING3.  If not see
+<http://www.gnu.org/licenses/>.  
 
 Java and all Java-based marks are trademarks or registered trademarks
 of Sun Microsystems, Inc. in the United States and other countries.
@@ -50,6 +50,9 @@ struct eh_range
 
     /* True if this range has already been expanded. */
     int expanded;
+
+    /* The TRY_CATCH_EXPR for this EH range.  */
+    tree stmt;
   };
 
 /* A dummy range that represents the entire method. */
@@ -59,9 +62,7 @@ extern struct eh_range whole_range;
 
 extern struct eh_range * find_handler (int);
 extern void method_init_exceptions (void);
-extern void emit_handlers (void);
 extern void maybe_start_try (int, int);
-extern void maybe_end_try (int, int);
 extern void add_handler (int, int, tree, tree);
-extern void handle_nested_ranges (void);
-extern void expand_resume_after_catch (void);
+extern void expand_end_java_handler (struct eh_range *);
+extern bool sanity_check_exception_range (struct eh_range *);

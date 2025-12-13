@@ -1,14 +1,14 @@
 /* Handle a .class file embedded in a .zip archive.
    This extracts a member from a .zip file, but does not handle
    uncompression (since that is not needed for classes.zip).
-   Copyright (C) 1996, 1997, 1998, 1999, 2000, 2001, 2003
-   Free Software Foundation, Inc.
+   Copyright (C) 1996, 1997, 1998, 1999, 2000, 2001, 2003, 2004, 2005,
+   2007 Free Software Foundation, Inc.
 
 This file is part of GCC.
 
 GCC is free software; you can redistribute it and/or modify
 it under the terms of the GNU General Public License as published by
-the Free Software Foundation; either version 2, or (at your option)
+the Free Software Foundation; either version 3, or (at your option)
 any later version.
 
 GCC is distributed in the hope that it will be useful,
@@ -17,9 +17,8 @@ MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
 GNU General Public License for more details.
 
 You should have received a copy of the GNU General Public License
-along with GCC; see the file COPYING.  If not, write to
-the Free Software Foundation, 59 Temple Place - Suite 330,
-Boston, MA 02111-1307, USA.  
+along with GCC; see the file COPYING3.  If not see
+<http://www.gnu.org/licenses/>.  
 
 Java and all Java-based marks are trademarks or registered trademarks
 of Sun Microsystems, Inc. in the United States and other countries.
@@ -236,7 +235,8 @@ static ush makeword(const uch *b)
 /* Function makelong() */
 /***********************/
 
-static ulg makelong(const uch *sig)
+static ulg
+makelong (const uch *sig)
 {
     /*
      * Convert intel style 'long' variable to non-Intel non-16-bit
@@ -263,7 +263,7 @@ find_zip_file_start (int fd, long offset)
   if (read (fd, buffer, LREC_SIZE + 4) != LREC_SIZE + 4)
     return -1;
 
-  if (buffer[0] != 'P' || strncmp (&buffer[1], LOCAL_HDR_SIG, 3))
+  if (buffer[0] != 'P' || strncmp ((const char *) &buffer[1], LOCAL_HDR_SIG, 3))
     return -1;
 
   filename_length = makeword (&buffer[4 + L_FILENAME_LENGTH]);
@@ -286,11 +286,29 @@ read_zip_archive (ZipFile *zipf)
     return -1;
   if (read (zipf->fd, buffer, ECREC_SIZE+4) != ECREC_SIZE+4)
     return -2;
-  zipf->count = makeword(&buffer[TOTAL_ENTRIES_CENTRAL_DIR]);
-  zipf->dir_size = makelong(&buffer[SIZE_CENTRAL_DIRECTORY]);
-#define ALLOC xmalloc
+  if (buffer[0] != 'P'
+      || strncmp ((const char *) &buffer[1], END_CENTRAL_SIG, 3))
+    {
+      /* We could not find the end-central-header signature, probably
+	 because a zipfile comment is present. Scan backwards until we
+	 find the signature. */
+      if (lseek (zipf->fd, (long)(-ECREC_SIZE), SEEK_END) <= 0)
+	return -2;
+      while (buffer[0] != 'P'
+	     || strncmp ((const char *) &buffer[1], END_CENTRAL_SIG, 3))
+	{
+	  if (lseek (zipf->fd, -5, SEEK_CUR) < 0)
+	    return -2;
+	  if (read (zipf->fd, buffer, 4) != 4)
+	    return -2;
+	}
+      if (read (zipf->fd, buffer + 4, ECREC_SIZE) != ECREC_SIZE)
+	return -2;
+    }
+  zipf->count = makeword((const uch *) &buffer[TOTAL_ENTRIES_CENTRAL_DIR]);
+  zipf->dir_size = makelong((const uch *) &buffer[SIZE_CENTRAL_DIRECTORY]);
   /* Allocate 1 more to allow appending '\0' to last filename. */
-  zipf->central_directory = ALLOC (zipf->dir_size+1);
+  zipf->central_directory = XNEWVEC (char, zipf->dir_size + 1);
   if (lseek (zipf->fd, -(zipf->dir_size+ECREC_SIZE+4), SEEK_CUR) < 0)
     return -2;
   if (read (zipf->fd, zipf->central_directory, zipf->dir_size) < 0)
@@ -305,9 +323,9 @@ read_zip_archive (ZipFile *zipf)
   printf ("total_entries_central_dir = %d\n",
         makeword(&buffer[TOTAL_ENTRIES_CENTRAL_DIR]));
   printf ("size_central_directory = %d\n",
-        makelong(&buffer[SIZE_CENTRAL_DIRECTORY]));
+        makelong((const uch *) &buffer[SIZE_CENTRAL_DIRECTORY]));
   printf ("offset_start_central_directory = %d\n",
-        makelong(&buffer[OFFSET_START_CENTRAL_DIRECTORY]));
+        makelong((const uch *) &buffer[OFFSET_START_CENTRAL_DIRECTORY]));
   printf ("zipfile_comment_length = %d\n",
         makeword(&buffer[ZIPFILE_COMMENT_LENGTH]));
 #endif
@@ -318,11 +336,11 @@ read_zip_archive (ZipFile *zipf)
     {
       ZipDirectory *zipd = (ZipDirectory*)(dir_ptr + dir_last_pad);
       int compression_method = (int) dir_ptr[4+C_COMPRESSION_METHOD];
-      long size = makelong (&dir_ptr[4+C_COMPRESSED_SIZE]);
-      long uncompressed_size = makelong (&dir_ptr[4+C_UNCOMPRESSED_SIZE]);
-      long filename_length = makeword (&dir_ptr[4+C_FILENAME_LENGTH]);
-      long extra_field_length = makeword (&dir_ptr[4+C_EXTRA_FIELD_LENGTH]);
-      long file_offset = makelong (&dir_ptr[4+C_RELATIVE_OFFSET_LOCAL_HEADER]);
+      long size = makelong ((const uch *) &dir_ptr[4+C_COMPRESSED_SIZE]);
+      long uncompressed_size = makelong ((const uch *) &dir_ptr[4+C_UNCOMPRESSED_SIZE]);
+      long filename_length = makeword ((const uch *) &dir_ptr[4+C_FILENAME_LENGTH]);
+      long extra_field_length = makeword ((const uch *) &dir_ptr[4+C_EXTRA_FIELD_LENGTH]);
+      long file_offset = makelong ((const uch *) &dir_ptr[4+C_RELATIVE_OFFSET_LOCAL_HEADER]);
       int unpadded_direntry_length;
       if ((dir_ptr-zipf->central_directory)+filename_length+CREC_SIZE+4>zipf->dir_size)
 	return -1;

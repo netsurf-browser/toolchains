@@ -1,10 +1,11 @@
 /* Dump a gcov file, for debugging use.
-   Copyright (C) 2002, 2003, 2006 Free Software Foundation, Inc.
+   Copyright (C) 2002, 2003, 2004, 2005, 2006, 2007, 2008, 2009, 2010, 2011
+   Free Software Foundation, Inc.
    Contributed by Nathan Sidwell <nathan@codesourcery.com>
 
 Gcov is free software; you can redistribute it and/or modify
 it under the terms of the GNU General Public License as published by
-the Free Software Foundation; either version 2, or (at your option)
+the Free Software Foundation; either version 3, or (at your option)
 any later version.
 
 Gcov is distributed in the hope that it will be useful,
@@ -13,9 +14,8 @@ MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
 GNU General Public License for more details.
 
 You should have received a copy of the GNU General Public License
-along with Gcov; see the file COPYING.  If not, write to
-the Free Software Foundation, 59 Temple Place - Suite 330,
-Boston, MA 02111-1307, USA.  */
+along with Gcov; see the file COPYING3.  If not see
+<http://www.gnu.org/licenses/>.  */
 
 #include "config.h"
 #include "system.h"
@@ -77,6 +77,9 @@ main (int argc ATTRIBUTE_UNUSED, char **argv)
 {
   int opt;
 
+  /* Unlock the stdio streams.  */
+  unlock_std_streams ();
+
   while ((opt = getopt_long (argc, argv, "hlpv", options, NULL)) != -1)
     {
       switch (opt)
@@ -117,8 +120,8 @@ print_usage (void)
 static void
 print_version (void)
 {
-  printf ("gcov-dump (GCC) %s\n", version_string);
-  printf ("Copyright (C) 2006 Free Software Foundation, Inc.\n");
+  printf ("gcov-dump %s%s\n", pkgversion_string, version_string);
+  printf ("Copyright (C) 2011 Free Software Foundation, Inc.\n");
   printf ("This is free software; see the source for copying conditions.\n"
   	  "There is NO warranty; not even for MERCHANTABILITY or \n"
 	  "FITNESS FOR A PARTICULAR PURPOSE.\n\n");
@@ -154,7 +157,7 @@ dump_file (const char *filename)
     const char *type = NULL;
     int endianness = 0;
     char m[4], v[4];
-    
+
     if ((endianness = gcov_magic (magic, GCOV_DATA_MAGIC)))
       type = "data";
     else if ((endianness = gcov_magic (magic, GCOV_NOTE_MAGIC)))
@@ -168,13 +171,13 @@ dump_file (const char *filename)
     version = gcov_read_unsigned ();
     GCOV_UNSIGNED2STRING (v, version);
     GCOV_UNSIGNED2STRING (m, magic);
-    
+
     printf ("%s:%s:magic `%.4s':version `%.4s'%s\n", filename, type,
  	    m, v, endianness < 0 ? " (swapped endianness)" : "");
     if (version != GCOV_VERSION)
       {
 	char e[4];
-	
+
 	GCOV_UNSIGNED2STRING (e, GCOV_VERSION);
 	printf ("%s:warning:current version is `%.4s'\n", filename, e);
       }
@@ -186,7 +189,7 @@ dump_file (const char *filename)
 
     printf ("%s:stamp %lu\n", filename, (unsigned long)stamp);
   }
-  
+
   while (1)
     {
       gcov_position_t base, position = gcov_position ();
@@ -254,8 +257,6 @@ dump_file (const char *filename)
 	  break;
 	}
     }
-  if (!gcov_is_eof ())
-    printf ("%s:early end of file\n", filename);
   gcov_close ();
 }
 
@@ -419,7 +420,7 @@ tag_summary (const char *filename ATTRIBUTE_UNUSED,
   gcov_read_summary (&summary);
   printf (" checksum=0x%08x", summary.checksum);
 
-  for (ix = 0; ix != GCOV_COUNTERS; ix++)
+  for (ix = 0; ix != GCOV_COUNTERS_SUMMABLE; ix++)
     {
       printf ("\n");
       print_prefix (filename, 0, 0);

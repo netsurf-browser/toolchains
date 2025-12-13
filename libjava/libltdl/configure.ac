@@ -1,5 +1,5 @@
 ## Process this file with autoconf to create configure. -*- autoconf -*-
-# Copyright 2001  Free Software Foundation, Inc.
+# Copyright 2001, 2006  Free Software Foundation, Inc.
 #
 # This program is free software; you can redistribute it and/or modify
 # it under the terms of the GNU General Public License as published by
@@ -13,17 +13,27 @@
 #
 # You should have received a copy of the GNU General Public License
 # along with this program; if not, write to the Free Software
-# Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA
-# 02111-1307  USA
+# Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA
+# 02110-1301  USA
 
+
+AC_PREREQ(2.64)
+
+dnl Disable libtool 1.5 support for languages we don't use
+define([AC_LIBTOOL_LANG_CXX_CONFIG], [:])dnl
+define([AC_LIBTOOL_LANG_F77_CONFIG], [:])dnl
+define([AC_LIBTOOL_LANG_GCJ_CONFIG], [:])dnl
 
 ## ------------------------ ##
 ## Autoconf initialisation. ##
 ## ------------------------ ##
-AC_PREREQ(2.57)
 AC_INIT([libltdl], [1.2], [bug-libtool@gnu.org])
 AC_CONFIG_SRCDIR([ltdl.c])
 
+## GCJ LOCAL: gcc tree uses maintainer mode.
+AM_MAINTAINER_MODE
+
+AM_ENABLE_MULTILIB(, ../..)
 
 ## ------------------------------- ##
 ## Libltdl specific configuration. ##
@@ -49,7 +59,6 @@ fi
 ## ------------------------ ##
 AM_INIT_AUTOMAKE(AC_PACKAGE_TARNAME, AC_PACKAGE_VERSION, -)
 AM_CONFIG_HEADER([config.h:config-h.in])
-AM_MAINTAINER_MODE
 
 
 ## ------------------ ##

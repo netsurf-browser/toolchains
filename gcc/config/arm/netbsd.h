@@ -1,12 +1,13 @@
 /* NetBSD/arm a.out version.
-   Copyright (C) 1993, 1994, 1997, 1998, 2003 Free Software Foundation, Inc.
+   Copyright (C) 1993, 1994, 1997, 1998, 2003, 2004, 2005, 2007, 2008, 2010
+   Free Software Foundation, Inc.
    Contributed by Mark Brinicombe (amb@physig.ph.kcl.ac.uk)
 
    This file is part of GCC.
 
    GCC is free software; you can redistribute it and/or modify it
    under the terms of the GNU General Public License as published
-   by the Free Software Foundation; either version 2, or (at your
+   by the Free Software Foundation; either version 3, or (at your
    option) any later version.
 
    GCC is distributed in the hope that it will be useful, but WITHOUT
@@ -15,9 +16,8 @@
    License for more details.
 
    You should have received a copy of the GNU General Public License
-   along with GCC; see the file COPYING.  If not, write to
-   the Free Software Foundation, 59 Temple Place - Suite 330,
-   Boston, MA 02111-1307, USA.  */
+   along with GCC; see the file COPYING3.  If not see
+   <http://www.gnu.org/licenses/>.  */
 
 /* Run-time Target Specification.  */
 #undef  TARGET_VERSION
@@ -34,9 +34,8 @@
 /* ARM6 family default cpu.  */
 #define SUBTARGET_CPU_DEFAULT TARGET_CPU_arm6
 
-/* Default is to use APCS-32 mode.  */
 #undef TARGET_DEFAULT
-#define TARGET_DEFAULT (ARM_FLAG_APCS_32 | ARM_FLAG_SOFT_FLOAT | ARM_FLAG_APCS_FRAME | ARM_FLAG_MMU_TRAPS)
+#define TARGET_DEFAULT (MASK_APCS_FRAME)
 
 /* Some defines for CPP.
    arm32 is the NetBSD port name, so we always define arm32 and __arm32__.  */
@@ -55,14 +54,10 @@
 
 #undef CPP_SPEC
 #define CPP_SPEC "\
-%(cpp_cpu_arch) %(cpp_apcs_pc) %(cpp_float) %(cpp_endian) %(netbsd_cpp_spec) \
+%(cpp_cpu_arch) %(cpp_float) %(cpp_endian) %(netbsd_cpp_spec) \
 "
 
-/* Because TARGET_DEFAULT sets ARM_FLAG_APCS_32 */
-#undef CPP_APCS_PC_DEFAULT_SPEC
-#define CPP_APCS_PC_DEFAULT_SPEC "-D__APCS_32__"
-
-/* Because TARGET_DEFAULT sets ARM_FLAG_SOFT_FLOAT */
+/* Because TARGET_DEFAULT sets MASK_SOFT_FLOAT */
 #undef CPP_FLOAT_DEFAULT_SPEC
 #define CPP_FLOAT_DEFAULT_SPEC "-D__SOFTFP__"
 
@@ -75,8 +70,6 @@
 
 #undef PTRDIFF_TYPE
 #define PTRDIFF_TYPE "int"
-
-#define HANDLE_SYSV_PRAGMA 1
 
 /* We don't have any limit on the length as out debugger is GDB.  */
 #undef DBX_CONTIN_LENGTH
@@ -106,7 +99,7 @@
 /* Although not normally relevant (since by default, all aggregates
    are returned in memory) compiling some parts of libc requires
    non-APCS style struct returns.  */
-#undef RETURN_IN_MEMORY
+#undef TARGET_RETURN_IN_MEMORY
 
 /* VERY BIG NOTE : Change of structure alignment for RiscBSD.
    There are consequences you should be aware of...
@@ -141,19 +134,6 @@
    requirements.  */
 #undef  DEFAULT_STRUCTURE_SIZE_BOUNDARY
 #define DEFAULT_STRUCTURE_SIZE_BOUNDARY 8
-
-/* Emit code to set up a trampoline and synchronize the caches.  */
-#undef  INITIALIZE_TRAMPOLINE
-#define INITIALIZE_TRAMPOLINE(TRAMP, FNADDR, CXT)                      \
-{                                                                      \
-  emit_move_insn (gen_rtx (MEM, SImode, plus_constant ((TRAMP), 8)),   \
-                 (CXT));                                               \
-  emit_move_insn (gen_rtx (MEM, SImode, plus_constant ((TRAMP), 12)),  \
-                 (FNADDR));                                            \
-  emit_library_call (gen_rtx_SYMBOL_REF (Pmode, "__clear_cache"),      \
-                    0, VOIDmode, 2, TRAMP, Pmode,                      \
-                    plus_constant (TRAMP, TRAMPOLINE_SIZE), Pmode);    \
-}
 
 /* Clear the instruction cache from `BEG' to `END'.  This makes a
    call to the ARM32_SYNC_ICACHE architecture specific syscall.  */

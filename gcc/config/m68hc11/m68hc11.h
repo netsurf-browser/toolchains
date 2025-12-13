@@ -1,6 +1,6 @@
 /* Definitions of target machine for GNU compiler.
    Motorola 68HC11 and 68HC12.
-   Copyright (C) 1999, 2000, 2001, 2002, 2003, 2004
+   Copyright (C) 1999, 2000, 2001, 2002, 2003, 2004, 2005, 2007, 2008, 2009, 2010
    Free Software Foundation, Inc.
    Contributed by Stephane Carrez (stcarrez@nerim.fr)
 
@@ -8,7 +8,7 @@ This file is part of GCC.
 
 GCC is free software; you can redistribute it and/or modify
 it under the terms of the GNU General Public License as published by
-the Free Software Foundation; either version 2, or (at your option)
+the Free Software Foundation; either version 3, or (at your option)
 any later version.
 
 GCC is distributed in the hope that it will be useful,
@@ -17,9 +17,8 @@ MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
 GNU General Public License for more details.
 
 You should have received a copy of the GNU General Public License
-along with GCC; see the file COPYING.  If not, write to
-the Free Software Foundation, 59 Temple Place - Suite 330,
-Boston, MA 02111-1307, USA.
+along with GCC; see the file COPYING3.  If not see
+<http://www.gnu.org/licenses/>.
 
 Note:
    A first 68HC11 port was made by Otto Lind (otto@coactive.com)
@@ -118,44 +117,14 @@ typedef int enum_machine_mode;
 
 /* Run-time compilation parameters selecting different hardware subsets.  */
 
-extern int target_flags;
-
 extern short *reg_renumber;	/* def in local_alloc.c */
 
-/* Macros used in the machine description to test the flags.  */
-
-/* 6811 specific options
- *
- * For 68HC12, the auto inc/dec mode is disabled by default. The reason
- * is that for most programs, the reload pass will fail because it needs
- * more registers to save the value of the indexed register after the
- * memory access.  For simple programs, you can enable this
- * with -mauto-incdec.
- */
-
-#define MASK_SHORT              0002	/* Compile with 16-bit `int' */
-#define MASK_AUTO_INC_DEC       0004
-#define MASK_M6811              0010
-#define MASK_M6812              0020
-#define MASK_M68S12             0040
-#define MASK_NO_DIRECT_MODE     0100
-#define MASK_MIN_MAX            0200
-#define MASK_LONG_CALLS         0400
-
 #define TARGET_OP_TIME		(optimize && optimize_size == 0)
-#define TARGET_SHORT            (target_flags & MASK_SHORT)
-#define TARGET_M6811            (target_flags & MASK_M6811)
-#define TARGET_M6812            (target_flags & MASK_M6812)
-#define TARGET_M68S12           (target_flags & MASK_M68S12)
-#define TARGET_AUTO_INC_DEC     (target_flags & MASK_AUTO_INC_DEC)
-#define TARGET_MIN_MAX          (target_flags & MASK_MIN_MAX)
-#define TARGET_NO_DIRECT_MODE   (target_flags & MASK_NO_DIRECT_MODE)
 #define TARGET_RELAX            (TARGET_NO_DIRECT_MODE)
-#define TARGET_LONG_CALLS       (target_flags & MASK_LONG_CALLS)
 
 /* Default target_flags if no switches specified.  */
 #ifndef TARGET_DEFAULT
-# define TARGET_DEFAULT		(MASK_M6811)
+# define TARGET_DEFAULT		0
 #endif
 
 /* Define this macro as a C expression for the initializer of an
@@ -170,88 +139,8 @@ extern short *reg_renumber;	/* def in local_alloc.c */
 # endif
 #endif
 
-/* Macro to define tables used to set the flags. This is a list in braces of
-   pairs in braces, each pair being { "NAME", VALUE } where VALUE is the bits
-   to set or minus the bits to clear. An empty string NAME is used to
-   identify the default VALUE.  */
-
-#define TARGET_SWITCHES						\
-{ { "short", MASK_SHORT,					\
-    N_("Compile with 16-bit integer mode")},			\
-  { "noshort", - MASK_SHORT,					\
-    N_("Compile with 32-bit integer mode")},			\
-  { "auto-incdec", MASK_AUTO_INC_DEC,				\
-    N_("Auto pre/post decrement increment allowed")},		\
-  { "noauto-incdec", - MASK_AUTO_INC_DEC,			\
-    N_("Auto pre/post decrement increment not allowed")},	\
-  { "inmax", MASK_MIN_MAX,                                      \
-    N_("Min/max instructions allowed")},                        \
-  { "nominmax", - MASK_MIN_MAX,                                 \
-    N_("Min/max instructions not allowed")},                    \
-  { "long-calls", MASK_LONG_CALLS,				\
-    N_("Use call and rtc for function calls and returns")},	\
-  { "nolong-calls", - MASK_LONG_CALLS,				\
-    N_("Use jsr and rts for function calls and returns")},	\
-  { "relax", MASK_NO_DIRECT_MODE,                               \
-    N_("Do not use direct addressing mode for soft registers")},\
-  { "norelax", -MASK_NO_DIRECT_MODE,                            \
-    N_("Use direct addressing mode for soft registers")},       \
-  { "68hc11", MASK_M6811,					\
-    N_("Compile for a 68HC11")},				\
-  { "68hc12", MASK_M6812,					\
-    N_("Compile for a 68HC12")},				\
-  { "68hcs12", MASK_M6812 | MASK_M68S12,			\
-    N_("Compile for a 68HCS12")},				\
-  { "6811",   MASK_M6811,					\
-    N_("Compile for a 68HC11")},				\
-  { "6812",   MASK_M6812,					\
-    N_("Compile for a 68HC12")},				\
-  { "68S12",  MASK_M6812 | MASK_M68S12,				\
-    N_("Compile for a 68HCS12")},				\
-  { "", TARGET_DEFAULT, 0 }}
-
-/* This macro is similar to `TARGET_SWITCHES' but defines names of
-   command options that have values.  Its definition is an
-   initializer with a subgrouping for each command option.
-
-   Each subgrouping contains a string constant, that defines the
-   fixed part of the option name, and the address of a variable.  The
-   variable, type `char *', is set to the variable part of the given
-   option if the fixed part matches.  The actual option name is made
-   by appending `-m' to the specified name.  */
-#define TARGET_OPTIONS							\
-{ { "reg-alloc=",	&m68hc11_reg_alloc_order,                       \
-    N_("Specify the register allocation order"), 0},			\
-  { "soft-reg-count=",	&m68hc11_soft_reg_count,                        \
-    N_("Indicate the number of soft registers available"), 0},		\
-  SUBTARGET_OPTIONS							\
-}
-
-/* These are meant to be redefined in the host dependent files */
-#define SUBTARGET_SWITCHES
-#define SUBTARGET_OPTIONS
-
-extern const char *m68hc11_regparm_string;
-extern const char *m68hc11_reg_alloc_order;
-extern const char *m68hc11_soft_reg_count;
-
-#ifndef TARGET_M68HC12
-# define TARGET_M68HC11 1
-#endif
-
 /* Print subsidiary information on the compiler version in use.  */
 #define TARGET_VERSION	fprintf (stderr, " (MC68HC11/MC68HC12/MC68HCS12)")
-
-/* Sometimes certain combinations of command options do not make
-   sense on a particular target machine.  You can define a macro
-   `OVERRIDE_OPTIONS' to take account of this.  This macro, if
-   defined, is executed once just after all the command options have
-   been parsed.
-
-   Don't use this macro to turn on various extra optimizations for
-   `-O'.  That is what `OPTIMIZATION_OPTIONS' is for.  */
-
-#define OVERRIDE_OPTIONS	m68hc11_override_options ();
 
 
 /* Define cost parameters for a given processor variant.  */
@@ -388,7 +277,7 @@ extern const struct processor_costs *m68hc11_cost;
 /* The Z register does not really exist in the 68HC11.  This a fake register
    for GCC.  It is treated exactly as an index register (X or Y).  It is only
    in the A_REGS class, which is the BASE_REG_CLASS for GCC.  Defining this
-   register helps the reload pass of GCC.  Otherwise, the reload often aborts
+   register helps the reload pass of GCC.  Otherwise, the reload often dies
    with register spill failures.
 
    The Z register is replaced by either X or Y during the machine specific
@@ -483,14 +372,6 @@ SOFT_REG_FIRST+28, SOFT_REG_FIRST+29,SOFT_REG_FIRST+30,SOFT_REG_FIRST+31
 /* X, D, Y, SP,PC,A, B, CCR, Z, FP, ZTMP,ZR,XYR, D1 - 32,     SOFT-FP, AP */
 
 
-/* Define this macro to change register usage conditional on target flags.
-
-   The soft-registers are disabled or enabled according to the
-  -msoft-reg-count=<n> option.  */
-
-
-#define CONDITIONAL_REGISTER_USAGE (m68hc11_conditional_register_usage ())
-
 /* List the order in which to allocate registers.  Each register must be
    listed once, even those in FIXED_REGISTERS.  */
 #define REG_ALLOC_ORDER							\
@@ -508,9 +389,9 @@ SOFT_REG_FIRST+28, SOFT_REG_FIRST+29,SOFT_REG_FIRST+30,SOFT_REG_FIRST+31
    ((GET_MODE_SIZE (MODE) + HARD_REG_SIZE - 1) / HARD_REG_SIZE))
 
 /* Value is 1 if hard register REGNO can hold a value of machine-mode MODE.
-    - 8 bit values are stored anywhere (except the SP register).
-    - 16 bit values can be stored in any register whose mode is 16
-    - 32 bit values can be stored in D, X registers or in a soft register
+    - 8-bit values are stored anywhere (except the SP register).
+    - 16-bit values can be stored in any register whose mode is 16
+    - 32-bit values can be stored in D, X registers or in a soft register
       (except the last one because we need 2 soft registers)
     - Values whose size is > 32 bit are not stored in real hard
       registers.  They may be stored in soft registers if there are
@@ -549,7 +430,7 @@ SOFT_REG_FIRST+28, SOFT_REG_FIRST+29,SOFT_REG_FIRST+30,SOFT_REG_FIRST+31
    For any two classes, it is very desirable that there be another
    class that represents their union.  */
 
-/* The M68hc11 has so fiew registers that it's not possible for GCC to
+/* The M68hc11 has so few registers that it's not possible for GCC to
    do any register allocation without breaking. We extend the processor
    registers by having soft registers. These registers are treated as
    hard registers by GCC but they are located in memory and accessed by page0
@@ -560,7 +441,7 @@ enum reg_class
   D_REGS,			/* 16-bit data register */
   X_REGS,			/* 16-bit X register */
   Y_REGS,			/* 16-bit Y register */
-  SP_REGS,			/* 16 bit stack pointer */
+  SP_REGS,			/* 16-bit stack pointer */
   DA_REGS,			/* 8-bit A reg.  */
   DB_REGS,			/* 8-bit B reg.  */
   Z_REGS,			/* 16-bit fake Z register */
@@ -588,7 +469,7 @@ enum reg_class
   D_OR_SP_OR_S_REGS,		/* 16-bit soft register or D or SP register */
   A_OR_S_REGS,			/* 16-bit soft register or X, Y registers */
   D_OR_A_OR_S_REGS,		/* 16-bit soft register or D, X, Y registers */
-  TMP_REGS,			/* 16 bit fake scratch register */
+  TMP_REGS,			/* 16-bit fake scratch register */
   D_OR_A_OR_TMP_REGS,		/* General scratch register */
   G_REGS,			/* 16-bit general register
                                    (H_REGS + soft registers) */
@@ -807,41 +688,13 @@ extern enum reg_class m68hc11_tmp_regs_class;
 
 #define PREFERRED_RELOAD_CLASS(X,CLASS)	preferred_reload_class(X,CLASS)
 
-#define SMALL_REGISTER_CLASSES 1
+#define TARGET_SMALL_REGISTER_CLASSES_FOR_MODE_P hook_bool_mode_true
 
 /* A C expression that is nonzero if hard register number REGNO2 can be
    considered for use as a rename register for REGNO1 */
 
 #define HARD_REGNO_RENAME_OK(REGNO1,REGNO2) \
   m68hc11_hard_regno_rename_ok ((REGNO1), (REGNO2))
-
-/* A C expression whose value is nonzero if pseudos that have been
-   assigned to registers of class CLASS would likely be spilled
-   because registers of CLASS are needed for spill registers.
-
-   The default value of this macro returns 1 if CLASS has exactly one
-   register and zero otherwise.  On most machines, this default
-   should be used.  Only define this macro to some other expression
-   if pseudo allocated by `local-alloc.c' end up in memory because
-   their hard registers were needed for spill registers.  If this
-   macro returns nonzero for those classes, those pseudos will only
-   be allocated by `global.c', which knows how to reallocate the
-   pseudo to another register.  If there would not be another
-   register available for reallocation, you should not change the
-   definition of this macro since the only effect of such a
-   definition would be to slow down register allocation.  */
-
-#define CLASS_LIKELY_SPILLED_P(CLASS)					\
-  (((CLASS) == D_REGS)							\
-   || ((CLASS) == X_REGS)                                               \
-   || ((CLASS) == Y_REGS)                                               \
-   || ((CLASS) == A_REGS)                                               \
-   || ((CLASS) == SP_REGS)                                              \
-   || ((CLASS) == D_OR_X_REGS)                                          \
-   || ((CLASS) == D_OR_Y_REGS)                                          \
-   || ((CLASS) == X_OR_SP_REGS)                                         \
-   || ((CLASS) == Y_OR_SP_REGS)                                         \
-   || ((CLASS) == D_OR_SP_REGS))
 
 /* Return the maximum number of consecutive registers needed to represent
    mode MODE in a register of class CLASS.  */
@@ -899,14 +752,14 @@ extern enum reg_class m68hc11_tmp_regs_class;
    makes the stack pointer a smaller address.  */
 #define STACK_GROWS_DOWNWARD
 
-/* Define this if the nominal address of the stack frame
+/* Define this to nonzero if the nominal address of the stack frame
    is at the high-address end of the local variables;
    that is, each additional local variable allocated
    goes at a more negative offset in the frame.
 
-   Don't define for 68HC11, the frame pointer is the bottom
+   Define to 0 for 68HC11, the frame pointer is the bottom
    of local variables.  */
-/* #define FRAME_GROWS_DOWNWARD */
+#define FRAME_GROWS_DOWNWARD		0
 
 /* Define this if successive arguments to a function occupy decreasing 
    addresses in the stack.  */
@@ -983,23 +836,6 @@ extern enum reg_class m68hc11_tmp_regs_class;
  {FRAME_POINTER_REGNUM, STACK_POINTER_REGNUM},		\
  {FRAME_POINTER_REGNUM, HARD_FRAME_POINTER_REGNUM}}
 
-/* Value should be nonzero if functions must have frame pointers.
-   Zero means the frame pointer need not be set up (and parms may be
-   accessed via the stack pointer) in functions that seem suitable.
-   This is computed in `reload', in reload1.c.  */
-#define FRAME_POINTER_REQUIRED	0
-
-/* Given FROM and TO register numbers, say whether this elimination is allowed.
-   Frame pointer elimination is automatically handled.
-
-   All other eliminations are valid.  */
-
-#define CAN_ELIMINATE(FROM, TO)					\
- ((FROM) == ARG_POINTER_REGNUM && (TO) == STACK_POINTER_REGNUM	\
-  ? ! frame_pointer_needed					\
-  : 1)
-
-
 /* Define the offset between two registers, one to be eliminated, and the other
    its replacement, at the start of a routine.  */
 
@@ -1009,31 +845,10 @@ extern enum reg_class m68hc11_tmp_regs_class;
 
 /* Passing Function Arguments on the Stack.  */
 
-/* When a prototype says `char' or `short', really pass an `int'.  */
-/* #define PROMOTE_PROTOTYPES */
-
 /* If we generate an insn to push BYTES bytes, this says how many the
    stack pointer really advances by. No rounding or alignment needed
    for MC6811.  */
 #define PUSH_ROUNDING(BYTES)	(BYTES)
-
-/* Value is 1 if returning from a function call automatically pops the
-   arguments described by the number-of-args field in the call. FUNTYPE is
-   the data type of the function (as a tree), or for a library call it is
-   an identifier node for the subroutine name.
-  
-   The standard MC6811 call, with arg count word, includes popping the
-   args as part of the call template.  */
-#define RETURN_POPS_ARGS(FUNDECL,FUNTYPE,SIZE)	0
-
-/* Nonzero if type TYPE should be returned in memory.
-   Blocks and data types largers than 4 bytes cannot be returned
-   in the register (D + X = 4).  */
-#define RETURN_IN_MEMORY(TYPE)				\
-    ((TYPE_MODE (TYPE) == BLKmode)			\
-     ? (int_size_in_bytes (TYPE) > 4)			\
-     : (GET_MODE_SIZE (TYPE_MODE (TYPE)) > 4))
-
 
 /* Passing Arguments in Registers.  */
 
@@ -1049,17 +864,6 @@ typedef struct m68hc11_args
   int nregs;
 } CUMULATIVE_ARGS;
 
-/* A C expression that indicates when an argument must be passed by reference.
-   If nonzero for an argument, a copy of that argument is made in memory and a
-   pointer to the argument is passed instead of the argument itself.
-   The pointer is passed in whatever way is appropriate for passing a pointer
-   to that type.
- 
-   64-bit numbers are passed by reference.  */
-#define FUNCTION_ARG_PASS_BY_REFERENCE(CUM, MODE, TYPE, NAMED) \
-    m68hc11_function_arg_pass_by_reference (& (CUM), (MODE), (TYPE), (NAMED))
-
-
 /* If defined, a C expression which determines whether, and in which direction,
    to pad out an argument with extra space.  The value should be of type
    `enum direction': either `upward' to pad above the argument,
@@ -1073,43 +877,10 @@ typedef struct m68hc11_args
 #define PAD_VARARGS_DOWN \
   (m68hc11_function_arg_padding (TYPE_MODE (type), type) == downward)
 
-/* A C expression that indicates when it is the called function's
-   responsibility to make a copy of arguments passed by invisible
-   reference.  Normally, the caller makes a copy and passes the
-   address of the copy to the routine being called.  When
-   FUNCTION_ARG_CALLEE_COPIES is defined and is nonzero, the caller
-   does not make a copy.  Instead, it passes a pointer to the "live"
-   value.  The called function must not modify this value.  If it can
-   be determined that the value won't be modified, it need not make a
-   copy; otherwise a copy must be made.  */
-#define FUNCTION_ARG_CALLEE_COPIES(CUM, MODE, TYPE, NAMED)		\
-    ((NAMED) && FUNCTION_ARG_PASS_BY_REFERENCE (CUM, MODE, TYPE, NAMED))
-
 /* Initialize a variable CUM of type CUMULATIVE_ARGS for a call to a
    function whose data type is FNTYPE. For a library call, FNTYPE is 0.  */
 #define INIT_CUMULATIVE_ARGS(CUM, FNTYPE, LIBNAME, INDIRECT, N_NAMED_ARGS) \
     (m68hc11_init_cumulative_args (&CUM, FNTYPE, LIBNAME))
-
-/* Update the data in CUM to advance over an argument of mode MODE and data
-   type TYPE. (TYPE is null for libcalls where that information may not be
-   available.) */
-#define FUNCTION_ARG_ADVANCE(CUM, MODE, TYPE, NAMED) \
-    (m68hc11_function_arg_advance (&CUM, MODE, TYPE, NAMED))
-
-/* Define where to put the arguments to a function.
-   Value is zero to push the argument on the stack,
-   or a hard register in which to store the argument.
-
-   MODE is the argument's machine mode.
-   TYPE is the data type of the argument (as a tree).
-    This is null for libcalls where that information may
-    not be available.
-   CUM is a variable of type CUMULATIVE_ARGS which gives info about
-    the preceding args and about the function being called.
-   NAMED is nonzero if this argument is a named parameter
-    (otherwise it is an extra parameter matching an ellipsis).  */
-#define FUNCTION_ARG(CUM, MODE, TYPE, NAMED) \
-  (m68hc11_function_arg (&CUM, MODE, TYPE, NAMED))
 
 /* Define the profitability of saving registers around calls.
 
@@ -1118,14 +889,6 @@ typedef struct m68hc11_args
    it forbids all spill registers at that point.  Enabling
    caller saving results in spill failure.  */
 #define CALLER_SAVE_PROFITABLE(REFS,CALLS) 0
-
-/* For an arg passed partly in registers and partly in memory,
-   this is the number of registers used.
-   For args passed entirely in registers or entirely in memory, zero.
-
-   Passing an arg partly in register and memory does not work at all.
-   Don't do that.  */
-#define FUNCTION_ARG_PARTIAL_NREGS(CUM, MODE, TYPE, NAMED) (0)
 
 /* 1 if N is a possible register number for function argument passing.
    D is for 16-bit values, X is for 32-bit (X+D).  */
@@ -1139,23 +902,19 @@ typedef struct m68hc11_args
       The high part is passed in X and the low part in D.
       For GCC, the register number must be HARD_X_REGNUM.  */
 #define FUNCTION_VALUE(VALTYPE, FUNC)					\
-     gen_rtx (REG, TYPE_MODE (VALTYPE),					\
+     gen_rtx_REG (TYPE_MODE (VALTYPE),					\
               ((TYPE_MODE (VALTYPE) == BLKmode				\
 	        || GET_MODE_SIZE (TYPE_MODE (VALTYPE)) <= 2)		\
 		   ? HARD_D_REGNUM : HARD_X_REGNUM))
 
 #define LIBCALL_VALUE(MODE)						\
-     gen_rtx (REG, MODE,						\
+     gen_rtx_REG (MODE,						\
               (((MODE) == BLKmode || GET_MODE_SIZE (MODE) <= 2)		\
                    ? HARD_D_REGNUM : HARD_X_REGNUM))
 
 /* 1 if N is a possible register number for a function value.  */
 #define FUNCTION_VALUE_REGNO_P(N) \
      ((N) == HARD_D_REGNUM || (N) == HARD_X_REGNUM)
-
-/* Register in which address to store a structure value is passed to a
-   function.  */
-#define STRUCT_VALUE_REGNUM	HARD_D_REGNUM
 
 /* EXIT_IGNORE_STACK should be nonzero if, when returning from a function,
    the stack pointer does not matter.  The value is tested only in functions
@@ -1169,19 +928,19 @@ typedef struct m68hc11_args
    for profiling a function entry.  */
 #define FUNCTION_PROFILER(FILE, LABELNO)		\
     fprintf (FILE, "\tldy\t.LP%d\n\tjsr mcount\n", (LABELNO))
+
 /* Length in units of the trampoline for entering a nested function.  */
 #define TRAMPOLINE_SIZE		(TARGET_M6811 ? 11 : 9)
 
-/* A C statement to initialize the variable parts of a trampoline.
-   ADDR is an RTX for the address of the trampoline; FNADDR is an
-   RTX for the address of the nested function; STATIC_CHAIN is an
-   RTX for the static chain value that should be passed to the
-   function when it is called.  */
-#define INITIALIZE_TRAMPOLINE(TRAMP, FNADDR, CXT) \
-  m68hc11_initialize_trampoline ((TRAMP), (FNADDR), (CXT))
-
 
 /* Addressing modes, and classification of registers for them.  */
+
+#define ADDR_STRICT       0x01  /* Accept only registers in class A_REGS  */
+#define ADDR_INCDEC       0x02  /* Post/Pre inc/dec */
+#define ADDR_INDEXED      0x04  /* D-reg index */
+#define ADDR_OFFSET       0x08
+#define ADDR_INDIRECT     0x10  /* Accept (mem (mem ...)) for [n,X] */
+#define ADDR_CONST        0x20  /* Accept const and symbol_ref  */
 
 /* The 68HC12 has all the post/pre increment/decrement modes.  */
 #define HAVE_POST_INCREMENT (TARGET_M6812 && TARGET_AUTO_INC_DEC)
@@ -1207,18 +966,15 @@ extern enum reg_class m68hc11_index_reg_class;
    local-alloc.c.  */
 
 
-/* Internal macro, return 1 if REGNO is a valid base register.  */
-#define REG_VALID_P(REGNO) (1)	/* ? */
-
 extern unsigned char m68hc11_reg_valid_for_base[FIRST_PSEUDO_REGISTER];
 #define REG_VALID_FOR_BASE_P(REGNO) \
-    (REG_VALID_P (REGNO) && (REGNO) < FIRST_PSEUDO_REGISTER \
+    ((REGNO) < FIRST_PSEUDO_REGISTER \
      && m68hc11_reg_valid_for_base[REGNO])
 
 /* Internal macro, return 1 if REGNO is a valid index register.  */
 extern unsigned char m68hc11_reg_valid_for_index[FIRST_PSEUDO_REGISTER];
 #define REG_VALID_FOR_INDEX_P(REGNO) \
-    (REG_VALID_P (REGNO) >= 0 && (REGNO) < FIRST_PSEUDO_REGISTER \
+    ((REGNO) < FIRST_PSEUDO_REGISTER \
      && m68hc11_reg_valid_for_index[REGNO])
 
 /* Internal macro, the nonstrict definition for REGNO_OK_FOR_BASE_P.  */
@@ -1275,13 +1031,10 @@ extern unsigned char m68hc11_reg_valid_for_index[FIRST_PSEUDO_REGISTER];
      && (GET_CODE (XEXP (operand, 0)) == POST_INC) \
      && (SP_REG_P (XEXP (XEXP (operand, 0), 0))))
 
-/* 1 if X is an rtx for a constant that is a valid address.  */
-#define CONSTANT_ADDRESS_P(X)	(CONSTANT_P (X))
-
 /* Maximum number of registers that can appear in a valid memory address */
 #define MAX_REGS_PER_ADDRESS	2
 
-/* GO_IF_LEGITIMATE_ADDRESS recognizes an RTL expression that is a
+/* TARGET_LEGITIMATE_ADDRESS_P recognizes an RTL expression that is a
    valid memory address for an instruction. The MODE argument is the
    machine mode for the MEM expression that wants to use this address.  */
 
@@ -1318,19 +1071,6 @@ extern unsigned char m68hc11_reg_valid_for_index[FIRST_PSEUDO_REGISTER];
   (((GET_CODE (X) == PRE_DEC) || (GET_CODE (X) == POST_INC)) \
 	&& SP_REG_P (XEXP (X, 0)))
 
-/* Go to ADDR if X is a valid address.  */
-#ifndef REG_OK_STRICT
-#define GO_IF_LEGITIMATE_ADDRESS(MODE, X, ADDR) \
-{ \
-  if (m68hc11_go_if_legitimate_address ((X), (MODE), 0)) goto ADDR; \
-}
-#else
-#define GO_IF_LEGITIMATE_ADDRESS(MODE, X, ADDR)		 \
-{							 \
-  if (m68hc11_go_if_legitimate_address ((X), (MODE), 1)) goto ADDR; \
-}
-#endif
-
 /* The macros REG_OK_FOR..._P assume that the arg is a REG rtx and check its
    validity for a certain class.  We have two alternate definitions for each
    of them.  The usual definition accepts all pseudo regs; the other rejects
@@ -1353,37 +1093,6 @@ extern unsigned char m68hc11_reg_valid_for_index[FIRST_PSEUDO_REGISTER];
 #define REG_OK_FOR_INDEX_P(X)  REG_OK_FOR_INDEX_STRICT_P(X)
 #endif
 
-
-/* Try machine-dependent ways of modifying an illegitimate address
-   to be legitimate.  If we find one, return the new, valid address.
-   This macro is used in only one place: `memory_address' in explow.c.
-  
-   OLDX is the address as it was before break_out_memory_refs was called.
-   In some cases it is useful to look at this to decide what needs to be done.
-  
-   MODE and WIN are passed so that this macro can use
-   GO_IF_LEGITIMATE_ADDRESS.
-  
-   It is always safe for this macro to do nothing.
-   It exists to recognize opportunities to optimize the output.  */
-
-#define LEGITIMIZE_ADDRESS(X,OLDX,MODE,WIN)                     \
-{ rtx operand = (X);                                            \
-  if (m68hc11_legitimize_address (&operand, (OLDX), (MODE)))	\
-    {                                                           \
-      (X) = operand;                                            \
-      GO_IF_LEGITIMATE_ADDRESS (MODE,X,WIN);                    \
-    }                                                           \
-}
-
-/* Go to LABEL if ADDR (a legitimate address expression)
-   has an effect that depends on the machine mode it is used for.  */
-#define GO_IF_MODE_DEPENDENT_ADDRESS(ADDR,LABEL)  \
-{									\
-  if (GET_CODE (ADDR) == PRE_DEC || GET_CODE (ADDR) == POST_DEC		\
-      || GET_CODE (ADDR) == PRE_INC || GET_CODE (ADDR) == POST_INC)	\
-    goto LABEL;								\
-}
 
 /* Nonzero if the constant value X is a legitimate general operand.
    It is given that X satisfies CONSTANT_P or is a CONST_DOUBLE.  */
@@ -1411,7 +1120,7 @@ extern unsigned char m68hc11_reg_valid_for_index[FIRST_PSEUDO_REGISTER];
 
    Pretend branches are cheap because GCC generates sub-optimal code
    for the default value.  */
-#define BRANCH_COST 0
+#define BRANCH_COST(speed_p, predictable_p) 0
 
 /* Nonzero if access to memory by bytes is slow and undesirable.  */
 #define SLOW_BYTE_ACCESS	0
@@ -1552,6 +1261,7 @@ do {                                                                    \
 /* Output #ident as a .ident.  */
 
 /* output external reference */
+#undef ASM_OUTPUT_EXTERNAL
 #define ASM_OUTPUT_EXTERNAL(FILE,DECL,NAME) \
   {fputs ("\t; extern\t", FILE); \
   assemble_name (FILE, NAME); \
@@ -1563,17 +1273,6 @@ do {                                                                    \
 { "x", "d", "y", "sp", "pc", "a", "b", "ccr", "z",		\
   "*_.frame", "*_.tmp", "*_.z", "*_.xy", "*fake clobber",	\
   SOFT_REG_NAMES, "*sframe", "*ap"}
-
-/* Print an instruction operand X on file FILE. CODE is the code from the
-   %-spec for printing this operand. If `%z3' was used to print operand
-   3, then CODE is 'z'.  */
-
-#define PRINT_OPERAND(FILE, X, CODE) \
-  print_operand (FILE, X, CODE)
-
-/* Print a memory operand whose address is X, on file FILE.  */
-#define PRINT_OPERAND_ADDRESS(FILE, ADDR) \
-  print_operand_address (FILE, ADDR)
 
 /* This is how to output an insn to push/pop a register on the stack.
    It need not be very fast code.  
@@ -1620,7 +1319,7 @@ do {                                                                    \
    sections when it shrinks the code.  This results in invalid addresses
    when debugging.  This does not bless too much the HC11/HC12 as most
    applications are embedded and small, hence a reasonable debug info.
-   This problem is known for binutils 2.13, 2.14 and mainline.   */
+   This problem is known for binutils 2.13, 2.14 and mainline.  */
 #undef HAVE_AS_DWARF2_DEBUG_LINE
 
 /* The prefix for local labels.  You should be able to define this as
@@ -1637,27 +1336,6 @@ do {                                                                    \
 
 /* Miscellaneous Parameters.  */
 
-/* Define the codes that are matched by predicates in m68hc11.c.  */
-#define PREDICATE_CODES \
-{"stack_register_operand",   {SUBREG, REG}},				\
-{"d_register_operand",       {SUBREG, REG}},				\
-{"hard_addr_reg_operand",    {SUBREG, REG}},				\
-{"hard_reg_operand",         {SUBREG, REG}},				\
-{"m68hc11_logical_operator", {AND, IOR, XOR}},				\
-{"m68hc11_arith_operator",   {AND, IOR, XOR, PLUS, MINUS,		\
-			      ASHIFT, ASHIFTRT, LSHIFTRT,		\
-			      ROTATE, ROTATERT }},			\
-{"m68hc11_non_shift_operator", {AND, IOR, XOR, PLUS, MINUS}},		\
-{"m68hc11_unary_operator",   {NEG, NOT, SIGN_EXTEND, ZERO_EXTEND}},	\
-{"m68hc11_shift_operator",   {ASHIFT, ASHIFTRT, LSHIFTRT, ROTATE, ROTATERT}},\
-{"m68hc11_eq_compare_operator", {EQ, NE}},                              \
-{"non_push_operand",         {SUBREG, REG, MEM}},			\
-{"splitable_operand",        {SUBREG, REG, MEM}},			\
-{"reg_or_some_mem_operand",  {SUBREG, REG, MEM}},			\
-{"tst_operand",              {SUBREG, REG, MEM}},			\
-{"cmp_operand",              {SUBREG, REG, MEM, SYMBOL_REF, LABEL_REF,	\
-			     CONST_INT, CONST_DOUBLE}},
-
 /* Specify the machine mode that this machine uses
    for the index in the tablejump instruction.  */
 #define CASE_VECTOR_MODE	Pmode
@@ -1673,7 +1351,7 @@ do {                                                                    \
 /* MOVE_RATIO is the number of move instructions that is better than a
    block move.  Make this small on 6811, since the code size grows very
    large with each move.  */
-#define MOVE_RATIO		3
+#define MOVE_RATIO(speed)	3
 
 /* Define if shifts truncate the shift count which implies one can omit
    a sign-extension or zero-extension of a shift count.  */
@@ -1698,8 +1376,6 @@ extern int current_function_interrupt;
 extern int current_function_trap;
 extern int current_function_far;
 
-extern GTY(()) rtx m68hc11_compare_op0;
-extern GTY(()) rtx m68hc11_compare_op1;
 extern GTY(()) rtx m68hc11_soft_tmp_reg;
 extern GTY(()) rtx ix_reg;
 extern GTY(()) rtx iy_reg;

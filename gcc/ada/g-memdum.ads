@@ -1,12 +1,12 @@
 ------------------------------------------------------------------------------
 --                                                                          --
---                         GNAT RUNTIME COMPONENTS                          --
+--                         GNAT RUN-TIME COMPONENTS                         --
 --                                                                          --
 --                     G N A T . M E M O R Y _ D U M P                      --
 --                                                                          --
 --                                 S p e c                                  --
 --                                                                          --
---              Copyright (C) 2003 Ada Core Technologies, Inc.              --
+--                     Copyright (C) 2003-2008, AdaCore                     --
 --                                                                          --
 -- GNAT is free software;  you can  redistribute it  and/or modify it under --
 -- terms of the  GNU General Public License as published  by the Free Soft- --
@@ -16,8 +16,8 @@
 -- or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU General Public License --
 -- for  more details.  You should have  received  a copy of the GNU General --
 -- Public License  distributed with GNAT;  see file COPYING.  If not, write --
--- to  the Free Software Foundation,  59 Temple Place - Suite 330,  Boston, --
--- MA 02111-1307, USA.                                                      --
+-- to  the  Free Software Foundation,  51  Franklin  Street,  Fifth  Floor, --
+-- Boston, MA 02110-1301, USA.                                              --
 --                                                                          --
 -- As a special exception,  if other files  instantiate  generics from this --
 -- unit, or you link  this unit with other files  to produce an executable, --
@@ -38,7 +38,7 @@
 with System;
 
 package GNAT.Memory_Dump is
-pragma Preelaborate (Memory_Dump);
+   pragma Preelaborate;
 
    procedure Dump (Addr : System.Address; Count : Natural);
    --  Dumps indicated number (Count) of bytes, starting at the address given
@@ -46,7 +46,7 @@ pragma Preelaborate (Memory_Dump);
    --  case of a byte addressable machine (and is therefore inapplicable to
    --  machines like the AAMP, where the storage unit is not 8 bits). The
    --  output is one or more lines in the following format, which is for the
-   --  case of 32-bit addresses (64-bit addressea are handled appropriately):
+   --  case of 32-bit addresses (64-bit addresses are handled appropriately):
    --
    --    0234_3368: 66 67 68 . . .  73 74 75 "fghijklmnopqstuv"
    --

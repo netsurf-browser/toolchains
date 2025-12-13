@@ -1,6 +1,7 @@
 /* Instruction scheduling pass.
    Copyright (C) 1992, 1993, 1994, 1995, 1996, 1997, 1998,
-   1999, 2000, 2001, 2002, 2003, 2004 Free Software Foundation, Inc.
+   1999, 2000, 2001, 2002, 2003, 2004, 2005, 2006, 2007, 2008, 2009, 2010
+   Free Software Foundation, Inc.
    Contributed by Michael Tiemann (tiemann@cygnus.com) Enhanced by,
    and currently maintained by, Jim Wilson (wilson@cygnus.com)
 
@@ -8,7 +9,7 @@ This file is part of GCC.
 
 GCC is free software; you can redistribute it and/or modify it under
 the terms of the GNU General Public License as published by the Free
-Software Foundation; either version 2, or (at your option) any later
+Software Foundation; either version 3, or (at your option) any later
 version.
 
 GCC is distributed in the hope that it will be useful, but WITHOUT ANY
@@ -17,107 +18,170 @@ FITNESS FOR A PARTICULAR PURPOSE.  See the GNU General Public License
 for more details.
 
 You should have received a copy of the GNU General Public License
-along with GCC; see the file COPYING.  If not, write to the Free
-Software Foundation, 59 Temple Place - Suite 330, Boston, MA
-02111-1307, USA.  */
+along with GCC; see the file COPYING3.  If not see
+<http://www.gnu.org/licenses/>.  */
 
 #include "config.h"
 #include "system.h"
 #include "coretypes.h"
 #include "tm.h"
-#include "toplev.h"
+#include "diagnostic-core.h"
 #include "rtl.h"
 #include "tm_p.h"
 #include "hard-reg-set.h"
-#include "basic-block.h"
 #include "regs.h"
 #include "function.h"
 #include "flags.h"
 #include "insn-config.h"
 #include "insn-attr.h"
 #include "except.h"
-#include "toplev.h"
 #include "recog.h"
 #include "cfglayout.h"
 #include "params.h"
 #include "sched-int.h"
 #include "target.h"
+#include "output.h"
+
 
+#ifdef INSN_SCHEDULING
+
 /* The number of insns to be scheduled in total.  */
-static int target_n_insns;
+static int rgn_n_insns;
+
 /* The number of insns scheduled so far.  */
-static int sched_n_insns;
+static int sched_rgn_n_insns;
+
+/* Set of blocks, that already have their dependencies calculated.  */
+static bitmap_head dont_calc_deps;
+
+/* Last basic block in current ebb.  */
+static basic_block last_bb;
 
 /* Implementations of the sched_info functions for region scheduling.  */
-static void init_ready_list (struct ready_list *);
-static int can_schedule_ready_p (rtx);
-static int new_ready (rtx);
+static void init_ready_list (void);
+static void begin_schedule_ready (rtx, rtx);
 static int schedule_more_p (void);
-static const char *ebb_print_insn (rtx, int);
+static const char *ebb_print_insn (const_rtx, int);
 static int rank (rtx, rtx);
-static int contributes_to_priority (rtx, rtx);
-static void compute_jump_reg_dependencies (rtx, regset, regset, regset);
+static int ebb_contributes_to_priority (rtx, rtx);
 static basic_block earliest_block_with_similiar_load (basic_block, rtx);
 static void add_deps_for_risky_insns (rtx, rtx);
 static basic_block schedule_ebb (rtx, rtx);
-static basic_block fix_basic_block_boundaries (basic_block, basic_block, rtx,
-					       rtx);
-static void add_missing_bbs (rtx, basic_block, basic_block);
+static void debug_ebb_dependencies (rtx, rtx);
+
+static void ebb_add_remove_insn (rtx, int);
+static void ebb_add_block (basic_block, basic_block);
+static basic_block advance_target_bb (basic_block, rtx);
+static void ebb_fix_recovery_cfg (int, int, int);
 
 /* Return nonzero if there are more insns that should be scheduled.  */
 
 static int
 schedule_more_p (void)
 {
-  return sched_n_insns < target_n_insns;
+  return sched_rgn_n_insns < rgn_n_insns;
+}
+
+/* Print dependency information about ebb between HEAD and TAIL.  */
+static void
+debug_ebb_dependencies (rtx head, rtx tail)
+{
+  fprintf (sched_dump,
+	   ";;   --------------- forward dependences: ------------ \n");
+
+  fprintf (sched_dump, "\n;;   --- EBB Dependences --- from bb%d to bb%d \n",
+	   BLOCK_NUM (head), BLOCK_NUM (tail));
+
+  debug_dependencies (head, tail);
 }
 
 /* Add all insns that are initially ready to the ready list READY.  Called
    once before scheduling a set of insns.  */
 
 static void
-init_ready_list (struct ready_list *ready)
+init_ready_list (void)
 {
+  int n = 0;
   rtx prev_head = current_sched_info->prev_head;
   rtx next_tail = current_sched_info->next_tail;
   rtx insn;
 
-  target_n_insns = 0;
-  sched_n_insns = 0;
+  sched_rgn_n_insns = 0;
 
-#if 0
   /* Print debugging information.  */
   if (sched_verbose >= 5)
-    debug_dependencies ();
-#endif
+    debug_ebb_dependencies (NEXT_INSN (prev_head), PREV_INSN (next_tail));
 
   /* Initialize ready list with all 'ready' insns in target block.
      Count number of insns in the target block being scheduled.  */
   for (insn = NEXT_INSN (prev_head); insn != next_tail; insn = NEXT_INSN (insn))
     {
-      if (INSN_DEP_COUNT (insn) == 0)
-	ready_add (ready, insn);
-      target_n_insns++;
+      try_ready (insn);
+      n++;
     }
+
+  gcc_assert (n == rgn_n_insns);
 }
 
-/* Called after taking INSN from the ready list.  Returns nonzero if this
-   insn can be scheduled, nonzero if we should silently discard it.  */
-
-static int
-can_schedule_ready_p (rtx insn ATTRIBUTE_UNUSED)
+/* INSN is being scheduled after LAST.  Update counters.  */
+static void
+begin_schedule_ready (rtx insn, rtx last)
 {
-  sched_n_insns++;
-  return 1;
-}
+  sched_rgn_n_insns++;
 
-/* Called after INSN has all its dependencies resolved.  Return nonzero
-   if it should be moved to the ready list or the queue, or zero if we
-   should silently discard it.  */
-static int
-new_ready (rtx next ATTRIBUTE_UNUSED)
-{
-  return 1;
+  if (BLOCK_FOR_INSN (insn) == last_bb
+      /* INSN is a jump in the last block, ...  */
+      && control_flow_insn_p (insn)
+      /* that is going to be moved over some instructions.  */
+      && last != PREV_INSN (insn))
+    {
+      edge e;
+      basic_block bb;
+
+      /* An obscure special case, where we do have partially dead
+	 instruction scheduled after last control flow instruction.
+	 In this case we can create new basic block.  It is
+	 always exactly one basic block last in the sequence.  */
+
+      e = find_fallthru_edge (last_bb->succs);
+
+      gcc_checking_assert (!e || !(e->flags & EDGE_COMPLEX));
+
+      gcc_checking_assert (BLOCK_FOR_INSN (insn) == last_bb
+			   && !IS_SPECULATION_CHECK_P (insn)
+			   && BB_HEAD (last_bb) != insn
+			   && BB_END (last_bb) == insn);
+
+      {
+	rtx x;
+
+	x = NEXT_INSN (insn);
+	if (e)
+	  gcc_checking_assert (NOTE_P (x) || LABEL_P (x));
+	else
+	  gcc_checking_assert (BARRIER_P (x));
+      }
+
+      if (e)
+	{
+	  bb = split_edge (e);
+	  gcc_assert (NOTE_INSN_BASIC_BLOCK_P (BB_END (bb)));
+	}
+      else
+	/* Create an empty unreachable block after the INSN.  */
+	bb = create_basic_block (NEXT_INSN (insn), NULL_RTX, last_bb);
+
+      /* split_edge () creates BB before E->DEST.  Keep in mind, that
+	 this operation extends scheduling region till the end of BB.
+	 Hence, we need to shift NEXT_TAIL, so haifa-sched.c won't go out
+	 of the scheduling region.  */
+      current_sched_info->next_tail = NEXT_INSN (BB_END (bb));
+      gcc_assert (current_sched_info->next_tail);
+
+      /* Append new basic block to the end of the ebb.  */
+      sched_init_only_bb (bb, last_bb);
+      gcc_assert (last_bb == bb);
+    }
 }
 
 /* Return a string that contains the insn uid and optionally anything else
@@ -126,11 +190,16 @@ new_ready (rtx next ATTRIBUTE_UNUSED)
    to be formatted so that multiple output lines will line up nicely.  */
 
 static const char *
-ebb_print_insn (rtx insn, int aligned ATTRIBUTE_UNUSED)
+ebb_print_insn (const_rtx insn, int aligned ATTRIBUTE_UNUSED)
 {
   static char tmp[80];
 
-  sprintf (tmp, "%4d", INSN_UID (insn));
+  /* '+' before insn means it is a new cycle start.  */
+  if (GET_MODE (insn) == TImode)
+    sprintf (tmp, "+ %4d", INSN_UID (insn));
+  else
+    sprintf (tmp, "  %4d", INSN_UID (insn));
+
   return tmp;
 }
 
@@ -158,8 +227,8 @@ rank (rtx insn1, rtx insn2)
    calculations.  */
 
 static int
-contributes_to_priority (rtx next ATTRIBUTE_UNUSED,
-			 rtx insn ATTRIBUTE_UNUSED)
+ebb_contributes_to_priority (rtx next ATTRIBUTE_UNUSED,
+                             rtx insn ATTRIBUTE_UNUSED)
 {
   return 1;
 }
@@ -169,178 +238,62 @@ contributes_to_priority (rtx next ATTRIBUTE_UNUSED,
     must be considered as used by this jump in USED and that of
     registers that must be considered as set in SET.  */
 
-static void
-compute_jump_reg_dependencies (rtx insn, regset cond_set, regset used,
-			       regset set)
+void
+ebb_compute_jump_reg_dependencies (rtx insn, regset cond_set, regset used,
+				   regset set)
 {
   basic_block b = BLOCK_FOR_INSN (insn);
   edge e;
-  for (e = b->succ; e; e = e->succ_next)
+  edge_iterator ei;
+
+  FOR_EACH_EDGE (e, ei, b->succs)
     if (e->flags & EDGE_FALLTHRU)
       /* The jump may be a by-product of a branch that has been merged
 	 in the main codepath after being conditionalized.  Therefore
 	 it may guard the fallthrough block from using a value that has
 	 conditionally overwritten that of the main codepath.  So we
 	 consider that it restores the value of the main codepath.  */
-      bitmap_operation (set, e->dest->global_live_at_start, cond_set,
-			BITMAP_AND);
+      bitmap_and (set, df_get_live_in (e->dest), cond_set);
     else
-      bitmap_operation (used, used, e->dest->global_live_at_start,
-			BITMAP_IOR);
+      bitmap_ior_into (used, df_get_live_in (e->dest));
 }
 
 /* Used in schedule_insns to initialize current_sched_info for scheduling
    regions (or single basic blocks).  */
 
-static struct sched_info ebb_sched_info =
+static struct common_sched_info_def ebb_common_sched_info;
+
+static struct sched_deps_info_def ebb_sched_deps_info =
+  {
+    ebb_compute_jump_reg_dependencies,
+    NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL,
+    NULL,
+    1, 0, 0
+  };
+
+static struct haifa_sched_info ebb_sched_info =
 {
   init_ready_list,
-  can_schedule_ready_p,
+  NULL,
   schedule_more_p,
-  new_ready,
+  NULL,
   rank,
   ebb_print_insn,
-  contributes_to_priority,
-  compute_jump_reg_dependencies,
+  ebb_contributes_to_priority,
+  NULL, /* insn_finishes_block_p */
 
   NULL, NULL,
   NULL, NULL,
-  0, 1, 0
+  1, 0,
+
+  ebb_add_remove_insn,
+  begin_schedule_ready,
+  advance_target_bb,
+  SCHED_EBB
+  /* We can create new blocks in begin_schedule_ready ().  */
+  | NEW_BBS
 };
 
-/* It is possible that ebb scheduling eliminated some blocks.
-   Place blocks from FIRST to LAST before BEFORE.  */
-
-static void
-add_missing_bbs (rtx before, basic_block first, basic_block last)
-{
-  for (; last != first->prev_bb; last = last->prev_bb)
-    {
-      before = emit_note_before (NOTE_INSN_BASIC_BLOCK, before);
-      NOTE_BASIC_BLOCK (before) = last;
-      BB_HEAD (last) = before;
-      BB_END (last) = before;
-      update_bb_for_insn (last);
-    }
-}
-
-/* Fixup the CFG after EBB scheduling.  Re-recognize the basic
-   block boundaries in between HEAD and TAIL and update basic block
-   structures between BB and LAST.  */
-
-static basic_block
-fix_basic_block_boundaries (basic_block bb, basic_block last, rtx head,
-			    rtx tail)
-{
-  rtx insn = head;
-  rtx last_inside = BB_HEAD (bb);
-  rtx aftertail = NEXT_INSN (tail);
-
-  head = BB_HEAD (bb);
-
-  for (; insn != aftertail; insn = NEXT_INSN (insn))
-    {
-      if (GET_CODE (insn) == CODE_LABEL)
-	abort ();
-      /* Create new basic blocks just before first insn.  */
-      if (inside_basic_block_p (insn))
-	{
-	  if (!last_inside)
-	    {
-	      rtx note;
-
-	      /* Re-emit the basic block note for newly found BB header.  */
-	      if (GET_CODE (insn) == CODE_LABEL)
-		{
-		  note = emit_note_after (NOTE_INSN_BASIC_BLOCK, insn);
-		  head = insn;
-		  last_inside = note;
-		}
-	      else
-		{
-		  note = emit_note_before (NOTE_INSN_BASIC_BLOCK, insn);
-		  head = note;
-		  last_inside = insn;
-		}
-	    }
-	  else
-	    last_inside = insn;
-	}
-      /* Control flow instruction terminate basic block.  It is possible
-	 that we've eliminated some basic blocks (made them empty).
-	 Find the proper basic block using BLOCK_FOR_INSN and arrange things in
-	 a sensible way by inserting empty basic blocks as needed.  */
-      if (control_flow_insn_p (insn) || (insn == tail && last_inside))
-	{
-	  basic_block curr_bb = BLOCK_FOR_INSN (insn);
-	  rtx note;
-
-	  if (!control_flow_insn_p (insn))
-	    curr_bb = last;
-	  if (bb == last->next_bb)
-	    {
-	      edge f;
-	      rtx h;
-
-	      /* An obscure special case, where we do have partially dead
-	         instruction scheduled after last control flow instruction.
-	         In this case we can create new basic block.  It is
-	         always exactly one basic block last in the sequence.  Handle
-	         it by splitting the edge and repositioning the block.
-	         This is somewhat hackish, but at least avoid cut&paste
-
-	         A safer solution can be to bring the code into sequence,
-	         do the split and re-emit it back in case this will ever
-	         trigger problem.  */
-	      f = bb->prev_bb->succ;
-	      while (f && !(f->flags & EDGE_FALLTHRU))
-		f = f->succ_next;
-
-	      if (f)
-		{
-		  last = curr_bb = split_edge (f);
-		  h = BB_HEAD (curr_bb);
-		  BB_HEAD (curr_bb) = head;
-		  BB_END (curr_bb) = insn;
-		  /* Edge splitting created misplaced BASIC_BLOCK note, kill
-		     it.  */
-		  delete_insn (h);
-		}
-	      /* It may happen that code got moved past unconditional jump in
-	         case the code is completely dead.  Kill it.  */
-	      else
-		{
-		  rtx next = next_nonnote_insn (insn);
-		  delete_insn_chain (head, insn);
-		  /* We keep some notes in the way that may split barrier from the
-		     jump.  */
-		  if (GET_CODE (next) == BARRIER)
-		     {
-		       emit_barrier_after (prev_nonnote_insn (head));
-		       delete_insn (next);
-		     }
-		  insn = NULL;
-		}
-	    }
-	  else
-	    {
-	      BB_HEAD (curr_bb) = head;
-	      BB_END (curr_bb) = insn;
-	      add_missing_bbs (BB_HEAD (curr_bb), bb, curr_bb->prev_bb);
-	    }
-	  note = GET_CODE (head) == CODE_LABEL ? NEXT_INSN (head) : head;
-	  NOTE_BASIC_BLOCK (note) = curr_bb;
-	  update_bb_for_insn (curr_bb);
-	  bb = curr_bb->next_bb;
-	  last_inside = NULL;
-	  if (!insn)
-	     break;
-	}
-    }
-  add_missing_bbs (BB_HEAD (last->next_bb), bb, last);
-  return bb->prev_bb;
-}
-
 /* Returns the earliest block in EBB currently being processed where a
    "similar load" 'insn2' is found, and hence LOAD_INSN can move
    speculatively into the found block.  All the following must hold:
@@ -360,28 +313,26 @@ fix_basic_block_boundaries (basic_block bb, basic_block last, rtx head,
 static basic_block
 earliest_block_with_similiar_load (basic_block last_block, rtx load_insn)
 {
-  rtx back_link;
+  sd_iterator_def back_sd_it;
+  dep_t back_dep;
   basic_block bb, earliest_block = NULL;
 
-  for (back_link = LOG_LINKS (load_insn);
-       back_link;
-       back_link = XEXP (back_link, 1))
+  FOR_EACH_DEP (load_insn, SD_LIST_BACK, back_sd_it, back_dep)
     {
-      rtx insn1 = XEXP (back_link, 0);
+      rtx insn1 = DEP_PRO (back_dep);
 
-      if (GET_MODE (back_link) == VOIDmode)
+      if (DEP_TYPE (back_dep) == REG_DEP_TRUE)
+	/* Found a DEF-USE dependence (insn1, load_insn).  */
 	{
-	  /* Found a DEF-USE dependence (insn1, load_insn).  */
-	  rtx fore_link;
+	  sd_iterator_def fore_sd_it;
+	  dep_t fore_dep;
 
-	  for (fore_link = INSN_DEPEND (insn1);
-	       fore_link;
-	       fore_link = XEXP (fore_link, 1))
+	  FOR_EACH_DEP (insn1, SD_LIST_FORW, fore_sd_it, fore_dep)
 	    {
-	      rtx insn2 = XEXP (fore_link, 0);
+	      rtx insn2 = DEP_CON (fore_dep);
 	      basic_block insn2_block = BLOCK_FOR_INSN (insn2);
 
-	      if (GET_MODE (fore_link) == VOIDmode)
+	      if (DEP_TYPE (fore_dep) == REG_DEP_TRUE)
 		{
 		  if (earliest_block != NULL
 		      && earliest_block->index < insn2_block->index)
@@ -392,7 +343,7 @@ earliest_block_with_similiar_load (basic_block last_block, rtx load_insn)
 		    /* insn2 not guaranteed to be a 1 base reg load.  */
 		    continue;
 
-		  for (bb = last_block; bb; bb = bb->aux)
+		  for (bb = last_block; bb; bb = (basic_block) bb->aux)
 		    if (insn2_block == bb)
 		      break;
 
@@ -414,13 +365,13 @@ static void
 add_deps_for_risky_insns (rtx head, rtx tail)
 {
   rtx insn, prev;
-  int class;
+  int classification;
   rtx last_jump = NULL_RTX;
   rtx next_tail = NEXT_INSN (tail);
   basic_block last_block = NULL, bb;
 
   for (insn = head; insn != next_tail; insn = NEXT_INSN (insn))
-    if (GET_CODE (insn) == JUMP_INSN)
+    if (control_flow_insn_p (insn))
       {
 	bb = BLOCK_FOR_INSN (insn);
 	bb->aux = last_block;
@@ -429,9 +380,9 @@ add_deps_for_risky_insns (rtx head, rtx tail)
       }
     else if (INSN_P (insn) && last_jump != NULL_RTX)
       {
-	class = haifa_classify_insn (insn);
+	classification = haifa_classify_insn (insn);
 	prev = last_jump;
-	switch (class)
+	switch (classification)
 	  {
 	  case PFREE_CANDIDATE:
 	    if (flag_schedule_speculative_load)
@@ -439,7 +390,7 @@ add_deps_for_risky_insns (rtx head, rtx tail)
 		bb = earliest_block_with_similiar_load (last_block, insn);
 		if (bb)
 		  {
-		    bb = bb->aux;
+		    bb = (basic_block) bb->aux;
 		    if (!bb)
 		      break;
 		    prev = BB_END (bb);
@@ -454,8 +405,36 @@ add_deps_for_risky_insns (rtx head, rtx tail)
 	    /* We can not change the mode of the backward
 	       dependency because REG_DEP_ANTI has the lowest
 	       rank.  */
-	    if (add_dependence (insn, prev, REG_DEP_ANTI))
-	      add_forward_dependence (prev, insn, REG_DEP_ANTI);
+	    if (! sched_insns_conditions_mutex_p (insn, prev))
+	      {
+		dep_def _dep, *dep = &_dep;
+
+		init_dep (dep, prev, insn, REG_DEP_ANTI);
+
+		if (!(current_sched_info->flags & USE_DEPS_LIST))
+		  {
+		    enum DEPS_ADJUST_RESULT res;
+
+		    res = sd_add_or_update_dep (dep, false);
+
+		    /* We can't change an existing dependency with
+		       DEP_ANTI.  */
+		    gcc_assert (res != DEP_CHANGED);
+		  }
+		else
+		  {
+		    if ((current_sched_info->flags & DO_SPECULATION)
+			&& (spec_info->mask & BEGIN_CONTROL))
+		      DEP_STATUS (dep) = set_dep_weak (DEP_ANTI, BEGIN_CONTROL,
+						       MAX_DEP_WEAK);
+
+		    sd_add_or_update_dep (dep, false);
+
+		    /* Dep_status could have been changed.
+		       No assertion here.  */
+		  }
+	      }
+
             break;
 
           default:
@@ -465,7 +444,7 @@ add_deps_for_risky_insns (rtx head, rtx tail)
   /* Maintain the invariant that bb->aux is clear after use.  */
   while (last_block)
     {
-      bb = last_block->aux;
+      bb = (basic_block) last_block->aux;
       last_block->aux = NULL;
       last_block = bb;
     }
@@ -477,92 +456,90 @@ add_deps_for_risky_insns (rtx head, rtx tail)
 static basic_block
 schedule_ebb (rtx head, rtx tail)
 {
-  int n_insns;
-  basic_block b;
-  struct deps tmp_deps;
-  basic_block first_bb = BLOCK_FOR_INSN (head);
-  basic_block last_bb = BLOCK_FOR_INSN (tail);
+  basic_block first_bb, target_bb;
+  struct deps_desc tmp_deps;
+
+  first_bb = BLOCK_FOR_INSN (head);
+  last_bb = BLOCK_FOR_INSN (tail);
 
   if (no_real_insns_p (head, tail))
     return BLOCK_FOR_INSN (tail);
 
-  init_deps_global ();
+  gcc_assert (INSN_P (head) && INSN_P (tail));
 
-  /* Compute LOG_LINKS.  */
-  init_deps (&tmp_deps);
-  sched_analyze (&tmp_deps, head, tail);
-  free_deps (&tmp_deps);
+  if (!bitmap_bit_p (&dont_calc_deps, first_bb->index))
+    {
+      init_deps_global ();
 
-  /* Compute INSN_DEPEND.  */
-  compute_forward_dependences (head, tail);
+      /* Compute dependencies.  */
+      init_deps (&tmp_deps, false);
+      sched_analyze (&tmp_deps, head, tail);
+      free_deps (&tmp_deps);
 
-  add_deps_for_risky_insns (head, tail);
+      add_deps_for_risky_insns (head, tail);
 
-  if (targetm.sched.dependencies_evaluation_hook)
-    targetm.sched.dependencies_evaluation_hook (head, tail);
+      if (targetm.sched.dependencies_evaluation_hook)
+        targetm.sched.dependencies_evaluation_hook (head, tail);
+
+      finish_deps_global ();
+    }
+  else
+    /* Only recovery blocks can have their dependencies already calculated,
+       and they always are single block ebbs.  */
+    gcc_assert (first_bb == last_bb);
 
   /* Set priorities.  */
-  n_insns = set_priorities (head, tail);
+  current_sched_info->sched_max_insns_priority = 0;
+  rgn_n_insns = set_priorities (head, tail);
+  current_sched_info->sched_max_insns_priority++;
 
   current_sched_info->prev_head = PREV_INSN (head);
   current_sched_info->next_tail = NEXT_INSN (tail);
 
-  if (write_symbols != NO_DEBUG)
-    {
-      save_line_notes (first_bb->index, head, tail);
-      rm_line_notes (head, tail);
-    }
+  remove_notes (head, tail);
 
-  /* rm_other_notes only removes notes which are _inside_ the
-     block---that is, it won't remove notes before the first real insn
-     or after the last real insn of the block.  So if the first insn
-     has a REG_SAVE_NOTE which would otherwise be emitted before the
-     insn, it is redundant with the note before the start of the
-     block, and so we have to take it out.  */
-  if (INSN_P (head))
-    {
-      rtx note;
+  unlink_bb_notes (first_bb, last_bb);
 
-      for (note = REG_NOTES (head); note; note = XEXP (note, 1))
-	if (REG_NOTE_KIND (note) == REG_SAVE_NOTE)
-	  {
-	    remove_note (head, note);
-	    note = XEXP (note, 1);
-	    remove_note (head, note);
-	  }
-    }
+  target_bb = first_bb;
 
-  /* Remove remaining note insns from the block, save them in
-     note_list.  These notes are restored at the end of
-     schedule_block ().  */
-  rm_other_notes (head, tail);
+  /* Make ready list big enough to hold all the instructions from the ebb.  */
+  sched_extend_ready_list (rgn_n_insns);
+  schedule_block (&target_bb);
+  /* Free ready list.  */
+  sched_finish_ready_list ();
 
-  current_sched_info->queue_must_finish_empty = 1;
-
-  schedule_block (-1, n_insns);
+  /* We might pack all instructions into fewer blocks,
+     so we may made some of them empty.  Can't assert (b == last_bb).  */
 
   /* Sanity check: verify that all region insns were scheduled.  */
-  if (sched_n_insns != n_insns)
-    abort ();
-  head = current_sched_info->head;
-  tail = current_sched_info->tail;
+  gcc_assert (sched_rgn_n_insns == rgn_n_insns);
 
-  if (write_symbols != NO_DEBUG)
-    restore_line_notes (head, tail);
-  b = fix_basic_block_boundaries (first_bb, last_bb, head, tail);
+  /* Free dependencies.  */
+  sched_free_deps (current_sched_info->head, current_sched_info->tail, true);
 
-  finish_deps_global ();
-  return b;
+  gcc_assert (haifa_recovery_bb_ever_added_p
+	      || deps_pools_are_empty_p ());
+
+  if (EDGE_COUNT (last_bb->preds) == 0)
+    /* LAST_BB is unreachable.  */
+    {
+      gcc_assert (first_bb != last_bb
+		  && EDGE_COUNT (last_bb->succs) == 0);
+      last_bb = last_bb->prev_bb;
+      delete_basic_block (last_bb->next_bb);
+    }
+
+  return last_bb;
 }
 
-/* The one entry point in this file.  DUMP_FILE is the dump file for
-   this pass.  */
+/* The one entry point in this file.  */
 
 void
-schedule_ebbs (FILE *dump_file)
+schedule_ebbs (void)
 {
   basic_block bb;
   int probability_cutoff;
+  rtx tail;
 
   if (profile_info && flag_branch_probabilities)
     probability_cutoff = PARAM_VALUE (TRACER_MIN_BRANCH_PROBABILITY_FEEDBACK);
@@ -572,32 +549,44 @@ schedule_ebbs (FILE *dump_file)
 
   /* Taking care of this degenerate case makes the rest of
      this code simpler.  */
-  if (n_basic_blocks == 0)
+  if (n_basic_blocks == NUM_FIXED_BLOCKS)
     return;
 
-  sched_init (dump_file);
+  /* Setup infos.  */
+  {
+    memcpy (&ebb_common_sched_info, &haifa_common_sched_info,
+	    sizeof (ebb_common_sched_info));
 
-  current_sched_info = &ebb_sched_info;
+    ebb_common_sched_info.fix_recovery_cfg = ebb_fix_recovery_cfg;
+    ebb_common_sched_info.add_block = ebb_add_block;
+    ebb_common_sched_info.sched_pass_id = SCHED_EBB_PASS;
 
-  allocate_reg_life_data ();
+    common_sched_info = &ebb_common_sched_info;
+    sched_deps_info = &ebb_sched_deps_info;
+    current_sched_info = &ebb_sched_info;
+  }
+
+  haifa_sched_init ();
+
   compute_bb_for_insn ();
+
+  /* Initialize DONT_CALC_DEPS and ebb-{start, end} markers.  */
+  bitmap_initialize (&dont_calc_deps, 0);
+  bitmap_clear (&dont_calc_deps);
 
   /* Schedule every region in the subroutine.  */
   FOR_EACH_BB (bb)
     {
       rtx head = BB_HEAD (bb);
-      rtx tail;
 
       for (;;)
 	{
 	  edge e;
 	  tail = BB_END (bb);
 	  if (bb->next_bb == EXIT_BLOCK_PTR
-	      || GET_CODE (BB_HEAD (bb->next_bb)) == CODE_LABEL)
+	      || LABEL_P (BB_HEAD (bb->next_bb)))
 	    break;
-	  for (e = bb->succ; e; e = e->succ_next)
-	    if ((e->flags & EDGE_FALLTHRU) != 0)
-	      break;
+	  e = find_fallthru_edge (bb->succs);
 	  if (! e)
 	    break;
 	  if (e->probability <= probability_cutoff)
@@ -609,11 +598,11 @@ schedule_ebbs (FILE *dump_file)
 	 a note or two.  */
       while (head != tail)
 	{
-	  if (GET_CODE (head) == NOTE)
+	  if (NOTE_P (head) || DEBUG_INSN_P (head))
 	    head = NEXT_INSN (head);
-	  else if (GET_CODE (tail) == NOTE)
+	  else if (NOTE_P (tail) || DEBUG_INSN_P (tail))
 	    tail = PREV_INSN (tail);
-	  else if (GET_CODE (head) == CODE_LABEL)
+	  else if (LABEL_P (head))
 	    head = NEXT_INSN (head);
 	  else
 	    break;
@@ -621,17 +610,88 @@ schedule_ebbs (FILE *dump_file)
 
       bb = schedule_ebb (head, tail);
     }
-
-  /* Updating life info can be done by local propagation over the modified
-     superblocks.  */
+  bitmap_clear (&dont_calc_deps);
 
   /* Reposition the prologue and epilogue notes in case we moved the
      prologue/epilogue insns.  */
   if (reload_completed)
-    reposition_prologue_and_epilogue_notes (get_insns ());
+    reposition_prologue_and_epilogue_notes ();
 
-  if (write_symbols != NO_DEBUG)
-    rm_redundant_line_notes ();
-
-  sched_finish ();
+  haifa_sched_finish ();
 }
+
+/* INSN has been added to/removed from current ebb.  */
+static void
+ebb_add_remove_insn (rtx insn ATTRIBUTE_UNUSED, int remove_p)
+{
+  if (!remove_p)
+    rgn_n_insns++;
+  else
+    rgn_n_insns--;
+}
+
+/* BB was added to ebb after AFTER.  */
+static void
+ebb_add_block (basic_block bb, basic_block after)
+{
+  /* Recovery blocks are always bounded by BARRIERS,
+     therefore, they always form single block EBB,
+     therefore, we can use rec->index to identify such EBBs.  */
+  if (after == EXIT_BLOCK_PTR)
+    bitmap_set_bit (&dont_calc_deps, bb->index);
+  else if (after == last_bb)
+    last_bb = bb;
+}
+
+/* Return next block in ebb chain.  For parameter meaning please refer to
+   sched-int.h: struct sched_info: advance_target_bb.  */
+static basic_block
+advance_target_bb (basic_block bb, rtx insn)
+{
+  if (insn)
+    {
+      if (BLOCK_FOR_INSN (insn) != bb
+	  && control_flow_insn_p (insn)
+	  /* We handle interblock movement of the speculation check
+	     or over a speculation check in
+	     haifa-sched.c: move_block_after_check ().  */
+	  && !IS_SPECULATION_BRANCHY_CHECK_P (insn)
+	  && !IS_SPECULATION_BRANCHY_CHECK_P (BB_END (bb)))
+	{
+	  /* Assert that we don't move jumps across blocks.  */
+	  gcc_assert (!control_flow_insn_p (BB_END (bb))
+		      && NOTE_INSN_BASIC_BLOCK_P (BB_HEAD (bb->next_bb)));
+	  return bb;
+	}
+      else
+	return 0;
+    }
+  else
+    /* Return next non empty block.  */
+    {
+      do
+	{
+	  gcc_assert (bb != last_bb);
+
+	  bb = bb->next_bb;
+	}
+      while (bb_note (bb) == BB_END (bb));
+
+      return bb;
+    }
+}
+
+/* Fix internal data after interblock movement of jump instruction.
+   For parameter meaning please refer to
+   sched-int.h: struct sched_info: fix_recovery_cfg.  */
+static void
+ebb_fix_recovery_cfg (int bbi ATTRIBUTE_UNUSED, int jump_bbi,
+		      int jump_bb_nexti)
+{
+  gcc_assert (last_bb->index != bbi);
+
+  if (jump_bb_nexti == last_bb->index)
+    last_bb = BASIC_BLOCK (jump_bbi);
+}
+
+#endif /* INSN_SCHEDULING */

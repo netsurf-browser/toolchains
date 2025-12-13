@@ -1,5 +1,5 @@
 /* -----------------------------------------------------------------------
-   ffi.c - Copyright (c) 1996, 2003, 2004 Red Hat, Inc.
+   ffi.c - Copyright (c) 1996, 2003, 2004, 2007, 2008 Red Hat, Inc.
    
    SPARC Foreign Function Interface 
 
@@ -14,13 +14,14 @@
    The above copyright notice and this permission notice shall be included
    in all copies or substantial portions of the Software.
 
-   THE SOFTWARE IS PROVIDED ``AS IS'', WITHOUT WARRANTY OF ANY KIND, EXPRESS
-   OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF
-   MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.
-   IN NO EVENT SHALL CYGNUS SOLUTIONS BE LIABLE FOR ANY CLAIM, DAMAGES OR
-   OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE,
-   ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR
-   OTHER DEALINGS IN THE SOFTWARE.
+   THE SOFTWARE IS PROVIDED ``AS IS'', WITHOUT WARRANTY OF ANY KIND,
+   EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF
+   MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND
+   NONINFRINGEMENT.  IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT
+   HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY,
+   WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+   OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+   DEALINGS IN THE SOFTWARE.
    ----------------------------------------------------------------------- */
 
 #include <ffi.h>
@@ -307,14 +308,24 @@ ffi_status ffi_prep_cif_machdep(ffi_cif *cif)
 	cif->flags = FFI_TYPE_STRUCT;
       break;
 
+    case FFI_TYPE_SINT8:
+    case FFI_TYPE_UINT8:
+    case FFI_TYPE_SINT16:
+    case FFI_TYPE_UINT16:
+      if (cif->abi == FFI_V9)
+	cif->flags = FFI_TYPE_INT;
+      else
+	cif->flags = cif->rtype->type;
+      break;
+
     case FFI_TYPE_SINT64:
     case FFI_TYPE_UINT64:
-      if (cif->abi != FFI_V9)
-	{
-	  cif->flags = FFI_TYPE_SINT64;
-	  break;
-	}
-      /* FALLTHROUGH */
+      if (cif->abi == FFI_V9)
+	cif->flags = FFI_TYPE_INT;
+      else
+	cif->flags = FFI_TYPE_SINT64;
+      break;
+
     default:
       cif->flags = FFI_TYPE_INT;
       break;
@@ -358,13 +369,13 @@ int ffi_v9_layout_struct(ffi_type *arg, int off, char *ret, char *intg, char *fl
 
 #ifdef SPARC64
 extern int ffi_call_v9(void *, extended_cif *, unsigned, 
-		       unsigned, unsigned *, void (*fn)());
+		       unsigned, unsigned *, void (*fn)(void));
 #else
 extern int ffi_call_v8(void *, extended_cif *, unsigned, 
-		       unsigned, unsigned *, void (*fn)());
+		       unsigned, unsigned *, void (*fn)(void));
 #endif
 
-void ffi_call(ffi_cif *cif, void (*fn)(), void *rvalue, void **avalue)
+void ffi_call(ffi_cif *cif, void (*fn)(void), void *rvalue, void **avalue)
 {
   extended_cif ecif;
   void *rval = rvalue;
@@ -425,10 +436,11 @@ extern void ffi_closure_v8(void);
 #endif
 
 ffi_status
-ffi_prep_closure (ffi_closure* closure,
-		  ffi_cif* cif,
-		  void (*fun)(ffi_cif*, void*, void**, void*),
-		  void *user_data)
+ffi_prep_closure_loc (ffi_closure* closure,
+		      ffi_cif* cif,
+		      void (*fun)(ffi_cif*, void*, void**, void*),
+		      void *user_data,
+		      void *codeloc)
 {
   unsigned int *tramp = (unsigned int *) &closure->tramp[0];
   unsigned long fn;
@@ -443,7 +455,7 @@ ffi_prep_closure (ffi_closure* closure,
   tramp[3] = 0x01000000;	/* nop			*/
   *((unsigned long *) &tramp[4]) = fn;
 #else
-  unsigned long ctx = (unsigned long) closure;
+  unsigned long ctx = (unsigned long) codeloc;
   FFI_ASSERT (cif->abi == FFI_V8);
   fn = (unsigned long) ffi_closure_v8;
   tramp[0] = 0x03000000 | fn >> 10;	/* sethi %hi(fn), %g1	*/
@@ -470,7 +482,7 @@ ffi_prep_closure (ffi_closure* closure,
 
 int
 ffi_closure_sparc_inner_v8(ffi_closure *closure,
-  void *rvalue, unsigned long *gpr)
+  void *rvalue, unsigned long *gpr, unsigned long *scratch)
 {
   ffi_cif *cif;
   ffi_type **arg_types;
@@ -504,6 +516,19 @@ ffi_closure_sparc_inner_v8(ffi_closure *closure,
 	{
 	  /* Straight copy of invisible reference.  */
 	  avalue[i] = (void *)gpr[argn++];
+	}
+      else if ((arg_types[i]->type == FFI_TYPE_DOUBLE
+	       || arg_types[i]->type == FFI_TYPE_SINT64
+	       || arg_types[i]->type == FFI_TYPE_UINT64)
+	       /* gpr is 8-byte aligned.  */
+	       && (argn % 2) != 0)
+	{
+	  /* Align on a 8-byte boundary.  */
+	  scratch[0] = gpr[argn];
+	  scratch[1] = gpr[argn+1];
+	  avalue[i] = scratch;
+	  scratch -= 2;
+	  argn += 2;
 	}
       else
 	{
@@ -574,6 +599,11 @@ ffi_closure_sparc_inner_v9(ffi_closure *closure,
 	  /* Right-justify.  */
 	  argn += ALIGN(arg_types[i]->size, FFI_SIZEOF_ARG) / FFI_SIZEOF_ARG;
 
+	  /* Align on a 16-byte boundary.  */
+#if FFI_TYPE_LONGDOUBLE != FFI_TYPE_DOUBLE
+	  if (arg_types[i]->type == FFI_TYPE_LONGDOUBLE && (argn % 2) != 0)
+	    argn++;
+#endif
 	  if (i < fp_slot_max
 	      && (arg_types[i]->type == FFI_TYPE_FLOAT
 		  || arg_types[i]->type == FFI_TYPE_DOUBLE

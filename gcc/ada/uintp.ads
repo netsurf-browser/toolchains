@@ -6,25 +6,23 @@
 --                                                                          --
 --                                 S p e c                                  --
 --                                                                          --
---          Copyright (C) 1992-2003, Free Software Foundation, Inc.         --
+--          Copyright (C) 1992-2010, Free Software Foundation, Inc.         --
 --                                                                          --
 -- GNAT is free software;  you can  redistribute it  and/or modify it under --
 -- terms of the  GNU General Public License as published  by the Free Soft- --
--- ware  Foundation;  either version 2,  or (at your option) any later ver- --
+-- ware  Foundation;  either version 3,  or (at your option) any later ver- --
 -- sion.  GNAT is distributed in the hope that it will be useful, but WITH- --
 -- OUT ANY WARRANTY;  without even the  implied warranty of MERCHANTABILITY --
--- or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU General Public License --
--- for  more details.  You should have  received  a copy of the GNU General --
--- Public License  distributed with GNAT;  see file COPYING.  If not, write --
--- to  the Free Software Foundation,  59 Temple Place - Suite 330,  Boston, --
--- MA 02111-1307, USA.                                                      --
+-- or FITNESS FOR A PARTICULAR PURPOSE.                                     --
 --                                                                          --
--- As a special exception,  if other files  instantiate  generics from this --
--- unit, or you link  this unit with other files  to produce an executable, --
--- this  unit  does not  by itself cause  the resulting  executable  to  be --
--- covered  by the  GNU  General  Public  License.  This exception does not --
--- however invalidate  any other reasons why  the executable file  might be --
--- covered by the  GNU Public License.                                      --
+-- As a special exception under Section 7 of GPL version 3, you are granted --
+-- additional permissions described in the GCC Runtime Library Exception,   --
+-- version 3.1, as published by the Free Software Foundation.               --
+--                                                                          --
+-- You should have received a copy of the GNU General Public License and    --
+-- a copy of the GCC Runtime Library Exception along with this program;     --
+-- see the files COPYING3 and COPYING.RUNTIME respectively.  If not, see    --
+-- <http://www.gnu.org/licenses/>.                                          --
 --                                                                          --
 -- GNAT was originally developed  by the GNAT team at  New York University. --
 -- Extensive contributions were provided by Ada Core Technologies Inc.      --
@@ -64,7 +62,10 @@ package Uintp is
    Uint_8   : constant Uint;
    Uint_9   : constant Uint;
    Uint_10  : constant Uint;
+   Uint_11  : constant Uint;
    Uint_12  : constant Uint;
+   Uint_13  : constant Uint;
+   Uint_14  : constant Uint;
    Uint_15  : constant Uint;
    Uint_16  : constant Uint;
    Uint_24  : constant Uint;
@@ -100,21 +101,22 @@ package Uintp is
    --  gigi processing.
 
    procedure Tree_Read;
-   --  Initializes internal tables from current tree file using Tree_Read.
-   --  Note that Initialize should not be called if Tree_Read is used.
-   --  Tree_Read includes all necessary initialization.
+   --  Initializes internal tables from current tree file using the relevant
+   --  Table.Tree_Read routines. Note that Initialize should not be called if
+   --  Tree_Read is used. Tree_Read includes all necessary initialization.
 
    procedure Tree_Write;
-   --  Writes out internal tables to current tree file using Tree_Write.
+   --  Writes out internal tables to current tree file using the relevant
+   --  Table.Tree_Write routines.
 
    function UI_Abs (Right : Uint) return Uint;
    pragma Inline (UI_Abs);
-   --  Returns abs function of universal integer.
+   --  Returns abs function of universal integer
 
    function UI_Add (Left : Uint; Right : Uint) return Uint;
    function UI_Add (Left : Int;  Right : Uint) return Uint;
    function UI_Add (Left : Uint; Right : Int)  return Uint;
-   --  Returns sum of two integer values.
+   --  Returns sum of two integer values
 
    function UI_Decimal_Digits_Hi (U : Uint) return Nat;
    --  Returns an estimate of the number of decimal digits required to
@@ -139,44 +141,44 @@ package Uintp is
    function UI_Eq (Left : Int;  Right : Uint) return Boolean;
    function UI_Eq (Left : Uint; Right : Int)  return Boolean;
    pragma Inline (UI_Eq);
-   --  Compares integer values for equality.
+   --  Compares integer values for equality
 
    function UI_Expon (Left : Uint; Right : Uint) return Uint;
    function UI_Expon (Left : Int;  Right : Uint) return Uint;
    function UI_Expon (Left : Uint; Right : Int)  return Uint;
    function UI_Expon (Left : Int;  Right : Int)  return Uint;
-   --  Returns result of exponentiating two integer values
+   --  Returns result of exponentiating two integer values.
    --  Fatal error if Right is negative.
 
    function UI_GCD (Uin, Vin : Uint) return Uint;
-   --  Computes GCD of input values. Assumes Uin >= Vin >= 0.
+   --  Computes GCD of input values. Assumes Uin >= Vin >= 0
 
    function UI_Ge (Left : Uint; Right : Uint) return Boolean;
    function UI_Ge (Left : Int;  Right : Uint) return Boolean;
    function UI_Ge (Left : Uint; Right : Int)  return Boolean;
    pragma Inline (UI_Ge);
-   --  Compares integer values for greater than or equal.
+   --  Compares integer values for greater than or equal
 
    function UI_Gt (Left : Uint; Right : Uint) return Boolean;
    function UI_Gt (Left : Int;  Right : Uint) return Boolean;
    function UI_Gt (Left : Uint; Right : Int)  return Boolean;
    pragma Inline (UI_Gt);
-   --  Compares integer values for greater than.
+   --  Compares integer values for greater than
 
    function UI_Is_In_Int_Range (Input : Uint) return Boolean;
    pragma Inline (UI_Is_In_Int_Range);
-   --  Determines if universal integer is in Int range.
+   --  Determines if universal integer is in Int range
 
    function UI_Le (Left : Uint; Right : Uint) return Boolean;
    function UI_Le (Left : Int;  Right : Uint) return Boolean;
    function UI_Le (Left : Uint; Right : Int)  return Boolean;
    pragma Inline (UI_Le);
-   --  Compares integer values for less than or equal.
+   --  Compares integer values for less than or equal
 
    function UI_Lt (Left : Uint; Right : Uint) return Boolean;
    function UI_Lt (Left : Int;  Right : Uint) return Boolean;
    function UI_Lt (Left : Uint; Right : Int)  return Boolean;
-   --  Compares integer values for less than.
+   --  Compares integer values for less than
 
    function UI_Max (Left : Uint; Right : Uint) return Uint;
    function UI_Max (Left : Int;  Right : Uint) return Uint;
@@ -186,13 +188,13 @@ package Uintp is
    function UI_Min (Left : Uint; Right : Uint) return Uint;
    function UI_Min (Left : Int;  Right : Uint) return Uint;
    function UI_Min (Left : Uint; Right : Int)  return Uint;
-   --  Returns minimum of two integer values.
+   --  Returns minimum of two integer values
 
    function UI_Mod (Left : Uint; Right : Uint) return Uint;
    function UI_Mod (Left : Int;  Right : Uint) return Uint;
    function UI_Mod (Left : Uint; Right : Int)  return Uint;
    pragma Inline (UI_Mod);
-   --  Returns mod function of two integer values.
+   --  Returns mod function of two integer values
 
    function UI_Mul (Left : Uint; Right : Uint) return Uint;
    function UI_Mul (Left : Int;  Right : Uint) return Uint;
@@ -203,16 +205,16 @@ package Uintp is
    function UI_Ne (Left : Int;  Right : Uint) return Boolean;
    function UI_Ne (Left : Uint; Right : Int)  return Boolean;
    pragma Inline (UI_Ne);
-   --  Compares integer values for inequality.
+   --  Compares integer values for inequality
 
    function UI_Negate (Right : Uint) return Uint;
    pragma Inline (UI_Negate);
-   --  Returns negative of universal integer.
+   --  Returns negative of universal integer
 
    function UI_Rem (Left : Uint; Right : Uint) return Uint;
    function UI_Rem (Left : Int;  Right : Uint) return Uint;
    function UI_Rem (Left : Uint; Right : Int)  return Uint;
-   --  Returns rem of two integer values.
+   --  Returns rem of two integer values
 
    function UI_Sub (Left : Uint; Right : Uint) return Uint;
    function UI_Sub (Left : Int;  Right : Uint) return Uint;
@@ -220,15 +222,30 @@ package Uintp is
    pragma Inline (UI_Sub);
    --  Returns difference of two integer values
 
-   function UI_From_Dint (Input : Dint) return Uint;
-   --  Converts Dint value to universal integer form.
+   function UI_Modular_Exponentiation
+     (B      : Uint;
+      E      : Uint;
+      Modulo : Uint) return Uint;
+   --  Efficiently compute (B ** E) rem Modulo
+
+   function UI_Modular_Inverse (N : Uint; Modulo : Uint) return Uint;
+   --  Compute the multiplicative inverse of N in modular arithmetics with the
+   --  given Modulo (uses Euclid's algorithm). Note: the call is considered
+   --  to be erroneous (and the behavior is undefined) if n is not invertible.
 
    function UI_From_Int (Input : Int) return Uint;
-   --  Converts Int value to universal integer form.
+   --  Converts Int value to universal integer form
+
+   function UI_From_CC (Input : Char_Code) return Uint;
+   --  Converts Char_Code value to universal integer form
 
    function UI_To_Int (Input : Uint) return Int;
-   --  Converts universal integer value to Int. Fatal error
-   --  if value is not in appropriate range.
+   --  Converts universal integer value to Int. Fatal error if value is not in
+   --  appropriate range.
+
+   function UI_To_CC (Input : Uint) return Char_Code;
+   --  Converts universal integer value to Char_Code. Fatal error if value is
+   --  not in Char_Code range.
 
    function Num_Bits (Input : Uint) return Nat;
    --  Approximate number of binary bits in given universal integer.
@@ -244,7 +261,7 @@ package Uintp is
    --  or decimal format. Auto, the default setting, lets the routine make
    --  a decision based on the value.
 
-   UI_Image_Max    : constant := 32;
+   UI_Image_Max    : constant := 48; -- Enough for a 128-bit number
    UI_Image_Buffer : String (1 .. UI_Image_Max);
    UI_Image_Length : Natural;
    --  Buffer used for UI_Image as described below
@@ -381,18 +398,19 @@ private
    --  a multi-digit format using Base as the base. This value is chosen so
    --  that the product Base*Base is within the range of allowed Int values.
 
-   --  Base is defined to allow efficient execution of the primitive
-   --  operations (a0, b0, c0) defined in the section "The Classical
-   --  Algorithms" (sec. 4.3.1) of Donald Knuth's "The Art of Computer
-   --  Programming", Vol. 2. These algorithms are used in this package.
+   --  Base is defined to allow efficient execution of the primitive operations
+   --  (a0, b0, c0) defined in the section "The Classical Algorithms"
+   --  (sec. 4.3.1) of Donald Knuth's "The Art of Computer  Programming",
+   --  Vol. 2. These algorithms are used in this package. In particular,
+   --  the product of two single digits in this base fits in a 32-bit integer.
 
    Base_Bits : constant := 15;
    --  Number of bits in base value
 
    Base : constant Int := 2 ** Base_Bits;
 
-   --  Values in the range -(Base+1) .. maxdirect are encoded directly as
-   --  Uint values by adding a bias value. The value of maxdirect is chosen
+   --  Values in the range -(Base+1) .. Max_Direct are encoded directly as
+   --  Uint values by adding a bias value. The value of Max_Direct is chosen
    --  so that a directly represented number always fits in two digits when
    --  represented in base format.
 
@@ -400,10 +418,10 @@ private
    Max_Direct : constant Int := (Base - 1) * (Base - 1);
 
    --  The following values define the bias used to store Uint values which
-   --  are in this range, as well as the biased values for the first and
-   --  last values in this range. We use a new derived type for these
-   --  constants to avoid accidental use of Uint arithmetic on these
-   --  values, which is never correct.
+   --  are in this range, as well as the biased values for the first and last
+   --  values in this range. We use a new derived type for these constants to
+   --  avoid accidental use of Uint arithmetic on these values, which is never
+   --  correct.
 
    type Ctrl is range Int'First .. Int'Last;
 
@@ -422,7 +440,10 @@ private
    Uint_8   : constant Uint := Uint (Uint_Direct_Bias + 8);
    Uint_9   : constant Uint := Uint (Uint_Direct_Bias + 9);
    Uint_10  : constant Uint := Uint (Uint_Direct_Bias + 10);
+   Uint_11  : constant Uint := Uint (Uint_Direct_Bias + 11);
    Uint_12  : constant Uint := Uint (Uint_Direct_Bias + 12);
+   Uint_13  : constant Uint := Uint (Uint_Direct_Bias + 13);
+   Uint_14  : constant Uint := Uint (Uint_Direct_Bias + 14);
    Uint_15  : constant Uint := Uint (Uint_Direct_Bias + 15);
    Uint_16  : constant Uint := Uint (Uint_Direct_Bias + 16);
    Uint_24  : constant Uint := Uint (Uint_Direct_Bias + 24);
@@ -447,16 +468,21 @@ private
    Uint_Minus_80  : constant Uint := Uint (Uint_Direct_Bias - 80);
    Uint_Minus_128 : constant Uint := Uint (Uint_Direct_Bias - 128);
 
+   Uint_Max_Simple_Mul : constant := Uint_Direct_Bias + 2 ** 15;
+   --  If two values are directly represented and less than or equal to this
+   --  value, then we know the product fits in a 32-bit integer. This allows
+   --  UI_Mul to efficiently compute the product in this case.
+
    type Save_Mark is record
       Save_Uint   : Uint;
       Save_Udigit : Int;
    end record;
 
-   --  Values outside the range that is represented directly are stored
-   --  using two tables. The secondary table Udigits contains sequences of
-   --  Int values consisting of the digits of the number in a radix Base
-   --  system. The digits are stored from most significant to least
-   --  significant with the first digit only carrying the sign.
+   --  Values outside the range that is represented directly are stored using
+   --  two tables. The secondary table Udigits contains sequences of Int values
+   --  consisting of the digits of the number in a radix Base system. The
+   --  digits are stored from most significant to least significant with the
+   --  first digit only carrying the sign.
 
    --  There is one entry in the primary Uints table for each distinct Uint
    --  value. This table entry contains the length (number of digits) and
@@ -464,11 +490,11 @@ private
 
    Uint_First_Entry : constant Uint := Uint (Uint_Table_Start);
 
-   --  Some subprograms defined in this package manipulate the Udigits
-   --  table directly, while for others it is more convenient to work with
-   --  locally defined arrays of the digits of the Universal Integers.
-   --  The type UI_Vector is defined for this purpose and some internal
-   --  subprograms used for converting from one to the other are defined.
+   --  Some subprograms defined in this package manipulate the Udigits table
+   --  directly, while for others it is more convenient to work with locally
+   --  defined arrays of the digits of the Universal Integers. The type
+   --  UI_Vector is defined for this purpose and some internal subprograms
+   --  used for converting from one to the other are defined.
 
    type UI_Vector is array (Pos range <>) of Int;
    --  Vector containing the integer values of a Uint value
@@ -493,7 +519,7 @@ private
 
    package Uints is new Table.Table (
      Table_Component_Type => Uint_Entry,
-     Table_Index_Type     => Uint,
+     Table_Index_Type     => Uint'Base,
      Table_Low_Bound      => Uint_First_Entry,
      Table_Initial        => Alloc.Uints_Initial,
      Table_Increment      => Alloc.Uints_Increment,
@@ -508,7 +534,7 @@ private
      Table_Name           => "Udigits");
 
    --  Note: the reason these tables are defined here in the private part of
-   --  the spec, rather than in the body, is that they are refrerenced
-   --  directly by gigi.
+   --  the spec, rather than in the body, is that they are referenced directly
+   --  by gigi.
 
 end Uintp;

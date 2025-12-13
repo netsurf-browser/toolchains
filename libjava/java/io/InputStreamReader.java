@@ -1,5 +1,5 @@
 /* InputStreamReader.java -- Reader than transforms bytes to chars
-   Copyright (C) 1998, 1999, 2001, 2003 Free Software Foundation, Inc.
+   Copyright (C) 1998, 1999, 2001, 2003, 2004, 2005  Free Software Foundation, Inc.
 
 This file is part of GNU Classpath.
 
@@ -15,8 +15,8 @@ General Public License for more details.
 
 You should have received a copy of the GNU General Public License
 along with GNU Classpath; see the file COPYING.  If not, write to the
-Free Software Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA
-02111-1307 USA.
+Free Software Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA
+02110-1301 USA.
 
 Linking this library statically or dynamically with other modules is
 making a combined work based on this library.  Thus, the terms and
@@ -39,6 +39,8 @@ exception statement from your version. */
 package java.io;
 
 import gnu.gcj.convert.*;
+import java.nio.charset.Charset;
+import java.nio.charset.CharsetDecoder;
 
 /**
  * This class reads characters from a byte input stream.   The characters
@@ -56,18 +58,18 @@ import gnu.gcj.convert.*;
  * Here is a list of standard encoding names that may be available:
  * <p>
  * <ul>
- * <li>8859_1 (ISO-8859-1/Latin-1)
- * <li>8859_2 (ISO-8859-2/Latin-2)
- * <li>8859_3 (ISO-8859-3/Latin-3)
- * <li>8859_4 (ISO-8859-4/Latin-4)
- * <li>8859_5 (ISO-8859-5/Latin-5)
- * <li>8859_6 (ISO-8859-6/Latin-6)
- * <li>8859_7 (ISO-8859-7/Latin-7)
- * <li>8859_8 (ISO-8859-8/Latin-8)
- * <li>8859_9 (ISO-8859-9/Latin-9)
- * <li>ASCII (7-bit ASCII)
- * <li>UTF8 (UCS Transformation Format-8)
- * <li>More later
+ * <li>8859_1 (ISO-8859-1/Latin-1)</li>
+ * <li>8859_2 (ISO-8859-2/Latin-2)</li>
+ * <li>8859_3 (ISO-8859-3/Latin-3)</li>
+ * <li>8859_4 (ISO-8859-4/Latin-4)</li>
+ * <li>8859_5 (ISO-8859-5/Latin-5)</li>
+ * <li>8859_6 (ISO-8859-6/Latin-6)</li>
+ * <li>8859_7 (ISO-8859-7/Latin-7)</li>
+ * <li>8859_8 (ISO-8859-8/Latin-8)</li>
+ * <li>8859_9 (ISO-8859-9/Latin-9)</li>
+ * <li>ASCII (7-bit ASCII)</li>
+ * <li>UTF8 (UCS Transformation Format-8)</li>
+ * <li>More later</li>
  * </ul>
  * <p>
  * It is recommended that applications do not use 
@@ -82,7 +84,7 @@ import gnu.gcj.convert.*;
  * @see InputStream
  *
  * @author Aaron M. Renn (arenn@urbanophile.com)
- * @author Per Bothner <bothner@cygnus.com>
+ * @author Per Bothner (bothner@cygnus.com)
  * @date April 22, 1998.  
  */
 public class InputStreamReader extends Reader
@@ -131,6 +133,25 @@ public class InputStreamReader extends Reader
     this(in, BytesToUnicode.getDecoder(encoding_name));
   }
 
+  /**
+   * Creates an InputStreamReader that uses a decoder of the given
+   * charset to decode the bytes in the InputStream into
+   * characters.
+   */
+  public InputStreamReader(InputStream in, Charset charset)
+  {
+    this(in, new BytesToCharsetAdaptor(charset));
+  }
+
+  /**
+   * Creates an InputStreamReader that uses the given charset decoder
+   * to decode the bytes in the InputStream into characters.
+   */
+  public InputStreamReader(InputStream in, CharsetDecoder decoder)
+  {
+    this(in, new BytesToCharsetAdaptor(decoder));
+  }
+
   private InputStreamReader(InputStream in, BytesToUnicode decoder)
   {
     // FIXME: someone could pass in a BufferedInputStream whose buffer
@@ -170,7 +191,7 @@ public class InputStreamReader extends Reader
    * by this object.  If the stream has been closed, this method is allowed
    * to return <code>null</code>.
    *
-   * @param The current encoding name
+   * @return The current encoding name
    */
   public String getEncoding()
   {
@@ -231,10 +252,8 @@ public class InputStreamReader extends Reader
 	int wavail = wcount - wpos;
 	if (wavail <= 0)
 	  {
-	    // Nothing waiting, so refill our buffer.
-	    if (! refill ())
-	      return -1;
-	    wavail = wcount - wpos;
+	    // Nothing waiting, so refill their buffer.
+	    return refill(buf, offset, length);
 	  }
 
 	if (length > wavail)
@@ -262,45 +281,52 @@ public class InputStreamReader extends Reader
 	int wavail = wcount - wpos;
 	if (wavail <= 0)
 	  {
-	    // Nothing waiting, so refill our buffer.
-	    if (! refill ())
+	    // Nothing waiting, so refill our internal buffer.
+	    wpos = wcount = 0;
+	    if (work == null)
+	       work = new char[100];
+	    int count = refill(work, 0, work.length);
+	    if (count == -1)
 	      return -1;
+	    wcount += count;
 	  }
 
 	return work[wpos++];
       }
   }
 
-  // Read more bytes and convert them into the WORK buffer.
-  // Return false on EOF.
-  private boolean refill () throws IOException
+  // Read more bytes and convert them into the specified buffer.
+  // Returns the number of converted characters or -1 on EOF.
+  private int refill(char[] buf, int offset, int length) throws IOException
   {
-    wcount = wpos = 0;
-
-    if (work == null)
-      work = new char[100];
-
     for (;;)
       {
 	// We have knowledge of the internals of BufferedInputStream
 	// here.  Eww.
-	in.mark (0);
 	// BufferedInputStream.refill() can only be called when
 	// `pos>=count'.
 	boolean r = in.pos < in.count || in.refill ();
-	in.reset ();
 	if (! r)
-	  return false;
+	  return -1;
 	converter.setInput(in.buf, in.pos, in.count);
-	int count = converter.read (work, wpos, work.length - wpos);
-	in.skip(converter.inpos - in.pos);
-	if (count > 0)
+	int count = converter.read(buf, offset, length);
+
+	// We might have bytes but not have made any progress.  In
+	// this case we try to refill.  If refilling fails, we assume
+	// we have a malformed character at the end of the stream.
+	if (count == 0 && converter.inpos == in.pos)
 	  {
-	    wcount += count;
-	    return true;
+	    in.mark(in.count);
+	    if (! in.refill ())
+	      throw new CharConversionException ();
+	    in.reset();
+	  }
+	else
+	  {
+	    in.skip(converter.inpos - in.pos);
+	    if (count > 0)
+	      return count;
 	  }
       }
   }
-
-} // class InputStreamReader
-
+}

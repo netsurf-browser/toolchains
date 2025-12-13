@@ -1,5 +1,6 @@
 /* StringBuffer.java -- Growable strings
-   Copyright (C) 1998, 1999, 2000, 2001, 2002, 2003 Free Software Foundation, Inc.
+   Copyright (C) 1998, 1999, 2000, 2001, 2002, 2003, 2004, 2005, 2008
+   Free Software Foundation, Inc.
 
 This file is part of GNU Classpath.
 
@@ -15,8 +16,8 @@ General Public License for more details.
 
 You should have received a copy of the GNU General Public License
 along with GNU Classpath; see the file COPYING.  If not, write to the
-Free Software Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA
-02111-1307 USA.
+Free Software Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA
+02110-1301 USA.
 
 Linking this library statically or dynamically with other modules is
 making a combined work based on this library.  Thus, the terms and
@@ -66,34 +67,22 @@ import java.io.Serializable;
  * @author Paul Fisher
  * @author John Keiser
  * @author Tom Tromey
- * @author Eric Blake <ebb9@email.byu.edu>
+ * @author Eric Blake (ebb9@email.byu.edu)
  * @see String
  * @since 1.0
  * @status updated to 1.4
  */
-public final class StringBuffer implements Serializable, CharSequence
+public final class StringBuffer
+  extends AbstractStringBuffer
+  implements Serializable, CharSequence, Appendable
 {
+  // Implementation note: if you change this class, you usually will
+  // want to change StringBuilder as well.
+
   /**
    * Compatible with JDK 1.0+.
    */
   private static final long serialVersionUID = 3388685877147921107L;
-
-  /**
-   * Index of next available character (and thus the size of the current
-   * string contents).  Note that this has permissions set this way so that
-   * String can get the value.
-   *
-   * @serial the number of characters in the buffer
-   */
-  int count;
-
-  /**
-   * The buffer.  Note that this has permissions set this way so that String
-   * can get the value.
-   *
-   * @serial the buffer
-   */
-  char[] value;
 
   /**
    * True if the buffer is shared with another object (StringBuffer or
@@ -106,16 +95,11 @@ public final class StringBuffer implements Serializable, CharSequence
   boolean shared;
 
   /**
-   * The default capacity of a buffer.
-   */
-  private final static int DEFAULT_CAPACITY = 16;
-
-  /**
    * Create a new StringBuffer with default capacity 16.
    */
   public StringBuffer()
   {
-    this(DEFAULT_CAPACITY);
+    super();
   }
 
   /**
@@ -127,7 +111,7 @@ public final class StringBuffer implements Serializable, CharSequence
    */
   public StringBuffer(int capacity)
   {
-    value = new char[capacity];
+    super(capacity);
   }
 
   /**
@@ -141,9 +125,22 @@ public final class StringBuffer implements Serializable, CharSequence
   public StringBuffer(String str)
   {
     // Unfortunately, because the size is 16 larger, we cannot share.
-    count = str.count;
-    value = new char[count + DEFAULT_CAPACITY];
-    str.getChars(0, count, value, 0);
+    super(str);
+  }
+
+  /**
+   * Create a new <code>StringBuffer</code> with the characters in the
+   * specified <code>CharSequence</code>. Initial capacity will be the
+   * length of the sequence plus 16; if the sequence reports a length
+   * less than or equal to 0, then the initial capacity will be 16.
+   *
+   * @param seq the initializing <code>CharSequence</code>
+   * @throws NullPointerException if str is null
+   * @since 1.5
+   */
+  public StringBuffer(CharSequence seq)
+  {
+    super(seq);
   }
 
   /**
@@ -202,13 +199,7 @@ public final class StringBuffer implements Serializable, CharSequence
    */
   public synchronized void setLength(int newLength)
   {
-    if (newLength < 0)
-      throw new StringIndexOutOfBoundsException(newLength);
-
-    ensureCapacity_unsynchronized(newLength);
-    while (count < newLength)
-      value[count++] = '\0';
-    count = newLength;
+    super.setLength(newLength);
   }
 
   /**
@@ -221,9 +212,36 @@ public final class StringBuffer implements Serializable, CharSequence
    */
   public synchronized char charAt(int index)
   {
-    if (index < 0 || index >= count)
-      throw new StringIndexOutOfBoundsException(index);
-    return value[index];
+    return super.charAt(index);
+  }
+
+  /**
+   * Get the code point at the specified index.  This is like #charAt(int),
+   * but if the character is the start of a surrogate pair, and the
+   * following character completes the pair, then the corresponding
+   * supplementary code point is returned.
+   * @param index the index of the codepoint to get, starting at 0
+   * @return the codepoint at the specified index
+   * @throws IndexOutOfBoundsException if index is negative or &gt;= length()
+   * @since 1.5
+   */
+  public synchronized int codePointAt(int index)
+  {
+    return super.codePointAt(index);
+  }
+
+  /**
+   * Get the code point before the specified index.  This is like
+   * #codePointAt(int), but checks the characters at <code>index-1</code> and
+   * <code>index-2</code> to see if they form a supplementary code point.
+   * @param index the index just past the codepoint to get, starting at 0
+   * @return the codepoint at the specified index
+   * @throws IndexOutOfBoundsException if index is negative or &gt;= length()
+   * @since 1.5
+   */
+  public synchronized int codePointBefore(int index)
+  {
+    return super.codePointBefore(index);
   }
 
   /**
@@ -244,9 +262,7 @@ public final class StringBuffer implements Serializable, CharSequence
   public synchronized void getChars(int srcOffset, int srcEnd,
                                     char[] dst, int dstOffset)
   {
-    if (srcOffset < 0 || srcEnd > count || srcEnd < srcOffset)
-      throw new StringIndexOutOfBoundsException();
-    System.arraycopy(value, srcOffset, dst, dstOffset, srcEnd - srcOffset);
+    super.getChars(srcOffset, srcEnd, dst, dstOffset);
   }
 
   /**
@@ -259,11 +275,7 @@ public final class StringBuffer implements Serializable, CharSequence
    */
   public synchronized void setCharAt(int index, char ch)
   {
-    if (index < 0 || index >= count)
-      throw new StringIndexOutOfBoundsException(index);
-    // Call ensureCapacity to enforce copy-on-write.
-    ensureCapacity_unsynchronized(count);
-    value[index] = ch;
+    super.setCharAt(index, ch);
   }
 
   /**
@@ -276,9 +288,10 @@ public final class StringBuffer implements Serializable, CharSequence
    * @see String#valueOf(Object)
    * @see #append(String)
    */
-  public StringBuffer append(Object obj)
+  public synchronized StringBuffer append(Object obj)
   {
-    return append(obj == null ? "null" : obj.toString());
+    super.append(obj);
+    return this;
   }
 
   /**
@@ -290,12 +303,7 @@ public final class StringBuffer implements Serializable, CharSequence
    */
   public synchronized StringBuffer append(String str)
   {
-    if (str == null)
-      str = "null";
-    int len = str.count;
-    ensureCapacity_unsynchronized(count + len);
-    str.getChars(0, len, value, count);
-    count += len;
+    super.append(str);
     return this;
   }
 
@@ -311,15 +319,7 @@ public final class StringBuffer implements Serializable, CharSequence
    */
   public synchronized StringBuffer append(StringBuffer stringBuffer)
   {
-    if (stringBuffer == null)
-      return append("null");
-    synchronized (stringBuffer)
-      {
-        int len = stringBuffer.count;
-        ensureCapacity_unsynchronized(count + len);
-        System.arraycopy(stringBuffer.value, 0, value, count, len);
-        count += len;
-      }
+    super.append(stringBuffer);
     return this;
   }
 
@@ -333,9 +333,10 @@ public final class StringBuffer implements Serializable, CharSequence
    * @throws NullPointerException if <code>str</code> is <code>null</code>
    * @see #append(char[], int, int)
    */
-  public StringBuffer append(char[] data)
+  public synchronized StringBuffer append(char[] data)
   {
-    return append(data, 0, data.length);
+    super.append(data, 0, data.length);
+    return this;
   }
 
   /**
@@ -354,11 +355,7 @@ public final class StringBuffer implements Serializable, CharSequence
    */
   public synchronized StringBuffer append(char[] data, int offset, int count)
   {
-    if (offset < 0 || count < 0 || offset > data.length - count)
-      throw new StringIndexOutOfBoundsException();
-    ensureCapacity_unsynchronized(this.count + count);
-    System.arraycopy(data, offset, value, this.count, count);
-    this.count += count;
+    super.append(data, offset, count);
     return this;
   }
 
@@ -371,21 +368,52 @@ public final class StringBuffer implements Serializable, CharSequence
    * @return this <code>StringBuffer</code>
    * @see String#valueOf(boolean)
    */
-  public StringBuffer append(boolean bool)
+  public synchronized StringBuffer append(boolean bool)
   {
-    return append(bool ? "true" : "false");
+    super.append(bool);
+    return this;
   }
 
   /**
    * Append the <code>char</code> to this <code>StringBuffer</code>.
    *
-   * @param c the <code>char</code> to append
+   * @param ch the <code>char</code> to append
    * @return this <code>StringBuffer</code>
    */
   public synchronized StringBuffer append(char ch)
   {
-    ensureCapacity_unsynchronized(count + 1);
-    value[count++] = ch;
+    super.append(ch);
+    return this;
+  }
+
+  /**
+   * Append the characters in the <code>CharSequence</code> to this
+   * buffer.
+   *
+   * @param seq the <code>CharSequence</code> providing the characters
+   * @return this <code>StringBuffer</code>
+   * @since 1.5
+   */
+  public synchronized StringBuffer append(CharSequence seq)
+  {
+    super.append(seq, 0, seq.length());
+    return this;
+  }
+
+  /**
+   * Append some characters from the <code>CharSequence</code> to this
+   * buffer.  If the argument is null, the four characters "null" are
+   * appended.
+   *
+   * @param seq the <code>CharSequence</code> providing the characters
+   * @param start the starting index
+   * @param end one past the final index
+   * @return this <code>StringBuffer</code>
+   * @since 1.5
+   */
+  public synchronized StringBuffer append(CharSequence seq, int start, int end)
+  {
+    super.append(seq, start, end);
     return this;
   }
 
@@ -398,8 +426,12 @@ public final class StringBuffer implements Serializable, CharSequence
    * @return this <code>StringBuffer</code>
    * @see String#valueOf(int)
    */
-  // GCJ LOCAL: this is native for efficiency.
-  public native StringBuffer append (int inum);
+  // This is native in libgcj, for efficiency.
+  public synchronized StringBuffer append(int inum)
+  {
+    super.append(inum);
+    return this;
+  }
 
   /**
    * Append the <code>String</code> value of the argument to this
@@ -410,9 +442,10 @@ public final class StringBuffer implements Serializable, CharSequence
    * @return this <code>StringBuffer</code>
    * @see String#valueOf(long)
    */
-  public StringBuffer append(long lnum)
+  public synchronized StringBuffer append(long lnum)
   {
-    return append(Long.toString(lnum, 10));
+    super.append(lnum);
+    return this;
   }
 
   /**
@@ -424,9 +457,10 @@ public final class StringBuffer implements Serializable, CharSequence
    * @return this <code>StringBuffer</code>
    * @see String#valueOf(float)
    */
-  public StringBuffer append(float fnum)
+  public synchronized StringBuffer append(float fnum)
   {
-    return append(Float.toString(fnum));
+    super.append(fnum);
+    return this;
   }
 
   /**
@@ -438,9 +472,26 @@ public final class StringBuffer implements Serializable, CharSequence
    * @return this <code>StringBuffer</code>
    * @see String#valueOf(double)
    */
-  public StringBuffer append(double dnum)
+  public synchronized StringBuffer append(double dnum)
   {
-    return append(Double.toString(dnum));
+    super.append(dnum);
+    return this;
+  }
+
+  /**
+   * Append the code point to this <code>StringBuffer</code>.
+   * This is like #append(char), but will append two characters
+   * if a supplementary code point is given.
+   *
+   * @param code the code point to append
+   * @return this <code>StringBuffer</code>
+   * @see Character#toChars(int, char[], int)
+   * @since 1.5
+   */
+  public synchronized StringBuffer appendCodePoint(int code)
+  {
+    super.appendCodePoint(code);
+    return this;
   }
 
   /**
@@ -456,15 +507,8 @@ public final class StringBuffer implements Serializable, CharSequence
    */
   public synchronized StringBuffer delete(int start, int end)
   {
-    if (start < 0 || start > count || start > end)
-      throw new StringIndexOutOfBoundsException(start);
-    if (end > count)
-      end = count;
     // This will unshare if required.
-    ensureCapacity_unsynchronized(count);
-    if (count - end != 0)
-      System.arraycopy(value, end, value, start, count - end);
-    count -= end - start;
+    super.delete(start, end);
     return this;
   }
 
@@ -476,9 +520,10 @@ public final class StringBuffer implements Serializable, CharSequence
    * @throws StringIndexOutOfBoundsException if index is out of bounds
    * @since 1.2
    */
-  public StringBuffer deleteCharAt(int index)
+  public synchronized StringBuffer deleteCharAt(int index)
   {
-    return delete(index, index + 1);
+    super.deleteCharAt(index);
+    return this;
   }
 
   /**
@@ -497,19 +542,7 @@ public final class StringBuffer implements Serializable, CharSequence
    */
   public synchronized StringBuffer replace(int start, int end, String str)
   {
-    if (start < 0 || start > count || start > end)
-      throw new StringIndexOutOfBoundsException(start);
-
-    int len = str.count;
-    // Calculate the difference in 'count' after the replace.
-    int delta = len - (end > count ? count : end) + start;
-    ensureCapacity_unsynchronized(count + delta);
-
-    if (delta != 0 && end < count)
-      System.arraycopy(value, end, value, end + delta, count - end);
-
-    str.getChars(0, len, value, start);
-    count += delta;
+    super.replace(start, end, str);
     return this;
   }
 
@@ -589,13 +622,7 @@ public final class StringBuffer implements Serializable, CharSequence
   public synchronized StringBuffer insert(int offset,
                                           char[] str, int str_offset, int len)
   {
-    if (offset < 0 || offset > count || len < 0
-        || str_offset < 0 || str_offset > str.length - len)
-      throw new StringIndexOutOfBoundsException();
-    ensureCapacity_unsynchronized(count + len);
-    System.arraycopy(value, offset, value, offset + len, count - offset);
-    System.arraycopy(str, str_offset, value, offset, len);
-    count += len;
+    super.insert(offset, str, str_offset, len);
     return this;
   }
 
@@ -610,9 +637,10 @@ public final class StringBuffer implements Serializable, CharSequence
    * @exception StringIndexOutOfBoundsException if offset is out of bounds
    * @see String#valueOf(Object)
    */
-  public StringBuffer insert(int offset, Object obj)
+  public synchronized StringBuffer insert(int offset, Object obj)
   {
-    return insert(offset, obj == null ? "null" : obj.toString());
+    super.insert(offset, obj);
+    return this;
   }
 
   /**
@@ -627,15 +655,45 @@ public final class StringBuffer implements Serializable, CharSequence
    */
   public synchronized StringBuffer insert(int offset, String str)
   {
-    if (offset < 0 || offset > count)
-      throw new StringIndexOutOfBoundsException(offset);
-    if (str == null)
-      str = "null";
-    int len = str.count;
-    ensureCapacity_unsynchronized(count + len);
-    System.arraycopy(value, offset, value, offset + len, count - offset);
-    str.getChars(0, len, value, offset);
-    count += len;
+    super.insert(offset, str);
+    return this;
+  }
+
+  /**
+   * Insert the <code>CharSequence</code> argument into this
+   * <code>StringBuffer</code>.  If the sequence is null, the String
+   * "null" is used instead.
+   *
+   * @param offset the place to insert in this buffer
+   * @param sequence the <code>CharSequence</code> to insert
+   * @return this <code>StringBuffer</code>
+   * @throws IndexOutOfBoundsException if offset is out of bounds
+   * @since 1.5
+   */
+  public synchronized StringBuffer insert(int offset, CharSequence sequence)
+  {
+    super.insert(offset, sequence);
+    return this;
+  }
+
+  /**
+   * Insert a subsequence of the <code>CharSequence</code> argument into this
+   * <code>StringBuffer</code>.  If the sequence is null, the String
+   * "null" is used instead.
+   *
+   * @param offset the place to insert in this buffer
+   * @param sequence the <code>CharSequence</code> to insert
+   * @param start the starting index of the subsequence
+   * @param end one past the ending index of the subsequence
+   * @return this <code>StringBuffer</code>
+   * @throws IndexOutOfBoundsException if offset, start,
+   * or end are out of bounds
+   * @since 1.5
+   */
+  public synchronized StringBuffer insert(int offset, CharSequence sequence,
+					  int start, int end)
+  {
+    super.insert(offset, sequence, start, end);
     return this;
   }
 
@@ -650,9 +708,10 @@ public final class StringBuffer implements Serializable, CharSequence
    * @throws StringIndexOutOfBoundsException if offset is out of bounds
    * @see #insert(int, char[], int, int)
    */
-  public StringBuffer insert(int offset, char[] data)
+  public synchronized StringBuffer insert(int offset, char[] data)
   {
-    return insert(offset, data, 0, data.length);
+    super.insert(offset, data, 0, data.length);
+    return this;
   }
 
   /**
@@ -666,9 +725,10 @@ public final class StringBuffer implements Serializable, CharSequence
    * @throws StringIndexOutOfBoundsException if offset is out of bounds
    * @see String#valueOf(boolean)
    */
-  public StringBuffer insert(int offset, boolean bool)
+  public synchronized StringBuffer insert(int offset, boolean bool)
   {
-    return insert(offset, bool ? "true" : "false");
+    super.insert(offset, bool);
+    return this;
   }
 
   /**
@@ -681,12 +741,7 @@ public final class StringBuffer implements Serializable, CharSequence
    */
   public synchronized StringBuffer insert(int offset, char ch)
   {
-    if (offset < 0 || offset > count)
-      throw new StringIndexOutOfBoundsException(offset);
-    ensureCapacity_unsynchronized(count + 1);
-    System.arraycopy(value, offset, value, offset + 1, count - offset);
-    value[offset] = ch;
-    count++;
+    super.insert(offset, ch);
     return this;
   }
 
@@ -701,9 +756,10 @@ public final class StringBuffer implements Serializable, CharSequence
    * @throws StringIndexOutOfBoundsException if offset is out of bounds
    * @see String#valueOf(int)
    */
-  public StringBuffer insert(int offset, int inum)
+  public synchronized StringBuffer insert(int offset, int inum)
   {
-    return insert(offset, String.valueOf(inum));
+    super.insert(offset, inum);
+    return this;
   }
 
   /**
@@ -717,9 +773,10 @@ public final class StringBuffer implements Serializable, CharSequence
    * @throws StringIndexOutOfBoundsException if offset is out of bounds
    * @see String#valueOf(long)
    */
-  public StringBuffer insert(int offset, long lnum)
+  public synchronized StringBuffer insert(int offset, long lnum)
   {
-    return insert(offset, Long.toString(lnum, 10));
+    super.insert(offset, lnum);
+    return this;
   }
 
   /**
@@ -733,9 +790,10 @@ public final class StringBuffer implements Serializable, CharSequence
    * @throws StringIndexOutOfBoundsException if offset is out of bounds
    * @see String#valueOf(float)
    */
-  public StringBuffer insert(int offset, float fnum)
+  public synchronized StringBuffer insert(int offset, float fnum)
   {
-    return insert(offset, Float.toString(fnum));
+    super.insert(offset, fnum);
+    return this;
   }
 
   /**
@@ -749,9 +807,10 @@ public final class StringBuffer implements Serializable, CharSequence
    * @throws StringIndexOutOfBoundsException if offset is out of bounds
    * @see String#valueOf(double)
    */
-  public StringBuffer insert(int offset, double dnum)
+  public synchronized StringBuffer insert(int offset, double dnum)
   {
-    return insert(offset, Double.toString(dnum));
+    super.insert(offset, dnum);
+    return this;
   }
 
   /**
@@ -763,9 +822,9 @@ public final class StringBuffer implements Serializable, CharSequence
    * @see #indexOf(String, int)
    * @since 1.4
    */
-  public int indexOf(String str)
+  public synchronized int indexOf(String str)
   {
-    return indexOf(str, 0);
+    return super.indexOf(str, 0);
   }
 
   /**
@@ -782,13 +841,7 @@ public final class StringBuffer implements Serializable, CharSequence
    */
   public synchronized int indexOf(String str, int fromIndex)
   {
-    if (fromIndex < 0)
-      fromIndex = 0;
-    int limit = count - str.count;
-    for ( ; fromIndex <= limit; fromIndex++)
-      if (regionMatches(fromIndex, str))
-        return fromIndex;
-    return -1;
+    return super.indexOf(str, fromIndex);
   }
 
   /**
@@ -800,9 +853,9 @@ public final class StringBuffer implements Serializable, CharSequence
    * @see #lastIndexOf(String, int)
    * @since 1.4
    */
-  public int lastIndexOf(String str)
+  public synchronized int lastIndexOf(String str)
   {
-    return lastIndexOf(str, count - str.count);
+    return super.lastIndexOf(str, count - str.count);
   }
 
   /**
@@ -819,11 +872,7 @@ public final class StringBuffer implements Serializable, CharSequence
    */
   public synchronized int lastIndexOf(String str, int fromIndex)
   {
-    fromIndex = Math.min(fromIndex, count - str.count);
-    for ( ; fromIndex >= 0; fromIndex--)
-      if (regionMatches(fromIndex, str))
-        return fromIndex;
-    return -1;
+    return super.lastIndexOf(str, fromIndex);
   }
 
   /**
@@ -834,14 +883,7 @@ public final class StringBuffer implements Serializable, CharSequence
    */
   public synchronized StringBuffer reverse()
   {
-    // Call ensureCapacity to enforce copy-on-write.
-    ensureCapacity_unsynchronized(count);
-    for (int i = count >> 1, j = count - i; --i >= 0; ++j)
-      {
-        char c = value[i];
-        value[i] = value[j];
-        value[j] = c;
-      }
+    super.reverse();
     return this;
   }
 
@@ -860,6 +902,51 @@ public final class StringBuffer implements Serializable, CharSequence
   }
 
   /**
+   * This may reduce the amount of memory used by the StringBuffer,
+   * by resizing the internal array to remove unused space.  However,
+   * this method is not required to resize, so this behavior cannot
+   * be relied upon.
+   * @since 1.5
+   */
+  public synchronized void trimToSize()
+  {
+    super.trimToSize();
+  }
+
+  /**
+   * Return the number of code points between two indices in the
+   * <code>StringBuffer</code>.  An unpaired surrogate counts as a
+   * code point for this purpose.  Characters outside the indicated
+   * range are not examined, even if the range ends in the middle of a
+   * surrogate pair.
+   *
+   * @param start the starting index
+   * @param end one past the ending index
+   * @return the number of code points
+   * @since 1.5
+   */
+  public synchronized int codePointCount(int start, int end)
+  {
+    return super.codePointCount(start, end);
+  }
+
+  /**
+   * Starting at the given index, this counts forward by the indicated
+   * number of code points, and then returns the resulting index.  An
+   * unpaired surrogate counts as a single code point for this
+   * purpose.
+   *
+   * @param start the starting index
+   * @param codePoints the number of code points
+   * @return the resulting index
+   * @since 1.5
+   */
+  public synchronized int offsetByCodePoints(int start, int codePoints)
+  {
+    return super.offsetByCodePoints(start, codePoints);
+  }
+
+  /**
    * An unsynchronized version of ensureCapacity, used internally to avoid
    * the cost of a second lock on the same object. This also has the side
    * effect of duplicating the array, if it was shared (to form copy-on-write
@@ -868,7 +955,7 @@ public final class StringBuffer implements Serializable, CharSequence
    * @param minimumCapacity the minimum capacity
    * @see #ensureCapacity(int)
    */
-  private void ensureCapacity_unsynchronized(int minimumCapacity)
+  void ensureCapacity_unsynchronized(int minimumCapacity)
   {
     if (shared || minimumCapacity > value.length)
       {
@@ -886,19 +973,4 @@ public final class StringBuffer implements Serializable, CharSequence
       }
   }
 
-  /**
-   * Predicate which determines if a substring of this matches another String
-   * starting at a specified offset for each String and continuing for a
-   * specified length. This is more efficient than creating a String to call
-   * indexOf on.
-   *
-   * @param toffset index to start comparison at for this String
-   * @param other non-null String to compare to region of this
-   * @return true if regions match, false otherwise
-   * @see #indexOf(String, int)
-   * @see #lastIndexOf(String, int)
-   * @see String#regionMatches(boolean, int, String, int, int)
-   */
-  // GCJ LOCAL: native for gcj.
-  private native boolean regionMatches(int toffset, String other);
 }

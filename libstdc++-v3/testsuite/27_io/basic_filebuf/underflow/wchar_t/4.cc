@@ -1,12 +1,14 @@
+// { dg-require-namedlocale "se_NO.UTF-8" }
+
 // 2003-09-04  Petur Runolfsson  <peturr02@ru.is>
 // Adapted from 27_io/basic_filebuf/underflow/char/2.cc
 
-// Copyright (C) 2003 Free Software Foundation, Inc.
+// Copyright (C) 2003, 2005, 2009 Free Software Foundation, Inc.
 //
 // This file is part of the GNU ISO C++ Library.  This library is free
 // software; you can redistribute it and/or modify it under the
 // terms of the GNU General Public License as published by the
-// Free Software Foundation; either version 2, or (at your option)
+// Free Software Foundation; either version 3, or (at your option)
 // any later version.
 
 // This library is distributed in the hope that it will be useful,
@@ -15,9 +17,8 @@
 // GNU General Public License for more details.
 
 // You should have received a copy of the GNU General Public License along
-// with this library; see the file COPYING.  If not, write to the Free
-// Software Foundation, 59 Temple Place - Suite 330, Boston, MA 02111-1307,
-// USA.
+// with this library; see the file COPYING3.  If not see
+// <http://www.gnu.org/licenses/>.
 
 // 27.8.1.4 Overridden virtual functions
 
@@ -30,7 +31,7 @@ void test01()
   bool test __attribute__((unused)) = true;
   using namespace std;
 
-  locale loc (__gnu_test::try_named_locale("se_NO.UTF-8"));
+  locale loc (locale("se_NO.UTF-8"));
   wfilebuf fb_out, fb_in_out;
   fb_out.pubimbue(loc);
   fb_in_out.pubimbue(loc);

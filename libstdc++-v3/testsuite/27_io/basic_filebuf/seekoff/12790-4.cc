@@ -1,9 +1,9 @@
-// Copyright (C) 2003 Free Software Foundation, Inc.
+// Copyright (C) 2003, 2005, 2009, 2010 Free Software Foundation, Inc.
 //
 // This file is part of the GNU ISO C++ Library.  This library is free
 // software; you can redistribute it and/or modify it under the
 // terms of the GNU General Public License as published by the
-// Free Software Foundation; either version 2, or (at your option)
+// Free Software Foundation; either version 3, or (at your option)
 // any later version.
 
 // This library is distributed in the hope that it will be useful,
@@ -12,11 +12,12 @@
 // GNU General Public License for more details.
 
 // You should have received a copy of the GNU General Public License along
-// with this library; see the file COPYING.  If not, write to the Free
-// Software Foundation, 59 Temple Place - Suite 330, Boston, MA 02111-1307,
-// USA.
+// with this library; see the file COPYING3.  If not see
+// <http://www.gnu.org/licenses/>.
 
 // 27.8.1.4 Overridden virtual functions
+
+// { dg-require-fileio "" }
 
 #include <locale>
 #include <fstream>
@@ -27,8 +28,8 @@
 void test01()
 {
   using namespace std;
-  using __gnu_test::character;
-  typedef basic_filebuf<character>::traits_type traits_type;
+  using __gnu_test::pod_uchar;
+  typedef basic_filebuf<pod_uchar>::traits_type traits_type;
 
   bool test __attribute__((unused)) = true;
   const char* name = "tmp_seekoff_12790";
@@ -37,20 +38,20 @@ void test01()
 	     new codecvt<traits_type::char_type, char,
 	     traits_type::state_type>);
 
-  basic_filebuf<character> fb;
+  basic_filebuf<pod_uchar> fb;
   fb.pubsetbuf(0, 0);
   fb.pubimbue(loc);
 
   fb.open(name, ios_base::in | ios_base::out | ios_base::trunc);
-  fb.sputc(character::from_char('b'));
-  fb.sputc(character::from_char(0xff));
+  fb.sputc(pod_uchar::from<char>('b'));
+  fb.sputc(pod_uchar::from<char>(0xff));
 
   // Check that seekoff sets the current state during output
-  traits_type::pos_type pos = fb.pubseekoff(0, ios_base::cur);
-  fb.sputc(character::from_char('a'));
-  fb.sputc(character::from_char(0xff));
-  fb.sputc(character::from_char(0));
-  fb.sputc(character::from_char(0));
+  fb.pubseekoff(0, ios_base::cur);
+  fb.sputc(pod_uchar::from<char>('a'));
+  fb.sputc(pod_uchar::from<char>(0xff));
+  fb.sputc(pod_uchar::from<char>(0));
+  fb.sputc(pod_uchar::from<char>(0));
 
   fb.pubseekoff(0, ios_base::beg);
   fb.sbumpc();
@@ -59,7 +60,7 @@ void test01()
   traits_type::int_type c = fb.sbumpc();
   VERIFY( c != traits_type::eof() );
   VERIFY( traits_type::eq(traits_type::to_char_type(c),
-			  character::from_char('a')) );
+			  pod_uchar::from<char>('a')) );
 
   fb.close();
 }

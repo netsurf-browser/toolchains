@@ -1,11 +1,13 @@
+// { dg-require-namedlocale "es_MX" }
+
 // 2000-08-31 Benjamin Kosnik <bkoz@redhat.com>
 
-// Copyright (C) 2000, 2002, 2003 Free Software Foundation
+// Copyright (C) 2000, 2002, 2003, 2005, 2009 Free Software Foundation
 //
 // This file is part of the GNU ISO C++ Library.  This library is free
 // software; you can redistribute it and/or modify it under the
 // terms of the GNU General Public License as published by the
-// Free Software Foundation; either version 2, or (at your option)
+// Free Software Foundation; either version 3, or (at your option)
 // any later version.
 
 // This library is distributed in the hope that it will be useful,
@@ -14,9 +16,8 @@
 // GNU General Public License for more details.
 
 // You should have received a copy of the GNU General Public License along
-// with this library; see the file COPYING.  If not, write to the Free
-// Software Foundation, 59 Temple Place - Suite 330, Boston, MA 02111-1307,
-// USA.
+// with this library; see the file COPYING3.  If not see
+// <http://www.gnu.org/licenses/>.
 
 // 22.1.1.1.2 - class locale::facet [lib.locale.facet]
 
@@ -83,7 +84,7 @@ void test02()
   // 4: Named locale should destroy facets when it goes out of scope.
   // Not quite sure how to test for this w/o valgrind at the moment.
   {
-    locale loc03 = __gnu_test::try_named_locale("es_MX");
+    locale loc03 = locale("es_MX");
   }
 }
 

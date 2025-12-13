@@ -11,6 +11,9 @@
    marker.  Self-recursion tail calls are optimized for all targets,
    regardless of presence of sibcall patterns.  */
 
+extern void abort (void);
+extern void exit (int);
+
 extern void recurser_void (int);
 extern void track (int);
 
@@ -34,7 +37,7 @@ recurser_void (int n)
 
 void *trackpoint;
 
-void
+void __attribute__ ((noinline))
 track (int n)
 {
   char stackpos[1];

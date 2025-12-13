@@ -1,9 +1,15 @@
-// Copyright (C) 2004 Free Software Foundation
+// Before Solaris 11, iconv -f ISO-8859-1 -t ISO-8859-1 fails with
+// Not supported ISO-8859-1 to ISO-8859-1
+//
+// { dg-do run { xfail *-*-solaris2.[89] *-*-solaris2.10 } }
+// { dg-require-iconv "ISO-8859-1" }
+
+// Copyright (C) 2004, 2005, 2006, 2007, 2009, 2010 Free Software Foundation
 //
 // This file is part of the GNU ISO C++ Library.  This library is free
 // software; you can redistribute it and/or modify it under the
 // terms of the GNU General Public License as published by the
-// Free Software Foundation; either version 2, or (at your option)
+// Free Software Foundation; either version 3, or (at your option)
 // any later version.
 
 // This library is distributed in the hope that it will be useful,
@@ -12,36 +18,36 @@
 // GNU General Public License for more details.
 
 // You should have received a copy of the GNU General Public License along
-// with this library; see the file COPYING.  If not, write to the Free
-// Software Foundation, 59 Temple Place - Suite 330, Boston, MA 02111-1307,
-// USA.
+// with this library; see the file COPYING3.  If not see
+// <http://www.gnu.org/licenses/>.
 
 #include <locale>
 #include <cstring>
-#include <cassert>
-#ifdef _GLIBCXX_USE___ENC_TRAITS
+#include <cstddef>
+#include <testsuite_hooks.h>
 #include <ext/enc_filebuf.h>
-#endif
 
 int main()
 {
-#ifdef _GLIBCXX_USE___ENC_TRAITS
-  const char* str = "Hello, world!\n";
+  bool test __attribute__((unused)) = true;
+  typedef char char_type;
+  typedef __gnu_cxx::enc_filebuf<char_type> filebuf_type;
+  typedef filebuf_type::state_type state_type;
 
+  const char* str = "Hello, world!\n";
   std::locale loc(std::locale::classic(),
-		  new std::codecvt<char, char, std::__enc_traits>());
-  std::__enc_traits st("ISO-8859-1", "ISO-8859-1");
-  __gnu_cxx::enc_filebuf<char> fb(st);
+		  new std::codecvt<char, char, __gnu_cxx::encoding_state>());
+  state_type st("ISO-8859-1", "ISO-8859-1");
+  filebuf_type fb(st);
   fb.pubimbue(loc);
 
   fb.open("tmp_13598", std::ios_base::out);
   std::streamsize n = fb.sputn(str, std::strlen(str));
   int s = fb.pubsync();
   fb.close();
-  
-  assert(n == std::strlen(str));
-  assert(s == 0);
-#endif
+
+  VERIFY( std::size_t(n) == std::strlen(str) );
+  VERIFY( s == 0 );
   
   return 0;
 }

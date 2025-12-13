@@ -2,14 +2,28 @@
    adapted for gcc by Paul Bame <bame@debian.org>
    and Alan Modra <alan@linuxcare.com.au>.
 
-   Copyright 2001, 2002, 2003 Free Software Foundation, Inc.
+   Copyright 2001, 2002, 2003, 2007, 2009 Free Software Foundation, Inc.
 
-   This file is part of GCC and is released under the terms of
-   of the GNU General Public License as published by the Free Software
-   Foundation; either version 2, or (at your option) any later version.
-   See the file COPYING in the top-level GCC source directory for a copy
-   of the license.  */
+This file is part of GCC.
 
+GCC is free software; you can redistribute it and/or modify it under
+the terms of the GNU General Public License as published by the Free
+Software Foundation; either version 3, or (at your option) any later
+version.
+
+GCC is distributed in the hope that it will be useful, but WITHOUT ANY
+WARRANTY; without even the implied warranty of MERCHANTABILITY or
+FITNESS FOR A PARTICULAR PURPOSE.  See the GNU General Public License
+for more details.
+
+Under Section 7 of GPL version 3, you are granted additional
+permissions described in the GCC Runtime Library Exception, version
+3.1, as published by the Free Software Foundation.
+
+You should have received a copy of the GNU General Public License and
+a copy of the GCC Runtime Library Exception along with this program;
+see the files COPYING3 and COPYING.RUNTIME respectively.  If not, see
+<http://www.gnu.org/licenses/>.  */
 
 #ifdef pa64
         .level  2.0w
@@ -411,7 +425,7 @@ LSYM(small_divisor)
 
 #if defined(pa64)
 /*  Clear the upper 32 bits of the arg1 register.  We are working with	*/
-/*  small divisors (and 32 bit integers)   We must not be mislead  */
+/*  small divisors (and 32-bit integers)   We must not be mislead  */
 /*  by "1" bits left in the upper 32 bits.  */
 	depd %r0,31,32,%r25
 #endif
@@ -626,7 +640,7 @@ LSYM(special_divisor)
 
 #if defined(pa64)
 /* Clear the upper 32 bits of the arg1 register.  We are working with
-   small divisors (and 32 bit unsigned integers)   We must not be mislead
+   small divisors (and 32-bit unsigned integers)   We must not be mislead
    by "1" bits left in the upper 32 bits.  */
 	depd %r0,31,32,%r25
 #endif
@@ -1300,14 +1314,14 @@ GSYM($$divI_3)
 	.export		$$divI_3,millicode
 	comb,<,N	x2,0,LREF(neg3)
 
-	addi		1,x2,x2		/* this can not overflow	*/
+	addi		1,x2,x2		/* this cannot overflow	*/
 	extru		x2,1,2,x1	/* multiply by 5 to get started */
 	sh2add		x2,x2,x2
 	b		LREF(pos)
 	addc		x1,0,x1
 
 LSYM(neg3)
-	subi		1,x2,x2		/* this can not overflow	*/
+	subi		1,x2,x2		/* this cannot overflow	*/
 	extru		x2,1,2,x1	/* multiply by 5 to get started */
 	sh2add		x2,x2,x2
 	b		LREF(neg)
@@ -1328,14 +1342,14 @@ GSYM($$divI_5)
 	.export		$$divI_5,millicode
 	comb,<,N	x2,0,LREF(neg5)
 
-	addi		3,x2,t1		/* this can not overflow	*/
+	addi		3,x2,t1		/* this cannot overflow	*/
 	sh1add		x2,t1,x2	/* multiply by 3 to get started */
 	b		LREF(pos)
 	addc		0,0,x1
 
 LSYM(neg5)
 	sub		0,x2,x2		/* negate x2			*/
-	addi		1,x2,x2		/* this can not overflow	*/
+	addi		1,x2,x2		/* this cannot overflow	*/
 	shd		0,x2,31,x1	/* get top bit (can be 1)	*/
 	sh1add		x2,x2,x2	/* multiply by 3 to get started */
 	b		LREF(neg)
@@ -1373,7 +1387,7 @@ LSYM(neg6)
 GSYM($$divU_6)
 	.export		$$divU_6,millicode
 	extru		x2,30,31,x2	/* divide by 2 */
-	addi		1,x2,x2		/* can not carry */
+	addi		1,x2,x2		/* cannot carry */
 	shd		0,x2,30,x1	/* multiply by 5 to get started */
 	sh2add		x2,x2,x2
 	b		LREF(pos)
@@ -1408,7 +1422,7 @@ GSYM($$divI_10)
 	comb,<		x2,0,LREF(neg10)
 	copy		0,x1
 	extru		x2,30,31,x2	/* divide by 2 */
-	addib,TR	1,x2,LREF(pos)	/* add 1 (can not overflow)     */
+	addib,TR	1,x2,LREF(pos)	/* add 1 (cannot overflow)     */
 	sh1add		x2,x2,x2	/* multiply by 3 to get started */
 
 LSYM(neg10)
@@ -1455,7 +1469,7 @@ LSYM(neg12)
 GSYM($$divU_12)
 	.export		$$divU_12,millicode
 	extru		x2,29,30,x2	/* divide by 4   */
-	addi		5,x2,t1		/* can not carry */
+	addi		5,x2,t1		/* cannot carry */
 	sh2add		x2,t1,x2	/* multiply by 5 to get started */
 	b		LREF(pos)
 	addc		0,0,x1
@@ -1482,7 +1496,7 @@ GSYM($$divU_15)
 GSYM($$divI_17)
 	.export		$$divI_17,millicode
 	comb,<,n	x2,0,LREF(neg17)
-	addi		1,x2,x2		/* this can not overflow */
+	addi		1,x2,x2		/* this cannot overflow */
 	shd		0,x2,28,t1	/* multiply by 0xf to get started */
 	shd		x2,0,28,t2
 	sub		t2,x2,x2
@@ -1490,7 +1504,7 @@ GSYM($$divI_17)
 	subb		t1,0,x1
 
 LSYM(neg17)
-	subi		1,x2,x2		/* this can not overflow */
+	subi		1,x2,x2		/* this cannot overflow */
 	shd		0,x2,28,t1	/* multiply by 0xf to get started */
 	shd		x2,0,28,t2
 	sub		t2,x2,x2
@@ -1540,7 +1554,7 @@ GSYM($$divI_7)
 	.export		$$divI_7,millicode
 	comb,<,n	x2,0,LREF(neg7)
 LSYM(7)
-	addi		1,x2,x2		/* can not overflow */
+	addi		1,x2,x2		/* cannot overflow */
 	shd		0,x2,29,x1
 	sh3add		x2,x2,x2
 	addc		x1,0,x1
@@ -1615,7 +1629,7 @@ GSYM($$divU_7)
 GSYM($$divI_9)
 	.export		$$divI_9,millicode
 	comb,<,n	x2,0,LREF(neg9)
-	addi		1,x2,x2		/* can not overflow */
+	addi		1,x2,x2		/* cannot overflow */
 	shd		0,x2,29,t1
 	shd		x2,0,29,t2
 	sub		t2,x2,x2

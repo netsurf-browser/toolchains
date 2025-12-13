@@ -6,25 +6,23 @@
 --                                                                          --
 --                                 S p e c                                  --
 --                                                                          --
---          Copyright (C) 1992-2003 Free Software Foundation, Inc.          --
+--          Copyright (C) 1992-2010, Free Software Foundation, Inc.         --
 --                                                                          --
 -- GNAT is free software;  you can  redistribute it  and/or modify it under --
 -- terms of the  GNU General Public License as published  by the Free Soft- --
--- ware  Foundation;  either version 2,  or (at your option) any later ver- --
+-- ware  Foundation;  either version 3,  or (at your option) any later ver- --
 -- sion.  GNAT is distributed in the hope that it will be useful, but WITH- --
 -- OUT ANY WARRANTY;  without even the  implied warranty of MERCHANTABILITY --
--- or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU General Public License --
--- for  more details.  You should have  received  a copy of the GNU General --
--- Public License  distributed with GNAT;  see file COPYING.  If not, write --
--- to  the Free Software Foundation,  59 Temple Place - Suite 330,  Boston, --
--- MA 02111-1307, USA.                                                      --
+-- or FITNESS FOR A PARTICULAR PURPOSE.                                     --
 --                                                                          --
--- As a special exception,  if other files  instantiate  generics from this --
--- unit, or you link  this unit with other files  to produce an executable, --
--- this  unit  does not  by itself cause  the resulting  executable  to  be --
--- covered  by the  GNU  General  Public  License.  This exception does not --
--- however invalidate  any other reasons why  the executable file  might be --
--- covered by the  GNU Public License.                                      --
+-- As a special exception under Section 7 of GPL version 3, you are granted --
+-- additional permissions described in the GCC Runtime Library Exception,   --
+-- version 3.1, as published by the Free Software Foundation.               --
+--                                                                          --
+-- You should have received a copy of the GNU General Public License and    --
+-- a copy of the GCC Runtime Library Exception along with this program;     --
+-- see the files COPYING3 and COPYING.RUNTIME respectively.  If not, see    --
+-- <http://www.gnu.org/licenses/>.                                          --
 --                                                                          --
 -- GNAT was originally developed  by the GNAT team at  New York University. --
 -- Extensive contributions were provided by Ada Core Technologies Inc.      --
@@ -33,6 +31,7 @@
 
 with Alloc;
 with Table;
+with Hostparm; use Hostparm;
 with System;   use System;
 with Types;    use Types;
 
@@ -48,18 +47,18 @@ package Namet is
 
 --  The forms of the entries are as follows:
 
---    Identifiers        Stored with upper case letters folded to lower case.
---                       Upper half (16#80# bit set) and wide characters are
---                       stored in an encoded form (Uhh for upper half and
---                       Whhhh for wide characters, as provided by the routine
---                       Store_Encoded_Character, where hh are hex digits for
---                       the character code using lower case a-f). Normally
---                       the use of U or W in other internal names is avoided,
---                       but these letters may be used in internal names
---                       (without this special meaning), if the appear as
---                       the last character of the name, or they are followed
---                       by an upper case letter or an underscore.
-
+--    Identifiers Stored with upper case letters folded to lower case. Upper
+--                       half (16#80# bit set) and wide characters are stored
+--                       in an encoded form (Uhh for upper half char, Whhhh
+--                       for wide characters, WWhhhhhhhh as provided by the
+--                       routine Store_Encoded_Character, where hh are hex
+--                       digits for the character code using lower case a-f).
+--                       Normally the use of U or W in other internal names is
+--                       avoided, but these letters may be used in internal
+--                       names (without this special meaning), if they appear
+--                       as the last character of the name, or they are
+--                       followed by an upper case letter (other than the WW
+--                       sequence), or an underscore.
 
 --    Operator symbols   Stored with an initial letter O, and the remainder
 --                       of the name is the lower case characters XXX where
@@ -71,9 +70,9 @@ package Namet is
 --                       followed by an upper case letter or an underscore.
 
 --    Character literals Character literals have names that are used only for
---                       debugging and error message purposes. The form is a
+--                       debugging and error message purposes. The form is an
 --                       upper case Q followed by a single lower case letter,
---                       or by a Uxx or Wxxxx encoding as described for
+--                       or by a Uxx/Wxxxx/WWxxxxxxx encoding as described for
 --                       identifiers. The Set_Character_Literal_Name procedure
 --                       should be used to construct these encodings. Normally
 --                       the use of O in other internal names is avoided, but
@@ -83,9 +82,9 @@ package Namet is
 --                       underscore.
 
 --    Unit names         Stored with upper case letters folded to lower case,
---                       using Uhh/Whhhh encoding as described for identifiers,
---                       and a %s or %b suffix for specs/bodies. See package
---                       Uname for further details.
+--                       using Uhh/Whhhh/WWhhhhhhhh encoding as described for
+--                       identifiers, and a %s or %b suffix for specs/bodies.
+--                       See package Uname for further details.
 
 --    File names         Are stored in the form provided by Osint. Typically
 --                       they may include wide character escape sequences and
@@ -100,12 +99,12 @@ package Namet is
 --                       characters may appear for such entries.
 
 --  Note: the encodings Uhh (upper half characters), Whhhh (wide characters),
---  and Qx (character literal names) are described in the spec, since they
---  are visible throughout the system (e.g. in debugging output). However,
---  no code should depend on these particular encodings, so it should be
---  possible to change the encodings by making changes only to the Namet
---  specification (to change these comments) and the body (which actually
---  implements the encodings).
+--  WWhhhhhhhh (wide wide characters) and Qx (character literal names) are
+--  described in the spec, since they are visible throughout the system (e.g.
+--  in debugging output). However, no code should depend on these particular
+--  encodings, so it should be possible to change the encodings by making
+--  changes only to the Namet specification (to change these comments) and the
+--  body (which actually implements the encodings).
 
 --  The names are hashed so that a given name appears only once in the table,
 --  except that names entered with Name_Enter as opposed to Name_Find are
@@ -118,23 +117,53 @@ package Namet is
 
 --  Two values, one of type Int and one of type Byte, are stored with each
 --  names table entry and subprograms are provided for setting and retrieving
---  these associated values. The usage of these values is up to the client.
---  In the compiler, the Int field is used to point to a chain of potentially
---  visible entities (see Sem.Ch8 for details), and the Byte field is used
---  to hold the Token_Type value for reserved words (see Sem for details).
---  In the binder, the Byte field is unused, and the Int field is used in
---  various ways depending on the name involved (see binder documentation).
+--  these associated values. The usage of these values is up to the client. In
+--  the compiler, the Int field is used to point to a chain of potentially
+--  visible entities (see Sem.Ch8 for details), and the Byte field is used to
+--  hold the Token_Type value for reserved words (see Sem for details). In the
+--  binder, the Byte field is unused, and the Int field is used in various
+--  ways depending on the name involved (see binder documentation).
 
-   Name_Buffer : String (1 .. 16*1024);
+   Name_Buffer : String (1 .. 4 * Max_Line_Length);
    --  This buffer is used to set the name to be stored in the table for the
    --  Name_Find call, and to retrieve the name for the Get_Name_String call.
-   --  The plus 1 in the length allows for cases of adding ASCII.NUL. The
-   --  16K here is intended to be an infinite value that ensures that we
+   --  The limit here is intended to be an infinite value that ensures that we
    --  never overflow the buffer (names this long are too absurd to worry!)
 
    Name_Len : Natural;
    --  Length of name stored in Name_Buffer. Used as an input parameter for
    --  Name_Find, and as an output value by Get_Name_String, or Write_Name.
+
+   -----------------------------
+   -- Types for Namet Package --
+   -----------------------------
+
+   --  Name_Id values are used to identify entries in the names table. Except
+   --  for the special values No_Name and Error_Name, they are subscript values
+   --  for the Names table defined in this package.
+
+   --  Note that with only a few exceptions, which are clearly documented, the
+   --  type Name_Id should be regarded as a private type. In particular it is
+   --  never appropriate to perform arithmetic operations using this type.
+
+   type Name_Id is range Names_Low_Bound .. Names_High_Bound;
+   for Name_Id'Size use 32;
+   --  Type used to identify entries in the names table
+
+   No_Name : constant Name_Id := Names_Low_Bound;
+   --  The special Name_Id value No_Name is used in the parser to indicate
+   --  a situation where no name is present (e.g. on a loop or block).
+
+   Error_Name : constant Name_Id := Names_Low_Bound +  1;
+   --  The special Name_Id value Error_Name is used in the parser to
+   --  indicate that some kind of error was encountered in scanning out
+   --  the relevant name, so it does not have a representable label.
+
+   subtype Error_Name_Or_No_Name is Name_Id range No_Name .. Error_Name;
+   --  Used to test for either error name or no name
+
+   First_Name_Id : constant Name_Id := Names_Low_Bound + 2;
+   --  Subscript of first entry in names table
 
    -----------------
    -- Subprograms --
@@ -147,28 +176,28 @@ package Namet is
 
    procedure Get_Name_String (Id : Name_Id);
    --  Get_Name_String is used to retrieve the string associated with an entry
-   --  in the names table. The resulting string is stored in Name_Buffer
-   --  and Name_Len is set. It is an error to call Get_Name_String with one
-   --  of the special name Id values (No_Name or Error_Name).
+   --  in the names table. The resulting string is stored in Name_Buffer and
+   --  Name_Len is set. It is an error to call Get_Name_String with one of the
+   --  special name Id values (No_Name or Error_Name).
 
    function Get_Name_String (Id : Name_Id) return String;
    --  This functional form returns the result as a string without affecting
-   --  the contents of either Name_Buffer or Name_Len.
+   --  the contents of either Name_Buffer or Name_Len. The lower bound is 1.
 
    procedure Get_Unqualified_Name_String (Id : Name_Id);
    --  Similar to the above except that qualification (as defined in unit
-   --  Exp_Dbug) is removed (including both preceding __ delimited names,
-   --  and also the suffixes used to indicate package body entities and to
+   --  Exp_Dbug) is removed (including both preceding __ delimited names, and
+   --  also the suffixes used to indicate package body entities and to
    --  distinguish between overloaded entities). Note that names are not
-   --  qualified until just before the call to gigi, so this routine is
-   --  only needed by processing that occurs after gigi has been called.
-   --  This includes all ASIS processing, since ASIS works on the tree
-   --  written after gigi has been called.
+   --  qualified until just before the call to gigi, so this routine is only
+   --  needed by processing that occurs after gigi has been called. This
+   --  includes all ASIS processing, since ASIS works on the tree written
+   --  after gigi has been called.
 
    procedure Get_Name_String_And_Append (Id : Name_Id);
-   --  Like Get_Name_String but the resulting characters are appended to
-   --  the current contents of the entry stored in Name_Buffer, and Name_Len
-   --  is incremented to include the added characters.
+   --  Like Get_Name_String but the resulting characters are appended to the
+   --  current contents of the entry stored in Name_Buffer, and Name_Len is
+   --  incremented to include the added characters.
 
    procedure Get_Decoded_Name_String (Id : Name_Id);
    --  Same calling sequence an interface as Get_Name_String, except that the
@@ -179,22 +208,23 @@ package Namet is
 
    procedure Get_Unqualified_Decoded_Name_String (Id : Name_Id);
    --  Similar to the above except that qualification (as defined in unit
-   --  Exp_Dbug) is removed (including both preceding __ delimited names,
-   --  and also the suffix used to indicate package body entities). Note
-   --  that names are not qualified until just before the call to gigi, so
-   --  this routine is only needed by processing that occurs after gigi has
-   --  been called. This includes all ASIS processing, since ASIS works on
-   --  the tree written after gigi has been called.
+   --  Exp_Dbug) is removed (including both preceding __ delimited names, and
+   --  also the suffix used to indicate package body entities). Note that
+   --  names are not qualified until just before the call to gigi, so this
+   --  routine is only needed by processing that occurs after gigi has been
+   --  called. This includes all ASIS processing, since ASIS works on the tree
+   --  written after gigi has been called.
 
    procedure Get_Decoded_Name_String_With_Brackets (Id : Name_Id);
    --  This routine is similar to Decoded_Name, except that the brackets
-   --  notation (Uhh replaced by ["hh"], Whhhh replaced by ["hhhh"]) is
-   --  used for all non-lower half characters, regardless of the setting
-   --  of Opt.Wide_Character_Encoding_Method, and also in that characters
-   --  in the range 16#80# .. 16#FF# are converted to brackets notation
-   --  in all cases. This routine can be used when there is a requirement
-   --  for a canonical representation not affected by the character set
-   --  options (e.g. in the binder generation of symbols).
+   --  notation (Uhh replaced by ["hh"], Whhhh replaced by ["hhhh"],
+   --  WWhhhhhhhh replaced by ["hhhhhhhh"]) is used for all non-lower half
+   --  characters, regardless of how Opt.Wide_Character_Encoding_Method is
+   --  set, and also in that characters in the range 16#80# .. 16#FF# are
+   --  converted to brackets notation in all cases. This routine can be used
+   --  when there is a requirement for a canonical representation not affected
+   --  by the character set options (e.g. in the binder generation of
+   --  symbols).
 
    function Get_Name_Table_Byte (Id : Name_Id) return Byte;
    pragma Inline (Get_Name_Table_Byte);
@@ -204,19 +234,28 @@ package Namet is
    pragma Inline (Get_Name_Table_Info);
    --  Fetches the Int value associated with the given name
 
+   function Is_Operator_Name (Id : Name_Id) return Boolean;
+   --  Returns True if name given is of the form of an operator (that
+   --  is, it starts with an upper case O).
+
    procedure Initialize;
-   --  Initializes the names table, including initializing the first 26
-   --  entries in the table (for the 1-character lower case names a-z)
-   --  Note that Initialize must not be called if Tree_Read is used.
+   --  This is a dummy procedure. It is retained for easy compatibility with
+   --  clients who used to call Initialize when this call was required. Now
+   --  initialization is performed automatically during package elaboration.
+   --  Note that this change fixes problems which existed prior to the change
+   --  of Initialize being called more than once. See also Reinitialize which
+   --  allows reinitialization of the tables.
 
    procedure Lock;
-   --  Lock name table before calling back end. Space for up to 10 extra
-   --  names and 1000 extra characters is reserved before the table is locked.
+   --  Lock name tables before calling back end. We reserve some extra space
+   --  before locking to avoid unnecessary inefficiencies when we unlock.
+
+   procedure Reinitialize;
+   --  Clears the name tables and removes all existing entries from the table.
 
    procedure Unlock;
-   --  Unlocks the name table to allow use of the 10 extra names and 1000
-   --  extra characters reserved by the Lock call. See gnat1drv for details
-   --  of the need for this.
+   --  Unlocks the name table to allow use of the extra space reserved by the
+   --  call to Lock. See gnat1drv for details of the need for this.
 
    function Length_Of_Name (Id : Name_Id) return Nat;
    pragma Inline (Length_Of_Name);
@@ -226,18 +265,18 @@ package Namet is
    --  Length_Of_Name does not affect the contents of Name_Len and Name_Buffer.
 
    function Name_Chars_Address return System.Address;
-   --  Return starting address of name characters table (used in Back_End
-   --  call to Gigi).
+   --  Return starting address of name characters table (used in Back_End call
+   --  to Gigi).
 
    function Name_Find return Name_Id;
-   --  Name_Find is called with a string stored in Name_Buffer whose length
-   --  is in Name_Len (i.e. the characters of the name are in subscript
-   --  positions 1 to Name_Len in Name_Buffer). It searches the names
-   --  table to see if the string has already been stored. If so the Id of
-   --  the existing entry is returned. Otherwise a new entry is created with
-   --  its Name_Table_Info field set to zero. The contents of Name_Buffer
-   --  and Name_Len are not modified by this call. Note that it is permissible
-   --  for Name_Len to be set to zero to lookup the null name string.
+   --  Name_Find is called with a string stored in Name_Buffer whose length is
+   --  in Name_Len (i.e. the characters of the name are in subscript positions
+   --  1 to Name_Len in Name_Buffer). It searches the names table to see if
+   --  the string has already been stored. If so the Id of the existing entry
+   --  is returned. Otherwise a new entry is created with its Name_Table_Info
+   --  field set to zero. The contents of Name_Buffer and Name_Len are not
+   --  modified by this call. Note that it is permissible for Name_Len to be
+   --  set to zero to lookup the null name string.
 
    function Name_Enter return Name_Id;
    --  Name_Enter has the same calling interface as Name_Find. The difference
@@ -251,7 +290,7 @@ package Namet is
    --  hashing by Name_Find in any case.
 
    function Name_Entries_Address return System.Address;
-   --  Return starting address of Names table. Used in Back_End call to Gigi.
+   --  Return starting address of Names table (used in Back_End call to Gigi)
 
    function Name_Entries_Count return Nat;
    --  Return current number of entries in the names table
@@ -270,29 +309,33 @@ package Namet is
    --  with an underscore. This call destroys the value of Name_Len and
    --  Name_Buffer (it loads these as for Get_Name_String).
    --
-   --  Note: if the name is qualified (has a double underscore), then
-   --  only the final entity name is considered, not the qualifying
-   --  names. Consider for example that the name:
+   --  Note: if the name is qualified (has a double underscore), then only the
+   --  final entity name is considered, not the qualifying names. Consider for
+   --  example that the name:
    --
    --    pkg__B_1__xyz
    --
-   --  is not an internal name, because the B comes from the internal
-   --  name of a qualifying block, but the xyz means that this was
-   --  indeed a declared identifier called "xyz" within this block
-   --  and there is nothing internal about that name.
+   --  is not an internal name, because the B comes from the internal name of
+   --  a qualifying block, but the xyz means that this was indeed a declared
+   --  identifier called "xyz" within this block and there is nothing internal
+   --  about that name.
 
    function Is_Internal_Name return Boolean;
    --  Like the form with an Id argument, except that the name to be tested is
    --  passed in Name_Buffer and Name_Len (which are not affected by the call).
    --  Name_Buffer (it loads these as for Get_Name_String).
 
+   function Is_Valid_Name (Id : Name_Id) return Boolean;
+   --  True if Id is a valid name -- points to a valid entry in the
+   --  Name_Entries table.
+
    procedure Reset_Name_Table;
    --  This procedure is used when there are multiple source files to reset
    --  the name table info entries associated with current entries in the
    --  names table. There is no harm in keeping the names entries themselves
    --  from one compilation to another, but we can't keep the entity info,
-   --  since this refers to tree nodes, which are destroyed between each
-   --  main source file.
+   --  since this refers to tree nodes, which are destroyed between each main
+   --  source file.
 
    procedure Add_Char_To_Name_Buffer (C : Character);
    pragma Inline (Add_Char_To_Name_Buffer);
@@ -306,6 +349,11 @@ package Namet is
    procedure Add_Str_To_Name_Buffer (S : String);
    --  Add characters of string S to the end of the string currently stored
    --  in the Name_Buffer, incrementing Name_Len by the length of the string.
+
+   procedure Insert_Str_In_Name_Buffer (S : String; Index : Positive);
+   --  Inserts given string in name buffer, starting at Index. Any existing
+   --  characters at or past this location get moved beyond the inserted string
+   --  and Name_Len is incremented by the length of the string.
 
    procedure Set_Character_Literal_Name (C : Char_Code);
    --  This procedure sets the proper encoded name for the character literal
@@ -324,19 +372,21 @@ package Namet is
    --  Stores given character code at the end of Name_Buffer, updating the
    --  value in Name_Len appropriately. Lower case letters and digits are
    --  stored unchanged. Other 8-bit characters are stored using the Uhh
-   --  encoding (hh = hex code), and other 16-bit wide-character values
-   --  are stored using the Whhhh (hhhh = hex code) encoding. Note that
-   --  this procedure does not fold upper case letters (they are stored
-   --  using the Uhh encoding). If folding is required, it must be done
+   --  encoding (hh = hex code), other 16-bit wide character values are stored
+   --  using the Whhhh (hhhh = hex code) encoding, and other 32-bit wide wide
+   --  character values are stored using the WWhhhhhhhh (hhhhhhhh = hex code).
+   --  Note that this procedure does not fold upper case letters (they are
+   --  stored using the Uhh encoding). If folding is required, it must be done
    --  by the caller prior to the call.
 
    procedure Tree_Read;
-   --  Initializes internal tables from current tree file using Tree_Read.
-   --  Note that Initialize should not be called if Tree_Read is used.
-   --  Tree_Read includes all necessary initialization.
+   --  Initializes internal tables from current tree file using the relevant
+   --  Table.Tree_Read routines. Note that Initialize should not be called if
+   --  Tree_Read is used. Tree_Read includes all necessary initialization.
 
    procedure Tree_Write;
-   --  Writes out internal tables to current tree file using Tree_Write
+   --  Writes out internal tables to current tree file using the relevant
+   --  Table.Tree_Write routines.
 
    procedure Get_Last_Two_Chars (N : Name_Id; C1, C2 : out Character);
    --  Obtains last two characters of a name. C1 is last but one character
@@ -351,15 +401,73 @@ package Namet is
    --  in encoded form (i.e. including Uhh, Whhh, Qx, _op as they appear in
    --  the name table). If Id is Error_Name, or No_Name, no text is output.
 
-   procedure wn (Id : Name_Id);
-   pragma Export (Ada, wn);
-   --  Like Write_Name, but includes new line at end. Intended for use
-   --  from the debugger only.
-
    procedure Write_Name_Decoded (Id : Name_Id);
    --  Like Write_Name, except that the name written is the decoded name, as
    --  described for Get_Decoded_Name_String, and the resulting value stored
    --  in Name_Len and Name_Buffer is the decoded name.
+
+   ------------------------------
+   -- File and Unit Name Types --
+   ------------------------------
+
+   --  These are defined here in Namet rather than Fname and Uname to avoid
+   --  problems with dependencies, and to avoid dragging in Fname and Uname
+   --  into many more files, but it would be cleaner to move to Fname/Uname.
+
+   type File_Name_Type is new Name_Id;
+   --  File names are stored in the names table and this type is used to
+   --  indicate that a Name_Id value is being used to hold a simple file name
+   --  (which does not include any directory information).
+
+   No_File : constant File_Name_Type := File_Name_Type (No_Name);
+   --  Constant used to indicate no file is present (this is used for example
+   --  when a search for a file indicates that no file of the name exists).
+
+   Error_File_Name : constant File_Name_Type := File_Name_Type (Error_Name);
+   --  The special File_Name_Type value Error_File_Name is used to indicate
+   --  a unit name where some previous processing has found an error.
+
+   subtype Error_File_Name_Or_No_File is
+     File_Name_Type range No_File .. Error_File_Name;
+   --  Used to test for either error file name or no file
+
+   type Path_Name_Type is new Name_Id;
+   --  Path names are stored in the names table and this type is used to
+   --  indicate that a Name_Id value is being used to hold a path name (that
+   --  may contain directory information).
+
+   No_Path : constant Path_Name_Type := Path_Name_Type (No_Name);
+   --  Constant used to indicate no path name is present
+
+   type Unit_Name_Type is new Name_Id;
+   --  Unit names are stored in the names table and this type is used to
+   --  indicate that a Name_Id value is being used to hold a unit name, which
+   --  terminates in %b for a body or %s for a spec.
+
+   No_Unit_Name : constant Unit_Name_Type := Unit_Name_Type (No_Name);
+   --  Constant used to indicate no file name present
+
+   Error_Unit_Name : constant Unit_Name_Type := Unit_Name_Type (Error_Name);
+   --  The special Unit_Name_Type value Error_Unit_Name is used to indicate
+   --  a unit name where some previous processing has found an error.
+
+   subtype Error_Unit_Name_Or_No_Unit_Name is
+     Unit_Name_Type range No_Unit_Name .. Error_Unit_Name;
+
+   ------------------------
+   -- Debugging Routines --
+   ------------------------
+
+   procedure wn (Id : Name_Id);
+   pragma Export (Ada, wn);
+   --  This routine is intended for debugging use only (i.e. it is intended to
+   --  be called from the debugger). It writes the characters of the specified
+   --  name using the standard output procedures in package Output, followed by
+   --  a new line. The name is written in encoded form (i.e. including Uhh,
+   --  Whhh, Qx, _op as they appear in the name table). If Id is Error_Name,
+   --  No_Name, or invalid an appropriate string is written (<Error_Name>,
+   --  <No_Name>, <invalid name>). Unlike Write_Name, this call does not affect
+   --  the contents of Name_Buffer or Name_Len.
 
    ---------------------------
    -- Table Data Structures --
@@ -371,10 +479,10 @@ package Namet is
 
 private
 
-   --  This table stores the actual string names. Although logically there
-   --  is no need for a terminating character (since the length is stored
-   --  in the name entry table), we still store a NUL character at the end
-   --  of every name (for convenience in interfacing to the C world).
+   --  This table stores the actual string names. Although logically there is
+   --  no need for a terminating character (since the length is stored in the
+   --  name entry table), we still store a NUL character at the end of every
+   --  name (for convenience in interfacing to the C world).
 
    package Name_Chars is new Table.Table (
      Table_Component_Type => Character,
@@ -386,16 +494,22 @@ private
 
    type Name_Entry is record
       Name_Chars_Index : Int;
-      --  Starting location of characters in the Name_Chars table minus
-      --  one (i.e. pointer to character just before first character). The
-      --  reason for the bias of one is that indexes in Name_Buffer are
-      --  one's origin, so this avoids unnecessary adds and subtracts of 1.
+      --  Starting location of characters in the Name_Chars table minus one
+      --  (i.e. pointer to character just before first character). The reason
+      --  for the bias of one is that indexes in Name_Buffer are one's origin,
+      --  so this avoids unnecessary adds and subtracts of 1.
 
       Name_Len : Short;
       --  Length of this name in characters
 
       Byte_Info : Byte;
       --  Byte value associated with this name
+
+      Name_Has_No_Encodings : Boolean;
+      --  This flag is set True if the name entry is known not to contain any
+      --  special character encodings. This is used to speed up repeated calls
+      --  to Get_Decoded_Name_String. A value of False means that it is not
+      --  known whether the name contains any such encodings.
 
       Hash_Link : Name_Id;
       --  Link to next entry in names table for same hash code
@@ -404,12 +518,24 @@ private
       --  Int Value associated with this name
    end record;
 
+   for Name_Entry use record
+      Name_Chars_Index      at  0 range 0 .. 31;
+      Name_Len              at  4 range 0 .. 15;
+      Byte_Info             at  6 range 0 .. 7;
+      Name_Has_No_Encodings at  7 range 0 .. 7;
+      Hash_Link             at  8 range 0 .. 31;
+      Int_Info              at 12 range 0 .. 31;
+   end record;
+
+   for Name_Entry'Size use 16 * 8;
+   --  This ensures that we did not leave out any fields
+
    --  This is the table that is referenced by Name_Id entries.
    --  It contains one entry for each unique name in the table.
 
    package Name_Entries is new Table.Table (
      Table_Component_Type => Name_Entry,
-     Table_Index_Type     => Name_Id,
+     Table_Index_Type     => Name_Id'Base,
      Table_Low_Bound      => First_Name_Id,
      Table_Initial        => Alloc.Names_Initial,
      Table_Increment      => Alloc.Names_Increment,

@@ -1,13 +1,14 @@
 /* Operating system specific defines to be used when targeting GCC for
    generic System V Release 3 system.
-   Copyright (C) 1991, 1996, 2000, 2002 Free Software Foundation, Inc.
+   Copyright (C) 1991, 1996, 2000, 2002, 2004, 2007, 2010
+   Free Software Foundation, Inc.
    Contributed by Ron Guilmette (rfg@monkeys.com).
 
 This file is part of GCC.
 
 GCC is free software; you can redistribute it and/or modify
 it under the terms of the GNU General Public License as published by
-the Free Software Foundation; either version 2, or (at your option)
+the Free Software Foundation; either version 3, or (at your option)
 any later version.
 
 GCC is distributed in the hope that it will be useful,
@@ -16,9 +17,8 @@ MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
 GNU General Public License for more details.
 
 You should have received a copy of the GNU General Public License
-along with GCC; see the file COPYING.  If not, write to
-the Free Software Foundation, 59 Temple Place - Suite 330,
-Boston, MA 02111-1307, USA. */
+along with GCC; see the file COPYING3.  If not see
+<http://www.gnu.org/licenses/>. */
 
 /* Define a symbol indicating that we are using svr3.h.  */
 #define USING_SVR3_H
@@ -54,7 +54,7 @@ Boston, MA 02111-1307, USA. */
   do {							\
     int align = exact_log2 (ROUNDED);			\
     if (align > 2) align = 2;				\
-    data_section ();					\
+    switch_to_section (data_section);			\
     ASM_OUTPUT_ALIGN ((FILE), align == -1 ? 2 : align);	\
     ASM_OUTPUT_LABEL ((FILE), (NAME));			\
     fprintf ((FILE), "\t.set .,.+%u\n", (int)(ROUNDED));	\
@@ -70,10 +70,6 @@ Boston, MA 02111-1307, USA. */
 
 #define NO_DOLLAR_IN_LABEL
 
-/* Implicit library calls should use memcpy, not bcopy, etc.  */
-
-#define TARGET_MEM_FUNCTIONS
-
 /* System V Release 3 uses COFF debugging info.  */
 
 #define SDB_DEBUGGING_INFO 1
@@ -81,21 +77,6 @@ Boston, MA 02111-1307, USA. */
 /* We don't want to output DBX debugging information.  */
 
 #undef DBX_DEBUGGING_INFO
-
-/* Define the actual types of some ANSI-mandated types.  These
-   definitions should work for most SVR3 systems.  */
-
-#undef SIZE_TYPE
-#define SIZE_TYPE "unsigned int"
-
-#undef PTRDIFF_TYPE
-#define PTRDIFF_TYPE "int"
-
-#undef WCHAR_TYPE
-#define WCHAR_TYPE "long int"
-
-#undef WCHAR_TYPE_SIZE
-#define WCHAR_TYPE_SIZE BITS_PER_WORD
 
 /* The prefix to add to user-visible assembler symbols.
 
@@ -163,33 +144,3 @@ do {								\
 } while (0)
 
 #endif /* STACK_GROWS_DOWNWARD */
-
-#undef EXTRA_SECTIONS
-#define EXTRA_SECTIONS in_init, in_fini
-
-#undef EXTRA_SECTION_FUNCTIONS
-#define EXTRA_SECTION_FUNCTIONS					\
-  INIT_SECTION_FUNCTION						\
-  FINI_SECTION_FUNCTION
-
-#define INIT_SECTION_FUNCTION					\
-void								\
-init_section ()							\
-{								\
-  if (in_section != in_init)					\
-    {								\
-      fprintf (asm_out_file, "%s\n", INIT_SECTION_ASM_OP);	\
-      in_section = in_init;					\
-    }								\
-}
-
-#define FINI_SECTION_FUNCTION					\
-void								\
-fini_section ()							\
-{								\
-  if (in_section != in_fini)					\
-    {								\
-      fprintf (asm_out_file, "%s\n", FINI_SECTION_ASM_OP);	\
-      in_section = in_fini;					\
-    }								\
-}

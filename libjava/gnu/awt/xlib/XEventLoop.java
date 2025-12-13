@@ -26,8 +26,8 @@ public class XEventLoop implements Runnable
   Display display;
   EventQueue queue;
   XAnyEvent anyEvent;
-  Thread eventLoopThread;
-
+  private Thread eventLoopThread;
+  
   LightweightRedirector lightweightRedirector = new LightweightRedirector();
     
   public XEventLoop(Display display, EventQueue queue)
@@ -40,40 +40,45 @@ public class XEventLoop implements Runnable
     eventLoopThread.start();
   }
 
-  public void run()
+  public void run ()
   {
-    while (true) 
-      postNextEvent();
+    // FIXME: do we need an interrupt mechanism for window shutdown?
+    while (true)
+      postNextEvent (true);
   }
-
-  void postNextEvent()
+  
+  /** If there's an event available, post it.
+   * @return true if an event was posted
+   */
+  boolean postNextEvent(boolean block)
   {
-    AWTEvent evt = getNextEvent();
-    queue.postEvent(evt);
+    AWTEvent evt = getNextEvent(block);
+    if (evt != null)
+      queue.postEvent(evt);
+    return evt != null;
   }
     
-  /** get next event. Will block until events become available. */
- 
-  public AWTEvent getNextEvent()
+  /** Get the next event.
+   * @param block If true, block until an event becomes available
+   */
+  public AWTEvent getNextEvent(boolean block)
   {
     // ASSERT:
     if (isIdle())
       throw new Error("should not be idle");
     
     AWTEvent event = null;
-    while (event == null)
+    if (loadNextEvent(block))
       {
-	loadNextEvent();
-	event = createEvent();
+        event = createEvent(); 
+        event = lightweightRedirector.redirect(event);
       }
-
-    event = lightweightRedirector.redirect(event);
-
     return event;
   }
 
-  void loadNextEvent()
+  boolean loadNextEvent(boolean block)
   {
+    boolean gotEvent = false;
     try
       {
 	setIdle(true);
@@ -100,7 +105,7 @@ public class XEventLoop implements Runnable
 	   of events. */
 	
 	//display.flush(); // implicit?
-	anyEvent.loadNext();
+	gotEvent = anyEvent.loadNext(block);
       }
     catch (RuntimeException re)
       {
@@ -110,6 +115,7 @@ public class XEventLoop implements Runnable
       {
 	setIdle(false);
       }
+    return gotEvent;
   }
     
   /**
@@ -173,7 +179,7 @@ public class XEventLoop implements Runnable
         return null;
         
       default:
-        String msg = "Do no know how to handle event (" + anyEvent + ")";
+        String msg = "Do not know how to handle event (" + anyEvent + ")";
         throw new RuntimeException (msg);
     }
   }
@@ -197,13 +203,13 @@ public class XEventLoop implements Runnable
     switch (buttonEvt.button)
       {
       case 1:
-	modifiers = InputEvent.BUTTON1_MASK;
+	modifiers = InputEvent.BUTTON1_DOWN_MASK;
 	break;
       case 2:
-	modifiers = InputEvent.BUTTON2_MASK;
+	modifiers = InputEvent.BUTTON2_DOWN_MASK;
 	break;
       case 3:
-	modifiers = InputEvent.BUTTON2_MASK;
+	modifiers = InputEvent.BUTTON2_DOWN_MASK;
 	break;
       }
     

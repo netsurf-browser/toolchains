@@ -8,6 +8,6 @@ struct A {
 };
 
 template <class T>
-A<T>::A<T>()
+A<T>::A<T>()   // { dg-error "constructor|qualified name" }
 {
 }

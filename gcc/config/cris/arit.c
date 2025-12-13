@@ -2,40 +2,29 @@
    Contributed by Axis Communications.
    Written by Hans-Peter Nilsson <hp@axis.se>, c:a 1992.
 
-   Copyright (C) 1998, 1999, 2000, 2001, 2002 Free Software Foundation, Inc.
+   Copyright (C) 1998, 1999, 2000, 2001, 2002,
+   2005, 2009  Free Software Foundation, Inc.
 
 This file is part of GCC.
 
 GCC is free software; you can redistribute it and/or modify it
 under the terms of the GNU General Public License as published by the
-Free Software Foundation; either version 2, or (at your option) any
+Free Software Foundation; either version 3, or (at your option) any
 later version.
-
-In addition to the permissions in the GNU General Public License, the
-Free Software Foundation gives you unlimited permission to link the
-compiled version of this file with other programs, and to distribute
-those programs without any restriction coming from the use of this
-file.  (The General Public License restrictions do apply in other
-respects; for example, they cover modification of the file, and
-distribution when not linked into another program.)
 
 This file is distributed in the hope that it will be useful, but
 WITHOUT ANY WARRANTY; without even the implied warranty of
 MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
 General Public License for more details.
 
-You should have received a copy of the GNU General Public License
-along with this program; see the file COPYING.  If not, write to
-the Free Software Foundation, 59 Temple Place - Suite 330,
-Boston, MA 02111-1307, USA.
+Under Section 7 of GPL version 3, you are granted additional
+permissions described in the GCC Runtime Library Exception, version
+3.1, as published by the Free Software Foundation.
 
-   As a special exception, if you link this library with files, some of
-   which are compiled with GCC, this library does not by itself cause
-   the resulting object or executable to be covered by the GNU General
-   Public License.
-   This exception does not however invalidate any other reasons why
-   the executable file or object might be covered by the GNU General
-   Public License.  */
+You should have received a copy of the GNU General Public License and
+a copy of the GCC Runtime Library Exception along with this program;
+see the files COPYING3 and COPYING.RUNTIME respectively.  If not, see
+<http://www.gnu.org/licenses/>.  */
 
 
 /* Note that we provide prototypes for all "const" functions, to attach
@@ -47,8 +36,7 @@ Boston, MA 02111-1307, USA.
 #include "config.h"
 
 #if defined (__CRIS_arch_version) && __CRIS_arch_version >= 3
-#define LZ(v) __extension__ \
- ({ int tmp_; __asm__ ("lz %1,%0" : "=r" (tmp_) : "r" (v)); tmp_; })
+#define LZ(v) __builtin_clz (v)
 #endif
 
 
@@ -62,7 +50,8 @@ struct quot_rem
  };
 
 /* This is the worker function for div and mod.  It is inlined into the
-   respective library function.  */
+   respective library function.  Parameter A must have bit 31 == 0.  */
+
 static __inline__ struct quot_rem
 do_31div (unsigned long a, unsigned long b)
      __attribute__ ((__const__, __always_inline__));
@@ -155,19 +144,10 @@ do_31div (unsigned long a, unsigned long b)
   }
 }
 
-/* Note that unsigned and signed division both build when L_divsi3, but
-   the unsigned variant is then inlined, as with do_31div above.  */
-#if defined (L_udivsi3) || defined (L_divsi3)
-#ifndef L_udivsi3
-static __inline__
-#endif
+#ifdef L_udivsi3
 unsigned long
-__Udiv (unsigned long a, unsigned long b)
-     __attribute__ ((__const__, __always_inline__));
+__Udiv (unsigned long a, unsigned long b) __attribute__ ((__const__));
 
-#ifndef L_udivsi3
-static __inline__
-#endif
 unsigned long
 __Udiv (unsigned long a, unsigned long b)
 {
@@ -208,7 +188,7 @@ __Udiv (unsigned long a, unsigned long b)
 
   return do_31div (a, b).quot+extra;
 }
-
+#endif /* L_udivsi3 */
 
 #ifdef L_divsi3
 long
@@ -217,35 +197,40 @@ __Div (long a, long b) __attribute__ ((__const__));
 long
 __Div (long a, long b)
 {
-  long sign;
-  long result;
+  long extra = 0;
+  long sign = (b < 0) ? -1 : 1;
 
-  /* Do *not* call do_31div since abs (-2147483648) == 2147483648
-     <=> abs (-0x80000000) == 0x80000000
-     which is still 32 bits.  */
+  /* We need to handle a == -2147483648 as expected and must while
+     doing that avoid producing a sequence like "abs (a) < 0" as GCC
+     may optimize out the test.  That sequence may not be obvious as
+     we call inline functions.  Testing for a being negative and
+     handling (presumably much rarer than positive) enables us to get
+     a bit of optimization for an (accumulated) reduction of the
+     penalty of the 0x80000000 special-case.  */
+  if (a < 0)
+    {
+      sign = -sign;
 
-  sign = a ^ b;
-  result = __Udiv (__builtin_labs (a), __builtin_labs (b));
+      if ((a & 0x7fffffff) == 0)
+	{
+	  /* We're at 0x80000000.  Tread carefully.  */
+	  a -= b * sign;
+	  extra = sign;
+	}
+      a = -a;
+    }
 
-  return  (sign < 0) ? -result : result;
+  /* We knowingly penalize pre-v10 models by multiplication with the
+     sign.  */
+  return sign * do_31div (a, __builtin_labs (b)).quot + extra;
 }
 #endif /* L_divsi3 */
-#endif /* L_udivsi3 || L_divsi3 */
 
 
-/* Note that unsigned and signed modulus both build when L_modsi3, but
-   then the unsigned variant is inlined, as with do_31div above.  */
-#if defined (L_umodsi3) || defined (L_modsi3)
-#ifndef L_umodsi3
-static __inline__
-#endif
+#ifdef L_umodsi3
 unsigned long
-__Umod (unsigned long a, unsigned long b)
-     __attribute__ ((__const__, __always_inline__));
+__Umod (unsigned long a, unsigned long b) __attribute__ ((__const__));
 
-#ifndef L_umodsi3
-static __inline__
-#endif
 unsigned long
 __Umod (unsigned long a, unsigned long b)
 {
@@ -279,6 +264,7 @@ __Umod (unsigned long a, unsigned long b)
 
   return do_31div (a, b).rem;
 }
+#endif /* L_umodsi3 */
 
 #ifdef L_modsi3
 long
@@ -287,14 +273,27 @@ __Mod (long a, long b) __attribute__ ((__const__));
 long
 __Mod (long a, long b)
 {
-  long	result;
+  long sign = 1;
 
-  result = __Umod (__builtin_labs (a), __builtin_labs (b));
+  /* We need to handle a == -2147483648 as expected and must while
+     doing that avoid producing a sequence like "abs (a) < 0" as GCC
+     may optimize out the test.  That sequence may not be obvious as
+     we call inline functions.  Testing for a being negative and
+     handling (presumably much rarer than positive) enables us to get
+     a bit of optimization for an (accumulated) reduction of the
+     penalty of the 0x80000000 special-case.  */
+  if (a < 0)
+    {
+      sign = -1;
+      if ((a & 0x7fffffff) == 0)
+	/* We're at 0x80000000.  Tread carefully.  */
+	a += __builtin_labs (b);
+      a = -a;
+    }
 
-  return (a < 0) ? -result : result;
+  return sign * do_31div (a, __builtin_labs (b)).rem;
 }
 #endif /* L_modsi3 */
-#endif /* L_umodsi3 || L_modsi3 */
 #endif /* L_udivsi3 || L_divsi3 || L_umodsi3 || L_modsi3 */
 
 /*

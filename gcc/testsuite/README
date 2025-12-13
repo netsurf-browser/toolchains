@@ -6,7 +6,7 @@ need a current DejaGnu snapshot, which is available from
 ftp://gcc.gnu.org/pub/gcc/infrastructure, for example.
 
 These tests are included "as is". If any of them fails, do not report
-a bug.  Bug reports for DejaGnu can go to bug-dejagnu@prep.ai.mit.edu.
+a bug.  Bug reports for DejaGnu can go to bug-dejagnu@gnu.org.
 Discussion and comments about this testsuite should be sent to
 gcc@gcc.gnu.org; additions and changes to should go to sent to
 gcc-patches@gcc.gnu.org.
@@ -59,3 +59,10 @@ where
 		containing the sources of the testsuite. This is
 		./testsuite if you are in the directory that has the
 		testsuite directory.
+
+
+Copyright (C) 1998, 1999, 2000, 2003, 2005 Free Software Foundation, Inc.
+
+Copying and distribution of this file, with or without modification,
+are permitted in any medium without royalty provided the copyright
+notice and this notice are preserved.

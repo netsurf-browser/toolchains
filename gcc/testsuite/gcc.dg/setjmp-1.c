@@ -2,7 +2,7 @@
    Inspired by cse.c:simplify_relational_operation. */
 
 /* { dg-do compile } */
-/* { dg-options "-O -W -Wall" } */
+/* { dg-options "-O -Wclobbered -Wextra -Wall" } */
 
 #include <setjmp.h>
 
@@ -13,7 +13,7 @@ extern void set_float_handler (jmp_buf *);
 #define GT 0x04
 
 int
-compare_float (double a, double b)  /* { dg-bogus "clobbered" "spurious clobbered warning" { xfail *-*-* } } */
+compare_float (double a, double b)  /* { dg-bogus "clobbered" "spurious clobbered warning" } */
 {
   jmp_buf handler;
   int result;

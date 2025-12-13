@@ -6,18 +6,17 @@
 --                                                                          --
 --                                 S p e c                                  --
 --                                                                          --
---          Copyright (C) 1992-2002, Free Software Foundation, Inc.         --
+--          Copyright (C) 1992-2008, Free Software Foundation, Inc.         --
 --                                                                          --
 -- GNAT is free software;  you can  redistribute it  and/or modify it under --
 -- terms of the  GNU General Public License as published  by the Free Soft- --
--- ware  Foundation;  either version 2,  or (at your option) any later ver- --
+-- ware  Foundation;  either version 3,  or (at your option) any later ver- --
 -- sion.  GNAT is distributed in the hope that it will be useful, but WITH- --
 -- OUT ANY WARRANTY;  without even the  implied warranty of MERCHANTABILITY --
 -- or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU General Public License --
 -- for  more details.  You should have  received  a copy of the GNU General --
--- Public License  distributed with GNAT;  see file COPYING.  If not, write --
--- to  the Free Software Foundation,  59 Temple Place - Suite 330,  Boston, --
--- MA 02111-1307, USA.                                                      --
+-- Public License  distributed with GNAT; see file COPYING3.  If not, go to --
+-- http://www.gnu.org/licenses for a complete copy of the license.          --
 --                                                                          --
 -- GNAT was originally developed  by the GNAT team at  New York University. --
 -- Extensive contributions were provided by Ada Core Technologies Inc.      --
@@ -30,13 +29,11 @@
 --  off into a child package to avoid a dependence of Sinput on Osint which
 --  would cause trouble in the tree read/write routines.
 
-with Types; use Types;
-
 package Sinput.L is
 
-   -------------------------------------------
-   --  Subprograms for Loading Source Files --
-   -------------------------------------------
+   ------------------------------------------
+   -- Subprograms for Loading Source Files --
+   ------------------------------------------
 
    function Load_Source_File (N : File_Name_Type) return Source_File_Index;
    --  Given a source file name, returns the index of the corresponding entry
@@ -54,18 +51,23 @@ package Sinput.L is
    --  The file is never preprocessed.
 
    function Load_Definition_File
-     (N    : File_Name_Type)
-      return Source_File_Index;
-   --  Needs comments ???
+     (N : File_Name_Type) return Source_File_Index;
+   --  Loads preprocessing definition file. Similar to Load_Source_File
+   --  except that this file is not itself preprocessed.
 
    function Load_Preprocessing_Data_File
-     (N    : File_Name_Type)
-      return Source_File_Index;
-   --  Similar to Load_Source_File, except that the file is never preprocessed.
+     (N : File_Name_Type) return Source_File_Index;
+   --  Loads preprocessing data file. Similar to Load_Source_File except
+   --  that this file is not itself preprocessed.
 
    procedure Complete_Source_File_Entry;
    --  Called on completing the parsing of a source file. This call completes
    --  the source file table entry for the current source file.
+
+   function Source_File_Is_No_Body (X : Source_File_Index) return Boolean;
+   --  Returns true if the designated source file contains pragma No_Body;
+   --  and no other tokens. If the source file contains anything other than
+   --  this sequence of three tokens, then False is returned.
 
    function Source_File_Is_Subunit (X : Source_File_Index) return Boolean;
    --  This function determines if a source file represents a subunit. It
@@ -92,7 +94,7 @@ package Sinput.L is
    --  Inst_Node is the instantiation node, and Template_Id is the defining
    --  identifier of the generic declaration or body unit as appropriate.
    --  A is set to an adjustment factor to be used in subsequent calls to
-   --  Adjust_Instantiation_Sloc. The instantiation mechnaism is also used
+   --  Adjust_Instantiation_Sloc. The instantiation mechanism is also used
    --  for inlined function and procedure calls. The parameter Inlined_Body
    --  is set to True in such cases, and False for a generic instantiation.
    --  This is used for generating error messages that distinguish these

@@ -6,25 +6,23 @@
 --                                                                          --
 --                                 S p e c                                  --
 --                                                                          --
---          Copyright (C) 1992-2003 Free Software Foundation, Inc.          --
+--          Copyright (C) 1992-2010, Free Software Foundation, Inc.         --
 --                                                                          --
 -- GNAT is free software;  you can  redistribute it  and/or modify it under --
 -- terms of the  GNU General Public License as published  by the Free Soft- --
--- ware  Foundation;  either version 2,  or (at your option) any later ver- --
+-- ware  Foundation;  either version 3,  or (at your option) any later ver- --
 -- sion.  GNAT is distributed in the hope that it will be useful, but WITH- --
 -- OUT ANY WARRANTY;  without even the  implied warranty of MERCHANTABILITY --
--- or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU General Public License --
--- for  more details.  You should have  received  a copy of the GNU General --
--- Public License  distributed with GNAT;  see file COPYING.  If not, write --
--- to  the Free Software Foundation,  59 Temple Place - Suite 330,  Boston, --
--- MA 02111-1307, USA.                                                      --
+-- or FITNESS FOR A PARTICULAR PURPOSE.                                     --
 --                                                                          --
--- As a special exception,  if other files  instantiate  generics from this --
--- unit, or you link  this unit with other files  to produce an executable, --
--- this  unit  does not  by itself cause  the resulting  executable  to  be --
--- covered  by the  GNU  General  Public  License.  This exception does not --
--- however invalidate  any other reasons why  the executable file  might be --
--- covered by the  GNU Public License.                                      --
+-- As a special exception under Section 7 of GPL version 3, you are granted --
+-- additional permissions described in the GCC Runtime Library Exception,   --
+-- version 3.1, as published by the Free Software Foundation.               --
+--                                                                          --
+-- You should have received a copy of the GNU General Public License and    --
+-- a copy of the GCC Runtime Library Exception along with this program;     --
+-- see the files COPYING3 and COPYING.RUNTIME respectively.  If not, see    --
+-- <http://www.gnu.org/licenses/>.                                          --
 --                                                                          --
 -- GNAT was originally developed  by the GNAT team at  New York University. --
 -- Extensive contributions were provided by Ada Core Technologies Inc.      --
@@ -35,10 +33,26 @@
 --  information. It contains the routine to load subsidiary units.
 
 with Alloc;
+with Namet; use Namet;
 with Table;
-with Types;  use Types;
+with Types; use Types;
 
 package Lib is
+
+   type Compiler_State_Type is (Parsing, Analyzing);
+   Compiler_State : Compiler_State_Type;
+   --  Indicates current state of compilation. This is used to implement the
+   --  function In_Extended_Main_Source_Unit.
+
+   Parsing_Main_Extended_Source : Boolean := False;
+   --  Set True if we are currently parsing a file that is part of the main
+   --  extended source (the main unit, its spec, or one of its subunits). This
+   --  flag to implement In_Extended_Main_Source_Unit.
+
+   Analysing_Subunit_Of_Main : Boolean := False;
+   --  Set to True when analyzing a subunit of the main source. When True, if
+   --  the subunit is preprocessed and -gnateG is specified, then the
+   --  preprocessed file (.prep) is written.
 
    --------------------------------------------
    -- General Approach to Library Management --
@@ -207,10 +221,10 @@ package Lib is
    -- Special Handling of Subprogram Bodies --
    -------------------------------------------
 
-   --  A subprogram body (in an adb file) may stand for both a spec and a
-   --  body. A simple model (and one that was adopted through version 2.07),
-   --  is simply to assume that such an adb file acts as its own spec if no
-   --  ads file is present.
+   --  A subprogram body (in an adb file) may stand for both a spec and a body.
+   --  A simple model (and one that was adopted through version 2.07) is simply
+   --  to assume that such an adb file acts as its own spec if no ads file is
+   --  is present.
 
    --  However, this is not correct. RM 10.1.4(4) requires that such a body
    --  act as a spec unless a subprogram declaration of the same name is
@@ -239,11 +253,6 @@ package Lib is
    --  Main_Unit is a body with a separate spec, in which case it is the
    --  entity for the spec.
 
-   Unit_Exception_Table_Present : Boolean;
-   --  Set true if a unit exception table is present for the unit (i.e.
-   --  zero cost exception handling is active and there is at least one
-   --  subprogram in the extended unit).
-
    -----------------
    -- Units Table --
    -----------------
@@ -261,6 +270,10 @@ package Lib is
    --      The index in the source file table of the corresponding source file.
    --      Set when the entry is created by a call to Lib.Load and then cannot
    --      be changed.
+
+   --    Munit_Index
+   --      The index of the unit within the file for multiple unit per file
+   --      mode. Set to zero in normal single unit per file mode.
 
    --    Error_Location
    --      This is copied from the Sloc field of the Enode argument passed
@@ -297,7 +310,7 @@ package Lib is
    --      order. The number is ones origin, so a value of 2 refers to the
    --      second generated D line. The Dependency_Number values are set
    --      as the D lines are generated, and are used to generate proper
-   --      unit references in the generated xref information.
+   --      unit references in the generated xref information and SCO output.
 
    --    Dynamic_Elab
    --      A flag indicating if this unit was compiled with dynamic elaboration
@@ -325,6 +338,10 @@ package Lib is
    --      (RACW) object. This is used for controlling generation of the RA
    --      attribute in the ali file.
 
+   --    Is_Compiler_Unit
+   --      A Boolean flag, initially set False by default, set to True if a
+   --      pragma Compiler_Unit appears in the unit.
+
    --    Ident_String
    --      N_String_Literal node from a valid pragma Ident that applies to
    --      this unit. If no Ident pragma applies to the unit, then Empty.
@@ -339,6 +356,20 @@ package Lib is
    --      program, as set by a pragma Priority. A value of -1 indicates
    --      that the default priority is to be used (and is also used for
    --      entries that do not correspond to possible main programs).
+
+   --    Main_CPU
+   --      This field is used to indicate the affinity of a possible main
+   --      program, as set by a pragma CPU. A value of -1 indicates
+   --      that the default affinity is to be used (and is also used for
+   --      entries that do not correspond to possible main programs).
+
+   --    Has_Allocator
+   --      This flag is set if a subprogram unit has an allocator after the
+   --      BEGIN (it is used to set the AB flag in the M ALI line).
+
+   --    OA_Setting
+   --      This is a character field containing L if Optimize_Alignment mode
+   --      was set locally, and O/T/S for Off/Time/Space default if not.
 
    --    Serial_Number
    --      This field holds a serial number used by New_Internal_Name to
@@ -357,14 +388,6 @@ package Lib is
    --      then called to reflect the contributions of any unit on which this
    --      unit is semantically dependent.
 
-   --    Dependent_Unit
-   --      This is a Boolean flag, which is set True to indicate that this
-   --      entry is for a semantically dependent unit. This flag is nearly
-   --      always set True, the only exception is for a unit that is loaded
-   --      by an Rtsfind request in High_Integrity_Mode, where the entity that
-   --      is obtained by Rtsfind.RTE is for an inlined subprogram or other
-   --      entity for which a dependency need not be created.
-
    --  The units table is reset to empty at the start of the compilation of
    --  each main unit by Lib.Initialize. Entries are then added by calls to
    --  the Lib.Load procedure. The following subprograms are used to access
@@ -375,9 +398,11 @@ package Lib is
    Default_Main_Priority : constant Int := -1;
    --  Value used in Main_Priority field to indicate default main priority
 
+   Default_Main_CPU : constant Int := -1;
+   --  Value used in Main_CPU field to indicate default main affinity
+
    function Cunit            (U : Unit_Number_Type) return Node_Id;
    function Cunit_Entity     (U : Unit_Number_Type) return Entity_Id;
-   function Dependent_Unit   (U : Unit_Number_Type) return Boolean;
    function Dependency_Num   (U : Unit_Number_Type) return Nat;
    function Dynamic_Elab     (U : Unit_Number_Type) return Boolean;
    function Error_Location   (U : Unit_Number_Type) return Source_Ptr;
@@ -385,25 +410,34 @@ package Lib is
    function Fatal_Error      (U : Unit_Number_Type) return Boolean;
    function Generate_Code    (U : Unit_Number_Type) return Boolean;
    function Ident_String     (U : Unit_Number_Type) return Node_Id;
+   function Has_Allocator    (U : Unit_Number_Type) return Boolean;
    function Has_RACW         (U : Unit_Number_Type) return Boolean;
+   function Is_Compiler_Unit (U : Unit_Number_Type) return Boolean;
    function Loading          (U : Unit_Number_Type) return Boolean;
+   function Main_CPU         (U : Unit_Number_Type) return Int;
    function Main_Priority    (U : Unit_Number_Type) return Int;
+   function Munit_Index      (U : Unit_Number_Type) return Nat;
+   function OA_Setting       (U : Unit_Number_Type) return Character;
    function Source_Index     (U : Unit_Number_Type) return Source_File_Index;
    function Unit_File_Name   (U : Unit_Number_Type) return File_Name_Type;
    function Unit_Name        (U : Unit_Number_Type) return Unit_Name_Type;
    --  Get value of named field from given units table entry
 
-   procedure Set_Cunit          (U : Unit_Number_Type; N : Node_Id);
-   procedure Set_Cunit_Entity   (U : Unit_Number_Type; E : Entity_Id);
-   procedure Set_Dynamic_Elab   (U : Unit_Number_Type; B : Boolean := True);
-   procedure Set_Error_Location (U : Unit_Number_Type; W : Source_Ptr);
-   procedure Set_Fatal_Error    (U : Unit_Number_Type; B : Boolean := True);
-   procedure Set_Generate_Code  (U : Unit_Number_Type; B : Boolean := True);
-   procedure Set_Has_RACW       (U : Unit_Number_Type; B : Boolean := True);
-   procedure Set_Ident_String   (U : Unit_Number_Type; N : Node_Id);
-   procedure Set_Loading        (U : Unit_Number_Type; B : Boolean := True);
-   procedure Set_Main_Priority  (U : Unit_Number_Type; P : Int);
-   procedure Set_Unit_Name      (U : Unit_Number_Type; N : Unit_Name_Type);
+   procedure Set_Cunit            (U : Unit_Number_Type; N : Node_Id);
+   procedure Set_Cunit_Entity     (U : Unit_Number_Type; E : Entity_Id);
+   procedure Set_Dynamic_Elab     (U : Unit_Number_Type; B : Boolean := True);
+   procedure Set_Error_Location   (U : Unit_Number_Type; W : Source_Ptr);
+   procedure Set_Fatal_Error      (U : Unit_Number_Type; B : Boolean := True);
+   procedure Set_Generate_Code    (U : Unit_Number_Type; B : Boolean := True);
+   procedure Set_Has_RACW         (U : Unit_Number_Type; B : Boolean := True);
+   procedure Set_Has_Allocator    (U : Unit_Number_Type; B : Boolean := True);
+   procedure Set_Is_Compiler_Unit (U : Unit_Number_Type; B : Boolean := True);
+   procedure Set_Ident_String     (U : Unit_Number_Type; N : Node_Id);
+   procedure Set_Loading          (U : Unit_Number_Type; B : Boolean := True);
+   procedure Set_Main_CPU         (U : Unit_Number_Type; P : Int);
+   procedure Set_Main_Priority    (U : Unit_Number_Type; P : Int);
+   procedure Set_OA_Setting       (U : Unit_Number_Type; C : Character);
+   procedure Set_Unit_Name        (U : Unit_Number_Type; N : Unit_Name_Type);
    --  Set value of named field for given units table entry. Note that we
    --  do not have an entry for each possible field, since some of the fields
    --  can only be set by specialized interfaces (defined below).
@@ -433,10 +467,10 @@ package Lib is
    --  Return unit number of file identified by given source pointer value.
    --  This call must always succeed, since any valid source pointer value
    --  belongs to some previously loaded module. If the given source pointer
-   --  value is within an instantiation, this function returns the unit
-   --  number of the templace, i.e. the unit containing the source code
-   --  corresponding to the given Source_Ptr value. The version taking
-   --  a Node_Id argument, N, simply applies the function to Sloc (N).
+   --  value is within an instantiation, this function returns the unit number
+   --  of the template, i.e. the unit containing the source code corresponding
+   --  to the given Source_Ptr value. The version taking a Node_Id argument, N,
+   --  simply applies the function to Sloc (N).
 
    function Get_Code_Unit (N : Node_Or_Entity_Id) return Unit_Number_Type;
    pragma Inline (Get_Code_Unit);
@@ -453,15 +487,24 @@ package Lib is
    --  same value for each argument.
 
    function In_Same_Code_Unit (N1, N2 : Node_Or_Entity_Id) return Boolean;
-   pragma Inline (In_Same_Source_Unit);
+   pragma Inline (In_Same_Code_Unit);
    --  Determines if the two nodes or entities N1 and N2 are in the same
    --  code unit, the criterion being that Get_Code_Unit yields the same
    --  value for each argument.
 
+   function In_Same_Extended_Unit (N1, N2 : Node_Or_Entity_Id) return Boolean;
+   pragma Inline (In_Same_Extended_Unit);
+   --  Determines if two nodes or entities N1 and N2 are in the same
+   --  extended unit, where an extended unit is defined as a unit and all
+   --  its subunits (considered recursively, i.e. subunits of subunits are
+   --  included). Returns true if S1 and S2 are in the same extended unit
+   --  and False otherwise.
+
    function In_Same_Extended_Unit (S1, S2 : Source_Ptr) return Boolean;
+   pragma Inline (In_Same_Extended_Unit);
    --  Determines if the two source locations S1 and S2 are in the same
    --  extended unit, where an extended unit is defined as a unit and all
-   --  its subunits (considered recursively, i.e. subunits or subunits are
+   --  its subunits (considered recursively, i.e. subunits of subunits are
    --  included). Returns true if S1 and S2 are in the same extended unit
    --  and False otherwise.
 
@@ -491,14 +534,22 @@ package Lib is
    --  and the parent unit spec if it is separate.
 
    function In_Extended_Main_Source_Unit (Loc : Source_Ptr) return Boolean;
-   --  Same function as above, but argument is a source pointer rather
-   --  than a node.
+   --  Same function as above, but argument is a source pointer
+
+   function In_Predefined_Unit (N : Node_Or_Entity_Id) return Boolean;
+   --  Returns True if the given node or entity appears within the source text
+   --  of a predefined unit (i.e. within Ada, Interfaces, System or within one
+   --  of the descendent packages of one of these three packages).
+
+   function In_Predefined_Unit (S : Source_Ptr) return Boolean;
+   --  Same function as above but argument is a source pointer
 
    function Earlier_In_Extended_Unit (S1, S2 : Source_Ptr) return Boolean;
-   --  Given two Sloc values  for which In_Same_Extended_Unit is true,
-   --  determine if S1 appears before S2. Returns True if S1 appears before
-   --  S2, and False otherwise. The result is undefined if S1 and S2 are
-   --  not in the same extended unit.
+   --  Given two Sloc values for which In_Same_Extended_Unit is true, determine
+   --  if S1 appears before S2. Returns True if S1 appears before S2, and False
+   --  otherwise. The result is undefined if S1 and S2 are not in the same
+   --  extended unit. Note: this routine will not give reliable results if
+   --  called after Sprint has been called with -gnatD set.
 
    function Compilation_Switches_Last return Nat;
    --  Return the count of stored compilation switches
@@ -522,18 +573,42 @@ package Lib is
    --  Increment Serial_Number field for current unit, and return the
    --  incremented value.
 
+   procedure Synchronize_Serial_Number;
+   --  This function increments the Serial_Number field for the current unit
+   --  but does not return the incremented value. This is used when there
+   --  is a situation where one path of control increments a serial number
+   --  (using Increment_Serial_Number), and the other path does not and it is
+   --  important to keep the serial numbers synchronized in the two cases (e.g.
+   --  when the references in a package and a client must be kept consistent).
+
    procedure Replace_Linker_Option_String
-     (S : String_Id; Match_String : String);
-   --  Replace an existing Linker_Option if the prefix Match_String
-   --  matches, otherwise call Store_Linker_Option_String.
+     (S            : String_Id;
+      Match_String : String);
+   --  Replace an existing Linker_Option if the prefix Match_String matches,
+   --  otherwise call Store_Linker_Option_String.
 
    procedure Store_Compilation_Switch (Switch : String);
-   --  Called to register a compilation switch, either front-end or
-   --  back-end, which may influence the generated output file(s).
+   --  Called to register a compilation switch, either front-end or back-end,
+   --  which may influence the generated output file(s). Switch is the text of
+   --  the switch to store (except that -fRTS gets changed back to --RTS).
+
+   procedure Enable_Switch_Storing;
+   --  Enable registration of switches by Store_Compilation_Switch. Used to
+   --  avoid registering switches added automatically by the gcc driver at the
+   --  beginning of the command line.
+
+   procedure Disable_Switch_Storing;
+   --  Disable registration of switches by Store_Compilation_Switch. Used to
+   --  avoid registering switches added automatically by the gcc driver at the
+   --  end of the command line.
 
    procedure Store_Linker_Option_String (S : String_Id);
    --  This procedure is called to register the string from a pragma
    --  Linker_Option. The argument is the Id of the string to register.
+
+   procedure Store_Note (N : Node_Id);
+   --  This procedure is called to register a pragma N for which a notes
+   --  entry is required.
 
    procedure Initialize;
    --  Initialize internal tables
@@ -541,11 +616,16 @@ package Lib is
    procedure Lock;
    --  Lock internal tables before calling back end
 
-   procedure Tree_Write;
-   --  Writes out internal tables to current tree file using Tree_Write
+   procedure Unlock;
+   --  Unlock internal tables, in cases where the back end needs to modify them
 
    procedure Tree_Read;
-   --  Initializes internal tables from current tree file using Tree_Read
+   --  Initializes internal tables from current tree file using the relevant
+   --  Table.Tree_Read routines.
+
+   procedure Tree_Write;
+   --  Writes out internal tables to current tree file using the relevant
+   --  Table.Tree_Write routines.
 
    function Is_Loaded (Uname : Unit_Name_Type) return Boolean;
    --  Determines if unit with given name is already loaded, i.e. there is
@@ -560,67 +640,55 @@ package Lib is
 
    procedure List (File_Names_Only : Boolean := False);
    --  Lists units in active library (i.e. generates output consisting of a
-   --  sorted listing of the units represented in File table, with the
-   --  exception of the main unit). If File_Names_Only is set to True, then
-   --  the list includes only file names, and no other information. Otherwise
-   --  the unit name and time stamp are also output. File_Names_Only also
-   --  restricts the list to exclude any predefined files.
+   --  sorted listing of the units represented in File table, except for the
+   --  main unit). If File_Names_Only is set to True, then the list includes
+   --  only file names, and no other information. Otherwise the unit name and
+   --  time stamp are also output. File_Names_Only also restricts the list to
+   --  exclude any predefined files.
 
-   function Generic_Separately_Compiled (E : Entity_Id) return Boolean;
-   --  This is the old version of tbe documentation of this function:
-   --
-   --  Most generic units must be separately compiled. Since we always use
+   function Generic_May_Lack_ALI (Sfile : File_Name_Type) return Boolean;
+   --  Generic units must be separately compiled. Since we always use
    --  macro substitution for generics, the resulting object file is a dummy
-   --  one with no code, but the ali file has the normal form, and we need
-   --  this ali file so that the binder can work out a correct order of
-   --  elaboration. However, we do not need to separate compile generics
-   --  if the generic files are language defined, since in this case there
-   --  are no order of elaborration problems, and we can simply incorporate
-   --  the context clause of the generic unit into the client. There are two
-   --  reasons for making this exception for predefined units. First, clearly
-   --  it is more efficient not to introduce extra unnecessary files. Second,
-   --  the old version of GNAT did not compile any generic units. That was
-   --  clearly incorrect in some cases of complex order of elaboration and
-   --  was fixed in version 3.10 of GNAT. However, the transition would have
-   --  caused bootstrap path problems in the case of generics used in the
-   --  compiler itself. The only such generics are predefined ones. This
-   --  function returns True if the given generic unit entity E is for a
-   --  generic unit that should be separately compiled, and false otherwise.
-   --
-   --  Now GNAT can compile any generic unit including predefined ones, but
-   --  because of the backward compatibility (to keep the ability to use old
-   --  compiler versions to build GNAT) compiling library generics is an
-   --  option. That is, now GNAT compiles a library generic as an ordinary
-   --  unit, but it also can build an exeutable in case if its library
-   --  contains some (or all) predefined generics non compiled. See 9628-002
-   --  for the description of changes to be done to get rid of a special
-   --  processing of library generic.
-   --
-   --  So now this function returns TRUE if a generic MUST be separately
-   --  compiled with the current approach.
+   --  one with no code, but the ALI file has the normal form, and we need
+   --  this ALI file so that the binder can work out a correct order of
+   --  elaboration.
 
-   function Generic_Separately_Compiled
-     (Sfile : File_Name_Type) return  Boolean;
-   --  Same as the previous function, but works directly on a unit file name.
+   --  However, ancient versions of GNAT used to not generate code or ALI
+   --  files for generic units, and this would yield complex order of
+   --  elaboration issues. These were fixed in GNAT 3.10. The support for not
+   --  compiling language-defined library generics was retained nonetheless
+   --  to facilitate bootstrap. Specifically, it is convenient to have
+   --  the same list of files to be compiled for all stages. So, if the
+   --  bootstrap compiler does not generate code for a given file, then
+   --  the stage1 compiler (and binder) also must deal with the case of
+   --  that file not being compiled. The predicate Generic_May_Lack_ALI is
+   --  True for those generic units for which missing ALI files are allowed.
 
 private
    pragma Inline (Cunit);
    pragma Inline (Cunit_Entity);
    pragma Inline (Dependency_Num);
-   pragma Inline (Dependent_Unit);
    pragma Inline (Fatal_Error);
    pragma Inline (Generate_Code);
+   pragma Inline (Has_Allocator);
    pragma Inline (Has_RACW);
+   pragma Inline (Is_Compiler_Unit);
    pragma Inline (Increment_Serial_Number);
    pragma Inline (Loading);
+   pragma Inline (Main_CPU);
    pragma Inline (Main_Priority);
+   pragma Inline (Munit_Index);
+   pragma Inline (OA_Setting);
    pragma Inline (Set_Cunit);
    pragma Inline (Set_Cunit_Entity);
    pragma Inline (Set_Fatal_Error);
    pragma Inline (Set_Generate_Code);
+   pragma Inline (Set_Has_Allocator);
    pragma Inline (Set_Has_RACW);
    pragma Inline (Set_Loading);
+   pragma Inline (Set_Main_CPU);
    pragma Inline (Set_Main_Priority);
+   pragma Inline (Set_OA_Setting);
    pragma Inline (Set_Unit_Name);
    pragma Inline (Source_Index);
    pragma Inline (Unit_File_Name);
@@ -629,23 +697,59 @@ private
    type Unit_Record is record
       Unit_File_Name   : File_Name_Type;
       Unit_Name        : Unit_Name_Type;
+      Munit_Index      : Nat;
       Expected_Unit    : Unit_Name_Type;
       Source_Index     : Source_File_Index;
       Cunit            : Node_Id;
       Cunit_Entity     : Entity_Id;
       Dependency_Num   : Int;
-      Dependent_Unit   : Boolean;
+      Ident_String     : Node_Id;
+      Main_Priority    : Int;
+      Main_CPU         : Int;
+      Serial_Number    : Nat;
+      Version          : Word;
+      Error_Location   : Source_Ptr;
       Fatal_Error      : Boolean;
       Generate_Code    : Boolean;
       Has_RACW         : Boolean;
-      Ident_String     : Node_Id;
-      Loading          : Boolean;
-      Main_Priority    : Int;
-      Serial_Number    : Nat;
-      Version          : Word;
+      Is_Compiler_Unit : Boolean;
       Dynamic_Elab     : Boolean;
-      Error_Location   : Source_Ptr;
+      Loading          : Boolean;
+      Has_Allocator    : Boolean;
+      OA_Setting       : Character;
    end record;
+
+   --  The following representation clause ensures that the above record
+   --  has no holes. We do this so that when instances of this record are
+   --  written by Tree_Gen, we do not write uninitialized values to the file.
+
+   for Unit_Record use record
+      Unit_File_Name   at  0 range 0 .. 31;
+      Unit_Name        at  4 range 0 .. 31;
+      Munit_Index      at  8 range 0 .. 31;
+      Expected_Unit    at 12 range 0 .. 31;
+      Source_Index     at 16 range 0 .. 31;
+      Cunit            at 20 range 0 .. 31;
+      Cunit_Entity     at 24 range 0 .. 31;
+      Dependency_Num   at 28 range 0 .. 31;
+      Ident_String     at 32 range 0 .. 31;
+      Main_Priority    at 36 range 0 .. 31;
+      Main_CPU         at 40 range 0 .. 31;
+      Serial_Number    at 44 range 0 .. 31;
+      Version          at 48 range 0 .. 31;
+      Error_Location   at 52 range 0 .. 31;
+      Fatal_Error      at 56 range 0 ..  7;
+      Generate_Code    at 57 range 0 ..  7;
+      Has_RACW         at 58 range 0 ..  7;
+      Dynamic_Elab     at 59 range 0 ..  7;
+      Is_Compiler_Unit at 60 range 0 ..  7;
+      OA_Setting       at 61 range 0 ..  7;
+      Loading          at 62 range 0 ..  7;
+      Has_Allocator    at 63 range 0 ..  7;
+   end record;
+
+   for Unit_Record'Size use 64 * 8;
+   --  This ensures that we did not leave out any fields
 
    package Units is new Table.Table (
      Table_Component_Type => Unit_Record,
@@ -673,10 +777,25 @@ private
      Table_Increment      => Alloc.Linker_Option_Lines_Increment,
      Table_Name           => "Linker_Option_Lines");
 
+   --  The following table stores references to pragmas that generate Notes
+
+   type Notes_Entry is record
+      Pragma_Node : Node_Id;
+      Unit        : Unit_Number_Type;
+   end record;
+
+   package Notes is new Table.Table (
+     Table_Component_Type => Notes_Entry,
+     Table_Index_Type     => Integer,
+     Table_Low_Bound      => 1,
+     Table_Initial        => Alloc.Notes_Initial,
+     Table_Increment      => Alloc.Notes_Increment,
+     Table_Name           => "Notes");
+
    --  The following table records the compilation switches used to compile
-   --  the main unit. The table includes only switches and excludes -quiet,
-   --  -dumpbase, and -o switches, since the latter are typically artifacts
-   --  of the gcc/gnat1 interface.
+   --  the main unit. The table includes only switches. It excludes -o
+   --  switches as well as artifacts of the gcc/gnat1 interface such as
+   --  -quiet, -dumpbase, or -auxbase.
 
    --  This table is set as part of the compiler argument scanning in
    --  Back_End. It can also be reset in -gnatc mode from the data in an
@@ -700,17 +819,24 @@ private
    type Unit_Ref_Table is array (Pos range <>) of Unit_Number_Type;
    --  Type to hold list of indirect references to unit number table
 
+   type Load_Stack_Entry is record
+      Unit_Number : Unit_Number_Type;
+      With_Node   : Node_Id;
+   end record;
+
    --  The Load_Stack table contains a list of unit numbers (indexes into the
-   --  unit table) of units being loaded on a single dependency chain. The
-   --  First entry is the main unit. The second entry, if present is a unit
-   --  on which the first unit depends, etc. This stack is used to generate
-   --  error messages showing the dependency chain if a file is not found.
-   --  The Load function makes an entry in this table when it is called, and
-   --  removes the entry just before it returns.
+   --  unit table) of units being loaded on a single dependency chain, and a
+   --  flag to indicate whether this unit is loaded through a limited_with
+   --  clause. The First entry is the main unit. The second entry, if present
+   --  is a unit on which the first unit depends, etc. This stack is used to
+   --  generate error messages showing the dependency chain if a file is not
+   --  found, or whether a true circular dependency exists.  The Load_Unit
+   --  function makes an entry in this table when it is called, and removes
+   --  the entry just before it returns.
 
    package Load_Stack is new Table.Table (
-     Table_Component_Type => Unit_Number_Type,
-     Table_Index_Type     => Nat,
+     Table_Component_Type => Load_Stack_Entry,
+     Table_Index_Type     => Int,
      Table_Low_Bound      => 0,
      Table_Initial        => Alloc.Load_Stack_Initial,
      Table_Increment      => Alloc.Load_Stack_Increment,

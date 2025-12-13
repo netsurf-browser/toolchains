@@ -1,5 +1,6 @@
 /* Definitions of various defaults for tm.h macros.
-   Copyright (C) 1992, 1996, 1997, 1998, 1999, 2000, 2001, 2002, 2003, 2004
+   Copyright (C) 1992, 1996, 1997, 1998, 1999, 2000, 2001, 2002, 2003, 2004,
+   2005, 2007, 2008, 2009, 2010
    Free Software Foundation, Inc.
    Contributed by Ron Guilmette (rfg@monkeys.com)
 
@@ -7,7 +8,7 @@ This file is part of GCC.
 
 GCC is free software; you can redistribute it and/or modify it under
 the terms of the GNU General Public License as published by the Free
-Software Foundation; either version 2, or (at your option) any later
+Software Foundation; either version 3, or (at your option) any later
 version.
 
 GCC is distributed in the hope that it will be useful, but WITHOUT ANY
@@ -15,37 +16,17 @@ WARRANTY; without even the implied warranty of MERCHANTABILITY or
 FITNESS FOR A PARTICULAR PURPOSE.  See the GNU General Public License
 for more details.
 
-You should have received a copy of the GNU General Public License
-along with GCC; see the file COPYING.  If not, write to the Free
-Software Foundation, 59 Temple Place - Suite 330, Boston, MA
-02111-1307, USA.  */
+Under Section 7 of GPL version 3, you are granted additional
+permissions described in the GCC Runtime Library Exception, version
+3.1, as published by the Free Software Foundation.
+
+You should have received a copy of the GNU General Public License and
+a copy of the GCC Runtime Library Exception along with this program;
+see the files COPYING3 and COPYING.RUNTIME respectively.  If not, see
+<http://www.gnu.org/licenses/>.  */
 
 #ifndef GCC_DEFAULTS_H
 #define GCC_DEFAULTS_H
-
-#ifndef GET_ENVIRONMENT
-#define GET_ENVIRONMENT(VALUE, NAME) do { (VALUE) = getenv (NAME); } while (0)
-#endif
-
-#define obstack_chunk_alloc	((void *(*) (long)) xmalloc)
-#define obstack_chunk_free	((void (*) (void *)) free)
-#define OBSTACK_CHUNK_SIZE	0
-#define gcc_obstack_init(OBSTACK)			\
-  _obstack_begin ((OBSTACK), OBSTACK_CHUNK_SIZE, 0,	\
-		  obstack_chunk_alloc,			\
-		  obstack_chunk_free)
-
-/* Define default standard character escape sequences.  */
-#ifndef TARGET_BELL
-#  define TARGET_BELL 007
-#  define TARGET_BS 010
-#  define TARGET_TAB 011
-#  define TARGET_NEWLINE 012
-#  define TARGET_VT 013
-#  define TARGET_FF 014
-#  define TARGET_CR 015
-#  define TARGET_ESC 033
-#endif
 
 /* Store in OUTPUT a string (made with alloca) containing an
    assembler-name for a local static variable or function named NAME.
@@ -66,24 +47,10 @@ Software Foundation, 59 Temple Place - Suite 330, Boston, MA
 #ifndef ASM_FORMAT_PRIVATE_NAME
 # define ASM_FORMAT_PRIVATE_NAME(OUTPUT, NAME, LABELNO) \
   do { const char *const name_ = (NAME); \
-       char *const output_ = (OUTPUT) = alloca (strlen (name_) + 32);\
+       char *const output_ = (OUTPUT) = \
+	 (char *) alloca (strlen (name_) + 32); \
        sprintf (output_, ASM_PN_FORMAT, name_, (unsigned long)(LABELNO)); \
   } while (0)
-#endif
-
-#ifndef ASM_STABD_OP
-#define ASM_STABD_OP "\t.stabd\t"
-#endif
-
-/* This is how to output an element of a case-vector that is absolute.
-   Some targets don't use this, but we have to define it anyway.  */
-
-#ifndef ASM_OUTPUT_ADDR_VEC_ELT
-#define ASM_OUTPUT_ADDR_VEC_ELT(FILE, VALUE)  \
-do { fputs (integer_asm_op (POINTER_SIZE / UNITS_PER_WORD, TRUE), FILE); \
-     (*targetm.asm_out.internal_label) (FILE, "L", (VALUE));			\
-     fputc ('\n', FILE);						\
-   } while (0)
 #endif
 
 /* Choose a reasonable default for ASM_OUTPUT_ASCII.  */
@@ -139,6 +106,26 @@ do { fputs (integer_asm_op (POINTER_SIZE / UNITS_PER_WORD, TRUE), FILE); \
 #endif
 #endif
 
+#ifndef IFUNC_ASM_TYPE
+#define IFUNC_ASM_TYPE "gnu_indirect_function"
+#endif
+
+#ifndef TLS_COMMON_ASM_OP
+#define TLS_COMMON_ASM_OP ".tls_common"
+#endif
+
+#if defined (HAVE_AS_TLS) && !defined (ASM_OUTPUT_TLS_COMMON)
+#define ASM_OUTPUT_TLS_COMMON(FILE, DECL, NAME, SIZE)			\
+  do									\
+    {									\
+      fprintf ((FILE), "\t%s\t", TLS_COMMON_ASM_OP);			\
+      assemble_name ((FILE), (NAME));					\
+      fprintf ((FILE), ","HOST_WIDE_INT_PRINT_UNSIGNED",%u\n",		\
+	       (SIZE), DECL_ALIGN (DECL) / BITS_PER_UNIT);		\
+    }									\
+  while (0)
+#endif
+
 /* Decide whether to defer emitting the assembler output for an equate
    of two values.  The default is to not defer output.  */
 #ifndef TARGET_DEFERRED_OUTPUT_DEFS
@@ -146,11 +133,28 @@ do { fputs (integer_asm_op (POINTER_SIZE / UNITS_PER_WORD, TRUE), FILE); \
 #endif
 
 /* This is how to output the definition of a user-level label named
-   NAME, such as the label on a static function or variable NAME.  */
+   NAME, such as the label on variable NAME.  */
 
 #ifndef ASM_OUTPUT_LABEL
 #define ASM_OUTPUT_LABEL(FILE,NAME) \
   do { assemble_name ((FILE), (NAME)); fputs (":\n", (FILE)); } while (0)
+#endif
+
+/* This is how to output the definition of a user-level label named
+   NAME, such as the label on a function.  */
+
+#ifndef ASM_OUTPUT_FUNCTION_LABEL
+#define ASM_OUTPUT_FUNCTION_LABEL(FILE, NAME, DECL) \
+  ASM_OUTPUT_LABEL ((FILE), (NAME))
+#endif
+
+/* Output the definition of a compiler-generated label named NAME.  */
+#ifndef ASM_OUTPUT_INTERNAL_LABEL
+#define ASM_OUTPUT_INTERNAL_LABEL(FILE,NAME)	\
+  do {						\
+    assemble_name_raw ((FILE), (NAME));		\
+    fputs (":\n", (FILE));			\
+  } while (0)
 #endif
 
 /* This is how to output a reference to a user-level label named NAME.  */
@@ -178,6 +182,27 @@ do { fputs (integer_asm_op (POINTER_SIZE / UNITS_PER_WORD, TRUE), FILE); \
       if (VALUE)					\
         ASM_OUTPUT_DEF (STREAM, NAME, VALUE);		\
     }							\
+  while (0)
+#endif
+#endif
+
+/* This is how we tell the assembler that a symbol is a weak alias to
+   another symbol that doesn't require the other symbol to be defined.
+   Uses of the former will turn into weak uses of the latter, i.e.,
+   uses that, in case the latter is undefined, will not cause errors,
+   and will add it to the symbol table as weak undefined.  However, if
+   the latter is referenced directly, a strong reference prevails.  */
+#ifndef ASM_OUTPUT_WEAKREF
+#if defined HAVE_GAS_WEAKREF
+#define ASM_OUTPUT_WEAKREF(FILE, DECL, NAME, VALUE)			\
+  do									\
+    {									\
+      fprintf ((FILE), "\t.weakref\t");					\
+      assemble_name ((FILE), (NAME));					\
+      fprintf ((FILE), ",");						\
+      assemble_name ((FILE), (VALUE));					\
+      fprintf ((FILE), "\n");						\
+    }									\
   while (0)
 #endif
 #endif
@@ -225,12 +250,29 @@ do { fputs (integer_asm_op (POINTER_SIZE / UNITS_PER_WORD, TRUE), FILE); \
 #endif
 #endif
 
-/* This determines whether or not we support weak symbols.  */
+/* This determines whether or not we support weak symbols.  SUPPORTS_WEAK
+   must be a preprocessor constant.  */
 #ifndef SUPPORTS_WEAK
 #if defined (ASM_WEAKEN_LABEL) || defined (ASM_WEAKEN_DECL)
 #define SUPPORTS_WEAK 1
 #else
 #define SUPPORTS_WEAK 0
+#endif
+#endif
+
+/* This determines whether or not we support weak symbols during target
+   code generation.  TARGET_SUPPORTS_WEAK can be any valid C expression.  */
+#ifndef TARGET_SUPPORTS_WEAK
+#define TARGET_SUPPORTS_WEAK (SUPPORTS_WEAK)
+#endif
+
+/* This determines whether or not we support the discriminator
+   attribute in the .loc directive.  */
+#ifndef SUPPORTS_DISCRIMINATOR
+#ifdef HAVE_GAS_DISCRIMINATOR
+#define SUPPORTS_DISCRIMINATOR 1
+#else
+#define SUPPORTS_DISCRIMINATOR 0
 #endif
 #endif
 
@@ -243,13 +285,27 @@ do { fputs (integer_asm_op (POINTER_SIZE / UNITS_PER_WORD, TRUE), FILE); \
 #endif
 #endif
 
+/* This determines whether weak symbols must be left out of a static
+   archive's table of contents.  Defining this macro to be nonzero has
+   the consequence that certain symbols will not be made weak that
+   otherwise would be.  The C++ ABI requires this macro to be zero;
+   see the documentation.  */
+#ifndef TARGET_WEAK_NOT_IN_ARCHIVE_TOC
+#define TARGET_WEAK_NOT_IN_ARCHIVE_TOC 0
+#endif
+
+/* This determines whether or not we need linkonce unwind information.  */
+#ifndef TARGET_USES_WEAK_UNWIND_INFO
+#define TARGET_USES_WEAK_UNWIND_INFO 0
+#endif
+
 /* By default, there is no prefix on user-defined symbols.  */
 #ifndef USER_LABEL_PREFIX
 #define USER_LABEL_PREFIX ""
 #endif
 
 /* If the target supports weak symbols, define TARGET_ATTRIBUTE_WEAK to
-   provide a weak attribute.  Else define it to nothing. 
+   provide a weak attribute.  Else define it to nothing.
 
    This would normally belong in ansidecl.h, but SUPPORTS_WEAK is
    not available at that time.
@@ -262,6 +318,18 @@ do { fputs (integer_asm_op (POINTER_SIZE / UNITS_PER_WORD, TRUE), FILE); \
 # else
 #  define TARGET_ATTRIBUTE_WEAK
 # endif
+#endif
+
+/* Determines whether we may use common symbols to represent one-only
+   semantics (a.k.a. "vague linkage").  */
+#ifndef USE_COMMON_FOR_ONE_ONLY
+# define USE_COMMON_FOR_ONE_ONLY 1
+#endif
+
+/* By default we can assume that all global symbols are in one namespace,
+   across all shared libraries.  */
+#ifndef MULTIPLE_SYMBOL_SPACES
+# define MULTIPLE_SYMBOL_SPACES 0
 #endif
 
 /* If the target supports init_priority C++ attribute, give
@@ -292,6 +360,26 @@ do { fputs (integer_asm_op (POINTER_SIZE / UNITS_PER_WORD, TRUE), FILE); \
 #endif
 #endif
 
+/* On many systems, different EH table encodings are used under
+   difference circumstances.  Some will require runtime relocations;
+   some will not.  For those that do not require runtime relocations,
+   we would like to make the table read-only.  However, since the
+   read-only tables may need to be combined with read-write tables
+   that do require runtime relocation, it is not safe to make the
+   tables read-only unless the linker will merge read-only and
+   read-write sections into a single read-write section.  If your
+   linker does not have this ability, but your system is such that no
+   encoding used with non-PIC code will ever require a runtime
+   relocation, then you can define EH_TABLES_CAN_BE_READ_ONLY to 1 in
+   your target configuration file.  */
+#ifndef EH_TABLES_CAN_BE_READ_ONLY
+#ifdef HAVE_LD_RO_RW_SECTION_MIXING
+#define EH_TABLES_CAN_BE_READ_ONLY 1
+#else
+#define EH_TABLES_CAN_BE_READ_ONLY 0
+#endif
+#endif
+
 /* If we have named section and we support weak symbols, then use the
    .jcr section for recording java classes which need to be registered
    at program start-up time.  */
@@ -301,19 +389,16 @@ do { fputs (integer_asm_op (POINTER_SIZE / UNITS_PER_WORD, TRUE), FILE); \
 #endif
 #endif
 
-/* By default, we generate a label at the beginning and end of the
-   text section, and compute the size of the text section by
-   subtracting the two.  However, on some platforms that doesn't 
-   work, and we use the section itself, rather than a label at the
-   beginning of it, to indicate the start of the section.  On such
-   platforms, define this to zero.  */
-#ifndef DWARF2_GENERATE_TEXT_SECTION_LABEL
-#define DWARF2_GENERATE_TEXT_SECTION_LABEL 1
+/* This decision to use a .jcr section can be overridden by defining
+   USE_JCR_SECTION to 0 in target file.  This is necessary if target
+   can define JCR_SECTION_NAME but does not have crtstuff or
+   linker support for .jcr section.  */
+#ifndef TARGET_USE_JCR_SECTION
+#ifdef JCR_SECTION_NAME
+#define TARGET_USE_JCR_SECTION 1
+#else
+#define TARGET_USE_JCR_SECTION 0
 #endif
-
-/* Supply a default definition for PROMOTE_PROTOTYPES.  */
-#ifndef PROMOTE_PROTOTYPES
-#define PROMOTE_PROTOTYPES	0
 #endif
 
 /* Number of hardware registers that go into the DWARF-2 unwind info.
@@ -383,6 +468,225 @@ do { fputs (integer_asm_op (POINTER_SIZE / UNITS_PER_WORD, TRUE), FILE); \
 #define LONG_DOUBLE_TYPE_SIZE (BITS_PER_WORD * 2)
 #endif
 
+#ifndef DECIMAL32_TYPE_SIZE
+#define DECIMAL32_TYPE_SIZE 32
+#endif
+
+#ifndef DECIMAL64_TYPE_SIZE
+#define DECIMAL64_TYPE_SIZE 64
+#endif
+
+#ifndef DECIMAL128_TYPE_SIZE
+#define DECIMAL128_TYPE_SIZE 128
+#endif
+
+#ifndef SHORT_FRACT_TYPE_SIZE
+#define SHORT_FRACT_TYPE_SIZE BITS_PER_UNIT
+#endif
+
+#ifndef FRACT_TYPE_SIZE
+#define FRACT_TYPE_SIZE (BITS_PER_UNIT * 2)
+#endif
+
+#ifndef LONG_FRACT_TYPE_SIZE
+#define LONG_FRACT_TYPE_SIZE (BITS_PER_UNIT * 4)
+#endif
+
+#ifndef LONG_LONG_FRACT_TYPE_SIZE
+#define LONG_LONG_FRACT_TYPE_SIZE (BITS_PER_UNIT * 8)
+#endif
+
+#ifndef SHORT_ACCUM_TYPE_SIZE
+#define SHORT_ACCUM_TYPE_SIZE (SHORT_FRACT_TYPE_SIZE * 2)
+#endif
+
+#ifndef ACCUM_TYPE_SIZE
+#define ACCUM_TYPE_SIZE (FRACT_TYPE_SIZE * 2)
+#endif
+
+#ifndef LONG_ACCUM_TYPE_SIZE
+#define LONG_ACCUM_TYPE_SIZE (LONG_FRACT_TYPE_SIZE * 2)
+#endif
+
+#ifndef LONG_LONG_ACCUM_TYPE_SIZE
+#define LONG_LONG_ACCUM_TYPE_SIZE (LONG_LONG_FRACT_TYPE_SIZE * 2)
+#endif
+
+/* We let tm.h override the types used here, to handle trivial differences
+   such as the choice of unsigned int or long unsigned int for size_t.
+   When machines start needing nontrivial differences in the size type,
+   it would be best to do something here to figure out automatically
+   from other information what type to use.  */
+
+#ifndef SIZE_TYPE
+#define SIZE_TYPE "long unsigned int"
+#endif
+
+#ifndef PID_TYPE
+#define PID_TYPE "int"
+#endif
+
+/* If GCC knows the exact uint_least16_t and uint_least32_t types from
+   <stdint.h>, use them for char16_t and char32_t.  Otherwise, use
+   these guesses; getting the wrong type of a given width will not
+   affect C++ name mangling because in C++ these are distinct types
+   not typedefs.  */
+
+#ifdef UINT_LEAST16_TYPE
+#define CHAR16_TYPE UINT_LEAST16_TYPE
+#else
+#define CHAR16_TYPE "short unsigned int"
+#endif
+
+#ifdef UINT_LEAST32_TYPE
+#define CHAR32_TYPE UINT_LEAST32_TYPE
+#else
+#define CHAR32_TYPE "unsigned int"
+#endif
+
+#ifndef WCHAR_TYPE
+#define WCHAR_TYPE "int"
+#endif
+
+/* WCHAR_TYPE gets overridden by -fshort-wchar.  */
+#define MODIFIED_WCHAR_TYPE \
+	(flag_short_wchar ? "short unsigned int" : WCHAR_TYPE)
+
+#ifndef PTRDIFF_TYPE
+#define PTRDIFF_TYPE "long int"
+#endif
+
+#ifndef WINT_TYPE
+#define WINT_TYPE "unsigned int"
+#endif
+
+#ifndef INTMAX_TYPE
+#define INTMAX_TYPE ((INT_TYPE_SIZE == LONG_LONG_TYPE_SIZE)	\
+		     ? "int"					\
+		     : ((LONG_TYPE_SIZE == LONG_LONG_TYPE_SIZE)	\
+			? "long int"				\
+			: "long long int"))
+#endif
+
+#ifndef UINTMAX_TYPE
+#define UINTMAX_TYPE ((INT_TYPE_SIZE == LONG_LONG_TYPE_SIZE)	\
+		     ? "unsigned int"				\
+		     : ((LONG_TYPE_SIZE == LONG_LONG_TYPE_SIZE)	\
+			? "long unsigned int"			\
+			: "long long unsigned int"))
+#endif
+
+
+/* There are no default definitions of these <stdint.h> types.  */
+
+#ifndef SIG_ATOMIC_TYPE
+#define SIG_ATOMIC_TYPE ((const char *) NULL)
+#endif
+
+#ifndef INT8_TYPE
+#define INT8_TYPE ((const char *) NULL)
+#endif
+
+#ifndef INT16_TYPE
+#define INT16_TYPE ((const char *) NULL)
+#endif
+
+#ifndef INT32_TYPE
+#define INT32_TYPE ((const char *) NULL)
+#endif
+
+#ifndef INT64_TYPE
+#define INT64_TYPE ((const char *) NULL)
+#endif
+
+#ifndef UINT8_TYPE
+#define UINT8_TYPE ((const char *) NULL)
+#endif
+
+#ifndef UINT16_TYPE
+#define UINT16_TYPE ((const char *) NULL)
+#endif
+
+#ifndef UINT32_TYPE
+#define UINT32_TYPE ((const char *) NULL)
+#endif
+
+#ifndef UINT64_TYPE
+#define UINT64_TYPE ((const char *) NULL)
+#endif
+
+#ifndef INT_LEAST8_TYPE
+#define INT_LEAST8_TYPE ((const char *) NULL)
+#endif
+
+#ifndef INT_LEAST16_TYPE
+#define INT_LEAST16_TYPE ((const char *) NULL)
+#endif
+
+#ifndef INT_LEAST32_TYPE
+#define INT_LEAST32_TYPE ((const char *) NULL)
+#endif
+
+#ifndef INT_LEAST64_TYPE
+#define INT_LEAST64_TYPE ((const char *) NULL)
+#endif
+
+#ifndef UINT_LEAST8_TYPE
+#define UINT_LEAST8_TYPE ((const char *) NULL)
+#endif
+
+#ifndef UINT_LEAST16_TYPE
+#define UINT_LEAST16_TYPE ((const char *) NULL)
+#endif
+
+#ifndef UINT_LEAST32_TYPE
+#define UINT_LEAST32_TYPE ((const char *) NULL)
+#endif
+
+#ifndef UINT_LEAST64_TYPE
+#define UINT_LEAST64_TYPE ((const char *) NULL)
+#endif
+
+#ifndef INT_FAST8_TYPE
+#define INT_FAST8_TYPE ((const char *) NULL)
+#endif
+
+#ifndef INT_FAST16_TYPE
+#define INT_FAST16_TYPE ((const char *) NULL)
+#endif
+
+#ifndef INT_FAST32_TYPE
+#define INT_FAST32_TYPE ((const char *) NULL)
+#endif
+
+#ifndef INT_FAST64_TYPE
+#define INT_FAST64_TYPE ((const char *) NULL)
+#endif
+
+#ifndef UINT_FAST8_TYPE
+#define UINT_FAST8_TYPE ((const char *) NULL)
+#endif
+
+#ifndef UINT_FAST16_TYPE
+#define UINT_FAST16_TYPE ((const char *) NULL)
+#endif
+
+#ifndef UINT_FAST32_TYPE
+#define UINT_FAST32_TYPE ((const char *) NULL)
+#endif
+
+#ifndef UINT_FAST64_TYPE
+#define UINT_FAST64_TYPE ((const char *) NULL)
+#endif
+
+#ifndef INTPTR_TYPE
+#define INTPTR_TYPE ((const char *) NULL)
+#endif
+
+#ifndef UINTPTR_TYPE
+#define UINTPTR_TYPE ((const char *) NULL)
+#endif
+
 /* Width in bits of a pointer.  Mind the value of the macro `Pmode'.  */
 #ifndef POINTER_SIZE
 #define POINTER_SIZE BITS_PER_WORD
@@ -390,6 +694,24 @@ do { fputs (integer_asm_op (POINTER_SIZE / UNITS_PER_WORD, TRUE), FILE); \
 
 #ifndef PIC_OFFSET_TABLE_REGNUM
 #define PIC_OFFSET_TABLE_REGNUM INVALID_REGNUM
+#endif
+
+#ifndef PIC_OFFSET_TABLE_REG_CALL_CLOBBERED
+#define PIC_OFFSET_TABLE_REG_CALL_CLOBBERED 0
+#endif
+
+#ifndef TARGET_DLLIMPORT_DECL_ATTRIBUTES
+#define TARGET_DLLIMPORT_DECL_ATTRIBUTES 0
+#endif
+
+#ifndef TARGET_DECLSPEC
+#if TARGET_DLLIMPORT_DECL_ATTRIBUTES
+/* If the target supports the "dllimport" attribute, users are
+   probably used to the "__declspec" syntax.  */
+#define TARGET_DECLSPEC 1
+#else
+#define TARGET_DECLSPEC 0
+#endif
 #endif
 
 /* By default, the preprocessor should be invoked the same way in C++
@@ -433,20 +755,26 @@ do { fputs (integer_asm_op (POINTER_SIZE / UNITS_PER_WORD, TRUE), FILE); \
 #define PUSH_ARGS_REVERSED 0
 #endif
 
+/* Default value for the alignment (in bits) a C conformant malloc has to
+   provide. This default is intended to be safe and always correct.  */
+#ifndef MALLOC_ABI_ALIGNMENT
+#define MALLOC_ABI_ALIGNMENT BITS_PER_WORD
+#endif
+
 /* If PREFERRED_STACK_BOUNDARY is not defined, set it to STACK_BOUNDARY.
    STACK_BOUNDARY is required.  */
 #ifndef PREFERRED_STACK_BOUNDARY
 #define PREFERRED_STACK_BOUNDARY STACK_BOUNDARY
 #endif
 
-/* By default, the C++ compiler will use function addresses in the
-   vtable entries.  Setting this nonzero tells the compiler to use
-   function descriptors instead.  The value of this macro says how
-   many words wide the descriptor is (normally 2).  It is assumed 
-   that the address of a function descriptor may be treated as a
-   pointer to a function.  */
-#ifndef TARGET_VTABLE_USES_DESCRIPTORS
-#define TARGET_VTABLE_USES_DESCRIPTORS 0
+/* Set INCOMING_STACK_BOUNDARY to PREFERRED_STACK_BOUNDARY if it is not
+   defined.  */
+#ifndef INCOMING_STACK_BOUNDARY
+#define INCOMING_STACK_BOUNDARY PREFERRED_STACK_BOUNDARY
+#endif
+
+#ifndef TARGET_DEFAULT_PACK_STRUCT
+#define TARGET_DEFAULT_PACK_STRUCT 0
 #endif
 
 /* By default, the vtable entries are void pointers, the so the alignment
@@ -463,6 +791,16 @@ do { fputs (integer_asm_op (POINTER_SIZE / UNITS_PER_WORD, TRUE), FILE); \
    words in each data entry.  */
 #ifndef TARGET_VTABLE_DATA_ENTRY_DISTANCE
 #define TARGET_VTABLE_DATA_ENTRY_DISTANCE 1
+#endif
+
+/* Decide whether it is safe to use a local alias for a virtual function
+   when constructing thunks.  */
+#ifndef TARGET_USE_LOCAL_THUNK_ALIAS_P
+#ifdef ASM_OUTPUT_DEF
+#define TARGET_USE_LOCAL_THUNK_ALIAS_P(DECL) 1
+#else
+#define TARGET_USE_LOCAL_THUNK_ALIAS_P(DECL) 0
+#endif
 #endif
 
 /* Select a format to encode pointers in exception handling data.  We
@@ -488,58 +826,35 @@ do { fputs (integer_asm_op (POINTER_SIZE / UNITS_PER_WORD, TRUE), FILE); \
 #endif
 
 /* If more than one debugging type is supported, you must define
-   PREFERRED_DEBUGGING_TYPE to choose a format in a system-dependent way.
+   PREFERRED_DEBUGGING_TYPE to choose the default.  */
 
-   This is one long line cause VAXC can't handle a \-newline.  */
-#if 1 < (defined (DBX_DEBUGGING_INFO) + defined (SDB_DEBUGGING_INFO) + defined (DWARF2_DEBUGGING_INFO) + defined (XCOFF_DEBUGGING_INFO) + defined (VMS_DEBUGGING_INFO))
+#if 1 < (defined (DBX_DEBUGGING_INFO) + defined (SDB_DEBUGGING_INFO) \
+         + defined (DWARF2_DEBUGGING_INFO) + defined (XCOFF_DEBUGGING_INFO) \
+         + defined (VMS_DEBUGGING_INFO))
 #ifndef PREFERRED_DEBUGGING_TYPE
-You Lose!  You must define PREFERRED_DEBUGGING_TYPE!
+#error You must define PREFERRED_DEBUGGING_TYPE
 #endif /* no PREFERRED_DEBUGGING_TYPE */
-#else /* Only one debugging format supported.  Define PREFERRED_DEBUGGING_TYPE
-	 so other code needn't care.  */
-#ifdef DBX_DEBUGGING_INFO
+
+/* If only one debugging format is supported, define PREFERRED_DEBUGGING_TYPE
+   here so other code needn't care.  */
+#elif defined DBX_DEBUGGING_INFO
 #define PREFERRED_DEBUGGING_TYPE DBX_DEBUG
-#endif
-#ifdef SDB_DEBUGGING_INFO
+
+#elif defined SDB_DEBUGGING_INFO
 #define PREFERRED_DEBUGGING_TYPE SDB_DEBUG
-#endif
-#ifdef DWARF_DEBUGGING_INFO
-#define PREFERRED_DEBUGGING_TYPE DWARF_DEBUG
-#endif
-#ifdef DWARF2_DEBUGGING_INFO
+
+#elif defined DWARF2_DEBUGGING_INFO
 #define PREFERRED_DEBUGGING_TYPE DWARF2_DEBUG
-#endif
-#ifdef VMS_DEBUGGING_INFO
+
+#elif defined VMS_DEBUGGING_INFO
 #define PREFERRED_DEBUGGING_TYPE VMS_AND_DWARF2_DEBUG
-#endif
-#ifdef XCOFF_DEBUGGING_INFO
+
+#elif defined XCOFF_DEBUGGING_INFO
 #define PREFERRED_DEBUGGING_TYPE XCOFF_DEBUG
-#endif
-#endif /* More than one debugger format enabled.  */
 
-/* If still not defined, must have been because no debugging formats
-   are supported.  */
-#ifndef PREFERRED_DEBUGGING_TYPE
+#else
+/* No debugging format is supported by this target.  */
 #define PREFERRED_DEBUGGING_TYPE NO_DEBUG
-#endif
-
-/* Define codes for all the float formats that we know of.  */
-#define UNKNOWN_FLOAT_FORMAT 0
-#define IEEE_FLOAT_FORMAT 1
-#define VAX_FLOAT_FORMAT 2
-#define IBM_FLOAT_FORMAT 3
-#define C4X_FLOAT_FORMAT 4
-
-/* Default to IEEE float if not specified.  Nearly all machines use it.  */
-#ifndef TARGET_FLOAT_FORMAT
-#define	TARGET_FLOAT_FORMAT	IEEE_FLOAT_FORMAT
-#endif
-
-/* Determine the register class for registers suitable to be the base
-   address register in a MEM.  Allow the choice to be dependent upon
-   the mode of the memory access.  */
-#ifndef MODE_BASE_REG_CLASS
-#define MODE_BASE_REG_CLASS(MODE) BASE_REG_CLASS
 #endif
 
 #ifndef LARGEST_EXPONENT_IS_NORMAL
@@ -550,34 +865,15 @@ You Lose!  You must define PREFERRED_DEBUGGING_TYPE!
 #define ROUND_TOWARDS_ZERO 0
 #endif
 
-#ifndef MODE_HAS_NANS
-#define MODE_HAS_NANS(MODE)					\
-  (FLOAT_MODE_P (MODE)						\
-   && TARGET_FLOAT_FORMAT == IEEE_FLOAT_FORMAT			\
-   && !LARGEST_EXPONENT_IS_NORMAL (GET_MODE_BITSIZE (MODE)))
-#endif
-
-#ifndef MODE_HAS_INFINITIES
-#define MODE_HAS_INFINITIES(MODE)				\
-  (FLOAT_MODE_P (MODE)						\
-   && TARGET_FLOAT_FORMAT == IEEE_FLOAT_FORMAT			\
-   && !LARGEST_EXPONENT_IS_NORMAL (GET_MODE_BITSIZE (MODE)))
-#endif
-
-#ifndef MODE_HAS_SIGNED_ZEROS
-#define MODE_HAS_SIGNED_ZEROS(MODE) \
-  (FLOAT_MODE_P (MODE) && TARGET_FLOAT_FORMAT == IEEE_FLOAT_FORMAT)
-#endif
-
-#ifndef MODE_HAS_SIGN_DEPENDENT_ROUNDING
-#define MODE_HAS_SIGN_DEPENDENT_ROUNDING(MODE)			\
-  (FLOAT_MODE_P (MODE)						\
-   && TARGET_FLOAT_FORMAT == IEEE_FLOAT_FORMAT			\
-   && !ROUND_TOWARDS_ZERO)
-#endif
-
 #ifndef FLOAT_LIB_COMPARE_RETURNS_BOOL
 #define FLOAT_LIB_COMPARE_RETURNS_BOOL(MODE, COMPARISON) false
+#endif
+
+/* True if the targets integer-comparison functions return { 0, 1, 2
+   } to indicate { <, ==, > }.  False if { -1, 0, 1 } is used
+   instead.  The libgcc routines are biased.  */
+#ifndef TARGET_LIB_INT_CMP_BIASED
+#define TARGET_LIB_INT_CMP_BIASED (true)
 #endif
 
 /* If FLOAT_WORDS_BIG_ENDIAN is not defined in the header files,
@@ -586,20 +882,23 @@ You Lose!  You must define PREFERRED_DEBUGGING_TYPE!
 #define FLOAT_WORDS_BIG_ENDIAN WORDS_BIG_ENDIAN
 #endif
 
-#ifndef TARGET_FLT_EVAL_METHOD
+#ifdef TARGET_FLT_EVAL_METHOD
+#define TARGET_FLT_EVAL_METHOD_NON_DEFAULT 1
+#else
 #define TARGET_FLT_EVAL_METHOD 0
+#define TARGET_FLT_EVAL_METHOD_NON_DEFAULT 0
 #endif
 
-#ifndef HOT_TEXT_SECTION_NAME
-#define HOT_TEXT_SECTION_NAME "text.hot"
+#ifndef TARGET_DEC_EVAL_METHOD
+#define TARGET_DEC_EVAL_METHOD 2
 #endif
 
-#ifndef UNLIKELY_EXECUTED_TEXT_SECTION_NAME
-#define UNLIKELY_EXECUTED_TEXT_SECTION_NAME "text.unlikely"
+#ifndef HAS_LONG_COND_BRANCH
+#define HAS_LONG_COND_BRANCH 0
 #endif
 
-#ifndef VECTOR_MODE_SUPPORTED_P
-#define VECTOR_MODE_SUPPORTED_P(MODE) 0
+#ifndef HAS_LONG_UNCOND_BRANCH
+#define HAS_LONG_UNCOND_BRANCH 0
 #endif
 
 /* Determine whether __cxa_atexit, rather than atexit, is used to
@@ -607,6 +906,33 @@ You Lose!  You must define PREFERRED_DEBUGGING_TYPE!
 #ifndef DEFAULT_USE_CXA_ATEXIT
 #define DEFAULT_USE_CXA_ATEXIT 0
 #endif
+
+/* If none of these macros are defined, the port must use the new
+   technique of defining constraints in the machine description.
+   tm_p.h will define those macros that machine-independent code
+   still uses.  */
+#if  !defined CONSTRAINT_LEN			\
+  && !defined REG_CLASS_FROM_LETTER		\
+  && !defined REG_CLASS_FROM_CONSTRAINT		\
+  && !defined CONST_OK_FOR_LETTER_P		\
+  && !defined CONST_OK_FOR_CONSTRAINT_P		\
+  && !defined CONST_DOUBLE_OK_FOR_LETTER_P	\
+  && !defined CONST_DOUBLE_OK_FOR_CONSTRAINT_P  \
+  && !defined EXTRA_CONSTRAINT			\
+  && !defined EXTRA_CONSTRAINT_STR		\
+  && !defined EXTRA_MEMORY_CONSTRAINT		\
+  && !defined EXTRA_ADDRESS_CONSTRAINT
+
+#define USE_MD_CONSTRAINTS
+
+#if GCC_VERSION >= 3000 && defined IN_GCC
+/* These old constraint macros shouldn't appear anywhere in a
+   configuration using MD constraint definitions.  */
+#pragma GCC poison REG_CLASS_FROM_LETTER CONST_OK_FOR_LETTER_P \
+                   CONST_DOUBLE_OK_FOR_LETTER_P EXTRA_CONSTRAINT
+#endif
+
+#else /* old constraint mechanism in use */
 
 /* Determine whether extra constraint letter should be handled
    via address reload (like 'o').  */
@@ -647,21 +973,25 @@ You Lose!  You must define PREFERRED_DEBUGGING_TYPE!
 #define EXTRA_CONSTRAINT_STR(OP, C,STR) EXTRA_CONSTRAINT (OP, C)
 #endif
 
-#ifndef REGISTER_MOVE_COST
-#define REGISTER_MOVE_COST(m, x, y) 2
-#endif
+#endif /* old constraint mechanism in use */
 
-/* Determine whether the the entire c99 runtime
+/* Determine whether the entire c99 runtime
    is present in the runtime library.  */
 #ifndef TARGET_C99_FUNCTIONS
 #define TARGET_C99_FUNCTIONS 0
 #endif
 
+/* Determine whether the target runtime library has
+   a sincos implementation following the GNU extension.  */
+#ifndef TARGET_HAS_SINCOS
+#define TARGET_HAS_SINCOS 0
+#endif
+
 /* Indicate that CLZ and CTZ are undefined at zero.  */
-#ifndef CLZ_DEFINED_VALUE_AT_ZERO 
+#ifndef CLZ_DEFINED_VALUE_AT_ZERO
 #define CLZ_DEFINED_VALUE_AT_ZERO(MODE, VALUE)  0
 #endif
-#ifndef CTZ_DEFINED_VALUE_AT_ZERO 
+#ifndef CTZ_DEFINED_VALUE_AT_ZERO
 #define CTZ_DEFINED_VALUE_AT_ZERO(MODE, VALUE)  0
 #endif
 
@@ -681,6 +1011,18 @@ You Lose!  You must define PREFERRED_DEBUGGING_TYPE!
 #define MOVE_MAX_PIECES   MOVE_MAX
 #endif
 
+#ifndef MAX_MOVE_MAX
+#define MAX_MOVE_MAX MOVE_MAX
+#endif
+
+#ifndef MIN_UNITS_PER_WORD
+#define MIN_UNITS_PER_WORD UNITS_PER_WORD
+#endif
+
+#ifndef MAX_BITS_PER_WORD
+#define MAX_BITS_PER_WORD BITS_PER_WORD
+#endif
+
 #ifndef STACK_POINTER_OFFSET
 #define STACK_POINTER_OFFSET    0
 #endif
@@ -695,5 +1037,306 @@ You Lose!  You must define PREFERRED_DEBUGGING_TYPE!
 #ifndef EXIT_IGNORE_STACK
 #define EXIT_IGNORE_STACK 0
 #endif
+
+/* Assume that case vectors are not pc-relative.  */
+#ifndef CASE_VECTOR_PC_RELATIVE
+#define CASE_VECTOR_PC_RELATIVE 0
+#endif
+
+/* Assume that trampolines need function alignment.  */
+#ifndef TRAMPOLINE_ALIGNMENT
+#define TRAMPOLINE_ALIGNMENT FUNCTION_BOUNDARY
+#endif
+
+/* Register mappings for target machines without register windows.  */
+#ifndef INCOMING_REGNO
+#define INCOMING_REGNO(N) (N)
+#endif
+
+#ifndef OUTGOING_REGNO
+#define OUTGOING_REGNO(N) (N)
+#endif
+
+#ifndef SHIFT_COUNT_TRUNCATED
+#define SHIFT_COUNT_TRUNCATED 0
+#endif
+
+#ifndef LEGITIMATE_PIC_OPERAND_P
+#define LEGITIMATE_PIC_OPERAND_P(X) 1
+#endif
+
+#ifndef TARGET_MEM_CONSTRAINT
+#define TARGET_MEM_CONSTRAINT 'm'
+#endif
+
+#ifndef REVERSIBLE_CC_MODE
+#define REVERSIBLE_CC_MODE(MODE) 0
+#endif
+
+/* Biggest alignment supported by the object file format of this machine.  */
+#ifndef MAX_OFILE_ALIGNMENT
+#define MAX_OFILE_ALIGNMENT BIGGEST_ALIGNMENT
+#endif
+
+#ifndef FRAME_GROWS_DOWNWARD
+#define FRAME_GROWS_DOWNWARD 0
+#endif
+
+/* On most machines, the CFA coincides with the first incoming parm.  */
+#ifndef ARG_POINTER_CFA_OFFSET
+#define ARG_POINTER_CFA_OFFSET(FNDECL) \
+  (FIRST_PARM_OFFSET (FNDECL) + crtl->args.pretend_args_size)
+#endif
+
+/* On most machines, we use the CFA as DW_AT_frame_base.  */
+#ifndef CFA_FRAME_BASE_OFFSET
+#define CFA_FRAME_BASE_OFFSET(FNDECL) 0
+#endif
+
+/* The offset from the incoming value of %sp to the top of the stack frame
+   for the current function.  */
+#ifndef INCOMING_FRAME_SP_OFFSET
+#define INCOMING_FRAME_SP_OFFSET 0
+#endif
+
+#ifndef HARD_REGNO_NREGS_HAS_PADDING
+#define HARD_REGNO_NREGS_HAS_PADDING(REGNO, MODE) 0
+#define HARD_REGNO_NREGS_WITH_PADDING(REGNO, MODE) -1
+#endif
+
+#ifndef OUTGOING_REG_PARM_STACK_SPACE
+#define OUTGOING_REG_PARM_STACK_SPACE(FNTYPE) 0
+#endif
+
+/* MAX_STACK_ALIGNMENT is the maximum stack alignment guaranteed by
+   the backend.  MAX_SUPPORTED_STACK_ALIGNMENT is the maximum best
+   effort stack alignment supported by the backend.  If the backend
+   supports stack alignment, MAX_SUPPORTED_STACK_ALIGNMENT and
+   MAX_STACK_ALIGNMENT are the same.  Otherwise, the incoming stack
+   boundary will limit the maximum guaranteed stack alignment.  */
+#ifdef MAX_STACK_ALIGNMENT
+#define MAX_SUPPORTED_STACK_ALIGNMENT MAX_STACK_ALIGNMENT
+#else
+#define MAX_STACK_ALIGNMENT STACK_BOUNDARY
+#define MAX_SUPPORTED_STACK_ALIGNMENT PREFERRED_STACK_BOUNDARY
+#endif
+
+#define SUPPORTS_STACK_ALIGNMENT (MAX_STACK_ALIGNMENT > STACK_BOUNDARY)
+
+#ifndef LOCAL_ALIGNMENT
+#define LOCAL_ALIGNMENT(TYPE, ALIGNMENT) ALIGNMENT
+#endif
+
+#ifndef STACK_SLOT_ALIGNMENT
+#define STACK_SLOT_ALIGNMENT(TYPE,MODE,ALIGN) \
+  ((TYPE) ? LOCAL_ALIGNMENT ((TYPE), (ALIGN)) : (ALIGN))
+#endif
+
+#ifndef LOCAL_DECL_ALIGNMENT
+#define LOCAL_DECL_ALIGNMENT(DECL) \
+  LOCAL_ALIGNMENT (TREE_TYPE (DECL), DECL_ALIGN (DECL))
+#endif
+
+#ifndef MINIMUM_ALIGNMENT
+#define MINIMUM_ALIGNMENT(EXP,MODE,ALIGN) (ALIGN)
+#endif
+
+/* Alignment value for attribute ((aligned)).  */
+#ifndef ATTRIBUTE_ALIGNED_VALUE
+#define ATTRIBUTE_ALIGNED_VALUE BIGGEST_ALIGNMENT
+#endif
+
+/* Many ports have no mode-dependent addresses (except possibly autoincrement
+   and autodecrement addresses, which are handled by target-independent code
+   in recog.c).  */
+#ifndef GO_IF_MODE_DEPENDENT_ADDRESS
+#define GO_IF_MODE_DEPENDENT_ADDRESS(X, WIN)
+#endif
+
+/* For most ports anything that evaluates to a constant symbolic
+   or integer value is acceptable as a constant address.  */
+#ifndef CONSTANT_ADDRESS_P
+#define CONSTANT_ADDRESS_P(X)   (CONSTANT_P (X) && GET_CODE (X) != CONST_DOUBLE)
+#endif
+
+#ifndef MAX_FIXED_MODE_SIZE
+#define MAX_FIXED_MODE_SIZE GET_MODE_BITSIZE (DImode)
+#endif
+
+/* Nonzero if structures and unions should be returned in memory.
+
+   This should only be defined if compatibility with another compiler or
+   with an ABI is needed, because it results in slower code.  */
+
+#ifndef DEFAULT_PCC_STRUCT_RETURN
+#define DEFAULT_PCC_STRUCT_RETURN 1
+#endif
+
+#ifdef GCC_INSN_FLAGS_H
+/* Dependent default target macro definitions
+
+   This section of defaults.h defines target macros that depend on generated
+   headers.  This is a bit awkward:  We want to put all default definitions
+   for target macros in defaults.h, but some of the defaults depend on the
+   HAVE_* flags defines of insn-flags.h.  But insn-flags.h is not always
+   included by files that do include defaults.h.
+
+   Fortunately, the default macro definitions that depend on the HAVE_*
+   macros are also the ones that will only be used inside GCC itself, i.e.
+   not in the gen* programs or in target objects like libgcc.
+
+   Obviously, it would be best to keep this section of defaults.h as small
+   as possible, by converting the macros defined below to target hooks or
+   functions.
+*/
+
+/* The default branch cost is 1.  */
+#ifndef BRANCH_COST
+#define BRANCH_COST(speed_p, predictable_p) 1
+#endif
+
+/* If a memory-to-memory move would take MOVE_RATIO or more simple
+   move-instruction sequences, we will do a movmem or libcall instead.  */
+
+#ifndef MOVE_RATIO
+#if defined (HAVE_movmemqi) || defined (HAVE_movmemhi) || defined (HAVE_movmemsi) || defined (HAVE_movmemdi) || defined (HAVE_movmemti)
+#define MOVE_RATIO(speed) 2
+#else
+/* If we are optimizing for space (-Os), cut down the default move ratio.  */
+#define MOVE_RATIO(speed) ((speed) ? 15 : 3)
+#endif
+#endif
+
+/* If a clear memory operation would take CLEAR_RATIO or more simple
+   move-instruction sequences, we will do a setmem or libcall instead.  */
+
+#ifndef CLEAR_RATIO
+#if defined (HAVE_setmemqi) || defined (HAVE_setmemhi) || defined (HAVE_setmemsi) || defined (HAVE_setmemdi) || defined (HAVE_setmemti)
+#define CLEAR_RATIO(speed) 2
+#else
+/* If we are optimizing for space, cut down the default clear ratio.  */
+#define CLEAR_RATIO(speed) ((speed) ? 15 :3)
+#endif
+#endif
+
+/* If a memory set (to value other than zero) operation would take
+   SET_RATIO or more simple move-instruction sequences, we will do a movmem
+   or libcall instead.  */
+#ifndef SET_RATIO
+#define SET_RATIO(speed) MOVE_RATIO(speed)
+#endif
+
+/* Supply a default definition for FUNCTION_ARG_PADDING:
+   usually pad upward, but pad short args downward on
+   big-endian machines.  */
+
+#define DEFAULT_FUNCTION_ARG_PADDING(MODE, TYPE)			\
+  (! BYTES_BIG_ENDIAN							\
+   ? upward								\
+   : (((MODE) == BLKmode						\
+       ? ((TYPE) && TREE_CODE (TYPE_SIZE (TYPE)) == INTEGER_CST		\
+	  && int_size_in_bytes (TYPE) < (PARM_BOUNDARY / BITS_PER_UNIT)) \
+       : GET_MODE_BITSIZE (MODE) < PARM_BOUNDARY)			\
+      ? downward : upward))
+
+#ifndef FUNCTION_ARG_PADDING
+#define FUNCTION_ARG_PADDING(MODE, TYPE)	\
+  DEFAULT_FUNCTION_ARG_PADDING ((MODE), (TYPE))
+#endif
+
+/* Supply a default definition of STACK_SAVEAREA_MODE for emit_stack_save.
+   Normally move_insn, so Pmode stack pointer.  */
+
+#ifndef STACK_SAVEAREA_MODE
+#define STACK_SAVEAREA_MODE(LEVEL) Pmode
+#endif
+
+/* Supply a default definition of STACK_SIZE_MODE for
+   allocate_dynamic_stack_space.  Normally PLUS/MINUS, so word_mode.  */
+
+#ifndef STACK_SIZE_MODE
+#define STACK_SIZE_MODE word_mode
+#endif
+
+/* Provide default values for the macros controlling stack checking.  */
+
+/* The default is neither full builtin stack checking...  */
+#ifndef STACK_CHECK_BUILTIN
+#define STACK_CHECK_BUILTIN 0
+#endif
+
+/* ...nor static builtin stack checking.  */
+#ifndef STACK_CHECK_STATIC_BUILTIN
+#define STACK_CHECK_STATIC_BUILTIN 0
+#endif
+
+/* The default interval is one page (4096 bytes).  */
+#ifndef STACK_CHECK_PROBE_INTERVAL_EXP
+#define STACK_CHECK_PROBE_INTERVAL_EXP 12
+#endif
+
+/* The default is not to move the stack pointer.  */
+#ifndef STACK_CHECK_MOVING_SP
+#define STACK_CHECK_MOVING_SP 0
+#endif
+
+/* This is a kludge to try to capture the discrepancy between the old
+   mechanism (generic stack checking) and the new mechanism (static
+   builtin stack checking).  STACK_CHECK_PROTECT needs to be bumped
+   for the latter because part of the protection area is effectively
+   included in STACK_CHECK_MAX_FRAME_SIZE for the former.  */
+#ifdef STACK_CHECK_PROTECT
+#define STACK_OLD_CHECK_PROTECT STACK_CHECK_PROTECT
+#else
+#define STACK_OLD_CHECK_PROTECT					\
+ (targetm.except_unwind_info (&global_options) == UI_SJLJ	\
+  ? 75 * UNITS_PER_WORD						\
+  : 8 * 1024)
+#endif
+
+/* Minimum amount of stack required to recover from an anticipated stack
+   overflow detection.  The default value conveys an estimate of the amount
+   of stack required to propagate an exception.  */
+#ifndef STACK_CHECK_PROTECT
+#define STACK_CHECK_PROTECT					\
+ (targetm.except_unwind_info (&global_options) == UI_SJLJ	\
+  ? 75 * UNITS_PER_WORD						\
+  : 12 * 1024)
+#endif
+
+/* Make the maximum frame size be the largest we can and still only need
+   one probe per function.  */
+#ifndef STACK_CHECK_MAX_FRAME_SIZE
+#define STACK_CHECK_MAX_FRAME_SIZE \
+  ((1 << STACK_CHECK_PROBE_INTERVAL_EXP) - UNITS_PER_WORD)
+#endif
+
+/* This is arbitrary, but should be large enough everywhere.  */
+#ifndef STACK_CHECK_FIXED_FRAME_SIZE
+#define STACK_CHECK_FIXED_FRAME_SIZE (4 * UNITS_PER_WORD)
+#endif
+
+/* Provide a reasonable default for the maximum size of an object to
+   allocate in the fixed frame.  We may need to be able to make this
+   controllable by the user at some point.  */
+#ifndef STACK_CHECK_MAX_VAR_SIZE
+#define STACK_CHECK_MAX_VAR_SIZE (STACK_CHECK_MAX_FRAME_SIZE / 100)
+#endif
+
+/* By default, the C++ compiler will use function addresses in the
+   vtable entries.  Setting this nonzero tells the compiler to use
+   function descriptors instead.  The value of this macro says how
+   many words wide the descriptor is (normally 2).  It is assumed
+   that the address of a function descriptor may be treated as a
+   pointer to a function.  */
+#ifndef TARGET_VTABLE_USES_DESCRIPTORS
+#define TARGET_VTABLE_USES_DESCRIPTORS 0
+#endif
+
+#ifndef SWITCHABLE_TARGET
+#define SWITCHABLE_TARGET 0
+#endif
+
+#endif /* GCC_INSN_FLAGS_H  */
 
 #endif  /* ! GCC_DEFAULTS_H */

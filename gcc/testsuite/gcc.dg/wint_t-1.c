@@ -1,11 +1,11 @@
-/* { dg-do compile } */
+/* { dg-do compile { target wchar } } */
 /* { dg-options "-Wall" } */
 
 /* Compile with -Wall to get a warning if built-in and system wint_t don't
    match.  */
 
 #define _STDDEF_H
-#include <wchar.h> /* { dg-excess-errors "" { xfail *-*-darwin* } } */
+#include <wchar.h>
 
 __WINT_TYPE__ __wi_t__;
 wint_t *wi_t_p;

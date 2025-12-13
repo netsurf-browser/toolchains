@@ -1,11 +1,11 @@
-/* { dg-do compile } */
+/* { dg-do compile { target wchar } } */
 /* { dg-options "-Wall" } */
 
 /* Compile with -Wall to get a warning if built-in and system wchar_t don't
    match.  */
 
 #define _STDDEF_H
-#include <wchar.h> /* { dg-excess-errors "" { xfail *-*-darwin* } } */
+#include <wchar.h>
 
 __WCHAR_TYPE__ __wc_t__;
 wchar_t *wc_t_p;

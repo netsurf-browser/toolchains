@@ -1,6 +1,9 @@
 /* Test typeof with __asm redirection. */
 /* { dg-do compile } */
+/* -mlongcall will cause us to place &baz3 in the CTR register.  */
+/* { dg-skip-if "" { powerpc*-*-* } { "-mlongcall" } { "" } } */
 /* { dg-require-weak "" } */
+/* { dg-require-alias "" } */
 /* { dg-options "-O2" } */
 
 extern int foo1 (int x) __asm ("baz1");
@@ -34,4 +37,12 @@ int bar3 (int x)
 // { dg-final { if [string match {sh[elb1-9]*-*-*} $target_triplet ] {return} } }
 // Likewise for S/390 targets
 // { dg-final { if [string match s390*-*-* $target_triplet ] {return} } }
+// Likewise for CRIS targets.
+// { dg-final { if [string match cris-*-* $target_triplet ] {return} } }
+// { dg-final { if [string match crisv32-*-* $target_triplet ] {return} } }
+// Likewise for m68k targets.
+// { dg-final { if [string match fido-*-* $target_triplet ] {return} } }
+// { dg-final { if [string match m68k-*-* $target_triplet ] {return} } }
+// Likewise for moxie targets.
+// { dg-final { if [string match moxie-*-* $target_triplet ] {return} } }
 // { dg-final { scan-assembler "baz3.*baz3.*baz3.*baz3.*baz3.*baz3" } }

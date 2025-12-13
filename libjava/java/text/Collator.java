@@ -1,5 +1,6 @@
 /* Collator.java -- Perform locale dependent String comparisons.
-   Copyright (C) 1998, 1999, 2000, 2001 Free Software Foundation, Inc.
+   Copyright (C) 1998, 1999, 2000, 2001, 2004, 2005, 2007,
+   2008  Free Software Foundation, Inc.
 
 This file is part of GNU Classpath.
 
@@ -15,8 +16,8 @@ General Public License for more details.
 
 You should have received a copy of the GNU General Public License
 along with GNU Classpath; see the file COPYING.  If not, write to the
-Free Software Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA
-02111-1307 USA.
+Free Software Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA
+02110-1301 USA.
 
 Linking this library statically or dynamically with other modules is
 making a combined work based on this library.  Thus, the terms and
@@ -38,10 +39,15 @@ exception statement from your version. */
 
 package java.text;
 
+import gnu.java.locale.LocaleHelper;
+
+import java.text.spi.CollatorProvider;
+
+import java.util.Comparator;
 import java.util.Locale;
 import java.util.MissingResourceException;
 import java.util.ResourceBundle;
-import java.util.Comparator;
+import java.util.ServiceLoader;
 
 /**
  * This class is the abstract superclass of classes which perform 
@@ -64,15 +70,11 @@ import java.util.Comparator;
  * are described in detail in the documentation for the methods and values
  * that are related to them.
  *
- * @author Tom Tromey <tromey@cygnus.com>
+ * @author Tom Tromey (tromey@cygnus.com)
  * @author Aaron M. Renn (arenn@urbanophile.com)
  * @date March 18, 1999
  */
-/* Written using "Java Class Libraries", 2nd edition, plus online
- * API docs for JDK 1.2 from http://www.javasoft.com.
- * Status: Mostly complete, but parts stubbed out.  Look for FIXME.
- */
-public abstract class Collator implements Comparator, Cloneable
+public abstract class Collator implements Comparator<Object>, Cloneable
 {
   /**
    * This constant is a strength value which indicates that only primary
@@ -150,8 +152,8 @@ public abstract class Collator implements Comparator, Cloneable
    * <code>Collator</code> and the strength and decomposition rules in
    * effect.
    *
-   * @param str1 The first object to compare
-   * @param str2 The second object to compare
+   * @param source The first object to compare
+   * @param target The second object to compare
    *
    * @return A negative integer if str1 &lt; str2, 0 if str1 == str2, or
    * a positive integer if str1 &gt; str2. 
@@ -164,8 +166,8 @@ public abstract class Collator implements Comparator, Cloneable
    * equal to, or greater than the second argument.  These two objects
    * must be <code>String</code>'s or an exception will be thrown.
    *
-   * @param obj1 The first object to compare
-   * @param obj2 The second object to compare
+   * @param o1 The first object to compare
+   * @param o2 The second object to compare
    *
    * @return A negative integer if obj1 &lt; obj2, 0 if obj1 == obj2, or
    * a positive integer if obj1 &gt; obj2. 
@@ -183,10 +185,10 @@ public abstract class Collator implements Comparator, Cloneable
    * object.  This will be true if and only if the following conditions are
    * met:
    * <ul>
-   * <li>The specified object is not <code>null</code>.
-   * <li>The specified object is an instance of <code>Collator</code>.
+   * <li>The specified object is not <code>null</code>.</li>
+   * <li>The specified object is an instance of <code>Collator</code>.</li>
    * <li>The specified object has the same strength and decomposition
-   * settings as this object.
+   * settings as this object.</li>
    * </ul>
    *
    * @param obj The <code>Object</code> to test for equality against
@@ -208,8 +210,8 @@ public abstract class Collator implements Comparator, Cloneable
    * according to the collation rules for the locale of this object and
    * the current strength and decomposition settings.
    *
-   * @param str1 The first <code>String</code> to compare
-   * @param str2 The second <code>String</code> to compare
+   * @param source The first <code>String</code> to compare
+   * @param target The second <code>String</code> to compare
    *
    * @return <code>true</code> if the two strings are equal,
    * <code>false</code> otherwise. 
@@ -244,10 +246,7 @@ public abstract class Collator implements Comparator, Cloneable
    */
   public static synchronized Locale[] getAvailableLocales ()
   {
-    // FIXME
-    Locale[] l = new Locale[1];
-    l[0] = Locale.US;
-    return l;
+    return LocaleHelper.getCollatorLocales();
   }
 
   /**
@@ -256,7 +255,7 @@ public abstract class Collator implements Comparator, Cloneable
    * comparisons against a string might be performed multiple times, such
    * as during a sort operation.
    *
-   * @param str The <code>String</code> to convert.
+   * @param source The <code>String</code> to convert.
    *
    * @return A <code>CollationKey</code> for the specified <code>String</code>.
    */
@@ -290,34 +289,60 @@ public abstract class Collator implements Comparator, Cloneable
   /**
    * This method returns an instance of <code>Collator</code> for the
    * specified locale.  If no <code>Collator</code> exists for the desired
-   * locale, a <code>Collator</code> for the default locale will be returned.
+   * locale, the fallback procedure described in
+   * {@link java.util.spi.LocaleServiceProvider} is invoked.
    *
-   * @param locale The desired localed to load a <code>Collator</code> for.
+   * @param loc The desired locale to load a <code>Collator</code> for.
    *
    * @return A <code>Collator</code> for the requested locale
    */
   public static Collator getInstance (Locale loc)
   {
-    ResourceBundle res;
     String pattern;
     try
       {
-	res = ResourceBundle.getBundle("gnu.java.locale.LocaleInformation",
-				       loc);
-	pattern = res.getString("collation_rules");
+	ResourceBundle res =
+	  ResourceBundle.getBundle("gnu.java.locale.LocaleInformation",
+				   loc, ClassLoader.getSystemClassLoader());
+	return new RuleBasedCollator(res.getString("collation_rules"));
       }
     catch (MissingResourceException x)
       {
-	return null;
-      }
-    try
-      {
-	return new RuleBasedCollator (pattern);
+	/* This means runtime support for the locale
+	 * is not available, so we check providers. */
       }
     catch (ParseException x)
       {
-	return null;
+	throw (InternalError)new InternalError().initCause(x);
       }
+    for (CollatorProvider p : ServiceLoader.load(CollatorProvider.class))
+      {
+	for (Locale l : p.getAvailableLocales())
+	  {
+	    if (l.equals(loc))
+	      {
+		Collator c = p.getInstance(loc);
+		if (c != null)
+		  return c;
+		break;
+	      }
+	  }
+      }
+    if (loc.equals(Locale.ROOT))
+      {
+	try
+	  {
+	    return new RuleBasedCollator("<0<1<2<3<4<5<6<7<8<9<A,a<b,B<c," +
+					 "C<d,D<e,E<f,F<g,G<h,H<i,I<j,J<k,K" +
+					 "<l,L<m,M<n,N<o,O<p,P<q,Q<r,R<s,S<t,"+
+					 "T<u,U<v,V<w,W<x,X<y,Y<z,Z");
+	  }
+	catch (ParseException x)
+	  {
+	    throw (InternalError)new InternalError().initCause(x);
+	  }
+      }
+    return getInstance(LocaleHelper.getFallbackLocale(loc));
   }
 
   /**
@@ -346,7 +371,7 @@ public abstract class Collator implements Comparator, Cloneable
    * exception will be thrown.  See the documentation for those
    * contants for an explanation of this setting.
    *
-   * @param decmp The new decomposition setting.
+   * @param mode The new decomposition setting.
    *
    * @exception IllegalArgumentException If the requested
    * decomposition setting is not valid.

@@ -1,5 +1,5 @@
-/* FileChannelImpl.java -- 
-   Copyright (C) 2002 Free Software Foundation, Inc.
+/* FileLockImpl.java -- FileLock associated with a FileChannelImpl.
+   Copyright (C) 2002, 2004, 2005 Free Software Foundation, Inc.
 
 This file is part of GNU Classpath.
 
@@ -15,8 +15,8 @@ General Public License for more details.
 
 You should have received a copy of the GNU General Public License
 along with GNU Classpath; see the file COPYING.  If not, write to the
-Free Software Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA
-02111-1307 USA.
+Free Software Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA
+02110-1301 USA.
 
 Linking this library statically or dynamically with other modules is
 making a combined work based on this library.  Thus, the terms and
@@ -38,49 +38,67 @@ exception statement from your version. */
 
 package gnu.java.nio;
 
-import java.io.FileDescriptor;
+import gnu.java.nio.channels.FileChannelImpl;
+
 import java.io.IOException;
-import java.nio.channels.FileChannel;
 import java.nio.channels.FileLock;
-import gnu.classpath.Configuration;
 
 /**
+ * A FileLock associated with a FileChannelImpl.
+ *
  * @author Michael Koch
  * @since 1.4
  */
-public class FileLockImpl extends FileLock
+public final class FileLockImpl extends FileLock
 {
-  static
-  {
-    // load the shared library needed for native methods.
-    if (Configuration.INIT_LOAD_LIBRARY)
-      {
-        System.loadLibrary ("javanio");
-      }
-  }
-  
-  private FileDescriptor fd;
-  private boolean released;
-  
-  public FileLockImpl (FileDescriptor fd, FileChannel channel, long position,
+  /**
+   * Whether or not this lock is valid, false when channel is closed or
+   * release has been explicitly called.
+   */
+  private boolean valid;
+
+  public FileLockImpl (FileChannelImpl channel, long position,
                        long size, boolean shared)
   {
     super (channel, position, size, shared);
-    this.fd = fd;
-    this.released = false;
+    valid = true;
+  }
+
+  /**
+   * Releases this lock.
+   */
+  protected void finalize()
+  {
+    try
+      {
+	release();
+      }
+    catch (IOException e)
+      {
+	// Ignore this.
+      }
   }
   
-  public boolean isValid ()
+  /**
+   * Whether or not this lock is valid, false when channel is closed or
+   * release has been explicitly called.
+   */
+  public boolean isValid()
   {
-    return (released
-            || !channel ().isOpen ());
+    if (valid)
+      valid = channel().isOpen();
+    return valid;
   }
 
-  private native void releaseImpl () throws IOException;
-
-  public synchronized void release () throws IOException
+  /**
+   * Releases the lock if it is still valid. Marks this lock as invalid.
+   */
+  public void release() throws IOException
   {
-    releaseImpl ();
-    released = true;
+    if (isValid())
+      {
+	valid = false;
+	((FileChannelImpl) channel()).unlock(position(), size());
+      }
   }
 }

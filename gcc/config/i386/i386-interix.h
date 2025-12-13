@@ -1,6 +1,6 @@
 /* Target definitions for GCC for Intel 80386 running Interix
-   Parts Copyright (C) 1991, 1999, 2000, 2002, 2003, 2004
-   Free Software Foundation, Inc.
+   Parts Copyright (C) 1991, 1999, 2000, 2002, 2003, 2004, 2007, 2008, 2009,
+   2010 Free Software Foundation, Inc.
 
    Parts:
      by Douglas B. Rupp (drupp@cs.washington.edu).
@@ -12,7 +12,7 @@ This file is part of GCC.
 
 GCC is free software; you can redistribute it and/or modify
 it under the terms of the GNU General Public License as published by
-the Free Software Foundation; either version 2, or (at your option)
+the Free Software Foundation; either version 3, or (at your option)
 any later version.
 
 GCC is distributed in the hope that it will be useful,
@@ -21,18 +21,14 @@ MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
 GNU General Public License for more details.
 
 You should have received a copy of the GNU General Public License
-along with GCC; see the file COPYING.  If not, write to
-the Free Software Foundation, 59 Temple Place - Suite 330,
-Boston, MA 02111-1307, USA.  */
+along with GCC; see the file COPYING3.  If not see
+<http://www.gnu.org/licenses/>.  */
 
 /* The rest must follow.  */
 
 #define DBX_DEBUGGING_INFO 1
 #define SDB_DEBUGGING_INFO 1
 #define PREFERRED_DEBUGGING_TYPE DBX_DEBUG
-
-#define HANDLE_SYSV_PRAGMA 1
-#undef HANDLE_PRAGMA_WEAK  /* until the link format can handle it */
 
 /* By default, target has a 80387, uses IEEE compatible arithmetic,
    and returns float values in the 387 and needs stack probes
@@ -44,7 +40,7 @@ Boston, MA 02111-1307, USA.  */
     MASK_ALIGN_DOUBLE | MASK_MS_BITFIELD_LAYOUT)
 
 #undef TARGET_CPU_DEFAULT
-#define TARGET_CPU_DEFAULT 2 /* 486 */
+#define TARGET_CPU_DEFAULT TARGET_CPU_DEFAULT_i486
 
 #define WCHAR_TYPE_SIZE 16
 #define WCHAR_TYPE "short unsigned int"
@@ -53,6 +49,8 @@ Boston, MA 02111-1307, USA.  */
 #define SIZE_TYPE "unsigned int"
 
 #define ASM_LOAD_ADDR(loc, reg)   "     leal " #loc "," #reg "\n"
+
+#define TARGET_DECLSPEC 1
 
 /* cpp handles __STDC__ */
 #define TARGET_OS_CPP_BUILTINS()					\
@@ -64,7 +62,6 @@ Boston, MA 02111-1307, USA.  */
 	builtin_define ("_X86_=1");					\
 	builtin_define ("__stdcall=__attribute__((__stdcall__))");	\
 	builtin_define ("__cdecl=__attribute__((__cdecl__))");		\
-	builtin_define ("__declspec(x)=__attribute__((x))");		\
 	builtin_assert ("system=unix");					\
 	builtin_assert ("system=interix");				\
 	if (preprocessing_asm_p ())					\
@@ -83,7 +80,7 @@ Boston, MA 02111-1307, USA.  */
 #undef CPP_SPEC
 /* Write out the correct language type definition for the header files.  
    Unless we have assembler language, write out the symbols for C.
-   mieee is an Alpha specific variant.  Cross polination a bad idea.
+   mieee is an Alpha specific variant.  Cross pollination a bad idea.
    */
 #define CPP_SPEC "-remap %{posix:-D_POSIX_SOURCE} \
 -isystem %$INTERIX_ROOT/usr/include"
@@ -209,7 +206,7 @@ Boston, MA 02111-1307, USA.  */
 	  else								\
 	    {								\
 	      if (bytes_in_chunk == 0)					\
-		fprintf ((FILE), "\t.byte\t");				\
+		fputs (ASM_BYTE, (FILE));				\
 	      else							\
 		fputc (',', (FILE));					\
 	      fprintf ((FILE), "0x%02x", *_ascii_bytes);		\
@@ -217,7 +214,7 @@ Boston, MA 02111-1307, USA.  */
 	    }								\
 	}								\
       if (bytes_in_chunk > 0)						\
-        fprintf ((FILE), "\n");						\
+        fputc ('\n', (FILE));						\
     }									\
   while (0)
 
@@ -277,18 +274,15 @@ do {									\
 #define ASM_OUTPUT_DEF(FILE,LABEL1,LABEL2)				\
 do									\
 {									\
-    fprintf ((FILE), "%s", SET_ASM_OP);					\
+    fputs (SET_ASM_OP, (FILE));						\
     assemble_name (FILE, LABEL1);					\
-    fprintf (FILE, ",");						\
+    fputc (',', (FILE));						\
     assemble_name (FILE, LABEL2);					\
-    fprintf (FILE, "\n");						\
+    fputc ('\n', (FILE));						\
     }									\
 while (0)
 
-#define HOST_PTR_PRINTF "%p"
 #define HOST_PTR_AS_INT unsigned long
-
-#define PCC_BITFIELD_TYPE_MATTERS 1
 
 /* The following two flags are usually "off" for i386, because some non-gnu
    tools (for the i386) don't handle them.  However, we don't have that
@@ -326,8 +320,7 @@ while (0)
    differently depending on something about the variable or
    function named by the symbol (such as what section it is in).  */
 
-#undef TARGET_ENCODE_SECTION_INFO
-#define TARGET_ENCODE_SECTION_INFO i386_pe_encode_section_info
+#define SUBTARGET_ENCODE_SECTION_INFO i386_pe_encode_section_info
 #undef  TARGET_STRIP_NAME_ENCODING
 #define TARGET_STRIP_NAME_ENCODING  i386_pe_strip_name_encoding_full
 
@@ -336,14 +329,12 @@ while (0)
    .data$ sections correctly. See corresponding note in i386/interix.c. 
    MK.  */
 
-/* Define this macro if in some cases global symbols from one translation
-   unit may not be bound to undefined symbols in another translation unit
-   without user intervention.  For instance, under Microsoft Windows
-   symbols must be explicitly imported from shared libraries (DLLs).  */
-#define MULTIPLE_SYMBOL_SPACES
+/* Interix uses explicit import from shared libraries.  */
+#define MULTIPLE_SYMBOL_SPACES 1
 
 extern void i386_pe_unique_section (tree, int);
 #define TARGET_ASM_UNIQUE_SECTION i386_pe_unique_section
+#define TARGET_ASM_FUNCTION_RODATA_SECTION default_no_function_rodata_section
 
 #define SUPPORTS_ONE_ONLY 1
 #endif /* 0 */
@@ -361,7 +352,6 @@ extern void i386_pe_unique_section (tree, int);
 
 #define DEFAULT_PCC_STRUCT_RETURN 0
 
-#undef RETURN_IN_MEMORY
-#define RETURN_IN_MEMORY(TYPE) \
-  (TYPE_MODE (TYPE) == BLKmode || \
-     (AGGREGATE_TYPE_P (TYPE) && int_size_in_bytes(TYPE) > 8 ))
+#define SUBTARGET_RETURN_IN_MEMORY(TYPE, FNTYPE) \
+	(TYPE_MODE (TYPE) == BLKmode \
+	 || (AGGREGATE_TYPE_P (TYPE) && int_size_in_bytes (TYPE) > 8 ))

@@ -1,11 +1,11 @@
 // 2001-05-21 Benjamin Kosnik  <bkoz@redhat.com>
 
-// Copyright (C) 2001, 2002, 2003 Free Software Foundation, Inc.
+// Copyright (C) 2001, 2002, 2003, 2009, 2010 Free Software Foundation, Inc.
 //
 // This file is part of the GNU ISO C++ Library.  This library is free
 // software; you can redistribute it and/or modify it under the
 // terms of the GNU General Public License as published by the
-// Free Software Foundation; either version 2, or (at your option)
+// Free Software Foundation; either version 3, or (at your option)
 // any later version.
 
 // This library is distributed in the hope that it will be useful,
@@ -14,11 +14,12 @@
 // GNU General Public License for more details.
 
 // You should have received a copy of the GNU General Public License along
-// with this library; see the file COPYING.  If not, write to the Free
-// Software Foundation, 59 Temple Place - Suite 330, Boston, MA 02111-1307,
-// USA.
+// with this library; see the file COPYING3.  If not see
+// <http://www.gnu.org/licenses/>.
 
 // 27.8.1.4 Overridden virtual functions
+
+// { dg-require-fileio "" }
 
 #include <fstream>
 #include <testsuite_hooks.h>
@@ -40,7 +41,7 @@ void test01()
 
   bool test __attribute__((unused)) = true;
   streamsize 			strmsz_1, strmsz_2;
-  int_type 			c1, c2, c3;
+  int_type 			c1, c2;
 
   // int_type sungetc()
   // if in_cur not avail, return pbackfail(), else decrement and
@@ -55,7 +56,7 @@ void test01()
     fb_01.sputc('u');
     fb_01.sputc('v');
     fb_01.pubseekoff(-1, std::ios_base::end);
-    c3 = fb_01.sbumpc();
+    fb_01.sbumpc();
     strmsz_1 = fb_01.in_avail();
     c2 = fb_01.sungetc(); 
     strmsz_2 = fb_01.in_avail();
@@ -67,7 +68,7 @@ void test01()
     c1 = fb_01.sgetc(); 
     c2 = fb_01.sungetc();
     strmsz_2 = fb_01.in_avail(); // 1
-    c3 = fb_01.sgetc();
+    fb_01.sgetc();
     VERIFY( c1 != c2 );
     VERIFY( strmsz_2 != strmsz_1 );
     VERIFY( strmsz_2 == 1 );

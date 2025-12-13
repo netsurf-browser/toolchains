@@ -2,6 +2,13 @@
 @setfilename gcj.info
 @settitle Guide to GNU gcj
 
+@c Merge the standard indexes into a single one.
+@syncodeindex fn cp
+@syncodeindex vr cp
+@syncodeindex ky cp
+@syncodeindex pg cp
+@syncodeindex tp cp
+
 @include gcc-common.texi
 
 @c Note: When reading this manual you'll find lots of strange
@@ -10,24 +17,20 @@
 @c the word ``Java'.
 
 @c When this manual is copyrighted.
-@set copyrights-gcj 2001, 2002
-
-@c Versions
-@set which-gcj GCC-@value{version-GCC}
+@set copyrights-gcj 2001, 2002, 2003, 2004, 2005, 2006, 2007, 2008, 2010
 
 @copying
 @c man begin COPYRIGHT
 Copyright @copyright{} @value{copyrights-gcj} Free Software Foundation, Inc.
 
 Permission is granted to copy, distribute and/or modify this document
-under the terms of the GNU Free Documentation License, Version 1.2 or
-any later version published by the Free Software Foundation; with the
-Invariant Sections being ``GNU General Public License'', the Front-Cover
-texts being (a) (see below), and with the Back-Cover Texts being (b)
-(see below).  A copy of the license is included in the
+under the terms of the GNU Free Documentation License, Version 1.3 or
+any later version published by the Free Software Foundation; with no
+Invariant Sections, the Front-Cover Texts being (a) (see below), and
+with the Back-Cover Texts being (b) (see below).
+A copy of the license is included in the
 @c man end
-section entitled
-``GNU Free Documentation License''.
+section entitled ``GNU Free Documentation License''.
 @ignore
 @c man begin COPYRIGHT
 man page gfdl(7).
@@ -50,26 +53,29 @@ man page gfdl(7).
 
 @ifinfo
 @format
-@dircategory Programming
+@dircategory Software development
 @direntry
 * Gcj: (gcj).               Ahead-of-time compiler for the Java language
 @end direntry
 
 @dircategory Individual utilities
 @direntry
-* gcjh: (gcj)Invoking gcjh.
-                            Generate header files from Java class files
-* jv-scan: (gcj)Invoking jv-scan.
-                            Print information about Java source files
 * jcf-dump: (gcj)Invoking jcf-dump.
                             Print information about Java class files
 * gij: (gcj)Invoking gij.   GNU interpreter for Java bytecode
+* gcj-dbtool: (gcj)Invoking gcj-dbtool.
+                            Tool for manipulating class file databases.
 * jv-convert: (gcj)Invoking jv-convert.
                             Convert file from one encoding to another
-* rmic: (gcj)Invoking rmic.
+* grmic: (gcj)Invoking grmic.
                             Generate stubs for Remote Method Invocation.
-* rmiregistry: (gcj)Invoking rmiregistry.
-                            The remote object registry.
+* gc-analyze: (gcj)Invoking gc-analyze.
+                            Analyze Garbage Collector (GC) memory dumps.
+* aot-compile: (gcj)Invoking aot-compile.
+                            Compile bytecode to native and generate databases.
+* rebuild-gcj-db: (gcj)Invoking rebuild-gcj-db.
+                            Merge the per-solib databases made by aot-compile
+                            into one system-wide database.
 @end direntry
 @end format
 
@@ -78,15 +84,14 @@ man page gfdl(7).
 
 @titlepage
 @title GNU gcj
+@versionsubtitle
 @author Tom Tromey
 
 @page
 @vskip 0pt plus 1filll
-For the @value{which-gcj} Version*
-@sp 1
 Published by the Free Software Foundation @*
-59 Temple Place - Suite 330@*
-Boston, MA 02111-1307, USA@*
+51 Franklin Street, Fifth Floor@*
+Boston, MA 02110-1301, USA@*
 @sp 1
 @insertcopying
 @end titlepage
@@ -103,25 +108,28 @@ files and object files, and it can read both Java source code and
 @file{.class} files.
 
 @menu
-* Copying::		 The GNU General Public License
+* Copying::             The GNU General Public License
 * GNU Free Documentation License::
-			How you can share and copy this manual
-* Invoking gcj::	Compiler options supported by @command{gcj}
-* Compatibility::	Compatibility between gcj and other tools for Java
-* Invoking gcjh::       Generate header files from class files
-* Invoking jv-scan::    Print information about source files
+                        How you can share and copy this manual
+* Invoking gcj::        Compiler options supported by @command{gcj}
+* Compatibility::       Compatibility between gcj and other tools for Java
 * Invoking jcf-dump::   Print information about class files
-* Invoking gij::	Interpreting Java bytecodes
+* Invoking gij::        Interpreting Java bytecodes
+* Invoking gcj-dbtool:: Tool for manipulating class file databases.
 * Invoking jv-convert:: Converting from one encoding to another
-* Invoking rmic::        Generate stubs for Remote Method Invocation.
-* Invoking rmiregistry:: The remote object registry.
+* Invoking grmic::      Generate stubs for Remote Method Invocation.
+* Invoking gc-analyze:: Analyze Garbage Collector (GC) memory dumps.
+* Invoking aot-compile:: Compile bytecode to native and generate databases.
+* Invoking rebuild-gcj-db:: Merge the per-solib databases made by aot-compile
+                            into one system-wide database.
 * About CNI::           Description of the Compiled Native Interface
 * System properties::   Modifying runtime behavior of the libgcj library
-* Resources::		Where to look for more information
+* Resources::           Where to look for more information
+* Index::               Index.
 @end menu
 
 
-@include gpl.texi
+@include gpl_v3.texi
 
 @include fdl.texi
 
@@ -142,7 +150,7 @@ gcj [@option{-I}@var{dir}@dots{}] [@option{-d} @var{dir}@dots{}]
     @var{sourcefile}@dots{}
 @c man end
 @c man begin SEEALSO gcj
-gcc(1), gcjh(1), gij(1), jv-scan(1), jcf-dump(1), gfdl(7),
+gcc(1), gcjh(1), gjnih(1), gij(1), jcf-dump(1), gfdl(7),
 and the Info entries for @file{gcj} and @file{gcc}.
 @c man end
 @end ignore
@@ -158,11 +166,12 @@ options specific to @command{gcj}.
 
 @menu
 * Input and output files::
-* Input Options::		How gcj finds files
+* Input Options::               How gcj finds files
 * Encodings::                   Options controlling source file encoding
-* Warnings::			Options controlling warnings specific to gcj
-* Code Generation::		Options controlling the output of gcj
-* Configure-time Options::	Options you won't use
+* Warnings::                    Options controlling warnings specific to gcj
+* Linking::                     Options for making an executable
+* Code Generation::             Options controlling the output of gcj
+* Configure-time Options::      Options you won't use
 @end menu
 
 @c man begin OPTIONS gcj
@@ -184,7 +193,7 @@ Java bytecode files.
 An archive containing one or more @code{.class} files, all of
 which are compiled.  The archive may be compressed.  Files in
 an archive which don't end with @samp{.class} are treated as
-resource files; they are copmiled into the resulting object file
+resource files; they are compiled into the resulting object file
 as @samp{core:} URLs.
 @item @@@var{file}
 A file containing a whitespace-separated list of input file names.
@@ -224,7 +233,7 @@ searches the class path looking for matching @file{.class} or
 points at the installed @file{libgcj.jar}, a file which contains all the
 standard classes.
 
-In the below, a directory or path component can refer either to an
+In the text below, a directory or path component can refer either to an
 actual directory on the filesystem, or to a @file{.zip} or @file{.jar}
 file, which @command{gcj} will search as if it is a directory.
 
@@ -290,6 +299,10 @@ behavior in this particular case.)
 This forces the compiler to always check for the special zero length
 attribute @code{gnu.gcj.gcj-compiled} in @code{java.lang.Object} and
 issue an error if it isn't found.
+
+@item -fsource=@var{VERSION}
+This option is used to choose the source version accepted by
+@command{gcj}.  The default is @samp{1.5}.
 @end table
 
 @node Encodings
@@ -353,21 +366,45 @@ This is the same as @code{-Wredundant-modifiers -Wextraneous-semicolon
 @end table
 
 
-@node Code Generation
-@section Code Generation
+@node Linking
+@section Linking
 
-In addition to the many @command{gcc} options controlling code generation,
-@command{gcj} has several options specific to itself.
+To turn a Java application into an executable program,
+you need to link it with the needed libraries, just as for C or C++.
+The linker by default looks for a global function named @code{main}.
+Since Java does not have global functions, and a
+collection of Java classes may have more than one class with a
+@code{main} method, you need to let the linker know which of those
+@code{main} methods it should invoke when starting the application.
+You can do that in any of these ways:
+
+@itemize @bullet
+@item
+Specify the class containing the desired @code{main} method
+when you link the application, using the @code{--main} flag,
+described below.
+@item
+Link the Java package(s) into a shared library (dll) rather than an
+executable.  Then invoke the application using the @code{gij} program,
+making sure that @code{gij} can find the libraries it needs.
+@item
+Link the Java packages(s) with the flag @code{-lgij}, which links
+in the @code{main} routine from the @code{gij} command.
+This allows you to select the class whose @code{main} method you
+want to run when you run the application.  You can also use
+other @code{gij} flags, such as @code{-D} flags to set properties.
+Using the @code{-lgij} library (rather than the @code{gij} program
+of the previous mechanism) has some advantages: it is compatible with
+static linking, and does not require configuring or installing libraries.
+@end itemize
+
+These @code{gij} options relate to linking an executable:
 
 @table @gcctabopt
 @item --main=@var{CLASSNAME}
 This option is used when linking to specify the name of the class whose
 @code{main} method should be invoked when the resulting executable is
-run.  @footnote{The linker by default looks for a global function named
-@code{main}.  Since Java does not have global functions, and a
-collection of Java classes may have more than one class with a
-@code{main} method, you need to let the linker know which of those
-@code{main} methods it should invoke when starting the application.}
+run.
 
 @item -D@var{name}[=@var{value}]
 This option can only be used with @code{--main}.  It defines a system
@@ -375,6 +412,35 @@ property named @var{name} with value @var{value}.  If @var{value} is not
 specified then it defaults to the empty string.  These system properties
 are initialized at the program's startup and can be retrieved at runtime
 using the @code{java.lang.System.getProperty} method.
+
+@item -lgij
+Create an application whose command-line processing is that
+of the @code{gij} command.
+
+This option is an alternative to using @code{--main}; you cannot use both.
+
+@item -static-libgcj
+This option causes linking to be done against a static version of the
+libgcj runtime library.  This option is only available if
+corresponding linker support exists.
+
+@strong{Caution:} Static linking of libgcj may cause essential parts
+of libgcj to be omitted.  Some parts of libgcj use reflection to load
+classes at runtime.  Since the linker does not see these references at
+link time, it can omit the referred to classes.  The result is usually
+(but not always) a @code{ClassNotFoundException} being thrown at
+runtime. Caution must be used when using this option.  For more
+details see:
+@w{@uref{http://gcc.gnu.org/wiki/Statically%20linking%20libgcj}}
+@end table
+
+@node Code Generation
+@section Code Generation
+
+In addition to the many @command{gcc} options controlling code generation,
+@command{gcj} has several options specific to itself.
+
+@table @gcctabopt
 
 @item -C
 This option is used to tell @command{gcj} to generate bytecode
@@ -388,6 +454,11 @@ protocol handler as @samp{core:/@var{resource-name}}.  Note that
 instance, it could be used in a call to @code{ResourceBundle.getBundle}.
 The actual file name to be compiled this way must be specified
 separately.
+
+@item -ftarget=@var{VERSION}
+This can be used with @option{-C} to choose the version of bytecode
+emitted by @command{gcj}.  The default is @samp{1.5}.  When not
+generating bytecode, this option has no effect.
 
 @item -d @var{directory}
 When used with @code{-C}, this causes all generated @file{.class} files
@@ -431,6 +502,76 @@ to initialize static classes upon their first use (this optimization
 isn't carried out if @code{-C} was specified.) When compiling to native
 code, @code{-fno-optimize-static-class-initialization} will turn this
 optimization off, regardless of the optimization level in use.
+
+@item --disable-assertions[=@var{class-or-package}]
+Don't include code for checking assertions in the compiled code.
+If @code{=@var{class-or-package}} is missing disables assertion code
+generation for all classes, unless overridden by a more
+specific @code{--enable-assertions} flag.
+If @var{class-or-package} is a class name, only disables generating
+assertion checks within the named class or its inner classes.
+If @var{class-or-package} is a package name, disables generating
+assertion checks within the named package or a subpackage.
+
+By default, assertions are enabled when generating class files
+or when not optimizing, and disabled when generating optimized binaries.
+
+@item --enable-assertions[=@var{class-or-package}]
+Generates code to check assertions.  The option is perhaps misnamed,
+as you still need to turn on assertion checking at run-time,
+and we don't support any easy way to do that.
+So this flag isn't very useful yet, except to partially override
+@code{--disable-assertions}.
+
+@item -findirect-dispatch
+@command{gcj} has a special binary compatibility ABI, which is enabled
+by the @code{-findirect-dispatch} option.  In this mode, the code
+generated by @command{gcj} honors the binary compatibility guarantees
+in the Java Language Specification, and the resulting object files do
+not need to be directly linked against their dependencies.  Instead,
+all dependencies are looked up at runtime.  This allows free mixing of
+interpreted and compiled code.
+
+Note that, at present, @code{-findirect-dispatch} can only be used
+when compiling @file{.class} files.  It will not work when compiling
+from source.  CNI also does not yet work with the binary compatibility
+ABI.  These restrictions will be lifted in some future release.
+
+However, if you compile CNI code with the standard ABI, you can call
+it from code built with the binary compatibility ABI.
+
+@item -fbootstrap-classes
+This option can be use to tell @code{libgcj} that the compiled classes
+should be loaded by the bootstrap loader, not the system class loader.
+By default, if you compile a class and link it into an executable, it
+will be treated as if it was loaded using the system class loader.
+This is convenient, as it means that things like
+@code{Class.forName()} will search @samp{CLASSPATH} to find the
+desired class.
+
+@item -freduced-reflection
+This option causes the code generated by @command{gcj} to contain a
+reduced amount of the class meta-data used to support runtime
+reflection. The cost of this savings is the loss of
+the ability to use certain reflection capabilities of the standard
+Java runtime environment. When set all meta-data except for that
+which is needed to obtain correct runtime semantics is eliminated.
+
+For code that does not use reflection (i.e. serialization, RMI, CORBA
+or call methods in the @code{java.lang.reflect} package),
+@code{-freduced-reflection} will result in proper operation with a
+savings in executable code size.
+
+JNI (@code{-fjni}) and the binary compatibility ABI
+(@code{-findirect-dispatch}) do not work properly without full
+reflection meta-data.  Because of this, it is an error to use these options
+with @code{-freduced-reflection}.
+
+@strong{Caution:} If there is no reflection meta-data, code that uses
+a @code{SecurityManager} may not work properly.  Also calling
+@code{Class.forName()} may fail if the calling method has no
+reflection meta-data.
+
 @end table
 
 
@@ -466,6 +607,13 @@ On some systems it's necessary to insert inline checks whenever
 accessing an object via a reference.  On other systems you won't need
 this because null pointer accesses are caught automatically by the
 processor.
+
+@item -fuse-atomic-builtins
+On some systems, gcc can generate code for built-in atomic operations.
+Use this option to force gcj to use these builtins when compiling Java
+code.  Where this capability is present it should be automatically
+detected, so you won't usually need to use this option.
+
 @end table
 
 @c man end
@@ -533,16 +681,26 @@ added are to facilitate this functionality.
 @xref{About CNI}, for more info on how to use this in your programs.
 
 @item
-When you compile your classes into a shared library they can be automatically
-loaded by the @code{libgcj} system classloader.  When trying to load a class
-@code{gnu.pkg.SomeClass} the system classloader will first try to load the
-shared library @file{lib-gnu-pkg-SomeClass.so}, if that fails to load the
-class then it will try to load @file{lib-gnu-pkg.so} and finally when the
-class is still not loaded it will try to load @file{lib-gnu.so}.  Note that
+When you compile your classes into a shared library using
+@code{-findirect-dispatch} then add them to the system-wide
+classmap.db file using @code{gcj-dbtool}, they will be automatically
+loaded by the @code{libgcj} system classloader.  This is the new,
+preferred classname-to-library resolution mechanism.  @xref{Invoking
+gcj-dbtool}, for more information on using the classmap database.
+
+@item
+The old classname-to-library lookup mechanism is still supported
+through the @code{gnu.gcj.runtime.VMClassLoader.library_control}
+property, but it is deprecated and will likely be removed in some
+future release.  When trying to load a class @code{gnu.pkg.SomeClass}
+the system classloader will first try to load the shared library
+@file{lib-gnu-pkg-SomeClass.so}, if that fails to load the class then
+it will try to load @file{lib-gnu-pkg.so} and finally when the class
+is still not loaded it will try to load @file{lib-gnu.so}.  Note that
 all @samp{.}s will be transformed into @samp{-}s and that searching
-for inner classes starts with their outermost outer class.  If the class
-cannot be found this way the system classloader tries to use
-the @code{libgcj} bytecode interpreter to load the class from the standard
+for inner classes starts with their outermost outer class.  If the
+class cannot be found this way the system classloader tries to use the
+@code{libgcj} bytecode interpreter to load the class from the standard
 classpath.  This process can be controlled to some degree via the
 @code{gnu.gcj.runtime.VMClassLoader.library_control} property;
 @xref{libgcj Runtime Properties}.
@@ -574,170 +732,6 @@ setting.
 
 @end itemize
 
-
-@node Invoking gcjh
-@chapter Invoking gcjh
-
-@c man title gcjh generate header files from Java class files
-
-@c man begin DESCRIPTION gcjh
-
-The @code{gcjh} program is used to generate header files from class
-files.  It can generate both CNI and JNI header files, as well as stub
-implementation files which can be used as a basis for implementing the
-required native methods.
-
-@c man end
-
-@ignore
-@c man begin SYNOPSIS gcjh
-gcjh [@option{-stubs}] [@option{-jni}]
-    [@option{-add} @var{text}] [@option{-append} @var{text}] [@option{-friend} @var{text}]
-    [@option{-preprend} @var{text}]
-    [@option{--classpath}=@var{path}] [@option{--CLASSPATH}=@var{path}]
-    [@option{-I}@var{dir}@dots{}] [@option{-d} @var{dir}@dots{}]
-    [@option{-o} @var{file}] [@option{-td} @var{dir}]
-    [@option{-M}] [@option{-MM}] [@option{-MD}] [@option{-MMD}]
-    [@option{--version}] [@option{--help}] [@option{-v}] [@option{--verbose}]
-    @var{classname}@dots{}
-@c man end
-@c man begin SEEALSO gcjh
-gcc(1), gcj(1), gij(1), jv-scan(1), jcf-dump(1), gfdl(7),
-and the Info entries for @file{gcj} and @file{gcc}.
-@c man end
-@end ignore
-
-@c man begin OPTIONS gcjh
-
-@table @gcctabopt
-@item -stubs
-This causes @code{gcjh} to generate stub files instead of header files.
-By default the stub file will be named after the class, with a suffix of
-@samp{.cc}.  In JNI mode, the default output file will have the suffix
-@samp{.c}.
-
-@item -jni
-This tells @code{gcjh} to generate a JNI header or stub.  By default,
-CNI headers are generated.
-
-@item -add @var{text}
-Inserts @var{text} into the class body.  This is ignored in JNI mode.
-
-@item -append @var{text}
-Inserts @var{text} into the header file after the class declaration.
-This is ignored in JNI mode.
-
-@item -friend @var{text}
-Inserts @var{text} into the class as a @code{friend} declaration.
-This is ignored in JNI mode.
-
-@item -prepend @var{text}
-Inserts @var{text} into the header file before the class declaration.
-This is ignored in JNI mode.
-
-@item --classpath=@var{path}
-@itemx --CLASSPATH=@var{path}
-@itemx -I@var{directory}
-@itemx -d @var{directory}
-@itemx -o @var{file}
-These options are all identical to the corresponding @command{gcj} options.
-
-@item -o @var{file}
-Sets the output file name.  This cannot be used if there is more than
-one class on the command line.
-
-@item -td @var{directory}
-Sets the name of the directory to use for temporary files.
-
-@item -M
-Print all dependencies to stdout; suppress ordinary output.
-
-@item -MM
-Print non-system dependencies to stdout; suppress ordinary output.
-
-@item -MD
-Print all dependencies to stdout.
-
-@item -MMD
-Print non-system dependencies to stdout.
-
-@item --help
-Print help about @code{gcjh} and exit.  No further processing is done.
-
-@item --version
-Print version information for @code{gcjh} and exit.  No further
-processing is done.
-
-@item -v, --verbose
-Print extra information while running.
-@end table
-
-All remaining options are considered to be names of classes.
-
-@c man end
-
-@node Invoking jv-scan
-@chapter Invoking jv-scan
-
-@c man title jv-scan print information about Java source file
-
-@c man begin DESCRIPTION jv-scan
-
-The @code{jv-scan} program can be used to print information about a Java
-source file (@file{.java} file).
-
-@c man end
-
-@ignore
-@c man begin SYNOPSIS jv-scan
-jv-scan [@option{--no-assert}] [@option{--complexity}] 
-    [@option{--encoding}=@var{name}] [@option{--print-main}] 
-    [@option{--list-class}] [@option{--list-filename}]
-    [@option{--version}] [@option{--help}]
-    [@option{-o} @var{file}] @var{inputfile}@dots{}
-@c man end
-@c man begin SEEALSO jv-scan
-gcc(1), gcj(1), gcjh(1), gij(1), jcf-dump(1), gfdl(7),
-and the Info entries for @file{gcj} and @file{gcc}.
-@c man end
-@end ignore
-
-@c man begin OPTIONS jv-scan
-
-@table @gcctabopt
-@item --no-assert
-Don't recognize the @code{assert} keyword, for backwards compatibility
-with older versions of the language specification.
-
-@item --complexity
-This prints a complexity measure, related to cyclomatic complexity, for
-each input file.
-
-@item --encoding=@var{name}
-This works like the corresponding @command{gcj} option.
-
-@item --print-main
-This prints the name of the class in this file containing a @code{main}
-method.
-
-@item --list-class
-This lists the names of all classes defined in the input files.
-
-@item --list-filename
-If @code{--list-class} is given, this option causes @code{jv-scan} to
-also print the name of the file in which each class was found.
-
-@item -o @var{file}
-Print output to the named file.
-
-@item --help
-Print help, then exit.
-
-@item --version
-Print version number, then exit.
-@end table
-
-@c man end
 
 @node Invoking jcf-dump
 @chapter Invoking jcf-dump
@@ -772,6 +766,10 @@ or file name.
 @item -c
 Disassemble method bodies.  By default method bodies are not printed.
 
+@item --print-constants
+Print the constant pool.  When printing a reference to a constant
+also print its index in the constant pool.
+
 @item --javap
 Generate output in @code{javap} format.  The implementation of this
 feature is very incomplete.
@@ -790,6 +788,7 @@ Print version number, then exit.
 
 @item -v, --verbose
 Print extra information while running.
+Implies @code{--print-constants}.
 @end table
 
 @c man end
@@ -807,11 +806,11 @@ gij [@option{-jar}] [@option{OPTION}] @dots{} @var{CLASS} [@var{ARGS}@dots{}]
   [@option{-cp} @var{path}] [@option{-classpath} @var{path}]
   [@option{-D}@var{name}[=@var{value}]@dots{}]
   [@option{-ms=}@var{number}] [@option{-mx=}@var{number}]
-  [@option{-X@var{argument}]
+  [@option{-X@var{argument}}] [@option{-verbose}] [@option{-verbose:class}]
   [@option{--showversion}] [@option{--version}] [@option{--help}][@option{-?}]
 @c man end
 @c man begin SEEALSO gij
-gcc(1), gcj(1), gcjh(1), jv-scan(1), jcf-dump(1), gfdl(7),
+gcc(1), gcj(1), gcjh(1), jcf-dump(1), gfdl(7),
 and the Info entries for @file{gcj} and @file{gcc}.
 @c man end
 @end ignore
@@ -863,16 +862,34 @@ be retrieved at runtime using the @code{java.lang.System.getProperty}
 method.
 
 @item -ms=@var{number}
-This sets the initial heap size.
+Equivalent to @code{-Xms}.
 
 @item -mx=@var{number}
-This sets the maximum heap size.
+Equivalent to @code{-Xmx}.
+
+@item -noverify
+Do not verify compliance of bytecode with the VM specification. In addition,
+this option disables type verification which is otherwise performed on BC-ABI
+compiled code.
 
 @item -X
 @itemx -X@var{argument}
 Supplying @code{-X} by itself will cause @code{gij} to list all the
-supported @code{-X} options.  Currently there are none.  Unrecognized
-@code{-X} options are ignored, for compatibility with other runtimes.
+supported @code{-X} options.  Currently these options are supported:
+
+@table @gcctabopt
+@item -Xms@var{size}
+Set the initial heap size.
+
+@item -Xmx@var{size}
+Set the maximum heap size.
+
+@item -Xss@var{size}
+Set the thread stack size.
+@end table
+
+Unrecognized @code{-X} options are ignored, for compatibility with
+other runtimes.
 
 @item -jar
 This indicates that the name passed to @code{gij} should be interpreted
@@ -885,8 +902,113 @@ Print help, then exit.
 @item --showversion
 Print version number and continue.
 
+@item --fullversion
+Print detailed version information, then exit.
+
 @item --version
 Print version number, then exit.
+
+@item -verbose
+@itemx -verbose:class
+Each time a class is initialized, print a short message on standard error.
+@end table
+
+@code{gij} also recognizes and ignores the following options, for
+compatibility with existing application launch scripts:
+@code{-client}, @code{-server}, @code{-hotspot}, @code{-jrockit},
+@code{-agentlib}, @code{-agentpath}, @code{-debug}, @code{-d32},
+@code{-d64}, @code{-javaagent}, @code{-noclassgc}, @code{-verify},
+and @code{-verifyremote}.
+
+@c man end
+
+@node Invoking gcj-dbtool
+@chapter Invoking gcj-dbtool.
+
+@c man title gcj-dbtool Manipulate class file mapping databases for libgcj
+
+@ignore
+@c man begin SYNOPSIS gcj-dbtool
+gcj-dbtool @option{OPTION} @var{DBFILE} [@option{MORE}] @dots{}
+
+gcj-dbtool [@option{-0}] [@option{-}] [@option{-n}] [@option{-a}] [@option{-f}]
+  [@option{-t}] [@option{-l}] [@option{-p} [@var{LIBDIR}]]
+  [@option{-v}] [@option{-m}] [@option{--version}] [@option{--help}]
+
+@c man end
+@c man begin SEEALSO gcj-dbtool
+gcc(1), gcj(1), gcjh(1), jcf-dump(1), gfdl(7),
+and the Info entries for @file{gcj} and @file{gcc}.
+@c man end
+@end ignore
+
+@c man begin DESCRIPTION gcj-dbtool
+
+@code{gcj-dbtool} is a tool for creating and manipulating class file
+mapping databases.  @code{libgcj} can use these databases to find a
+shared library corresponding to the bytecode representation of a
+class.  This functionality is useful for ahead-of-time compilation of
+a program that has no knowledge of @code{gcj}.
+
+@code{gcj-dbtool} works best if all the jar files added to it are
+compiled using @code{-findirect-dispatch}.
+
+Note that @code{gcj-dbtool} is currently available as ``preview
+technology''.  We believe it is a reasonable way to allow
+application-transparent ahead-of-time compilation, but this is an
+unexplored area.  We welcome your comments.
+
+@c man end
+
+@c man begin OPTIONS gcj-dbtool
+
+@table @gcctabopt
+@item -n @var{DBFILE} [@var{SIZE}]
+This creates a new database.  Currently, databases cannot be resized;
+you can choose a larger initial size if desired.  The default size is
+32,749.
+
+@item -a @var{DBFILE} @var{JARFILE} @var{LIB}
+@itemx -f @var{DBFILE} @var{JARFILE} @var{LIB}
+This adds a jar file to the database.  For each class file in the jar,
+a cryptographic signature of the bytecode representation of the class
+is recorded in the database.  At runtime, a class is looked up by its
+signature and the compiled form of the class is looked for in the
+corresponding shared library.  The @option{-a} option will verify
+that @var{LIB} exists before adding it to the database; @option{-f}
+skips this check.
+
+@item [@option{-}][@option{-0}] -m @var{DBFILE} @var{DBFILE},[@var{DBFILE}]
+Merge a number of databases.  The output database overwrites any
+existing database.  To add databases into an existing database,
+include the destination in the list of sources.
+
+If @option{-} or @option{-0} are used, the list of files to read is
+taken from standard input instead of the command line.  For
+@option{-0}, Input filenames are terminated by a null character
+instead of by whitespace.  Useful when arguments might contain white
+space.  The GNU find -print0 option produces input suitable for this
+mode.
+
+@item -t @var{DBFILE}
+Test a database.
+
+@item -l @var{DBFILE}
+List the contents of a database.
+
+@item -p
+Print the name of the default database.  If there is no default
+database, this prints a blank line.  If @var{LIBDIR} is specified, use
+it instead of the default library directory component of the database
+name.
+
+@item --help
+Print a help message, then exit.
+
+@item --version
+@itemx -v
+Print version information, then exit.
+
 @end table
 
 @c man end
@@ -950,13 +1072,13 @@ Print version information, then exit.
 
 @c man end
 
-@node Invoking rmic
-@chapter Invoking rmic
+@node Invoking grmic
+@chapter Invoking grmic
 
-@c man title rmic Generate stubs for Remote Method Invocation
+@c man title grmic Generate stubs for Remote Method Invocation
 
-@c man begin SYNOPSIS rmic
-@command{rmic} [@option{OPTION}] @dots{} @var{class} @dots{}
+@c man begin SYNOPSIS grmic
+@command{grmic} [@option{OPTION}] @dots{} @var{class} @dots{}
 @ignore
   [@option{-keep}]
   [@option{-keepgenerated}]
@@ -971,16 +1093,16 @@ Print version information, then exit.
 @end ignore
 @c man end
 
-@c man begin DESCRIPTION rmic
+@c man begin DESCRIPTION grmic
 
-@command{rmic} is a utility included with @code{libgcj} which generates
+@command{grmic} is a utility included with @code{libgcj} which generates
 stubs for remote objects.
 
 @c FIXME: Add real information here.
 @c This really isn't much more than the --help output.
 
 Note that this program isn't yet fully compatible with the JDK
-@command{rmic}.  Some options, such as @option{-classpath}, are
+@command{grmic}.  Some options, such as @option{-classpath}, are
 recognized but currently ignored.  We have left these options
 undocumented for now.
 
@@ -989,31 +1111,31 @@ instance, @option{--help} is accepted.
 
 @c man end
 
-@c man begin OPTIONS rmic
+@c man begin OPTIONS grmic
 
 @table @gcctabopt
 @item -keep
 @itemx -keepgenerated
-By default, @command{rmic} deletes intermediate files.  Either of these
+By default, @command{grmic} deletes intermediate files.  Either of these
 options causes it not to delete such files.
 
 @item -v1.1
-Cause @command{rmic} to create stubs and skeletons for the 1.1
+Cause @command{grmic} to create stubs and skeletons for the 1.1
 protocol version.
 
 @item -vcompat
-Cause @command{rmic} to create stubs and skeletons compatible with both
+Cause @command{grmic} to create stubs and skeletons compatible with both
 the 1.1 and 1.2 protocol versions.  This is the default.
 
 @item -v1.2
-Cause @command{rmic} to create stubs and skeletons for the 1.2
+Cause @command{grmic} to create stubs and skeletons for the 1.2
 protocol version.
 
 @item -nocompile
 Don't compile the generated files.
 
 @item -verbose
-Print information about what @command{rmic} is doing.
+Print information about what @command{grmic} is doing.
 
 @item -d @var{directory}
 Put output files in @var{directory}.  By default the files are put in
@@ -1029,32 +1151,80 @@ Print version information, then exit.
 @c man end
 
 
-@node Invoking rmiregistry
-@chapter Invoking rmiregistry
+@node Invoking gc-analyze
+@chapter Invoking gc-analyze
 
-@c man title rmiregistry Remote object registry
+@c man title gc-analyze Analyze Garbage Collector (GC) memory dumps
 
-@c man begin SYNOPSIS rmiregistry
-@command{rmic} [@option{OPTION}] @dots{} [@var{port}]
+@c man begin SYNOPSIS gc-analyze
+@command{gc-analyze} [@option{OPTION}] @dots{} [@var{file}]
 @ignore
-  [@option{--help}]
+  [@option{-v}]
+  [@option{--verbose}]
+  [@option{-p} @var{tool-prefix}]
+  [@option{-d} @var{directory}]
   [@option{--version}]
+  [@option{--help}]
 @end ignore
 @c man end
 
-@c man begin DESCRIPTION rmiregistry
+@c man begin DESCRIPTION gc-analyze
 
-@command{rmiregistry} starts a remote object registry on the current
-host.  If no port number is specified, then port 1099 is used.
+@command{gc-analyze} prints an analysis of a GC memory dump to
+standard out.
+
+The memory dumps may be created by calling
+@code{gnu.gcj.util.GCInfo.enumerate(String namePrefix)} from java
+code.  A memory dump will be created on an out of memory condition if
+@code{gnu.gcj.util.GCInfo.setOOMDump(String namePrefix)} is called
+before the out of memory occurs.
+
+Running this program will create two files: @file{TestDump001} and
+@file{TestDump001.bytes}.
+
+@example
+import gnu.gcj.util.*;
+import java.util.*;
+
+public class GCDumpTest
+@{
+    static public void main(String args[])
+    @{
+        ArrayList<String> l = new ArrayList<String>(1000);
+
+        for (int i = 1; i < 1500; i++) @{
+            l.add("This is string #" + i);
+        @}
+        GCInfo.enumerate("TestDump");
+    @}
+@}
+@end example
+
+The memory dump may then be displayed by running:
+
+@example
+gc-analyze -v TestDump001
+@end example
 
 @c FIXME: Add real information here.
 @c This really isn't much more than the --help output.
 
 @c man end
 
-@c man begin OPTIONS rmiregistry
+@c man begin OPTIONS gc-analyze
 
 @table @gcctabopt
+@item --verbose
+@itemx -v
+Verbose output.
+
+@item -p @var{tool-prefix}
+Prefix added to the names of the @command{nm} and @command{readelf} commands.
+
+@item -d @var{directory}
+Directory that contains the executable and shared libraries used when
+the dump was generated.
+
 @item --help
 Print a help message, then exit.
 
@@ -1064,6 +1234,86 @@ Print version information, then exit.
 
 @c man end
 
+@node Invoking aot-compile
+@chapter Invoking aot-compile
+
+@c man title aot-compile Compile bytecode to native and generate databases
+
+@ignore
+
+@c man begin SYNOPSIS aot-compile
+aot-compile [@option{OPTION}] @dots{} @var{SRCDIR} @var{DSTDIR}
+
+aot-compile [@option{-M, --make}=@var{PATH}] [@option{-C, --gcj}=@var{PATH}]
+  [@option{-D, --dbtool}=@var{PATH}] [@option{-m, --makeflags}=@var{FLAGS}] 
+  [@option{-c, --gcjflags}=@var{FLAGS}] [@option{-l, --ldflags}=@var{FLAGS}] 
+  [@option{-e, --exclude}=@var{PATH}]
+@c man end
+
+@c man begin SEEALSO aot-compile
+gcc(1), gcj(1), gcjh(1), jcf-dump(1), gfdl(7),
+and the Info entries for @file{gcj} and @file{gcc}.
+@c man end
+
+@end ignore
+
+@c man begin DESCRIPTION aot-compile
+@code{aot-compile} is a script that searches a directory for Java bytecode
+(as class files, or in jars) and uses @code{gcj} to compile it to native
+code and generate the databases from it.
+@c man end
+
+@c man begin OPTIONS aot-compile
+@table @gcctabopt
+@item -M, --make=@var{PATH}
+Specify the path to the @code{make} executable to use.
+
+@item -C, --gcj=@var{PATH}
+Specify the path to the @code{gcj} executable to use.
+
+@item -D, --dbtool=@var{PATH}
+Specify the path to the @code{gcj-dbtool} executable to use.
+
+@item -m, --makeflags=@var{FLAGS}
+Specify flags to pass to @code{make} during the build.
+
+@item -c, --gcjflags=@var{FLAGS}
+Specify flags to pass to @code{gcj} during compilation, in addition to
+'-fPIC -findirect-dispatch -fjni'.
+
+@item -l, --ldflags=@var{FLAGS}
+Specify flags to pass to @code{gcj} during linking, in addition to
+'-Wl,-Bsymbolic'.
+
+@item -e, --exclude=@var{PATH}
+Do not compile @var{PATH}.
+
+@end table
+
+@c man end
+
+@node Invoking rebuild-gcj-db
+@chapter Invoking rebuild-gcj-db
+
+@c man title rebuild-gcj-db Merge the per-solib databases made by aot-compile into one system-wide database.
+@ignore
+
+@c man begin SYNOPSIS rebuild-gcj-db
+rebuild-gcj-db
+@c man end
+
+@c man begin SEEALSO rebuild-gcj-db
+gcc(1), gcj(1), gcjh(1), jcf-dump(1), gfdl(7),
+and the Info entries for @file{gcj} and @file{gcc}.
+@c man end
+
+@end ignore
+
+@c man begin DESCRIPTION rebuild-gcj-db
+@code{rebuild-gcj-db} is a script that merges the per-solib databases made by
+@code{aot-compile} into one system-wide database so @code{gij} can find the 
+solibs.
+@c man end
 
 @node About CNI
 @chapter About CNI
@@ -1076,18 +1326,20 @@ alternative to the standard JNI (Java Native Interface).
 @menu
 * Basic concepts::              Introduction to using CNI@.
 * Packages::                    How packages are mapped to C++.
-* Primitive types::             Handling Java types in C++.
+* Primitive types::             Handling primitive Java types in C++.
+* Reference types::             Handling Java reference types in C++.
 * Interfaces::                  How Java interfaces map to C++.
 * Objects and Classes::         C++ and Java classes.
 * Class Initialization::        How objects are initialized.
 * Object allocation::           How to create Java objects in C++.
+* Memory allocation::           How to allocate and free memory.
 * Arrays::                      Dealing with Java arrays in C++.
 * Methods::                     Java methods in C++.
 * Strings::                     Information about Java Strings.
 * Mixing with C++::             How CNI can interoperate with C++.
 * Exception Handling::          How exceptions are handled.
 * Synchronization::             Synchronizing between Java and C++.
-* Invocation::			Starting the Java runtime from C++.
+* Invocation::                  Starting the Java runtime from C++.
 * Reflection::                  Using reflection from C++.
 @end menu
 
@@ -1145,9 +1397,7 @@ macros start with the @code{Jv} prefix, for example the function
 @code{JvNewObjectArray}.  This convention is used to avoid conflicts
 with other libraries.  Internal functions in CNI start with the prefix
 @code{_Jv_}.  You should not call these; if you find a need to, let us
-know and we will try to come up with an alternate solution.  (This
-manual lists @code{_Jv_AllocBytes} as an example; CNI should instead
-provide a @code{JvAllocBytes} function.)
+know and we will try to come up with an alternate solution.
 
 
 @subsection Limitations
@@ -1274,7 +1524,7 @@ to avoid disappointment.
 @subsection Reference types associated with primitive types
 
 In Java each primitive type has an associated reference type, 
-e.g.: @code{boolean} has an associated @code{java.lang.Boolean} class.
+e.g.: @code{boolean} has an associated @code{java.lang.Boolean.TYPE} class.
 In order to make working with such classes easier GCJ provides the macro
 @code{JvPrimClass}:
 
@@ -1286,6 +1536,41 @@ JvPrimClass(void) @result{} java.lang.Void.TYPE
 @end example
 
 @end deffn
+
+
+@node Reference types
+@section Reference types
+
+A Java reference type is treated as a class in C++.  Classes and
+interfaces are handled this way.  A Java reference is translated to a
+C++ pointer, so for instance a Java @code{java.lang.String} becomes,
+in C++, @code{java::lang::String *}.
+
+CNI provides a few built-in typedefs for the most common classes:
+@multitable @columnfractions .30 .25 .60
+@item @strong{Java type} @tab @strong{C++ typename} @tab @strong{Description}
+@item @code{java.lang.Object} @tab @code{jobject} @tab Object type
+@item @code{java.lang.String} @tab @code{jstring} @tab String type
+@item @code{java.lang.Class} @tab @code{jclass} @tab Class type
+@end multitable
+@cindex jobject
+@cindex jstring
+@cindex jclass
+
+Every Java class or interface has a corresponding @code{Class}
+instance.  These can be accessed in CNI via the static @code{class$}
+field of a class.  The @code{class$} field is of type @code{Class}
+(and not @code{Class *}), so you will typically take the address of
+it.
+@cindex class$
+
+Here is how you can refer to the class of @code{String}, which in
+Java would be written @code{String.class}:
+
+@example
+using namespace java::lang;
+doSomething (&String::class$);
+@end example
 
 
 @node Interfaces
@@ -1304,7 +1589,7 @@ you can only call an interface method when the declared type of the
 field being called matches the interface which declares that
 method.  The workaround is to cast the interface reference to the right
 superinterface.
- 
+
 For example if you have: 
 
 @example 
@@ -1312,13 +1597,13 @@ interface A
 @{ 
   void a(); 
 @} 
- 
+
 interface B extends A 
 @{ 
   void b(); 
 @} 
 @end example
- 
+
 and declare a variable of type @code{B} in C++, you can't call
 @code{a()} unless you cast it to an @code{A} first.
 
@@ -1347,7 +1632,7 @@ management, but this is invisible to the application, and the
 reference to the object points to the dispatch table pointer.)
 
 The fields are laid out in the same order, alignment, and size as in
-C++.  Specifically, 8-bite and 16-bit native types (@code{byte},
+C++.  Specifically, 8-bit and 16-bit native types (@code{byte},
 @code{short}, @code{char}, and @code{boolean}) are @emph{not} widened
 to 32 bits.  Note that the Java VM does extend 8-bit and 16-bit types
 to 32 bits when on the VM stack or temporary registers.
@@ -1360,8 +1645,8 @@ way.  For example, given the following Java class:
 public class Int
 @{
   public int i;
-  public Integer (int i) @{ this.i = i; @}
-  public static zero = new Integer(0);
+  public Int (int i) @{ this.i = i; @}
+  public static Int zero = new Int(0);
 @}
 @end example
 
@@ -1431,7 +1716,7 @@ it is safe to leave it out).
 
 Accessing a static field also requires the class of the
 field to be initialized.  The Java compiler will generate code
-to call @code{Jv_InitClass} before getting or setting the field.
+to call @code{JvInitClass} before getting or setting the field.
 However, the C++ compiler will not generate this extra code,
 so it is your responsibility to make sure the class is
 initialized before you access a static field from C++.
@@ -1462,11 +1747,27 @@ using standard C++ overload resolution rules.
 java::util::Hashtable *ht = new java::util::Hashtable(120);
 @end example
 
-@deftypefun void* _Jv_AllocBytes (jsize @var{size})
-Allocates @var{size} bytes from the heap.  The memory is not scanned
-by the garbage collector but it freed if no references to it are discovered.
+
+@node Memory allocation
+@section Memory allocation
+
+When allocating memory in @acronym{CNI} methods it is best to handle
+out-of-memory conditions by throwing a Java exception.  These
+functions are provided for that purpose:
+
+@deftypefun void* JvMalloc (jsize @var{size})
+Calls malloc.  Throws @code{java.lang.OutOfMemoryError} if allocation
+fails.
 @end deftypefun
 
+@deftypefun void* JvRealloc (void* @var{ptr}, jsize @var{size})
+Calls realloc.  Throws @code{java.lang.OutOfMemoryError} if
+reallocation fails.
+@end deftypefun
+
+@deftypefun void JvFree (void* @var{ptr})
+Calls free.
+@end deftypefun
 
 @node Arrays
 @section Arrays
@@ -1531,9 +1832,16 @@ The name of this function may change in the future.
 
 
 @deftypefun jobjectArray JvNewObjectArray (jsize @var{length}, jclass @var{klass}, jobject @var{init})
-Here @code{klass} is the type of elements of the array and
+This creates a new array whose elements have reference type.
+@code{klass} is the type of elements of the array and
 @code{init} is the initial value put into every slot in the array.
 @end deftypefun
+
+@example
+using namespace java::lang;
+JArray<String *> *array
+  = (JArray<String *> *) JvNewObjectArray(length, &String::class$, NULL);
+@end example
 
 
 @subsection Creating arrays
@@ -1557,7 +1865,7 @@ JvNewBooleanArray
 @noindent The following function definition is the template for all such functions:
 
 @deftypefun jbooleanArray JvNewBooleanArray (jint @var{length})
-Create's an array @var{length} indices long.
+Creates an array @var{length} indices long.
 @end deftypefun
 
 @deftypefun jsize JvGetArrayLength (jarray @var{array})
@@ -1678,9 +1986,9 @@ working with Java Java @code{String} objects.
 The names and interfaces are analogous to those of @acronym{JNI}.
 
 
-@deftypefun jstring JvNewString (const char* @var{chars}, jsize @var{len})
-Returns a Java @code{String} object with characters from the C string
-@var{chars} up to the index @var{len} in that array.
+@deftypefun jstring JvNewString (const jchar* @var{chars}, jsize @var{len})
+Returns a Java @code{String} object with characters from the array of 
+Unicode characters @var{chars} up to the index @var{len} in that array.
 @end deftypefun
 
 @deftypefun jstring JvNewStringLatin1 (const char* @var{bytes}, jsize @var{len})
@@ -1758,11 +2066,13 @@ jint
 @}
 @end example
 
-But this restriction can cause a problem so @acronym{CNI} includes the
+@subsection RawData
+
+The above restriction can be problematic, so @acronym{CNI} includes the
 @code{gnu.gcj.RawData} class.  The @code{RawData} class is a
 @dfn{non-scanned reference} type.  In other words variables declared
 of type @code{RawData} can contain any data and are not checked by the
-compiler in any way.
+compiler or memory manager in any way.
 
 This means that you can put C/C++ data structures (including classes)
 in your @acronym{CNI} classes, as long as you use the appropriate cast.
@@ -1799,6 +2109,43 @@ void
 @}
 @end example
 
+
+@subsection RawDataManaged
+
+@code{gnu.gcj.RawDataManaged} is another type used to indicate special data used 
+by native code. Unlike the @code{RawData} type, fields declared as 
+@code{RawDataManaged} will be "marked" by the memory manager and 
+considered for garbage collection.  
+
+Native data which is allocated using CNI's @code{JvAllocBytes()}
+function and stored in a @code{RawDataManaged} will be automatically 
+freed when the Java object it is associated with becomes unreachable.
+
+@subsection Native memory allocation
+
+@deftypefun void* JvAllocBytes (jsize @var{size})
+Allocates @var{size} bytes from the heap.  The memory returned is zeroed.
+This memory is not scanned for pointers by the garbage collector, but will 
+be freed if no references to it are discovered.
+
+This function can be useful if you need to associate some native data with a
+Java object. Using a CNI's special @code{RawDataManaged} type, native data 
+allocated with @code{JvAllocBytes} will be automatically freed when the Java 
+object itself becomes unreachable.
+@end deftypefun
+
+@subsection Posix signals
+
+On Posix based systems the @code{libgcj} library uses several signals
+internally.  @acronym{CNI} code should not attempt to use the same
+signals as doing so may cause @code{libgcj} and/or the @acronym{CNI}
+code to fail.
+
+SIGSEGV is used on many systems to generate
+@code{NullPointerExceptions}.  SIGCHLD is used internally by
+@code{Runtime.exec()}.  Several other signals (that vary from platform to
+platform) can be used by the memory manager and by
+@code{Thread.interrupt()}.
 
 @node Exception Handling
 @section Exception Handling
@@ -1919,7 +2266,8 @@ CNI permits C++ applications to make calls into Java classes, in addition to
 allowing Java code to call into C++. Several functions, known as the 
 @dfn{invocation API}, are provided to support this.
 
-@deftypefun jint JvCreateJavaVM (void* @var{vm_args})
+@deftypefun jint JvCreateJavaVM (JvVMInitArgs* @var{vm_args})
+
 Initializes the Java runtime. This function performs essential initialization
 of the threads interface, garbage collector, exception handling and other key
 aspects of the runtime. It must be called once by an application with
@@ -1928,11 +2276,40 @@ It is safe, but not recommended, to call @code{JvCreateJavaVM()} more than
 once provided it is only called from a single thread.
 The @var{vmargs} parameter can be used to specify initialization parameters 
 for the Java runtime. It may be @code{NULL}.
-This function returns @code{0} upon success, or @code{-1} if the runtime is
-already initialized.
 
-@emph{Note:} In GCJ 3.1, the @code{vm_args} parameter is ignored. It may be 
-used in a future release.
+JvVMInitArgs represents a list of virtual machine initialization
+arguments. @code{JvCreateJavaVM()} ignores the version field.
+
+@example
+typedef struct JvVMOption
+@{
+  // a VM initialization option
+  char* optionString;
+  // extra information associated with this option
+  void* extraInfo;
+@} JvVMOption;
+
+typedef struct JvVMInitArgs
+@{
+  // for compatibility with JavaVMInitArgs
+  jint version;
+
+  // number of VM initialization options
+  jint nOptions;
+
+  // an array of VM initialization options
+  JvVMOption* options;
+
+  // true if the option parser should ignore unrecognized options
+  jboolean ignoreUnrecognized;
+@} JvVMInitArgs;
+@end example
+
+@code{JvCreateJavaVM()} returns @code{0} upon success, or @code{-1} if
+the runtime is already initialized.
+
+@emph{Note:} In GCJ 3.1, the @code{vm_args} parameter is ignored. It
+is recognized and used as of release 4.0.
 @end deftypefun
 
 @deftypefun java::lang::Thread* JvAttachCurrentThread (jstring @var{name}, java::lang::ThreadGroup* @var{group})
@@ -1976,7 +2353,7 @@ is detached from the runtime once it has finished making Java calls. Everything
 is wrapped with a try/catch block to provide a default handler for any uncaught 
 exceptions.
 
-The example can be compiled with @command{c++ test.cc -lgcj}.
+The example can be compiled with @command{c++ -c test.cc; gcj test.o}.
 
 @example
 // test.cc
@@ -1985,10 +2362,10 @@ The example can be compiled with @command{c++ test.cc -lgcj}.
 #include <java/io/PrintStream.h>
 #include <java/lang/Throwable.h>
 
-int main(int argc, char *argv)
+int main(int argc, char *argv[])
 @{
   using namespace java::lang;
-  
+
   try
   @{
     JvCreateJavaVM(NULL);
@@ -2119,7 +2496,7 @@ Currently not used in @code{libgcj}.
 
 @item java.ext.dirs
 Directories containing jar files with extra libraries.  Will be used when
-resolving classes.  Currently not used in @code{libgcj}.
+resolving classes.
 
 @item java.protocol.handler.pkgs
 A @samp{|} separated list of package names that is used to find classes that
@@ -2218,7 +2595,7 @@ Enables printing serialization debugging by the @code{java.io.ObjectInput} and
 string.  Only used when running a debug build of the library.
 
 @item gnu.classpath.vm.shortname
-This is a succint name of the virtual machine.  For @code{libgcj},
+This is a succinct name of the virtual machine.  For @code{libgcj},
 this will always be @samp{libgcj}.
 
 @item gnu.classpath.home.url
@@ -2249,40 +2626,81 @@ try to load a class @code{java.net.[impl.prefix]DatagramSocketImpl} instead of
 the normal @code{java.net.PlainDatagramSocketImpl}.
 
 @item gnu.gcj.progname
-The name that was used to invoked the program.
+The class or binary name that was used to invoke the program. This will be
+the name of the "main" class in the case where the @code{gij} front end is
+used, or the program binary name in the case where an application is compiled 
+to a native binary.
 
-@item gnu.gcj.runtime.NameFinder.demangle
-Whether names in a stack trace should be demangled.  Defaults to @code{true}.
-
-@item gnu.gcj.runtime.NameFinder.sanitize
-Whether calls to initialize exceptions and starting the runtime system
-should be removed from the stack trace.  Only done when names are
-demangled.  Defaults to @code{true}.
-
-@item gnu.gcj.runtime.NameFinder.remove_unknown
-Whether calls to unknown functions (class and method names are unknown)
-should be removed from the stack trace.  Only done when the stack is
-sanitized.  Ignored if this means no stack trace information would be
-available anymore.  Defaults to @code{true}.
-
-@item gnu.gcj.runtime.NameFinder.remove_interpreter
-Whether runtime interpreter calls (methods in the @code{_Jv_InterpMethod} class
-and functions starting with @samp{ffi_}) should be removed from the stack
-trace.  Only done when the stack is sanitized.  Defaults to @code{true}.
-
+@item gnu.gcj.user.realname
+The real name of the user, as taken from the password file.  This may
+not always hold only the user's name (as some sites put extra
+information in this field).  Also, this property is not available on
+all platforms.
 
 @item gnu.gcj.runtime.NameFinder.use_addr2line
-Whether an external process (@command{addr2line} or @command{addr2name.awk})
-should be used as fallback to convert the addresses to function names when
-the runtime is unable to do it through @code{dladdr}.
+Whether an external process, @command{addr2line}, should be used to determine
+line number information when tracing the stack. Setting this to @code{false} 
+may suppress line numbers when printing stack traces and when using
+the java.util.logging infrastructure. However, performance may improve
+significantly for applications that print stack traces or make logging calls
+frequently.
+
+@item gnu.gcj.runtime.NameFinder.show_raw
+Whether the address of a stack frame should be printed when the line
+number is unavailable. Setting this to @code{true} will cause the name
+of the object and the offset within that object to be printed when no
+line number is available.  This allows for off-line decoding of
+stack traces if necessary debug information is available.  The default
+is @code{false}, no raw addresses are printed.
+
+@item gnu.gcj.runtime.NameFinder.remove_unknown
+Whether stack frames for non-java code should be included in a stack
+trace.  The default value is @code{true}, stack frames for non-java
+code are suppressed.  Setting this to @code{false} will cause any
+non-java stack frames to be printed in addition to frames for the java
+code.
 
 @item gnu.gcj.runtime.VMClassLoader.library_control
 This controls how shared libraries are automatically loaded by the
-built-in class loader.  By default, or if this property is set to
-@samp{full}, a full search is done for each requested class.  If this
-property is set to @samp{cache}, then any failed lookups are cached
-and not tried again.  If this property is set to @samp{never}, then
-lookups are never done.  For more information, @xref{Extensions}.
+built-in class loader.  If this property is set to @samp{full}, a full
+search is done for each requested class.  If this property is set to
+@samp{cache}, then any failed lookups are cached and not tried again.
+If this property is set to @samp{never} (the default), then lookups
+are never done.  For more information, @xref{Extensions}.
+
+@item gnu.gcj.runtime.endorsed.dirs
+This is like the standard @code{java.endorsed.dirs}, property, but
+specifies some extra directories which are searched after the standard
+endorsed directories.  This is primarily useful for telling
+@code{libgcj} about additional libraries which are ordinarily
+incorporated into the JDK, and which should be loaded by the bootstrap
+class loader, but which are not yet part of @code{libgcj} itself for
+some reason.
+
+@item gnu.gcj.jit.compiler
+@c FIXME we should probably have a whole node on this...
+This is the full path to @command{gcj} executable which should be
+used to compile classes just-in-time when
+@code{ClassLoader.defineClass} is called.  If not set, @command{gcj}
+will not be invoked by the runtime; this can also be controlled via
+@code{Compiler.disable}.
+
+@item gnu.gcj.jit.options
+This is a space-separated string of options which should be passed to
+@command{gcj} when in JIT mode.  If not set, a sensible default is
+chosen.
+
+@item gnu.gcj.jit.cachedir
+This is the directory where cached shared library files are
+stored.  If not set, JIT compilation is disabled.  This should never
+be set to a directory that is writable by any other user.
+
+@item gnu.gcj.precompiled.db.path
+This is a sequence of file names, each referring to a file created by
+@command{gcj-dbtool}.  These files will be used by @code{libgcj} to
+find shared libraries corresponding to classes that are loaded from
+bytecode.  @code{libgcj} often has a built-in default database; it
+can be queried using @code{gcj-dbtool -p}.
 
 @end table
 
@@ -2306,5 +2724,11 @@ Some @code{libgcj} testing is done using the Mauve test suite.  This is
 a free software Java class library test suite which is being written
 because the JCK is not free.  See
 @uref{http://sources.redhat.com/mauve/} for more information.
+
+
+@node Index
+@unnumbered Index
+
+@printindex cp
 
 @bye

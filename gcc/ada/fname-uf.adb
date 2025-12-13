@@ -6,18 +6,17 @@
 --                                                                          --
 --                                 B o d y                                  --
 --                                                                          --
---          Copyright (C) 1992-2003, Free Software Foundation, Inc.         --
+--          Copyright (C) 1992-2007, Free Software Foundation, Inc.         --
 --                                                                          --
 -- GNAT is free software;  you can  redistribute it  and/or modify it under --
 -- terms of the  GNU General Public License as published  by the Free Soft- --
--- ware  Foundation;  either version 2,  or (at your option) any later ver- --
+-- ware  Foundation;  either version 3,  or (at your option) any later ver- --
 -- sion.  GNAT is distributed in the hope that it will be useful, but WITH- --
 -- OUT ANY WARRANTY;  without even the  implied warranty of MERCHANTABILITY --
 -- or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU General Public License --
 -- for  more details.  You should have  received  a copy of the GNU General --
--- Public License  distributed with GNAT;  see file COPYING.  If not, write --
--- to  the Free Software Foundation,  59 Temple Place - Suite 330,  Boston, --
--- MA 02111-1307, USA.                                                      --
+-- Public License  distributed with GNAT; see file COPYING3.  If not, go to --
+-- http://www.gnu.org/licenses for a complete copy of the license.          --
 --                                                                          --
 -- GNAT was originally developed  by the GNAT team at  New York University. --
 -- Extensive contributions were provided by Ada Core Technologies Inc.      --
@@ -28,10 +27,11 @@ with Alloc;
 with Debug;    use Debug;
 with Fmap;     use Fmap;
 with Krunch;
-with Namet;    use Namet;
 with Opt;      use Opt;
 with Osint;    use Osint;
 with Table;
+with Targparm; use Targparm;
+with Uname;    use Uname;
 with Widechar; use Widechar;
 
 with GNAT.HTable;
@@ -43,8 +43,9 @@ package body Fname.UF is
    --------------------------------------------------------
 
    type SFN_Entry is record
-      U : Unit_Name_Type; -- Unit name
-      F : File_Name_Type; -- Spec/Body file name
+      U     : Unit_Name_Type; -- Unit name
+      F     : File_Name_Type; -- Spec/Body file name
+      Index : Nat;            -- Index from SFN pragma (0 if none)
    end record;
    --  Record single Unit_Name type call to Set_File_Name
 
@@ -118,13 +119,61 @@ package body Fname.UF is
       return Get_File_Name (Name_Enter, Subunit => False);
    end File_Name_Of_Spec;
 
+   ----------------------------
+   -- Get_Expected_Unit_Type --
+   ----------------------------
+
+   function Get_Expected_Unit_Type
+     (Fname : File_Name_Type) return Expected_Unit_Type
+   is
+   begin
+      --  In syntax checking only mode or in multiple unit per file mode,
+      --  there can be more than one unit in a file, so the file name is
+      --  not a useful guide to the nature of the unit.
+
+      if Operating_Mode = Check_Syntax
+        or else Multiple_Unit_Index /= 0
+      then
+         return Unknown;
+      end if;
+
+      --  Search the file mapping table, if we find an entry for this
+      --  file we know whether it is a spec or a body.
+
+      for J in SFN_Table.First .. SFN_Table.Last loop
+         if Fname = SFN_Table.Table (J).F then
+            if Is_Body_Name (SFN_Table.Table (J).U) then
+               return Expect_Body;
+            else
+               return Expect_Spec;
+            end if;
+         end if;
+      end loop;
+
+      --  If no entry in file naming table, assume .ads/.adb for spec/body
+      --  and return unknown if we have neither of these two cases.
+
+      Get_Name_String (Fname);
+
+      if Name_Len > 4 then
+         if Name_Buffer (Name_Len - 3 .. Name_Len) = ".ads" then
+            return Expect_Spec;
+         elsif Name_Buffer (Name_Len - 3 .. Name_Len) = ".adb" then
+            return Expect_Body;
+         end if;
+      end if;
+
+      return Unknown;
+   end Get_Expected_Unit_Type;
+
    -------------------
    -- Get_File_Name --
    -------------------
 
    function Get_File_Name
-     (Uname   : Unit_Name_Type;
-      Subunit : Boolean) return File_Name_Type
+     (Uname    : Unit_Name_Type;
+      Subunit  : Boolean;
+      May_Fail : Boolean := False) return File_Name_Type
    is
       Unit_Char : Character;
       --  Set to 's' or 'b' for spec or body or to 'u' for a subunit
@@ -143,7 +192,7 @@ package body Fname.UF is
       --  Null or error name means that some previous error occurred
       --  This is an unrecoverable error, so signal it.
 
-      if Uname <= Error_Name then
+      if Uname in Error_Unit_Name_Or_No_Unit_Name then
          raise Unrecoverable_Error;
       end if;
 
@@ -362,7 +411,8 @@ package body Fname.UF is
                           (Name_Buffer,
                            Name_Len,
                            Integer (Maximum_File_Name_Length),
-                           Debug_Flag_4);
+                           Debug_Flag_4,
+                           OpenVMS_On_Target);
 
                         --  Replace extension
 
@@ -382,14 +432,19 @@ package body Fname.UF is
                         Debug_Flag_4);
                   end if;
 
-                  Fnam := File_Name_Type (Name_Find);
+                  Fnam := Name_Find;
 
                   --  If we are in the second search of the table, we accept
                   --  the file name without checking, because we know that
-                  --  the file does not exist.
+                  --  the file does not exist, except when May_Fail is True,
+                  --  in which case we return No_File.
 
                   if No_File_Check then
-                     return Fnam;
+                     if May_Fail then
+                        return No_File;
+                     else
+                        return Fnam;
+                     end if;
 
                   --  Otherwise we check if the file exists
 
@@ -451,6 +506,20 @@ package body Fname.UF is
       end;
    end Get_File_Name;
 
+   --------------------
+   -- Get_Unit_Index --
+   --------------------
+
+   function Get_Unit_Index (Uname : Unit_Name_Type) return Nat is
+      N : constant Int := SFN_HTable.Get (Uname);
+   begin
+      if N /= No_Entry then
+         return SFN_Table.Table (N).Index;
+      else
+         return 0;
+      end if;
+   end Get_Unit_Index;
+
    ----------------
    -- Initialize --
    ----------------
@@ -490,10 +559,14 @@ package body Fname.UF is
    -- Set_File_Name --
    -------------------
 
-   procedure Set_File_Name (U : Unit_Name_Type; F : File_Name_Type) is
+   procedure Set_File_Name
+     (U     : Unit_Name_Type;
+      F     : File_Name_Type;
+      Index : Nat)
+   is
    begin
       SFN_Table.Increment_Last;
-      SFN_Table.Table (SFN_Table.Last) := (U, F);
+      SFN_Table.Table (SFN_Table.Last) := (U, F, Index);
       SFN_HTable.Set (U, SFN_Table.Last);
    end Set_File_Name;
 
@@ -508,6 +581,7 @@ package body Fname.UF is
       Cas : Casing_Type)
    is
       L : constant Nat := SFN_Patterns.Last;
+
    begin
       SFN_Patterns.Increment_Last;
 

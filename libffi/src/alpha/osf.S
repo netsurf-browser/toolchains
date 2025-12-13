@@ -1,9 +1,7 @@
 /* -----------------------------------------------------------------------
-   osf.S - Copyright (c) 1998, 2001 Red Hat
+   osf.S - Copyright (c) 1998, 2001, 2007, 2008, 2011 Red Hat
    
    Alpha/OSF Foreign Function Interface 
-
-   $Id: osf.S,v 1.1.1.1 1998/11/29 16:48:16 green Exp $
 
    Permission is hereby granted, free of charge, to any person obtaining
    a copy of this software and associated documentation files (the
@@ -16,13 +14,14 @@
    The above copyright notice and this permission notice shall be included
    in all copies or substantial portions of the Software.
 
-   THE SOFTWARE IS PROVIDED ``AS IS'', WITHOUT WARRANTY OF ANY KIND, EXPRESS
-   OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF
-   MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.
-   IN NO EVENT SHALL CYGNUS SOLUTIONS BE LIABLE FOR ANY CLAIM, DAMAGES OR
-   OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE,
-   ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR
-   OTHER DEALINGS IN THE SOFTWARE.
+   THE SOFTWARE IS PROVIDED ``AS IS'', WITHOUT WARRANTY OF ANY KIND,
+   EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF
+   MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND
+   NONINFRINGEMENT.  IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT
+   HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY,
+   WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+   OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+   DEALINGS IN THE SOFTWARE.
    ----------------------------------------------------------------------- */
 
 #define LIBFFI_ASM	
@@ -33,7 +32,7 @@
 	.text
 
 /* ffi_call_osf (void *args, unsigned long bytes, unsigned flags,
-		 void *raddr, void (*fnaddr)());
+		 void *raddr, void (*fnaddr)(void));
 
    Bit o trickiness here -- ARGS+BYTES is the base of the stack frame
    for this function.  This has been allocated by ffi_call.  We also
@@ -42,6 +41,8 @@
 	.align	3
 	.globl	ffi_call_osf
 	.ent	ffi_call_osf
+	FFI_HIDDEN(ffi_call_osf)
+
 ffi_call_osf:
 	.frame	$15, 32, $26, 0
 	.mask   0x4008000, -32
@@ -129,6 +130,8 @@ $LFE1:
 	.align	3
 	.globl	ffi_closure_osf
 	.ent	ffi_closure_osf
+	FFI_HIDDEN(ffi_closure_osf)
+
 ffi_closure_osf:
 	.frame	$30, 16*8, $26, 0
 	.mask	0x4000000, -16*8
@@ -265,7 +268,7 @@ $load_table:
 	.gprel32 $load_32	# FFI_TYPE_INT
 	.gprel32 $load_float	# FFI_TYPE_FLOAT
 	.gprel32 $load_double	# FFI_TYPE_DOUBLE
-	.gprel32 $load_double	# FFI_TYPE_LONGDOUBLE
+	.gprel32 $load_none	# FFI_TYPE_LONGDOUBLE
 	.gprel32 $load_u8	# FFI_TYPE_UINT8
 	.gprel32 $load_s8	# FFI_TYPE_SINT8
 	.gprel32 $load_u16	# FFI_TYPE_UINT16
@@ -296,33 +299,51 @@ $load_table:
 #endif
 
 #ifdef __ELF__
+# define UA_SI		.4byte
+# define FDE_ENCODING	0x1b	/* pcrel sdata4 */
+# define FDE_ENCODE(X)	.4byte X-.
+# define FDE_ARANGE(X)	.4byte X
+#elif defined __osf__
+# define UA_SI		.align 0; .long
+# define FDE_ENCODING	0x50	/* aligned absolute */
+# define FDE_ENCODE(X)	.align 3; .quad X
+# define FDE_ARANGE(X)	.align 0; .quad X
+#endif
+
+#ifdef __ELF__
 	.section	.eh_frame,EH_FRAME_FLAGS,@progbits
+#elif defined __osf__
+	.data
+	.align 3
+	.globl _GLOBAL__F_ffi_call_osf
+_GLOBAL__F_ffi_call_osf:
+#endif
 __FRAME_BEGIN__:
-	.4byte	$LECIE1-$LSCIE1	# Length of Common Information Entry
+	UA_SI	$LECIE1-$LSCIE1	# Length of Common Information Entry
 $LSCIE1:
-	.4byte	0x0		# CIE Identifier Tag
+	UA_SI	0x0		# CIE Identifier Tag
 	.byte	0x1		# CIE Version
 	.ascii "zR\0"		# CIE Augmentation
 	.byte	0x1		# uleb128 0x1; CIE Code Alignment Factor
 	.byte	0x78		# sleb128 -8; CIE Data Alignment Factor
 	.byte	26		# CIE RA Column
 	.byte	0x1		# uleb128 0x1; Augmentation size
-	.byte	0x1b		# FDE Encoding (pcrel sdata4)
+	.byte	FDE_ENCODING	# FDE Encoding
 	.byte	0xc		# DW_CFA_def_cfa
 	.byte	30		# uleb128 column 30
 	.byte	0		# uleb128 offset 0
 	.align 3
 $LECIE1:
 $LSFDE1:
-	.4byte	$LEFDE1-$LASFDE1		# FDE Length
+	UA_SI	$LEFDE1-$LASFDE1		# FDE Length
 $LASFDE1:
-	.4byte	$LASFDE1-__FRAME_BEGIN__	# FDE CIE offset
-	.4byte	$LFB1-.		# FDE initial location
-	.4byte	$LFE1-$LFB1	# FDE address range
+	UA_SI	$LASFDE1-__FRAME_BEGIN__	# FDE CIE offset
+	FDE_ENCODE($LFB1)			# FDE initial location
+	FDE_ARANGE($LFE1-$LFB1)			# FDE address range
 	.byte	0x0		# uleb128 0x0; Augmentation size
 
 	.byte	0x4		# DW_CFA_advance_loc4
-	.4byte	$LCFI1-$LFB1
+	UA_SI	$LCFI1-$LFB1
 	.byte	0x9a		# DW_CFA_offset, column 26
 	.byte	4		# uleb128 4*-8
 	.byte	0x8f		# DW_CFA_offset, column 15
@@ -332,28 +353,35 @@ $LASFDE1:
 	.byte	32		# uleb128 offset 32
 
 	.byte	0x4		# DW_CFA_advance_loc4
-	.4byte	$LCFI2-$LCFI1
+	UA_SI	$LCFI2-$LCFI1
 	.byte	0xda		# DW_CFA_restore, column 26
 	.align 3
 $LEFDE1:
 
 $LSFDE3:
-	.4byte	$LEFDE3-$LASFDE3		# FDE Length
+	UA_SI	$LEFDE3-$LASFDE3		# FDE Length
 $LASFDE3:
-	.4byte	$LASFDE3-__FRAME_BEGIN__	# FDE CIE offset
-	.4byte	$LFB2-.		# FDE initial location
-	.4byte	$LFE2-$LFB2	# FDE address range
+	UA_SI	$LASFDE3-__FRAME_BEGIN__	# FDE CIE offset
+	FDE_ENCODE($LFB2)			# FDE initial location
+	FDE_ARANGE($LFE2-$LFB2)			# FDE address range
 	.byte	0x0		# uleb128 0x0; Augmentation size
 
 	.byte	0x4		# DW_CFA_advance_loc4
-	.4byte	$LCFI5-$LFB2
+	UA_SI	$LCFI5-$LFB2
 	.byte	0xe		# DW_CFA_def_cfa_offset
 	.byte	0x80,0x1	# uleb128 128
 
 	.byte	0x4		# DW_CFA_advance_loc4
-	.4byte	$LCFI6-$LCFI5
+	UA_SI	$LCFI6-$LCFI5
 	.byte	0x9a		# DW_CFA_offset, column 26
 	.byte	16		# uleb128 offset 16*-8
 	.align 3
 $LEFDE3:
+#if defined __osf__
+	.align 0
+	.long	0		# End of Table
+#endif
+
+#if defined __ELF__ && defined __linux__
+	.section	.note.GNU-stack,"",@progbits
 #endif

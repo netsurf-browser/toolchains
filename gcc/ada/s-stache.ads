@@ -1,30 +1,28 @@
 ------------------------------------------------------------------------------
 --                                                                          --
---                GNU ADA RUN-TIME LIBRARY (GNARL) COMPONENTS               --
+--                 GNAT RUN-TIME LIBRARY (GNARL) COMPONENTS                 --
 --                                                                          --
 --                 S Y S T E M . S T A C K _ C H E C K I N G                --
 --                                                                          --
 --                                  S p e c                                 --
 --                                                                          --
---           Copyright (C) 1999-2003 Free Software Foundation, Inc.         --
+--           Copyright (C) 1999-2009, Free Software Foundation, Inc.        --
 --                                                                          --
 -- GNARL is free software; you can  redistribute it  and/or modify it under --
 -- terms of the  GNU General Public License as published  by the Free Soft- --
--- ware  Foundation;  either version 2,  or (at your option) any later ver- --
--- sion. GNARL is distributed in the hope that it will be useful, but WITH- --
+-- ware  Foundation;  either version 3,  or (at your option) any later ver- --
+-- sion.  GNAT is distributed in the hope that it will be useful, but WITH- --
 -- OUT ANY WARRANTY;  without even the  implied warranty of MERCHANTABILITY --
--- or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU General Public License --
--- for  more details.  You should have  received  a copy of the GNU General --
--- Public License  distributed with GNARL; see file COPYING.  If not, write --
--- to  the Free Software Foundation,  59 Temple Place - Suite 330,  Boston, --
--- MA 02111-1307, USA.                                                      --
+-- or FITNESS FOR A PARTICULAR PURPOSE.                                     --
 --                                                                          --
--- As a special exception,  if other files  instantiate  generics from this --
--- unit, or you link  this unit with other files  to produce an executable, --
--- this  unit  does not  by itself cause  the resulting  executable  to  be --
--- covered  by the  GNU  General  Public  License.  This exception does not --
--- however invalidate  any other reasons why  the executable file  might be --
--- covered by the  GNU Public License.                                      --
+-- As a special exception under Section 7 of GPL version 3, you are granted --
+-- additional permissions described in the GCC Runtime Library Exception,   --
+-- version 3.1, as published by the Free Software Foundation.               --
+--                                                                          --
+-- You should have received a copy of the GNU General Public License and    --
+-- a copy of the GCC Runtime Library Exception along with this program;     --
+-- see the files COPYING3 and COPYING.RUNTIME respectively.  If not, see    --
+-- <http://www.gnu.org/licenses/>.                                          --
 --                                                                          --
 -- GNARL was developed by the GNARL team at Florida State University.       --
 -- Extensive contributions were provided by Ada Core Technologies, Inc.     --
@@ -34,13 +32,21 @@
 --  This package provides a system-independent implementation of stack
 --  checking using comparison with stack base and limit.
 
+--  This package defines basic types and objects. Operations related to
+--  stack checking can be found in package System.Stack_Checking.Operations.
+
+pragma Compiler_Unit;
+
 with System.Storage_Elements;
 
-pragma Polling (Off);
---  Turn off polling, we do not want polling to take place during stack
---  checking operations. It causes infinite loops and other problems.
-
 package System.Stack_Checking is
+   pragma Preelaborate;
+   pragma Elaborate_Body;
+   --  This unit has a junk null body. The reason is that historically we
+   --  used to have a real body, and it causes bootstrapping path problems
+   --  to eliminate it, since the old body may still be present in the
+   --  compilation environment for a build.
+
    type Stack_Info is record
       Limit : System.Address := System.Null_Address;
       Base  : System.Address := System.Null_Address;
@@ -59,30 +65,7 @@ package System.Stack_Checking is
    --  upgrowing stack) may contain any address that is part of another stack.
    --  The Stack_Access may be part of a larger data structure.
 
-   Multi_Processor        : constant Boolean := False; --  Not supported yet
-
-   ----------------------
-   -- Client Interface --
-   ----------------------
-
-   procedure Set_Stack_Size
-     (Stack_Size : System.Storage_Elements.Storage_Offset);
-   --  Specify the stack size for the current task.
-
-   procedure Update_Stack_Cache (Stack : Stack_Access);
-   --  Set the stack cache for the current task. Note that this is only
-   --  for optimization purposes, nothing can be assumed about the
-   --  contents of the cache at any time, see Set_Stack_Info.
-
-   procedure Invalidate_Stack_Cache (Any_Stack : Stack_Access);
-   --  Invalidate cache entries for the task T that owns Any_Stack.
-   --  This causes the Set_Stack_Info function to be called during
-   --  the next stack check done by T. This can be used to interrupt
-   --  task T asynchronously.
-   --  Stack_Check should be called in loops for this to work reliably.
-
-   function Stack_Check (Stack_Address : System.Address) return Stack_Access;
-   --  This version of Stack_Check should not be inlined.
+   Multi_Processor : constant Boolean := False; --  Not supported yet
 
 private
 
@@ -90,16 +73,10 @@ private
      (Limit => System.Null_Address,
       Base  => System.Null_Address,
       Size  => 0);
-   --  Use explicit assignment to avoid elaboration code (call to init proc).
+   --  Use explicit assignment to avoid elaboration code (call to init proc)
 
-   Null_Stack       : constant Stack_Access := Null_Stack_Info'Access;
+   Null_Stack : constant Stack_Access := Null_Stack_Info'Access;
    --  Stack_Access value that will return a Stack_Base and Stack_Limit
    --  that fail any stack check.
-
-   Cache            : aliased Stack_Access := Null_Stack;
-
-   pragma Export (C, Cache, "_gnat_stack_cache");
-   pragma Export (C, Stack_Check, "_gnat_stack_check");
-   pragma Export (C, Set_Stack_Size, "__gnat_set_stack_size");
 
 end System.Stack_Checking;

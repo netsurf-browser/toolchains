@@ -1,30 +1,28 @@
 ------------------------------------------------------------------------------
 --                                                                          --
---                         GNAT RUNTIME COMPONENTS                          --
+--                         GNAT RUN-TIME COMPONENTS                         --
 --                                                                          --
 --                 S Y S T E M . S E Q U E N T I A L _ I O                  --
 --                                                                          --
 --                                 S p e c                                  --
 --                                                                          --
---        Copyright (C) 1992,1993,1994 Free Software Foundation, Inc.       --
+--           Copyright (C) 1992-2009, Free Software Foundation, Inc.        --
 --                                                                          --
 -- GNAT is free software;  you can  redistribute it  and/or modify it under --
 -- terms of the  GNU General Public License as published  by the Free Soft- --
--- ware  Foundation;  either version 2,  or (at your option) any later ver- --
+-- ware  Foundation;  either version 3,  or (at your option) any later ver- --
 -- sion.  GNAT is distributed in the hope that it will be useful, but WITH- --
 -- OUT ANY WARRANTY;  without even the  implied warranty of MERCHANTABILITY --
--- or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU General Public License --
--- for  more details.  You should have  received  a copy of the GNU General --
--- Public License  distributed with GNAT;  see file COPYING.  If not, write --
--- to  the Free Software Foundation,  59 Temple Place - Suite 330,  Boston, --
--- MA 02111-1307, USA.                                                      --
+-- or FITNESS FOR A PARTICULAR PURPOSE.                                     --
 --                                                                          --
--- As a special exception,  if other files  instantiate  generics from this --
--- unit, or you link  this unit with other files  to produce an executable, --
--- this  unit  does not  by itself cause  the resulting  executable  to  be --
--- covered  by the  GNU  General  Public  License.  This exception does not --
--- however invalidate  any other reasons why  the executable file  might be --
--- covered by the  GNU Public License.                                      --
+-- As a special exception under Section 7 of GPL version 3, you are granted --
+-- additional permissions described in the GCC Runtime Library Exception,   --
+-- version 3.1, as published by the Free Software Foundation.               --
+--                                                                          --
+-- You should have received a copy of the GNU General Public License and    --
+-- a copy of the GCC Runtime Library Exception along with this program;     --
+-- see the files COPYING3 and COPYING.RUNTIME respectively.  If not, see    --
+-- <http://www.gnu.org/licenses/>.                                          --
 --                                                                          --
 -- GNAT was originally developed  by the GNAT team at  New York University. --
 -- Extensive contributions were provided by Ada Core Technologies Inc.      --
@@ -32,7 +30,7 @@
 ------------------------------------------------------------------------------
 
 --  This package contains the declaration of the control block used for
---  Seqential_IO. This must be declared at the outer library level. It also
+--  Sequential_IO. This must be declared at the outer library level. It also
 --  contains code that is shared between instances of Sequential_IO.
 
 with System.File_Control_Block;
@@ -46,11 +44,10 @@ package System.Sequential_IO is
    --  No additional fields required for Sequential_IO
 
    function AFCB_Allocate
-     (Control_Block : Sequential_AFCB)
-      return          FCB.AFCB_Ptr;
+     (Control_Block : Sequential_AFCB) return FCB.AFCB_Ptr;
 
-   procedure AFCB_Close (File : access Sequential_AFCB);
-   procedure AFCB_Free  (File : access Sequential_AFCB);
+   procedure AFCB_Close (File : not null access Sequential_AFCB);
+   procedure AFCB_Free  (File : not null access Sequential_AFCB);
 
    procedure Read
      (File : in out Sequential_AFCB;
@@ -60,7 +57,7 @@ package System.Sequential_IO is
 
    procedure Write
      (File : in out Sequential_AFCB;
-      Item : in Ada.Streams.Stream_Element_Array);
+      Item : Ada.Streams.Stream_Element_Array);
    --  Required overriding of Write, not actually used for Sequential_IO
 
    type File_Type is access all Sequential_AFCB;
@@ -68,14 +65,14 @@ package System.Sequential_IO is
 
    procedure Create
      (File : in out File_Type;
-      Mode : in FCB.File_Mode := FCB.Out_File;
-      Name : in String := "";
-      Form : in String := "");
+      Mode : FCB.File_Mode := FCB.Out_File;
+      Name : String := "";
+      Form : String := "");
 
    procedure Open
      (File : in out File_Type;
-      Mode : in FCB.File_Mode;
-      Name : in String;
-      Form : in String := "");
+      Mode : FCB.File_Mode;
+      Name : String;
+      Form : String := "");
 
 end System.Sequential_IO;

@@ -6,18 +6,17 @@
 --                                                                          --
 --                                 B o d y                                  --
 --                                                                          --
---          Copyright (C) 1992-2002 Free Software Foundation, Inc.          --
+--          Copyright (C) 1992-2008, Free Software Foundation, Inc.         --
 --                                                                          --
 -- GNAT is free software;  you can  redistribute it  and/or modify it under --
 -- terms of the  GNU General Public License as published  by the Free Soft- --
--- ware  Foundation;  either version 2,  or (at your option) any later ver- --
+-- ware  Foundation;  either version 3,  or (at your option) any later ver- --
 -- sion.  GNAT is distributed in the hope that it will be useful, but WITH- --
 -- OUT ANY WARRANTY;  without even the  implied warranty of MERCHANTABILITY --
 -- or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU General Public License --
 -- for  more details.  You should have  received  a copy of the GNU General --
--- Public License  distributed with GNAT;  see file COPYING.  If not, write --
--- to  the Free Software Foundation,  59 Temple Place - Suite 330,  Boston, --
--- MA 02111-1307, USA.                                                      --
+-- Public License  distributed with GNAT; see file COPYING3.  If not, go to --
+-- http://www.gnu.org/licenses for a complete copy of the license.          --
 --                                                                          --
 -- GNAT was originally developed  by the GNAT team at  New York University. --
 -- Extensive contributions were provided by Ada Core Technologies Inc.      --
@@ -53,30 +52,32 @@ with Ada.Strings.Unbounded;         use Ada.Strings.Unbounded;
 with Ada.Strings.Unbounded.Text_IO; use Ada.Strings.Unbounded.Text_IO;
 with Ada.Strings.Maps;              use Ada.Strings.Maps;
 with Ada.Strings.Maps.Constants;    use Ada.Strings.Maps.Constants;
+with Ada.Streams.Stream_IO;         use Ada.Streams.Stream_IO;
 with Ada.Text_IO;                   use Ada.Text_IO;
 
 with GNAT.Spitbol;                  use GNAT.Spitbol;
 with GNAT.Spitbol.Patterns;         use GNAT.Spitbol.Patterns;
+
+with XUtil;
 
 procedure XNmake is
 
    Err : exception;
    --  Raised to terminate execution
 
-   A          : VString := Nul;
-   Arg        : VString := Nul;
-   Arg_List   : VString := Nul;
-   Comment    : VString := Nul;
-   Default    : VString := Nul;
-   Field      : VString := Nul;
-   Line       : VString := Nul;
-   Node       : VString := Nul;
-   Op_Name    : VString := Nul;
-   Prevl      : VString := Nul;
-   Synonym    : VString := Nul;
-   X          : VString := Nul;
+   A        : VString := Nul;
+   Arg      : VString := Nul;
+   Arg_List : VString := Nul;
+   Comment  : VString := Nul;
+   Default  : VString := Nul;
+   Field    : VString := Nul;
+   Line     : VString := Nul;
+   Node     : VString := Nul;
+   Op_Name  : VString := Nul;
+   Prevl    : VString := Nul;
+   Synonym  : VString := Nul;
+   X        : VString := Nul;
 
-   Lineno : Natural;
    NWidth : Natural;
 
    FileS : VString := V ("nmake.ads");
@@ -86,40 +87,48 @@ procedure XNmake is
    Given_File : VString := Nul;
    --  File name given by command line argument
 
-   InS,  InT  : File_Type;
-   OutS, OutB : File_Type;
+   subtype Sfile is Ada.Streams.Stream_IO.File_Type;
 
-   wsp   : Pattern := Span (' ' & ASCII.HT);
+   InS,  InT  : Ada.Text_IO.File_Type;
+   OutS, OutB : Sfile;
 
-   Body_Only : Pattern := BreakX (' ') * X & Span (' ') & "--  body only";
-   Spec_Only : Pattern := BreakX (' ') * X & Span (' ') & "--  spec only";
+   wsp : constant Pattern := Span (' ' & ASCII.HT);
 
-   Node_Hdr  : Pattern := wsp & "--  N_" & Rest * Node;
-   Punc      : Pattern := BreakX (" .,");
+   Body_Only : constant Pattern := BreakX (' ') * X
+                                   & Span (' ') & "--  body only";
+   Spec_Only : constant Pattern := BreakX (' ') * X
+                                   & Span (' ') & "--  spec only";
 
-   Binop     : Pattern := wsp & "--  plus fields for binary operator";
-   Unop      : Pattern := wsp & "--  plus fields for unary operator";
-   Syn       : Pattern := wsp & "--  " & Break (' ') * Synonym
-                            & " (" & Break (')') * Field & Rest * Comment;
+   Node_Hdr  : constant Pattern := wsp & "--  N_" & Rest * Node;
+   Punc      : constant Pattern := BreakX (" .,");
 
-   Templ     : Pattern := BreakX ('T') * A & "T e m p l a t e";
-   Spec      : Pattern := BreakX ('S') * A & "S p e c";
+   Binop     : constant Pattern := wsp
+                                   & "--  plus fields for binary operator";
+   Unop      : constant Pattern := wsp
+                                   & "--  plus fields for unary operator";
+   Syn       : constant Pattern := wsp & "--  " & Break (' ') * Synonym
+                                   & " (" & Break (')') * Field
+                                   & Rest * Comment;
 
-   Sem_Field : Pattern := BreakX ('-') & "-Sem";
-   Lib_Field : Pattern := BreakX ('-') & "-Lib";
+   Templ     : constant Pattern := BreakX ('T') * A & "T e m p l a t e";
+   Spec      : constant Pattern := BreakX ('S') * A & "S p e c";
 
-   Get_Field : Pattern := BreakX (Decimal_Digit_Set) * Field;
+   Sem_Field : constant Pattern := BreakX ('-') & "-Sem";
+   Lib_Field : constant Pattern := BreakX ('-') & "-Lib";
 
-   Get_Dflt  : Pattern := BreakX ('(') & "(set to "
-                            & Break (" ") * Default & " if";
+   Get_Field : constant Pattern := BreakX (Decimal_Digit_Set) * Field;
 
-   Next_Arg  : Pattern := Break (',') * Arg & ',';
+   Get_Dflt  : constant Pattern := BreakX ('(') & "(set to "
+                                   & Break (" ") * Default & " if";
 
-   Op_Node   : Pattern := "Op_" & Rest * Op_Name;
+   Next_Arg  : constant Pattern := Break (',') * Arg & ',';
 
-   Shft_Rot  : Pattern := "Shift_" or "Rotate_";
+   Op_Node   : constant Pattern := "Op_" & Rest * Op_Name;
 
-   No_Ent    : Pattern := "Or_Else" or "And_Then" or "In" or "Not_In";
+   Shft_Rot  : constant Pattern := "Shift_" or "Rotate_";
+
+   No_Ent    : constant Pattern := "Or_Else" or "And_Then"
+                                     or "In" or "Not_In";
 
    M : Match_Result;
 
@@ -129,6 +138,10 @@ procedure XNmake is
    V_List_Id   : constant VString := V ("List_Id");
    V_Elist_Id  : constant VString := V ("Elist_Id");
    V_Boolean   : constant VString := V ("Boolean");
+
+   procedure Put_Line (F : Sfile; S : String)  renames XUtil.Put_Line;
+   procedure Put_Line (F : Sfile; S : VString) renames XUtil.Put_Line;
+   --  Local version of Put_Line ensures Unix style line endings
 
    procedure WriteS  (S : String);
    procedure WriteB  (S : String);
@@ -191,7 +204,6 @@ procedure XNmake is
 --  Start of processing for XNmake
 
 begin
-   Lineno := 0;
    NWidth := 28;
    Anchored_Mode := True;
 
@@ -267,7 +279,11 @@ begin
          end loop;
       end if;
 
+      --  Loop keeps going until "package" keyword written
+
       exit when Match (Line, "package");
+
+      --  Deal with WITH lines, writing to body or spec as appropriate
 
       if Match (Line, Body_Only, M) then
          Replace (M, X);
@@ -277,12 +293,16 @@ begin
          Replace (M, X);
          WriteS (Line);
 
+      --  Change header from Template to Spec and write to spec file
+
       else
          if Match (Line, Templ, M) then
             Replace (M, A &  "    S p e c    ");
          end if;
 
          WriteS (Line);
+
+         --  Write header line to body file
 
          if Match (Line, Spec, M) then
             Replace (M, A &  "B o d y");
@@ -348,12 +368,18 @@ begin
                then
                   Match (Field, Get_Field);
 
-                  if    Field = "Str"   then Field := V_String_Id;
-                  elsif Field = "Node"  then Field := V_Node_Id;
-                  elsif Field = "Name"  then Field := V_Name_Id;
-                  elsif Field = "List"  then Field := V_List_Id;
-                  elsif Field = "Elist" then Field := V_Elist_Id;
-                  elsif Field = "Flag"  then Field := V_Boolean;
+                  if    Field = "Str"   then
+                     Field := V_String_Id;
+                  elsif Field = "Node"  then
+                     Field := V_Node_Id;
+                  elsif Field = "Name"  then
+                     Field := V_Name_Id;
+                  elsif Field = "List"  then
+                     Field := V_List_Id;
+                  elsif Field = "Elist" then
+                     Field := V_Elist_Id;
+                  elsif Field = "Flag"  then
+                     Field := V_Boolean;
                   end if;
 
                   if Field = "Boolean" then

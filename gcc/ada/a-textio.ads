@@ -6,7 +6,7 @@
 --                                                                          --
 --                                 S p e c                                  --
 --                                                                          --
---          Copyright (C) 1992-2002 Free Software Foundation, Inc.          --
+--          Copyright (C) 1992-2009, Free Software Foundation, Inc.         --
 --                                                                          --
 -- This specification is derived from the Ada Reference Manual for use with --
 -- GNAT. The copyright notice above, and the license provisions that follow --
@@ -14,21 +14,19 @@
 --                                                                          --
 -- GNAT is free software;  you can  redistribute it  and/or modify it under --
 -- terms of the  GNU General Public License as published  by the Free Soft- --
--- ware  Foundation;  either version 2,  or (at your option) any later ver- --
+-- ware  Foundation;  either version 3,  or (at your option) any later ver- --
 -- sion.  GNAT is distributed in the hope that it will be useful, but WITH- --
 -- OUT ANY WARRANTY;  without even the  implied warranty of MERCHANTABILITY --
--- or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU General Public License --
--- for  more details.  You should have  received  a copy of the GNU General --
--- Public License  distributed with GNAT;  see file COPYING.  If not, write --
--- to  the Free Software Foundation,  59 Temple Place - Suite 330,  Boston, --
--- MA 02111-1307, USA.                                                      --
+-- or FITNESS FOR A PARTICULAR PURPOSE.                                     --
 --                                                                          --
--- As a special exception,  if other files  instantiate  generics from this --
--- unit, or you link  this unit with other files  to produce an executable, --
--- this  unit  does not  by itself cause  the resulting  executable  to  be --
--- covered  by the  GNU  General  Public  License.  This exception does not --
--- however invalidate  any other reasons why  the executable file  might be --
--- covered by the  GNU Public License.                                      --
+-- As a special exception under Section 7 of GPL version 3, you are granted --
+-- additional permissions described in the GCC Runtime Library Exception,   --
+-- version 3.1, as published by the Free Software Foundation.               --
+--                                                                          --
+-- You should have received a copy of the GNU General Public License and    --
+-- a copy of the GCC Runtime Library Exception along with this program;     --
+-- see the files COPYING3 and COPYING.RUNTIME respectively.  If not, see    --
+-- <http://www.gnu.org/licenses/>.                                          --
 --                                                                          --
 -- GNAT was originally developed  by the GNAT team at  New York University. --
 -- Extensive contributions were provided by Ada Core Technologies Inc.      --
@@ -43,11 +41,13 @@
 
 with Ada.IO_Exceptions;
 with Ada.Streams;
+
 with System;
 with System.File_Control_Block;
+with System.WCh_Con;
 
 package Ada.Text_IO is
-pragma Elaborate_Body (Text_IO);
+   pragma Elaborate_Body;
 
    type File_Type is limited private;
    type File_Mode is (In_File, Out_File, Append_File);
@@ -86,34 +86,34 @@ pragma Elaborate_Body (Text_IO);
 
    procedure Create
      (File : in out File_Type;
-      Mode : in File_Mode := Out_File;
-      Name : in String := "";
-      Form : in String := "");
+      Mode : File_Mode := Out_File;
+      Name : String := "";
+      Form : String := "");
 
    procedure Open
      (File : in out File_Type;
-      Mode : in File_Mode;
-      Name : in String;
-      Form : in String := "");
+      Mode : File_Mode;
+      Name : String;
+      Form : String := "");
 
    procedure Close  (File : in out File_Type);
    procedure Delete (File : in out File_Type);
-   procedure Reset  (File : in out File_Type; Mode : in File_Mode);
+   procedure Reset  (File : in out File_Type; Mode : File_Mode);
    procedure Reset  (File : in out File_Type);
 
-   function Mode (File : in File_Type) return File_Mode;
-   function Name (File : in File_Type) return String;
-   function Form (File : in File_Type) return String;
+   function Mode (File : File_Type) return File_Mode;
+   function Name (File : File_Type) return String;
+   function Form (File : File_Type) return String;
 
-   function Is_Open (File : in File_Type) return Boolean;
+   function Is_Open (File : File_Type) return Boolean;
 
    ------------------------------------------------------
    -- Control of default input, output and error files --
    ------------------------------------------------------
 
-   procedure Set_Input  (File : in File_Type);
-   procedure Set_Output (File : in File_Type);
-   procedure Set_Error  (File : in File_Type);
+   procedure Set_Input  (File : File_Type);
+   procedure Set_Output (File : File_Type);
+   procedure Set_Error  (File : File_Type);
 
    function Standard_Input  return File_Type;
    function Standard_Output return File_Type;
@@ -140,76 +140,76 @@ pragma Elaborate_Body (Text_IO);
    --  Note: The parameter file is IN OUT in the RM, but this is clearly
    --  an oversight, and was intended to be IN, see AI95-00057.
 
-   procedure Flush (File : in File_Type);
+   procedure Flush (File : File_Type);
    procedure Flush;
 
    --------------------------------------------
    -- Specification of line and page lengths --
    --------------------------------------------
 
-   procedure Set_Line_Length (File : in File_Type; To : in Count);
-   procedure Set_Line_Length (To : in Count);
+   procedure Set_Line_Length (File : File_Type; To : Count);
+   procedure Set_Line_Length (To : Count);
 
-   procedure Set_Page_Length (File : in File_Type; To : in Count);
-   procedure Set_Page_Length (To : in Count);
+   procedure Set_Page_Length (File : File_Type; To : Count);
+   procedure Set_Page_Length (To : Count);
 
-   function Line_Length (File : in File_Type) return Count;
+   function Line_Length (File : File_Type) return Count;
    function Line_Length return Count;
 
-   function Page_Length (File : in File_Type) return Count;
+   function Page_Length (File : File_Type) return Count;
    function Page_Length return Count;
 
    ------------------------------------
    -- Column, Line, and Page Control --
    ------------------------------------
 
-   procedure New_Line (File : in File_Type; Spacing : in Positive_Count := 1);
-   procedure New_Line (Spacing : in Positive_Count := 1);
+   procedure New_Line (File : File_Type; Spacing : Positive_Count := 1);
+   procedure New_Line (Spacing : Positive_Count := 1);
 
-   procedure Skip_Line (File : in File_Type; Spacing : in Positive_Count := 1);
-   procedure Skip_Line (Spacing : in Positive_Count := 1);
+   procedure Skip_Line (File : File_Type; Spacing : Positive_Count := 1);
+   procedure Skip_Line (Spacing : Positive_Count := 1);
 
-   function End_Of_Line (File : in File_Type) return Boolean;
+   function End_Of_Line (File : File_Type) return Boolean;
    function End_Of_Line return Boolean;
 
-   procedure New_Page (File : in File_Type);
+   procedure New_Page (File : File_Type);
    procedure New_Page;
 
-   procedure Skip_Page (File : in File_Type);
+   procedure Skip_Page (File : File_Type);
    procedure Skip_Page;
 
-   function End_Of_Page (File : in File_Type) return Boolean;
+   function End_Of_Page (File : File_Type) return Boolean;
    function End_Of_Page return Boolean;
 
-   function End_Of_File (File : in File_Type) return Boolean;
+   function End_Of_File (File : File_Type) return Boolean;
    function End_Of_File return Boolean;
 
-   procedure Set_Col (File : in File_Type;  To : in Positive_Count);
-   procedure Set_Col (To : in Positive_Count);
+   procedure Set_Col (File : File_Type;  To : Positive_Count);
+   procedure Set_Col (To : Positive_Count);
 
-   procedure Set_Line (File : in File_Type; To : in Positive_Count);
-   procedure Set_Line (To : in Positive_Count);
+   procedure Set_Line (File : File_Type; To : Positive_Count);
+   procedure Set_Line (To : Positive_Count);
 
-   function Col (File : in File_Type) return Positive_Count;
+   function Col (File : File_Type) return Positive_Count;
    function Col return Positive_Count;
 
-   function Line (File : in File_Type) return Positive_Count;
+   function Line (File : File_Type) return Positive_Count;
    function Line return Positive_Count;
 
-   function Page (File : in File_Type) return Positive_Count;
+   function Page (File : File_Type) return Positive_Count;
    function Page return Positive_Count;
 
    ----------------------------
    -- Character Input-Output --
    ----------------------------
 
-   procedure Get (File : in File_Type; Item : out Character);
+   procedure Get (File : File_Type; Item : out Character);
    procedure Get (Item : out Character);
-   procedure Put (File : in File_Type; Item : in Character);
-   procedure Put (Item : in Character);
+   procedure Put (File : File_Type; Item : Character);
+   procedure Put (Item : Character);
 
    procedure Look_Ahead
-     (File        : in File_Type;
+     (File        : File_Type;
       Item        : out Character;
       End_Of_Line : out Boolean);
 
@@ -218,14 +218,14 @@ pragma Elaborate_Body (Text_IO);
       End_Of_Line : out Boolean);
 
    procedure Get_Immediate
-     (File : in File_Type;
+     (File : File_Type;
       Item : out Character);
 
    procedure Get_Immediate
      (Item : out Character);
 
    procedure Get_Immediate
-     (File      : in File_Type;
+     (File      : File_Type;
       Item      : out Character;
       Available : out Boolean);
 
@@ -237,13 +237,13 @@ pragma Elaborate_Body (Text_IO);
    -- String Input-Output --
    -------------------------
 
-   procedure Get (File : in File_Type; Item : out String);
+   procedure Get (File : File_Type; Item : out String);
    procedure Get (Item : out String);
-   procedure Put (File : in File_Type; Item : in String);
-   procedure Put (Item : in String);
+   procedure Put (File : File_Type; Item : String);
+   procedure Put (Item : String);
 
    procedure Get_Line
-     (File : in File_Type;
+     (File : File_Type;
       Item : out String;
       Last : out Natural);
 
@@ -251,12 +251,18 @@ pragma Elaborate_Body (Text_IO);
      (Item : out String;
       Last : out Natural);
 
-   procedure Put_Line
-     (File : in File_Type;
-      Item : in String);
+   function Get_Line (File : File_Type) return String;
+   pragma Ada_05 (Get_Line);
+
+   function Get_Line return String;
+   pragma Ada_05 (Get_Line);
 
    procedure Put_Line
-     (Item : in String);
+     (File : File_Type;
+      Item : String);
+
+   procedure Put_Line
+     (Item : String);
 
    ---------------------------------------
    -- Generic packages for Input-Output --
@@ -294,6 +300,32 @@ pragma Elaborate_Body (Text_IO);
    Layout_Error : exception renames IO_Exceptions.Layout_Error;
 
 private
+
+   --  The following procedures have a File_Type formal of mode IN OUT because
+   --  they may close the original file. The Close operation may raise an
+   --  exception, but in that case we want any assignment to the formal to
+   --  be effective anyway, so it must be passed by reference (or the caller
+   --  will be left with a dangling pointer).
+
+   pragma Export_Procedure
+     (Internal  => Close,
+      External  => "",
+      Mechanism => Reference);
+   pragma Export_Procedure
+     (Internal  => Delete,
+      External  => "",
+      Mechanism => Reference);
+   pragma Export_Procedure
+     (Internal        => Reset,
+      External        => "",
+      Parameter_Types => (File_Type),
+      Mechanism       => Reference);
+   pragma Export_Procedure
+     (Internal        => Reset,
+      External        => "",
+      Parameter_Types => (File_Type, File_Mode),
+      Mechanism       => (File => Reference));
+
    -----------------------------------
    -- Handling of Format Characters --
    -----------------------------------
@@ -310,7 +342,7 @@ private
    --  omitted on output unless an explicit New_Page call is made before
    --  closing the file. No page mark is added when a file is appended to,
    --  so, in accordance with the permission in (RM A.10.2(4)), there may
-   --  or may not be a page mark separating preexising text in the file
+   --  or may not be a page mark separating preexisting text in the file
    --  from the new text to be written.
 
    --  A file mark is marked by the physical end of file. In DOS translation
@@ -328,6 +360,11 @@ private
    -- Text_IO File Control Block --
    --------------------------------
 
+   Default_WCEM : System.WCh_Con.WC_Encoding_Method :=
+                    System.WCh_Con.WCEM_UTF8;
+   --  This gets modified during initialization (see body) using
+   --  the default value established in the call to Set_Globals.
+
    package FCB renames System.File_Control_Block;
 
    type Text_AFCB;
@@ -342,12 +379,12 @@ private
 
       Self : aliased File_Type;
       --  Set to point to the containing Text_AFCB block. This is used to
-      --  implement the Current_{Error,Input,Ouput} functions which return
+      --  implement the Current_{Error,Input,Output} functions which return
       --  a File_Access, the file access value returned is a pointer to
       --  the Self field of the corresponding file.
 
       Before_LM : Boolean := False;
-      --  This flag is used to deal with the anomolies introduced by the
+      --  This flag is used to deal with the anomalies introduced by the
       --  peculiar definition of End_Of_File and End_Of_Page in Ada. These
       --  functions require looking ahead more than one character. Since
       --  there is no convenient way of backing up more than one character,
@@ -360,12 +397,37 @@ private
       --  after a LM-PM sequence when logically we are before the LM-PM. This
       --  flag can only be set if Before_LM is also set.
 
+      WC_Method : System.WCh_Con.WC_Encoding_Method := Default_WCEM;
+      --  Encoding method to be used for this file. Text_IO does not deal with
+      --  wide characters, but it does deal with upper half characters in the
+      --  range 16#80#-16#FF# which may need encoding, e.g. in UTF-8 mode.
+
+      Before_Upper_Half_Character : Boolean := False;
+      --  This flag is set to indicate that an encoded upper half character has
+      --  been read by Text_IO.Look_Ahead. If it is set to True, then it means
+      --  that the stream is logically positioned before the character but is
+      --  physically positioned after it. The character involved must be in
+      --  the range 16#80#-16#FF#, i.e. if the flag is set, then we know the
+      --  next character has a code greater than 16#7F#, and the value of this
+      --  character is saved in Saved_Upper_Half_Character.
+
+      Saved_Upper_Half_Character : Character;
+      --  This field is valid only if Before_Upper_Half_Character is set. It
+      --  contains an upper-half character read by Look_Ahead. If Look_Ahead
+      --  reads a character in the range 16#00# to 16#7F#, then it can use
+      --  ungetc to put it back, but ungetc cannot be called more than once,
+      --  so for characters above this range, we don't try to back up the
+      --  file. Instead we save the character in this field and set the flag
+      --  Before_Upper_Half_Character to True to indicate that we are logically
+      --  positioned before this character even though the stream is physically
+      --  positioned after it.
+
    end record;
 
    function AFCB_Allocate (Control_Block : Text_AFCB) return FCB.AFCB_Ptr;
 
-   procedure AFCB_Close (File : access Text_AFCB);
-   procedure AFCB_Free  (File : access Text_AFCB);
+   procedure AFCB_Close (File : not null access Text_AFCB);
+   procedure AFCB_Free  (File : not null access Text_AFCB);
 
    procedure Read
      (File : in out Text_AFCB;
@@ -375,23 +437,20 @@ private
 
    procedure Write
      (File : in out Text_AFCB;
-      Item : in Ada.Streams.Stream_Element_Array);
+      Item : Ada.Streams.Stream_Element_Array);
    --  Write operation used when Text_IO file is treated directly as Stream
 
    ------------------------
    -- The Standard Files --
    ------------------------
 
-   Null_Str : aliased constant String := "";
-   --  Used as name and form of standard files
-
-   Standard_Err_AFCB : aliased Text_AFCB;
    Standard_In_AFCB  : aliased Text_AFCB;
    Standard_Out_AFCB : aliased Text_AFCB;
+   Standard_Err_AFCB : aliased Text_AFCB;
 
-   Standard_Err : aliased File_Type := Standard_Err_AFCB'Access;
    Standard_In  : aliased File_Type := Standard_In_AFCB'Access;
    Standard_Out : aliased File_Type := Standard_Out_AFCB'Access;
+   Standard_Err : aliased File_Type := Standard_Err_AFCB'Access;
    --  Standard files
 
    Current_In   : aliased File_Type := Standard_In;
@@ -399,47 +458,15 @@ private
    Current_Err  : aliased File_Type := Standard_Err;
    --  Current files
 
-   -----------------------
-   -- Local Subprograms --
-   -----------------------
-
-   --  These subprograms are in the private part of the spec so that they can
-   --  be shared by the routines in the body of Ada.Text_IO.Wide_Text_IO.
-
-   --  Note: we use Integer in these declarations instead of the more accurate
-   --  Interfaces.C_Streams.int, because we do not want to drag in the spec of
-   --  this interfaces package with the spec of Ada.Text_IO, and we know that
-   --  in fact these types are identical
-
    function EOF_Char return Integer;
    --  Returns the system-specific character indicating the end of a text file.
    --  This is exported for use by child packages such as Enumeration_Aux to
-   --  eliminate their needing to depend directly on Interfaces.C_Streams.
+   --  eliminate their needing to depend directly on Interfaces.C_Streams,
+   --  which is not available in certain target environments (such as AAMP).
 
-   function Getc (File : File_Type) return Integer;
-   --  Gets next character from file, which has already been checked for
-   --  being in read status, and returns the character read if no error
-   --  occurs. The result is EOF if the end of file was read.
-
-   function Nextc (File : File_Type) return Integer;
-   --  Returns next character from file without skipping past it (i.e. it
-   --  is a combination of Getc followed by an Ungetc).
-
-   procedure Putc (ch : Integer; File : File_Type);
-   --  Outputs the given character to the file, which has already been
-   --  checked for being in output status. Device_Error is raised if the
-   --  character cannot be written.
-
-   procedure Terminate_Line (File : File_Type);
-   --  If the file is in Write_File or Append_File mode, and the current
-   --  line is not terminated, then a line terminator is written using
-   --  New_Line. Note that there is no Terminate_Page routine, because
-   --  the page mark at the end of the file is implied if necessary.
-
-   procedure Ungetc (ch : Integer; File : File_Type);
-   --  Pushes back character into stream, using ungetc. The caller has
-   --  checked that the file is in read status. Device_Error is raised
-   --  if the character cannot be pushed back. An attempt to push back
-   --  and end of file character (EOF) is ignored.
+   procedure Initialize_Standard_Files;
+   --  Initializes the file control blocks for the standard files. Called from
+   --  the elaboration routine for this package, and from Reset_Standard_Files
+   --  in package Ada.Text_IO.Reset_Standard_Files.
 
 end Ada.Text_IO;

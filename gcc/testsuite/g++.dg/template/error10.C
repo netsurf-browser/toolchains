@@ -1,4 +1,5 @@
 // { dg-do compile }
+// { dg-options "-std=gnu++98" }
 // Origin: <tilps at hotmail dot com>
 // c++/9154: poor error message for ">>" vs "> >" in template argument list
 
@@ -9,8 +10,8 @@
 template <class T>
 class A {};
 
-A<A<int>> blah;  // { dg-error "should be `> >' within" }
-A<int>> blah2; // { dg-error "spurious `>>'" }
+A<A<int>> blah;  // { dg-error "should be '> >' within" }
+A<int>> blah2; // { dg-error "spurious '>>'" }
 
 
 /*

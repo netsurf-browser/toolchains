@@ -6,33 +6,33 @@
 --                                                                          --
 --                                 B o d y                                  --
 --                                                                          --
---          Copyright (C) 1992-1999, Free Software Foundation, Inc.         --
+--          Copyright (C) 1992-2010, Free Software Foundation, Inc.         --
 --                                                                          --
 -- GNAT is free software;  you can  redistribute it  and/or modify it under --
 -- terms of the  GNU General Public License as published  by the Free Soft- --
--- ware  Foundation;  either version 2,  or (at your option) any later ver- --
+-- ware  Foundation;  either version 3,  or (at your option) any later ver- --
 -- sion.  GNAT is distributed in the hope that it will be useful, but WITH- --
 -- OUT ANY WARRANTY;  without even the  implied warranty of MERCHANTABILITY --
--- or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU General Public License --
--- for  more details.  You should have  received  a copy of the GNU General --
--- Public License  distributed with GNAT;  see file COPYING.  If not, write --
--- to  the Free Software Foundation,  59 Temple Place - Suite 330,  Boston, --
--- MA 02111-1307, USA.                                                      --
+-- or FITNESS FOR A PARTICULAR PURPOSE.                                     --
 --                                                                          --
--- As a special exception,  if other files  instantiate  generics from this --
--- unit, or you link  this unit with other files  to produce an executable, --
--- this  unit  does not  by itself cause  the resulting  executable  to  be --
--- covered  by the  GNU  General  Public  License.  This exception does not --
--- however invalidate  any other reasons why  the executable file  might be --
--- covered by the  GNU Public License.                                      --
+-- As a special exception under Section 7 of GPL version 3, you are granted --
+-- additional permissions described in the GCC Runtime Library Exception,   --
+-- version 3.1, as published by the Free Software Foundation.               --
+--                                                                          --
+-- You should have received a copy of the GNU General Public License and    --
+-- a copy of the GCC Runtime Library Exception along with this program;     --
+-- see the files COPYING3 and COPYING.RUNTIME respectively.  If not, see    --
+-- <http://www.gnu.org/licenses/>.                                          --
 --                                                                          --
 -- GNAT was originally developed  by the GNAT team at  New York University. --
 -- Extensive contributions were provided by Ada Core Technologies Inc.      --
 --                                                                          --
 ------------------------------------------------------------------------------
 
+with Aspects;
 with Atree;
 with Csets;
+with Debug;
 with Elists;
 with Fname;
 with Lib;
@@ -40,6 +40,7 @@ with Namet;
 with Nlists;
 with Opt;
 with Repinfo;
+with Sem_Aux;
 with Sinput;
 with Stand;
 with Stringt;
@@ -51,12 +52,20 @@ procedure Tree_In (Desc : File_Descriptor) is
 begin
    Tree_IO.Tree_Read_Initialize (Desc);
    Opt.Tree_Read;
+
+   --  For now, only  read aspect specifications hash table if -gnatd.A is set
+
+   if Debug.Debug_Flag_Dot_AA then
+      Aspects.Tree_Read;
+   end if;
+
    Atree.Tree_Read;
    Elists.Tree_Read;
    Fname.Tree_Read;
    Lib.Tree_Read;
    Namet.Tree_Read;
    Nlists.Tree_Read;
+   Sem_Aux.Tree_Read;
    Sinput.Tree_Read;
    Stand.Tree_Read;
    Stringt.Tree_Read;

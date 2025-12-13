@@ -1,12 +1,13 @@
 /* Output variables, constants and external declarations, for GNU compiler.
-   Copyright (C) 1996, 1997, 1998, 2000, 2001, 2002, 2004
+   Copyright (C) 1996, 1997, 1998, 2000, 2001, 2002, 2004, 2005, 2007, 2008,
+   2009, 2010
    Free Software Foundation, Inc.
 
 This file is part of GCC.
 
 GCC is free software; you can redistribute it and/or modify
 it under the terms of the GNU General Public License as published by
-the Free Software Foundation; either version 2, or (at your option)
+the Free Software Foundation; either version 3, or (at your option)
 any later version.
 
 GCC is distributed in the hope that it will be useful,
@@ -15,12 +16,15 @@ MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
 GNU General Public License for more details.
 
 You should have received a copy of the GNU General Public License
-along with GCC; see the file COPYING.  If not, write to
-the Free Software Foundation, 59 Temple Place - Suite 330,
-Boston, MA 02111-1307, USA.  */
+along with GCC; see the file COPYING3.  If not see
+<http://www.gnu.org/licenses/>.  */
 
 #define TARGET_OBJECT_SUFFIX ".obj"
 #define TARGET_EXECUTABLE_SUFFIX ".exe"
+
+/* Alpha/VMS object format is not really Elf, but this makes compiling
+   crtstuff.c and dealing with shared library initialization much easier.  */
+#define OBJECT_FORMAT_ELF
 
 /* This enables certain macros in alpha.h, which will make an indirect
    reference to an external symbol an invalid address.  This needs to be
@@ -42,7 +46,7 @@ Boston, MA 02111-1307, USA.  */
     } while (0)
 
 #undef TARGET_DEFAULT
-#define TARGET_DEFAULT (MASK_FP|MASK_FPREGS|MASK_GAS)
+#define TARGET_DEFAULT (MASK_FPREGS|MASK_GAS)
 #undef TARGET_ABI_OPEN_VMS
 #define TARGET_ABI_OPEN_VMS 1
 
@@ -50,6 +54,8 @@ Boston, MA 02111-1307, USA.  */
 #define TARGET_NAME "OpenVMS/Alpha"
 #undef TARGET_VERSION
 #define TARGET_VERSION fprintf (stderr, " (%s)", TARGET_NAME);           
+
+#define VMS_DEBUG_MAIN_POINTER "TRANSFER$BREAK$GO"
 
 #undef PCC_STATIC_STRUCT_RETURN
 
@@ -64,6 +70,10 @@ Boston, MA 02111-1307, USA.  */
 #define POINTERS_EXTEND_UNSIGNED 0
 
 #define MAX_OFILE_ALIGNMENT 524288  /* 8 x 2^16 by DEC Ada Test CD40VRA */
+
+/* The maximum alignment 'malloc' honors.  */
+#undef  MALLOC_ABI_ALIGNMENT
+#define MALLOC_ABI_ALIGNMENT ((TARGET_MALLOC64 ? 16 : 8) * BITS_PER_UNIT)
 
 #undef FIXED_REGISTERS
 #define FIXED_REGISTERS  \
@@ -130,24 +140,10 @@ Boston, MA 02111-1307, USA.  */
 #undef EPILOGUE_USES
 #define EPILOGUE_USES(REGNO)    ((REGNO) == 26 || (REGNO) == 29)
 
-#undef CAN_ELIMINATE
-#define CAN_ELIMINATE(FROM, TO)  \
-((TO) != STACK_POINTER_REGNUM || ! alpha_using_fp ())
-
 #undef INITIAL_ELIMINATION_OFFSET
 #define INITIAL_ELIMINATION_OFFSET(FROM, TO, OFFSET)			\
-{ if ((FROM) == FRAME_POINTER_REGNUM)					\
-    (OFFSET) = alpha_sa_size () + alpha_pv_save_size ();		\
-  else if ((FROM) == ARG_POINTER_REGNUM)				\
-    (OFFSET) = (ALPHA_ROUND (alpha_sa_size () + alpha_pv_save_size ()	\
-			     + get_frame_size ()			\
-			     + current_function_pretend_args_size)	\
-		- current_function_pretend_args_size);			\
-  else									\
-    abort();								\
-  if ((TO) == STACK_POINTER_REGNUM)					\
-    (OFFSET) += ALPHA_ROUND (current_function_outgoing_args_size);	\
-}
+  ((OFFSET) = alpha_vms_initial_elimination_offset(FROM, TO))
+
 
 /* Define a data type for recording info about an argument list
    during the scan of that argument list.  This data type should
@@ -177,67 +173,22 @@ typedef struct {int num_args; enum avms_arg_type atypes[6];} avms_arg_info;
   (CUM).atypes[0] = (CUM).atypes[1] = (CUM).atypes[2] = I64;	\
   (CUM).atypes[3] = (CUM).atypes[4] = (CUM).atypes[5] = I64;
 
-#undef FUNCTION_ARG_ADVANCE
-#define FUNCTION_ARG_ADVANCE(CUM, MODE, TYPE, NAMED)			\
-  if (MUST_PASS_IN_STACK (MODE, TYPE))					\
-    (CUM).num_args += 6;						\
-  else									\
-    {									\
-      if ((CUM).num_args < 6)						\
-        (CUM).atypes[(CUM).num_args] = alpha_arg_type (MODE);		\
-									\
-     (CUM).num_args += ALPHA_ARG_SIZE (MODE, TYPE, NAMED);		\
-    }
+#define DEFAULT_PCC_STRUCT_RETURN 0
 
-/* For an arg passed partly in registers and partly in memory,
-   this is the number of registers used.
-   For args passed entirely in registers or entirely in memory, zero.  */
+#undef  ASM_WEAKEN_LABEL
+#define ASM_WEAKEN_LABEL(FILE, NAME)                            \
+   do { fputs ("\t.weak\t", FILE); assemble_name (FILE, NAME);  \
+        fputc ('\n', FILE); } while (0)
 
-#undef FUNCTION_ARG_PARTIAL_NREGS
-#define FUNCTION_ARG_PARTIAL_NREGS(CUM, MODE, TYPE, NAMED)		\
-((CUM).num_args < 6 && 6 < (CUM).num_args				\
-   + ALPHA_ARG_SIZE (MODE, TYPE, NAMED)					\
- ? 6 - (CUM).num_args : 0)
-
-/* ABI has stack checking, but it's broken.  */
-#undef STACK_CHECK_BUILTIN
-#define STACK_CHECK_BUILTIN 0
-
-#define LINK_SECTION_ASM_OP "\t.link"
 #define READONLY_DATA_SECTION_ASM_OP "\t.rdata"
-#define LITERALS_SECTION_ASM_OP "\t.literals"
 #define CTORS_SECTION_ASM_OP "\t.ctors"
 #define DTORS_SECTION_ASM_OP "\t.dtors"
-
-#undef EXTRA_SECTIONS
-#define EXTRA_SECTIONS	in_link, in_literals
-
-#undef EXTRA_SECTION_FUNCTIONS
-#define EXTRA_SECTION_FUNCTIONS					\
-void								\
-link_section (void)						\
-{								\
-  if (in_section != in_link)					\
-    {								\
-      fprintf (asm_out_file, "%s\n", LINK_SECTION_ASM_OP); 	\
-      in_section = in_link;					\
-    }								\
-}                                                               \
-void								\
-literals_section (void)						\
-{								\
-  if (in_section != in_literals)				\
-    {								\
-      fprintf (asm_out_file, "%s\n", LITERALS_SECTION_ASM_OP); 	\
-      in_section = in_literals;					\
-    }								\
-}
-
-extern void link_section (void);
-extern void literals_section (void);
+#define SDATA_SECTION_ASM_OP "\t.sdata"
+#define CRT_CALL_STATIC_FUNCTION(SECTION_OP, FUNC)              \
+   asm (SECTION_OP "\n\t.long " #FUNC"\n");
 
 #undef ASM_OUTPUT_ADDR_DIFF_ELT
-#define ASM_OUTPUT_ADDR_DIFF_ELT(FILE, BODY, VALUE, REL) abort ()
+#define ASM_OUTPUT_ADDR_DIFF_ELT(FILE, BODY, VALUE, REL) gcc_unreachable ()
 
 #undef ASM_OUTPUT_ADDR_VEC_ELT
 #define ASM_OUTPUT_ADDR_VEC_ELT(FILE, VALUE) \
@@ -256,49 +207,10 @@ extern void literals_section (void);
 
 #define COMMON_ASM_OP "\t.comm\t"
 
-#undef ASM_OUTPUT_ALIGNED_COMMON
-#define ASM_OUTPUT_ALIGNED_COMMON(FILE, NAME, SIZE, ALIGN)		\
-do {									\
-  fprintf ((FILE), "%s", COMMON_ASM_OP);				\
-  assemble_name ((FILE), (NAME));					\
-  fprintf ((FILE), "," HOST_WIDE_INT_PRINT_UNSIGNED ",%u\n", (SIZE), (ALIGN) / BITS_PER_UNIT);	\
-} while (0)
-
+#undef ASM_OUTPUT_ALIGNED_DECL_COMMON
+#define ASM_OUTPUT_ALIGNED_DECL_COMMON(FILE, DECL, NAME, SIZE, ALIGN) \
+  vms_output_aligned_decl_common (FILE, DECL, NAME, SIZE, ALIGN)
 
-/* Output assembler code for a block containing the constant parts
-   of a trampoline, leaving space for the variable parts.
-
-   The trampoline should set the static chain pointer to value placed
-   into the trampoline and should branch to the specified routine.  
-   Note that $27 has been set to the address of the trampoline, so we can
-   use it for addressability of the two data items.  */
-
-#undef TRAMPOLINE_TEMPLATE
-#define TRAMPOLINE_TEMPLATE(FILE)		\
-{						\
-  fprintf (FILE, "\t.quad 0\n");		\
-  fprintf (FILE, "\t.linkage __tramp\n");	\
-  fprintf (FILE, "\t.quad 0\n");		\
-}
-
-/* Length in units of the trampoline for entering a nested function.  */
-
-#undef TRAMPOLINE_SIZE
-#define TRAMPOLINE_SIZE    32
-
-/* The alignment of a trampoline, in bits.  */
-
-#undef TRAMPOLINE_ALIGNMENT
-#define TRAMPOLINE_ALIGNMENT  64
-
-/* Emit RTL insns to initialize the variable parts of a trampoline.
-   FNADDR is an RTX for the address of the function's pure code.
-   CXT is an RTX for the static chain value for the function.  */
-
-#undef INITIALIZE_TRAMPOLINE
-#define INITIALIZE_TRAMPOLINE(TRAMP, FNADDR, CXT) \
-  alpha_initialize_trampoline (TRAMP, FNADDR, CXT, 16, 24, -1)
-
 /* Control how constructors and destructors are emitted.  */
 #define TARGET_ASM_CONSTRUCTOR  vms_asm_out_constructor
 #define TARGET_ASM_DESTRUCTOR   vms_asm_out_destructor
@@ -317,56 +229,64 @@ do {									\
   gen_rtx_MEM (Pmode, plus_constant (stack_pointer_rtx, 8))
 
 #define LINK_EH_SPEC "vms-dwarf2eh.o%s "
+#define LINK_GCC_C_SEQUENCE_SPEC "%G"
 
 #ifdef IN_LIBGCC2
-#include <pdscdef.h>
+/* Get the definition for MD_FALLBACK_FRAME_STATE_FOR from a separate
+   file. This avoids having to recompile the world instead of libgcc only
+   when changes to this macro are exercised.  */
 
-#define MD_FALLBACK_FRAME_STATE_FOR(CONTEXT, FS, SUCCESS)		\
- do {									\
-  PDSCDEF *pv = *((PDSCDEF **) (CONTEXT)->reg [29]);                    \
-									\
-  if (pv && ((long) pv & 0x7) == 0) /* low bits 0 means address */      \
-    pv = *(PDSCDEF **) pv;                                              \
-									\
-  if (pv && ((pv->pdsc$w_flags & 0xf) == PDSC$K_KIND_FP_STACK))		\
-    {									\
-      int i, j;								\
-									\
-      (FS)->cfa_offset = pv->pdsc$l_size;				\
-      (FS)->cfa_reg = pv->pdsc$w_flags & PDSC$M_BASE_REG_IS_FP ? 29 : 30; \
-      (FS)->retaddr_column = 26;					\
-      (FS)->cfa_how = CFA_REG_OFFSET;					\
-      (FS)->regs.reg[27].loc.offset = -pv->pdsc$l_size;			\
-      (FS)->regs.reg[27].how = REG_SAVED_OFFSET;			\
-      (FS)->regs.reg[26].loc.offset					\
-	 = -(pv->pdsc$l_size - pv->pdsc$w_rsa_offset);			\
-      (FS)->regs.reg[26].how = REG_SAVED_OFFSET;			\
-									\
-      for (i = 0, j = 0; i < 32; i++)					\
-	if (1<<i & pv->pdsc$l_ireg_mask)				\
-	  {								\
-	    (FS)->regs.reg[i].loc.offset				\
-	      = -(pv->pdsc$l_size - pv->pdsc$w_rsa_offset - 8 * ++j);	\
-	    (FS)->regs.reg[i].how = REG_SAVED_OFFSET;			\
-	  }								\
-									\
-      goto SUCCESS;							\
-    }									\
-  else if (pv && ((pv->pdsc$w_flags & 0xf) == PDSC$K_KIND_FP_REGISTER))	\
-    {									\
-      (FS)->cfa_offset = pv->pdsc$l_size;				\
-      (FS)->cfa_reg = pv->pdsc$w_flags & PDSC$M_BASE_REG_IS_FP ? 29 : 30; \
-      (FS)->retaddr_column = 26;					\
-      (FS)->cfa_how = CFA_REG_OFFSET;					\
-      (FS)->regs.reg[26].loc.reg = pv->pdsc$b_save_ra;			\
-      (FS)->regs.reg[26].how = REG_SAVED_REG;			        \
-      (FS)->regs.reg[29].loc.reg = pv->pdsc$b_save_fp;			\
-      (FS)->regs.reg[29].how = REG_SAVED_REG;			        \
-									\
-      goto SUCCESS;							\
-    }									\
-} while (0)
+#define MD_UNWIND_SUPPORT "config/alpha/vms-unwind.h"
 #endif
+
+#define ASM_OUTPUT_EXTERNAL(FILE, DECL, NAME) \
+  avms_asm_output_external (FILE, DECL, NAME)
+
+typedef struct crtl_name_spec
+{
+  const char *const name;
+  const char *deccname;
+  int referenced;
+} crtl_name_spec;
+
+#include "config/vms/vms-crtl.h"
+
+/* Alias CRTL names to 32/64bit DECCRTL functions. 
+   Fixme: This should do a binary search.  */
+#define DO_CRTL_NAMES                                                      \
+  do                                                                       \
+    {                                                                      \
+      int i;                                                               \
+      static crtl_name_spec vms_crtl_names[] = CRTL_NAMES;                 \
+      static int malloc64_init = 0;                                        \
+                                                                           \
+      if ((malloc64_init == 0) && TARGET_MALLOC64)          		   \
+	{                                                                  \
+          for (i=0; vms_crtl_names [i].name; i++)                          \
+            {                                                              \
+	      if (strcmp ("calloc", vms_crtl_names [i].name) == 0)         \
+                vms_crtl_names [i].deccname = "decc$_calloc64";            \
+              else                                                         \
+	      if (strcmp ("malloc", vms_crtl_names [i].name) == 0)         \
+                vms_crtl_names [i].deccname = "decc$_malloc64";            \
+              else                                                         \
+	      if (strcmp ("realloc", vms_crtl_names [i].name) == 0)        \
+                vms_crtl_names [i].deccname = "decc$_realloc64";           \
+              else                                                         \
+	      if (strcmp ("strdup", vms_crtl_names [i].name) == 0)         \
+                vms_crtl_names [i].deccname = "decc$_strdup64";            \
+	    }                                                              \
+            malloc64_init = 1;                                             \
+        }                                                                  \
+      for (i=0; vms_crtl_names [i].name; i++)                              \
+	if (!vms_crtl_names [i].referenced &&                              \
+	    (strcmp (name, vms_crtl_names [i].name) == 0))                 \
+	  {                                                                \
+	    fprintf (file, "\t%s=%s\n",                        \
+		     name, vms_crtl_names [i].deccname);                   \
+	    vms_crtl_names [i].referenced = 1;                             \
+	  }                                                                \
+    } while (0)
 
 /* This is how to output an assembler line
    that says to advance the location counter
@@ -380,7 +300,8 @@ do {									\
 #define TARGET_ASM_NAMED_SECTION vms_asm_named_section
 
 #define ASM_OUTPUT_DEF(FILE,LABEL1,LABEL2)				\
-  do {	literals_section();                                             \
+  do {	fprintf ((FILE), "\t.literals\n");				\
+	in_section = NULL;						\
 	fprintf ((FILE), "\t");						\
 	assemble_name (FILE, LABEL1);					\
 	fprintf (FILE, " = ");						\
@@ -400,23 +321,18 @@ do {									\
 #undef ASM_FINAL_SPEC
 
 /* The VMS convention is to always provide minimal debug info
-   for a traceback unless specifically overridden.  Defaulting this here
-   is a kludge.  */
+   for a traceback unless specifically overridden.  */
 
-#define OPTIMIZATION_OPTIONS(OPTIMIZE, OPTIMIZE_SIZE) \
-{                                                  \
-   write_symbols = VMS_DEBUG;                      \
-   debug_info_level = (enum debug_info_level) 1;   \
-}
-
-/* Override traceback debug info on -g0.  */
-#undef OVERRIDE_OPTIONS
-#define OVERRIDE_OPTIONS                           \
-{                                                  \
-   if (write_symbols == NO_DEBUG)                  \
-     debug_info_level = (enum debug_info_level) 0; \
-   override_options ();                            \
-}
+#undef SUBTARGET_OVERRIDE_OPTIONS
+#define SUBTARGET_OVERRIDE_OPTIONS                  \
+do {                                                \
+  if (write_symbols == NO_DEBUG                     \
+      && debug_info_level == DINFO_LEVEL_NONE)      \
+    {                                               \
+      write_symbols = VMS_DEBUG;                    \
+      debug_info_level = DINFO_LEVEL_TERSE;         \
+    }                                               \
+} while (0)
 
 /* Link with vms-dwarf2.o if -g (except -g0). This causes the
    VMS link to pull all the dwarf2 debug sections together.  */
@@ -425,26 +341,20 @@ do {									\
 %{g2:-g2 vms-dwarf2.o%s} %{g3:-g3 vms-dwarf2.o%s} %{shared} %{v} %{map}"
 
 #undef STARTFILE_SPEC
-#define STARTFILE_SPEC "%{!shared:%{mvms-return-codes:vcrt0.o%s} \
-%{!mvms-return-codes:pcrt0.o%s}}"
+#define STARTFILE_SPEC \
+"%{!shared:%{mvms-return-codes:vcrt0.o%s} %{!mvms-return-codes:pcrt0.o%s} \
+    crtbegin.o%s} \
+ %{!static:%{shared:crtbeginS.o%s}}"
 
-#undef LIB_SPEC
-#define LIB_SPEC "-lc"
+#define ENDFILE_SPEC \
+"%{!shared:crtend.o%s} %{!static:%{shared:crtendS.o%s}}"
 
 #define NAME__MAIN "__gccmain"
 #define SYMBOL__MAIN __gccmain
 
-#define MD_EXEC_PREFIX "/gnu/lib/gcc-lib/"
-#define MD_STARTFILE_PREFIX "/gnu/lib/gcc-lib/"
-
-/* Specify the list of include file directories.  */
-#define INCLUDE_DEFAULTS		   \
-{					   \
-  { "/gnu/lib/gcc-lib/include", 0, 0, 0 }, \
-  { "/gnu_gxx_include", 0, 1, 1 },	   \
-  { "/gnu_cc_include", 0, 0, 0 },	   \
-  { "/gnu/include", 0, 0, 0 },	           \
-  { 0, 0, 0, 0 }			   \
-}
+#define INIT_SECTION_ASM_OP "\t.section LIB$INITIALIZE,GBL,NOWRT"
 
 #define LONGLONG_STANDALONE 1
+
+#undef TARGET_VALID_POINTER_MODE
+#define TARGET_VALID_POINTER_MODE vms_valid_pointer_mode

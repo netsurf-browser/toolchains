@@ -1,12 +1,12 @@
 // The template and inlines for the -*- C++ -*- slice_array class.
 
-// Copyright (C) 1997, 1998, 1999, 2000, 2001, 2002, 2004
-// Free Software Foundation, Inc.
+// Copyright (C) 1997, 1998, 1999, 2000, 2001, 2002, 2004, 2005, 2006, 2009,
+// 2010  Free Software Foundation, Inc.
 //
 // This file is part of the GNU ISO C++ Library.  This library is free
 // software; you can redistribute it and/or modify it under the
 // terms of the GNU General Public License as published by the
-// Free Software Foundation; either version 2, or (at your option)
+// Free Software Foundation; either version 3, or (at your option)
 // any later version.
 
 // This library is distributed in the hope that it will be useful,
@@ -14,34 +14,36 @@
 // MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
 // GNU General Public License for more details.
 
-// You should have received a copy of the GNU General Public License along
-// with this library; see the file COPYING.  If not, write to the Free
-// Software Foundation, 59 Temple Place - Suite 330, Boston, MA 02111-1307,
-// USA.
+// Under Section 7 of GPL version 3, you are granted additional
+// permissions described in the GCC Runtime Library Exception, version
+// 3.1, as published by the Free Software Foundation.
 
-// As a special exception, you may use this file as part of a free software
-// library without restriction.  Specifically, if other files instantiate
-// templates or use macros or inline functions from this file, or you compile
-// this file and link it with other files to produce an executable, this
-// file does not by itself cause the resulting executable to be covered by
-// the GNU General Public License.  This exception does not however
-// invalidate any other reasons why the executable file might be covered by
-// the GNU General Public License.
+// You should have received a copy of the GNU General Public License and
+// a copy of the GCC Runtime Library Exception along with this program;
+// see the files COPYING3 and COPYING.RUNTIME respectively.  If not, see
+// <http://www.gnu.org/licenses/>.
+
+/** @file bits/slice_array.h
+ *  This is an internal header file, included by other library headers.
+ *  Do not attempt to use it directly. @headername{valarray}
+ */
 
 // Written by Gabriel Dos Reis <Gabriel.Dos-Reis@DPTMaths.ENS-Cachan.Fr>
-
-/** @file slice_array.h
- *  This is an internal header file, included by other library headers.
- *  You should not attempt to use it directly.
- */
 
 #ifndef _SLICE_ARRAY_H
 #define _SLICE_ARRAY_H 1
 
 #pragma GCC system_header
 
-namespace std
+namespace std _GLIBCXX_VISIBILITY(default)
 {
+_GLIBCXX_BEGIN_NAMESPACE_VERSION
+
+  /**
+   * @addtogroup numeric_arrays
+   * @{
+   */
+
   /**
    *  @brief  Class defining one-dimensional subset of an array.
    *
@@ -83,14 +85,15 @@ namespace std
     size_t _M_st;			// stride unit
   };
 
-  // The default constructor constructor is not required to initialize
-  // data members with any meaningful values, so we choose to do nothing.
+  // _GLIBCXX_RESOLVE_LIB_DEFECTS
+  // 543. valarray slice default constructor
   inline
-  slice::slice() {}
+  slice::slice() 
+  : _M_off(0), _M_sz(0), _M_st(0) {}
 
   inline
   slice::slice(size_t __o, size_t __d, size_t __s)
-    : _M_off(__o), _M_sz(__d), _M_st(__s) {}
+  : _M_off(__o), _M_sz(__d), _M_st(__s) {}
 
   inline size_t
   slice::start() const
@@ -160,34 +163,34 @@ namespace std
       //        ~slice_array ();
 
       template<class _Dom>
-	void operator=(const _Expr<_Dom,_Tp>&) const;
+        void operator=(const _Expr<_Dom, _Tp>&) const;
       template<class _Dom>
-	void operator*=(const _Expr<_Dom,_Tp>&) const;
+	void operator*=(const _Expr<_Dom, _Tp>&) const;
       template<class _Dom>
-	void operator/=(const _Expr<_Dom,_Tp>&) const;
+	void operator/=(const _Expr<_Dom, _Tp>&) const;
       template<class _Dom>
-	void operator%=(const _Expr<_Dom,_Tp>&) const;
+	void operator%=(const _Expr<_Dom, _Tp>&) const;
       template<class _Dom>
-	void operator+=(const _Expr<_Dom,_Tp>&) const;
+	void operator+=(const _Expr<_Dom, _Tp>&) const;
       template<class _Dom>
-	void operator-=(const _Expr<_Dom,_Tp>&) const;
+	void operator-=(const _Expr<_Dom, _Tp>&) const;
       template<class _Dom>
-	void operator^=(const _Expr<_Dom,_Tp>&) const;
+	void operator^=(const _Expr<_Dom, _Tp>&) const;
       template<class _Dom>
-	void operator&=(const _Expr<_Dom,_Tp>&) const;
+	void operator&=(const _Expr<_Dom, _Tp>&) const;
       template<class _Dom>
-	void operator|=(const _Expr<_Dom,_Tp>&) const;
+	void operator|=(const _Expr<_Dom, _Tp>&) const;
       template<class _Dom>
-	void operator<<=(const _Expr<_Dom,_Tp>&) const;
+	void operator<<=(const _Expr<_Dom, _Tp>&) const;
       template<class _Dom>
-	void operator>>=(const _Expr<_Dom,_Tp>&) const;
+	void operator>>=(const _Expr<_Dom, _Tp>&) const;
 
     private:
       friend class valarray<_Tp>;
       slice_array(_Array<_Tp>, const slice&);
 
-      const size_t     _M_sz;
-      const size_t     _M_stride;
+      const size_t      _M_sz;
+      const size_t      _M_stride;
       const _Array<_Tp> _M_array;
 
       // not implemented
@@ -264,10 +267,9 @@ _DEFINE_VALARRAY_OPERATOR(>>, __shift_right)
 
 #undef _DEFINE_VALARRAY_OPERATOR
 
-} // std::
+  // @} group numeric_arrays
+
+_GLIBCXX_END_NAMESPACE_VERSION
+} // namespace
 
 #endif /* _SLICE_ARRAY_H */
-
-// Local Variables:
-// mode:c++
-// End:

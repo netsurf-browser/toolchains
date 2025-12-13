@@ -1,12 +1,12 @@
 ------------------------------------------------------------------------------
 --                                                                          --
---                         GNAT RUNTIME COMPONENTS                          --
+--                         GNAT RUN-TIME COMPONENTS                         --
 --                                                                          --
 --                     G N A T . M E M O R Y _ D U M P                      --
 --                                                                          --
 --                                 B o d y                                  --
 --                                                                          --
---              Copyright (C) 2003 Ada Core Technologies, Inc.              --
+--                     Copyright (C) 2003-2007, AdaCore                     --
 --                                                                          --
 -- GNAT is free software;  you can  redistribute it  and/or modify it under --
 -- terms of the  GNU General Public License as published  by the Free Soft- --
@@ -16,8 +16,8 @@
 -- or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU General Public License --
 -- for  more details.  You should have  received  a copy of the GNU General --
 -- Public License  distributed with GNAT;  see file COPYING.  If not, write --
--- to  the Free Software Foundation,  59 Temple Place - Suite 330,  Boston, --
--- MA 02111-1307, USA.                                                      --
+-- to  the  Free Software Foundation,  51  Franklin  Street,  Fifth  Floor, --
+-- Boston, MA 02110-1301, USA.                                              --
 --                                                                          --
 -- As a special exception,  if other files  instantiate  generics from this --
 -- unit, or you link  this unit with other files  to produce an executable, --
@@ -37,7 +37,7 @@ with System.Storage_Elements; use System.Storage_Elements;
 with GNAT.IO;              use GNAT.IO;
 with GNAT.Debug_Utilities; use GNAT.Debug_Utilities;
 
-with Unchecked_Conversion;
+with Ada.Unchecked_Conversion;
 
 package body GNAT.Memory_Dump is
 
@@ -70,7 +70,7 @@ package body GNAT.Memory_Dump is
 
       type Char_Ptr is access all Character;
 
-      function To_Char_Ptr is new Unchecked_Conversion (Address, Char_Ptr);
+      function To_Char_Ptr is new Ada.Unchecked_Conversion (Address, Char_Ptr);
 
    begin
       while Ctr /= 0 loop

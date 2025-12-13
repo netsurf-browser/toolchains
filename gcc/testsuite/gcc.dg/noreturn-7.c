@@ -13,12 +13,12 @@ void _exit(int status) __attribute__ ((__noreturn__));
 
 int z = 0;
 
-void g()
+void g() /* { dg-warning "might be candidate" } */
 {
   if (++z > 10)
     _exit(0);
   g();
-}             /* { dg-warning "possible candidate" } */
+}
 
 void f()
 {
@@ -27,16 +27,16 @@ void f()
   f();
 }             /* { dg-bogus "does return" } */
 
-int h()
+int h() /* { dg-warning "might be candidate" } */
 {
   if (++z > 10)
     _exit(0);
   return h();
 }             /* { dg-bogus "end of non-void function" } */
 
-int k()
+int k() /* { dg-warning "might be candidate" } */
 {
   if (++z > 10)
     _exit(0);
   k();
-}             /* { dg-warning "end of non-void function" } */
+}             /* { dg-warning "control reaches" } */

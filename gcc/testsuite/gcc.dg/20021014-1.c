@@ -3,14 +3,14 @@
 /* { dg-options "-O2 -p" } */
 /* { dg-options "-O2 -p -static" { target hppa*-*-hpux* } } */
 /* { dg-error "profiler" "No profiler support" { target xstormy16-*-* } 0 } */
-/* { dg-error "" "consider using `-pg' instead of `-p' with gprof(1)" { target *-*-freebsd* } 0 } */
+/* { dg-message "" "consider using `-pg' instead of `-p' with gprof(1)" { target *-*-freebsd* } 0 } */
 
 extern void abort (void);
 extern void exit (int);
 
 int foo (void)
 {
-  static int bar (int x)
+  int bar (int x)
   {
     return x + 3;
   }
@@ -23,3 +23,5 @@ int main (void)
     abort ();
   exit (0);
 }
+
+/* { dg-final { cleanup-profile-file } } */

@@ -1,11 +1,14 @@
+// { dg-require-namedlocale "de_DE@euro" }
+
 // 2001-08-27 Benjamin Kosnik  <bkoz@redhat.com>
 
-// Copyright (C) 2001, 2002, 2003, 2004 Free Software Foundation
+// Copyright (C) 2001, 2002, 2003, 2004, 2005, 2009, 2010
+// Free Software Foundation
 //
 // This file is part of the GNU ISO C++ Library.  This library is free
 // software; you can redistribute it and/or modify it under the
 // terms of the GNU General Public License as published by the
-// Free Software Foundation; either version 2, or (at your option)
+// Free Software Foundation; either version 3, or (at your option)
 // any later version.
 
 // This library is distributed in the hope that it will be useful,
@@ -14,9 +17,8 @@
 // GNU General Public License for more details.
 
 // You should have received a copy of the GNU General Public License along
-// with this library; see the file COPYING.  If not, write to the Free
-// Software Foundation, 59 Temple Place - Suite 330, Boston, MA 02111-1307,
-// USA.
+// with this library; see the file COPYING3.  If not see
+// <http://www.gnu.org/licenses/>.
 
 // 22.2.6.2.1 money_put members
 
@@ -34,7 +36,7 @@ void test03()
 
   // basic construction
   locale loc_c = locale::classic();
-  locale loc_de = __gnu_test::try_named_locale("de_DE@euro");
+  locale loc_de = locale("de_DE@euro");
   VERIFY( loc_c != loc_de );
 
   // sanity check the data is correct.
@@ -48,12 +50,12 @@ void test03()
   oss.imbue(loc_de);
   const money_put<char>& mon_put = use_facet<money_put<char> >(oss.getloc()); 
 
-  iterator_type os_it01 = mon_put.put(oss.rdbuf(), true, oss, ' ', digits1);
+  mon_put.put(oss.rdbuf(), true, oss, ' ', digits1);
   string result1 = oss.str();
   VERIFY( result1 == "7.200.000.000,00 ");
 
   oss.str(empty);
-  iterator_type os_it02 = mon_put.put(oss.rdbuf(), false, oss, ' ', digits1);
+  mon_put.put(oss.rdbuf(), false, oss, ' ', digits1);
   string result2 = oss.str();
   VERIFY( result2 == "7.200.000.000,00 ");
 
@@ -64,12 +66,12 @@ void test03()
   oss.setf(ios_base::showbase);
 
   oss.str(empty);
-  iterator_type os_it03 = mon_put.put(oss.rdbuf(), true, oss, ' ', digits1);
+  mon_put.put(oss.rdbuf(), true, oss, ' ', digits1);
   string result3 = oss.str();
   VERIFY( result3 == "7.200.000.000,00 EUR ");
 
   oss.str(empty);
-  iterator_type os_it04 = mon_put.put(oss.rdbuf(), false, oss, ' ', digits1);
+  mon_put.put(oss.rdbuf(), false, oss, ' ', digits1);
   string result4 = oss.str();
   VERIFY( result4 == "7.200.000.000,00 \244");
 

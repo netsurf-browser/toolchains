@@ -1,11 +1,13 @@
+// { dg-require-namedlocale "en_US.UTF-8" }
+
 // 2003-02-06  Petur Runolfsson  <peturr02@ru.is>
 
-// Copyright (C) 2003 Free Software Foundation
+// Copyright (C) 2003, 2004, 2005, 2006, 2007, 2009 Free Software Foundation
 //
 // This file is part of the GNU ISO C++ Library.  This library is free
 // software; you can redistribute it and/or modify it under the
 // terms of the GNU General Public License as published by the
-// Free Software Foundation; either version 2, or (at your option)
+// Free Software Foundation; either version 3, or (at your option)
 // any later version.
 
 // This library is distributed in the hope that it will be useful,
@@ -14,13 +16,13 @@
 // GNU General Public License for more details.
 
 // You should have received a copy of the GNU General Public License along
-// with this library; see the file COPYING.  If not, write to the Free
-// Software Foundation, 59 Temple Place - Suite 330, Boston, MA 02111-1307,
-// USA.
+// with this library; see the file COPYING3.  If not see
+// <http://www.gnu.org/licenses/>.
 
 // 22.2.1.5 - Template class codecvt [lib.locale.codecvt]
 
 #include <locale>
+#include <cstring>
 #include <testsuite_hooks.h>
 
 // Need to explicitly set the state(mbstate_t) to zero.
@@ -111,7 +113,7 @@ void test09()
   int_type*		ito = i_arr;
   int_type*		ito_next;
 
-  locale loc = __gnu_test::try_named_locale("en_US.UTF-8");
+  locale loc = locale("en_US.UTF-8");
   locale::global(loc);
   const w_codecvt* 	cvt = &use_facet<w_codecvt>(loc); 
 
@@ -125,9 +127,6 @@ void test09()
       r1 = cvt->in(state01, efrom, e_lit + i, efrom_next, 
 		   ito, i_arr + esize, ito_next);
       
-      printf("%d %d %d %x %x\n", efrom - e_lit, i, efrom_next - e_lit,
-	     efrom[-1], ito[-1]);
-
       // It it not clear if partial should ever be returned here
       // (see DR 382).
       VERIFY( r1 == codecvt_base::ok || r1 == codecvt_base::partial );

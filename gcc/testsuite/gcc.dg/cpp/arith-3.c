@@ -9,7 +9,7 @@
    Please keep changes to arith-2.c and arith-3.c in sync.  */
 
 /* { dg-do preprocess } */
-/* { dg-options "-std=c99 -fno-show-column" } */
+/* { dg-options "-std=c99 -fshow-column" } */
 
 #include <limits.h>
 
@@ -143,13 +143,13 @@
 
 #if UTARG_MAX			/* { dg-warning "so large" }  */
 #endif
-#if UTARG_MAX_PLUS_1		/* { dg-error "too large" }  */
+#if UTARG_MAX_PLUS_1		/* { dg-warning "too large" }  */
 #endif
-#if UTARG_MAX_PLUS_1_HEX	/* { dg-error "too large" }  */
+#if UTARG_MAX_PLUS_1_HEX	/* { dg-warning "too large" }  */
 #endif
 #if UTARG_MAX_HEX		/* { dg-bogus "too large" }  */
 #endif
-#if UTARG_MAX_PLUS_1_OCT	/* { dg-error "too large" }  */
+#if UTARG_MAX_PLUS_1_OCT	/* { dg-warning "too large" }  */
 #endif
 #if UTARG_MAX_OCT		/* { dg-bogus "too large" }  */
 #endif
@@ -274,7 +274,7 @@
 # error		/* { dg-bogus "error" }  */
 #endif
 
-#if -5 / (2 - 2) /* { dg-error "division by zero" } */
+#if -5 / (2 - 2) /* { dg-error "13:division by zero" } */
 #endif
 
 #if LONG_UDIVISION != LONG_UDIVISION_ANSWER
@@ -286,7 +286,7 @@
 #endif
 
 /* Binary %.  Cannot overflow.  */
-#if -5 % (2 - 2) /* { dg-error "division by zero" } */
+#if -5 % (2 - 2) /* { dg-error "13:division by zero" } */
 #endif
 
 #if TARG_MIN % 1 /* { dg-bogus "overflow" } */

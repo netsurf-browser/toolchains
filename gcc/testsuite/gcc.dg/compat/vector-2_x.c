@@ -1,5 +1,8 @@
 /* { dg-options "-w" } */
-/* { dg-xfail-if "PR target/12916" "sparc*-*-*" "*" "" } */
+/* { dg-options "-w -mno-mmx -Wno-psabi" { target { i?86-*-* x86_64-*-* } } } */
+
+
+#ifndef SKIP_ATTRIBUTE
 
 #include "compat-common.h"
 #include "vector-defs.h"
@@ -8,20 +11,28 @@
 SETUP (2, sf);
 SETUP (4, sf);
 SETUP (16, sf);
+SETUP (8, sf);
 SETUP (2, df);
+SETUP (4, df);
+
+#endif
 
 void
 vector_2_x (void)
 {
+#ifndef SKIP_ATTRIBUTE
   DEBUG_INIT
 
   CHECK (2, sf);
   CHECK (4, sf);
+  CHECK (8, sf);
   CHECK (16, sf);
+  CHECK (4, df);
   CHECK (2, df);
 
   DEBUG_FINI
 
   if (fails != 0)
     abort ();
+#endif
 }

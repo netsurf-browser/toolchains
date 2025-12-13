@@ -1,7 +1,5 @@
-/* Logger.java
-   -- a class for logging messages
-
-Copyright (C) 2002 Free Software Foundation, Inc.
+/* Logger.java -- a class for logging messages
+   Copyright (C) 2002, 2004, 2006, 2007 Free Software Foundation, Inc.
 
 This file is part of GNU Classpath.
 
@@ -17,8 +15,8 @@ General Public License for more details.
 
 You should have received a copy of the GNU General Public License
 along with GNU Classpath; see the file COPYING.  If not, write to the
-Free Software Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA
-02111-1307 USA.
+Free Software Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA
+02110-1301 USA.
 
 Linking this library statically or dynamically with other modules is
 making a combined work based on this library.  Thus, the terms and
@@ -35,16 +33,16 @@ module.  An independent module is a module which is not derived from
 or based on this library.  If you modify this library, you may extend
 this exception to your version of the library, but you are not
 obligated to do so.  If you do not wish to do so, delete this
-exception statement from your version.
-
-*/
+exception statement from your version. */
 
 
 package java.util.logging;
 
-import java.util.ResourceBundle;
-import java.util.MissingResourceException;
 import java.util.List;
+import java.util.MissingResourceException;
+import java.util.ResourceBundle;
+import java.security.AccessController;
+import java.security.PrivilegedAction;
 
 /**
  * A Logger is used for logging information about events. Usually, there
@@ -71,13 +69,29 @@ import java.util.List;
  */
 public class Logger
 {
+
+  static final Logger root = new Logger("", null);
+
   /**
    * A logger provided to applications that make only occasional use
    * of the logging framework, typically early prototypes.  Serious
    * products are supposed to create and use their own Loggers, so
    * they can be controlled individually.
    */
-  public static final Logger global = getLogger("global");
+  public static final Logger global;
+
+  static
+    {
+      // Our class might be initialized from an unprivileged context
+      global = (Logger) AccessController.doPrivileged
+	(new PrivilegedAction()
+	  {
+	    public Object run()
+	    {
+	      return getLogger("global");
+	    }
+	  });
+    }
 
 
   /**
@@ -179,7 +193,7 @@ public class Logger
     /* This is null when the root logger is being constructed,
      * and the root logger afterwards.
      */
-    parent = LogManager.getLogManager().rootLogger;
+    parent = root;
 
     useParentHandlers = (parent != null);
   }
@@ -262,8 +276,8 @@ public class Logger
     LogManager lm = LogManager.getLogManager();
     Logger     result;
 
-    /* Throw NullPointerException if name is null. */
-    name.getClass();
+    if (name == null)
+      throw new NullPointerException();
 
     /* Without synchronized(lm), it could happen that another thread
      * would create a logger between our calls to getLogger and
@@ -581,7 +595,8 @@ public class Logger
 
   public void log(Level level, String message)
   {
-    log(level, message, (Object[]) null);
+    if (isLoggable(level))
+      log(level, message, (Object[]) null);
   }
 
 
@@ -589,12 +604,15 @@ public class Logger
 			       String message,
 			       Object param)
   {
-  	StackTraceElement caller = getCallerStackFrame();
-    logp(level,
-	 caller.getClassName(),
-	 caller.getMethodName(),
-	 message,
-	 param);
+    if (isLoggable(level))
+      {
+        StackTraceElement caller = getCallerStackFrame();
+        logp(level,
+             caller != null ? caller.getClassName() : "<unknown>",
+             caller != null ? caller.getMethodName() : "<unknown>",
+             message,
+             param);
+      }
   }
 
 
@@ -602,12 +620,15 @@ public class Logger
 			       String message,
 			       Object[] params)
   {
-    StackTraceElement caller = getCallerStackFrame();
-    logp(level,
-	 caller.getClassName(),
-	 caller.getMethodName(),
-	 message,
-	 params);
+    if (isLoggable(level))
+      {
+        StackTraceElement caller = getCallerStackFrame();
+        logp(level,
+             caller != null ? caller.getClassName() : "<unknown>",
+             caller != null ? caller.getMethodName() : "<unknown>",
+             message,
+             params);
+      }
   }
 
 
@@ -615,12 +636,15 @@ public class Logger
 			       String message,
 			       Throwable thrown)
   {
-	StackTraceElement caller = getCallerStackFrame();    
-    logp(level,
-	 caller.getClassName(),
-	 caller.getMethodName(),
-	 message,
-	 thrown);
+    if (isLoggable(level))
+      {
+        StackTraceElement caller = getCallerStackFrame();    
+        logp(level,
+             caller != null ? caller.getClassName() : "<unknown>",
+             caller != null ? caller.getMethodName() : "<unknown>",
+             message,
+             thrown);
+      }
   }
 
 
@@ -989,8 +1013,8 @@ public class Logger
   public synchronized void addHandler(Handler handler)
     throws SecurityException
   {
-    /* Throw a new NullPointerException if handler is null. */
-    handler.getClass();
+    if (handler == null)
+      throw new NullPointerException();
 
     /* An application is allowed to control an anonymous logger
      * without having the permission to control the logging
@@ -1033,8 +1057,8 @@ public class Logger
     if (!anonymous)
       LogManager.getLogManager().checkAccess();
 
-    /* Throw a new NullPointerException if handler is null. */
-    handler.getClass();
+    if (handler == null)
+      throw new NullPointerException();
 
     handlerList.remove(handler);
     handlers = getHandlers();
@@ -1142,21 +1166,12 @@ public class Logger
    */
   public synchronized void setParent(Logger parent)
   {
-    LogManager lm;
+    if (parent == null)
+      throw new NullPointerException();
 
-    /* Throw a new NullPointerException if parent is null. */
-    parent.getClass();
-
-    lm = LogManager.getLogManager();
-
-    if (this == lm.rootLogger)
-    {
-      if (parent != null)
+    if (this == root)
         throw new IllegalArgumentException(
-          "only the root logger can have a null parent");
-      this.parent = null;
-      return;
-    }
+          "the root logger can only have a null parent");
 
     /* An application is allowed to control an anonymous logger
      * without having the permission to control the logging
@@ -1171,19 +1186,21 @@ public class Logger
   /**
    * Gets the StackTraceElement of the first class that is not this class.
    * That should be the initial caller of a logging method.
-   * @return caller of the initial looging method
+   * @return caller of the initial logging method or null if unknown.
    */
-  private StackTraceElement getCallerStackFrame()
-  {
-    Throwable t = new Throwable();
-    StackTraceElement[] stackTrace = t.getStackTrace();
-    int index = 0;
-    // skip to stackentries until this class
-    while(!stackTrace[index].getClassName().equals(getClass().getName())){index++;}
-    // skip the stackentries of this class
-    while(stackTrace[index].getClassName().equals(getClass().getName())){index++;}
-
-    return stackTrace[index];
-  }
+  private native StackTraceElement getCallerStackFrame();
   
+  /**
+   * Reset and close handlers attached to this logger. This function is package
+   * private because it must only be avaiable to the LogManager.
+   */
+  void resetLogger()
+  {
+    for (int i = 0; i < handlers.length; i++)
+      {
+        handlers[i].close();
+        handlerList.remove(handlers[i]);
+      }
+    handlers = getHandlers();
+  }
 }

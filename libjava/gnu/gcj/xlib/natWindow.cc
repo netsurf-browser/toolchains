@@ -23,7 +23,7 @@ details.  */
 #include <gnu/gcj/xlib/Visual.h>
 #include <gnu/gcj/xlib/XException.h>
 
-jint gnu::gcj::xlib::Window::createChildXID(java::awt::Rectangle* bounds,
+jint gnu::gcj::xlib::Window::createChildXID(::java::awt::Rectangle* bounds,
 					jint borderWidth,
 					WindowAttributes* attributes,
 					jint windowIOClass, 
@@ -75,6 +75,20 @@ void gnu::gcj::xlib::Window::setAttributes(WindowAttributes* attributes)
 
   XChangeWindowAttributes(dpy, window, attributes->mask, attr);
   // no fast fail
+}
+
+void gnu::gcj::xlib::Window::toBack()
+{
+  ::Display* dpy = (::Display*) (display->display);
+  ::Window window = xid;
+  XLowerWindow(dpy, window);
+}
+
+void gnu::gcj::xlib::Window::toFront()
+{
+  ::Display* dpy = (::Display*) (display->display);
+  ::Window window = xid;
+  XRaiseWindow(dpy, window);
 }
 
 void gnu::gcj::xlib::Window::map()

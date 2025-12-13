@@ -1,11 +1,12 @@
 // -*- C++ -*- Manage the thread-local exception globals.
-// Copyright (C) 2001, 2004 Free Software Foundation, Inc.
+// Copyright (C) 2001, 2002, 2003, 2004, 2005, 2006, 2009
+// Free Software Foundation, Inc.
 //
 // This file is part of GCC.
 //
 // GCC is free software; you can redistribute it and/or modify
 // it under the terms of the GNU General Public License as published by
-// the Free Software Foundation; either version 2, or (at your option)
+// the Free Software Foundation; either version 3, or (at your option)
 // any later version.
 //
 // GCC is distributed in the hope that it will be useful,
@@ -13,115 +14,147 @@
 // MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
 // GNU General Public License for more details.
 //
-// You should have received a copy of the GNU General Public License
-// along with GCC; see the file COPYING.  If not, write to
-// the Free Software Foundation, 59 Temple Place - Suite 330,
-// Boston, MA 02111-1307, USA.
+// Under Section 7 of GPL version 3, you are granted additional
+// permissions described in the GCC Runtime Library Exception, version
+// 3.1, as published by the Free Software Foundation.
 
-// As a special exception, you may use this file as part of a free software
-// library without restriction.  Specifically, if other files instantiate
-// templates or use macros or inline functions from this file, or you compile
-// this file and link it with other files to produce an executable, this
-// file does not by itself cause the resulting executable to be covered by
-// the GNU General Public License.  This exception does not however
-// invalidate any other reasons why the executable file might be covered by
-// the GNU General Public License.
+// You should have received a copy of the GNU General Public License and
+// a copy of the GCC Runtime Library Exception along with this program;
+// see the files COPYING3 and COPYING.RUNTIME respectively.  If not, see
+// <http://www.gnu.org/licenses/>.
 
-
+#include <bits/c++config.h>
 #include <exception>
 #include <cstdlib>
+#include "cxxabi.h"
 #include "unwind-cxx.h"
-#include "bits/c++config.h"
 #include "bits/gthr.h"
+
+#if _GLIBCXX_HOSTED
+using std::free;
+using std::malloc;
+#else
+// In a freestanding environment, these functions may not be
+// available -- but for now, we assume that they are.
+extern "C" void *malloc (std::size_t);
+extern "C" void free(void *);
+#endif
 
 using namespace __cxxabiv1;
 
+#if _GLIBCXX_HAVE_TLS
+
+namespace
+{
+  abi::__cxa_eh_globals*
+  get_global() throw()
+  {
+    static __thread abi::__cxa_eh_globals global;
+    return &global;
+  }
+} // anonymous namespace
+
+extern "C" __cxa_eh_globals*
+__cxxabiv1::__cxa_get_globals_fast() throw()
+{ return get_global(); }
+
+extern "C" __cxa_eh_globals*
+__cxxabiv1::__cxa_get_globals() throw()
+{ return get_global(); }
+
+
+#else
 
 // Single-threaded fallback buffer.
-static __cxa_eh_globals globals_static;
+static __cxa_eh_globals eh_globals;
 
 #if __GTHREADS
-static __gthread_key_t globals_key;
-static int use_thread_key = -1;
 
 static void
-get_globals_dtor (void *ptr)
+eh_globals_dtor(void* ptr)
 {
   if (ptr)
     {
-      __cxa_exception *exn, *next;
-      exn = ((__cxa_eh_globals *) ptr)->caughtExceptions;
+      __cxa_eh_globals* g = reinterpret_cast<__cxa_eh_globals*>(ptr);
+      __cxa_exception* exn = g->caughtExceptions;
+      __cxa_exception* next;
       while (exn)
 	{
 	  next = exn->nextException;
-	  _Unwind_DeleteException (&exn->unwindHeader);
+	  _Unwind_DeleteException(&exn->unwindHeader);
 	  exn = next;
 	}
-      std::free (ptr);
+      free(ptr);
     }
 }
 
-static void
-get_globals_init ()
+struct __eh_globals_init
 {
-  use_thread_key =
-    (__gthread_key_create (&globals_key, get_globals_dtor) == 0);
-}
+  __gthread_key_t  	_M_key;
+  bool 			_M_init;
 
-static void
-get_globals_init_once ()
-{
-  static __gthread_once_t once = __GTHREAD_ONCE_INIT;
-  if (__gthread_once (&once, get_globals_init) != 0
-      || use_thread_key < 0)
-    use_thread_key = 0;
-}
-#endif
+  __eh_globals_init() : _M_init(false)
+  { 
+    if (__gthread_active_p())
+      _M_init = __gthread_key_create(&_M_key, eh_globals_dtor) == 0; 
+  }
 
-extern "C" __cxa_eh_globals *
-__cxa_get_globals_fast () throw()
+  ~__eh_globals_init()
+  {
+    if (_M_init)
+      __gthread_key_delete(_M_key);
+    _M_init = false;
+  }
+};
+
+static __eh_globals_init init;
+
+extern "C" __cxa_eh_globals*
+__cxxabiv1::__cxa_get_globals_fast() throw()
 {
-#if __GTHREADS
-  if (use_thread_key)
-    return (__cxa_eh_globals *) __gthread_getspecific (globals_key);
+  __cxa_eh_globals* g;
+  if (init._M_init)
+    g = static_cast<__cxa_eh_globals*>(__gthread_getspecific(init._M_key));
   else
-    return &globals_static;
-#else
-  return &globals_static;
-#endif
-}
-
-extern "C" __cxa_eh_globals *
-__cxa_get_globals () throw()
-{
-#if __GTHREADS
-  __cxa_eh_globals *g;
-
-  if (use_thread_key == 0)
-    return &globals_static;
-
-  if (use_thread_key < 0)
-    {
-      get_globals_init_once ();
-
-      // Make sure use_thread_key got initialized.
-      if (use_thread_key == 0)
-	return &globals_static;
-    }
-
-  g = (__cxa_eh_globals *) __gthread_getspecific (globals_key);
-  if (! g)
-    {
-      if ((g = (__cxa_eh_globals *)
-	   std::malloc (sizeof (__cxa_eh_globals))) == 0
-	  || __gthread_setspecific (globals_key, (void *) g) != 0)
-        std::terminate ();
-      g->caughtExceptions = 0;
-      g->uncaughtExceptions = 0;
-    }
-
+    g = &eh_globals;
   return g;
-#else
-  return &globals_static;
-#endif
 }
+
+extern "C" __cxa_eh_globals*
+__cxxabiv1::__cxa_get_globals() throw()
+{
+  __cxa_eh_globals* g;
+  if (init._M_init)
+    {
+      g = static_cast<__cxa_eh_globals*>(__gthread_getspecific(init._M_key));
+      if (!g)
+	{
+	  void* v = malloc(sizeof(__cxa_eh_globals));
+	  if (v == 0 || __gthread_setspecific(init._M_key, v) != 0)
+	    std::terminate();
+	  g = static_cast<__cxa_eh_globals*>(v);
+	  g->caughtExceptions = 0;
+	  g->uncaughtExceptions = 0;
+#ifdef __ARM_EABI_UNWINDER__
+	  g->propagatingExceptions = 0;
+#endif
+	}
+    }
+  else
+    g = &eh_globals;
+  return g;
+}
+
+#else
+
+extern "C" __cxa_eh_globals*
+__cxxabiv1::__cxa_get_globals_fast() throw()
+{ return &eh_globals; }
+
+extern "C" __cxa_eh_globals*
+__cxxabiv1::__cxa_get_globals() throw()
+{ return &eh_globals; }
+
+#endif
+
+#endif

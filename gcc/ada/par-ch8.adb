@@ -6,18 +6,17 @@
 --                                                                          --
 --                                 B o d y                                  --
 --                                                                          --
---          Copyright (C) 1992-2001 Free Software Foundation, Inc.          --
+--          Copyright (C) 1992-2010, Free Software Foundation, Inc.         --
 --                                                                          --
 -- GNAT is free software;  you can  redistribute it  and/or modify it under --
 -- terms of the  GNU General Public License as published  by the Free Soft- --
--- ware  Foundation;  either version 2,  or (at your option) any later ver- --
+-- ware  Foundation;  either version 3,  or (at your option) any later ver- --
 -- sion.  GNAT is distributed in the hope that it will be useful, but WITH- --
 -- OUT ANY WARRANTY;  without even the  implied warranty of MERCHANTABILITY --
 -- or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU General Public License --
 -- for  more details.  You should have  received  a copy of the GNU General --
--- Public License  distributed with GNAT;  see file COPYING.  If not, write --
--- to  the Free Software Foundation,  59 Temple Place - Suite 330,  Boston, --
--- MA 02111-1307, USA.                                                      --
+-- Public License  distributed with GNAT; see file COPYING3.  If not, go to --
+-- http://www.gnu.org/licenses for a complete copy of the license.          --
 --                                                                          --
 -- GNAT was originally developed  by the GNAT team at  New York University. --
 -- Extensive contributions were provided by Ada Core Technologies Inc.      --
@@ -52,9 +51,8 @@ package body Ch8 is
    begin
       Scan; -- past USE
 
-      if Token = Tok_Type then
+      if Token = Tok_Type or else Token = Tok_All then
          return P_Use_Type_Clause;
-
       else
          return P_Use_Package_Clause;
       end if;
@@ -96,21 +94,38 @@ package body Ch8 is
    -- 8.4  Use Type Clause --
    --------------------------
 
-   --  USE_TYPE_CLAUSE ::= use type SUBTYPE_MARK {, SUBTYPE_MARK};
+   --  USE_TYPE_CLAUSE ::= use [ALL] type SUBTYPE_MARK {, SUBTYPE_MARK};
 
    --  The caller has checked that the initial token is USE, scanned it out
-   --  and that the current token is TYPE.
+   --  and that the current token is either ALL or TYPE.
+
+   --  Note: Use of ALL is an Ada 2012 feature
 
    --  Error recovery: cannot raise Error_Resync
 
    function P_Use_Type_Clause return Node_Id is
-      Use_Node : Node_Id;
+      Use_Node    : Node_Id;
+      All_Present : Boolean;
 
    begin
+      if Token = Tok_All then
+         if Ada_Version < Ada_2012 then
+            Error_Msg_SC ("|`USE ALL TYPE` is an Ada 2012 feature");
+            Error_Msg_SC ("\|unit must be compiled with -gnat2012 switch");
+         end if;
+
+         All_Present := True;
+         Scan; -- past ALL
+
+      else
+         All_Present := False;
+      end if;
+
       Use_Node := New_Node (N_Use_Type_Clause, Prev_Token_Ptr);
+      Set_All_Present (Use_Node, All_Present);
       Set_Subtype_Marks (Use_Node, New_List);
 
-      if Ada_83 then
+      if Ada_Version = Ada_83 then
          Error_Msg_SC ("(Ada 83) use type not allowed!");
       end if;
 

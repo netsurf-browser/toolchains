@@ -8,13 +8,13 @@
 
 // keywords: overloading, ambiguity, resolution
 
-void function0 (int i, char c)
-{				// { dg-error "" } 
+void function0 (int i, char c)	// { dg-message "function0" }
+{
   i = c;
 }
 
-void function0 (char c, int i)
-{				// { dg-error "" } 
+void function0 (char c, int i)  // { dg-message "function0" }
+{
   i = c;
 }
 
@@ -22,7 +22,8 @@ char c;
 
 void test ()
 {
-  function0 (c,c);		// { dg-error "" } missed
+  function0 (c,c);		// { dg-error "ambiguous" }
+  // { dg-message "candidate" "candidate note" { target *-*-* } 25 }
 }
 
 int main () { return 0; }

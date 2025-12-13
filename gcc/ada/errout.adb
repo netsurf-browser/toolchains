@@ -6,18 +6,17 @@
 --                                                                          --
 --                                 B o d y                                  --
 --                                                                          --
---          Copyright (C) 1992-2003 Free Software Foundation, Inc.          --
+--          Copyright (C) 1992-2010, Free Software Foundation, Inc.         --
 --                                                                          --
 -- GNAT is free software;  you can  redistribute it  and/or modify it under --
 -- terms of the  GNU General Public License as published  by the Free Soft- --
--- ware  Foundation;  either version 2,  or (at your option) any later ver- --
+-- ware  Foundation;  either version 3,  or (at your option) any later ver- --
 -- sion.  GNAT is distributed in the hope that it will be useful, but WITH- --
 -- OUT ANY WARRANTY;  without even the  implied warranty of MERCHANTABILITY --
 -- or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU General Public License --
 -- for  more details.  You should have  received  a copy of the GNU General --
--- Public License  distributed with GNAT;  see file COPYING.  If not, write --
--- to  the Free Software Foundation,  59 Temple Place - Suite 330,  Boston, --
--- MA 02111-1307, USA.                                                      --
+-- Public License  distributed with GNAT; see file COPYING3.  If not, go to --
+-- http://www.gnu.org/licenses for a complete copy of the license.          --
 --                                                                          --
 -- GNAT was originally developed  by the GNAT team at  New York University. --
 -- Extensive contributions were provided by Ada Core Technologies Inc.      --
@@ -37,28 +36,30 @@ with Debug;    use Debug;
 with Einfo;    use Einfo;
 with Erroutc;  use Erroutc;
 with Fname;    use Fname;
+with Gnatvsn;  use Gnatvsn;
+with Hostparm; use Hostparm;
 with Lib;      use Lib;
-with Namet;    use Namet;
 with Opt;      use Opt;
 with Nlists;   use Nlists;
 with Output;   use Output;
 with Scans;    use Scans;
+with Sem_Aux;  use Sem_Aux;
 with Sinput;   use Sinput;
 with Sinfo;    use Sinfo;
 with Snames;   use Snames;
 with Stand;    use Stand;
-with Style;
-with Uintp;    use Uintp;
+with Stylesw;  use Stylesw;
 with Uname;    use Uname;
-
-with Unchecked_Conversion;
 
 package body Errout is
 
    Errors_Must_Be_Ignored : Boolean := False;
-   --  Set to True by procedure Set_Ignore_Errors (True), when calls to
-   --  error message procedures should be ignored (when parsing irrelevant
-   --  text in sources being preprocessed).
+   --  Set to True by procedure Set_Ignore_Errors (True), when calls to error
+   --  message procedures should be ignored (when parsing irrelevant text in
+   --  sources being preprocessed).
+
+   Finalize_Called : Boolean := False;
+   --  Set True if the Finalize routine has been called
 
    Warn_On_Instance : Boolean;
    --  Flag set true for warning message to be posted on instance
@@ -137,8 +138,9 @@ package body Errout is
    --  location of the flag, which is provided for the internal call to
    --  Set_Msg_Insertion_Line_Number,
 
-   procedure Set_Msg_Insertion_Unit_Name;
-   --  Handle unit name insertion ($ insertion character)
+   procedure Set_Msg_Insertion_Unit_Name (Suffix : Boolean := True);
+   --  Handle unit name insertion ($ insertion character). Depending on Boolean
+   --  parameter Suffix, (spec) or (body) is appended after the unit name.
 
    procedure Set_Msg_Node (Node : Node_Id);
    --  Add the sequence of characters for the name associated with the
@@ -164,10 +166,9 @@ package body Errout is
    --  example, the entity A.B.C.D will output B.C. if N = 2.
 
    function Special_Msg_Delete
-     (Msg  : String;
-      N    : Node_Or_Entity_Id;
-      E    : Node_Or_Entity_Id)
-      return Boolean;
+     (Msg : String;
+      N   : Node_Or_Entity_Id;
+      E   : Node_Or_Entity_Id) return Boolean;
    --  This function is called from Error_Msg_NEL, passing the message Msg,
    --  node N on which the error is to be posted, and the entity or node E
    --  to be used for an & insertion in the message if any. The job of this
@@ -176,17 +177,24 @@ package body Errout is
    --  If the message should be generated (the normal case) False is returned.
 
    procedure Unwind_Internal_Type (Ent : in out Entity_Id);
-   --  This procedure is given an entity id for an internal type, i.e.
-   --  a type with an internal name. It unwinds the type to try to get
-   --  to something reasonably printable, generating prefixes like
-   --  "subtype of", "access to", etc along the way in the buffer. The
-   --  value in Ent on return is the final name to be printed. Hopefully
-   --  this is not an internal name, but in some internal name cases, it
-   --  is an internal name, and has to be printed anyway (although in this
-   --  case the message has been killed if possible). The global variable
-   --  Class_Flag is set to True if the resulting entity should have
-   --  'Class appended to its name (see Add_Class procedure), and is
-   --  otherwise unchanged.
+   --  This procedure is given an entity id for an internal type, i.e. a type
+   --  with an internal name. It unwinds the type to try to get to something
+   --  reasonably printable, generating prefixes like "subtype of", "access
+   --  to", etc along the way in the buffer. The value in Ent on return is the
+   --  final name to be printed. Hopefully this is not an internal name, but in
+   --  some internal name cases, it is an internal name, and has to be printed
+   --  anyway (although in this case the message has been killed if possible).
+   --  The global variable Class_Flag is set to True if the resulting entity
+   --  should have 'Class appended to its name (see Add_Class procedure), and
+   --  is otherwise unchanged.
+
+   procedure VMS_Convert;
+   --  This procedure has no effect if called when the host is not OpenVMS. If
+   --  the host is indeed OpenVMS, then the error message stored in Msg_Buffer
+   --  is scanned for appearances of switch names which need converting to
+   --  corresponding VMS qualifier names. See Gnames/Vnames table in Errout
+   --  spec for precise definition of the conversion that is performed by this
+   --  routine in OpenVMS mode.
 
    -----------------------
    -- Change_Error_Text --
@@ -216,15 +224,28 @@ package body Errout is
       end if;
    end Change_Error_Text;
 
+   ------------------------
+   -- Compilation_Errors --
+   ------------------------
+
+   function Compilation_Errors return Boolean is
+   begin
+      if not Finalize_Called then
+         raise Program_Error;
+      else
+         return Erroutc.Compilation_Errors;
+      end if;
+   end Compilation_Errors;
+
    ---------------
    -- Error_Msg --
    ---------------
 
    --  Error_Msg posts a flag at the given location, except that if the
-   --  Flag_Location points within a generic template and corresponds
-   --  to an instantiation of this generic template, then the actual
-   --  message will be posted on the generic instantiation, along with
-   --  additional messages referencing the generic declaration.
+   --  Flag_Location points within a generic template and corresponds to an
+   --  instantiation of this generic template, then the actual message will be
+   --  posted on the generic instantiation, along with additional messages
+   --  referencing the generic declaration.
 
    procedure Error_Msg (Msg : String; Flag_Location : Source_Ptr) is
       Sindex : Source_File_Index;
@@ -235,8 +256,8 @@ package body Errout is
       --  template in instantiation case, otherwise unchanged).
 
    begin
-      --  It is a fatal error to issue an error message when scanning from
-      --  the internal source buffer (see Sinput for further documentation)
+      --  It is a fatal error to issue an error message when scanning from the
+      --  internal source buffer (see Sinput for further documentation)
 
       pragma Assert (Sinput.Source /= Internal_Source_Ptr);
 
@@ -246,8 +267,8 @@ package body Errout is
          return;
       end if;
 
-      --  If we already have messages, and we are trying to place a message
-      --  at No_Location or in package Standard, then just ignore the attempt
+      --  If we already have messages, and we are trying to place a message at
+      --  No_Location or in package Standard, then just ignore the attempt
       --  since we assume that what is happening is some cascaded junk. Note
       --  that this is safe in the sense that proceeding will surely bomb.
 
@@ -257,30 +278,29 @@ package body Errout is
          return;
       end if;
 
-      --  Start procesing of new message
+      --  Start of processing for new message
 
       Sindex := Get_Source_File_Index (Flag_Location);
       Test_Style_Warning_Serious_Msg (Msg);
       Orig_Loc := Original_Location (Flag_Location);
 
-      --  If the current location is in an instantiation, the issue arises
-      --  of whether to post the message on the template or the instantiation.
+      --  If the current location is in an instantiation, the issue arises of
+      --  whether to post the message on the template or the instantiation.
 
-      --  The way we decide is to see if we have posted the same message
-      --  on the template when we compiled the template (the template is
-      --  always compiled before any instantiations). For this purpose,
-      --  we use a separate table of messages. The reason we do this is
-      --  twofold:
+      --  The way we decide is to see if we have posted the same message on
+      --  the template when we compiled the template (the template is always
+      --  compiled before any instantiations). For this purpose, we use a
+      --  separate table of messages. The reason we do this is twofold:
 
       --     First, the messages can get changed by various processing
       --     including the insertion of tokens etc, making it hard to
       --     do the comparison.
 
-      --     Second, we will suppress a warning on a template if it is
-      --     not in the current extended source unit. That's reasonable
-      --     and means we don't want the warning on the instantiation
-      --     here either, but it does mean that the main error table
-      --     would not in any case include the message.
+      --     Second, we will suppress a warning on a template if it is not in
+      --     the current extended source unit. That's reasonable and means we
+      --     don't want the warning on the instantiation here either, but it
+      --     does mean that the main error table would not in any case include
+      --     the message.
 
       if Flag_Location = Orig_Loc then
          Non_Instance_Msgs.Append ((new String'(Msg), Flag_Location));
@@ -289,8 +309,8 @@ package body Errout is
       --  Here we have an instance message
 
       else
-         --  Delete if debug flag off, and this message duplicates a
-         --  message already posted on the corresponding template
+         --  Delete if debug flag off, and this message duplicates a message
+         --  already posted on the corresponding template
 
          if not Debug_Flag_GG then
             for J in Non_Instance_Msgs.First .. Non_Instance_Msgs.Last loop
@@ -307,21 +327,29 @@ package body Errout is
          Warn_On_Instance := Is_Warning_Msg;
       end if;
 
-      --  Ignore warning message that is suppressed. Note that style
-      --  checks are not considered warning messages for this purpose
+      --  Ignore warning message that is suppressed for this location. Note
+      --  that style checks are not considered warning messages for this
+      --  purpose.
 
       if Is_Warning_Msg and then Warnings_Suppressed (Orig_Loc) then
          return;
+
+      --  For style messages, check too many messages so far
+
+      elsif Is_Style_Msg
+        and then Maximum_Messages /= 0
+        and then Warnings_Detected >= Maximum_Messages
+      then
+         return;
       end if;
 
-      --  The idea at this stage is that we have two kinds of messages.
+      --  The idea at this stage is that we have two kinds of messages
 
-      --  First, we have those that are to be placed as requested at
-      --  Flag_Location. This includes messages that have nothing to
-      --  do with generics, and also messages placed on generic templates
-      --  that reflect an error in the template itself. For such messages
-      --  we simply call Error_Msg_Internal to place the message in the
-      --  requested location.
+      --  First, we have those messages that are to be placed as requested at
+      --  Flag_Location. This includes messages that have nothing to do with
+      --  generics, and also messages placed on generic templates that reflect
+      --  an error in the template itself. For such messages we simply call
+      --  Error_Msg_Internal to place the message in the requested location.
 
       if Instantiation (Sindex) = No_Location then
          Error_Msg_Internal (Msg, Flag_Location, Flag_Location, False);
@@ -344,9 +372,9 @@ package body Errout is
       --  instantiation error message can be repeated, pointing to each
       --  of the relevant instantiations.
 
-      --  Note: the instantiation mechanism is also shared for inlining
-      --  of subprogram bodies when front end inlining is done. In this
-      --  case the messages have the form:
+      --  Note: the instantiation mechanism is also shared for inlining of
+      --  subprogram bodies when front end inlining is done. In this case the
+      --  messages have the form:
 
       --     in inlined body at ...
       --     original error message
@@ -356,9 +384,8 @@ package body Errout is
       --     warning: in inlined body at
       --     warning: original warning message
 
-      --  OK, this is the case where we have an instantiation error, and
-      --  we need to generate the error on the instantiation, rather than
-      --  on the template.
+      --  OK, here we have an instantiation error, and we need to generate the
+      --  error on the instantiation, rather than on the template.
 
       declare
          Actual_Error_Loc : Source_Ptr;
@@ -367,9 +394,9 @@ package body Errout is
          --  location where all error messages will actually be posted.
 
          Save_Error_Msg_Sloc : constant Source_Ptr := Error_Msg_Sloc;
-         --  Save possible location set for caller's message. We need to
-         --  use Error_Msg_Sloc for the location of the instantiation error
-         --  but we have to preserve a possible original value.
+         --  Save possible location set for caller's message. We need to use
+         --  Error_Msg_Sloc for the location of the instantiation error but we
+         --  have to preserve a possible original value.
 
          X : Source_File_Index;
 
@@ -388,10 +415,9 @@ package body Errout is
             exit when Instantiation (X) = No_Location;
          end loop;
 
-         --  Since we are generating the messages at the instantiation
-         --  point in any case, we do not want the references to the
-         --  bad lines in the instance to be annotated with the location
-         --  of the instantiation.
+         --  Since we are generating the messages at the instantiation point in
+         --  any case, we do not want the references to the bad lines in the
+         --  instance to be annotated with the location of the instantiation.
 
          Suppress_Instance_Location := True;
          Msg_Cont_Status := False;
@@ -400,7 +426,6 @@ package body Errout is
 
          Error_Msg_Sloc := Flag_Location;
          X := Get_Source_File_Index (Flag_Location);
-
          while Instantiation (X) /= No_Location loop
 
             --  Suppress instantiation message on continuation lines
@@ -410,7 +435,7 @@ package body Errout is
                --  Case of inlined body
 
                if Inlined_Body (X) then
-                  if Is_Warning_Msg then
+                  if Is_Warning_Msg or else Is_Style_Msg then
                      Error_Msg_Internal
                        ("?in inlined body #",
                         Actual_Error_Loc, Flag_Location, Msg_Cont_Status);
@@ -424,7 +449,7 @@ package body Errout is
                --  Case of generic instantiation
 
                else
-                  if Is_Warning_Msg then
+                  if Is_Warning_Msg or else Is_Style_Msg then
                      Error_Msg_Internal
                        ("?in instantiation #",
                         Actual_Error_Loc, Flag_Location, Msg_Cont_Status);
@@ -485,6 +510,9 @@ package body Errout is
       --  since there may be white space inside the literal and we don't want
       --  to stop on that white space.
 
+      --  Note: since this is an error recovery issue anyway, it is not worth
+      --  worrying about special UTF_32 line terminator characters here.
+
       if Prev_Token = Tok_String_Literal then
          loop
             S1 := S1 + 1;
@@ -504,7 +532,10 @@ package body Errout is
 
       --  Otherwise we search forward for the end of the current token, marked
       --  by a line terminator, white space, a comment symbol or if we bump
-      --  into the following token (i.e. the current token)
+      --  into the following token (i.e. the current token).
+
+      --  Again, it is not worth worrying about UTF_32 special line terminator
+      --  characters in this context, since this is only for error recovery.
 
       else
          while Source (S1) not in Line_Terminator
@@ -520,7 +551,6 @@ package body Errout is
       --  S1 is now set to the location for the flag
 
       Error_Msg (Msg, S1);
-
    end Error_Msg_AP;
 
    ------------------
@@ -569,7 +599,6 @@ package body Errout is
       S : String (1 .. Feature'Length + 1 + CCRT'Length);
       L : Natural;
 
-
    begin
       S (1) := '|';
       S (2 .. Feature'Length + 1) := Feature;
@@ -593,52 +622,8 @@ package body Errout is
    -----------------
 
    procedure Error_Msg_F (Msg : String; N : Node_Id) is
-      SI : constant Source_File_Index := Source_Index (Get_Source_Unit (N));
-      SF : constant Source_Ptr        := Source_First (SI);
-      F  : Node_Id;
-      S  : Source_Ptr;
-
    begin
-      F := First_Node (N);
-      S := Sloc (F);
-
-      --  The following circuit is a bit subtle. When we have parenthesized
-      --  expressions, then the Sloc will not record the location of the
-      --  paren, but we would like to post the flag on the paren. So what
-      --  we do is to crawl up the tree from the First_Node, adjusting the
-      --  Sloc value for any parentheses we know are present. Yes, we know
-      --  this circuit is not 100% reliable (e.g. because we don't record
-      --  all possible paren level valoues), but this is only for an error
-      --  message so it is good enough.
-
-      Node_Loop : loop
-         Paren_Loop : for J in 1 .. Paren_Count (F) loop
-
-            --  We don't look more than 12 characters behind the current
-            --  location, and in any case not past the front of the source.
-
-            Search_Loop : for K in 1 .. 12 loop
-               exit Search_Loop when S = SF;
-
-               if Source_Text (SI) (S - 1) = '(' then
-                  S := S - 1;
-                  exit Search_Loop;
-
-               elsif Source_Text (SI) (S - 1) <= ' ' then
-                  S := S - 1;
-
-               else
-                  exit Search_Loop;
-               end if;
-            end loop Search_Loop;
-         end loop Paren_Loop;
-
-         exit Node_Loop when F = N;
-         F := Parent (F);
-         exit Node_Loop when Nkind (F) not in N_Subexpr;
-      end loop Node_Loop;
-
-      Error_Msg_NEL (Msg, N, N, S);
+      Error_Msg_NEL (Msg, N, N, Sloc (First_Node (N)));
    end Error_Msg_F;
 
    ------------------
@@ -690,14 +675,12 @@ package body Errout is
             Expander_Active := False;
          end if;
 
-         --  Set the fatal error flag in the unit table unless we are
-         --  in Try_Semantics mode. This stops the semantics from being
-         --  performed if we find a serious error. This is skipped if we
-         --  are currently dealing with the configuration pragma file.
+         --  Set the fatal error flag in the unit table unless we are in
+         --  Try_Semantics mode. This stops the semantics from being performed
+         --  if we find a serious error. This is skipped if we are currently
+         --  dealing with the configuration pragma file.
 
-         if not Try_Semantics
-           and then Current_Source_Unit /= No_Unit
-         then
+         if not Try_Semantics and then Current_Source_Unit /= No_Unit then
             Set_Fatal_Error (Get_Source_Unit (Sptr));
          end if;
       end Handle_Serious_Error;
@@ -710,6 +693,7 @@ package body Errout is
       end if;
 
       Continuation := Msg_Cont;
+      Continuation_New_Line := False;
       Suppress_Message := False;
       Kill_Message := False;
       Set_Msg_Text (Msg, Sptr);
@@ -723,8 +707,9 @@ package body Errout is
       --  Return without doing anything if message is suppressed
 
       if Suppress_Message
-        and not All_Errors_Mode
-        and not (Msg (Msg'Last) = '!')
+        and then not All_Errors_Mode
+        and then not Is_Warning_Msg
+        and then Msg (Msg'Last) /= '!'
       then
          if not Continuation then
             Last_Killed := True;
@@ -733,10 +718,10 @@ package body Errout is
          return;
       end if;
 
-      --  Return without doing anything if message is killed and this
-      --  is not the first error message. The philosophy is that if we
-      --  get a weird error message and we already have had a message,
-      --  then we hope the weird message is a junk cascaded message
+      --  Return without doing anything if message is killed and this is not
+      --  the first error message. The philosophy is that if we get a weird
+      --  error message and we already have had a message, then we hope the
+      --  weird message is a junk cascaded message
 
       if Kill_Message
         and then not All_Errors_Mode
@@ -755,25 +740,22 @@ package body Errout is
 
          --  Immediate return if warning message and warnings are suppressed
 
-         if Warnings_Suppressed (Optr)
-           or else Warnings_Suppressed (Sptr)
-         then
+         if Warnings_Suppressed (Optr) or else Warnings_Suppressed (Sptr) then
             Cur_Msg := No_Error_Msg;
             return;
          end if;
 
-         --  If the flag location is in the main extended source unit
-         --  then for sure we want the warning since it definitely belongs
+         --  If the flag location is in the main extended source unit then for
+         --  sure we want the warning since it definitely belongs
 
          if In_Extended_Main_Source_Unit (Sptr) then
             null;
 
-         --  If the flag location is not in the main extended source
-         --  unit then we want to eliminate the warning.
+         --  If the flag location is not in the main extended source unit, then
+         --  we want to eliminate the warning, unless it is in the extended
+         --  main code unit and we want warnings on the instance.
 
-         elsif In_Extended_Main_Code_Unit (Sptr)
-           and then Warn_On_Instance
-         then
+         elsif In_Extended_Main_Code_Unit (Sptr) and then Warn_On_Instance then
             null;
 
          --  Keep warning if debug flag G set
@@ -781,10 +763,20 @@ package body Errout is
          elsif Debug_Flag_GG then
             null;
 
+         --  Keep warning if message text ends in !!
+
+         elsif Msg (Msg'Last) = '!' and then Msg (Msg'Last - 1) = '!' then
+            null;
+
          --  Here is where we delete a warning from a with'ed unit
 
          else
             Cur_Msg := No_Error_Msg;
+
+            if not Continuation then
+               Last_Killed := True;
+            end if;
+
             return;
          end if;
       end if;
@@ -800,23 +792,107 @@ package body Errout is
          return;
       end if;
 
+      --  If error message line length set, and this is a continuation message
+      --  then all we do is to append the text to the text of the last message
+      --  with a comma space separator (eliminating a possible (style) or
+      --  info prefix).
+
+      if Error_Msg_Line_Length /= 0
+        and then Continuation
+      then
+         Cur_Msg := Errors.Last;
+
+         declare
+            Oldm : String_Ptr := Errors.Table (Cur_Msg).Text;
+            Newm : String (1 .. Oldm'Last + 2 + Msglen);
+            Newl : Natural;
+            M    : Natural;
+
+         begin
+            --  First copy old message to new one and free it
+
+            Newm (Oldm'Range) := Oldm.all;
+            Newl := Oldm'Length;
+            Free (Oldm);
+
+            --  Remove (style) or info: at start of message
+
+            if Msglen > 8 and then Msg_Buffer (1 .. 8) = "(style) " then
+               M := 9;
+
+            elsif Msglen > 6 and then Msg_Buffer (1 .. 6) = "info: " then
+               M := 7;
+
+            else
+               M := 1;
+            end if;
+
+            --  Now deal with separation between messages. Normally this is
+            --  simply comma space, but there are some special cases.
+
+            --  If continuation new line, then put actual NL character in msg
+
+            if Continuation_New_Line then
+               Newl := Newl + 1;
+               Newm (Newl) := ASCII.LF;
+
+            --  If continuation message is enclosed in parentheses, then
+            --  special treatment (don't need a comma, and we want to combine
+            --  successive parenthetical remarks into a single one with
+            --  separating commas).
+
+            elsif Msg_Buffer (M) = '(' and then Msg_Buffer (Msglen) = ')' then
+
+               --  Case where existing message ends in right paren, remove
+               --  and separate parenthetical remarks with a comma.
+
+               if Newm (Newl) = ')' then
+                  Newm (Newl) := ',';
+                  Msg_Buffer (M) := ' ';
+
+               --  Case where we are adding new parenthetical comment
+
+               else
+                  Newl := Newl + 1;
+                  Newm (Newl) := ' ';
+               end if;
+
+            --  Case where continuation not in parens and no new line
+
+            else
+               Newm (Newl + 1 .. Newl + 2) := ", ";
+               Newl := Newl + 2;
+            end if;
+
+            --  Append new message
+
+            Newm (Newl + 1 .. Newl + Msglen - M + 1) :=
+              Msg_Buffer (M .. Msglen);
+            Newl := Newl + Msglen - M + 1;
+            Errors.Table (Cur_Msg).Text := new String'(Newm (1 .. Newl));
+         end;
+
+         return;
+      end if;
+
       --  Otherwise build error message object for new message
 
-      Errors.Increment_Last;
+      Errors.Append
+        ((Text     => new String'(Msg_Buffer (1 .. Msglen)),
+          Next     => No_Error_Msg,
+          Prev     => No_Error_Msg,
+          Sptr     => Sptr,
+          Optr     => Optr,
+          Sfile    => Get_Source_File_Index (Sptr),
+          Line     => Get_Physical_Line_Number (Sptr),
+          Col      => Get_Column_Number (Sptr),
+          Warn     => Is_Warning_Msg,
+          Style    => Is_Style_Msg,
+          Serious  => Is_Serious_Error,
+          Uncond   => Is_Unconditional_Msg,
+          Msg_Cont => Continuation,
+          Deleted  => False));
       Cur_Msg := Errors.Last;
-      Errors.Table (Cur_Msg).Text     := new String'(Msg_Buffer (1 .. Msglen));
-      Errors.Table (Cur_Msg).Next     := No_Error_Msg;
-      Errors.Table (Cur_Msg).Sptr     := Sptr;
-      Errors.Table (Cur_Msg).Optr     := Optr;
-      Errors.Table (Cur_Msg).Sfile    := Get_Source_File_Index (Sptr);
-      Errors.Table (Cur_Msg).Line     := Get_Physical_Line_Number (Sptr);
-      Errors.Table (Cur_Msg).Col      := Get_Column_Number (Sptr);
-      Errors.Table (Cur_Msg).Warn     := Is_Warning_Msg;
-      Errors.Table (Cur_Msg).Style    := Is_Style_Msg;
-      Errors.Table (Cur_Msg).Serious  := Is_Serious_Error;
-      Errors.Table (Cur_Msg).Uncond   := Is_Unconditional_Msg;
-      Errors.Table (Cur_Msg).Msg_Cont := Continuation;
-      Errors.Table (Cur_Msg).Deleted  := False;
 
       --  If immediate errors mode set, output error message now. Also output
       --  now if the -d1 debug flag is set (so node number message comes out
@@ -824,8 +900,8 @@ package body Errout is
 
       if Debug_Flag_OO or else Debug_Flag_1 then
          Write_Eol;
-         Output_Source_Line (Errors.Table (Cur_Msg).Line,
-           Errors.Table (Cur_Msg).Sfile, True);
+         Output_Source_Line
+           (Errors.Table (Cur_Msg).Line, Errors.Table (Cur_Msg).Sfile, True);
          Temp_Msg := Cur_Msg;
          Output_Error_Msgs (Temp_Msg);
 
@@ -835,9 +911,9 @@ package body Errout is
       --  location (earlier flag location first in the chain).
 
       else
-         --  First a quick check, does this belong at the very end of the
-         --  chain of error messages. This saves a lot of time in the
-         --  normal case if there are lots of messages.
+         --  First a quick check, does this belong at the very end of the chain
+         --  of error messages. This saves a lot of time in the normal case if
+         --  there are lots of messages.
 
          if Last_Error_Msg /= No_Error_Msg
            and then Errors.Table (Cur_Msg).Sfile =
@@ -893,30 +969,30 @@ package body Errout is
            and then Compiler_State = Parsing
            and then not All_Errors_Mode
          then
-            --  Don't delete unconditional messages and at this stage,
-            --  don't delete continuation lines (we attempted to delete
-            --  those earlier if the parent message was deleted.
+            --  Don't delete unconditional messages and at this stage, don't
+            --  delete continuation lines (we attempted to delete those earlier
+            --  if the parent message was deleted.
 
             if not Errors.Table (Cur_Msg).Uncond
               and then not Continuation
             then
-               --  Don't delete if prev msg is warning and new msg is
-               --  an error. This is because we don't want a real error
-               --  masked by a warning. In all other cases (that is parse
-               --  errors for the same line that are not unconditional)
-               --  we do delete the message. This helps to avoid
-               --  junk extra messages from cascaded parsing errors
+               --  Don't delete if prev msg is warning and new msg is an error.
+               --  This is because we don't want a real error masked by a
+               --  warning. In all other cases (that is parse errors for the
+               --  same line that are not unconditional) we do delete the
+               --  message. This helps to avoid junk extra messages from
+               --  cascaded parsing errors
 
                if not (Errors.Table (Prev_Msg).Warn
-                         or
+                         or else
                        Errors.Table (Prev_Msg).Style)
                  or else
-                       (Errors.Table (Cur_Msg).Warn
-                         or
-                        Errors.Table (Cur_Msg).Style)
+                      (Errors.Table (Cur_Msg).Warn
+                         or else
+                       Errors.Table (Cur_Msg).Style)
                then
-                  --  All tests passed, delete the message by simply
-                  --  returning without any further processing.
+                  --  All tests passed, delete the message by simply returning
+                  --  without any further processing.
 
                   if not Continuation then
                      Last_Killed := True;
@@ -948,10 +1024,9 @@ package body Errout is
 
       --  Bump appropriate statistics count
 
-      if Errors.Table (Cur_Msg).Warn
-        or else Errors.Table (Cur_Msg).Style
-      then
+      if Errors.Table (Cur_Msg).Warn or else Errors.Table (Cur_Msg).Style then
          Warnings_Detected := Warnings_Detected + 1;
+
       else
          Total_Errors_Detected := Total_Errors_Detected + 1;
 
@@ -961,12 +1036,19 @@ package body Errout is
          end if;
       end if;
 
-      --  Terminate if max errors reached
+      --  If too many warnings turn off warnings
 
-      if Total_Errors_Detected + Warnings_Detected = Maximum_Errors then
-         raise Unrecoverable_Error;
+      if Maximum_Messages /= 0 then
+         if Warnings_Detected = Maximum_Messages then
+            Warning_Mode := Suppress;
+         end if;
+
+         --  If too many errors abandon compilation
+
+         if Total_Errors_Detected = Maximum_Messages then
+            raise Unrecoverable_Error;
+         end if;
       end if;
-
    end Error_Msg_Internal;
 
    -----------------
@@ -1015,10 +1097,16 @@ package body Errout is
          --  Suppress if no warnings set for either entity or node
 
          if No_Warnings (N) or else No_Warnings (E) then
+
+            --  Disable any continuation messages as well
+
+            Last_Killed := True;
             return;
          end if;
 
-         --  Suppress if inside loop that is known to be null
+         --  Suppress if inside loop that is known to be null or is probably
+         --  null (case where loop executes only if invalid values present).
+         --  In either case warnings in the loop are likely to be junk.
 
          declare
             P : Node_Id;
@@ -1026,7 +1114,9 @@ package body Errout is
          begin
             P := Parent (N);
             while Present (P) loop
-               if Nkind (P) = N_Loop_Statement and then Is_Null_Loop (P) then
+               if Nkind (P) = N_Loop_Statement
+                 and then Suppress_Loop_Warnings (P)
+               then
                   return;
                end if;
 
@@ -1039,8 +1129,9 @@ package body Errout is
 
       if All_Errors_Mode
         or else Msg (Msg'Last) = '!'
+        or else Is_Warning_Msg
         or else OK_Node (N)
-        or else (Msg (Msg'First) = '\' and not Last_Killed)
+        or else (Msg (Msg'First) = '\' and then not Last_Killed)
       then
          Debug_Output (N);
          Error_Msg_Node_1 := E;
@@ -1050,7 +1141,7 @@ package body Errout is
          Last_Killed := True;
       end if;
 
-      if not Is_Warning_Msg and then not Is_Style_Msg then
+      if not (Is_Warning_Msg or Is_Style_Msg) then
          Set_Posted (N);
       end if;
    end Error_Msg_NEL;
@@ -1065,7 +1156,10 @@ package body Errout is
       N     : Node_Or_Entity_Id)
    is
    begin
-      if Eflag and then In_Extended_Main_Source_Unit (N) then
+      if Eflag
+        and then In_Extended_Main_Source_Unit (N)
+        and then Comes_From_Source (N)
+      then
          Error_Msg_NEL (Msg, N, N, Sloc (N));
       end if;
    end Error_Msg_NW;
@@ -1115,20 +1209,38 @@ package body Errout is
    -- Finalize --
    --------------
 
-   procedure Finalize is
-      Cur      : Error_Msg_Id;
-      Nxt      : Error_Msg_Id;
-      E, F     : Error_Msg_Id;
-      Err_Flag : Boolean;
+   procedure Finalize (Last_Call : Boolean) is
+      Cur : Error_Msg_Id;
+      Nxt : Error_Msg_Id;
+      F   : Error_Msg_Id;
+
+      procedure Delete_Warning (E : Error_Msg_Id);
+      --  Delete a message if not already deleted and adjust warning count
+
+      --------------------
+      -- Delete_Warning --
+      --------------------
+
+      procedure Delete_Warning (E : Error_Msg_Id) is
+      begin
+         if not Errors.Table (E).Deleted then
+            Errors.Table (E).Deleted := True;
+            Warnings_Detected := Warnings_Detected - 1;
+         end if;
+      end Delete_Warning;
+
+   --  Start of message for Finalize
 
    begin
-      --  Reset current error source file if the main unit has a pragma
-      --  Source_Reference. This ensures outputting the proper name of
-      --  the source file in this situation.
+      --  Set Prev pointers
 
-      if Num_SRef_Pragmas (Main_Source_File) /= 0 then
-         Current_Error_Source_File := No_Source_File;
-      end if;
+      Cur := First_Error_Msg;
+      while Cur /= No_Error_Msg loop
+         Nxt := Errors.Table (Cur).Next;
+         exit when Nxt = No_Error_Msg;
+         Errors.Table (Nxt).Prev := Cur;
+         Cur := Nxt;
+      end loop;
 
       --  Eliminate any duplicated error messages from the list. This is
       --  done after the fact to avoid problems with Change_Error_Text.
@@ -1148,101 +1260,253 @@ package body Errout is
          Cur := Nxt;
       end loop;
 
-      --  Brief Error mode
+      --  Mark any messages suppressed by specific warnings as Deleted
 
-      if Brief_Output or (not Full_List and not Verbose_Mode) then
-         E := First_Error_Msg;
-         Set_Standard_Error;
+      Cur := First_Error_Msg;
+      while Cur /= No_Error_Msg loop
+         if not Errors.Table (Cur).Deleted
+           and then Warning_Specifically_Suppressed
+                      (Errors.Table (Cur).Sptr, Errors.Table (Cur).Text)
+         then
+            Delete_Warning (Cur);
 
-         while E /= No_Error_Msg loop
-            if not Errors.Table (E).Deleted and then not Debug_Flag_KK then
-               if Full_Path_Name_For_Brief_Errors then
-                  Write_Name (Full_Ref_Name (Errors.Table (E).Sfile));
+            --  If this is a continuation, delete previous messages
+
+            F := Cur;
+            while Errors.Table (F).Msg_Cont loop
+               F := Errors.Table (F).Prev;
+               Delete_Warning (F);
+            end loop;
+
+            --  Delete any following continuations
+
+            F := Cur;
+            loop
+               F := Errors.Table (F).Next;
+               exit when F = No_Error_Msg;
+               exit when not Errors.Table (F).Msg_Cont;
+               Delete_Warning (F);
+            end loop;
+         end if;
+
+         Cur := Errors.Table (Cur).Next;
+      end loop;
+
+      Finalize_Called := True;
+
+      --  Check consistency of specific warnings (may add warnings). We only
+      --  do this on the last call, after all possible warnings are posted.
+
+      if Last_Call then
+         Validate_Specific_Warnings (Error_Msg'Access);
+      end if;
+   end Finalize;
+
+   ----------------
+   -- First_Node --
+   ----------------
+
+   function First_Node (C : Node_Id) return Node_Id is
+      L        : constant Source_Ptr        := Sloc (Original_Node (C));
+      Sfile    : constant Source_File_Index := Get_Source_File_Index (L);
+      Earliest : Node_Id;
+      Eloc     : Source_Ptr;
+
+      function Test_Earlier (N : Node_Id) return Traverse_Result;
+      --  Function applied to every node in the construct
+
+      procedure Search_Tree_First is new Traverse_Proc (Test_Earlier);
+      --  Create traversal procedure
+
+      ------------------
+      -- Test_Earlier --
+      ------------------
+
+      function Test_Earlier (N : Node_Id) return Traverse_Result is
+         Loc : constant Source_Ptr := Sloc (Original_Node (N));
+
+      begin
+         --  Check for earlier. The tests for being in the same file ensures
+         --  against strange cases of foreign code somehow being present. We
+         --  don't want wild placement of messages if that happens, so it is
+         --  best to just ignore this situation.
+
+         if Loc < Eloc
+           and then Get_Source_File_Index (Loc) = Sfile
+         then
+            Earliest := Original_Node (N);
+            Eloc     := Loc;
+         end if;
+
+         return OK_Orig;
+      end Test_Earlier;
+
+   --  Start of processing for First_Node
+
+   begin
+      Earliest := Original_Node (C);
+      Eloc := Sloc (Earliest);
+      Search_Tree_First (Original_Node (C));
+      return Earliest;
+   end First_Node;
+
+   ----------------
+   -- First_Sloc --
+   ----------------
+
+   function First_Sloc (N : Node_Id) return Source_Ptr is
+      SI : constant Source_File_Index := Source_Index (Get_Source_Unit (N));
+      SF : constant Source_Ptr        := Source_First (SI);
+      F  : Node_Id;
+      S  : Source_Ptr;
+
+   begin
+      F := First_Node (N);
+      S := Sloc (F);
+
+      --  The following circuit is a bit subtle. When we have parenthesized
+      --  expressions, then the Sloc will not record the location of the paren,
+      --  but we would like to post the flag on the paren. So what we do is to
+      --  crawl up the tree from the First_Node, adjusting the Sloc value for
+      --  any parentheses we know are present. Yes, we know this circuit is not
+      --  100% reliable (e.g. because we don't record all possible paren level
+      --  values), but this is only for an error message so it is good enough.
+
+      Node_Loop : loop
+         Paren_Loop : for J in 1 .. Paren_Count (F) loop
+
+            --  We don't look more than 12 characters behind the current
+            --  location, and in any case not past the front of the source.
+
+            Search_Loop : for K in 1 .. 12 loop
+               exit Search_Loop when S = SF;
+
+               if Source_Text (SI) (S - 1) = '(' then
+                  S := S - 1;
+                  exit Search_Loop;
+
+               elsif Source_Text (SI) (S - 1) <= ' ' then
+                  S := S - 1;
+
                else
-                  Write_Name (Reference_Name (Errors.Table (E).Sfile));
+                  exit Search_Loop;
                end if;
+            end loop Search_Loop;
+         end loop Paren_Loop;
 
-               Write_Char (':');
-               Write_Int (Int (Physical_To_Logical
-                                (Errors.Table (E).Line,
-                                 Errors.Table (E).Sfile)));
-               Write_Char (':');
+         exit Node_Loop when F = N;
+         F := Parent (F);
+         exit Node_Loop when Nkind (F) not in N_Subexpr;
+      end loop Node_Loop;
 
-               if Errors.Table (E).Col < 10 then
-                  Write_Char ('0');
-               end if;
+      return S;
+   end First_Sloc;
 
-               Write_Int (Int (Errors.Table (E).Col));
-               Write_Str (": ");
-               Output_Msg_Text (E);
-               Write_Eol;
-            end if;
+   ----------------
+   -- Initialize --
+   ----------------
 
-            E := Errors.Table (E).Next;
-         end loop;
+   procedure Initialize is
+   begin
+      Errors.Init;
+      First_Error_Msg := No_Error_Msg;
+      Last_Error_Msg := No_Error_Msg;
+      Serious_Errors_Detected := 0;
+      Total_Errors_Detected := 0;
+      Warnings_Detected := 0;
+      Cur_Msg := No_Error_Msg;
+      List_Pragmas.Init;
 
-         Set_Standard_Output;
+      --  Initialize warnings table, if all warnings are suppressed, supply an
+      --  initial dummy entry covering all possible source locations.
+
+      Warnings.Init;
+      Specific_Warnings.Init;
+
+      if Warning_Mode = Suppress then
+         Warnings.Append
+           ((Start => Source_Ptr'First, Stop => Source_Ptr'Last));
       end if;
+   end Initialize;
 
-      --  Full source listing case
+   -----------------
+   -- No_Warnings --
+   -----------------
 
-      if Full_List then
-         List_Pragmas_Index := 1;
-         List_Pragmas_Mode := True;
-         E := First_Error_Msg;
-         Write_Eol;
+   function No_Warnings (N : Node_Or_Entity_Id) return Boolean is
+   begin
+      if Error_Posted (N) then
+         return True;
 
-         --  First list initial main source file with its error messages
+      elsif Nkind (N) in N_Entity and then Has_Warnings_Off (N) then
+         return True;
 
-         for N in 1 .. Last_Source_Line (Main_Source_File) loop
-            Err_Flag :=
-              E /= No_Error_Msg
-                and then Errors.Table (E).Line = N
-                and then Errors.Table (E).Sfile = Main_Source_File;
+      elsif Is_Entity_Name (N)
+        and then Present (Entity (N))
+        and then Has_Warnings_Off (Entity (N))
+      then
+         return True;
 
-            Output_Source_Line (N, Main_Source_File, Err_Flag);
-
-            if Err_Flag then
-               Output_Error_Msgs (E);
-
-               if not Debug_Flag_2 then
-                  Write_Eol;
-               end if;
-            end if;
-
-         end loop;
-
-         --  Then output errors, if any, for subsidiary units
-
-         while E /= No_Error_Msg
-           and then Errors.Table (E).Sfile /= Main_Source_File
-         loop
-            Write_Eol;
-            Output_Source_Line
-              (Errors.Table (E).Line, Errors.Table (E).Sfile, True);
-            Output_Error_Msgs (E);
-         end loop;
+      else
+         return False;
       end if;
+   end No_Warnings;
 
-      --  Verbose mode (error lines only with error flags)
+   -------------
+   -- OK_Node --
+   -------------
 
-      if Verbose_Mode and not Full_List then
-         E := First_Error_Msg;
+   function OK_Node (N : Node_Id) return Boolean is
+      K : constant Node_Kind := Nkind (N);
 
-         --  Loop through error lines
+   begin
+      if Error_Posted (N) then
+         return False;
 
-         while E /= No_Error_Msg loop
-            Write_Eol;
-            Output_Source_Line
-              (Errors.Table (E).Line, Errors.Table (E).Sfile, True);
-            Output_Error_Msgs (E);
-         end loop;
+      elsif K in N_Has_Etype
+        and then Present (Etype (N))
+        and then Error_Posted (Etype (N))
+      then
+         return False;
+
+      elsif (K in N_Op
+              or else K = N_Attribute_Reference
+              or else K = N_Character_Literal
+              or else K = N_Expanded_Name
+              or else K = N_Identifier
+              or else K = N_Operator_Symbol)
+        and then Present (Entity (N))
+        and then Error_Posted (Entity (N))
+      then
+         return False;
+      else
+         return True;
       end if;
+   end OK_Node;
 
-      --  Output error summary if verbose or full list mode
+   ---------------------
+   -- Output_Messages --
+   ---------------------
 
-      if Verbose_Mode or else Full_List then
+   procedure Output_Messages is
+      E        : Error_Msg_Id;
+      Err_Flag : Boolean;
 
+      procedure Write_Error_Summary;
+      --  Write error summary
+
+      procedure Write_Header (Sfile : Source_File_Index);
+      --  Write header line (compiling or checking given file)
+
+      procedure Write_Max_Errors;
+      --  Write message if max errors reached
+
+      -------------------------
+      -- Write_Error_Summary --
+      -------------------------
+
+      procedure Write_Error_Summary is
+      begin
          --  Extra blank line if error messages or source listing were output
 
          if Total_Errors_Detected + Warnings_Detected > 0
@@ -1314,162 +1578,284 @@ package body Errout is
 
          Write_Eol;
          Set_Standard_Output;
+      end Write_Error_Summary;
+
+      ------------------
+      -- Write_Header --
+      ------------------
+
+      procedure Write_Header (Sfile : Source_File_Index) is
+      begin
+         if Verbose_Mode or Full_List then
+            if Original_Operating_Mode = Generate_Code then
+               Write_Str ("Compiling: ");
+            else
+               Write_Str ("Checking: ");
+            end if;
+
+            Write_Name (Full_File_Name (Sfile));
+
+            if not Debug_Flag_7 then
+               Write_Str (" (source file time stamp: ");
+               Write_Time_Stamp (Sfile);
+               Write_Char (')');
+            end if;
+
+            Write_Eol;
+         end if;
+      end Write_Header;
+
+      ----------------------
+      -- Write_Max_Errors --
+      ----------------------
+
+      procedure Write_Max_Errors is
+      begin
+         if Maximum_Messages /= 0 then
+            if Warnings_Detected >= Maximum_Messages then
+               Set_Standard_Error;
+               Write_Line ("maximum number of warnings output");
+               Write_Line ("any further warnings suppressed");
+               Set_Standard_Output;
+            end if;
+
+            --  If too many errors print message
+
+            if Total_Errors_Detected >= Maximum_Messages then
+               Set_Standard_Error;
+               Write_Line ("fatal error: maximum number of errors detected");
+               Set_Standard_Output;
+            end if;
+         end if;
+      end Write_Max_Errors;
+
+   --  Start of processing for Output_Messages
+
+   begin
+      --  Error if Finalize has not been called
+
+      if not Finalize_Called then
+         raise Program_Error;
       end if;
 
-      if Maximum_Errors /= 0
-        and then Total_Errors_Detected + Warnings_Detected = Maximum_Errors
+      --  Reset current error source file if the main unit has a pragma
+      --  Source_Reference. This ensures outputting the proper name of
+      --  the source file in this situation.
+
+      if Main_Source_File = No_Source_File
+        or else Num_SRef_Pragmas (Main_Source_File) /= 0
       then
+         Current_Error_Source_File := No_Source_File;
+      end if;
+
+      --  Brief Error mode
+
+      if Brief_Output or (not Full_List and not Verbose_Mode) then
          Set_Standard_Error;
-         Write_Str ("fatal error: maximum errors reached");
-         Write_Eol;
+
+         E := First_Error_Msg;
+         while E /= No_Error_Msg loop
+            if not Errors.Table (E).Deleted and then not Debug_Flag_KK then
+               if Full_Path_Name_For_Brief_Errors then
+                  Write_Name (Full_Ref_Name (Errors.Table (E).Sfile));
+               else
+                  Write_Name (Reference_Name (Errors.Table (E).Sfile));
+               end if;
+
+               Write_Char (':');
+               Write_Int (Int (Physical_To_Logical
+                                (Errors.Table (E).Line,
+                                 Errors.Table (E).Sfile)));
+               Write_Char (':');
+
+               if Errors.Table (E).Col < 10 then
+                  Write_Char ('0');
+               end if;
+
+               Write_Int (Int (Errors.Table (E).Col));
+               Write_Str (": ");
+               Output_Msg_Text (E);
+               Write_Eol;
+            end if;
+
+            E := Errors.Table (E).Next;
+         end loop;
+
          Set_Standard_Output;
       end if;
+
+      --  Full source listing case
+
+      if Full_List then
+         List_Pragmas_Index := 1;
+         List_Pragmas_Mode := True;
+         E := First_Error_Msg;
+
+         --  Normal case, to stdout (copyright notice already output)
+
+         if Full_List_File_Name = null then
+            if not Debug_Flag_7 then
+               Write_Eol;
+            end if;
+
+         --  Output to file
+
+         else
+            Create_List_File_Access.all (Full_List_File_Name.all);
+            Set_Special_Output (Write_List_Info_Access.all'Access);
+
+            --  Write copyright notice to file
+
+            if not Debug_Flag_7 then
+               Write_Str ("GNAT ");
+               Write_Str (Gnat_Version_String);
+               Write_Eol;
+               Write_Str ("Copyright 1992-" &
+                          Current_Year &
+                          ", Free Software Foundation, Inc.");
+               Write_Eol;
+            end if;
+         end if;
+
+         --  First list extended main source file units with errors
+
+         for U in Main_Unit .. Last_Unit loop
+            if In_Extended_Main_Source_Unit (Cunit_Entity (U))
+
+              --  If debug flag d.m is set, only the main source is listed
+
+              and then (U = Main_Unit or else not Debug_Flag_Dot_M)
+
+              --  If the unit of the entity does not come from source, it is
+              --  an implicit subprogram declaration for a child subprogram.
+              --  Do not emit errors for it, they are listed with the body.
+
+              and then
+                (No (Cunit_Entity (U))
+                   or else Comes_From_Source (Cunit_Entity (U))
+                   or else not Is_Subprogram (Cunit_Entity (U)))
+            then
+               declare
+                  Sfile : constant Source_File_Index := Source_Index (U);
+
+               begin
+                  Write_Eol;
+                  Write_Header (Sfile);
+                  Write_Eol;
+
+                  --  Normally, we don't want an "error messages from file"
+                  --  message when listing the entire file, so we set the
+                  --  current source file as the current error source file.
+                  --  However, the old style of doing things was to list this
+                  --  message if pragma Source_Reference is present, even for
+                  --  the main unit. Since the purpose of the -gnatd.m switch
+                  --  is to duplicate the old behavior, we skip the reset if
+                  --  this debug flag is set.
+
+                  if not Debug_Flag_Dot_M then
+                     Current_Error_Source_File := Sfile;
+                  end if;
+
+                  for N in 1 .. Last_Source_Line (Sfile) loop
+                     while E /= No_Error_Msg
+                       and then Errors.Table (E).Deleted
+                     loop
+                        E := Errors.Table (E).Next;
+                     end loop;
+
+                     Err_Flag :=
+                       E /= No_Error_Msg
+                         and then Errors.Table (E).Line = N
+                         and then Errors.Table (E).Sfile = Sfile;
+
+                     Output_Source_Line (N, Sfile, Err_Flag);
+
+                     if Err_Flag then
+                        Output_Error_Msgs (E);
+
+                        if not Debug_Flag_2 then
+                           Write_Eol;
+                        end if;
+                     end if;
+                  end loop;
+               end;
+            end if;
+         end loop;
+
+         --  Then output errors, if any, for subsidiary units not in the
+         --  main extended unit.
+
+         --  Note: if debug flag d.m set, include errors for any units other
+         --  than the main unit in the extended source unit (e.g. spec and
+         --  subunits for a body).
+
+         while E /= No_Error_Msg
+           and then (not In_Extended_Main_Source_Unit (Errors.Table (E).Sptr)
+                       or else
+                        (Debug_Flag_Dot_M
+                          and then Get_Source_Unit
+                                     (Errors.Table (E).Sptr) /= Main_Unit))
+         loop
+            if Errors.Table (E).Deleted then
+               E := Errors.Table (E).Next;
+
+            else
+               Write_Eol;
+               Output_Source_Line
+                 (Errors.Table (E).Line, Errors.Table (E).Sfile, True);
+               Output_Error_Msgs (E);
+            end if;
+         end loop;
+
+         --  If output to file, write extra copy of error summary to the
+         --  output file, and then close it.
+
+         if Full_List_File_Name /= null then
+            Write_Error_Summary;
+            Write_Max_Errors;
+            Close_List_File_Access.all;
+            Cancel_Special_Output;
+         end if;
+      end if;
+
+      --  Verbose mode (error lines only with error flags). Normally this is
+      --  ignored in full list mode, unless we are listing to a file, in which
+      --  case we still generate -gnatv output to standard output.
+
+      if Verbose_Mode
+        and then (not Full_List or else Full_List_File_Name /= null)
+      then
+         Write_Eol;
+         Write_Header (Main_Source_File);
+         E := First_Error_Msg;
+
+         --  Loop through error lines
+
+         while E /= No_Error_Msg loop
+            if Errors.Table (E).Deleted then
+               E := Errors.Table (E).Next;
+            else
+               Write_Eol;
+               Output_Source_Line
+                 (Errors.Table (E).Line, Errors.Table (E).Sfile, True);
+               Output_Error_Msgs (E);
+            end if;
+         end loop;
+      end if;
+
+      --  Output error summary if verbose or full list mode
+
+      if Verbose_Mode or else Full_List then
+         Write_Error_Summary;
+      end if;
+
+      Write_Max_Errors;
 
       if Warning_Mode = Treat_As_Error then
          Total_Errors_Detected := Total_Errors_Detected + Warnings_Detected;
          Warnings_Detected := 0;
       end if;
-   end Finalize;
-
-   ----------------
-   -- First_Node --
-   ----------------
-
-   function First_Node (C : Node_Id) return Node_Id is
-      L        : constant Source_Ptr        := Sloc (C);
-      Sfile    : constant Source_File_Index := Get_Source_File_Index (L);
-      Earliest : Node_Id;
-      Eloc     : Source_Ptr;
-      Discard  : Traverse_Result;
-
-      pragma Warnings (Off, Discard);
-
-      function Test_Earlier (N : Node_Id) return Traverse_Result;
-      --  Function applied to every node in the construct
-
-      function Search_Tree_First is new Traverse_Func (Test_Earlier);
-      --  Create traversal function
-
-      ------------------
-      -- Test_Earlier --
-      ------------------
-
-      function Test_Earlier (N : Node_Id) return Traverse_Result is
-         Loc : constant Source_Ptr := Sloc (N);
-
-      begin
-         --  Check for earlier. The tests for being in the same file ensures
-         --  against strange cases of foreign code somehow being present. We
-         --  don't want wild placement of messages if that happens, so it is
-         --  best to just ignore this situation.
-
-         if Loc < Eloc
-           and then Get_Source_File_Index (Loc) = Sfile
-         then
-            Earliest := N;
-            Eloc     := Loc;
-         end if;
-
-         return OK_Orig;
-      end Test_Earlier;
-
-   --  Start of processing for First_Node
-
-   begin
-      Earliest := Original_Node (C);
-      Eloc := Sloc (Earliest);
-      Discard := Search_Tree_First (Original_Node (C));
-      return Earliest;
-   end First_Node;
-
-
-   ----------------
-   -- Initialize --
-   ----------------
-
-   procedure Initialize is
-   begin
-      Errors.Init;
-      First_Error_Msg := No_Error_Msg;
-      Last_Error_Msg := No_Error_Msg;
-      Serious_Errors_Detected := 0;
-      Total_Errors_Detected := 0;
-      Warnings_Detected := 0;
-      Cur_Msg := No_Error_Msg;
-      List_Pragmas.Init;
-
-      --  Initialize warnings table, if all warnings are suppressed, supply
-      --  an initial dummy entry covering all possible source locations.
-
-      Warnings.Init;
-
-      if Warning_Mode = Suppress then
-         Warnings.Increment_Last;
-         Warnings.Table (Warnings.Last).Start := Source_Ptr'First;
-         Warnings.Table (Warnings.Last).Stop  := Source_Ptr'Last;
-      end if;
-
-      --  Set the error nodes to Empty to avoid uninitialized variable
-      --  references for saves/restores/moves.
-
-      Error_Msg_Node_1 := Empty;
-      Error_Msg_Node_2 := Empty;
-   end Initialize;
-
-   -----------------
-   -- No_Warnings --
-   -----------------
-
-   function No_Warnings (N : Node_Or_Entity_Id) return Boolean is
-   begin
-      if Error_Posted (N) then
-         return True;
-
-      elsif Nkind (N) in N_Entity and then Warnings_Off (N) then
-         return True;
-
-      elsif Is_Entity_Name (N)
-        and then Present (Entity (N))
-        and then Warnings_Off (Entity (N))
-      then
-         return True;
-
-      else
-         return False;
-      end if;
-   end No_Warnings;
-
-   -------------
-   -- OK_Node --
-   -------------
-
-   function OK_Node (N : Node_Id) return Boolean is
-      K : constant Node_Kind := Nkind (N);
-
-   begin
-      if Error_Posted (N) then
-         return False;
-
-      elsif K in N_Has_Etype
-        and then Present (Etype (N))
-        and then Error_Posted (Etype (N))
-      then
-         return False;
-
-      elsif (K in N_Op
-              or else K = N_Attribute_Reference
-              or else K = N_Character_Literal
-              or else K = N_Expanded_Name
-              or else K = N_Identifier
-              or else K = N_Operator_Symbol)
-        and then Present (Entity (N))
-        and then Error_Posted (Entity (N))
-      then
-         return False;
-      else
-         return True;
-      end if;
-   end OK_Node;
+   end Output_Messages;
 
    ------------------------
    -- Output_Source_Line --
@@ -1485,6 +1871,9 @@ package body Errout is
 
       Line_Number_Output : Boolean := False;
       --  Set True once line number is output
+
+      Empty_Line : Boolean := True;
+      --  Set False if line includes at least one character
 
    begin
       if Sfile /= Current_Error_Source_File then
@@ -1573,11 +1962,19 @@ package body Errout is
             end if;
          end if;
 
+         Empty_Line := False;
          S := S + 1;
       end loop;
 
+      --  If we have output a source line, then add the line terminator, with
+      --  training spaces preserved (so we output the line exactly as input).
+
       if Line_Number_Output then
-         Write_Eol;
+         if Empty_Line then
+            Write_Eol;
+         else
+            Write_Eol_Keep_Blanks;
+         end if;
       end if;
    end Output_Source_Line;
 
@@ -1588,10 +1985,9 @@ package body Errout is
    procedure Remove_Warning_Messages (N : Node_Id) is
 
       function Check_For_Warning (N : Node_Id) return Traverse_Result;
-      --  This function checks one node for a possible warning message.
+      --  This function checks one node for a possible warning message
 
-      function Check_All_Warnings is new
-        Traverse_Func (Check_For_Warning);
+      function Check_All_Warnings is new Traverse_Func (Check_For_Warning);
       --  This defines the traversal operation
 
       -----------------------
@@ -1613,11 +2009,26 @@ package body Errout is
          function To_Be_Removed (E : Error_Msg_Id) return Boolean is
          begin
             if E /= No_Error_Msg
-              and then Errors.Table (E).Optr = Loc
-              and then (Errors.Table (E).Warn or Errors.Table (E).Style)
+
+               --  Don't remove if location does not match
+
+               and then Errors.Table (E).Optr = Loc
+
+               --  Don't remove if not warning/info message. Note that we do
+               --  not remove style messages here. They are warning messages
+               --  but not ones we want removed in this context.
+
+               and then Errors.Table (E).Warn
+
+               --  Don't remove unconditional messages
+
+               and then not Errors.Table (E).Uncond
             then
                Warnings_Detected := Warnings_Detected - 1;
                return True;
+
+            --  No removal required
+
             else
                return False;
             end if;
@@ -1652,15 +2063,14 @@ package body Errout is
            and then Original_Node (N) /= N
            and then No (Condition (N))
          then
-            --  Warnings may have been posted on subexpressions of
-            --  the original tree. We place the original node back
-            --  on the tree to remove those warnings, whose sloc
-            --  do not match those of any node in the current tree.
-            --  Given that we are in unreachable code, this modification
-            --  to the tree is harmless.
+            --  Warnings may have been posted on subexpressions of the original
+            --  tree. We place the original node back on the tree to remove
+            --  those warnings, whose sloc do not match those of any node in
+            --  the current tree. Given that we are in unreachable code, this
+            --  modification to the tree is harmless.
 
             declare
-               Status : Traverse_Result;
+               Status : Traverse_Final_Result;
 
             begin
                if Is_List_Member (N) then
@@ -1684,7 +2094,7 @@ package body Errout is
    begin
       if Warnings_Detected /= 0 then
          declare
-            Discard : Traverse_Result;
+            Discard : Traverse_Final_Result;
             pragma Warnings (Off, Discard);
 
          begin
@@ -1698,7 +2108,6 @@ package body Errout is
    begin
       if Is_Non_Empty_List (L) then
          Stat := First (L);
-
          while Present (Stat) loop
             Remove_Warning_Messages (Stat);
             Next (Stat);
@@ -1714,12 +2123,6 @@ package body Errout is
      (Identifier_Name : System.Address;
       File_Name       : System.Address)
    is
-      type Big_String is array (Positive) of Character;
-      type Big_String_Ptr is access all Big_String;
-
-      function To_Big_String_Ptr is new Unchecked_Conversion
-        (System.Address, Big_String_Ptr);
-
       Ident : constant Big_String_Ptr := To_Big_String_Ptr (Identifier_Name);
       File  : constant Big_String_Ptr := To_Big_String_Ptr (File_Name);
       Flen  : Natural;
@@ -1727,7 +2130,6 @@ package body Errout is
       Desired_Case : Casing_Type := Mixed_Case;
       --  Casing required for result. Default value of Mixed_Case is used if
       --  for some reason we cannot find the right file name in the table.
-
 
    begin
       --  Get length of file name
@@ -1737,12 +2139,12 @@ package body Errout is
          Flen := Flen + 1;
       end loop;
 
-      --  Loop through file names to find matching one. This is a bit slow,
-      --  but we only do it in error situations so it is not so terrible.
-      --  Note that if the loop does not exit, then the desired case will
-      --  be left set to Mixed_Case, this can happen if the name was not
-      --  in canonical form, and gets canonicalized on VMS. Possibly we
-      --  could fix this by unconditinally canonicalizing these names ???
+      --  Loop through file names to find matching one. This is a bit slow, but
+      --  we only do it in error situations so it is not so terrible. Note that
+      --  if the loop does not exit, then the desired case will be left set to
+      --  Mixed_Case, this can happen if the name was not in canonical form,
+      --  and gets canonicalized on VMS. Possibly we could fix this by
+      --  unconditionally canonicalizing these names ???
 
       for J in 1 .. Last_Source_File loop
          Get_Name_String (Full_Debug_Name (J));
@@ -1760,7 +2162,7 @@ package body Errout is
       for J in Name_Buffer'Range loop
          Name_Buffer (J) := Ident (J);
 
-         if Name_Buffer (J) = ASCII.Nul then
+         if Name_Buffer (J) = ASCII.NUL then
             Name_Len := J - 1;
             exit;
          end if;
@@ -1784,7 +2186,7 @@ package body Errout is
 
    procedure Set_Msg_Insertion_Column is
    begin
-      if Style.RM_Column_Check then
+      if RM_Column_Check then
          Set_Msg_Str (" in column ");
          Set_Msg_Int (Int (Error_Msg_Col) + 1);
       end if;
@@ -1795,6 +2197,8 @@ package body Errout is
    ----------------------------
 
    procedure Set_Msg_Insertion_Node is
+      K : Node_Kind;
+
    begin
       Suppress_Message :=
         Error_Msg_Node_1 = Error
@@ -1815,10 +2219,24 @@ package body Errout is
       else
          Set_Msg_Blank_Conditional;
 
-         --  Skip quotes for operator case
+         --  Output name
 
-         if Nkind (Error_Msg_Node_1) in N_Op then
+         K := Nkind (Error_Msg_Node_1);
+
+         --  If we have operator case, skip quotes since name of operator
+         --  itself will supply the required quotations. An operator can be an
+         --  applied use in an expression or an explicit operator symbol, or an
+         --  identifier whose name indicates it is an operator.
+
+         if K in N_Op
+           or else K = N_Operator_Symbol
+           or else K = N_Defining_Operator_Symbol
+           or else ((K = N_Identifier or else K = N_Defining_Identifier)
+                       and then Is_Operator_Name (Chars (Error_Msg_Node_1)))
+         then
             Set_Msg_Node (Error_Msg_Node_1);
+
+         --  Normal case, not an operator, surround with quotes
 
          else
             Set_Msg_Quote;
@@ -1829,9 +2247,15 @@ package body Errout is
       end if;
 
       --  The following assignment ensures that a second ampersand insertion
-      --  character will correspond to the Error_Msg_Node_2 parameter.
+      --  character will correspond to the Error_Msg_Node_2 parameter. We
+      --  suppress possible validity checks in case operating in -gnatVa mode,
+      --  and Error_Msg_Node_2 is not needed and has not been set.
 
-      Error_Msg_Node_1 := Error_Msg_Node_2;
+      declare
+         pragma Suppress (Range_Check);
+      begin
+         Error_Msg_Node_1 := Error_Msg_Node_2;
+      end;
    end Set_Msg_Insertion_Node;
 
    --------------------------------------
@@ -1947,11 +2371,19 @@ package body Errout is
          Set_Qualification (Error_Msg_Qual_Level, Ent);
          Set_Msg_Node (Ent);
          Add_Class;
-         Set_Msg_Quote;
+
+         --  If Ent is an anonymous subprogram type, there is no name to print,
+         --  so remove enclosing quotes.
+
+         if Buffer_Ends_With ("""") then
+            Buffer_Remove ("""");
+         else
+            Set_Msg_Quote;
+         end if;
       end if;
 
-      --  If the original type did not come from a predefined
-      --  file, add the location where the type was defined.
+      --  If the original type did not come from a predefined file, add the
+      --  location where the type was defined.
 
       if Sloc (Error_Msg_Node_1) > Standard_Location
         and then
@@ -1986,17 +2418,17 @@ package body Errout is
    -- Set_Msg_Insertion_Unit_Name --
    ---------------------------------
 
-   procedure Set_Msg_Insertion_Unit_Name is
+   procedure Set_Msg_Insertion_Unit_Name (Suffix : Boolean := True) is
    begin
-      if Error_Msg_Unit_1 = No_Name then
+      if Error_Msg_Unit_1 = No_Unit_Name then
          null;
 
-      elsif Error_Msg_Unit_1 = Error_Name then
+      elsif Error_Msg_Unit_1 = Error_Unit_Name then
          Set_Msg_Blank;
          Set_Msg_Str ("<error>");
 
       else
-         Get_Unit_Name_String (Error_Msg_Unit_1);
+         Get_Unit_Name_String (Error_Msg_Unit_1, Suffix);
          Set_Msg_Blank;
          Set_Msg_Quote;
          Set_Msg_Name_Buffer;
@@ -2004,9 +2436,15 @@ package body Errout is
       end if;
 
       --  The following assignment ensures that a second percent insertion
-      --  character will correspond to the Error_Msg_Unit_2 parameter.
+      --  character will correspond to the Error_Msg_Unit_2 parameter. We
+      --  suppress possible validity checks in case operating in -gnatVa mode,
+      --  and Error_Msg_Unit_2 is not needed and has not been set.
 
-      Error_Msg_Unit_1 := Error_Msg_Unit_2;
+      declare
+         pragma Suppress (Range_Check);
+      begin
+         Error_Msg_Unit_1 := Error_Msg_Unit_2;
+      end;
    end Set_Msg_Insertion_Unit_Name;
 
    ------------------
@@ -2038,14 +2476,17 @@ package body Errout is
       end if;
 
       --  The only remaining possibilities are identifiers, defining
-      --  identifiers, pragmas, and pragma argument associations, i.e.
-      --  nodes that have a Chars field.
+      --  identifiers, pragmas, and pragma argument associations.
 
-      --  Internal names generally represent something gone wrong. An exception
-      --  is the case of internal type names, where we try to find a reasonable
-      --  external representation for the external name
+      if Nkind (Node) = N_Pragma then
+         Nam := Pragma_Name (Node);
 
-      if Is_Internal_Name (Chars (Node))
+      --  The other cases have Chars fields, and we want to test for possible
+      --  internal names, which generally represent something gone wrong. An
+      --  exception is the case of internal type names, where we try to find a
+      --  reasonable external representation for the external name
+
+      elsif Is_Internal_Name (Chars (Node))
         and then
           ((Is_Entity_Name (Node)
                           and then Present (Entity (Node))
@@ -2059,8 +2500,17 @@ package body Errout is
             Ent := Node;
          end if;
 
-         Unwind_Internal_Type (Ent);
-         Nam := Chars (Ent);
+         --  If the type is the designated type of an access_to_subprogram,
+         --  there is no name to provide in the call.
+
+         if Ekind (Ent) = E_Subprogram_Type then
+            return;
+         else
+            Unwind_Internal_Type (Ent);
+            Nam := Chars (Ent);
+         end if;
+
+      --  If not internal name, just use name in Chars field
 
       else
          Nam := Chars (Node);
@@ -2093,7 +2543,7 @@ package body Errout is
       --  in case, which is the case when we can copy from the source.
 
       declare
-         Src_Loc : constant Source_Ptr := Sloc (Error_Msg_Node_1);
+         Src_Loc : constant Source_Ptr := Sloc (Node);
          Sbuffer : Source_Buffer_Ptr;
          Ref_Ptr : Integer;
          Src_Ptr : Source_Ptr;
@@ -2110,9 +2560,9 @@ package body Errout is
             Set_Casing (Mixed_Case);
 
          else
-            --  Determine if the reference we are dealing with corresponds
-            --  to text at the point of the error reference. This will often
-            --  be the case for simple identifier references, and is the case
+            --  Determine if the reference we are dealing with corresponds to
+            --  text at the point of the error reference. This will often be
+            --  the case for simple identifier references, and is the case
             --  where we can copy the spelling from the source.
 
             Sbuffer := Source_Text (Get_Source_File_Index (Src_Loc));
@@ -2125,8 +2575,8 @@ package body Errout is
                Src_Ptr := Src_Ptr + 1;
             end loop;
 
-            --  If we get through the loop without a mismatch, then output
-            --  the name the way it is spelled in the source program
+            --  If we get through the loop without a mismatch, then output the
+            --  name the way it is spelled in the source program
 
             if Ref_Ptr > Name_Len then
                Src_Ptr := Src_Loc;
@@ -2153,28 +2603,39 @@ package body Errout is
    ------------------
 
    procedure Set_Msg_Text (Text : String; Flag : Source_Ptr) is
-      C : Character;         -- Current character
-      P : Natural;           -- Current index;
+      C : Character;   -- Current character
+      P : Natural;     -- Current index;
 
    begin
       Manual_Quote_Mode := False;
       Is_Unconditional_Msg := False;
       Msglen := 0;
       Flag_Source := Get_Source_File_Index (Flag);
-      P := Text'First;
 
+      P := Text'First;
       while P <= Text'Last loop
          C := Text (P);
          P := P + 1;
 
-         --  Check for insertion character
+         --  Check for insertion character or sequence
 
          case C is
             when '%' =>
-               Set_Msg_Insertion_Name;
+               if P <= Text'Last and then Text (P) = '%' then
+                  P := P + 1;
+                  Set_Msg_Insertion_Name_Literal;
+               else
+                  Set_Msg_Insertion_Name;
+               end if;
 
             when '$' =>
-               Set_Msg_Insertion_Unit_Name;
+               if P <= Text'Last and then Text (P) = '$' then
+                  P := P + 1;
+                  Set_Msg_Insertion_Unit_Name (Suffix => False);
+
+               else
+                  Set_Msg_Insertion_Unit_Name;
+               end if;
 
             when '{' =>
                Set_Msg_Insertion_File_Name;
@@ -2194,12 +2655,16 @@ package body Errout is
             when '\' =>
                Continuation := True;
 
+               if Text (P) = '\' then
+                  Continuation_New_Line := True;
+                  P := P + 1;
+               end if;
+
             when '@' =>
                Set_Msg_Insertion_Column;
 
             when '>' =>
                Set_Msg_Insertion_Run_Time_Name;
-
 
             when '^' =>
                Set_Msg_Insertion_Uint;
@@ -2214,12 +2679,18 @@ package body Errout is
             when '?' =>
                null; -- already dealt with
 
+            when '<' =>
+               null; -- already dealt with
+
             when '|' =>
                null; -- already dealt with
 
             when ''' =>
                Set_Msg_Char (Text (P));
                P := P + 1;
+
+            when '~' =>
+               Set_Msg_Str (Error_Msg_String (1 .. Error_Msg_Strlen));
 
             --  Upper case letter
 
@@ -2243,6 +2714,8 @@ package body Errout is
                Set_Msg_Char (C);
          end case;
       end loop;
+
+      VMS_Convert;
    end Set_Msg_Text;
 
    ----------------
@@ -2259,9 +2732,9 @@ package body Errout is
 
          Set_Error_Posted (N);
 
-         --  If it is a subexpression, then set Error_Posted on parents
-         --  up to and including the first non-subexpression construct. This
-         --  helps avoid cascaded error messages within a single expression.
+         --  If it is a subexpression, then set Error_Posted on parents up to
+         --  and including the first non-subexpression construct. This helps
+         --  avoid cascaded error messages within a single expression.
 
          P := N;
          loop
@@ -2301,11 +2774,12 @@ package body Errout is
    -- Special_Msg_Delete --
    ------------------------
 
+   --  Is it really right to have all this specialized knowledge in errout?
+
    function Special_Msg_Delete
-     (Msg  : String;
-      N    : Node_Or_Entity_Id;
-      E    : Node_Or_Entity_Id)
-      return Boolean
+     (Msg : String;
+      N   : Node_Or_Entity_Id;
+      E   : Node_Or_Entity_Id) return Boolean
    is
    begin
       --  Never delete messages in -gnatdO mode
@@ -2313,48 +2787,61 @@ package body Errout is
       if Debug_Flag_OO then
          return False;
 
-      --  When an atomic object refers to a non-atomic type in the same
-      --  scope, we implicitly make the type atomic. In the non-error
-      --  case this is surely safe (and in fact prevents an error from
-      --  occurring if the type is not atomic by default). But if the
-      --  object cannot be made atomic, then we introduce an extra junk
-      --  message by this manipulation, which we get rid of here.
+      --  Processing for "atomic access cannot be guaranteed"
 
-      --  We identify this case by the fact that it references a type for
-      --  which Is_Atomic is set, but there is no Atomic pragma setting it.
+      elsif Msg = "atomic access to & cannot be guaranteed" then
 
-      elsif Msg = "atomic access to & cannot be guaranteed"
-        and then Is_Type (E)
-        and then Is_Atomic (E)
-        and then No (Get_Rep_Pragma (E, Name_Atomic))
-      then
-         return True;
+         --  When an atomic object refers to a non-atomic type in the same
+         --  scope, we implicitly make the type atomic. In the non-error case
+         --  this is surely safe (and in fact prevents an error from occurring
+         --  if the type is not atomic by default). But if the object cannot be
+         --  made atomic, then we introduce an extra junk message by this
+         --  manipulation, which we get rid of here.
 
-      --  When a size is wrong for a frozen type there is no explicit
-      --  size clause, and other errors have occurred, suppress the
-      --  message, since it is likely that this size error is a cascaded
-      --  result of other errors. The reason we eliminate unfrozen types
-      --  is that messages issued before the freeze type are for sure OK.
+         --  We identify this case by the fact that it references a type for
+         --  which Is_Atomic is set, but there is no Atomic pragma setting it.
 
-      elsif Msg = "size for& too small, minimum allowed is ^"
-        and then Is_Frozen (E)
-        and then Serious_Errors_Detected > 0
-        and then Nkind (N) /= N_Component_Clause
-        and then Nkind (Parent (N)) /= N_Component_Clause
-        and then
-          No (Get_Attribute_Definition_Clause (E, Attribute_Size))
-        and then
-          No (Get_Attribute_Definition_Clause (E, Attribute_Object_Size))
-        and then
-          No (Get_Attribute_Definition_Clause (E, Attribute_Value_Size))
-      then
-         return True;
+         if Is_Type (E)
+           and then Is_Atomic (E)
+           and then No (Get_Rep_Pragma (E, Name_Atomic))
+         then
+            return True;
+         end if;
+
+      --  Processing for "Size too small" messages
+
+      elsif Msg = "size for& too small, minimum allowed is ^" then
+
+         --  Suppress "size too small" errors in CodePeer mode, since pragma
+         --  Pack is also ignored in this configuration.
+
+         if CodePeer_Mode then
+            return True;
+
+         --  When a size is wrong for a frozen type there is no explicit size
+         --  clause, and other errors have occurred, suppress the message,
+         --  since it is likely that this size error is a cascaded result of
+         --  other errors. The reason we eliminate unfrozen types is that
+         --  messages issued before the freeze type are for sure OK.
+
+         elsif Is_Frozen (E)
+           and then Serious_Errors_Detected > 0
+           and then Nkind (N) /= N_Component_Clause
+           and then Nkind (Parent (N)) /= N_Component_Clause
+           and then
+             No (Get_Attribute_Definition_Clause (E, Attribute_Size))
+           and then
+             No (Get_Attribute_Definition_Clause (E, Attribute_Object_Size))
+           and then
+             No (Get_Attribute_Definition_Clause (E, Attribute_Value_Size))
+         then
+            return True;
+         end if;
+      end if;
 
       --  All special tests complete, so go ahead with message
 
-      else
-         return False;
-      end if;
+      return False;
    end Special_Msg_Delete;
 
    --------------------------
@@ -2375,20 +2862,68 @@ package body Errout is
          Msglen := Msglen - 1;
       end if;
 
-      --  The loop here deals with recursive types, we are trying to
-      --  find a related entity that is not an implicit type. Note
-      --  that the check with Old_Ent stops us from getting "stuck".
-      --  Also, we don't output the "type derived from" message more
-      --  than once in the case where we climb up multiple levels.
+      --  The loop here deals with recursive types, we are trying to find a
+      --  related entity that is not an implicit type. Note that the check with
+      --  Old_Ent stops us from getting "stuck". Also, we don't output the
+      --  "type derived from" message more than once in the case where we climb
+      --  up multiple levels.
 
-      loop
+      Find : loop
          Old_Ent := Ent;
 
-         --  Implicit access type, use directly designated type
+         --  Implicit access type, use directly designated type In Ada 2005,
+         --  the designated type may be an anonymous access to subprogram, in
+         --  which case we can only point to its definition.
 
          if Is_Access_Type (Ent) then
-            Set_Msg_Str ("access to ");
-            Ent := Directly_Designated_Type (Ent);
+            if Ekind (Ent) = E_Access_Subprogram_Type
+              or else Ekind (Ent) = E_Anonymous_Access_Subprogram_Type
+              or else Is_Access_Protected_Subprogram_Type (Ent)
+            then
+               Ent := Directly_Designated_Type (Ent);
+
+               if not Comes_From_Source (Ent) then
+                  if Buffer_Ends_With ("type ") then
+                     Buffer_Remove ("type ");
+                  end if;
+
+                  if Is_Itype (Ent) then
+                     declare
+                        Assoc : constant Node_Id :=
+                                  Associated_Node_For_Itype (Ent);
+
+                     begin
+                        if Nkind (Assoc) in N_Subprogram_Specification then
+
+                           --  Anonymous access to subprogram in a signature.
+                           --  Indicate the enclosing subprogram.
+
+                           Ent :=
+                             Defining_Unit_Name
+                               (Associated_Node_For_Itype (Ent));
+                           Set_Msg_Str
+                             ("access to subprogram declared in profile of ");
+
+                        else
+                           Set_Msg_Str ("access to subprogram with profile ");
+                        end if;
+                     end;
+                  end if;
+
+               elsif Ekind (Ent) = E_Function then
+                  Set_Msg_Str ("access to function ");
+               else
+                  Set_Msg_Str ("access to procedure ");
+               end if;
+
+               exit Find;
+
+            --  Type is access to object, named or anonymous
+
+            else
+               Set_Msg_Str ("access to ");
+               Ent := Directly_Designated_Type (Ent);
+            end if;
 
          --  Classwide type
 
@@ -2412,63 +2947,114 @@ package body Errout is
 
             Ent := Base_Type (Ent);
 
-         --  If this is a base type with a first named subtype, use the
-         --  first named subtype instead. This is not quite accurate in
-         --  all cases, but it makes too much noise to be accurate and
-         --  add 'Base in all cases. Note that we only do this is the
-         --  first named subtype is not itself an internal name. This
-         --  avoids the obvious loop (subtype->basetype->subtype) which
-         --  would otherwise occur!)
-
-         elsif Present (Freeze_Node (Ent))
-           and then Present (First_Subtype_Link (Freeze_Node (Ent)))
-           and then
-             not Is_Internal_Name
-                   (Chars (First_Subtype_Link (Freeze_Node (Ent))))
-         then
-            Ent := First_Subtype_Link (Freeze_Node (Ent));
-
-         --  Otherwise use root type
+         --  If this is a base type with a first named subtype, use the first
+         --  named subtype instead. This is not quite accurate in all cases,
+         --  but it makes too much noise to be accurate and add 'Base in all
+         --  cases. Note that we only do this is the first named subtype is not
+         --  itself an internal name. This avoids the obvious loop (subtype ->
+         --  basetype -> subtype) which would otherwise occur!)
 
          else
-            if not Derived then
-               Buffer_Remove ("type ");
+            declare
+               FST : constant Entity_Id := First_Subtype (Ent);
 
-               --  Test for "subtype of type derived from" which seems
-               --  excessive and is replaced by simply "type derived from"
+            begin
+               if not Is_Internal_Name (Chars (FST)) then
+                  Ent := FST;
+                  exit Find;
 
-               Buffer_Remove ("subtype of");
+                  --  Otherwise use root type
 
-               --  Avoid duplication "type derived from type derived from"
+               else
+                  if not Derived then
+                     Buffer_Remove ("type ");
 
-               if not Buffer_Ends_With ("type derived from ") then
-                  Set_Msg_Str ("type derived from ");
+                     --  Test for "subtype of type derived from" which seems
+                     --  excessive and is replaced by "type derived from".
+
+                     Buffer_Remove ("subtype of");
+
+                     --  Avoid duplicated "type derived from type derived from"
+
+                     if not Buffer_Ends_With ("type derived from ") then
+                        Set_Msg_Str ("type derived from ");
+                     end if;
+
+                     Derived := True;
+                  end if;
                end if;
-
-               Derived := True;
-            end if;
+            end;
 
             Ent := Etype (Ent);
          end if;
 
          --  If we are stuck in a loop, get out and settle for the internal
-         --  name after all. In this case we set to kill the message if it
-         --  is not the first error message (we really try hard not to show
-         --  the dirty laundry of the implementation to the poor user!)
+         --  name after all. In this case we set to kill the message if it is
+         --  not the first error message (we really try hard not to show the
+         --  dirty laundry of the implementation to the poor user!)
 
          if Ent = Old_Ent then
             Kill_Message := True;
-            exit;
+            exit Find;
          end if;
 
          --  Get out if we finally found a non-internal name to use
 
-         exit when not Is_Internal_Name (Chars (Ent));
-      end loop;
+         exit Find when not Is_Internal_Name (Chars (Ent));
+      end loop Find;
 
       if Mchar = '"' then
          Set_Msg_Char ('"');
       end if;
    end Unwind_Internal_Type;
+
+   -----------------
+   -- VMS_Convert --
+   -----------------
+
+   procedure VMS_Convert is
+      P : Natural;
+      L : Natural;
+      N : Natural;
+
+   begin
+      if not OpenVMS then
+         return;
+      end if;
+
+      P := Msg_Buffer'First;
+      loop
+         if P >= Msglen then
+            return;
+         end if;
+
+         if Msg_Buffer (P) = '-' then
+            for G in Gnames'Range loop
+               L := Gnames (G)'Length;
+
+               --  See if we have "-ggg switch", where ggg is Gnames entry
+
+               if P + L + 7 <= Msglen
+                 and then Msg_Buffer (P + 1 .. P + L) = Gnames (G).all
+                 and then Msg_Buffer (P + L + 1 .. P + L + 7) = " switch"
+               then
+                  --  Replace by "/vvv qualifier", where vvv is Vnames entry
+
+                  N := Vnames (G)'Length;
+                  Msg_Buffer (P + N + 11 .. Msglen + N - L + 3) :=
+                    Msg_Buffer (P + L + 8 .. Msglen);
+                  Msg_Buffer (P) := '/';
+                  Msg_Buffer (P + 1 .. P + N) := Vnames (G).all;
+                  Msg_Buffer (P + N + 1 .. P + N + 10) := " qualifier";
+                  P := P + N + 10;
+                  Msglen := Msglen + N - L + 3;
+                  exit;
+               end if;
+            end loop;
+         end if;
+
+         P := P + 1;
+      end loop;
+   end VMS_Convert;
 
 end Errout;

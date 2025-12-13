@@ -1,12 +1,13 @@
 /* Definitions of target machine for GNU compiler, for MCore using COFF/PE.
-   Copyright (C) 1994, 1999, 2000, 2002, 2003 Free Software Foundation, Inc.
+   Copyright (C) 1994, 1999, 2000, 2002, 2003, 2004, 2007
+   Free Software Foundation, Inc.
    Contributed by Michael Tiemann (tiemann@cygnus.com).
 
 This file is part of GCC.
 
 GCC is free software; you can redistribute it and/or modify
 it under the terms of the GNU General Public License as published by
-the Free Software Foundation; either version 2, or (at your option)
+the Free Software Foundation; either version 3, or (at your option)
 any later version.
 
 GCC is distributed in the hope that it will be useful,
@@ -15,9 +16,8 @@ MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
 GNU General Public License for more details.
 
 You should have received a copy of the GNU General Public License
-along with GCC; see the file COPYING.  If not, write to
-the Free Software Foundation, 59 Temple Place - Suite 330,
-Boston, MA 02111-1307, USA.  */
+along with GCC; see the file COPYING3.  If not see
+<http://www.gnu.org/licenses/>.  */
 
 /* Run-time Target Specification.  */
 #define TARGET_VERSION fputs (" (MCORE/pe)", stderr)
@@ -40,37 +40,15 @@ Boston, MA 02111-1307, USA.  */
 /* Computed in toplev.c.  */
 #undef  PREFERRED_DEBUGGING_TYPE
 
-/* Lay out additional 'sections' where we place things like code
-   and readonly data. This gets them out of default places.  */
-
-#define SUBTARGET_SWITCH_SECTIONS 		\
-  case in_drectve: drectve_section (); break;
-
-#define DRECTVE_SECTION_ASM_OP	"\t.section .drectve"
 #define READONLY_DATA_SECTION_ASM_OP	"\t.section .rdata"
-
-#define SUBTARGET_EXTRA_SECTIONS in_drectve
-
-#define SUBTARGET_EXTRA_SECTION_FUNCTIONS \
-  DRECTVE_SECTION_FUNCTION
-
-#define DRECTVE_SECTION_FUNCTION 				\
-void								\
-drectve_section ()						\
-{								\
-  if (in_section != in_drectve)					\
-    {								\
-      fprintf (asm_out_file, "%s\n", DRECTVE_SECTION_ASM_OP);	\
-      in_section = in_drectve;					\
-    }								\
-}
 
 #define MCORE_EXPORT_NAME(STREAM, NAME)			\
   do							\
     {							\
-      drectve_section ();				\
+      fprintf (STREAM, "\t.section .drectve\n");	\
       fprintf (STREAM, "\t.ascii \" -export:%s\"\n",	\
 	       (* targetm.strip_name_encoding) (NAME));	\
+      in_section = NULL;				\
     }							\
   while (0);
 
@@ -81,9 +59,9 @@ drectve_section ()						\
     {								\
       if (mcore_dllexport_name_p (NAME))			\
         {							\
-          enum in_section save_section = in_section;		\
+	  section *save_section = in_section;			\
 	  MCORE_EXPORT_NAME (STREAM, NAME);			\
-          switch_to_section (save_section, (DECL));		\
+	  switch_to_section (save_section);			\
         }							\
       ASM_OUTPUT_LABEL ((STREAM), (NAME));			\
     }								\
@@ -96,7 +74,7 @@ drectve_section ()						\
       if (mcore_dllexport_name_p (NAME))			\
 	{							\
           MCORE_EXPORT_NAME (STREAM, NAME);			\
-	  function_section (DECL);				\
+	  switch_to_section (function_section (DECL));		\
 	}							\
       ASM_OUTPUT_LABEL ((STREAM), (NAME));			\
     }								\
@@ -104,23 +82,7 @@ drectve_section ()						\
 
 #define TARGET_ASM_FILE_START_FILE_DIRECTIVE true
 
-#undef  ASM_OUTPUT_SOURCE_LINE
-#define ASM_OUTPUT_SOURCE_LINE(FILE, LINE, COUNTER)			  \
-  {									  \
-    if (write_symbols == DBX_DEBUG)					  \
-      {									  \
-        char buffer[256];						  \
-									  \
-        ASM_GENERATE_INTERNAL_LABEL (buffer, "LM", COUNTER);		  \
-        fprintf (FILE, ".stabn 68,0,%d,", LINE);			  \
-        assemble_name (FILE, buffer);					  \
-        putc ('-', FILE);						  \
-        assemble_name (FILE,						  \
-		   XSTR (XEXP (DECL_RTL (current_function_decl), 0), 0)); \
-        putc ('\n', FILE);						  \
-        (*targetm.asm_out.internal_label) (FILE, "LM", COUNTER);	  \
-      }									  \
-  }
+#define DBX_LINES_FUNCTION_RELATIVE 1
 
 #define STARTFILE_SPEC "crt0.o%s"
 #define ENDFILE_SPEC  "%{!mno-lsim:-lsim}"

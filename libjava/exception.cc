@@ -1,6 +1,6 @@
 // Functions for Exception Support for Java.
 
-/* Copyright (C) 1998, 1999, 2001, 2002  Free Software Foundation
+/* Copyright (C) 1998, 1999, 2001, 2002, 2006, 2010  Free Software Foundation
 
    This file is part of libgcj.
 
@@ -15,8 +15,6 @@ details.  */
 
 #include <java/lang/Class.h>
 #include <java/lang/NullPointerException.h>
-#include <gnu/gcj/runtime/StackTrace.h> 
-#include <gnu/gcj/runtime/MethodRef.h> 
 #include <gnu/gcj/RawData.h> 
 #include <gcj/cni.h>
 #include <jvm.h>
@@ -60,6 +58,21 @@ struct java_exception_header
   _Unwind_Exception unwindHeader;
 };
 
+#ifdef __ARM_EABI_UNWINDER__
+// This is the exception class we report -- "GNUCJAVA".
+
+const _Unwind_Exception_Class __gcj_exception_class
+  = {'G', 'N', 'U', 'C', 'J', 'A', 'V', 'A'};
+
+static inline java_exception_header *
+get_exception_header_from_ue (_Unwind_Exception *exc)
+{
+  return reinterpret_cast<java_exception_header *>(exc + 1) - 1;
+}
+
+extern "C" void __cxa_begin_cleanup (_Unwind_Exception*);
+
+#else // !__ARM_EABI_UNWINDER__
 // This is the exception class we report -- "GNUCJAVA".
 const _Unwind_Exception_Class __gcj_exception_class
 = ((((((((_Unwind_Exception_Class) 'G' 
@@ -77,6 +90,7 @@ get_exception_header_from_ue (_Unwind_Exception *exc)
 {
   return reinterpret_cast<java_exception_header *>(exc + 1) - 1;
 }
+#endif // !__ARM_EABI_UNWINDER__
 
 /* Perform a throw, Java style. Throw will unwind through this call,
    so there better not be any handlers or exception thrown here. */
@@ -91,16 +105,16 @@ _Jv_Throw (jthrowable value)
     value = new java::lang::NullPointerException ();
   xh->value = value;
 
-  xh->unwindHeader.exception_class = __gcj_exception_class;
+  memcpy (&xh->unwindHeader.exception_class, &__gcj_exception_class,
+	  sizeof xh->unwindHeader.exception_class);
   xh->unwindHeader.exception_cleanup = NULL;
 
   /* We're happy with setjmp/longjmp exceptions or region-based
      exception handlers: entry points are provided here for both.  */
-  _Unwind_Reason_Code code;
 #ifdef SJLJ_EXCEPTIONS
-  code = _Unwind_SjLj_RaiseException (&xh->unwindHeader);
+  _Unwind_SjLj_RaiseException (&xh->unwindHeader);
 #else
-  code = _Unwind_RaiseException (&xh->unwindHeader);
+  _Unwind_RaiseException (&xh->unwindHeader);
 #endif
 
   /* If code == _URC_END_OF_STACK, then we reached top of stack without
@@ -130,7 +144,7 @@ static const unsigned char *
 parse_lsda_header (_Unwind_Context *context, const unsigned char *p,
 		   lsda_header_info *info)
 {
-  _Unwind_Word tmp;
+  _uleb128_t tmp;
   unsigned char lpstart_encoding;
 
   info->Start = (context ? _Unwind_GetRegionStart (context) : 0);
@@ -161,6 +175,21 @@ parse_lsda_header (_Unwind_Context *context, const unsigned char *p,
   return p;
 }
 
+#ifdef __ARM_EABI_UNWINDER__
+
+static void **
+get_ttype_entry(_Unwind_Context *, lsda_header_info* info, _uleb128_t i)
+{
+  _Unwind_Ptr ptr;
+
+  ptr = (_Unwind_Ptr) (info->TType - (i * 4));
+  ptr = _Unwind_decode_target2(ptr);
+  
+  return reinterpret_cast<void **>(ptr);
+}
+
+#else
+
 static void **
 get_ttype_entry (_Unwind_Context *context, lsda_header_info *info, long i)
 {
@@ -172,6 +201,7 @@ get_ttype_entry (_Unwind_Context *context, lsda_header_info *info, long i)
   return reinterpret_cast<void **>(ptr);
 }
 
+#endif
 
 // Using a different personality function name causes link failures
 // when trying to mix code using different exception handling models.
@@ -182,12 +212,33 @@ get_ttype_entry (_Unwind_Context *context, lsda_header_info *info, long i)
 #define PERSONALITY_FUNCTION	__gcj_personality_v0
 #endif
 
+#ifdef __ARM_EABI_UNWINDER__
+
+#define CONTINUE_UNWINDING \
+  do								\
+    {								\
+      if (__gnu_unwind_frame(ue_header, context) != _URC_OK)	\
+	return _URC_FAILURE;					\
+      return _URC_CONTINUE_UNWIND;				\
+    }								\
+  while (0)
+
+extern "C" _Unwind_Reason_Code
+PERSONALITY_FUNCTION (_Unwind_State state,
+		      struct _Unwind_Exception* ue_header,
+		      struct _Unwind_Context* context)
+#else
+
+#define CONTINUE_UNWINDING return _URC_CONTINUE_UNWIND
+
 extern "C" _Unwind_Reason_Code
 PERSONALITY_FUNCTION (int version,
 		      _Unwind_Action actions,
 		      _Unwind_Exception_Class exception_class,
 		      struct _Unwind_Exception *ue_header,
 		      struct _Unwind_Context *context)
+
+#endif
 {
   java_exception_header *xh = get_exception_header_from_ue (ue_header);
 
@@ -199,25 +250,66 @@ PERSONALITY_FUNCTION (int version,
   int handler_switch_value;
   bool saw_cleanup;
   bool saw_handler;
+  bool foreign_exception;
+  int ip_before_insn = 0;
 
+#ifdef __ARM_EABI_UNWINDER__
+  _Unwind_Action actions;
 
+  switch (state & _US_ACTION_MASK)
+    {
+    case _US_VIRTUAL_UNWIND_FRAME:
+      actions = _UA_SEARCH_PHASE;
+      break;
+
+    case _US_UNWIND_FRAME_STARTING:
+      actions = _UA_CLEANUP_PHASE;
+      if (!(state & _US_FORCE_UNWIND)
+	  && ue_header->barrier_cache.sp == _Unwind_GetGR(context, 13))
+	actions |= _UA_HANDLER_FRAME;
+      break;
+
+    case _US_UNWIND_FRAME_RESUME:
+      CONTINUE_UNWINDING;
+      break;
+
+    default:
+      std::abort();
+    }
+  actions |= state & _US_FORCE_UNWIND;
+
+  // We don't know which runtime we're working with, so can't check this.
+  // However the ABI routines hide this from us, and we don't actually need
+  // to know.
+  foreign_exception = false;
+
+  // The dwarf unwinder assumes the context structure holds things like the
+  // function and LSDA pointers.  The ARM implementation caches these in
+  // the exception header (UCB).  To avoid rewriting everything we make the
+  // virtual IP register point at the UCB.
+  ip = (_Unwind_Ptr) ue_header;
+  _Unwind_SetGR(context, 12, ip);
+
+#else
   // Interface version check.
   if (version != 1)
     return _URC_FATAL_PHASE1_ERROR;
+  foreign_exception = exception_class != __gcj_exception_class;
+#endif
 
   // Shortcut for phase 2 found handler for domestic exception.
   if (actions == (_UA_CLEANUP_PHASE | _UA_HANDLER_FRAME)
-      && exception_class == __gcj_exception_class)
+      && !foreign_exception)
     {
       handler_switch_value = xh->handlerSwitchValue;
       landing_pad = xh->landingPad;
       goto install_context;
     }
 
-  // FIXME: In Phase 1, record _Unwind_GetIP in xh->obj as a part of
+  // FIXME: In Phase 1, record _Unwind_GetIPInfo in xh->obj as a part of
   // the stack trace for this exception.  This will only collect Java
   // frames, but perhaps that is acceptable.
-  // FIXME2: _Unwind_GetIP is nonsensical for SJLJ, being a call-site
+  // FIXME2: _Unwind_GetIPInfo is nonsensical for SJLJ, being a call-site
   // index instead of a PC value.  We could perhaps arrange for
   // _Unwind_GetRegionStart to return context->fc->jbuf[1], which
   // is the address of the handler label for __builtin_longjmp, but
@@ -228,11 +320,17 @@ PERSONALITY_FUNCTION (int version,
 
   // If no LSDA, then there are no handlers or cleanups.
   if (! language_specific_data)
-    return _URC_CONTINUE_UNWIND;
+    CONTINUE_UNWINDING;
 
   // Parse the LSDA header.
   p = parse_lsda_header (context, language_specific_data, &info);
-  ip = _Unwind_GetIP (context) - 1;
+#ifdef HAVE_GETIPINFO
+  ip = _Unwind_GetIPInfo (context, &ip_before_insn);
+#else
+  ip = _Unwind_GetIP (context);
+#endif
+  if (! ip_before_insn)
+    --ip;
   landing_pad = 0;
   action_record = 0;
   handler_switch_value = 0;
@@ -246,7 +344,7 @@ PERSONALITY_FUNCTION (int version,
     return _URC_CONTINUE_UNWIND;
   else
     {
-      _Unwind_Word cs_lp, cs_action;
+      _uleb128_t cs_lp, cs_action;
       do
 	{
 	  p = read_uleb128 (p, &cs_lp);
@@ -266,7 +364,7 @@ PERSONALITY_FUNCTION (int version,
   while (p < info.action_table)
     {
       _Unwind_Ptr cs_start, cs_len, cs_lp;
-      _Unwind_Word cs_action;
+      _uleb128_t cs_action;
 
       // Note that all call-site encodings are "absolute" displacements.
       p = read_encoded_value (0, info.call_site_encoding, p, &cs_start);
@@ -291,7 +389,7 @@ PERSONALITY_FUNCTION (int version,
   // If ip is not present in the table, C++ would call terminate.
   // ??? It is perhaps better to tweek the LSDA so that no-action
   // is mapped to no-entry for Java.
-  return _URC_CONTINUE_UNWIND;
+  CONTINUE_UNWINDING;
 
  found_something:
   saw_cleanup = false;
@@ -312,7 +410,7 @@ PERSONALITY_FUNCTION (int version,
   else
     {
       // Otherwise we have a catch handler.
-      _Unwind_Sword ar_filter, ar_disp;
+      _sleb128_t ar_filter, ar_disp;
 
       while (1)
 	{
@@ -329,7 +427,7 @@ PERSONALITY_FUNCTION (int version,
 	  // During forced unwinding, we only run cleanups.  With a
 	  // foreign exception class, we have no class info to match.
 	  else if ((actions & _UA_FORCE_UNWIND)
-	      || exception_class != __gcj_exception_class)
+		   || foreign_exception)
 	    ;
 
 	  else if (ar_filter > 0)
@@ -369,15 +467,15 @@ PERSONALITY_FUNCTION (int version,
     }
 
   if (! saw_handler && ! saw_cleanup)
-    return _URC_CONTINUE_UNWIND;
+	CONTINUE_UNWINDING;
 
   if (actions & _UA_SEARCH_PHASE)
     {
       if (! saw_handler)
-	return _URC_CONTINUE_UNWIND;
+	CONTINUE_UNWINDING;
 
       // For domestic exceptions, we cache data from phase 1 for phase 2.
-      if (exception_class == __gcj_exception_class)
+      if (! foreign_exception)
         {
           xh->handlerSwitchValue = handler_switch_value;
           xh->landingPad = landing_pad;
@@ -391,5 +489,9 @@ PERSONALITY_FUNCTION (int version,
   _Unwind_SetGR (context, __builtin_eh_return_data_regno (1),
 		 handler_switch_value);
   _Unwind_SetIP (context, landing_pad);
+#ifdef __ARM_EABI_UNWINDER__
+  if (saw_cleanup)
+    __cxa_begin_cleanup(ue_header);
+#endif
   return _URC_INSTALL_CONTEXT;
 }

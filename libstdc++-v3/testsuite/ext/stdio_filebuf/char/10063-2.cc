@@ -1,9 +1,9 @@
-// Copyright (C) 2000, 2001, 2002, 2003 Free Software Foundation
+// Copyright (C) 2000, 2001, 2002, 2003, 2009, 2010 Free Software Foundation
 //
 // This file is part of the GNU ISO C++ Library.  This library is free
 // software; you can redistribute it and/or modify it under the
 // terms of the GNU General Public License as published by the
-// Free Software Foundation; either version 2, or (at your option)
+// Free Software Foundation; either version 3, or (at your option)
 // any later version.
 
 // This library is distributed in the hope that it will be useful,
@@ -12,13 +12,14 @@
 // GNU General Public License for more details.
 
 // You should have received a copy of the GNU General Public License along
-// with this library; see the file COPYING.  If not, write to the Free
-// Software Foundation, 59 Temple Place - Suite 330, Boston, MA 02111-1307,
-// USA.
+// with this library; see the file COPYING3.  If not see
+// <http://www.gnu.org/licenses/>.
 
 // The ARM simulator does not provide support for "fstat", which
 // causes "sbumpc" to return an incorrect value.
-// { dg-do run { xfail arm-none-elf } }
+// { dg-do run { xfail arm*-*-elf arm*-*-eabi } }
+
+// { dg-require-fileio "" }
 
 #include <cstdio>
 #include <fstream>
@@ -36,7 +37,7 @@ void test2()
   fbuf.close();
 
   FILE* file = fopen("tmp_10063-2", "r");
-  setbuf(file, NULL);
+  setbuf(file, 0);
   int c = getc(file);
   VERIFY(c == '0');
   c = getc(file);

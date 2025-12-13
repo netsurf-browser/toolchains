@@ -6,18 +6,17 @@
 --                                                                          --
 --                                 S p e c                                  --
 --                                                                          --
---          Copyright (C) 1992-2001 Free Software Foundation, Inc.          --
+--          Copyright (C) 1992-2010, Free Software Foundation, Inc.         --
 --                                                                          --
 -- GNAT is free software;  you can  redistribute it  and/or modify it under --
 -- terms of the  GNU General Public License as published  by the Free Soft- --
--- ware  Foundation;  either version 2,  or (at your option) any later ver- --
+-- ware  Foundation;  either version 3,  or (at your option) any later ver- --
 -- sion.  GNAT is distributed in the hope that it will be useful, but WITH- --
 -- OUT ANY WARRANTY;  without even the  implied warranty of MERCHANTABILITY --
 -- or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU General Public License --
 -- for  more details.  You should have  received  a copy of the GNU General --
--- Public License  distributed with GNAT;  see file COPYING.  If not, write --
--- to  the Free Software Foundation,  59 Temple Place - Suite 330,  Boston, --
--- MA 02111-1307, USA.                                                      --
+-- Public License  distributed with GNAT; see file COPYING3.  If not, go to --
+-- http://www.gnu.org/licenses for a complete copy of the license.          --
 --                                                                          --
 -- GNAT was originally developed  by the GNAT team at  New York University. --
 -- Extensive contributions were provided by Ada Core Technologies Inc.      --
@@ -119,9 +118,9 @@ package Exp_Pakd is
    --  a packed array. There are two reasonable rules for deciding this:
 
    --    Store the first bit at right end (low order) word. This means
-   --    that the scaled subscript can be used directly as a right shift
+   --    that the scaled subscript can be used directly as a left shift
    --    count (if we put bit 0 at the left end, then we need an extra
-   --    subtract to compute the shift count.
+   --    subtract to compute the shift count).
 
    --    Layout the bits so that if the packed boolean array is overlaid on
    --    a record, using unchecked conversion, then bit 0 of the array is
@@ -156,7 +155,7 @@ package Exp_Pakd is
    --  that a worthwhile price to pay for the consistency.
 
    --  One more important point arises in the case where we have a constrained
-   --  subtype of an unconstrained array. Take the case of 20-bits. For the
+   --  subtype of an unconstrained array. Take the case of 20 bits. For the
    --  unconstrained representation, we would use an array of bytes:
 
    --     Little-endian case
@@ -201,10 +200,8 @@ package Exp_Pakd is
 
    --       1-2-...-7-8  9-10-...15-16  17-18-19-20-x-x-x-x  x-x-x-x-x-x-x-x
 
-   --   and now, we do indeed have the same representation. The special flag
-   --   Is_Left_Justified_Modular is set in the modular type used as the
-   --   packed array type in the big-endian case to ensure that this required
-   --   left justification occurs.
+   --   and now, we do indeed have the same representation for the memory
+   --   version in the constrained and unconstrained cases.
 
    -----------------
    -- Subprograms --
@@ -221,7 +218,7 @@ package Exp_Pakd is
    --  Note: although this routine is included in the expander package for
    --  packed types, it is actually called unconditionally from Freeze,
    --  whether or not expansion (and code generation) is enabled. We do this
-   --  since we want gigi to be able to properly compute type charactersitics
+   --  since we want gigi to be able to properly compute type characteristics
    --  (for the Data Decomposition Annex of ASIS, and possible other future
    --  uses) even if code generation is not active. Strictly this means that
    --  this procedure is not part of the expander, but it seems appropriate
@@ -237,8 +234,8 @@ package Exp_Pakd is
    procedure Expand_Packed_Element_Reference (N : Node_Id);
    --  N is an N_Indexed_Component node whose prefix is a packed array. In
    --  the bit packed case, this routine can only be used for the expression
-   --  evaluation case not the assignment case, since the result is not a
-   --  variable. See Expand_Bit_Packed_Element_Set for how he assignment case
+   --  evaluation case, not the assignment case, since the result is not a
+   --  variable. See Expand_Bit_Packed_Element_Set for how the assignment case
    --  is handled in the bit packed case. For the enumeration case, the result
    --  of this call is always a variable, so the call can be used for both the
    --  expression evaluation and assignment cases.
@@ -266,7 +263,7 @@ package Exp_Pakd is
    function Involves_Packed_Array_Reference (N : Node_Id) return Boolean;
    --  N is the node for a name. This function returns true if the name
    --  involves a packed array reference. A node involves a packed array
-   --  reference if it is itself an indexed compoment referring to a bit-
+   --  reference if it is itself an indexed component referring to a bit-
    --  packed array, or it is a selected component whose prefix involves
    --  a packed array reference.
 
@@ -274,5 +271,10 @@ package Exp_Pakd is
    --  The node N is an attribute reference for the 'Address reference, where
    --  the prefix involves a packed array reference. This routine expands the
    --  necessary code for performing the address reference in this case.
+
+   procedure Expand_Packed_Bit_Reference (N : Node_Id);
+   --  The node N is an attribute reference for the 'Bit reference, where the
+   --  prefix involves a packed array reference. This routine expands the
+   --  necessary code for performing the bit reference in this case.
 
 end Exp_Pakd;

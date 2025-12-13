@@ -1,12 +1,12 @@
 // Explicit instantiation file.
 
-// Copyright (C) 1997, 1998, 1999, 2000, 2001, 2002
+// Copyright (C) 1997, 1998, 1999, 2000, 2001, 2002, 2005, 2006, 2009
 // Free Software Foundation, Inc.
 //
 // This file is part of the GNU ISO C++ Library.  This library is free
 // software; you can redistribute it and/or modify it under the
 // terms of the GNU General Public License as published by the
-// Free Software Foundation; either version 2, or (at your option)
+// Free Software Foundation; either version 3, or (at your option)
 // any later version.
 
 // This library is distributed in the hope that it will be useful,
@@ -14,19 +14,14 @@
 // MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
 // GNU General Public License for more details.
 
-// You should have received a copy of the GNU General Public License along
-// with this library; see the file COPYING.  If not, write to the Free
-// Software Foundation, 59 Temple Place - Suite 330, Boston, MA 02111-1307,
-// USA.
+// Under Section 7 of GPL version 3, you are granted additional
+// permissions described in the GCC Runtime Library Exception, version
+// 3.1, as published by the Free Software Foundation.
 
-// As a special exception, you may use this file as part of a free software
-// library without restriction.  Specifically, if other files instantiate
-// templates or use macros or inline functions from this file, or you compile
-// this file and link it with other files to produce an executable, this
-// file does not by itself cause the resulting executable to be covered by
-// the GNU General Public License.  This exception does not however
-// invalidate any other reasons why the executable file might be covered by
-// the GNU General Public License.
+// You should have received a copy of the GNU General Public License and
+// a copy of the GCC Runtime Library Exception along with this program;
+// see the files COPYING3 and COPYING.RUNTIME respectively.  If not, see
+// <http://www.gnu.org/licenses/>.
 
 //
 // ISO C++ 14882:
@@ -35,9 +30,10 @@
 #include <istream>
 #include <iomanip>
 
-namespace std
+namespace std _GLIBCXX_VISIBILITY(default)
 {
-  // istream
+_GLIBCXX_BEGIN_NAMESPACE_VERSION
+
   template class basic_istream<char>;
   template istream& ws(istream&);
   template istream& operator>>(istream&, char&);
@@ -54,6 +50,20 @@ namespace std
   template istream& operator>>(istream&, _Setprecision);
   template istream& operator>>(istream&, _Setw);
 
+  template istream& istream::_M_extract(unsigned short&);
+  template istream& istream::_M_extract(unsigned int&);  
+  template istream& istream::_M_extract(long&);
+  template istream& istream::_M_extract(unsigned long&);
+  template istream& istream::_M_extract(bool&);
+#ifdef _GLIBCXX_USE_LONG_LONG
+  template istream& istream::_M_extract(long long&);
+  template istream& istream::_M_extract(unsigned long long&);
+#endif
+  template istream& istream::_M_extract(float&);
+  template istream& istream::_M_extract(double&);
+  template istream& istream::_M_extract(long double&);
+  template istream& istream::_M_extract(void*&);
+
 #ifdef _GLIBCXX_USE_WCHAR_T
   template class basic_istream<wchar_t>;
   template wistream& ws(wistream&);
@@ -66,5 +76,40 @@ namespace std
   template wistream& operator>>(wistream&, _Setbase);
   template wistream& operator>>(wistream&, _Setprecision);
   template wistream& operator>>(wistream&, _Setw);
+
+  template wistream& wistream::_M_extract(unsigned short&);
+  template wistream& wistream::_M_extract(unsigned int&);  
+  template wistream& wistream::_M_extract(long&);
+  template wistream& wistream::_M_extract(unsigned long&);
+  template wistream& wistream::_M_extract(bool&);
+#ifdef _GLIBCXX_USE_LONG_LONG
+  template wistream& wistream::_M_extract(long long&);
+  template wistream& wistream::_M_extract(unsigned long long&);
 #endif
-} // namespace std
+  template wistream& wistream::_M_extract(float&);
+  template wistream& wistream::_M_extract(double&);
+  template wistream& wistream::_M_extract(long double&);
+  template wistream& wistream::_M_extract(void*&);
+#endif
+
+_GLIBCXX_END_NAMESPACE_VERSION
+} // namespace
+
+// XXX GLIBCXX_ABI Deprecated
+#ifdef _GLIBCXX_LONG_DOUBLE_COMPAT
+
+#define _GLIBCXX_LDBL_COMPAT(dbl, ldbl) \
+  extern "C" void ldbl (void) __attribute__ ((alias (#dbl), weak))
+_GLIBCXX_LDBL_COMPAT (_ZNSirsERd, _ZNSirsERe);
+#ifdef _GLIBCXX_USE_WCHAR_T
+_GLIBCXX_LDBL_COMPAT (_ZNSt13basic_istreamIwSt11char_traitsIwEErsERd,
+		      _ZNSt13basic_istreamIwSt11char_traitsIwEErsERe);
+#endif
+_GLIBCXX_LDBL_COMPAT (_ZNSi10_M_extractIdEERSiRT_,
+		      _ZNSi10_M_extractIeEERSiRT_);
+#ifdef _GLIBCXX_USE_WCHAR_T
+_GLIBCXX_LDBL_COMPAT (_ZNSt13basic_istreamIwSt11char_traitsIwEE10_M_extractIdEERS2_RT_,
+		      _ZNSt13basic_istreamIwSt11char_traitsIwEE10_M_extractIeEERS2_RT_);
+#endif
+
+#endif // _GLIBCXX_LONG_DOUBLE_COMPAT

@@ -3,9 +3,9 @@
 /* Author: Ziemowit Laski <zlaski@apple.com> */
 
 /* { dg-do compile } */
-/* { dg-options "-fnext-runtime -fobjc-exceptions" } */
+/* { dg-options "-fobjc-exceptions" } */
 
-#include <objc/Object.h>
+#include "../objc-obj-c++-shared/Object1.h"
 
 const char *foo(void)
 {

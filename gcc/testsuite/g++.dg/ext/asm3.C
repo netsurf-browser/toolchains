@@ -8,6 +8,8 @@
 int two(int in)
 {
   register int out;
-  __asm__ ("" : "r" (out) : "r" (in)); // { dg-error "output operand" "" }
+  __asm__ ("" : "r" (out) : "r" (in));
   return out;
 }
+
+// { dg-message "error:" "" { target *-*-* } 11 }

@@ -1,12 +1,12 @@
 /* Declarations for interface to insn recognizer and insn-output.c.
-   Copyright (C) 1987, 1996, 1997, 1998, 1999, 2000, 2001, 2003, 2004
-   Free Software Foundation, Inc.
+   Copyright (C) 1987, 1996, 1997, 1998, 1999, 2000, 2001, 2003, 2004,
+   2005, 2006, 2007, 2008, 2009, 2010 Free Software Foundation, Inc.
 
 This file is part of GCC.
 
 GCC is free software; you can redistribute it and/or modify it under
 the terms of the GNU General Public License as published by the Free
-Software Foundation; either version 2, or (at your option) any later
+Software Foundation; either version 3, or (at your option) any later
 version.
 
 GCC is distributed in the hope that it will be useful, but WITHOUT ANY
@@ -15,14 +15,14 @@ FITNESS FOR A PARTICULAR PURPOSE.  See the GNU General Public License
 for more details.
 
 You should have received a copy of the GNU General Public License
-along with GCC; see the file COPYING.  If not, write to the Free
-Software Foundation, 59 Temple Place - Suite 330, Boston, MA
-02111-1307, USA.  */
+along with GCC; see the file COPYING3.  If not see
+<http://www.gnu.org/licenses/>.  */
+
+#ifndef GCC_RECOG_H
+#define GCC_RECOG_H
 
 /* Random number that should be large enough for all purposes.  */
 #define MAX_RECOG_ALTERNATIVES 30
-#define recog_memoized(I) (INSN_CODE (I) >= 0 \
-			   ? INSN_CODE (I) : recog_memoized_1 (I))
 
 /* Types of operands.  */
 enum op_type {
@@ -38,7 +38,7 @@ struct operand_alternative
   const char *constraint;
 
   /* The register class valid for this alternative (possibly NO_REGS).  */
-  enum reg_class class;
+  enum reg_class cl;
 
   /* "Badness" of this alternative, computed from number of '?' and '!'
      characters in the constraint string.  */
@@ -53,7 +53,8 @@ struct operand_alternative
 
   /* Nonzero if '&' was found in the constraint string.  */
   unsigned int earlyclobber:1;
-  /* Nonzero if 'm' was found in the constraint string.  */
+  /* Nonzero if TARGET_MEM_CONSTRAINT was found in the constraint
+     string.  */
   unsigned int memory_ok:1;
   /* Nonzero if 'o' was found in the constraint string.  */
   unsigned int offmem_ok:1;
@@ -73,52 +74,52 @@ struct operand_alternative
 
 extern void init_recog (void);
 extern void init_recog_no_volatile (void);
-extern int recog_memoized_1 (rtx);
 extern int check_asm_operands (rtx);
-extern int asm_operand_ok (rtx, const char *);
-extern int validate_change (rtx, rtx *, rtx, int);
+extern int asm_operand_ok (rtx, const char *, const char **);
+extern bool validate_change (rtx, rtx *, rtx, bool);
+extern bool validate_unshare_change (rtx, rtx *, rtx, bool);
+extern bool canonicalize_change_group (rtx insn, rtx x);
 extern int insn_invalid_p (rtx);
+extern int verify_changes (int);
+extern void confirm_change_group (void);
 extern int apply_change_group (void);
 extern int num_validated_changes (void);
 extern void cancel_changes (int);
 extern int constrain_operands (int);
 extern int constrain_operands_cached (int);
-extern int memory_address_p (enum machine_mode, rtx);
-extern int strict_memory_address_p (enum machine_mode, rtx);
+extern int memory_address_addr_space_p (enum machine_mode, rtx, addr_space_t);
+#define memory_address_p(mode,addr) \
+	memory_address_addr_space_p ((mode), (addr), ADDR_SPACE_GENERIC)
+extern int strict_memory_address_addr_space_p (enum machine_mode, rtx,
+					       addr_space_t);
+#define strict_memory_address_p(mode,addr) \
+	strict_memory_address_addr_space_p ((mode), (addr), ADDR_SPACE_GENERIC)
 extern int validate_replace_rtx_subexp (rtx, rtx, rtx, rtx *);
 extern int validate_replace_rtx (rtx, rtx, rtx);
+extern int validate_replace_rtx_part (rtx, rtx, rtx *, rtx);
+extern int validate_replace_rtx_part_nosimplify (rtx, rtx, rtx *, rtx);
 extern void validate_replace_rtx_group (rtx, rtx, rtx);
-extern int validate_replace_src (rtx, rtx, rtx);
 extern void validate_replace_src_group (rtx, rtx, rtx);
+extern bool validate_simplify_insn (rtx insn);
 extern int num_changes_pending (void);
 #ifdef HAVE_cc0
 extern int next_insn_tests_no_inequality (rtx);
 #endif
-extern int reg_fits_class_p (rtx, enum reg_class, int, enum machine_mode);
-extern rtx *find_single_use (rtx, rtx, rtx *);
-
-extern int general_operand (rtx, enum machine_mode);
-extern int address_operand (rtx, enum machine_mode);
-extern int register_operand (rtx, enum machine_mode);
-extern int pmode_register_operand (rtx, enum machine_mode);
-extern int scratch_operand (rtx, enum machine_mode);
-extern int immediate_operand (rtx, enum machine_mode);
-extern int const_int_operand (rtx, enum machine_mode);
-extern int const_double_operand (rtx, enum machine_mode);
-extern int nonimmediate_operand (rtx, enum machine_mode);
-extern int nonmemory_operand (rtx, enum machine_mode);
-extern int push_operand (rtx, enum machine_mode);
-extern int pop_operand (rtx, enum machine_mode);
-extern int memory_operand (rtx, enum machine_mode);
-extern int indirect_operand (rtx, enum machine_mode);
-extern int comparison_operator (rtx, enum machine_mode);
+extern bool reg_fits_class_p (const_rtx, reg_class_t, int, enum machine_mode);
 
 extern int offsettable_memref_p (rtx);
 extern int offsettable_nonstrict_memref_p (rtx);
-extern int offsettable_address_p (int, enum machine_mode, rtx);
-extern int mode_dependent_address_p (rtx);
+extern int offsettable_address_addr_space_p (int, enum machine_mode, rtx,
+					     addr_space_t);
+#define offsettable_address_p(strict,mode,addr) \
+	offsettable_address_addr_space_p ((strict), (mode), (addr), \
+					  ADDR_SPACE_GENERIC)
+extern bool mode_dependent_address_p (rtx);
 
 extern int recog (rtx, rtx, int *);
+#ifndef GENERATOR_FILE
+static inline int recog_memoized (rtx insn);
+#endif
 extern void add_clobbers (rtx, int);
 extern int added_clobbers_hard_reg_p (int);
 extern void insn_extract (rtx);
@@ -133,11 +134,42 @@ extern int peep2_reg_dead_p (int, rtx);
 extern rtx peep2_find_free_register (int, int, const char *,
 				     enum machine_mode, HARD_REG_SET *);
 #endif
-extern void peephole2_optimize (FILE *);
 extern rtx peephole2_insns (rtx, rtx, int *);
 
 extern int store_data_bypass_p (rtx, rtx);
 extern int if_test_bypass_p (rtx, rtx);
+
+#ifndef GENERATOR_FILE
+/* Try recognizing the instruction INSN,
+   and return the code number that results.
+   Remember the code so that repeated calls do not
+   need to spend the time for actual rerecognition.
+
+   This function is the normal interface to instruction recognition.
+   The automatically-generated function `recog' is normally called
+   through this one.  */
+
+static inline int
+recog_memoized (rtx insn)
+{
+  if (INSN_CODE (insn) < 0)
+    INSN_CODE (insn) = recog (PATTERN (insn), insn, 0);
+  return INSN_CODE (insn);
+}
+#endif
+
+/* Skip chars until the next ',' or the end of the string.  This is
+   useful to skip alternatives in a constraint string.  */
+static inline const char *
+skip_alternative (const char *p)
+{
+  const char *r = p;
+  while (*r != '\0' && *r != ',')
+    r++;
+  if (*r == ',')
+    r++;
+  return r;
+}
 
 /* Nonzero means volatile operands are recognized.  */
 extern int volatile_ok;
@@ -164,6 +196,9 @@ struct recog_data
 
   /* Gives the constraint string for operand N.  */
   const char *constraints[MAX_RECOG_OPERANDS];
+
+  /* Nonzero if operand N is a match_operator or a match_parallel.  */
+  char is_operator[MAX_RECOG_OPERANDS];
 
   /* Gives the mode of operand N.  */
   enum machine_mode operand_mode[MAX_RECOG_OPERANDS];
@@ -198,6 +233,15 @@ struct recog_data
   /* The number of alternatives in the constraints for the insn.  */
   char n_alternatives;
 
+  /* True if insn is ASM_OPERANDS.  */
+  bool is_asm;
+
+  /* Specifies whether an insn alternative is enabled using the
+     `enabled' attribute in the insn pattern definition.  For back
+     ends not using the `enabled' attribute the array fields are
+     always set to `true' in expand_insn.  */
+  bool alternative_enabled_p [MAX_RECOG_ALTERNATIVES];
+
   /* In case we are caching, hold insn data was generated for.  */
   rtx insn;
 };
@@ -225,6 +269,8 @@ struct insn_operand_data
 
   const char strict_low;
 
+  const char is_operator;
+
   const char eliminable;
 };
 
@@ -235,7 +281,7 @@ struct insn_operand_data
 #define INSN_OUTPUT_FORMAT_MULTI	2	/* const char * const * */
 #define INSN_OUTPUT_FORMAT_FUNCTION	3	/* const char * (*)(...) */
 
-struct insn_data
+struct insn_data_d
 {
   const char *const name;
 #if HAVE_DESIGNATED_INITIALIZERS
@@ -260,4 +306,7 @@ struct insn_data
   const char output_format;
 };
 
-extern const struct insn_data insn_data[];
+extern const struct insn_data_d insn_data[];
+extern int peep2_current_count;
+
+#endif /* GCC_RECOG_H */

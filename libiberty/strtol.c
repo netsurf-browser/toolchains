@@ -30,8 +30,10 @@
 
 /*
 
-@deftypefn Supplemental {long int} strtol (const char *@var{string}, char **@var{endptr}, int @var{base})
-@deftypefnx Supplemental {unsigned long int} strtoul (const char *@var{string}, char **@var{endptr}, int @var{base})
+@deftypefn Supplemental {long int} strtol (const char *@var{string}, @
+  char **@var{endptr}, int @var{base})
+@deftypefnx Supplemental {unsigned long int} strtoul (const char *@var{string}, @
+  char **@var{endptr}, int @var{base})
 
 The @code{strtol} function converts the string in @var{string} to a
 long integer value according to the given @var{base}, which must be
@@ -85,10 +87,7 @@ extern int errno;
  * alphabets and digits are each contiguous.
  */
 long
-strtol(nptr, endptr, base)
-	const char *nptr;
-	char **endptr;
-	register int base;
+strtol(const char *nptr, char **endptr, register int base)
 {
 	register const char *s = nptr;
 	register unsigned long acc;
@@ -147,7 +146,7 @@ strtol(nptr, endptr, base)
 			break;
 		if (c >= base)
 			break;
-		if (any < 0 || acc > cutoff || acc == cutoff && c > cutlim)
+		if (any < 0 || acc > cutoff || (acc == cutoff && c > cutlim))
 			any = -1;
 		else {
 			any = 1;

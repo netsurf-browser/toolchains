@@ -1,7 +1,7 @@
-// { dg-do assemble  }
+// { dg-do assemble { target fpic } }
 // { dg-options "-O0 -fpic" }
+// { dg-skip-if "requires unsupported run-time relocation" { spu-*-* } { "*" } { "" } }
 // Origin: Jakub Jelinek <jakub@redhat.com>
-// Skip if target: cris-*-elf* cris-*-aout* mmix-*-*
 
 struct bar {
   bar() {}

@@ -1,6 +1,6 @@
 // natConstructor.cc - Native code for Constructor class.
 
-/* Copyright (C) 1999, 2000, 2001, 2002, 2003  Free Software Foundation
+/* Copyright (C) 1999, 2000, 2001, 2002, 2003, 2006  Free Software Foundation
 
    This file is part of libgcj.
 
@@ -12,6 +12,7 @@ details.  */
 
 #include <gcj/cni.h>
 #include <jvm.h>
+#include <java-stack.h>
 
 #include <java/lang/ArrayIndexOutOfBoundsException.h>
 #include <java/lang/IllegalAccessException.h>
@@ -22,11 +23,31 @@ details.  */
 #include <java/lang/InstantiationException.h>
 #include <gcj/method.h>
 
+typedef JArray< ::java::lang::annotation::Annotation * > * anno_a_t;
+typedef JArray< JArray< ::java::lang::annotation::Annotation * > *> * anno_aa_t;
+
 jint
-java::lang::reflect::Constructor::getModifiers ()
+java::lang::reflect::Constructor::getModifiersInternal ()
 {
-  // Ignore all unknown flags.
-  return _Jv_FromReflectedConstructor (this)->accflags & Modifier::ALL_FLAGS;
+  return _Jv_FromReflectedConstructor (this)->accflags;
+}
+
+jstring
+java::lang::reflect::Constructor::getSignature()
+{
+  return declaringClass->getReflectionSignature (this);
+}
+
+anno_a_t
+java::lang::reflect::Constructor::getDeclaredAnnotationsInternal()
+{
+  return (anno_a_t) declaringClass->getDeclaredAnnotations(this, false);
+}
+
+anno_aa_t
+java::lang::reflect::Constructor::getParameterAnnotationsInternal()
+{
+  return (anno_aa_t) declaringClass->getDeclaredAnnotations(this, true);
 }
 
 void
@@ -55,20 +76,7 @@ java::lang::reflect::Constructor::newInstance (jobjectArray args)
   // Check accessibility, if required.
   if (! (Modifier::isPublic (meth->accflags) || this->isAccessible()))
     {
-      gnu::gcj::runtime::StackTrace *t 
-	= new gnu::gcj::runtime::StackTrace(4);
-      Class *caller = NULL;
-      try
-	{
-	  for (int i = 1; !caller; i++)
-	    {
-	      caller = t->classAt (i);
-	    }
-	}
-      catch (::java::lang::ArrayIndexOutOfBoundsException *e)
-	{
-	}
-
+      Class *caller = _Jv_StackTrace::GetCallingClass (&Constructor::class$);
       if (! _Jv_CheckAccess(caller, declaringClass, meth->accflags))
 	throw new IllegalAccessException;
     }

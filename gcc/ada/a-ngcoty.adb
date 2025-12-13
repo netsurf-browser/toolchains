@@ -1,30 +1,28 @@
 ------------------------------------------------------------------------------
 --                                                                          --
---                         GNAT RUNTIME COMPONENTS                          --
+--                         GNAT RUN-TIME COMPONENTS                         --
 --                                                                          --
 --   A D A . N U M E R I C S . G E N E R I C _ C O M P L E X _ T Y P E S    --
 --                                                                          --
 --                                 B o d y                                  --
 --                                                                          --
---          Copyright (C) 1992-2002 Free Software Foundation, Inc.          --
+--          Copyright (C) 1992-2010, Free Software Foundation, Inc.         --
 --                                                                          --
 -- GNAT is free software;  you can  redistribute it  and/or modify it under --
 -- terms of the  GNU General Public License as published  by the Free Soft- --
--- ware  Foundation;  either version 2,  or (at your option) any later ver- --
+-- ware  Foundation;  either version 3,  or (at your option) any later ver- --
 -- sion.  GNAT is distributed in the hope that it will be useful, but WITH- --
 -- OUT ANY WARRANTY;  without even the  implied warranty of MERCHANTABILITY --
--- or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU General Public License --
--- for  more details.  You should have  received  a copy of the GNU General --
--- Public License  distributed with GNAT;  see file COPYING.  If not, write --
--- to  the Free Software Foundation,  59 Temple Place - Suite 330,  Boston, --
--- MA 02111-1307, USA.                                                      --
+-- or FITNESS FOR A PARTICULAR PURPOSE.                                     --
 --                                                                          --
--- As a special exception,  if other files  instantiate  generics from this --
--- unit, or you link  this unit with other files  to produce an executable, --
--- this  unit  does not  by itself cause  the resulting  executable  to  be --
--- covered  by the  GNU  General  Public  License.  This exception does not --
--- however invalidate  any other reasons why  the executable file  might be --
--- covered by the  GNU Public License.                                      --
+-- As a special exception under Section 7 of GPL version 3, you are granted --
+-- additional permissions described in the GCC Runtime Library Exception,   --
+-- version 3.1, as published by the Free Software Foundation.               --
+--                                                                          --
+-- You should have received a copy of the GNU General Public License and    --
+-- a copy of the GCC Runtime Library Exception along with this program;     --
+-- see the files COPYING3 and COPYING.RUNTIME respectively.  If not, see    --
+-- <http://www.gnu.org/licenses/>.                                          --
 --                                                                          --
 -- GNAT was originally developed  by the GNAT team at  New York University. --
 -- Extensive contributions were provided by Ada Core Technologies Inc.      --
@@ -32,6 +30,7 @@
 ------------------------------------------------------------------------------
 
 with Ada.Numerics.Aux; use Ada.Numerics.Aux;
+
 package body Ada.Numerics.Generic_Complex_Types is
 
    subtype R is Real'Base;
@@ -44,6 +43,12 @@ package body Ada.Numerics.Generic_Complex_Types is
    ---------
 
    function "*" (Left, Right : Complex) return Complex is
+
+      Scale : constant R := R (R'Machine_Radix) ** ((R'Machine_Emax - 1) / 2);
+      --  In case of overflow, scale the operands by the largest power of the
+      --  radix (to avoid rounding error), so that the square of the scale does
+      --  not overflow itself.
+
       X : R;
       Y : R;
 
@@ -51,16 +56,24 @@ package body Ada.Numerics.Generic_Complex_Types is
       X := Left.Re * Right.Re - Left.Im * Right.Im;
       Y := Left.Re * Right.Im + Left.Im * Right.Re;
 
-      --  If either component overflows, try to scale.
+      --  If either component overflows, try to scale (skip in fast math mode)
 
-      if abs (X) > R'Last then
-         X := R'(4.0) * (R'(Left.Re / 2.0)  * R'(Right.Re / 2.0)
-                - R'(Left.Im / 2.0) * R'(Right.Im / 2.0));
-      end if;
+      if not Standard'Fast_Math then
 
-      if abs (Y) > R'Last then
-         Y := R'(4.0) * (R'(Left.Re / 2.0)  * R'(Right.Im / 2.0)
-                - R'(Left.Im / 2.0) * R'(Right.Re / 2.0));
+         --  Note that the test below is written as a negation. This is to
+         --  account for the fact that X and Y may be NaNs, because both of
+         --  their operands could overflow. Given that all operations on NaNs
+         --  return false, the test can only be written thus.
+
+         if not (abs (X) <= R'Last) then
+            X := Scale**2 * ((Left.Re / Scale) * (Right.Re / Scale) -
+                             (Left.Im / Scale) * (Right.Im / Scale));
+         end if;
+
+         if not (abs (Y) <= R'Last) then
+            Y := Scale**2 * ((Left.Re / Scale) * (Right.Im / Scale)
+                           + (Left.Im / Scale) * (Right.Re / Scale));
+         end if;
       end if;
 
       return (X, Y);
@@ -68,7 +81,7 @@ package body Ada.Numerics.Generic_Complex_Types is
 
    function "*" (Left, Right : Imaginary) return Real'Base is
    begin
-      return -R (Left) * R (Right);
+      return -(R (Left) * R (Right));
    end "*";
 
    function "*" (Left : Complex; Right : Real'Base) return Complex is
@@ -142,7 +155,6 @@ package body Ada.Numerics.Generic_Complex_Types is
          --  1.0 / infinity, and the closest model number will be zero.
 
          begin
-
             while Exp /= 0 loop
                if Exp rem 2 /= 0 then
                   Result := Result * Factor;
@@ -155,7 +167,6 @@ package body Ada.Numerics.Generic_Complex_Types is
             return R'(1.0) / Result;
 
          exception
-
             when Constraint_Error =>
                return (0.0, 0.0);
          end;
@@ -316,8 +327,8 @@ package body Ada.Numerics.Generic_Complex_Types is
       c : constant R := Right.Re;
       d : constant R := Right.Im;
    begin
-      return Complex'(Re =>  (a * c) / (c ** 2 + d ** 2),
-                      Im => -(a * d) / (c ** 2 + d ** 2));
+      return Complex'(Re =>   (a * c) / (c ** 2 + d ** 2),
+                      Im => -((a * d) / (c ** 2 + d ** 2)));
    end "/";
 
    function "/" (Left : Complex; Right : Imaginary) return Complex is
@@ -326,7 +337,7 @@ package body Ada.Numerics.Generic_Complex_Types is
       d : constant R := R (Right);
 
    begin
-      return (b / d,  -a / d);
+      return (b / d,  -(a / d));
    end "/";
 
    function "/" (Left : Imaginary; Right : Complex) return Complex is
@@ -346,7 +357,7 @@ package body Ada.Numerics.Generic_Complex_Types is
 
    function "/" (Left : Real'Base; Right : Imaginary) return Imaginary is
    begin
-      return Imaginary (-Left / R (Right));
+      return Imaginary (-(Left / R (Right)));
    end "/";
 
    ---------
@@ -566,27 +577,33 @@ package body Ada.Numerics.Generic_Complex_Types is
          --  we can use an explicit comparison to determine whether to use
          --  the scaling expression.
 
-         if Re2 > R'Last then
+         --  The scaling expression is computed in double format throughout
+         --  in order to prevent inaccuracies on machines where not all
+         --  immediate expressions are rounded, such as PowerPC.
+
+         --  ??? same weird test, why not Re2 > R'Last ???
+         if not (Re2 <= R'Last) then
             raise Constraint_Error;
          end if;
 
       exception
          when Constraint_Error =>
-            return abs (X.Re)
-              * R (Sqrt (Double (R (1.0) + (X.Im / X.Re) ** 2)));
+            return R (Double (abs (X.Re))
+              * Sqrt (1.0 + (Double (X.Im) / Double (X.Re)) ** 2));
       end;
 
       begin
          Im2 := X.Im ** 2;
 
-         if Im2 > R'Last then
+         --  ??? same weird test
+         if not (Im2 <= R'Last) then
             raise Constraint_Error;
          end if;
 
       exception
          when Constraint_Error =>
-            return abs (X.Im)
-              * R (Sqrt (Double (R (1.0) + (X.Re / X.Im) ** 2)));
+            return R (Double (abs (X.Im))
+              * Sqrt (1.0 + (Double (X.Re) / Double (X.Im)) ** 2));
       end;
 
       --  Now deal with cases of underflow. If only one of the squares
@@ -606,12 +623,12 @@ package body Ada.Numerics.Generic_Complex_Types is
             else
                if abs (X.Re) > abs (X.Im) then
                   return
-                    abs (X.Re)
-                      * R (Sqrt (Double (R (1.0) + (X.Im / X.Re) ** 2)));
+                    R (Double (abs (X.Re))
+                      * Sqrt (1.0 + (Double (X.Im) / Double (X.Re)) ** 2));
                else
                   return
-                    abs (X.Im)
-                      * R (Sqrt (Double (R (1.0) + (X.Re / X.Im) ** 2)));
+                    R (Double (abs (X.Im))
+                      * Sqrt (1.0 + (Double (X.Re) / Double (X.Im)) ** 2));
                end if;
             end if;
 
@@ -622,7 +639,7 @@ package body Ada.Numerics.Generic_Complex_Types is
       elsif Im2 = 0.0 then
          return abs (X.Re);
 
-         --  in all other cases, the naive computation will do.
+      --  In all other cases, the naive computation will do
 
       else
          return R (Sqrt (Double (Re2 + Im2)));
@@ -642,12 +659,12 @@ package body Ada.Numerics.Generic_Complex_Types is
    -- Set_Im --
    ------------
 
-   procedure Set_Im (X : in out Complex; Im : in Real'Base) is
+   procedure Set_Im (X : in out Complex; Im : Real'Base) is
    begin
       X.Im := Im;
    end Set_Im;
 
-   procedure Set_Im (X : out Imaginary; Im : in Real'Base) is
+   procedure Set_Im (X : out Imaginary; Im : Real'Base) is
    begin
       X := Imaginary (Im);
    end Set_Im;
@@ -656,7 +673,7 @@ package body Ada.Numerics.Generic_Complex_Types is
    -- Set_Re --
    ------------
 
-   procedure Set_Re (X : in out Complex; Re : in Real'Base) is
+   procedure Set_Re (X : in out Complex; Re : Real'Base) is
    begin
       X.Re := Re;
    end Set_Re;

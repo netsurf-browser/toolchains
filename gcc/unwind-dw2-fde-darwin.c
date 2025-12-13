@@ -1,10 +1,11 @@
-/* Copyright (C) 2001, 2002, 2003 Free Software Foundation, Inc.
+/* Copyright (C) 2001, 2002, 2003, 2005, 2009, 2010
+   Free Software Foundation, Inc.
 
    This file is part of GCC.
 
    GCC is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License as published by
-   the Free Software Foundation; either version 2, or (at your option)
+   the Free Software Foundation; either version 3, or (at your option)
    any later version.
 
    GCC is distributed in the hope that it will be useful,
@@ -12,21 +13,19 @@
    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
    GNU General Public License for more details.
 
-   You should have received a copy of the GNU General Public License
-   along with GCC; see the file COPYING.  If not, write to
-   the Free Software Foundation, 59 Temple Place - Suite 330,
-   Boston, MA 02111-1307, USA.  */
+   Under Section 7 of GPL version 3, you are granted additional
+   permissions described in the GCC Runtime Library Exception, version
+   3.1, as published by the Free Software Foundation.
 
-/* As a special exception, if you link this library with other files,
-   some of which are compiled with GCC, to produce an executable,
-   this library does not by itself cause the resulting executable
-   to be covered by the GNU General Public License.
-   This exception does not however invalidate any other reasons why
-   the executable file might be covered by the GNU General Public License.  */
+   You should have received a copy of the GNU General Public License and
+   a copy of the GCC Runtime Library Exception along with this program;
+   see the files COPYING3 and COPYING.RUNTIME respectively.  If not, see
+   <http://www.gnu.org/licenses/>.  */
 
 /* Locate the FDE entry for a given address, using Darwin's keymgr support.  */
 
 #include "tconfig.h"
+#include "tsystem.h"
 #include <string.h>
 #include <stdlib.h>
 #include "dwarf2.h"
@@ -57,8 +56,11 @@ extern void _keymgr_set_and_unlock_processwide_ptr (int, void *);
 extern void _keymgr_unlock_processwide_ptr (int);
 
 struct mach_header;
+struct mach_header_64;
 extern char *getsectdatafromheader (struct mach_header*, const char*,
-			const char *, unsigned long *);
+				    const char *, unsigned long *);
+extern char *getsectdatafromheader_64 (struct mach_header_64*, const char*,
+				       const char *, unsigned long *);
 
 /* This is referenced from KEYMGR_GCC3_DW2_OBJ_LIST.  */
 struct km_object_info {
@@ -148,14 +150,23 @@ examine_objects (void *pc, struct dwarf_eh_bases *bases, int dont_alloc)
   for (; image != NULL; image = image->next)
     if ((image->examined_p & EXAMINED_IMAGE_MASK) == 0)
       {
-	char *fde;
+	char *fde = NULL;
 	unsigned long sz;
 
+	/* For ppc only check whether or not we have __DATA eh frames.  */
+#ifdef __ppc__
 	fde = getsectdatafromheader (image->mh, "__DATA", "__eh_frame", &sz);
+#endif
+
 	if (fde == NULL)
 	  {
+#if __LP64__
+	    fde = getsectdatafromheader_64 ((struct mach_header_64 *) image->mh,
+					    "__TEXT", "__eh_frame", &sz);
+#else
 	    fde = getsectdatafromheader (image->mh, "__TEXT",
 					 "__eh_frame", &sz);
+#endif
 	    if (fde != NULL)
 	      image->examined_p |= IMAGE_IS_TEXT_MASK;
 	  }
@@ -206,6 +217,7 @@ examine_objects (void *pc, struct dwarf_eh_bases *bases, int dont_alloc)
 	    if (result)
 	      {
 		int encoding;
+		_Unwind_Ptr func;
 
 		bases->tbase = ob->tbase;
 		bases->dbase = ob->dbase;
@@ -215,8 +227,8 @@ examine_objects (void *pc, struct dwarf_eh_bases *bases, int dont_alloc)
 		  encoding = get_fde_encoding (result);
 		read_encoded_value_with_base (encoding,
 					      base_from_object (encoding, ob),
-					      result->pc_begin,
-					      (_Unwind_Ptr *)&bases->func);
+					      result->pc_begin, &func);
+		bases->func = (void *) func;
 		break;
 	      }
 	  }
@@ -262,3 +274,16 @@ _Unwind_Find_FDE (void *pc, struct dwarf_eh_bases *bases)
 					  the_obj_info);
   return ret;
 }
+
+void *
+_darwin10_Unwind_FindEnclosingFunction (void *pc ATTRIBUTE_UNUSED)
+{
+#if __MACH__ && (__ENVIRONMENT_MAC_OS_X_VERSION_MIN_REQUIRED__ >= 1060)
+  struct dwarf_eh_bases bases;
+  const struct dwarf_fde *fde = _Unwind_Find_FDE (pc-1, &bases);
+  if (fde)
+    return bases.func;
+#endif
+  return NULL;
+}
+

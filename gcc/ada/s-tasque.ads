@@ -1,30 +1,28 @@
 ------------------------------------------------------------------------------
 --                                                                          --
---                GNU ADA RUN-TIME LIBRARY (GNARL) COMPONENTS               --
+--                 GNAT RUN-TIME LIBRARY (GNARL) COMPONENTS                 --
 --                                                                          --
 --                 S Y S T E M . T A S K I N G . Q U E U I N G              --
 --                                                                          --
 --                                  S p e c                                 --
 --                                                                          --
---         Copyright (C) 1992-2001, Free Software Foundation, Inc.          --
+--         Copyright (C) 1992-2009, Free Software Foundation, Inc.          --
 --                                                                          --
 -- GNARL is free software; you can  redistribute it  and/or modify it under --
 -- terms of the  GNU General Public License as published  by the Free Soft- --
--- ware  Foundation;  either version 2,  or (at your option) any later ver- --
--- sion. GNARL is distributed in the hope that it will be useful, but WITH- --
+-- ware  Foundation;  either version 3,  or (at your option) any later ver- --
+-- sion.  GNAT is distributed in the hope that it will be useful, but WITH- --
 -- OUT ANY WARRANTY;  without even the  implied warranty of MERCHANTABILITY --
--- or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU General Public License --
--- for  more details.  You should have  received  a copy of the GNU General --
--- Public License  distributed with GNARL; see file COPYING.  If not, write --
--- to  the Free Software Foundation,  59 Temple Place - Suite 330,  Boston, --
--- MA 02111-1307, USA.                                                      --
+-- or FITNESS FOR A PARTICULAR PURPOSE.                                     --
 --                                                                          --
--- As a special exception,  if other files  instantiate  generics from this --
--- unit, or you link  this unit with other files  to produce an executable, --
--- this  unit  does not  by itself cause  the resulting  executable  to  be --
--- covered  by the  GNU  General  Public  License.  This exception does not --
--- however invalidate  any other reasons why  the executable file  might be --
--- covered by the  GNU Public License.                                      --
+-- As a special exception under Section 7 of GPL version 3, you are granted --
+-- additional permissions described in the GCC Runtime Library Exception,   --
+-- version 3.1, as published by the Free Software Foundation.               --
+--                                                                          --
+-- You should have received a copy of the GNU General Public License and    --
+-- a copy of the GCC Runtime Library Exception along with this program;     --
+-- see the files COPYING3 and COPYING.RUNTIME respectively.  If not, see    --
+-- <http://www.gnu.org/licenses/>.                                          --
 --                                                                          --
 -- GNARL was developed by the GNARL team at Florida State University.       --
 -- Extensive contributions were provided by Ada Core Technologies, Inc.     --
@@ -38,7 +36,7 @@ package System.Tasking.Queuing is
    package POE renames System.Tasking.Protected_Objects.Entries;
 
    procedure Broadcast_Program_Error
-     (Self_ID      : Task_ID;
+     (Self_ID      : Task_Id;
       Object       : POE.Protection_Entries_Access;
       Pending_Call : Entry_Call_Link;
       RTS_Locked   : Boolean := False);
@@ -54,9 +52,9 @@ package System.Tasking.Queuing is
    procedure Dequeue (E : in out Entry_Queue; Call : Entry_Call_Link);
    --  Dequeue Call from entry_queue E
 
-   function Head (E : in Entry_Queue) return Entry_Call_Link;
-   --  Return the head of entry_queue E
+   function Head (E : Entry_Queue) return Entry_Call_Link;
    pragma Inline (Head);
+   --  Return the head of entry_queue E
 
    procedure Dequeue_Head
      (E    : in out Entry_Queue;
@@ -64,14 +62,14 @@ package System.Tasking.Queuing is
    --  Remove and return the head of entry_queue E
 
    function Onqueue (Call : Entry_Call_Link) return Boolean;
-   --  Return True if Call is on any entry_queue at all
    pragma Inline (Onqueue);
+   --  Return True if Call is on any entry_queue at all
 
-   function Count_Waiting (E : in Entry_Queue) return Natural;
+   function Count_Waiting (E : Entry_Queue) return Natural;
    --  Return number of calls on the waiting queue of E
 
    procedure Select_Task_Entry_Call
-     (Acceptor         : Task_ID;
+     (Acceptor         : Task_Id;
       Open_Accepts     : Accept_List_Access;
       Call             : out Entry_Call_Link;
       Selection        : out Select_Index;
@@ -82,9 +80,9 @@ package System.Tasking.Queuing is
    --    Open_Alternative will be True if there were any open alternatives
 
    procedure Select_Protected_Entry_Call
-     (Self_ID   : Task_ID;
-      Object    : POE.Protection_Entries_Access;
-      Call      : out Entry_Call_Link);
+     (Self_ID : Task_Id;
+      Object  : POE.Protection_Entries_Access;
+      Call    : out Entry_Call_Link);
    --  Select an entry of a protected object
 
    procedure Enqueue_Call (Entry_Call : Entry_Call_Link);
@@ -95,7 +93,7 @@ package System.Tasking.Queuing is
    procedure Requeue_Call_With_New_Prio
      (Entry_Call : Entry_Call_Link; Prio : System.Any_Priority);
    --  Change Priority of the call and re insert to the queue when priority
-   --  queueing is in effect. When FIFO is inforced, this routine
+   --  queueing is in effect. When FIFO is enforced, this routine
    --  should not have any effect.
 
 end System.Tasking.Queuing;

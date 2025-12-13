@@ -1,12 +1,12 @@
 /* Handle exceptions for GNU compiler for the Java(TM) language.
-   Copyright (C) 1997, 1998, 1999, 2000, 2002, 2003, 2004
-   Free Software Foundation, Inc.
+   Copyright (C) 1997, 1998, 1999, 2000, 2002, 2003, 2004, 2005,
+   2007, 2008, 2009, 2010 Free Software Foundation, Inc.
 
 This file is part of GCC.
 
 GCC is free software; you can redistribute it and/or modify
 it under the terms of the GNU General Public License as published by
-the Free Software Foundation; either version 2, or (at your option)
+the Free Software Foundation; either version 3, or (at your option)
 any later version.
 
 GCC is distributed in the hope that it will be useful,
@@ -15,9 +15,8 @@ MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
 GNU General Public License for more details.
 
 You should have received a copy of the GNU General Public License
-along with GCC; see the file COPYING.  If not, write to
-the Free Software Foundation, 59 Temple Place - Suite 330,
-Boston, MA 02111-1307, USA.
+along with GCC; see the file COPYING3.  If not see
+<http://www.gnu.org/licenses/>.
 
 Java and all Java-based marks are trademarks or registered trademarks
 of Sun Microsystems, Inc. in the United States and other countries.
@@ -28,30 +27,25 @@ The Free Software Foundation is independent of Sun Microsystems, Inc.  */
 #include "coretypes.h"
 #include "tm.h"
 #include "tree.h"
-#include "real.h"
-#include "rtl.h"
 #include "java-tree.h"
 #include "javaop.h"
 #include "java-opcodes.h"
 #include "jcf.h"
-#include "function.h"
-#include "except.h"
 #include "java-except.h"
+#include "diagnostic-core.h"
 #include "toplev.h"
+#include "tree-iterator.h"
+
 
 static void expand_start_java_handler (struct eh_range *);
-static void expand_end_java_handler (struct eh_range *);
 static struct eh_range *find_handler_in_range (int, struct eh_range *,
 					       struct eh_range *);
-static void link_handler (struct eh_range *, struct eh_range *);
 static void check_start_handlers (struct eh_range *, int);
 static void free_eh_ranges (struct eh_range *range);
 
 struct eh_range *current_method_handlers;
 
 struct eh_range *current_try_block = NULL;
-
-struct eh_range *eh_range_freelist = NULL;
 
 /* These variables are used to speed up find_handler. */
 
@@ -63,12 +57,60 @@ static struct eh_range *cache_next_child;
 
 struct eh_range whole_range;
 
+/* Check the invariants of the structure we're using to contain
+   exception regions.  Either returns true or fails an assertion
+   check.  */
+
+bool
+sanity_check_exception_range (struct eh_range *range)
+{
+  struct eh_range *ptr = range->first_child;
+  for (; ptr; ptr = ptr->next_sibling)
+    {
+      gcc_assert (ptr->outer == range
+		  && ptr->end_pc > ptr->start_pc);
+      if (ptr->next_sibling)
+	gcc_assert (ptr->next_sibling->start_pc >= ptr->end_pc);
+      gcc_assert (ptr->start_pc >= ptr->outer->start_pc
+		  && ptr->end_pc <=  ptr->outer->end_pc);
+      (void) sanity_check_exception_range (ptr);
+    }
+  return true;
+}
+
 #if defined(DEBUG_JAVA_BINDING_LEVELS)
-extern int binding_depth;
 extern int is_class_level;
 extern int current_pc;
-extern void indent ();
+extern int binding_depth;
+extern void indent (void);
+static void
+print_ranges (struct eh_range *range)
+{
+  if (! range)
+    return;
 
+  struct eh_range *child = range->first_child;
+  
+  indent ();
+  fprintf (stderr, "handler pc %d --> %d ", range->start_pc, range->end_pc);
+  
+  tree handler = range->handlers;
+  for ( ; handler != NULL_TREE; handler = TREE_CHAIN (handler))
+    {
+      tree type = TREE_PURPOSE (handler);
+      if (type == NULL)
+	type = throwable_type_node;
+      fprintf (stderr, " type=%s ", IDENTIFIER_POINTER (DECL_NAME (TYPE_NAME (type))));
+    }
+  fprintf (stderr, "\n");
+
+  int saved = binding_depth;
+  binding_depth++;
+  print_ranges (child);
+  binding_depth = saved;
+
+  print_ranges (range->next_sibling);
+}
 #endif
 
 /* Search for the most specific eh_range containing PC.
@@ -118,107 +160,6 @@ find_handler (int pc)
   return find_handler_in_range (pc, h, cache_next_child);
 }
 
-/* Recursive helper routine for check_nested_ranges. */
-
-static void
-link_handler (struct eh_range *range, struct eh_range *outer)
-{
-  struct eh_range **ptr;
-
-  if (range->start_pc == outer->start_pc && range->end_pc == outer->end_pc)
-    {
-      outer->handlers = chainon (outer->handlers, range->handlers);
-      return;
-    }
-
-  /* If the new range completely encloses the `outer' range, then insert it
-     between the outer range and its parent.  */
-  if (range->start_pc <= outer->start_pc && range->end_pc >= outer->end_pc)
-    {
-      range->outer = outer->outer;
-      range->next_sibling = NULL;
-      range->first_child = outer;
-      {
-	struct eh_range **pr = &(outer->outer->first_child);
-	while (*pr != outer)
-	  pr = &(*pr)->next_sibling;
-	*pr = range;
-      }
-      outer->outer = range;
-      return;
-    }
-
-  /* Handle overlapping ranges by splitting the new range.  */
-  if (range->start_pc < outer->start_pc || range->end_pc > outer->end_pc)
-    {
-      struct eh_range *h = xmalloc (sizeof (struct eh_range));
-      if (range->start_pc < outer->start_pc)
-	{
-	  h->start_pc = range->start_pc;
-	  h->end_pc = outer->start_pc;
-	  range->start_pc = outer->start_pc;
-	}
-      else
-	{
-	  h->start_pc = outer->end_pc;
-	  h->end_pc = range->end_pc;
-	  range->end_pc = outer->end_pc;
-	}
-      h->first_child = NULL;
-      h->outer = NULL;
-      h->handlers = build_tree_list (TREE_PURPOSE (range->handlers),
-				     TREE_VALUE (range->handlers));
-      h->next_sibling = NULL;
-      h->expanded = 0;
-      /* Restart both from the top to avoid having to make this
-	 function smart about reentrancy.  */
-      link_handler (h, &whole_range);
-      link_handler (range, &whole_range);
-      return;
-    }
-
-  ptr = &outer->first_child;
-  for (;; ptr = &(*ptr)->next_sibling)
-    {
-      if (*ptr == NULL || range->end_pc <= (*ptr)->start_pc)
-	{
-	  range->next_sibling = *ptr;
-	  range->first_child = NULL;
-	  range->outer = outer;
-	  *ptr = range;
-	  return;
-	}
-      else if (range->start_pc < (*ptr)->end_pc)
-	{
-	  link_handler (range, *ptr);
-	  return;
-	}
-      /* end_pc > (*ptr)->start_pc && start_pc >= (*ptr)->end_pc. */
-    }
-}
-
-/* The first pass of exception range processing (calling add_handler)
-   constructs a linked list of exception ranges.  We turn this into
-   the data structure expected by the rest of the code, and also
-   ensure that exception ranges are properly nested.  */
-
-void
-handle_nested_ranges (void)
-{
-  struct eh_range *ptr, *next;
-
-  ptr = whole_range.first_child;
-  whole_range.first_child = NULL;
-  for (; ptr; ptr = next)
-    {
-      next = ptr->next_sibling;
-      ptr->next_sibling = NULL;
-      link_handler (ptr, &whole_range);
-    }
-}
-
-/* Free RANGE as well as its children and siblings.  */
-
 static void
 free_eh_ranges (struct eh_range *range)
 {
@@ -246,55 +187,166 @@ method_init_exceptions (void)
   cache_range_start = 0xFFFFFF;
 }
 
-/* Add an exception range.  If we already have an exception range
-   which has the same handler and label, and the new range overlaps
-   that one, then we simply extend the existing range.  Some bytecode
-   obfuscators generate seemingly nonoverlapping exception ranges
-   which, when coalesced, do in fact nest correctly.
-   
-   This constructs an ordinary linked list which check_nested_ranges()
-   later turns into the data structure we actually want.
-   
-   We expect the input to come in order of increasing START_PC.  This
-   function doesn't attempt to detect the case where two previously
-   added disjoint ranges could be coalesced by a new range; that is
-   what the sorting counteracts.  */
+/* Split an exception range into two at PC.  The sub-ranges that
+   belong to the range are split and distributed between the two new
+   ranges.  */
 
-void
-add_handler (int start_pc, int end_pc, tree handler, tree type)
+static void
+split_range (struct eh_range *range, int pc)
 {
-  struct eh_range *ptr, *prev = NULL, *h;
+  struct eh_range *ptr;
+  struct eh_range **first_child, **second_child;
+  struct eh_range *h;
 
-  for (ptr = whole_range.first_child; ptr; ptr = ptr->next_sibling)
+  /* First, split all the sub-ranges.  */
+  for (ptr = range->first_child; ptr; ptr = ptr->next_sibling)
     {
-      if (start_pc >= ptr->start_pc
-	  && start_pc <= ptr->end_pc
-	  && TREE_PURPOSE (ptr->handlers) == type
-	  && TREE_VALUE (ptr->handlers) == handler)
+      if (pc > ptr->start_pc
+	  && pc < ptr->end_pc)
 	{
-	  /* Already found an overlapping range, so coalesce.  */
-	  ptr->end_pc = MAX (ptr->end_pc, end_pc);
-	  return;
+	  split_range (ptr, pc);
 	}
-      prev = ptr;
     }
 
-  h = xmalloc (sizeof (struct eh_range));
+  /* Create a new range.  */
+  h = XNEW (struct eh_range);
+
+  h->start_pc = pc;
+  h->end_pc = range->end_pc;
+  h->next_sibling = range->next_sibling;
+  range->next_sibling = h;
+  range->end_pc = pc;
+  h->handlers = build_tree_list (TREE_PURPOSE (range->handlers),
+				 TREE_VALUE (range->handlers));
+  h->next_sibling = NULL;
+  h->expanded = 0;
+  h->stmt = NULL;
+  h->outer = range->outer;
+  h->first_child = NULL;
+
+  ptr = range->first_child;
+  first_child = &range->first_child;
+  second_child = &h->first_child;
+
+  /* Distribute the sub-ranges between the two new ranges.  */
+  for (ptr = range->first_child; ptr; ptr = ptr->next_sibling)
+    {
+      if (ptr->start_pc < pc)
+	{
+	  *first_child = ptr;
+	  ptr->outer = range;
+	  first_child = &ptr->next_sibling;
+	}
+      else
+	{
+	  *second_child = ptr;
+	  ptr->outer = h;
+	  second_child = &ptr->next_sibling;
+	}
+    }
+  *first_child = NULL;
+  *second_child = NULL;
+}  
+
+
+/* Add an exception range. 
+
+   There are some missed optimization opportunities here.  For
+   example, some bytecode obfuscators generate seemingly
+   nonoverlapping exception ranges which, when coalesced, do in fact
+   nest correctly.  We could merge these, but we'd have to fix up all
+   the enclosed regions first and perhaps create a new range anyway if
+   it overlapped existing ranges.
+   
+   Also, we don't attempt to detect the case where two previously
+   added disjoint ranges could be coalesced by a new range.  */
+
+void 
+add_handler (int start_pc, int end_pc, tree handler, tree type)
+{
+  struct eh_range *ptr, *h;
+  struct eh_range **first_child, **prev;
+
+  /* First, split all the existing ranges that we need to enclose.  */
+  for (ptr = whole_range.first_child; ptr; ptr = ptr->next_sibling)
+    {
+      if (start_pc > ptr->start_pc
+	  && start_pc < ptr->end_pc)
+	{
+	  split_range (ptr, start_pc);
+	}
+
+      if (end_pc > ptr->start_pc
+	  && end_pc < ptr->end_pc)
+	{
+	  split_range (ptr, end_pc);
+	}
+
+      if (ptr->start_pc >= end_pc)
+	break;
+    }
+
+  /* Create the new range.  */
+  h = XNEW (struct eh_range);
+  first_child = &h->first_child;
+
   h->start_pc = start_pc;
   h->end_pc = end_pc;
   h->first_child = NULL;
-  h->outer = NULL;
+  h->outer = NULL_EH_RANGE;
   h->handlers = build_tree_list (type, handler);
   h->next_sibling = NULL;
   h->expanded = 0;
+  h->stmt = NULL;
 
-  if (prev == NULL)
-    whole_range.first_child = h;
-  else
-    prev->next_sibling = h;
+  /* Find every range at the top level that will be a sub-range of the
+     range we're inserting and make it so.  */
+  {
+    struct eh_range **prev = &whole_range.first_child;
+    for (ptr = *prev; ptr;)
+      {
+	struct eh_range *next = ptr->next_sibling;
+
+	if (ptr->start_pc >= end_pc)
+	  break;
+
+	if (ptr->start_pc < start_pc)
+	  {
+	    prev = &ptr->next_sibling;
+	  }
+	else if (ptr->start_pc >= start_pc
+		 && ptr->start_pc < end_pc)
+	  {
+	    *prev = next;
+	    *first_child = ptr;
+	    first_child = &ptr->next_sibling;
+	    ptr->outer = h;
+	    ptr->next_sibling = NULL;	  
+	  }
+
+	ptr = next;
+      }
+  }
+
+  /* Find the right place to insert the new range.  */
+  prev = &whole_range.first_child;
+  for (ptr = *prev; ptr; prev = &ptr->next_sibling, ptr = ptr->next_sibling)
+    {
+      gcc_assert (ptr->outer == NULL_EH_RANGE);
+      if (ptr->start_pc >= start_pc)
+	break;
+    }
+
+  /* And insert it there.  */
+  *prev = h;
+  if (ptr)
+    {
+      h->next_sibling = ptr;
+      h->outer = ptr->outer;
+    }
 }
-
-
+      
+  
 /* if there are any handlers for this range, issue start of region */
 static void
 expand_start_java_handler (struct eh_range *range)
@@ -304,8 +356,9 @@ expand_start_java_handler (struct eh_range *range)
   fprintf (stderr, "expand start handler pc %d --> %d\n",
 	   current_pc, range->end_pc);
 #endif /* defined(DEBUG_JAVA_BINDING_LEVELS) */
+  pushlevel (0);
+  register_exception_range (range,  range->start_pc, range->end_pc);
   range->expanded = 1;
-  expand_eh_region_start ();
 }
 
 tree
@@ -328,7 +381,7 @@ prepare_eh_table_type (tree type)
     return NULL_TREE;
 
   if (TYPE_TO_RUNTIME_MAP (output_class) == NULL)
-    TYPE_TO_RUNTIME_MAP (output_class) = java_treetreehash_create (10, 1);
+    TYPE_TO_RUNTIME_MAP (output_class) = java_treetreehash_create (10);
   
   slot = java_treetreehash_new (TYPE_TO_RUNTIME_MAP (output_class), type);
   if (*slot != NULL)
@@ -337,9 +390,10 @@ prepare_eh_table_type (tree type)
   if (is_compiled_class (type) && !flag_indirect_dispatch)
     {
       name = IDENTIFIER_POINTER (DECL_NAME (TYPE_NAME (type)));
-      buf = alloca (strlen (name) + 5);
+      buf = (char *) alloca (strlen (name) + 5);
       sprintf (buf, "%s_ref", name);
-      decl = build_decl (VAR_DECL, get_identifier (buf), ptr_type_node);
+      decl = build_decl (input_location,
+			 VAR_DECL, get_identifier (buf), ptr_type_node);
       TREE_STATIC (decl) = 1;
       DECL_ARTIFICIAL (decl) = 1;
       DECL_IGNORED_P (decl) = 1;
@@ -348,15 +402,16 @@ prepare_eh_table_type (tree type)
       DECL_INITIAL (decl) = build_class_ref (type);
       layout_decl (decl, 0);
       pushdecl (decl);
-      exp = build1 (ADDR_EXPR, ptr_type_node, decl);
+      exp = build1 (ADDR_EXPR, build_pointer_type (TREE_TYPE (decl)), decl);
     }
   else
     {
       utf8_ref = build_utf8_ref (DECL_NAME (TYPE_NAME (type)));
       name = IDENTIFIER_POINTER (DECL_NAME (TREE_OPERAND (utf8_ref, 0)));
-      buf = alloca (strlen (name) + 5);
+      buf = (char *) alloca (strlen (name) + 5);
       sprintf (buf, "%s_ref", name);
-      decl = build_decl (VAR_DECL, get_identifier (buf), utf8const_ptr_type);
+      decl = build_decl (input_location,
+			 VAR_DECL, get_identifier (buf), utf8const_ptr_type);
       TREE_STATIC (decl) = 1;
       DECL_ARTIFICIAL (decl) = 1;
       DECL_IGNORED_P (decl) = 1;
@@ -365,10 +420,12 @@ prepare_eh_table_type (tree type)
       layout_decl (decl, 0);
       pushdecl (decl);
       exp = build1 (ADDR_EXPR, build_pointer_type (utf8const_ptr_type), decl);
-      TYPE_CATCH_CLASSES (output_class) = 
-	tree_cons (NULL, make_catch_class_record (exp, utf8_ref), 
-		   TYPE_CATCH_CLASSES (output_class));
+      CONSTRUCTOR_APPEND_ELT (TYPE_CATCH_CLASSES (output_class),
+			      NULL_TREE,
+			      make_catch_class_record (exp, utf8_ref));
     }
+
+  exp = convert (ptr_type_node, exp);
 
   *slot = tree_cons (type, exp, NULL_TREE);
 
@@ -379,8 +436,11 @@ static int
 expand_catch_class (void **entry, void *x ATTRIBUTE_UNUSED)
 {
   struct treetreehash_entry *ite = (struct treetreehash_entry *) *entry;
-  tree decl = TREE_OPERAND (TREE_VALUE ((tree)ite->value), 0);
-  rest_of_decl_compilation (decl, (char*) 0, global_bindings_p (), 0);
+  tree addr = TREE_VALUE ((tree)ite->value);
+  tree decl;
+  STRIP_NOPS (addr);
+  decl = TREE_OPERAND (addr, 0);
+  rest_of_decl_compilation (decl, global_bindings_p (), 0);
   return true;
 }
   
@@ -396,6 +456,26 @@ java_expand_catch_classes (tree this_class)
        expand_catch_class, NULL);
 }
 
+/* Build and push the variable that will hold the exception object
+   within this function.  */
+
+static tree
+build_exception_object_var (void)
+{
+  tree decl = DECL_FUNCTION_EXC_OBJ (current_function_decl);
+  if (decl == NULL)
+    {
+      decl = build_decl (DECL_SOURCE_LOCATION (current_function_decl),
+			 VAR_DECL, get_identifier ("#exc_obj"), ptr_type_node);
+      DECL_IGNORED_P (decl) = 1;
+      DECL_ARTIFICIAL (decl) = 1;
+
+      DECL_FUNCTION_EXC_OBJ (current_function_decl) = decl;
+      pushdecl_function_level (decl);
+    }
+  return decl;
+}
+
 /* Build a reference to the jthrowable object being carried in the
    exception header.  */
 
@@ -406,39 +486,64 @@ build_exception_object_ref (tree type)
 
   /* Java only passes object via pointer and doesn't require adjusting.
      The java object is immediately before the generic exception header.  */
-  obj = build (EXC_PTR_EXPR, build_pointer_type (type));
-  obj = build (MINUS_EXPR, TREE_TYPE (obj), obj,
-	       TYPE_SIZE_UNIT (TREE_TYPE (obj)));
+  obj = build_exception_object_var ();
+  obj = fold_convert (build_pointer_type (type), obj);
+  obj = build2 (POINTER_PLUS_EXPR, TREE_TYPE (obj), obj,
+		fold_build1 (NEGATE_EXPR, sizetype,
+			     TYPE_SIZE_UNIT (TREE_TYPE (obj))));
   obj = build1 (INDIRECT_REF, type, obj);
 
   return obj;
 }
 
-/* If there are any handlers for this range, isssue end of range,
+/* If there are any handlers for this range, issue end of range,
    and then all handler blocks */
-static void
+void
 expand_end_java_handler (struct eh_range *range)
 {  
   tree handler = range->handlers;
-  force_poplevels (range->start_pc);
-  expand_start_all_catch ();
-  for ( ; handler != NULL_TREE; handler = TREE_CHAIN (handler))
+  if (handler)
     {
-      /* For bytecode we treat exceptions a little unusually.  A
-	 `finally' clause looks like an ordinary exception handler for
-	 Throwable.  The reason for this is that the bytecode has
-	 already expanded the finally logic, and we would have to do
-	 extra (and difficult) work to get this to look like a
-	 gcc-style finally clause.  */
-      tree type = TREE_PURPOSE (handler);
-      if (type == NULL)
-	type = throwable_type_node;
+      tree exc_obj = build_exception_object_var ();
+      tree catches = make_node (STATEMENT_LIST);
+      tree_stmt_iterator catches_i = tsi_last (catches);
+      tree *body;
 
-      expand_start_catch (prepare_eh_table_type (type));
-      expand_goto (TREE_VALUE (handler));
-      expand_end_catch ();
+      for (; handler; handler = TREE_CHAIN (handler))
+	{
+	  tree type, eh_type, x;
+	  tree stmts = make_node (STATEMENT_LIST);
+	  tree_stmt_iterator stmts_i = tsi_last (stmts);
+
+	  type = TREE_PURPOSE (handler);
+	  if (type == NULL)
+	    type = throwable_type_node;
+	  eh_type = prepare_eh_table_type (type);
+
+	  x = build_call_expr (built_in_decls[BUILT_IN_EH_POINTER],
+				1, integer_zero_node);
+	  x = build2 (MODIFY_EXPR, void_type_node, exc_obj, x);
+	  tsi_link_after (&stmts_i, x, TSI_CONTINUE_LINKING);
+
+	  x = build1 (GOTO_EXPR, void_type_node, TREE_VALUE (handler));
+	  tsi_link_after (&stmts_i, x, TSI_CONTINUE_LINKING);
+
+	  x = build2 (CATCH_EXPR, void_type_node, eh_type, stmts);
+	  tsi_link_after (&catches_i, x, TSI_CONTINUE_LINKING);
+
+	  /* Throwable can match anything in Java, and therefore
+	     any subsequent handlers are unreachable.  */
+	  /* ??? If we're assured of no foreign language exceptions,
+	     we'd be better off using NULL as the exception type
+	     for the catch.  */
+	  if (type == throwable_type_node)
+	    break;
+	}
+
+      body = get_stmts ();
+      *body = build2 (TRY_CATCH_EXPR, void_type_node, *body, catches);
     }
-  expand_end_all_catch ();
+
 #if defined(DEBUG_JAVA_BINDING_LEVELS)
   indent ();
   fprintf (stderr, "expand end handler pc %d <-- %d\n",
@@ -460,6 +565,29 @@ check_start_handlers (struct eh_range *range, int pc)
 }
 
 
+/* Routine to see if exception handling is turned on.
+   DO_WARN is nonzero if we want to inform the user that exception
+   handling is turned off.
+
+   This is used to ensure that -fexceptions has been specified if the
+   compiler tries to use any exception-specific functions.  */
+
+static inline int
+doing_eh (void)
+{
+  if (! flag_exceptions)
+    {
+      static int warned = 0;
+      if (! warned)
+	{
+	  error ("exception handling disabled, use -fexceptions to enable");
+	  warned = 1;
+	}
+      return 0;
+    }
+  return 1;
+}
+
 static struct eh_range *current_range;
 
 /* Emit any start-of-try-range starting at start_pc and ending after
@@ -469,7 +597,7 @@ void
 maybe_start_try (int start_pc, int end_pc)
 {
   struct eh_range *range;
-  if (! doing_eh (1))
+  if (! doing_eh ())
     return;
 
   range = find_handler (start_pc);
@@ -481,19 +609,3 @@ maybe_start_try (int start_pc, int end_pc)
   check_start_handlers (range, start_pc);
 }
 
-/* Emit any end-of-try-range ending at end_pc and starting before
-   start_pc. */
-
-void
-maybe_end_try (int start_pc, int end_pc)
-{
-  if (! doing_eh (1))
-    return;
-
-  while (current_range != NULL_EH_RANGE && current_range->end_pc <= end_pc
-	 && current_range->start_pc >= start_pc)
-    {
-      expand_end_java_handler (current_range);
-      current_range = current_range->outer;
-    }
-}
