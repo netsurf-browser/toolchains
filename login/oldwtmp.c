@@ -1,0 +1,48 @@
+/*
+ * BSD style wtmp updating routine Version 1.0 (c) S.R.Usher 1991.
+ * Modified 910126 dpg: uses non-buffered file ops, like utmp.c
+ */
+
+/* Now obsolete.  */
+#define _OLD_UTMP
+
+#include <fcntl.h>
+#include <unistd.h>
+#include <string.h>
+#include <utmp.h>
+
+#if __GNUC_PREREQ(8, 0)
+# pragma GCC diagnostic ignored "-Wstringop-truncation"
+#endif
+
+link_warning (_write_wtmp,
+	      "using `_write_wtmp' is obsolete and dangerous")
+
+void _write_wtmp(const char *line, const char *name, const char *host, unsigned long time)
+{
+	int fd;
+	struct utmp entry;
+
+	if ((fd = open(WTMP_FILE, O_WRONLY | O_APPEND)) < 0)
+	{
+#ifdef DEBUG
+		perror("_write_wtmp");
+#endif
+		return;
+	}
+
+/*
+ * Note, doing this in this order means that it doesn't matter about the Null
+ * bytes strncpy adds the the strings if they are greater than 8/16 bytes!
+ */
+
+	strncpy(entry.ut_line, line, sizeof(entry.ut_line));
+	strncpy(entry.ut_name, name, sizeof(entry.ut_name));
+	strncpy(entry.ut_host, host, sizeof(entry.ut_host));
+	entry.ut_time = time;
+
+	write(fd, &entry, (unsigned) sizeof(struct utmp));
+
+	close(fd);
+}
+
