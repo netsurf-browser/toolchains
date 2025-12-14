@@ -1,12 +1,13 @@
 /* ELF object file format.
-   Copyright 1992, 1993, 1994, 1995, 1996, 1997, 1998, 1999, 2000, 2001, 2002
+   Copyright 1992, 1993, 1994, 1995, 1996, 1997, 1998, 1999, 2000, 2001,
+   2002, 2003, 2004, 2005, 2006, 2007, 2009, 2010, 2011
    Free Software Foundation, Inc.
 
    This file is part of GAS, the GNU Assembler.
 
    GAS is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License as published by
-   the Free Software Foundation; either version 2, or (at your option)
+   the Free Software Foundation; either version 3, or (at your option)
    any later version.
 
    GAS is distributed in the hope that it will be useful,
@@ -16,8 +17,8 @@
 
    You should have received a copy of the GNU General Public License
    along with GAS; see the file COPYING.  If not, write to the Free
-   Software Foundation, 59 Temple Place - Suite 330, Boston, MA
-   02111-1307, USA.  */
+   Software Foundation, 51 Franklin Street - Fifth Floor, Boston, MA
+   02110-1301, USA.  */
 
 /* HP PA-RISC support was contributed by the Center for Software Science
    at the University of Utah.  */
@@ -33,8 +34,6 @@
 #ifndef OUTPUT_FLAVOR
 #define OUTPUT_FLAVOR bfd_target_elf_flavour
 #endif
-
-#include "bfd.h"
 
 #define BYTES_IN_WORD 4		/* for now */
 #include "bfd/elf-bfd.h"
@@ -82,16 +81,6 @@ struct elf_obj_sy
 
 #define OBJ_SYMFIELD_TYPE struct elf_obj_sy
 
-/* Symbol fields used by the ELF back end.  */
-#define ELF_TARGET_SYMBOL_FIELDS int local:1;
-
-/* Don't change this; change ELF_TARGET_SYMBOL_FIELDS instead.  */
-#ifndef TARGET_SYMBOL_FIELDS
-#define TARGET_SYMBOL_FIELDS ELF_TARGET_SYMBOL_FIELDS
-#endif
-
-/* #include "targ-cpu.h" */
-
 #ifndef FALSE
 #define FALSE 0
 #define TRUE  !FALSE
@@ -100,7 +89,11 @@ struct elf_obj_sy
 #ifndef obj_begin
 #define obj_begin() elf_begin ()
 #endif
-extern void elf_begin PARAMS ((void));
+extern void elf_begin (void);
+
+#ifndef LOCAL_LABEL_PREFIX
+#define LOCAL_LABEL_PREFIX '.'
+#endif
 
 /* should be conditional on address size! */
 #define elf_symbol(asymbol) ((elf_symbol_type *) (&(asymbol)->the_bfd))
@@ -123,7 +116,7 @@ extern void elf_begin PARAMS ((void));
   (elf_symbol (symbol_get_bfdsym (S))->internal_elf_sym.st_value = (V))
 #endif
 
-int elf_s_get_other PARAMS ((symbolS *));
+int elf_s_get_other (symbolS *);
 #ifndef S_GET_OTHER
 #define S_GET_OTHER(S)	(elf_s_get_other (S))
 #endif
@@ -137,35 +130,44 @@ extern asection *gdb_section;
 #ifndef obj_frob_file
 #define obj_frob_file  elf_frob_file
 #endif
-extern void elf_frob_file PARAMS ((void));
+extern void elf_frob_file (void);
 
 #ifndef obj_frob_file_before_adjust
 #define obj_frob_file_before_adjust  elf_frob_file_before_adjust
 #endif
-extern void elf_frob_file_before_adjust PARAMS ((void));
+extern void elf_frob_file_before_adjust (void);
 
 #ifndef obj_frob_file_after_relocs
 #define obj_frob_file_after_relocs  elf_frob_file_after_relocs
 #endif
-extern void elf_frob_file_after_relocs PARAMS ((void));
+extern void elf_frob_file_after_relocs (void);
+
+/* If the target doesn't have special processing for labels, take care of
+   dwarf2 output at the object file level.  */
+#ifndef tc_frob_label
+#include "dwarf2dbg.h"
+#define obj_frob_label  dwarf2_emit_label
+#endif
 
 #ifndef obj_app_file
 #define obj_app_file elf_file_symbol
 #endif
-extern void elf_file_symbol PARAMS ((const char *));
+extern void elf_file_symbol (const char *, int);
 
-extern void obj_elf_section_change_hook PARAMS ((void));
+extern void obj_elf_section_change_hook (void);
 
-extern void obj_elf_section PARAMS ((int));
-extern void obj_elf_previous PARAMS ((int));
-extern void obj_elf_version PARAMS ((int));
-extern void obj_elf_common PARAMS ((int));
-extern void obj_elf_data PARAMS ((int));
-extern void obj_elf_text PARAMS ((int));
+extern void obj_elf_section (int);
+extern char * obj_elf_section_name (void);
+extern void obj_elf_previous (int);
+extern void obj_elf_version (int);
+extern void obj_elf_common (int);
+extern void obj_elf_data (int);
+extern void obj_elf_text (int);
 extern void obj_elf_change_section
-  PARAMS ((const char *, int, int, int, const char *, int, int));
-extern struct fix *obj_elf_vtable_inherit PARAMS ((int));
-extern struct fix *obj_elf_vtable_entry PARAMS ((int));
+  (const char *, int, bfd_vma, int, const char *, int, int);
+extern struct fix *obj_elf_vtable_inherit (int);
+extern struct fix *obj_elf_vtable_entry (int);
+extern int obj_elf_vendor_attribute (int);
 
 /* BFD wants to write the udata field, which is a no-no for the
    predefined section symbols in bfd/section.c.  They are read-only.  */
@@ -173,20 +175,25 @@ extern struct fix *obj_elf_vtable_entry PARAMS ((int));
 #define obj_sec_sym_ok_for_reloc(SEC)	((SEC)->owner != 0)
 #endif
 
-void elf_obj_read_begin_hook PARAMS ((void));
+void elf_obj_read_begin_hook (void);
 #ifndef obj_read_begin_hook
 #define obj_read_begin_hook	elf_obj_read_begin_hook
 #endif
 
-void elf_obj_symbol_new_hook PARAMS ((symbolS *));
+void elf_obj_symbol_new_hook (symbolS *);
 #ifndef obj_symbol_new_hook
 #define obj_symbol_new_hook	elf_obj_symbol_new_hook
 #endif
 
-void elf_copy_symbol_attributes PARAMS ((symbolS *, symbolS *));
+void elf_copy_symbol_attributes (symbolS *, symbolS *);
 #ifndef OBJ_COPY_SYMBOL_ATTRIBUTES
 #define OBJ_COPY_SYMBOL_ATTRIBUTES(DEST, SRC) \
   (elf_copy_symbol_attributes (DEST, SRC))
+#endif
+
+void elf_adjust_symtab (void);
+#ifndef obj_adjust_symtab
+#define obj_adjust_symtab	elf_adjust_symtab
 #endif
 
 #ifndef SEPARATE_STAB_SECTIONS
@@ -200,7 +207,7 @@ void elf_copy_symbol_attributes PARAMS ((symbolS *, symbolS *));
 
 /* We need 12 bytes at the start of the section to hold some initial
    information.  */
-extern void obj_elf_init_stab_section PARAMS ((segT));
+extern void obj_elf_init_stab_section (segT);
 #define INIT_STAB_SECTION(seg) obj_elf_init_stab_section (seg)
 
 #ifdef ECOFF_DEBUGGING
@@ -222,22 +229,24 @@ extern void obj_elf_init_stab_section PARAMS ((segT));
 
 #endif /* SEPARATE_STAB_SECTIONS not defined.  */
 
-extern void elf_frob_symbol PARAMS ((symbolS *, int *));
+extern void elf_frob_symbol (symbolS *, int *);
 #ifndef obj_frob_symbol
 #define obj_frob_symbol(symp, punt) elf_frob_symbol (symp, &punt)
 #endif
 
-extern void elf_pop_insert PARAMS ((void));
+extern void elf_pop_insert (void);
 #ifndef obj_pop_insert
 #define obj_pop_insert()	elf_pop_insert()
 #endif
 
 #ifndef OBJ_MAYBE_ELF
+/* If OBJ_MAYBE_ELF then obj-multi.h will define obj_ecoff_set_ext.  */
 #define obj_ecoff_set_ext elf_ecoff_set_ext
-#ifdef ANSI_PROTOTYPES
 struct ecoff_extr;
+extern void elf_ecoff_set_ext (symbolS *, struct ecoff_extr *);
 #endif
-extern void elf_ecoff_set_ext PARAMS ((symbolS *, struct ecoff_extr *));
-#endif
+extern asection *elf_com_section_ptr;
+extern symbolS * elf_common_parse (int ignore ATTRIBUTE_UNUSED, symbolS *symbolP,
+				   addressT size);
 
 #endif /* _OBJ_ELF_H */

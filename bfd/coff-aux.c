@@ -1,22 +1,24 @@
 /* BFD back-end for Apple M68K COFF A/UX 3.x files.
-   Copyright 1996, 1997, 2000, 2002 Free Software Foundation, Inc.
+   Copyright 1996, 1997, 2000, 2002, 2005, 2007, 2008, 2011, 2012
+   Free Software Foundation, Inc.
    Written by Richard Henderson <rth@tamu.edu>.
 
-This file is part of BFD, the Binary File Descriptor library.
+   This file is part of BFD, the Binary File Descriptor library.
 
-This program is free software; you can redistribute it and/or modify
-it under the terms of the GNU General Public License as published by
-the Free Software Foundation; either version 2 of the License, or
-(at your option) any later version.
+   This program is free software; you can redistribute it and/or modify
+   it under the terms of the GNU General Public License as published by
+   the Free Software Foundation; either version 3 of the License, or
+   (at your option) any later version.
 
-This program is distributed in the hope that it will be useful,
-but WITHOUT ANY WARRANTY; without even the implied warranty of
-MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-GNU General Public License for more details.
+   This program is distributed in the hope that it will be useful,
+   but WITHOUT ANY WARRANTY; without even the implied warranty of
+   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+   GNU General Public License for more details.
 
-You should have received a copy of the GNU General Public License
-along with this program; if not, write to the Free Software
-Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.  */
+   You should have received a copy of the GNU General Public License
+   along with this program; if not, write to the Free Software
+   Foundation, Inc., 51 Franklin Street - Fifth Floor, Boston,
+   MA 02110-1301, USA.  */
 
 #define TARGET_SYM	m68kaux_coff_vec
 #define TARGET_NAME	"coff-m68k-aux"
@@ -37,15 +39,19 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.  */
 
 #define COFF_COMMON_ADDEND
 
-#include "bfd.h"
 #include "sysdep.h"
-
-static bfd_boolean coff_m68k_aux_link_add_one_symbol
-  PARAMS ((struct bfd_link_info *, bfd *, const char *, flagword,
-           asection *, bfd_vma, const char *, bfd_boolean, bfd_boolean,
-           struct bfd_link_hash_entry **));
+#include "bfd.h"
 
 #define coff_link_add_one_symbol coff_m68k_aux_link_add_one_symbol
+static bfd_boolean
+coff_m68k_aux_link_add_one_symbol
+  (struct bfd_link_info *, bfd *, const char *, flagword, asection *,
+   bfd_vma, const char *, bfd_boolean, bfd_boolean,
+   struct bfd_link_hash_entry **);
+
+#ifndef bfd_pe_print_pdata
+#define bfd_pe_print_pdata	NULL
+#endif
 
 #include "coff/aux-coff.h"  /* override coff/internal.h and coff/m68k.h */
 #include "coff-m68k.c"
@@ -57,18 +63,16 @@ static bfd_boolean coff_m68k_aux_link_add_one_symbol
    what you include in the shared object.  */
 
 static bfd_boolean
-coff_m68k_aux_link_add_one_symbol (info, abfd, name, flags, section, value,
-				   string, copy, collect, hashp)
-     struct bfd_link_info *info;
-     bfd *abfd;
-     const char *name;
-     flagword flags;
-     asection *section;
-     bfd_vma value;
-     const char *string;
-     bfd_boolean copy;
-     bfd_boolean collect;
-     struct bfd_link_hash_entry **hashp;
+coff_m68k_aux_link_add_one_symbol (struct bfd_link_info *info,
+				   bfd *abfd,
+				   const char *name,
+				   flagword flags,
+				   asection *section,
+				   bfd_vma value,
+				   const char *string,
+				   bfd_boolean copy,
+				   bfd_boolean collect,
+				   struct bfd_link_hash_entry **hashp)
 {
   struct bfd_link_hash_entry *h;
 
@@ -99,7 +103,8 @@ coff_m68k_aux_link_add_one_symbol (info, abfd, name, flags, section, value,
 	  && (bfd_hash_lookup (info->notice_hash, name, FALSE, FALSE)
 	      != (struct bfd_hash_entry *) NULL))
 	{
-	  if (! (*info->callbacks->notice) (info, name, abfd, section, value))
+	  if (! (*info->callbacks->notice) (info, h, abfd, section, value,
+					    flags, string))
 	    return FALSE;
 	}
 

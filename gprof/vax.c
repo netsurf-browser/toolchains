@@ -53,30 +53,31 @@ enum opermodes
   };
 typedef enum opermodes operandenum;
 
-#if 0
+/* *INDENT-OFF* */
 /* Here to document only.  We can't use this when cross compiling as
-   the bitfield layout might not be the same as native.  */
-struct modebyte
-  {
-    unsigned int regfield:4;
-    unsigned int modefield:4;
-  };
-#endif
+   the bitfield layout might not be the same as native.
+
+   struct modebyte
+     {
+       unsigned int regfield:4;
+       unsigned int modefield:4;
+     };
+*/
+/* *INDENT-ON* */
 
 /*
  * A symbol to be the child of indirect calls:
  */
 static Sym indirectchild;
 
-static operandenum vax_operandmode PARAMS ((unsigned char *));
-static char *vax_operandname PARAMS ((operandenum));
-static long vax_operandlength PARAMS ((unsigned char *));
-static bfd_signed_vma vax_offset PARAMS ((unsigned char *));
-void vax_find_call PARAMS ((Sym *, bfd_vma, bfd_vma));
+static operandenum vax_operandmode (unsigned char *);
+static char *vax_operandname (operandenum);
+static long vax_operandlength (unsigned char *);
+static bfd_signed_vma vax_offset (unsigned char *);
+void vax_find_call (Sym *, bfd_vma, bfd_vma);
 
 static operandenum
-vax_operandmode (modep)
-     unsigned char *modep;
+vax_operandmode (unsigned char *modep)
 {
   int usesreg = *modep & 0xf;
 
@@ -117,8 +118,7 @@ vax_operandmode (modep)
 }
 
 static char *
-vax_operandname (mode)
-     operandenum mode;
+vax_operandname (operandenum mode)
 {
 
   switch (mode)
@@ -171,8 +171,7 @@ vax_operandname (mode)
 }
 
 static long
-vax_operandlength (modep)
-     unsigned char *modep;
+vax_operandlength (unsigned char *modep)
 {
 
   switch (vax_operandmode (modep))
@@ -209,8 +208,7 @@ vax_operandlength (modep)
 }
 
 static bfd_signed_vma
-vax_offset (modep)
-     unsigned char *modep;
+vax_offset (unsigned char *modep)
 {
   operandenum mode = vax_operandmode (modep);
 
@@ -231,10 +229,7 @@ vax_offset (modep)
 
 
 void
-vax_find_call (parent, p_lowpc, p_highpc)
-     Sym *parent;
-     bfd_vma p_lowpc;
-     bfd_vma p_highpc;
+vax_find_call (Sym *parent, bfd_vma p_lowpc, bfd_vma p_highpc)
 {
   unsigned char *instructp;
   long length;
@@ -252,18 +247,6 @@ vax_find_call (parent, p_lowpc, p_highpc)
       indirectchild.cg.cyc.head = &indirectchild;
     }
 
-  if (core_text_space == 0)
-    {
-      return;
-    }
-  if (p_lowpc < s_lowpc)
-    {
-      p_lowpc = s_lowpc;
-    }
-  if (p_highpc > s_highpc)
-    {
-      p_highpc = s_highpc;
-    }
   DBG (CALLDEBUG, printf ("[findcall] %s: 0x%lx to 0x%lx\n",
 			  parent->name, (unsigned long) p_lowpc,
 			  (unsigned long) p_highpc));
@@ -323,24 +306,27 @@ vax_find_call (parent, p_lowpc, p_highpc)
 	       *      a function.
 	       */
 	      destpc = pc + vax_offset (instructp + length);
-	      if (destpc >= s_lowpc && destpc <= s_highpc)
+	      if (hist_check_address (destpc))
 		{
 		  child = sym_lookup (&symtab, destpc);
-		  DBG (CALLDEBUG,
-		       printf ("[findcall]\tdestpc 0x%lx",
-			       (unsigned long) destpc);
-		       printf (" child->name %s", child->name);
-		       printf (" child->addr 0x%lx\n",
-			       (unsigned long) child->addr);
-		    );
-		  if (child->addr == destpc)
+		  if (child)
 		    {
-		      /*
-		       *    a hit
-		       */
-		      arc_add (parent, child, (unsigned long) 0);
-		      length += vax_operandlength (instructp + length);
-		      continue;
+		      DBG (CALLDEBUG,
+		           printf ("[findcall]\tdestpc 0x%lx",
+			           (unsigned long) destpc);
+		           printf (" child->name %s", child->name);
+		           printf (" child->addr 0x%lx\n",
+			           (unsigned long) child->addr);
+		        );
+		      if (child->addr == destpc)
+		        {
+		          /*
+		           *    a hit
+		           */
+		          arc_add (parent, child, (unsigned long) 0);
+		          length += vax_operandlength (instructp + length);
+		          continue;
+		        }
 		    }
 		  goto botched;
 		}

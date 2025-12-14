@@ -1,4 +1,4 @@
-@c Copyright 2001, 2002 Free Software Foundation, Inc.
+@c Copyright 2001, 2002, 2003, 2006, 2011 Free Software Foundation, Inc.
 @c This is part of the GAS manual.
 @c For copying conditions, see the file as.texinfo.
 @c MMIX description by Hans-Peter Nilsson, hp@bitrange.com
@@ -82,6 +82,21 @@ that at link stage can be contracted.  (Though linker relaxation isn't yet
 implemented in @code{@value{LD}}.)  The option @samp{-x} also imples
 @samp{--linker-allocated-gregs}.
 
+@cindex @samp{--no-pushj-stubs} command line option, MMIX
+@cindex @samp{--no-stubs} command line option, MMIX
+If instruction expansion is enabled, @code{@value{AS}} can expand a
+@samp{PUSHJ} instruction into a series of instructions.  The shortest
+expansion is to not expand it, but just mark the call as redirectable to a
+stub, which @code{@value{LD}} creates at link-time, but only if the
+original @samp{PUSHJ} instruction is found not to reach the target.  The
+stub consists of the necessary instructions to form a jump to the target.
+This happens if @code{@value{AS}} can assert that the @samp{PUSHJ}
+instruction can reach such a stub.  The option @samp{--no-pushj-stubs}
+disables this shorter expansion, and the longer series of instructions is
+then created at assembly-time.  The option @samp{--no-stubs} is a synonym,
+intended for compatibility with future releases, where generation of stubs
+for other instructions may be implemented.
+
 @cindex @samp{--linker-allocated-gregs} command line option, MMIX
 Usually a two-operand-expression (@pxref{GREG-base}) without a matching
 @samp{GREG} directive is treated as an error by @code{@value{AS}}.  When
@@ -157,7 +172,10 @@ specified, the rest of the line is ignored, treated as a comment.
 The characters @samp{*} and @samp{#} are line comment characters; each
 start a comment at the beginning of a line, but only at the beginning of a
 line.  A @samp{#} prefixes a hexadecimal number if found elsewhere on a
-line.
+line.  If a @samp{#} appears at the start of a line the whole line is
+treated as a comment, but the line can also act as a logical line
+number directive (@pxref{Comments}) or a preprocessor control command
+(@pxref{Preprocessing}).
 
 Two other characters, @samp{%} and @samp{!}, each start a comment anywhere
 on the line.  Thus you can't use the @samp{modulus} and @samp{not}
@@ -428,7 +446,7 @@ operand can be omitted, defaulting to a zero value.
 The directives @samp{WYDE}, @samp{TETRA} and @samp{OCTA} emit constants of
 two, four and eight bytes size respectively.  Before anything else happens
 for the directive, the current location is aligned to the respective
-constant-size bondary.  If a label is defined at the beginning of the
+constant-size boundary.  If a label is defined at the beginning of the
 line, its value will be that after the alignment.  A single operand can be
 omitted, defaulting to a zero value emitted for the directive.  Operands
 can be expressed as strings (@pxref{Strings}), in which case each
@@ -515,7 +533,7 @@ Operand syntax is a bit stricter with @code{@value{AS}} than
 must write @code{addu $1,$2,3}.
 
 You can't LOC to a lower address than those already visited
-(i.e. ``backwards'').
+(i.e., ``backwards'').
 
 A LOC directive must come before any emitted code.
 

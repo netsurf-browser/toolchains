@@ -1,5 +1,5 @@
 /* Implement the stpncpy function.
-   Copyright (C) 2003 Free Software Foundation, Inc.
+   Copyright (C) 2003, 2011 Free Software Foundation, Inc.
    Written by Kaveh R. Ghazi <ghazi@caip.rutgers.edu>.
 
 This file is part of the libiberty library.
@@ -15,12 +15,13 @@ Library General Public License for more details.
 
 You should have received a copy of the GNU Library General Public
 License along with libiberty; see the file COPYING.LIB.  If
-not, write to the Free Software Foundation, Inc., 59 Temple Place - Suite 330,
-Boston, MA 02111-1307, USA.  */
+not, write to the Free Software Foundation, Inc., 51 Franklin Street - Fifth Floor,
+Boston, MA 02110-1301, USA.  */
 
 /*
 
-@deftypefn Supplemental char* stpncpy (char *@var{dst}, const char *@var{src}, size_t @var{len})
+@deftypefn Supplemental char* stpncpy (char *@var{dst}, const char *@var{src}, @
+  size_t @var{len})
 
 Copies the string @var{src} into @var{dst}, copying exactly @var{len}
 and padding with zeros if necessary.  If @var{len} < strlen(@var{src})
@@ -32,20 +33,13 @@ strlen(@var{src}).
 */
 
 #include <ansidecl.h>
-#ifdef ANSI_PROTOTYPES
 #include <stddef.h>
-#else
-#define size_t unsigned long
-#endif
 
-extern size_t strlen PARAMS ((const char *));
-extern char *strncpy PARAMS ((char *, const char *, size_t));
+extern size_t strlen (const char *);
+extern char *strncpy (char *, const char *, size_t);
 
 char *
-stpncpy (dst, src, len)
-     char *dst;
-     const char *src;
-     size_t len;
+stpncpy (char *dst, const char *src, size_t len)
 {
   size_t n = strlen (src);
   if (n > len)

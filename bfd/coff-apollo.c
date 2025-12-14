@@ -1,27 +1,28 @@
 /* BFD back-end for Apollo 68000 COFF binaries.
-   Copyright 1990, 1991, 1992, 1993, 1994, 1999, 2000, 2001, 2002
-   Free Software Foundation, Inc.
+   Copyright 1990, 1991, 1992, 1993, 1994, 1999, 2000, 2001, 2002, 2003,
+   2005, 2007, 2008, 2012  Free Software Foundation, Inc.
    By Troy Rollo (troy@cbme.unsw.edu.au)
    Based on m68k standard COFF version Written by Cygnus Support.
 
-This file is part of BFD, the Binary File Descriptor library.
+   This file is part of BFD, the Binary File Descriptor library.
 
-This program is free software; you can redistribute it and/or modify
-it under the terms of the GNU General Public License as published by
-the Free Software Foundation; either version 2 of the License, or
-(at your option) any later version.
+   This program is free software; you can redistribute it and/or modify
+   it under the terms of the GNU General Public License as published by
+   the Free Software Foundation; either version 3 of the License, or
+   (at your option) any later version.
 
-This program is distributed in the hope that it will be useful,
-but WITHOUT ANY WARRANTY; without even the implied warranty of
-MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-GNU General Public License for more details.
+   This program is distributed in the hope that it will be useful,
+   but WITHOUT ANY WARRANTY; without even the implied warranty of
+   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+   GNU General Public License for more details.
 
-You should have received a copy of the GNU General Public License
-along with this program; if not, write to the Free Software
-Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.  */
+   You should have received a copy of the GNU General Public License
+   along with this program; if not, write to the Free Software
+   Foundation, Inc., 51 Franklin Street - Fifth Floor, Boston,
+   MA 02110-1301, USA.  */
 
-#include "bfd.h"
 #include "sysdep.h"
+#include "bfd.h"
 #include "libbfd.h"
 #include "coff/apollo.h"
 #include "coff/internal.h"
@@ -51,14 +52,12 @@ reloc_howto_type apollocoff_howto_table[] =
 
 /* Turn a howto into a reloc number.  */
 
-extern void apollo_rtype2howto PARAMS ((arelent *, int));
-extern int  apollo_howto2rtype PARAMS ((reloc_howto_type *));
+extern void apollo_rtype2howto (arelent *, int);
+extern int  apollo_howto2rtype (reloc_howto_type *);
 #ifndef ONLY_DECLARE_RELOCS
 
 void
-apollo_rtype2howto (internal, relocentry)
-     arelent *internal;
-     int relocentry;
+apollo_rtype2howto (arelent *internal, int relocentry)
 {
   switch (relocentry)
     {
@@ -73,8 +72,7 @@ apollo_rtype2howto (internal, relocentry)
 }
 
 int
-apollo_howto2rtype (internal)
-     reloc_howto_type *internal;
+apollo_howto2rtype (reloc_howto_type *internal)
 {
   if (internal->pc_relative)
     {
@@ -104,6 +102,8 @@ apollo_howto2rtype (internal)
 #define SELECT_RELOC(external, internal) \
   external.r_type = apollo_howto2rtype (internal);
 
+#define bfd_pe_print_pdata	NULL
+
 #include "coffcode.h"
 
 #ifndef TARGET_SYM
@@ -115,7 +115,7 @@ apollo_howto2rtype (internal)
 #endif
 
 #ifdef NAMES_HAVE_UNDERSCORE
-CREATE_BIG_COFF_TARGET_VEC (TARGET_SYM, TARGET_NAME, 0, 0, '_', NULL)
+CREATE_BIG_COFF_TARGET_VEC (TARGET_SYM, TARGET_NAME, 0, 0, '_', NULL, COFF_SWAP_TABLE)
 #else
-CREATE_BIG_COFF_TARGET_VEC (TARGET_SYM, TARGET_NAME, 0, 0, 0, NULL)
+CREATE_BIG_COFF_TARGET_VEC (TARGET_SYM, TARGET_NAME, 0, 0, 0, NULL, COFF_SWAP_TABLE)
 #endif

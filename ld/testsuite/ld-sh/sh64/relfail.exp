@@ -1,19 +1,22 @@
 # Expect script for ld-sh tests
-#   Copyright (C) 2001 Free Software Foundation
+#   Copyright (C) 2001, 2002, 2003, 2004, 2005, 2007 Free Software Foundation
 #
-# This file is free software; you can redistribute it and/or modify
+# This file is part of the GNU Binutils.
+#
+# This program is free software; you can redistribute it and/or modify
 # it under the terms of the GNU General Public License as published by
-# the Free Software Foundation; either version 2 of the License, or
+# the Free Software Foundation; either version 3 of the License, or
 # (at your option) any later version.
-# 
+#
 # This program is distributed in the hope that it will be useful,
 # but WITHOUT ANY WARRANTY; without even the implied warranty of
 # MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
 # GNU General Public License for more details.
-# 
+#
 # You should have received a copy of the GNU General Public License
 # along with this program; if not, write to the Free Software
-# Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
+# Foundation, Inc., 51 Franklin Street - Fifth Floor, Boston,
+# MA 02110-1301, USA.
 #
 
 # Test SH reloc failures - that is, cases that ld must not allow.
@@ -27,6 +30,13 @@ if [istarget sh64-*-linux*] {
     set oformat32 "elf32-sh64-linux"
     set startsym "_start"
     set doabi64 0
+} elseif { [istarget sh64*-*-netbsd*] || [istarget sh5*-*-netbsd*] } then {
+    set emul32 "shelf32_nbsd"
+    set oformat32 "elf32-sh64-nbsd"
+    set startsym "__start"
+    set doabi64 1
+    set emul64 "shelf64_nbsd"
+    set oformat64 "elf64-sh64-nbsd"
 } else {
     set emul32 "shelf32"
     set oformat32 "elf32-sh64"
@@ -143,10 +153,10 @@ proc run_sh64relfailtests {sh64relfailtests} {
 	}
 	
 	if {$as_options == ""} {
-	    set as_options $def_as_options;
+	    set as_options $def_as_options
 	}
 	if {$ld_options == ""} {
-	    set ld_options $def_ld_options;
+	    set ld_options $def_ld_options
 	}
 	
 	if { $is_unresolved } {
@@ -158,7 +168,7 @@ proc run_sh64relfailtests {sh64relfailtests} {
 	puts $asm " .text"
 	puts $asm " .global $startsym"
 	puts $asm "$startsym:"
-	puts $asm " $opcode";
+	puts $asm " $opcode"
 	close $asm
 	
 	if ![ld_assemble $as "$as_options tmpdir/relfail-$testindex.s" "tmpdir/relfail-$testindex.o"] {

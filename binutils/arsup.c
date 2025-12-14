@@ -1,12 +1,12 @@
 /* arsup.c - Archive support for MRI compatibility
-   Copyright 1992, 1994, 1995, 1996, 1997, 2000, 2002
-   Free Software Foundation, Inc.
+   Copyright 1992, 1994, 1995, 1996, 1997, 1999, 2000, 2001, 2002, 2003,
+   2004, 2005, 2007, 2008 Free Software Foundation, Inc.
 
    This file is part of GNU Binutils.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License as published by
-   the Free Software Foundation; either version 2 of the License, or
+   the Free Software Foundation; either version 3 of the License, or
    (at your option) any later version.
 
    This program is distributed in the hope that it will be useful,
@@ -16,7 +16,8 @@
 
    You should have received a copy of the GNU General Public License
    along with this program; if not, write to the Free Software
-   Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.  */
+   Foundation, Inc., 51 Franklin Street - Fifth Floor, Boston,
+   MA 02110-1301, USA.  */
 
 
 /* Contributed by Steve Chamberlain
@@ -25,24 +26,26 @@
    This file looks after requests from arparse.y, to provide the MRI
    style librarian command syntax + 1 word LIST.  */
 
+#include "sysdep.h"
 #include "bfd.h"
-#include "arsup.h"
 #include "libiberty.h"
-#include "bucomm.h"
 #include "filenames.h"
+#include "bucomm.h"
+#include "arsup.h"
 
 static void map_over_list
-  PARAMS ((bfd *, void (*function) (bfd *, bfd *), struct list *));
-static void ar_directory_doer PARAMS ((bfd *, bfd *));
-static void ar_addlib_doer PARAMS ((bfd *, bfd *));
+  (bfd *, void (*function) (bfd *, bfd *), struct list *);
+static void ar_directory_doer (bfd *, bfd *);
+static void ar_addlib_doer (bfd *, bfd *);
 
 extern int verbose;
 
+static bfd *obfd;
+static char *real_name;
+static FILE *outfile;
+
 static void
-map_over_list (arch, function, list)
-     bfd *arch;
-     void (*function) PARAMS ((bfd *, bfd *));
-     struct list *list;
+map_over_list (bfd *arch, void (*function) (bfd *, bfd *), struct list *list)
 {
   bfd *head;
 
@@ -50,10 +53,10 @@ map_over_list (arch, function, list)
     {
       bfd *next;
 
-      head = arch->next;
+      head = arch->archive_next;
       while (head != NULL)
 	{
-	  next = head->next;
+	  next = head->archive_next;
 	  function (head, (bfd *) NULL);
 	  head = next;
 	}
@@ -72,7 +75,7 @@ map_over_list (arch, function, list)
 	  bfd_boolean found = FALSE;
 	  bfd *prev = arch;
 
-	  for (head = arch->next; head; head = head->next)
+	  for (head = arch->archive_next; head; head = head->archive_next)
 	    {
 	      if (head->filename != NULL
 		  && FILENAME_CMP (ptr->name, head->filename) == 0)
@@ -89,21 +92,15 @@ map_over_list (arch, function, list)
 }
 
 
-FILE *outfile;
 
 static void
-ar_directory_doer (abfd, ignore)
-     bfd *abfd;
-     bfd *ignore ATTRIBUTE_UNUSED;
+ar_directory_doer (bfd *abfd, bfd *ignore ATTRIBUTE_UNUSED)
 {
   print_arelt_descr(outfile, abfd, verbose);
 }
 
 void
-ar_directory (ar_name, list, output)
-     char *ar_name;
-     struct list *list;
-     char *output;
+ar_directory (char *ar_name, struct list *list, char *output)
 {
   bfd *arch;
 
@@ -130,7 +127,7 @@ ar_directory (ar_name, list, output)
 }
 
 void
-DEFUN_VOID(prompt)
+prompt (void)
 {
   extern int interactive;
 
@@ -142,20 +139,15 @@ DEFUN_VOID(prompt)
 }
 
 void
-maybequit ()
+maybequit (void)
 {
   if (! interactive)
     xexit (9);
 }
 
 
-bfd *obfd;
-char *real_name;
-
 void
-ar_open (name, t)
-  char *name;
-  int t;
+ar_open (char *name, int t)
 {
   char *tname = (char *) xmalloc (strlen (name) + 10);
   const char *bname = lbasename (name);
@@ -207,7 +199,7 @@ ar_open (name, t)
 	  while (element)
 	    {
 	      *ptr = element;
-	      ptr = &element->next;
+	      ptr = &element->archive_next;
 	      element = bfd_openr_next_archived_file (ibfd, element);
 	    }
 	}
@@ -215,26 +207,23 @@ ar_open (name, t)
       bfd_set_format (obfd, bfd_archive);
 
       obfd->has_armap = 1;
+      obfd->is_thin_archive = 0;
     }
 }
 
 static void
-ar_addlib_doer (abfd, prev)
-     bfd *abfd;
-     bfd *prev;
+ar_addlib_doer (bfd *abfd, bfd *prev)
 {
   /* Add this module to the output bfd.  */
   if (prev != NULL)
-    prev->next = abfd->next;
+    prev->archive_next = abfd->archive_next;
 
-  abfd->next = obfd->archive_head;
+  abfd->archive_next = obfd->archive_head;
   obfd->archive_head = abfd;
 }
 
 void
-ar_addlib (name, list)
-     char *name;
-     struct list *list;
+ar_addlib (char *name, struct list *list)
 {
   if (obfd == NULL)
     {
@@ -249,13 +238,12 @@ ar_addlib (name, list)
       if (arch != NULL)
 	map_over_list (arch, ar_addlib_doer, list);
 
-      /* Don't close the bfd, since it will make the elements disasppear.  */
+      /* Don't close the bfd, since it will make the elements disappear.  */
     }
 }
 
 void
-ar_addmod (list)
-     struct list *list;
+ar_addmod (struct list *list)
 {
   if (!obfd)
     {
@@ -276,7 +264,7 @@ ar_addmod (list)
 	    }
 	  else
 	    {
-	      abfd->next = obfd->archive_head;
+	      abfd->archive_next = obfd->archive_head;
 	      obfd->archive_head = abfd;
 	    }
 	  list = list->next;
@@ -286,15 +274,14 @@ ar_addmod (list)
 
 
 void
-ar_clear ()
+ar_clear (void)
 {
   if (obfd)
     obfd->archive_head = 0;
 }
 
 void
-ar_delete (list)
-     struct list *list;
+ar_delete (struct list *list)
 {
   if (!obfd)
     {
@@ -314,13 +301,13 @@ ar_delete (list)
 	    {
 	      if (FILENAME_CMP(member->filename, list->name) == 0)
 		{
-		  *prev = member->next;
+		  *prev = member->archive_next;
 		  found = 1;
 		}
 	      else
-		prev = &(member->next);
+		prev = &(member->archive_next);
 
-	      member = member->next;
+	      member = member->archive_next;
 	    }
 
 	  if (!found)
@@ -336,7 +323,7 @@ ar_delete (list)
 }
 
 void
-ar_save ()
+ar_save (void)
 {
   if (!obfd)
     {
@@ -349,15 +336,14 @@ ar_save ()
 
       bfd_close (obfd);
 
-      rename (ofilename, real_name);
+      smart_rename (ofilename, real_name, 0);
       obfd = 0;
       free (ofilename);
     }
 }
 
 void
-ar_replace (list)
-     struct list *list;
+ar_replace (struct list *list)
 {
   if (!obfd)
     {
@@ -389,15 +375,15 @@ ar_replace (list)
 		  else
 		    {
 		      *prev = abfd;
-		      abfd->next = member->next;
+		      abfd->archive_next = member->archive_next;
 		      found = 1;
 		    }
 		}
 	      else
 		{
-		  prev = &(member->next);
+		  prev = &(member->archive_next);
 		}
-	      member = member->next;
+	      member = member->archive_next;
 	    }
 
 	  if (!found)
@@ -423,7 +409,7 @@ ar_replace (list)
 
 /* And I added this one.  */
 void
-ar_list ()
+ar_list (void)
 {
   if (!obfd)
     {
@@ -440,24 +426,23 @@ ar_list ()
 
       for (abfd = obfd->archive_head;
 	   abfd != (bfd *)NULL;
-	   abfd = abfd->next)
+	   abfd = abfd->archive_next)
 	ar_directory_doer (abfd, (bfd *) NULL);
     }
 }
 
 void
-ar_end ()
+ar_end (void)
 {
   if (obfd)
     {
-      fclose ((FILE *)(obfd->iostream));
+      bfd_cache_close (obfd);
       unlink (bfd_get_filename (obfd));
     }
 }
 
 void
-ar_extract (list)
-     struct list *list;
+ar_extract (struct list *list)
 {
   if (!obfd)
     {
@@ -480,7 +465,7 @@ ar_extract (list)
 		  found = 1;
 		}
 
-	      member = member->next;
+	      member = member->archive_next;
 	    }
 
 	  if (!found)

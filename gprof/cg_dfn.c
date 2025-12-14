@@ -26,8 +26,8 @@
  * OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF
  * SUCH DAMAGE.
  */
-#include "libiberty.h"
 #include "gprof.h"
+#include "libiberty.h"
 #include "search_list.h"
 #include "source.h"
 #include "symtab.h"
@@ -44,11 +44,11 @@ typedef struct
   }
 DFN_Stack;
 
-static bfd_boolean is_numbered PARAMS ((Sym *));
-static bfd_boolean is_busy PARAMS ((Sym *));
-static void find_cycle PARAMS ((Sym *));
-static void pre_visit PARAMS ((Sym *));
-static void post_visit PARAMS ((Sym *));
+static bfd_boolean is_numbered (Sym *);
+static bfd_boolean is_busy (Sym *);
+static void find_cycle (Sym *);
+static void pre_visit (Sym *);
+static void post_visit (Sym *);
 
 DFN_Stack *dfn_stack = NULL;
 int dfn_maxdepth = 0;
@@ -60,8 +60,7 @@ int dfn_counter = DFN_NAN;
  * Is CHILD already numbered?
  */
 static bfd_boolean
-is_numbered (child)
-     Sym *child;
+is_numbered (Sym *child)
 {
   return child->cg.top_order != DFN_NAN && child->cg.top_order != DFN_BUSY;
 }
@@ -71,8 +70,7 @@ is_numbered (child)
  * Is CHILD already busy?
  */
 static bfd_boolean
-is_busy (child)
-     Sym *child;
+is_busy (Sym *child)
 {
   if (child->cg.top_order == DFN_NAN)
     {
@@ -89,13 +87,12 @@ is_busy (child)
  * depth-first number).
  */
 static void
-find_cycle (child)
-     Sym *child;
+find_cycle (Sym *child)
 {
   Sym *head = 0;
   Sym *tail;
   int cycle_top;
-  int index;
+  int cycle_index;
 
   for (cycle_top = dfn_depth; cycle_top > 0; --cycle_top)
     {
@@ -172,9 +169,9 @@ find_cycle (child)
 	       print_name (head);
 	       printf ("\n"));
 	}
-      for (index = cycle_top + 1; index <= dfn_depth; ++index)
+      for (cycle_index = cycle_top + 1; cycle_index <= dfn_depth; ++cycle_index)
 	{
-	  child = dfn_stack[index].sym;
+	  child = dfn_stack[cycle_index].sym;
 	  if (child->cg.cyc.head == child)
 	    {
 	      /*
@@ -213,15 +210,15 @@ find_cycle (child)
  * the stack and mark it busy.
  */
 static void
-pre_visit (parent)
-     Sym *parent;
+pre_visit (Sym *parent)
 {
   ++dfn_depth;
 
   if (dfn_depth >= dfn_maxdepth)
     {
       dfn_maxdepth += DFN_INCR_DEPTH;
-      dfn_stack = xrealloc (dfn_stack, dfn_maxdepth * sizeof *dfn_stack);
+      dfn_stack = (DFN_Stack *) xrealloc (dfn_stack,
+                                          dfn_maxdepth * sizeof *dfn_stack);
     }
 
   dfn_stack[dfn_depth].sym = parent;
@@ -238,8 +235,7 @@ pre_visit (parent)
  * and number functions if PARENT is head of a cycle.
  */
 static void
-post_visit (parent)
-     Sym *parent;
+post_visit (Sym *parent)
 {
   Sym *member;
 
@@ -273,8 +269,7 @@ post_visit (parent)
  * Given this PARENT, depth first number its children.
  */
 void
-cg_dfn (parent)
-     Sym *parent;
+cg_dfn (Sym *parent)
 {
   Arc *arc;
 

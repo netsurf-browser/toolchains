@@ -28,15 +28,7 @@ CTOR=".ctors ${CONSTRUCTING-0} :
   {
     ${CONSTRUCTING+ PROVIDE (__CTOR_LIST__ = .); }
     ${CONSTRUCTING+${CTOR_START}}
-    *(.ctors)
-    /* We don't want to include the .ctor section from
-       from the crtend.o file until after the sorted ctors.
-       The .ctor section from the crtend file contains the
-       end of ctors marker and it must be last
-
-    KEEP (*(EXCLUDE_FILE (*crtend.o) .ctors))
-    KEEP (*(SORT(.ctors.*)))
-    KEEP (*(.ctors)) */
+    KEEP (*(.ctors))
 
     ${CONSTRUCTING+${CTOR_END}}
     ${CONSTRUCTING+ PROVIDE(__CTOR_END__ = .); }
@@ -45,12 +37,7 @@ CTOR=".ctors ${CONSTRUCTING-0} :
 DTOR="  .dtors	${CONSTRUCTING-0} :
   {
     ${CONSTRUCTING+ PROVIDE(__DTOR_LIST__ = .); }
-    *(.dtors)
-    /*
-    KEEP (*crtbegin.o(.dtors))
-    KEEP (*(EXCLUDE_FILE (*crtend.o) .dtors))
-    KEEP (*(SORT(.dtors.*)))
-    KEEP (*(.dtors)) */
+    KEEP (*(.dtors))
     ${CONSTRUCTING+ PROVIDE(__DTOR_END__ = .); }
   } ${RELOCATING+ > ${TEXT_MEMORY}}"
 
@@ -177,7 +164,7 @@ ${RELOCATING-/* Linker script for 68HC11 object file (ld -r).  */}
 OUTPUT_FORMAT("${OUTPUT_FORMAT}", "${BIG_OUTPUT_FORMAT}",
 	      "${LITTLE_OUTPUT_FORMAT}")
 OUTPUT_ARCH(${OUTPUT_ARCH})
-ENTRY(${ENTRY})
+${RELOCATING+ENTRY(${ENTRY})}
 
 ${RELOCATING+${LIB_SEARCH_DIRS}}
 ${RELOCATING+${EXECUTABLE_SYMBOLS}}
@@ -326,6 +313,8 @@ SECTIONS
     /* .gnu.warning sections are handled specially by elf32.em.  */
     *(.gnu.warning)
     ${RELOCATING+*(.gnu.linkonce.t.*)}
+    ${RELOCATING+*(.tramp)}
+    ${RELOCATING+*(.tramp.*)}
 
     ${RELOCATING+${FINISH_CODE}}
 
@@ -337,6 +326,11 @@ SECTIONS
   .eh_frame ${RELOCATING-0} :
   {
     KEEP (*(.eh_frame))
+  } ${RELOCATING+ > ${TEXT_MEMORY}}
+
+  .gcc_except_table ${RELOCATING-0} :
+  {
+    *(.gcc_except_table)
   } ${RELOCATING+ > ${TEXT_MEMORY}}
 
   .rodata  ${RELOCATING-0} :
@@ -434,33 +428,10 @@ SECTIONS
 
   .comment	 0 : { *(.comment) }
 
-  /* DWARF debug sections.
-     Symbols in the DWARF debugging sections are relative to the beginning
-     of the section so we begin them at 0.
-     Treatment of DWARF debug section must be at end of the linker
-     script to avoid problems when there are undefined symbols. It's necessary
-     to avoid that the DWARF section is relocated before such undefined
-     symbols are found.  */
+EOF
 
-  /* DWARF 1 */
-  .debug	 0 : { *(.debug) }
-  .line		 0 : { *(.line) }
+. $srcdir/scripttempl/DWARF.sc
 
-  /* GNU DWARF 1 extensions */
-  .debug_srcinfo 0 : { *(.debug_srcinfo) }
-  .debug_sfnames 0 : { *(.debug_sfnames) }
-
-  /* DWARF 1.1 and DWARF 2 */
-  .debug_aranges  0 : { *(.debug_aranges) }
-  .debug_pubnames 0 : { *(.debug_pubnames) }
-
-  /* DWARF 2 */
-  .debug_info     0 : { *(.debug_info) *(.gnu.linkonce.wi.*) }
-  .debug_abbrev   0 : { *(.debug_abbrev) }
-  .debug_line     0 : { *(.debug_line) }
-  .debug_frame    0 : { *(.debug_frame) }
-  .debug_str      0 : { *(.debug_str) }
-  .debug_loc      0 : { *(.debug_loc) }
-  .debug_macinfo  0 : { *(.debug_macinfo) }
+cat <<EOF
 }
 EOF

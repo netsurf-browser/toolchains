@@ -1,13 +1,13 @@
 /* This file is aout_gnu.h
 
-   Copyright 1987, 1988, 1989, 1990, 1991, 1992, 1993, 1994, 2000
-   Free Software Foundation, Inc.
+   Copyright 1987, 1988, 1989, 1990, 1991, 1992, 1993, 1994, 2000, 2002,
+   2005, 2007 Free Software Foundation, Inc.
 
    This file is part of GAS, the GNU Assembler.
 
    GAS is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License as published by
-   the Free Software Foundation; either version 2, or (at your option)
+   the Free Software Foundation; either version 3, or (at your option)
    any later version.
 
    GAS is distributed in the hope that it will be useful,
@@ -17,7 +17,8 @@
 
    You should have received a copy of the GNU General Public License
    along with GAS; see the file COPYING.  If not, write to
-   the Free Software Foundation, 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.  */
+   the Free Software Foundation, 51 Franklin Street - Fifth Floor,
+   Boston, MA 02110-1301, USA.  */
 
 #ifndef __A_OUT_GNU_H__
 #define __A_OUT_GNU_H__
@@ -26,15 +27,15 @@
    relocations, and one which uses extended relocations.
 
    Today, the extended reloc uses are
-   TC_SPARC, TC_A29K
+   TC_SPARC
 
    each must define the enum reloc_type
 
 */
 
-#define USE_EXTENDED_RELOC (defined(TC_SPARC) || defined(TC_A29K))
+#define USE_EXTENDED_RELOC defined(TC_SPARC)
 
-#if defined(TC_SPARC) || defined(TC_A29K)
+#if defined(TC_SPARC)
 enum reloc_type
   {
     RELOC_8, RELOC_16, RELOC_32,/* simple relocations */
@@ -62,7 +63,7 @@ enum reloc_type
     NO_RELOC
   };
 
-#endif /* TC_SPARC or TC_A29K */
+#endif /* TC_SPARC */
 
 #define __GNU_EXEC_MACROS__
 
@@ -72,22 +73,20 @@ enum reloc_type
    "struct exec".  Don't assume that on this machine, the "struct exec"
    will lay out the same sizes or alignments.  */
 
-#define BYTES_IN_WORD 4
-
 struct exec_bytes
   {
     unsigned char a_info[4];
-    unsigned char a_text[BYTES_IN_WORD];
-    unsigned char a_data[BYTES_IN_WORD];
-    unsigned char a_bss[BYTES_IN_WORD];
-    unsigned char a_syms[BYTES_IN_WORD];
-    unsigned char a_entry[BYTES_IN_WORD];
-    unsigned char a_trsize[BYTES_IN_WORD];
-    unsigned char a_drsize[BYTES_IN_WORD];
+    unsigned char a_text[4];
+    unsigned char a_data[4];
+    unsigned char a_bss[4];
+    unsigned char a_syms[4];
+    unsigned char a_entry[4];
+    unsigned char a_trsize[4];
+    unsigned char a_drsize[4];
   };
 
 /* How big the "struct exec" is on disk */
-#define	EXEC_BYTES_SIZE (4 + BYTES_IN_WORD * 7)
+#define	EXEC_BYTES_SIZE	(8 * 4)
 
 /* This is the layout in memory of a "struct exec" while we process it.  */
 

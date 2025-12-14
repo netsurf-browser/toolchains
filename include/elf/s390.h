@@ -1,12 +1,12 @@
 /* 390 ELF support for BFD.
-   Copyright 2000, 2001 Free Software Foundation, Inc.
+   Copyright 2000, 2001, 2003, 2010 Free Software Foundation, Inc.
    Contributed by Carl B. Pedersen and Martin Schwidefsky.
 
    This file is part of BFD, the Binary File Descriptor library.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License as published by
-   the Free Software Foundation; either version 2 of the License, or
+   the Free Software Foundation; either version 3 of the License, or
    (at your option) any later version.
 
    This program is distributed in the hope that it will be useful,
@@ -16,8 +16,8 @@
 
    You should have received a copy of the GNU General Public License
    along with this program; if not, write to the Free Software
-   Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA
-   02111-1307, USA.  */
+   Foundation, Inc., 51 Franklin Street - Fifth Floor, Boston, MA
+   02110-1301, USA.  */
 
 #ifndef _ELF_390_H
 #define _ELF_390_H
@@ -32,6 +32,10 @@
 #define GOT_REG 		12		/* Holds addr of GOT */
 
 #include "elf/reloc-macros.h"
+
+/* Processor specific flags for the ELF header e_flags field.  */
+
+#define EF_S390_HIGH_GPRS        0x00000001
 
 /* Relocation types.  */
 
@@ -53,8 +57,12 @@ START_RELOC_NUMBERS (elf_s390_reloc_type)
     RELOC_NUMBER (R_390_GOTPC, 14)	/* 32 bit PC relative offset to GOT.  */
     RELOC_NUMBER (R_390_GOT16, 15)	/* 16 bit GOT offset.  */
     RELOC_NUMBER (R_390_PC16, 16)	/* PC relative 16 bit.  */
+    RELOC_NUMBER (R_390_PC12DBL, 62)	/* PC relative 12 bit shifted by 1.  */
+    RELOC_NUMBER (R_390_PLT12DBL, 63)	/* 12 bit PC rel. PLT shifted by 1.  */
     RELOC_NUMBER (R_390_PC16DBL, 17)	/* PC relative 16 bit shifted by 1.  */
     RELOC_NUMBER (R_390_PLT16DBL, 18)	/* 16 bit PC rel. PLT shifted by 1.  */
+    RELOC_NUMBER (R_390_PC24DBL, 64)	/* PC relative 24 bit shifted by 1.  */
+    RELOC_NUMBER (R_390_PLT24DBL, 65)	/* 24 bit PC rel. PLT shifted by 1.  */
     RELOC_NUMBER (R_390_PC32DBL, 19)	/* PC relative 32 bit shifted by 1.  */
     RELOC_NUMBER (R_390_PLT32DBL, 20)	/* 32 bit PC rel. PLT shifted by 1.  */
     RELOC_NUMBER (R_390_GOTPCDBL, 21)	/* 32 bit PC rel. GOT shifted by 1.  */
@@ -110,6 +118,12 @@ START_RELOC_NUMBERS (elf_s390_reloc_type)
     RELOC_NUMBER (R_390_TLS_DTPOFF, 55)	/* Offset in TLS block.  */
     RELOC_NUMBER (R_390_TLS_TPOFF, 56)	/* Negate offset in static TLS
 					   block.  */
+    RELOC_NUMBER (R_390_20, 57)		/* Direct 20 bit.  */
+    RELOC_NUMBER (R_390_GOT20, 58)	/* 20 bit GOT offset.  */
+    RELOC_NUMBER (R_390_GOTPLT20, 59)	/* 20 bit offset to jump slot.  */
+    RELOC_NUMBER (R_390_TLS_GOTIE20, 60)/* 20 bit GOT offset for statis TLS
+					   block offset.  */
+    RELOC_NUMBER (R_390_IRELATIVE, 61)  /* IFUNC relocation.  */
     /* These are GNU extensions to enable C++ vtable garbage collection.  */
     RELOC_NUMBER (R_390_GNU_VTINHERIT, 250)
     RELOC_NUMBER (R_390_GNU_VTENTRY, 251)

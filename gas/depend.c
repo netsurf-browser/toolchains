@@ -1,11 +1,12 @@
 /* depend.c - Handle dependency tracking.
-   Copyright 1997, 1998, 2000, 2001 Free Software Foundation, Inc.
+   Copyright 1997, 1998, 2000, 2001, 2003, 2004, 2005, 2007
+   Free Software Foundation, Inc.
 
    This file is part of GAS, the GNU Assembler.
 
    GAS is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License as published by
-   the Free Software Foundation; either version 2, or (at your option)
+   the Free Software Foundation; either version 3, or (at your option)
    any later version.
 
    GAS is distributed in the hope that it will be useful,
@@ -15,10 +16,11 @@
 
    You should have received a copy of the GNU General Public License
    along with GAS; see the file COPYING.  If not, write to the Free
-   Software Foundation, 59 Temple Place - Suite 330, Boston, MA
-   02111-1307, USA.  */
+   Software Foundation, 51 Franklin Street - Fifth Floor, Boston, MA
+   02110-1301, USA.  */
 
 #include "as.h"
+#include "filenames.h"
 
 /* The file to write to, or NULL if no dependencies being kept.  */
 static char * dep_file = NULL;
@@ -35,8 +37,8 @@ static struct dependency * dep_chain = NULL;
 /* Current column in output file.  */
 static int column = 0;
 
-static int quote_string_for_make PARAMS ((FILE *, char *));
-static void wrap_output PARAMS ((FILE *, char *, int));
+static int quote_string_for_make (FILE *, char *);
+static void wrap_output (FILE *, char *, int);
 
 /* Number of columns allowable.  */
 #define MAX_COLUMNS 72
@@ -45,8 +47,7 @@ static void wrap_output PARAMS ((FILE *, char *, int));
    never called, then dependency tracking is simply skipped.  */
 
 void
-start_dependencies (filename)
-     char *filename;
+start_dependencies (char *filename)
 {
   dep_file = filename;
 }
@@ -54,8 +55,7 @@ start_dependencies (filename)
 /* Noticed a new filename, so try to register it.  */
 
 void
-register_dependency (filename)
-     char *filename;
+register_dependency (char *filename)
 {
   struct dependency *dep;
 
@@ -64,7 +64,7 @@ register_dependency (filename)
 
   for (dep = dep_chain; dep != NULL; dep = dep->next)
     {
-      if (!strcmp (filename, dep->file))
+      if (!filename_cmp (filename, dep->file))
 	return;
     }
 
@@ -81,9 +81,7 @@ register_dependency (filename)
    This code is taken from gcc with only minor changes.  */
 
 static int
-quote_string_for_make (file, src)
-     FILE *file;
-     char *src;
+quote_string_for_make (FILE *file, char *src)
 {
   char *p = src;
   int i = 0;
@@ -145,10 +143,7 @@ quote_string_for_make (file, src)
    wrapping as necessary.  */
 
 static void
-wrap_output (f, string, spacer)
-     FILE *f;
-     char *string;
-     int spacer;
+wrap_output (FILE *f, char *string, int spacer)
 {
   int len = quote_string_for_make (NULL, string);
 
@@ -186,7 +181,7 @@ wrap_output (f, string, spacer)
 /* Print dependency file.  */
 
 void
-print_dependencies ()
+print_dependencies (void)
 {
   FILE *f;
   struct dependency *dep;

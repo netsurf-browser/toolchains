@@ -1,25 +1,27 @@
 /* BFD back-end for HP/Intel IA-64 COFF files.
-   Copyright 1999, 2000, 2001, 2002 Free Software Foundation, Inc.
+   Copyright 1999, 2000, 2001, 2002, 2005, 2007, 2008, 2009, 2011, 2012
+   Free Software Foundation, Inc.
    Contributed by David Mosberger <davidm@hpl.hp.com>
 
-This file is part of BFD, the Binary File Descriptor library.
+   This file is part of BFD, the Binary File Descriptor library.
 
-This program is free software; you can redistribute it and/or modify
-it under the terms of the GNU General Public License as published by
-the Free Software Foundation; either version 2 of the License, or
-(at your option) any later version.
+   This program is free software; you can redistribute it and/or modify
+   it under the terms of the GNU General Public License as published by
+   the Free Software Foundation; either version 3 of the License, or
+   (at your option) any later version.
 
-This program is distributed in the hope that it will be useful,
-but WITHOUT ANY WARRANTY; without even the implied warranty of
-MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-GNU General Public License for more details.
+   This program is distributed in the hope that it will be useful,
+   but WITHOUT ANY WARRANTY; without even the implied warranty of
+   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+   GNU General Public License for more details.
 
-You should have received a copy of the GNU General Public License
-along with this program; if not, write to the Free Software
-Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.  */
+   You should have received a copy of the GNU General Public License
+   along with this program; if not, write to the Free Software
+   Foundation, Inc., 51 Franklin Street - Fifth Floor, Boston,
+   MA 02110-1301, USA.  */
 
-#include "bfd.h"
 #include "sysdep.h"
+#include "bfd.h"
 #include "libbfd.h"
 #include "coff/ia64.h"
 #include "coff/internal.h"
@@ -27,9 +29,9 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.  */
 #include "libcoff.h"
 
 #define COFF_DEFAULT_SECTION_ALIGNMENT_POWER (2)
-/* The page size is a guess based on ELF.  */
 
-#define COFF_PAGE_SIZE 0x1000
+/* Windows ia64 uses 8K page size.  */
+#define COFF_PAGE_SIZE 0x2000
 
 static reloc_howto_type howto_table[] =
 {
@@ -52,24 +54,22 @@ static reloc_howto_type howto_table[] =
 /* Return TRUE if this relocation should
    appear in the output .reloc section.  */
 
-static bfd_boolean in_reloc_p PARAMS ((bfd *, reloc_howto_type *));
-
 static bfd_boolean
-in_reloc_p(abfd, howto)
-     bfd * abfd ATTRIBUTE_UNUSED;
-     reloc_howto_type *howto ATTRIBUTE_UNUSED;
+in_reloc_p (bfd * abfd ATTRIBUTE_UNUSED,
+	    reloc_howto_type *howto ATTRIBUTE_UNUSED)
 {
   return FALSE;			/* We don't do relocs for now...  */
 }
 #endif
 
+#ifndef bfd_pe_print_pdata
+#define bfd_pe_print_pdata	NULL
+#endif
+
 #include "coffcode.h"
 
-static const bfd_target *ia64coff_object_p PARAMS ((bfd *));
-
 static const bfd_target *
-ia64coff_object_p (abfd)
-     bfd *abfd;
+ia64coff_object_p (bfd *abfd)
 {
 #ifdef COFF_IMAGE_WITH_PE
   {
@@ -170,6 +170,7 @@ const bfd_target
 #endif
   '/',				/* ar_pad_char */
   15,				/* ar_max_namelen */
+  0,				/* match priority.  */
 
   bfd_getl64, bfd_getl_signed_64, bfd_putl64,
      bfd_getl32, bfd_getl_signed_32, bfd_putl32,

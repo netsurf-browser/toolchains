@@ -1,26 +1,28 @@
 /* Motorola 68HC11-specific support for 32-bit ELF
-   Copyright 1999, 2000, 2001, 2002, 2003 Free Software Foundation, Inc.
+   Copyright 1999, 2000, 2001, 2002, 2003, 2004, 2005, 2006, 2007, 2010, 2012
+   Free Software Foundation, Inc.
    Contributed by Stephane Carrez (stcarrez@nerim.fr)
    (Heavily copied from the D10V port by Martin Hunt (hunt@cygnus.com))
 
-This file is part of BFD, the Binary File Descriptor library.
+   This file is part of BFD, the Binary File Descriptor library.
 
-This program is free software; you can redistribute it and/or modify
-it under the terms of the GNU General Public License as published by
-the Free Software Foundation; either version 2 of the License, or
-(at your option) any later version.
+   This program is free software; you can redistribute it and/or modify
+   it under the terms of the GNU General Public License as published by
+   the Free Software Foundation; either version 3 of the License, or
+   (at your option) any later version.
 
-This program is distributed in the hope that it will be useful,
-but WITHOUT ANY WARRANTY; without even the implied warranty of
-MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-GNU General Public License for more details.
+   This program is distributed in the hope that it will be useful,
+   but WITHOUT ANY WARRANTY; without even the implied warranty of
+   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+   GNU General Public License for more details.
 
-You should have received a copy of the GNU General Public License
-along with this program; if not, write to the Free Software
-Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.  */
+   You should have received a copy of the GNU General Public License
+   along with this program; if not, write to the Free Software
+   Foundation, Inc., 51 Franklin Street - Fifth Floor, Boston,
+   MA 02110-1301, USA.  */
 
-#include "bfd.h"
 #include "sysdep.h"
+#include "bfd.h"
 #include "bfdlink.h"
 #include "libbfd.h"
 #include "elf-bfd.h"
@@ -30,27 +32,26 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.  */
 
 /* Relocation functions.  */
 static reloc_howto_type *bfd_elf32_bfd_reloc_type_lookup
-  PARAMS ((bfd *, bfd_reloc_code_real_type));
+  (bfd *, bfd_reloc_code_real_type);
 static void m68hc11_info_to_howto_rel
-  PARAMS ((bfd *, arelent *, Elf_Internal_Rela *));
+  (bfd *, arelent *, Elf_Internal_Rela *);
 
 /* Trampoline generation.  */
 static bfd_boolean m68hc11_elf_size_one_stub
-  PARAMS((struct bfd_hash_entry *gen_entry, PTR in_arg));
+  (struct bfd_hash_entry *gen_entry, void *in_arg);
 static bfd_boolean m68hc11_elf_build_one_stub
-  PARAMS((struct bfd_hash_entry *gen_entry, PTR in_arg));
+  (struct bfd_hash_entry *gen_entry, void *in_arg);
 static struct bfd_link_hash_table* m68hc11_elf_bfd_link_hash_table_create
-  PARAMS ((bfd* abfd));
+  (bfd* abfd);
 
 /* Linker relaxation.  */
 static bfd_boolean m68hc11_elf_relax_section
-  PARAMS ((bfd *, asection *, struct bfd_link_info *, bfd_boolean *));
+  (bfd *, asection *, struct bfd_link_info *, bfd_boolean *);
 static void m68hc11_elf_relax_delete_bytes
-  PARAMS ((bfd *, asection *, bfd_vma, int));
+  (bfd *, asection *, bfd_vma, int);
 static void m68hc11_relax_group
-  PARAMS ((bfd *, asection *, bfd_byte *, unsigned,
-	   unsigned long, unsigned long));
-static int compare_reloc PARAMS ((const void *, const void *));
+  (bfd *, asection *, bfd_byte *, unsigned, unsigned long, unsigned long);
+static int compare_reloc (const void *, const void *);
 
 /* Use REL instead of RELA to save space */
 #define USE_REL	1
@@ -342,9 +343,8 @@ static const struct m68hc11_reloc_map m68hc11_reloc_map[] = {
 };
 
 static reloc_howto_type *
-bfd_elf32_bfd_reloc_type_lookup (abfd, code)
-     bfd *abfd ATTRIBUTE_UNUSED;
-     bfd_reloc_code_real_type code;
+bfd_elf32_bfd_reloc_type_lookup (bfd *abfd ATTRIBUTE_UNUSED,
+                                 bfd_reloc_code_real_type code)
 {
   unsigned int i;
 
@@ -359,13 +359,28 @@ bfd_elf32_bfd_reloc_type_lookup (abfd, code)
   return NULL;
 }
 
+static reloc_howto_type *
+bfd_elf32_bfd_reloc_name_lookup (bfd *abfd ATTRIBUTE_UNUSED,
+				 const char *r_name)
+{
+  unsigned int i;
+
+  for (i = 0;
+       i < (sizeof (elf_m68hc11_howto_table)
+	    / sizeof (elf_m68hc11_howto_table[0]));
+       i++)
+    if (elf_m68hc11_howto_table[i].name != NULL
+	&& strcasecmp (elf_m68hc11_howto_table[i].name, r_name) == 0)
+      return &elf_m68hc11_howto_table[i];
+
+  return NULL;
+}
+
 /* Set the howto pointer for an M68HC11 ELF reloc.  */
 
 static void
-m68hc11_info_to_howto_rel (abfd, cache_ptr, dst)
-     bfd *abfd ATTRIBUTE_UNUSED;
-     arelent *cache_ptr;
-     Elf_Internal_Rela *dst;
+m68hc11_info_to_howto_rel (bfd *abfd ATTRIBUTE_UNUSED,
+                           arelent *cache_ptr, Elf_Internal_Rela *dst)
 {
   unsigned int r_type;
 
@@ -379,9 +394,7 @@ m68hc11_info_to_howto_rel (abfd, cache_ptr, dst)
 
 /* Build a 68HC11 trampoline stub.  */
 static bfd_boolean
-m68hc11_elf_build_one_stub (gen_entry, in_arg)
-     struct bfd_hash_entry *gen_entry;
-     PTR in_arg;
+m68hc11_elf_build_one_stub (struct bfd_hash_entry *gen_entry, void *in_arg)
 {
   struct elf32_m68hc11_stub_hash_entry *stub_entry;
   struct bfd_link_info *info;
@@ -396,12 +409,14 @@ m68hc11_elf_build_one_stub (gen_entry, in_arg)
   info = (struct bfd_link_info *) in_arg;
 
   htab = m68hc11_elf_hash_table (info);
+  if (htab == NULL)
+    return FALSE;
 
   stub_sec = stub_entry->stub_sec;
 
   /* Make a note of the offset within the stubs for this entry.  */
-  stub_entry->stub_offset = stub_sec->_raw_size;
-  stub_sec->_raw_size += 10;
+  stub_entry->stub_offset = stub_sec->size;
+  stub_sec->size += 10;
   loc = stub_sec->contents + stub_entry->stub_offset;
 
   stub_bfd = stub_sec->owner;
@@ -443,24 +458,22 @@ m68hc11_elf_build_one_stub (gen_entry, in_arg)
    we know stub section sizes.  */
 
 static bfd_boolean
-m68hc11_elf_size_one_stub (gen_entry, in_arg)
-     struct bfd_hash_entry *gen_entry;
-     PTR in_arg ATTRIBUTE_UNUSED;
+m68hc11_elf_size_one_stub (struct bfd_hash_entry *gen_entry,
+                           void *in_arg ATTRIBUTE_UNUSED)
 {
   struct elf32_m68hc11_stub_hash_entry *stub_entry;
 
   /* Massage our args to the form they really have.  */
   stub_entry = (struct elf32_m68hc11_stub_hash_entry *) gen_entry;
 
-  stub_entry->stub_sec->_raw_size += 10;
+  stub_entry->stub_sec->size += 10;
   return TRUE;
 }
 
 /* Create a 68HC11 ELF linker hash table.  */
 
 static struct bfd_link_hash_table *
-m68hc11_elf_bfd_link_hash_table_create (abfd)
-     bfd *abfd;
+m68hc11_elf_bfd_link_hash_table_create (bfd *abfd)
 {
   struct m68hc11_elf_link_hash_table *ret;
 
@@ -533,9 +546,7 @@ find_relaxable_insn (unsigned char code)
 }
 
 static int
-compare_reloc (e1, e2)
-     const void *e1;
-     const void *e2;
+compare_reloc (const void *e1, const void *e2)
 {
   const Elf_Internal_Rela *i1 = (const Elf_Internal_Rela *) e1;
   const Elf_Internal_Rela *i2 = (const Elf_Internal_Rela *) e2;
@@ -549,13 +560,9 @@ compare_reloc (e1, e2)
 #define M6811_OP_LDX_IMMEDIATE (0xCE)
 
 static void
-m68hc11_relax_group (abfd, sec, contents, value, offset, end_group)
-     bfd *abfd;
-     asection *sec;
-     bfd_byte *contents;
-     unsigned value;
-     unsigned long offset;
-     unsigned long end_group;
+m68hc11_relax_group (bfd *abfd, asection *sec, bfd_byte *contents,
+                     unsigned value, unsigned long offset,
+                     unsigned long end_group)
 {
   unsigned char code;
   unsigned long start_offset;
@@ -665,14 +672,10 @@ m68hc11_relax_group (abfd, sec, contents, value, offset, end_group)
 	and somewhat more difficult to support.  */
 
 static bfd_boolean
-m68hc11_elf_relax_section (abfd, sec, link_info, again)
-     bfd *abfd;
-     asection *sec;
-     struct bfd_link_info *link_info;
-     bfd_boolean *again;
+m68hc11_elf_relax_section (bfd *abfd, asection *sec,
+                           struct bfd_link_info *link_info, bfd_boolean *again)
 {
   Elf_Internal_Shdr *symtab_hdr;
-  Elf_Internal_Shdr *shndx_hdr;
   Elf_Internal_Rela *internal_relocs;
   Elf_Internal_Rela *free_relocs = NULL;
   Elf_Internal_Rela *irel, *irelend;
@@ -687,26 +690,20 @@ m68hc11_elf_relax_section (abfd, sec, link_info, again)
   /* Assume nothing changes.  */
   *again = FALSE;
 
-  /* We don't have to do anything for a relocateable link, if
+  /* We don't have to do anything for a relocatable link, if
      this section does not have relocs, or if this is not a
      code section.  */
-  if (link_info->relocateable
+  if (link_info->relocatable
       || (sec->flags & SEC_RELOC) == 0
       || sec->reloc_count == 0
       || (sec->flags & SEC_CODE) == 0)
     return TRUE;
 
-  /* If this is the first time we have been called for this section,
-     initialize the cooked size.  */
-  if (sec->_cooked_size == 0)
-    sec->_cooked_size = sec->_raw_size;
-
   symtab_hdr = &elf_tdata (abfd)->symtab_hdr;
-  shndx_hdr = &elf_tdata (abfd)->symtab_shndx_hdr;
 
   /* Get a copy of the native relocations.  */
-  internal_relocs = (_bfd_elf32_link_read_relocs
-		     (abfd, sec, (PTR) NULL, (Elf_Internal_Rela *) NULL,
+  internal_relocs = (_bfd_elf_link_read_relocs
+		     (abfd, sec, NULL, (Elf_Internal_Rela *) NULL,
 		      link_info->keep_memory));
   if (internal_relocs == NULL)
     goto error_return;
@@ -748,13 +745,7 @@ m68hc11_elf_relax_section (abfd, sec, link_info, again)
 	  else
 	    {
 	      /* Go get them off disk.  */
-	      contents = (bfd_byte *) bfd_malloc (sec->_raw_size);
-	      if (contents == NULL)
-		goto error_return;
-	      free_contents = contents;
-
-	      if (! bfd_get_section_contents (abfd, sec, contents,
-					      (file_ptr) 0, sec->_raw_size))
+	      if (!bfd_malloc_and_get_section (abfd, sec, &contents))
 		goto error_return;
 	    }
 	}
@@ -780,7 +771,7 @@ m68hc11_elf_relax_section (abfd, sec, link_info, again)
           prev_insn_group = 0;
 
 	  /* Do nothing if this reloc is the last byte in the section.  */
-	  if (irel->r_offset + 2 >= sec->_cooked_size)
+	  if (irel->r_offset + 2 >= sec->size)
 	    continue;
 
 	  /* See if the next instruction is an unconditional pc-relative
@@ -866,7 +857,7 @@ m68hc11_elf_relax_section (abfd, sec, link_info, again)
           prev_insn_group = 0;
 
 	  /* Do nothing if this reloc is the last byte in the section.  */
-	  if (irel->r_offset == sec->_cooked_size)
+	  if (irel->r_offset == sec->size)
 	    continue;
 
           prev_insn_group = irel;
@@ -969,9 +960,9 @@ m68hc11_elf_relax_section (abfd, sec, link_info, again)
 
           if (prev_insn_group)
             {
-              unsigned long old_sec_size = sec->_cooked_size;
+              unsigned long old_sec_size = sec->size;
 
-              /* Note that we've changed the reldection contents, etc.  */
+              /* Note that we've changed the relocation contents, etc.  */
               elf_section_data (sec)->relocs = internal_relocs;
               free_relocs = NULL;
 
@@ -988,7 +979,7 @@ m68hc11_elf_relax_section (abfd, sec, link_info, again)
               prev_insn_group = 0;
               irel->r_info = ELF32_R_INFO (ELF32_R_SYM (irel->r_info),
                                            R_M68HC11_NONE);
-              if (sec->_cooked_size != old_sec_size)
+              if (sec->size != old_sec_size)
                 *again = TRUE;
               continue;
             }
@@ -1002,7 +993,7 @@ m68hc11_elf_relax_section (abfd, sec, link_info, again)
               continue;
             }
 
-          /* Note that we've changed the reldection contents, etc.  */
+          /* Note that we've changed the relocation contents, etc.  */
           elf_section_data (sec)->relocs = internal_relocs;
           free_relocs = NULL;
 
@@ -1047,7 +1038,7 @@ m68hc11_elf_relax_section (abfd, sec, link_info, again)
               if ((offset & 0xff80) == 0 || (offset & 0xff80) == 0xff80)
                 {
 
-                  /* Note that we've changed the reldection contents, etc.  */
+                  /* Note that we've changed the relocation contents, etc.  */
                   elf_section_data (sec)->relocs = internal_relocs;
                   free_relocs = NULL;
 
@@ -1121,11 +1112,8 @@ m68hc11_elf_relax_section (abfd, sec, link_info, again)
 /* Delete some bytes from a section while relaxing.  */
 
 static void
-m68hc11_elf_relax_delete_bytes (abfd, sec, addr, count)
-     bfd *abfd;
-     asection *sec;
-     bfd_vma addr;
-     int count;
+m68hc11_elf_relax_delete_bytes (bfd *abfd, asection *sec,
+                                bfd_vma addr, int count)
 {
   Elf_Internal_Shdr *symtab_hdr;
   unsigned int sec_shndx;
@@ -1144,7 +1132,7 @@ m68hc11_elf_relax_delete_bytes (abfd, sec, addr, count)
 
   contents = elf_section_data (sec)->this_hdr.contents;
 
-  toaddr = sec->_cooked_size;
+  toaddr = sec->size;
 
   irel = elf_section_data (sec)->relocs;
   irelend = irel + sec->reloc_count;
@@ -1153,7 +1141,7 @@ m68hc11_elf_relax_delete_bytes (abfd, sec, addr, count)
   memmove (contents + addr, contents + addr + count,
 	   (size_t) (toaddr - addr - count));
 
-  sec->_cooked_size -= count;
+  sec->size -= count;
 
   /* Adjust all the relocs.  */
   for (irel = elf_section_data (sec)->relocs; irel < irelend; irel++)
@@ -1281,8 +1269,23 @@ m68hc11_elf_relax_delete_bytes (abfd, sec, addr, count)
     }
 }
 
+/* Specific sections:
+   - The .page0 is a data section that is mapped in [0x0000..0x00FF].
+     Page0 accesses are faster on the M68HC11. Soft registers used by GCC-m6811
+     are located in .page0.
+   - The .vectors is the section that represents the interrupt
+     vectors.  */
+static const struct bfd_elf_special_section elf32_m68hc11_special_sections[] =
+{
+  { STRING_COMMA_LEN (".eeprom"),   0, SHT_PROGBITS, SHF_ALLOC + SHF_WRITE },
+  { STRING_COMMA_LEN (".page0"),    0, SHT_PROGBITS, SHF_ALLOC + SHF_WRITE },
+  { STRING_COMMA_LEN (".softregs"), 0, SHT_NOBITS,   SHF_ALLOC + SHF_WRITE },
+  { STRING_COMMA_LEN (".vectors"),  0, SHT_PROGBITS, SHF_ALLOC },
+  { NULL,                       0,  0, 0,            0 }
+};
 
 #define ELF_ARCH		bfd_arch_m68hc11
+#define ELF_TARGET_ID		M68HC11_ELF_DATA
 #define ELF_MACHINE_CODE	EM_68HC11
 #define ELF_MAXPAGESIZE		0x1000
 
@@ -1292,14 +1295,14 @@ m68hc11_elf_relax_delete_bytes (abfd, sec, addr, count)
 #define elf_info_to_howto	0
 #define elf_info_to_howto_rel	m68hc11_info_to_howto_rel
 #define bfd_elf32_bfd_relax_section  m68hc11_elf_relax_section
-#define elf_backend_gc_mark_hook     elf32_m68hc11_gc_mark_hook
-#define elf_backend_gc_sweep_hook    elf32_m68hc11_gc_sweep_hook
 #define elf_backend_check_relocs     elf32_m68hc11_check_relocs
 #define elf_backend_relocate_section elf32_m68hc11_relocate_section
 #define elf_backend_add_symbol_hook  elf32_m68hc11_add_symbol_hook
 #define elf_backend_object_p	0
 #define elf_backend_final_write_processing	0
 #define elf_backend_can_gc_sections		1
+#define elf_backend_special_sections  elf32_m68hc11_special_sections
+#define elf_backend_merge_symbol_attribute elf32_m68hc11_merge_symbol_attribute
 
 #define bfd_elf32_bfd_link_hash_table_create \
                                 m68hc11_elf_bfd_link_hash_table_create

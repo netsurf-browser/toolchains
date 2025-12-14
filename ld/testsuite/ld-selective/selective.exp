@@ -1,9 +1,12 @@
 # Expect script for LD selective linking tests
-#   Copyright 1998, 1999, 2000, 2001, 2002 Free Software Foundation, Inc.
+#   Copyright 1998, 1999, 2000, 2001, 2002, 2003, 2004, 2005, 2006, 2007, 2009,
+#   2010, 2011 Free Software Foundation, Inc.
 #
-# This file is free software; you can redistribute it and/or modify
+# This file is part of the GNU Binutils.
+#
+# This program is free software; you can redistribute it and/or modify
 # it under the terms of the GNU General Public License as published by
-# the Free Software Foundation; either version 2 of the License, or
+# the Free Software Foundation; either version 3 of the License, or
 # (at your option) any later version.
 #
 # This program is distributed in the hope that it will be useful,
@@ -13,34 +16,14 @@
 #
 # You should have received a copy of the GNU General Public License
 # along with this program; if not, write to the Free Software
-# Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
+# Foundation, Inc., 51 Franklin Street - Fifth Floor, Boston,
+# MA 02110-1301, USA.
 #
 # Written by Catherine Moore (clm@cygnus.com)
 # Make sure that constructors are handled correctly.
 
-
-# AOUT based ports do not support selective linking
-if {[istarget "*-*-*aout*"] \
-    || [istarget "*-*-*bout*"] \
-    || [istarget "vax-*-ultrix*"]} {
-    return
-}
-
-# COFF based ports do not support selective linking
-if {[istarget "*-*-coff"]} {
-    return
-}
-if {[istarget "*-*-pe"]} {
-    return
-}
-
-# Alpha does not support selective linking
-if {[istarget "alpha*-*-*"]} {
-    return
-}
-
-# s390 does not support selective linking
-if {[istarget "s390*-*-*"]} {
+# Only ELF based ports support selective linking
+if { ![is_elf_format] || ![check_gc_sections_available] } {
     return
 }
 
@@ -55,18 +38,25 @@ if {[istarget "s390*-*-*"]} {
 #
 # FIXME: Instead of table, read settings from each source-file.
 set seltests {
-  {selective1 C   1.c  {}       {}    {dropme1 dropme2} {alpha*-*}}
-  {selective2 C   2.c  {}       {}    {foo} {alpha*-* mips*-*}}
-  {selective3 C   2.c  {-u foo} {foo} {{foo 0}} {mips*-*}}
-  {selective4 C++ 3.cc {}       {start a A::foo() B::foo()} {A::bar()} {alpha*-*  mips*-*}}
-  {selective5 C++ 4.cc {}       {start a A::bar()} {A::foo() B::foo()} {alpha*-*  mips*-*}}
+  {selective1 C   1.c  {}       {}    {dropme1 dropme2} {}}
+  {selective2 C   2.c  {}       {}    {foo} {}}
+  {selective3 C   2.c  {-u foo} {foo} {{foo 0}} {}}
+  {selective4 C++ 3.cc {}       {start a A::foo() B::foo()} {A::bar()} {mips*-*}}
+  {selective5 C++ 4.cc {}       {start a A::bar()} {A::foo() B::foo()} {mips*-*}}
   {selective6 C++ 5.cc {}       {start a A::bar()}
     {A::foo() B::foo() dropme1() dropme2()} {*-*-*}}
 }
 
 set cflags "-w -O -ffunction-sections -fdata-sections"
-set cxxflags "-fvtable-gc -fno-exceptions -fno-rtti"
+set cxxflags "-fno-exceptions -fno-rtti"
 set ldflags "--gc-sections -Bstatic"
+
+if [istarget mips*-*] {
+    # MIPS16 doesn't support PIC code.
+    set cflags "-mno-abicalls $cflags"
+    # MIPS ELF uses __start by default, we override it.
+    set ldflags "-e _start $ldflags"
+}
 
 if [istarget sh64*-*-elf] {
     # This is what gcc passes to ld by default, plus switch to the
@@ -76,7 +66,7 @@ if [istarget sh64*-*-elf] {
 }
 
 # If we don't have g++ for the target, mark all tests as untested.
-if { [which $CXX] == 0 } {
+if { ![is_remote host] && [which $CXX] == 0 } {
     foreach testitem $seltests {
 	untested "[lindex $testitem 0]"
     }
@@ -102,39 +92,56 @@ foreach testitem $seltests {
 
     # It's either C or C++ at the moment.
     if { $testtype == "C++" } {
-	set testflags "$cflags $cxxflags"
-    } {
+	set compiler "$CXX"
+	# Starting with 3.4.0, -fvtable-gc is no longer supported and thus
+	# the functionality we try to test for cannot be expected to work.
+	set version [remote_exec host "$CXX -dumpversion"]
+	set version [lindex $version 1]
+	if [regexp "^(\[1-9\]\[0-9\]+|\[4-9\]|3.(\[1-9\]\[0-9\]+|\[4-9\]))\\." $version] {
+	    set testflags "$cflags $cxxflags"
+	    setup_xfail {*-*-*}
+	} else {
+	    set testflags "$cflags $cxxflags -fvtable-gc"
+	}
+    } else {
 	set testflags "$cflags"
+	set compiler "$CC"
     }
 
     # Note that we do not actually *use* CXX; we just add cxxflags for C++
     # tests.  It might have been a buglet originally; now I think better
     # leave as is.
-    if { ![ld_compile "$CC $testflags" $srcdir/$subdir/$testfile $objfile] } {
+    if { ![ld_compile "$compiler $testflags" $srcdir/$subdir/$testfile $objfile] } {
 	unresolved $testname
 	continue
     }
 
     # V850 targets need libgcc.a
-    # FIXME: This does not work with installed toolchains!
     if [istarget v850*-*-elf] {
-	set objfile "$objfile -L ../gcc -lgcc"
+	set libgcc [remote_exec host "$compiler -print-libgcc-file-name"]
+	set libgcc [lindex $libgcc 1]
+	regsub -all "\[\r\n\]" $libgcc "" libgcc
+	set objfile "$objfile $libgcc"
     }
 
     # ARM targets need libgcc.a in THUMB mode so that __call_via_r3 is provided
-    # FIXME: This does not work with installed toolchains!
-    if {[istarget arm-*-*] || [istarget xscale-*-*]} {
-	set objfile "$objfile -L ../gcc -lgcc"
+    if {[istarget arm-*-*]} {
+	set libgcc [remote_exec host "$compiler -print-libgcc-file-name"]
+	set libgcc [lindex $libgcc 1]
+	regsub -all "\[\r\n\]" $libgcc "" libgcc
+	set objfile "$objfile $libgcc"
     }
 
     # HPPA linux targets need libgcc.a for millicode routines ($$dyncall).
     if [istarget hppa*-*-linux*] {
-    	catch "exec $CC -print-libgcc-file-name" libgcc
+	set libgcc [remote_exec host "$compiler -print-libgcc-file-name"]
+	set libgcc [lindex $libgcc 1]
+	regsub -all "\[\r\n\]" $libgcc "" libgcc
 	set objfile "$objfile $libgcc"
     }
 
     # m6811/m6812 code has references to soft registers.
-    if {[istarget m6811-*-*] || [istarget m6812-*-*]} {
+    if {[istarget m6811-*-*] || [istarget m6812-*-*] || [istarget m68hc1*-*-*]} {
 	set objfile "$objfile --defsym _.frame=0 --defsym _.d1=0"
 	set objfile "$objfile --defsym _.d2=0"
     }

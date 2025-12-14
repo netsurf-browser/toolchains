@@ -1,26 +1,30 @@
 /* Disassemble h8500 instructions.
-   Copyright 1993, 1998, 2000, 2001, 2002 Free Software Foundation, Inc.
+   Copyright 1993, 1998, 2000, 2001, 2002, 2004, 2005, 2007, 2012
+   Free Software Foundation, Inc.
 
-This program is free software; you can redistribute it and/or modify
-it under the terms of the GNU General Public License as published by
-the Free Software Foundation; either version 2 of the License, or
-(at your option) any later version.
+   This file is part of the GNU opcodes library.
 
-This program is distributed in the hope that it will be useful,
-but WITHOUT ANY WARRANTY; without even the implied warranty of
-MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-GNU General Public License for more details.
+   This library is free software; you can redistribute it and/or modify
+   it under the terms of the GNU General Public License as published by
+   the Free Software Foundation; either version 3, or (at your option)
+   any later version.
 
-You should have received a copy of the GNU General Public License
-along with this program; if not, write to the Free Software
-Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.  */
+   It is distributed in the hope that it will be useful, but WITHOUT
+   ANY WARRANTY; without even the implied warranty of MERCHANTABILITY
+   or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU General Public
+   License for more details.
 
+   You should have received a copy of the GNU General Public License
+   along with this program; if not, write to the Free Software
+   Foundation, Inc., 51 Franklin Street - Fifth Floor, Boston,
+   MA 02110-1301, USA.  */
+
+#include "sysdep.h"
 #include <stdio.h>
 
 #define DISASSEMBLER_TABLE
 #define DEFINE_TABLE
 
-#include "sysdep.h"
 #include "h8500-opc.h"
 #include "dis-asm.h"
 #include "opintl.h"
@@ -29,8 +33,6 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.  */
 #define MAXLEN 8
 
 #include <setjmp.h>
-
-static int fetch_data PARAMS ((struct disassemble_info *, bfd_byte *));
 
 struct private
 {
@@ -49,9 +51,7 @@ struct private
    ? 1 : fetch_data ((info), (addr)))
 
 static int
-fetch_data (info, addr)
-     struct disassemble_info *info;
-     bfd_byte *addr;
+fetch_data (struct disassemble_info *info, bfd_byte *addr)
 {
   int status;
   struct private *priv = (struct private *) info->private_data;
@@ -74,14 +74,11 @@ fetch_data (info, addr)
 static char *crname[] = { "sr", "ccr", "*", "br", "ep", "dp", "*", "tp" };
 
 int
-print_insn_h8500 (addr, info)
-     bfd_vma addr;
-     disassemble_info *info;
+print_insn_h8500 (bfd_vma addr, disassemble_info *info)
 {
   const h8500_opcode_info *opcode;
   void *stream = info->stream;
   fprintf_ftype func = info->fprintf_func;
-
   struct private priv;
   bfd_byte *buffer = priv.the_buffer;
 
@@ -92,21 +89,6 @@ print_insn_h8500 (addr, info)
     /* Error return.  */
     return -1;
 
-  if (0)
-    {
-      static int one;
-
-      if (!one)
-	{
-	  one = 1;
-	  for (opcode = h8500_table; opcode->name; opcode++)
-	    {
-	      if ((opcode->bytes[0].contents & 0x8) == 0)
-		printf ("%s\n", opcode->name);
-	    }
-	}
-    }
-
   /* Run down the table to find the one which matches.  */
   for (opcode = h8500_table; opcode->name; opcode++)
     {
@@ -115,7 +97,7 @@ print_insn_h8500 (addr, info)
       int rd = 0;
       int rs = 0;
       int disp = 0;
-      int abs = 0;
+      int abs_val = 0;
       int imm = 0;
       int pcrel = 0;
       int qim = 0;
@@ -127,9 +109,8 @@ print_insn_h8500 (addr, info)
 	  FETCH_DATA (info, buffer + byte + 1);
 	  if ((buffer[byte] & opcode->bytes[byte].mask)
 	      != (opcode->bytes[byte].contents))
-	    {
-	      goto next;
-	    }
+	    goto next;
+
 	  else
 	    {
 	      /* Extract any info parts.  */
@@ -173,17 +154,17 @@ print_insn_h8500 (addr, info)
 		  break;
 		case ABS24:
 		  FETCH_DATA (info, buffer + byte + 3);
-		  abs =
+		  abs_val =
 		    (buffer[byte] << 16)
 		    | (buffer[byte + 1] << 8)
 		    | (buffer[byte + 2]);
 		  break;
 		case ABS16:
 		  FETCH_DATA (info, buffer + byte + 2);
-		  abs = (buffer[byte] << 8) | (buffer[byte + 1]);
+		  abs_val = (buffer[byte] << 8) | (buffer[byte + 1]);
 		  break;
 		case ABS8:
-		  abs = (buffer[byte]);
+		  abs_val = (buffer[byte]);
 		  break;
 		case IMM16:
 		  FETCH_DATA (info, buffer + byte + 2);
@@ -227,14 +208,6 @@ print_insn_h8500 (addr, info)
       /* We get here when all the masks have passed so we can output
 	 the operands.  */
       FETCH_DATA (info, buffer + opcode->length);
-      for (i = 0; i < opcode->length; i++)
-	{
-	  (func) (stream, "%02x ", buffer[i]);
-	}
-      for (; i < 6; i++)
-	{
-	  (func) (stream, "   ");
-	}
       (func) (stream, "%s\t", opcode->name);
       for (i = 0; i < opcode->nargs; i++)
 	{
@@ -258,7 +231,7 @@ print_insn_h8500 (addr, info)
 	      func (stream, "@(0x%x:8 (%d), r%d)", disp & 0xff, disp, rd);
 	      break;
 	    case FPIND_D8:
-	      func (stream, "@(0x%x:8 (%d), fp)", disp & 0xff, disp, rn);
+	      func (stream, "@(0x%x:8 (%d), fp)", disp & 0xff, disp);
 	      break;
 	    case CRB:
 	    case CRW:
@@ -292,27 +265,28 @@ print_insn_h8500 (addr, info)
 	      func (stream, "@-sp");
 	      break;
 	    case ABS24:
-	      func (stream, "@0x%0x:24", abs);
+	      func (stream, "@0x%0x:24", abs_val);
 	      break;
 	    case ABS16:
-	      func (stream, "@0x%0x:16", abs & 0xffff);
+	      func (stream, "@0x%0x:16", abs_val & 0xffff);
 	      break;
 	    case ABS8:
-	      func (stream, "@0x%0x:8", abs & 0xff);
+	      func (stream, "@0x%0x:8", abs_val & 0xff);
 	      break;
 	    case IMM16:
 	      func (stream, "#0x%0x:16", imm & 0xffff);
 	      break;
 	    case RLIST:
 	      {
-		int i;
+		int j;
 		int nc = 0;
+
 		func (stream, "(");
-		for (i = 0; i < 8; i++)
+		for (j = 0; j < 8; j++)
 		  {
-		    if (imm & (1 << i))
+		    if (imm & (1 << j))
 		      {
-			func (stream, "r%d", i);
+			func (stream, "r%d", j);
 			if (nc)
 			  func (stream, ",");
 			nc = 1;
@@ -326,11 +300,11 @@ print_insn_h8500 (addr, info)
 	      break;
 	    case PCREL16:
 	      func (stream, "0x%0x:16",
-		    (pcrel + addr + opcode->length) & 0xffff);
+		    (int)(pcrel + addr + opcode->length) & 0xffff);
 	      break;
 	    case PCREL8:
 	      func (stream, "#0x%0x:8",
-		    ((char) pcrel + addr + opcode->length) & 0xffff);
+		    (int)((char) pcrel + addr + opcode->length) & 0xffff);
 	      break;
 	    case QIM:
 	      func (stream, "#%d:q", qim);

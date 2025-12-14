@@ -1,4 +1,5 @@
 # source: expdyn1.s
+# target: cris-*-*elf* cris-*-*aout*
 # as: --em=criself
 # ld: -mcriself
 # objdump: -d
@@ -12,8 +13,8 @@
 
 Disassembly of section \.text:
 
-0+6 <__start>:
-   6:	0f05                	nop 
+0+ <(___init__start|__start|__Stext)>:
+   0:	0f05                	nop 
 
-0+8 <expfn>:
-   8:	0f05                	nop 
+0+2 <expfn>:
+   2:	0f05                	nop 

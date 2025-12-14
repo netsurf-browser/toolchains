@@ -1,22 +1,23 @@
 %{/* nlmheader.y - parse NLM header specification keywords.
-     Copyright 1993, 1994, 1995, 1997, 1998, 2001, 2002
-     Free Software Foundation, Inc.
+     Copyright 1993, 1994, 1995, 1997, 1998, 2001, 2002, 2003, 2005, 2007,
+     2010 Free Software Foundation, Inc.
 
-This file is part of GNU Binutils.
+     This file is part of GNU Binutils.
 
-This program is free software; you can redistribute it and/or modify
-it under the terms of the GNU General Public License as published by
-the Free Software Foundation; either version 2 of the License, or
-(at your option) any later version.
+     This program is free software; you can redistribute it and/or modify
+     it under the terms of the GNU General Public License as published by
+     the Free Software Foundation; either version 3 of the License, or
+     (at your option) any later version.
 
-This program is distributed in the hope that it will be useful,
-but WITHOUT ANY WARRANTY; without even the implied warranty of
-MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-GNU General Public License for more details.
+     This program is distributed in the hope that it will be useful,
+     but WITHOUT ANY WARRANTY; without even the implied warranty of
+     MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+     GNU General Public License for more details.
 
-You should have received a copy of the GNU General Public License
-along with this program; if not, write to the Free Software
-Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.  */
+     You should have received a copy of the GNU General Public License
+     along with this program; if not, write to the Free Software
+     Foundation, Inc., 51 Franklin Street - Fifth Floor, Boston,
+     MA 02110-1301, USA.  */
 
 /* Written by Ian Lance Taylor <ian@cygnus.com>.
 
@@ -27,13 +28,12 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.  */
    This implementation is based on the description in the NetWare Tool
    Maker Specification manual, edition 1.0.  */
 
-#include "ansidecl.h"
-#include <stdio.h>
+#include "sysdep.h"
 #include "safe-ctype.h"
 #include "bfd.h"
-#include "bucomm.h"
 #include "nlm/common.h"
 #include "nlm/internal.h"
+#include "bucomm.h"
 #include "nlmconv.h"
 
 /* Information is stored in the structures pointed to by these
@@ -91,22 +91,21 @@ static char *symbol_prefix;
 #define yyerror(msg) nlmheader_error (msg);
 
 /* Local functions.  */
-static int yylex PARAMS ((void));
-static void nlmlex_file_push PARAMS ((const char *));
-static bfd_boolean nlmlex_file_open PARAMS ((const char *));
-static int nlmlex_buf_init PARAMS ((void));
-static char nlmlex_buf_add PARAMS ((int));
-static long nlmlex_get_number PARAMS ((const char *));
-static void nlmheader_identify PARAMS ((void));
-static void nlmheader_warn PARAMS ((const char *, int));
-static void nlmheader_error PARAMS ((const char *));
-static struct string_list * string_list_cons PARAMS ((char *,
-						      struct string_list *));
-static struct string_list * string_list_append PARAMS ((struct string_list *,
-							struct string_list *));
-static struct string_list * string_list_append1 PARAMS ((struct string_list *,
-							 char *));
-static char *xstrdup PARAMS ((const char *));
+static int yylex (void);
+static void nlmlex_file_push (const char *);
+static bfd_boolean nlmlex_file_open (const char *);
+static int nlmlex_buf_init (void);
+static char nlmlex_buf_add (int);
+static long nlmlex_get_number (const char *);
+static void nlmheader_identify (void);
+static void nlmheader_warn (const char *, int);
+static void nlmheader_error (const char *);
+static struct string_list * string_list_cons (char *, struct string_list *);
+static struct string_list * string_list_append (struct string_list *,
+						struct string_list *);
+static struct string_list * string_list_append1 (struct string_list *,
+						 char *);
+static char *xstrdup (const char *);
 
 %}
 
@@ -118,7 +117,7 @@ static char *xstrdup PARAMS ((const char *));
 
 /* The reserved words.  */
 
-%token CHECK CODESTART COPYRIGHT CUSTOM DATE DEBUG DESCRIPTION EXIT
+%token CHECK CODESTART COPYRIGHT CUSTOM DATE DEBUG_K DESCRIPTION EXIT
 %token EXPORT FLAG_ON FLAG_OFF FULLMAP HELP IMPORT INPUT MAP MESSAGES
 %token MODULE MULTIPLE OS_DOMAIN OUTPUT PSEUDOPREEMPTION REENTRANT
 %token SCREENNAME SHARELIB STACK START SYNCHRONIZE
@@ -203,7 +202,7 @@ command:
 	    if (version_hdr->year < 1900 || version_hdr->year > 3000)
 	      nlmheader_warn (_("illegal year"), -1);
 	  }
-	| DEBUG
+	| DEBUG_K
 	  {
 	    debug_info = TRUE;
 	  }
@@ -537,8 +536,7 @@ static struct input current;
 /* Start the lexer going on the main input file.  */
 
 bfd_boolean
-nlmlex_file (name)
-     const char *name;
+nlmlex_file (const char *name)
 {
   current.next = NULL;
   return nlmlex_file_open (name);
@@ -547,8 +545,7 @@ nlmlex_file (name)
 /* Start the lexer going on a subsidiary input file.  */
 
 static void
-nlmlex_file_push (name)
-     const char *name;
+nlmlex_file_push (const char *name)
 {
   struct input *push;
 
@@ -566,8 +563,7 @@ nlmlex_file_push (name)
 /* Start lexing from a file.  */
 
 static bfd_boolean
-nlmlex_file_open (name)
-     const char *name;
+nlmlex_file_open (const char *name)
 {
   current.file = fopen (name, "r");
   if (current.file == NULL)
@@ -590,14 +586,14 @@ struct keyword_tokens_struct
   int token;
 };
 
-struct keyword_tokens_struct keyword_tokens[] =
+static struct keyword_tokens_struct keyword_tokens[] =
 {
   { "CHECK", CHECK },
   { "CODESTART", CODESTART },
   { "COPYRIGHT", COPYRIGHT },
   { "CUSTOM", CUSTOM },
   { "DATE", DATE },
-  { "DEBUG", DEBUG },
+  { "DEBUG", DEBUG_K },
   { "DESCRIPTION", DESCRIPTION },
   { "EXIT", EXIT },
   { "EXPORT", EXPORT },
@@ -640,7 +636,7 @@ static int lex_pos;
   ((void) (lex_buf != NULL ? lex_pos = 0 : nlmlex_buf_init ()))
 
 static int
-nlmlex_buf_init ()
+nlmlex_buf_init (void)
 {
   lex_size = 10;
   lex_buf = xmalloc (lex_size + 1);
@@ -658,8 +654,7 @@ nlmlex_buf_init ()
 	   : nlmlex_buf_add (c)))
 
 static char
-nlmlex_buf_add (c)
-     int c;
+nlmlex_buf_add (int c)
 {
   if (lex_pos >= lex_size)
     {
@@ -674,7 +669,7 @@ nlmlex_buf_add (c)
    code.  */
 
 static int
-yylex ()
+yylex (void)
 {
   int c;
 
@@ -857,8 +852,7 @@ tail_recurse:
 /* Get a number from a string.  */
 
 static long
-nlmlex_get_number (s)
-     const char *s;
+nlmlex_get_number (const char *s)
 {
   long ret;
   char *send;
@@ -875,7 +869,7 @@ nlmlex_get_number (s)
    number.  */
 
 static void
-nlmheader_identify ()
+nlmheader_identify (void)
 {
   static int done;
 
@@ -890,9 +884,7 @@ nlmheader_identify ()
 /* Issue a warning.  */
 
 static void
-nlmheader_warn (s, imax)
-     const char *s;
-     int imax;
+nlmheader_warn (const char *s, int imax)
 {
   nlmheader_identify ();
   fprintf (stderr, "%s:%d: %s", current.name, current.lineno, s);
@@ -904,8 +896,7 @@ nlmheader_warn (s, imax)
 /* Report an error.  */
 
 static void
-nlmheader_error (s)
-     const char *s;
+nlmheader_error (const char *s)
 {
   nlmheader_warn (s, -1);
   ++parse_errors;
@@ -914,9 +905,7 @@ nlmheader_error (s)
 /* Add a string to a string list.  */
 
 static struct string_list *
-string_list_cons (s, l)
-     char *s;
-     struct string_list *l;
+string_list_cons (char *s, struct string_list *l)
 {
   struct string_list *ret;
 
@@ -929,9 +918,7 @@ string_list_cons (s, l)
 /* Append a string list to another string list.  */
 
 static struct string_list *
-string_list_append (l1, l2)
-     struct string_list *l1;
-     struct string_list *l2;
+string_list_append (struct string_list *l1, struct string_list *l2)
 {
   register struct string_list **pp;
 
@@ -944,9 +931,7 @@ string_list_append (l1, l2)
 /* Append a string to a string list.  */
 
 static struct string_list *
-string_list_append1 (l, s)
-     struct string_list *l;
-     char *s;
+string_list_append1 (struct string_list *l, char *s)
 {
   struct string_list *n;
   register struct string_list **pp;
@@ -963,8 +948,7 @@ string_list_append1 (l, s)
 /* Duplicate a string in memory.  */
 
 static char *
-xstrdup (s)
-     const char *s;
+xstrdup (const char *s)
 {
   unsigned long len;
   char *ret;

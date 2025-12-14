@@ -1,5 +1,6 @@
 /* bfd back-end for TMS320C[34]x support
-   Copyright 1996, 1997, 2002, 2003 Free Software Foundation, Inc.
+   Copyright 1996, 1997, 2002, 2003, 2005, 2007, 2012
+   Free Software Foundation, Inc.
 
    Contributed by Michael Hayes (m.hayes@elec.canterbury.ac.nz)
 
@@ -7,7 +8,7 @@
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License as published by
-   the Free Software Foundation; either version 2 of the License, or
+   the Free Software Foundation; either version 3 of the License, or
    (at your option) any later version.
 
    This program is distributed in the hope that it will be useful,
@@ -17,20 +18,16 @@
 
    You should have received a copy of the GNU General Public License
    along with this program; if not, write to the Free Software
-   Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.  */
+   Foundation, Inc., 51 Franklin Street - Fifth Floor, Boston,
+   MA 02110-1301, USA.  */
 
-#include "bfd.h"
 #include "sysdep.h"
+#include "bfd.h"
 #include "libbfd.h"
 
-static bfd_boolean tic4x_scan
-    PARAMS ((const struct bfd_arch_info *, const char * ));
-
-
 static bfd_boolean
-tic4x_scan (info, string)
-     const struct bfd_arch_info *info;
-     const char *string;
+tic4x_scan (const struct bfd_arch_info *info,
+	    const char *string)
 {
   /* Allow strings of form [ti][Cc][34][0-9], let's not be too picky
      about strange numbered machines in C3x or C4x series.  */
@@ -63,6 +60,7 @@ const bfd_arch_info_type bfd_tic3x_arch =
     FALSE,			/* Not the default architecture.  */
     bfd_default_compatible,
     tic4x_scan,
+    bfd_arch_default_fill,
     0
   };
 
@@ -79,6 +77,7 @@ const bfd_arch_info_type bfd_tic4x_arch =
     TRUE,			/* The default architecture.  */
     bfd_default_compatible,
     tic4x_scan,
+    bfd_arch_default_fill,
     &bfd_tic3x_arch,
   };
 

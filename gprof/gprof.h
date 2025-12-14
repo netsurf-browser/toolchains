@@ -33,11 +33,11 @@
 #include "sysdep.h"
 #include "bfd.h"
 
-/* Undefine the BFD PACKAGE and VERSION macros before including the
-   gprof config.h file.  */
 #undef PACKAGE
-#undef VERSION
-
+#undef PACKAGE_NAME
+#undef PACKAGE_STRING
+#undef PACKAGE_TARNAME
+#undef PACKAGE_VERSION
 #include "gconfig.h"
 
 #ifndef MIN
@@ -67,8 +67,6 @@
 #undef  _
 #define _(String) gettext (String)
 #endif
-
-#include "bin-bugs.h"
 
 #define STYLE_FLAT_PROFILE	(1<<0)
 #define STYLE_CALL_GRAPH	(1<<1)
@@ -121,7 +119,6 @@ extern int output_style;
 extern int output_width;		/* controls column width in index */
 extern bfd_boolean bsd_style_output;	/* as opposed to FSF style output */
 extern bfd_boolean demangle;		/* demangle symbol names? */
-extern bfd_boolean discard_underscores;	/* discard leading underscores? */
 extern bfd_boolean ignore_direct_calls;	/* don't count direct calls */
 extern bfd_boolean ignore_static_funcs;	/* suppress static functions */
 extern bfd_boolean ignore_zeros;	/* ignore unused symbols/files */
@@ -134,6 +131,6 @@ extern File_Format file_format;		/* requested file format */
 
 extern bfd_boolean first_output;	/* no output so far? */
 
-extern void done PARAMS ((int status)) ATTRIBUTE_NORETURN;
+extern void done (int status) ATTRIBUTE_NORETURN;
 
 #endif /* gprof_h */

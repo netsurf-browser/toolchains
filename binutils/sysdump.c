@@ -1,12 +1,12 @@
 /* Sysroff object format dumper.
-   Copyright 1994, 1995, 1998, 1999, 2000, 2001, 2002
-   Free Software Foundation, Inc.
+   Copyright 1994, 1995, 1998, 1999, 2000, 2001, 2002, 2003, 2005, 2007,
+   2009, 2011  Free Software Foundation, Inc.
 
    This file is part of GNU Binutils.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License as published by
-   the Free Software Foundation; either version 2 of the License, or
+   the Free Software Foundation; either version 3 of the License, or
    (at your option) any later version.
 
    This program is distributed in the hope that it will be useful,
@@ -16,8 +16,8 @@
 
    You should have received a copy of the GNU General Public License
    along with this program; if not, write to the Free Software
-   Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA
-   02111-1307, USA.  */
+   Foundation, Inc., 51 Franklin Street - Fifth Floor, Boston, MA
+   02110-1301, USA.  */
 
 
 /* Written by Steve Chamberlain <sac@cygnus.com>.
@@ -25,13 +25,12 @@
  This program reads a SYSROFF object file and prints it in an
  almost human readable form to stdout.  */
 
+#include "sysdep.h"
 #include "bfd.h"
-#include "bucomm.h"
 #include "safe-ctype.h"
-
-#include <stdio.h>
 #include "libiberty.h"
 #include "getopt.h"
+#include "bucomm.h"
 #include "sysroff.h"
 
 static int dump = 1;
@@ -40,42 +39,31 @@ static int code;
 static int addrsize = 4;
 static FILE *file;
 
-static void dh PARAMS ((unsigned char *, int));
-static void itheader PARAMS ((char *, int));
-static void p PARAMS ((void));
-static void tabout PARAMS ((void));
-static void pbarray PARAMS ((barray *));
-static int getone PARAMS ((int));
-static int opt PARAMS ((int));
-static void must PARAMS ((int));
-static void tab PARAMS ((int, char *));
-static void dump_symbol_info PARAMS ((void));
-static void derived_type PARAMS ((void));
-static void module PARAMS ((void));
-static void show_usage PARAMS ((FILE *, int));
+static void dh (unsigned char *, int);
+static void itheader (char *, int);
+static void p (void);
+static void tabout (void);
+static void pbarray (barray *);
+static int getone (int);
+static int opt (int);
+static void must (int);
+static void tab (int, char *);
+static void dump_symbol_info (void);
+static void derived_type (void);
+static void module (void);
+static void show_usage (FILE *, int);
 
-extern char *getCHARS PARAMS ((unsigned char *, int *, int, int));
-extern int fillup PARAMS ((char *));
-extern barray getBARRAY PARAMS ((unsigned char *, int *, int, int));
-extern int getINT PARAMS ((unsigned char *, int *, int, int));
-extern int getBITS PARAMS ((char *, int *, int, int));
-extern void sysroff_swap_tr_in PARAMS ((void));
-extern void sysroff_print_tr_out PARAMS ((void));
-extern int main PARAMS ((int, char **));
+extern int main (int, char **);
 
-char *
-getCHARS (ptr, idx, size, max)
-     unsigned char *ptr;
-     int *idx;
-     int size;
-     int max;
+static char *
+getCHARS (unsigned char *ptr, int *idx, int size, int max)
 {
   int oc = *idx / 8;
   char *r;
   int b = size;
 
   if (b >= max)
-    return "*undefined*";
+    return _("*undefined*");
 
   if (b == 0)
     {
@@ -93,9 +81,7 @@ getCHARS (ptr, idx, size, max)
 }
 
 static void
-dh (ptr, size)
-     unsigned char *ptr;
-     int size;
+dh (unsigned char *ptr, int size)
 {
   int i;
   int j;
@@ -126,36 +112,39 @@ dh (ptr, size)
     }
 }
 
-int
-fillup (ptr)
-     char *ptr;
+static int
+fillup (unsigned char *ptr)
 {
   int size;
   int sum;
   int i;
 
-  size = getc (file) - 2;
-  fread (ptr, 1, size, file);
+  size = getc (file);
+  if (size == EOF
+      || size <= 2)
+    return 0;
+
+  size -= 2;
+  if (fread (ptr, size, 1, file) != 1)
+    return 0;
+
   sum = code + size + 2;
 
   for (i = 0; i < size; i++)
     sum += ptr[i];
 
   if ((sum & 0xff) != 0xff)
-    printf ("SUM IS %x\n", sum);
+    printf (_("SUM IS %x\n"), sum);
 
   if (dump)
     dh (ptr, size);
 
-  return size - 1;
+  return size;
 }
 
-barray
-getBARRAY (ptr, idx, dsize, max)
-     unsigned char *ptr;
-     int *idx;
-     int dsize ATTRIBUTE_UNUSED;
-     int max ATTRIBUTE_UNUSED;
+static barray
+getBARRAY (unsigned char *ptr, int *idx, int dsize ATTRIBUTE_UNUSED,
+	   int max ATTRIBUTE_UNUSED)
 {
   barray res;
   int i;
@@ -171,12 +160,8 @@ getBARRAY (ptr, idx, dsize, max)
   return res;
 }
 
-int
-getINT (ptr, idx, size, max)
-     unsigned char *ptr;
-     int *idx;
-     int size;
-     int max;
+static int
+getINT (unsigned char *ptr, int *idx, int size, int max)
 {
   int n = 0;
   int byte = *idx / 8;
@@ -211,11 +196,8 @@ getINT (ptr, idx, size, max)
   return n;
 }
 
-int
-getBITS (ptr, idx, size, max)
-     char *ptr;
-     int *idx;
-     int size, max;
+static int
+getBITS (unsigned char *ptr, int *idx, int size, int max)
 {
   int byte = *idx / 8;
   int bit = *idx % 8;
@@ -229,17 +211,15 @@ getBITS (ptr, idx, size, max)
 }
 
 static void
-itheader (name, code)
-     char *name;
-     int code;
+itheader (char *name, int icode)
 {
-  printf ("\n%s 0x%02x\n", name, code);
+  printf ("\n%s 0x%02x\n", name, icode);
 }
 
 static int indent;
 
 static void
-p ()
+p (void)
 {
   int i;
 
@@ -250,14 +230,13 @@ p ()
 }
 
 static void
-tabout ()
+tabout (void)
 {
   p ();
 }
 
 static void
-pbarray (y)
-     barray *y;
+pbarray (barray *y)
 {
   int x;
 
@@ -282,24 +261,23 @@ pbarray (y)
 
 #define IT_tr_CODE	0x7f
 
-void
-sysroff_swap_tr_in()
+static void
+sysroff_swap_tr_in (void)
 {
-  char raw[255];
+  unsigned char raw[255];
 
   memset (raw, 0, 255);
   fillup (raw);
 }
 
-void
-sysroff_print_tr_out()
+static void
+sysroff_print_tr_out (void)
 {
   itheader ("tr", IT_tr_CODE);
 }
 
 static int
-getone (type)
-     int type;
+getone (int type)
 {
   int c = getc (file);
 
@@ -522,7 +500,7 @@ getone (type)
       break;
 
     default:
-      printf ("GOT A %x\n", c);
+      printf (_("GOT A %x\n"), c);
       return 0;
       break;
     }
@@ -531,81 +509,34 @@ getone (type)
 }
 
 static int
-opt (x)
-     int x;
+opt (int x)
 {
   return getone (x);
 }
 
-#if 0
-
-/* This is no longer used.  */
-
 static void
-unit_info_list ()
-{
-  while (opt (IT_un_CODE))
-    {
-      getone (IT_us_CODE);
-
-      while (getone (IT_sc_CODE))
-	getone (IT_ss_CODE);
-
-      while (getone (IT_er_CODE))
-	;
-
-      while (getone (IT_ed_CODE))
-	;
-    }
-}
-
-#endif
-
-#if 0
-
-/* This is no longer used.  */
-
-static void
-object_body_list ()
-{
-  while (getone (IT_sh_CODE))
-    {
-      while (getone (IT_ob_CODE))
-	;
-      while (getone (IT_rl_CODE))
-	;
-    }
-}
-
-#endif
-
-static void
-must (x)
-     int x;
+must (int x)
 {
   if (!getone (x))
-    printf ("WANTED %x!!\n", x);
+    printf (_("WANTED %x!!\n"), x);
 }
 
 static void
-tab (i, s)
-     int i;
-     char *s;
+tab (int i, char *s)
 {
   indent += i;
 
   if (s)
     {
       p ();
-      printf (s);
-      printf ("\n");
+      puts (s);
     }
 }
 
 static void
-dump_symbol_info ()
+dump_symbol_info (void)
 {
-  tab (1, "SYMBOL INFO");
+  tab (1, _("SYMBOL INFO"));
 
   while (opt (IT_dsy_CODE))
     {
@@ -621,9 +552,9 @@ dump_symbol_info ()
 }
 
 static void
-derived_type ()
+derived_type (void)
 {
-  tab (1, "DERIVED TYPE");
+  tab (1, _("DERIVED TYPE"));
 
   while (1)
     {
@@ -674,52 +605,13 @@ derived_type ()
   tab (-1, "");
 }
 
-#if 0
-
-/* This is no longer used.  */
-
 static void
-program_structure ()
-{
-  tab (1, "PROGRAM STRUCTURE");
-  while (opt (IT_dps_CODE))
-    {
-      must (IT_dso_CODE);
-      opt (IT_dss_CODE);
-      dump_symbol_info ();
-      must (IT_dps_CODE);
-    }
-  tab (-1, "");
-}
-
-#endif
-
-#if 0
-
-/* This is no longer used.  */
-
-static void
-debug_list ()
-{
-  tab (1, "DEBUG LIST");
-
-  must (IT_du_CODE);
-  opt (IT_dus_CODE);
-  program_structure ();
-  must (IT_dln_CODE);
-
-  tab (-1, "");
-}
-
-#endif
-
-static void
-module ()
+module (void)
 {
   int c = 0;
   int l = 0;
 
-  tab (1, "MODULE***\n");
+  tab (1, _("MODULE***\n"));
 
   do
     {
@@ -730,17 +622,6 @@ module ()
     }
   while (getone (c) && c != IT_tr_CODE);
 
-#if 0
-  must (IT_cs_CODE);
-  must (IT_hd_CODE);
-  opt (IT_hs_CODE);
-
-  unit_info_list ();
-  object_body_list ();
-  debug_list ();
-
-  must (IT_tr_CODE);
-#endif
   tab (-1, "");
 
   c = getc (file);
@@ -760,28 +641,24 @@ module ()
 char *program_name;
 
 static void
-show_usage (file, status)
-     FILE *file;
-     int status;
+show_usage (FILE *ffile, int status)
 {
-  fprintf (file, _("Usage: %s [option(s)] in-file\n"), program_name);
-  fprintf (file, _("Print a human readable interpretation of a SYSROFF object file\n"));
-  fprintf (file, _(" The options are:\n\
+  fprintf (ffile, _("Usage: %s [option(s)] in-file\n"), program_name);
+  fprintf (ffile, _("Print a human readable interpretation of a SYSROFF object file\n"));
+  fprintf (ffile, _(" The options are:\n\
   -h --help        Display this information\n\
   -v --version     Print the program's version number\n"));
 
-  if (status == 0)
-    fprintf (file, _("Report bugs to %s\n"), REPORT_BUGS_TO);
+  if (REPORT_BUGS_TO[0] && status == 0)
+    fprintf (ffile, _("Report bugs to %s\n"), REPORT_BUGS_TO);
   exit (status);
 }
 
 int
-main (ac, av)
-     int ac;
-     char **av;
+main (int ac, char **av)
 {
   char *input_file = NULL;
-  int opt;
+  int option;
   static struct option long_options[] =
   {
     {"help", no_argument, 0, 'h'},
@@ -801,9 +678,11 @@ main (ac, av)
   program_name = av[0];
   xmalloc_set_program_name (program_name);
 
-  while ((opt = getopt_long (ac, av, "HhVv", long_options, (int *) NULL)) != EOF)
+  expandargv (&ac, &av);
+
+  while ((option = getopt_long (ac, av, "HhVv", long_options, (int *) NULL)) != EOF)
     {
-      switch (opt)
+      switch (option)
 	{
 	case 'H':
 	case 'h':

@@ -8,6 +8,7 @@
 #		(e.g., .PARISC.milli)
 #	OTHER_READWRITE_SECTIONS - other than .data .bss .ctors .sdata ...
 #		(e.g., .PARISC.global)
+#	ATTRS_SECTIONS - at the end
 #	OTHER_SECTIONS - at the end
 #	EXECUTABLE_SYMBOLS - symbols that must be defined for an
 #		executable (e.g., _DYNAMIC_LINK)
@@ -24,6 +25,7 @@
 test -z "$ENTRY" && ENTRY=_start
 test -z "${BIG_OUTPUT_FORMAT}" && BIG_OUTPUT_FORMAT=${OUTPUT_FORMAT}
 test -z "${LITTLE_OUTPUT_FORMAT}" && LITTLE_OUTPUT_FORMAT=${OUTPUT_FORMAT}
+test -z "$ATTRS_SECTIONS" && ATTRS_SECTIONS=".gnu.attributes 0 : { KEEP (*(.gnu.attributes)) }"
 test "$LD_FLAG" = "N" && DATA_ADDR=.
 SBSS2=".sbss2 ${RELOCATING-0} : { *(.sbss2) }"
 SDATA2=".sdata2 ${RELOCATING-0} : { *(.sdata2) }"
@@ -33,7 +35,7 @@ cat <<EOF
 OUTPUT_FORMAT("${OUTPUT_FORMAT}", "${BIG_OUTPUT_FORMAT}",
 	      "${LITTLE_OUTPUT_FORMAT}")
 OUTPUT_ARCH(${ARCH})
-ENTRY(${ENTRY})
+${RELOCATING+ENTRY(${ENTRY})}
 
 ${RELOCATING+${LIB_SEARCH_DIRS}}
 ${RELOCATING+/* Do we need any of these for elf?
@@ -181,37 +183,12 @@ SECTIONS
   .stab 0 : { *(.stab) }
   .stabstr 0 : { *(.stabstr) }
 
-  /* DWARF debug sections.
-     Symbols in the DWARF debugging sections are relative to the beginning
-     of the section so we begin them at 0.  */
+EOF
 
-  /* DWARF 1 */
-  .debug          0 : { *(.debug) }
-  .line           0 : { *(.line) }
+. $srcdir/scripttempl/DWARF.sc
 
-  /* GNU DWARF 1 extensions */
-  .debug_srcinfo  0 : { *(.debug_srcinfo) }
-  .debug_sfnames  0 : { *(.debug_sfnames) }
-
-  /* DWARF 1.1 and DWARF 2 */
-  .debug_aranges  0 : { *(.debug_aranges) }
-  .debug_pubnames 0 : { *(.debug_pubnames) }
-
-  /* DWARF 2 */
-  .debug_info     0 : { *(.debug_info) *(.gnu.linkonce.wi.*) }
-  .debug_abbrev   0 : { *(.debug_abbrev) }
-  .debug_line     0 : { *(.debug_line) }
-  .debug_frame    0 : { *(.debug_frame) }
-  .debug_str      0 : { *(.debug_str) }
-  .debug_loc      0 : { *(.debug_loc) }
-  .debug_macinfo  0 : { *(.debug_macinfo) }
-
-  /* SGI/MIPS DWARF 2 extensions */
-  .debug_weaknames 0 : { *(.debug_weaknames) }
-  .debug_funcnames 0 : { *(.debug_funcnames) }
-  .debug_typenames 0 : { *(.debug_typenames) }
-  .debug_varnames  0 : { *(.debug_varnames) }
-
+cat <<EOF  
+  ${ATTRS_SECTIONS}
   ${OTHER_SECTIONS}
 }
 EOF

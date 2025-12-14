@@ -1,5 +1,5 @@
 /* Implement the snprintf function.
-   Copyright (C) 2003 Free Software Foundation, Inc.
+   Copyright (C) 2003, 2011 Free Software Foundation, Inc.
    Written by Kaveh R. Ghazi <ghazi@caip.rutgers.edu>.
 
 This file is part of the libiberty library.  This library is free
@@ -15,7 +15,7 @@ GNU General Public License for more details.
 
 You should have received a copy of the GNU General Public License
 along with GNU CC; see the file COPYING.  If not, write to
-the Free Software Foundation, 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
+the Free Software Foundation, 51 Franklin Street - Fifth Floor, Boston, MA 02110-1301, USA.
 
 As a special exception, if you link this library with files
 compiled with a GNU compiler to produce an executable, this does not cause
@@ -25,15 +25,18 @@ the executable file might be covered by the GNU General Public License. */
 
 /*
 
-@deftypefn Supplemental int snprintf (char *@var{buf}, size_t @var{n}, const char *@var{format}, ...)
+@deftypefn Supplemental int snprintf (char *@var{buf}, size_t @var{n}, @
+  const char *@var{format}, ...)
 
-This function is similar to sprintf, but it will print at most @var{n}
-characters.  On error the return value is -1, otherwise it returns the
-number of characters that would have been printed had @var{n} been
-sufficiently large, regardless of the actual value of @var{n}.  Note
-some pre-C99 system libraries do not implement this correctly so users
-cannot generally rely on the return value if the system version of
-this function is used.
+This function is similar to @code{sprintf}, but it will write to
+@var{buf} at most @code{@var{n}-1} bytes of text, followed by a
+terminating null byte, for a total of @var{n} bytes.
+On error the return value is -1, otherwise it returns the number of
+bytes, not including the terminating null byte, that would have been
+written had @var{n} been sufficiently large, regardless of the actual
+value of @var{n}.  Note some pre-C99 system libraries do not implement
+this correctly so users cannot generally rely on the return value if
+the system version of this function is used.
 
 @end deftypefn
 
@@ -41,18 +44,13 @@ this function is used.
 
 #include "ansidecl.h"
 
-#ifdef ANSI_PROTOTYPES
 #include <stdarg.h>
 #include <stddef.h>
-#else
-#include <varargs.h>
-#define size_t unsigned long
-#endif
 
-int vsnprintf PARAMS ((char *, size_t, const char *, va_list));
+int vsnprintf (char *, size_t, const char *, va_list);
 
 int
-snprintf VPARAMS ((char *s, size_t n, const char *format, ...))
+snprintf (char *s, size_t n, const char *format, ...)
 {
   int result;
   VA_OPEN (ap, format);

@@ -1,12 +1,12 @@
 /* PowerPC traceback table support for BFD.
-   Copyright 1993, 1998, 1999, 2000, 2001, 2002
+   Copyright 1993, 1998, 1999, 2000, 2001, 2002, 2005, 2007
    Free Software Foundation, Inc.
 
    This file is part of BFD, the Binary File Descriptor library.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License as published by
-   the Free Software Foundation; either version 2 of the License, or
+   the Free Software Foundation; either version 3 of the License, or
    (at your option) any later version.
 
    This program is distributed in the hope that it will be useful,
@@ -15,21 +15,23 @@
    GNU General Public License for more details.
 
    You should have received a copy of the GNU General Public License
-   along with this program; if not, write to the Free Software 
-   Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.  */
+   along with this program; if not, write to the Free Software
+   Foundation, Inc., 51 Franklin Street - Fifth Floor, Boston,
+   MA 02110-1301, USA.  */
 
-/* Originally written by Ira Ruben, 06/28/93 */
+
+/* Originally written by Ira Ruben, 06/28/93.  */
 
 /*  This is a compiler independent representation of the AIX Version 3 traceback table (in
     sys/debug.h), which occurs, usually, one per procedure (routine). The table is marked by
     a multiple of 4 32-bit word of zeroes in the instruction space. The traceback table is
     also referred to as "procedure-end table".
- 
+
     The AIX traceback table representation on which this header is based is defined as a
     series of bit field struct specifications. Bit fields are compiler dependent! Thus,
     the definitions presented here follow the original header and the existing documentation
     (such as it is), but define the fields as BIT MASKS and other macros. The mask names,
-    however, where chosen as the original field names to give some compatibility with the 
+    however, where chosen as the original field names to give some compatibility with the
     original header and to agree with the documentation.  */
 
 #ifndef __TRACEBACK__
@@ -48,8 +50,8 @@
 #define TB_RPG 10U		/* RPG */
 #define TB_PL8 11U		/* PL8 */
 #define TB_ASM 12U		/* Asm */
- 
-/* flags 1 */
+
+/* Flags 1.  */
 
 #define TB_GLOBALLINK 0x80U	/* Routine is Global Linkage.  */
 #define TB_is_eprol 0x40U	/* Out-of-line prolog or epilog routine.  */
@@ -57,10 +59,10 @@
 #define TB_INT_PROC 0x10U	/* Internal leaf routine.  */
 #define TB_HAS_CTL 0x08U	/* Has controlled automatic storage.  */
 #define TB_TOCLESS 0X04U	/* Routine has no TOC.  */
-#define TB_FP_PRESENT 0x02U	/* Routine has floating point ops.  */ 
+#define TB_FP_PRESENT 0x02U	/* Routine has floating point ops.  */
 #define TB_LOG_ABORT 0x01U	/* fp_present && log/abort compiler opt.  */
- 
-/* flags 2 */
+
+/* Flags 2.  */
 
 #define TB_INT_HNDL 0x80U	/* Routine is an interrupt handler.  */
 #define TB_NAME_PRESENT 0x40U	/* Name_len/name set (extension field).  */
@@ -68,16 +70,16 @@
 #define TB_CL_DIS_inv 0x1CU	/* On-condition directives (see below).  */
 #define TB_SAVES_CR 0x02U	/* Routine saves the CR.  */
 #define TB_SAVES_LR 0x01U	/* Routine saves the LR.  */
-  
-/* cl_dis_inv "on condition" settings: */
- 
+
+/* cl_dis_inv "on condition" settings:  */
+
 #define TB_CL_DIS_INV(x) (((x) & cl_dis_inv) >> 2U)
 
 #define TB_WALK_ONCOND 0U	/* Walk stack without restoring state.  */
 #define TB_DISCARD_ONCOND 1U	/* Walk stack and discard.  */
 #define TB_INVOKE_ONCOND 2U	/* Invoke a specific system routine.  */
- 
-/* flags 3 */
+
+/* Flags 3.  */
 
 #define TB_STORES_BC 0x80U	/* Routine saves frame ptr of caller.  */
 #define TB_SPARE2 0X40U		/* Spare bit.  */
@@ -85,8 +87,8 @@
 				/* (Last reg saved is ALWAYS fpr31).  */
 
 #define TB_NUM_FPR_SAVED(x) ((x) & fpr_saved)
- 
-/* flags 4 */
+
+/* Flags 4.  */
 
 #define TB_HAS_VEC_INFO 0x80U	/* Routine uses vectors.  */
 #define TB_SPARE3 0X40U		/* Spare bit.  */
@@ -94,15 +96,15 @@
 				/* (Last reg saved is ALWAYS gpr31).  */
 
 #define TB_NUM_GPR_SAVED(x) ((x) & gpr_saved)
- 
-/* flags 5 */
+
+/* Flags 5.  */
 
 #define TB_FLOATPARAMS 0xfeU	/* Number of floating point parameters.  */
 #define TB_PARAMSONSTK 0X01U	/* All parameters are on the stack.  */
- 
+
 #define TB_NUM_FLOATPARAMS(X) (((x) & floatparams) >> 1U)
 
-/* traceback_table (fixed portion).  */
+/* Traceback_table (fixed portion).  */
 
 struct traceback_table
 {
@@ -131,7 +133,7 @@ struct traceback_table
 /* Order and type encoding of parameters:  */
 struct traceback_table_fixedparams
 {
-  unsigned long paraminfo;		
+  unsigned long paraminfo;
 };
 
 /* Left-justified bit-encoding as follows:  */
@@ -167,7 +169,7 @@ struct traceback_table_interrupts
 /* Controlled automatic storage info:  */
 struct traceback_table_anchors
 {
-  unsigned long ctl_info;	/* Number of controlled automatic anchors.  */ 
+  unsigned long ctl_info;	/* Number of controlled automatic anchors.  */
   long ctl_info_disp[1];	/* Array of stack displacements where each.  */
 };				/* Anchor is located (array STARTS here).  */
 
@@ -203,12 +205,12 @@ struct traceback_table_vector
 #define TB_HAS_VARARGS 0x01U	/* Routine has a variable argument list.  */
 
 #define TB_NUM_VR_SAVED(x) (((x) & TB_VR_SAVED) >> 2U)
- 
+
   unsigned char vec_flags2;	/* Vec info bits #2:  */
 
 #define TB_VECTORPARAMS 0xfeU	/* Number of vector parameters.  */
 #define TB_VEC_PRESENT 0x01U	/* Routine uses at least one vec instr.  */
- 
+
 #define VECPARAMS(x) (((x) & TB_VECTORPARAMS) >> 1U)
 };
 

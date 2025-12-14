@@ -30,7 +30,9 @@
 
 /*
 
-@deftypefn Supplemental void* bsearch (const void *@var{key}, const void *@var{base}, size_t @var{nmemb}, size_t @var{size}, int (*@var{compar})(const void *, const void *))
+@deftypefn Supplemental void* bsearch (const void *@var{key}, @
+  const void *@var{base}, size_t @var{nmemb}, size_t @var{size}, @
+  int (*@var{compar})(const void *, const void *))
 
 Performs a search over an array of @var{nmemb} elements pointed to by
 @var{base} for a member that matches the object pointed to by @var{key}.
@@ -67,24 +69,21 @@ is respectively less than, matching, or greater than the array member.
  * look at item 3.
  */
 void *
-bsearch(key, base0, nmemb, size, compar)
-	register void *key;
-	void *base0;
-	size_t nmemb;
-	register size_t size;
-	register int (*compar)();
+bsearch (register const void *key, const void *base0,
+         size_t nmemb, register size_t size,
+         register int (*compar)(const void *, const void *))
 {
-	register char *base = base0;
+	register const char *base = (const char *) base0;
 	register int lim, cmp;
-	register void *p;
+	register const void *p;
 
 	for (lim = nmemb; lim != 0; lim >>= 1) {
 		p = base + (lim >> 1) * size;
 		cmp = (*compar)(key, p);
 		if (cmp == 0)
-			return (p);
+			return (void *)p;
 		if (cmp > 0) {	/* key > p: move right */
-			base = (char *)p + size;
+			base = (const char *)p + size;
 			lim--;
 		} /* else move left */
 	}

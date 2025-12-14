@@ -1,27 +1,29 @@
 /* BFD back-end for ALPHA Extended-Coff files.
-   Copyright 1993, 1994, 1995, 1996, 1997, 1998, 1999, 2000, 2001, 2002
+   Copyright 1993, 1994, 1995, 1996, 1997, 1998, 1999, 2000, 2001, 2002,
+   2003, 2004, 2005, 2007, 2008, 2009, 2010, 2011, 2012
    Free Software Foundation, Inc.
    Modified from coff-mips.c by Steve Chamberlain <sac@cygnus.com> and
    Ian Lance Taylor <ian@cygnus.com>.
 
-This file is part of BFD, the Binary File Descriptor library.
+   This file is part of BFD, the Binary File Descriptor library.
 
-This program is free software; you can redistribute it and/or modify
-it under the terms of the GNU General Public License as published by
-the Free Software Foundation; either version 2 of the License, or
-(at your option) any later version.
+   This program is free software; you can redistribute it and/or modify
+   it under the terms of the GNU General Public License as published by
+   the Free Software Foundation; either version 3 of the License, or
+   (at your option) any later version.
 
-This program is distributed in the hope that it will be useful,
-but WITHOUT ANY WARRANTY; without even the implied warranty of
-MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-GNU General Public License for more details.
+   This program is distributed in the hope that it will be useful,
+   but WITHOUT ANY WARRANTY; without even the implied warranty of
+   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+   GNU General Public License for more details.
 
-You should have received a copy of the GNU General Public License
-along with this program; if not, write to the Free Software
-Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.  */
+   You should have received a copy of the GNU General Public License
+   along with this program; if not, write to the Free Software
+   Foundation, Inc., 51 Franklin Street - Fifth Floor, Boston,
+   MA 02110-1301, USA.  */
 
-#include "bfd.h"
 #include "sysdep.h"
+#include "bfd.h"
 #include "bfdlink.h"
 #include "libbfd.h"
 #include "coff/internal.h"
@@ -35,40 +37,7 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.  */
 
 /* Prototypes for static functions.  */
 
-static const bfd_target *alpha_ecoff_object_p
-  PARAMS ((bfd *));
-static bfd_boolean alpha_ecoff_bad_format_hook
-  PARAMS ((bfd *abfd, PTR filehdr));
-static PTR alpha_ecoff_mkobject_hook
-  PARAMS ((bfd *, PTR filehdr, PTR aouthdr));
-static void alpha_ecoff_swap_reloc_in
-  PARAMS ((bfd *, PTR, struct internal_reloc *));
-static void alpha_ecoff_swap_reloc_out
-  PARAMS ((bfd *, const struct internal_reloc *, PTR));
-static void alpha_adjust_reloc_in
-  PARAMS ((bfd *, const struct internal_reloc *, arelent *));
-static void alpha_adjust_reloc_out
-  PARAMS ((bfd *, const arelent *, struct internal_reloc *));
-static reloc_howto_type *alpha_bfd_reloc_type_lookup
-  PARAMS ((bfd *, bfd_reloc_code_real_type));
-static bfd_byte *alpha_ecoff_get_relocated_section_contents
-  PARAMS ((bfd *abfd, struct bfd_link_info *, struct bfd_link_order *,
-	   bfd_byte *data, bfd_boolean relocateable, asymbol **symbols));
-static bfd_vma alpha_convert_external_reloc
-  PARAMS ((bfd *, struct bfd_link_info *, bfd *, struct external_reloc *,
-	   struct ecoff_link_hash_entry *));
-static bfd_boolean alpha_relocate_section
-  PARAMS ((bfd *, struct bfd_link_info *, bfd *, asection *, bfd_byte *, PTR));
-static bfd_boolean alpha_adjust_headers
-  PARAMS ((bfd *, struct internal_filehdr *, struct internal_aouthdr *));
-static PTR alpha_ecoff_read_ar_hdr
-  PARAMS ((bfd *));
-static bfd *alpha_ecoff_get_elt_at_filepos
-  PARAMS ((bfd *, file_ptr));
-static bfd *alpha_ecoff_openr_next_archived_file
-  PARAMS ((bfd *, bfd *));
-static bfd *alpha_ecoff_get_elt_at_index
-  PARAMS ((bfd *, symindex));
+
 
 /* ECOFF has COFF sections, but the debugging information is stored in
    a completely different format.  ECOFF targets use some of the
@@ -126,18 +95,14 @@ static bfd *alpha_ecoff_get_elt_at_index
 
 /* How to process the various reloc types.  */
 
-static bfd_reloc_status_type reloc_nil
-  PARAMS ((bfd *, arelent *, asymbol *, PTR, asection *, bfd *, char **));
-
 static bfd_reloc_status_type
-reloc_nil (abfd, reloc, sym, data, sec, output_bfd, error_message)
-     bfd *abfd ATTRIBUTE_UNUSED;
-     arelent *reloc ATTRIBUTE_UNUSED;
-     asymbol *sym ATTRIBUTE_UNUSED;
-     PTR data ATTRIBUTE_UNUSED;
-     asection *sec ATTRIBUTE_UNUSED;
-     bfd *output_bfd ATTRIBUTE_UNUSED;
-     char **error_message ATTRIBUTE_UNUSED;
+reloc_nil (bfd *abfd ATTRIBUTE_UNUSED,
+	   arelent *reloc ATTRIBUTE_UNUSED,
+	   asymbol *sym ATTRIBUTE_UNUSED,
+	   void * data ATTRIBUTE_UNUSED,
+	   asection *sec ATTRIBUTE_UNUSED,
+	   bfd *output_bfd ATTRIBUTE_UNUSED,
+	   char **error_message ATTRIBUTE_UNUSED)
 {
   return bfd_reloc_ok;
 }
@@ -436,8 +401,7 @@ static reloc_howto_type alpha_howto_table[] =
 /* Recognize an Alpha ECOFF file.  */
 
 static const bfd_target *
-alpha_ecoff_object_p (abfd)
-     bfd *abfd;
+alpha_ecoff_object_p (bfd *abfd)
 {
   static const bfd_target *ret;
 
@@ -462,8 +426,8 @@ alpha_ecoff_object_p (abfd)
 	  bfd_size_type size;
 
 	  size = sec->line_filepos * 8;
-	  BFD_ASSERT (size == bfd_section_size (abfd, sec)
-		      || size + 8 == bfd_section_size (abfd, sec));
+	  BFD_ASSERT (size == sec->size
+		      || size + 8 == sec->size);
 	  if (! bfd_set_section_size (abfd, sec, size))
 	    return NULL;
 	}
@@ -475,28 +439,30 @@ alpha_ecoff_object_p (abfd)
 /* See whether the magic number matches.  */
 
 static bfd_boolean
-alpha_ecoff_bad_format_hook (abfd, filehdr)
-     bfd *abfd ATTRIBUTE_UNUSED;
-     PTR filehdr;
+alpha_ecoff_bad_format_hook (bfd *abfd ATTRIBUTE_UNUSED,
+			     void * filehdr)
 {
   struct internal_filehdr *internal_f = (struct internal_filehdr *) filehdr;
 
-  if (ALPHA_ECOFF_BADMAG (*internal_f))
-    return FALSE;
+  if (! ALPHA_ECOFF_BADMAG (*internal_f))
+    return TRUE;
 
-  return TRUE;
+  if (ALPHA_ECOFF_COMPRESSEDMAG (*internal_f))
+    (*_bfd_error_handler)
+      (_("%B: Cannot handle compressed Alpha binaries.\n"
+	 "   Use compiler flags, or objZ, to generate uncompressed binaries."),
+       abfd);
+
+  return FALSE;
 }
 
 /* This is a hook called by coff_real_object_p to create any backend
    specific information.  */
 
-static PTR
-alpha_ecoff_mkobject_hook (abfd, filehdr, aouthdr)
-     bfd *abfd;
-     PTR filehdr;
-     PTR aouthdr;
+static void *
+alpha_ecoff_mkobject_hook (bfd *abfd, void * filehdr, void * aouthdr)
 {
-  PTR ecoff;
+  void * ecoff;
 
   ecoff = _bfd_ecoff_mkobject_hook (abfd, filehdr, aouthdr);
 
@@ -526,10 +492,9 @@ alpha_ecoff_mkobject_hook (abfd, filehdr, aouthdr)
 /* Swap a reloc in.  */
 
 static void
-alpha_ecoff_swap_reloc_in (abfd, ext_ptr, intern)
-     bfd *abfd;
-     PTR ext_ptr;
-     struct internal_reloc *intern;
+alpha_ecoff_swap_reloc_in (bfd *abfd,
+			   void * ext_ptr,
+			   struct internal_reloc *intern)
 {
   const RELOC *ext = (RELOC *) ext_ptr;
 
@@ -574,10 +539,9 @@ alpha_ecoff_swap_reloc_in (abfd, ext_ptr, intern)
 /* Swap a reloc out.  */
 
 static void
-alpha_ecoff_swap_reloc_out (abfd, intern, dst)
-     bfd *abfd;
-     const struct internal_reloc *intern;
-     PTR dst;
+alpha_ecoff_swap_reloc_out (bfd *abfd,
+			    const struct internal_reloc *intern,
+			    void * dst)
 {
   RELOC *ext = (RELOC *) dst;
   long symndx;
@@ -603,8 +567,11 @@ alpha_ecoff_swap_reloc_out (abfd, intern, dst)
       size = intern->r_size;
     }
 
+  /* XXX FIXME:  The maximum symndx value used to be 14 but this
+     fails with object files produced by DEC's C++ compiler.
+     Where does the value 14 (or 15) come from anyway ?  */
   BFD_ASSERT (intern->r_extern
-	      || (intern->r_symndx >= 0 && intern->r_symndx <= 14));
+	      || (intern->r_symndx >= 0 && intern->r_symndx <= 15));
 
   H_PUT_64 (abfd, intern->r_vaddr, ext->r_vaddr);
   H_PUT_32 (abfd, symndx, ext->r_symndx);
@@ -626,13 +593,20 @@ alpha_ecoff_swap_reloc_out (abfd, intern, dst)
    this backend routine.  It must fill in the howto field.  */
 
 static void
-alpha_adjust_reloc_in (abfd, intern, rptr)
-     bfd *abfd;
-     const struct internal_reloc *intern;
-     arelent *rptr;
+alpha_adjust_reloc_in (bfd *abfd,
+		       const struct internal_reloc *intern,
+		       arelent *rptr)
 {
   if (intern->r_type > ALPHA_R_GPVALUE)
-    abort ();
+    {
+      (*_bfd_error_handler)
+	(_("%B: unknown/unsupported relocation type %d"),
+	 abfd, intern->r_type);
+      bfd_set_error (bfd_error_bad_value);
+      rptr->addend = 0;
+      rptr->howto  = NULL;
+      return;
+    }
 
   switch (intern->r_type)
     {
@@ -668,7 +642,7 @@ alpha_adjust_reloc_in (abfd, intern, rptr)
     case ALPHA_R_OP_STORE:
       /* The STORE reloc needs the size and offset fields.  We store
 	 them in the addend.  */
-      BFD_ASSERT (intern->r_offset <= 256 && intern->r_size <= 256);
+      BFD_ASSERT (intern->r_offset <= 256);
       rptr->addend = (intern->r_offset << 8) + intern->r_size;
       break;
 
@@ -710,10 +684,9 @@ alpha_adjust_reloc_in (abfd, intern, rptr)
    not need to undo.  */
 
 static void
-alpha_adjust_reloc_out (abfd, rel, intern)
-     bfd *abfd ATTRIBUTE_UNUSED;
-     const arelent *rel;
-     struct internal_reloc *intern;
+alpha_adjust_reloc_out (bfd *abfd ATTRIBUTE_UNUSED,
+			const arelent *rel,
+			struct internal_reloc *intern)
 {
   switch (intern->r_type)
     {
@@ -752,22 +725,21 @@ alpha_adjust_reloc_out (abfd, rel, intern)
    assembler is going to handle this.  */
 
 static bfd_byte *
-alpha_ecoff_get_relocated_section_contents (abfd, link_info, link_order,
-					    data, relocateable, symbols)
-     bfd *abfd;
-     struct bfd_link_info *link_info;
-     struct bfd_link_order *link_order;
-     bfd_byte *data;
-     bfd_boolean relocateable;
-     asymbol **symbols;
+alpha_ecoff_get_relocated_section_contents (bfd *abfd,
+					    struct bfd_link_info *link_info,
+					    struct bfd_link_order *link_order,
+					    bfd_byte *data,
+					    bfd_boolean relocatable,
+					    asymbol **symbols)
 {
   bfd *input_bfd = link_order->u.indirect.section->owner;
   asection *input_section = link_order->u.indirect.section;
   long reloc_size = bfd_get_reloc_upper_bound (input_bfd, input_section);
   arelent **reloc_vector = NULL;
   long reloc_count;
-  bfd *output_bfd = relocateable ? abfd : (bfd *) NULL;
+  bfd *output_bfd = relocatable ? abfd : (bfd *) NULL;
   bfd_vma gp;
+  bfd_size_type sz;
   bfd_boolean gp_undefined;
   bfd_vma stack[RELOC_STACKSIZE];
   int tos = 0;
@@ -778,13 +750,9 @@ alpha_ecoff_get_relocated_section_contents (abfd, link_info, link_order,
   if (reloc_vector == NULL && reloc_size != 0)
     goto error_return;
 
-  if (! bfd_get_section_contents (input_bfd, input_section, data,
-				  (file_ptr) 0, input_section->_raw_size))
+  sz = input_section->rawsize ? input_section->rawsize : input_section->size;
+  if (! bfd_get_section_contents (input_bfd, input_section, data, 0, sz))
     goto error_return;
-
-  /* The section size is not going to change.  */
-  input_section->_cooked_size = input_section->_raw_size;
-  input_section->reloc_done = TRUE;
 
   reloc_count = bfd_canonicalize_reloc (input_bfd, input_section,
 					reloc_vector, symbols);
@@ -798,7 +766,7 @@ alpha_ecoff_get_relocated_section_contents (abfd, link_info, link_order,
   gp = _bfd_get_gp_value (abfd);
   if (gp == 0)
     {
-      if (relocateable)
+      if (relocatable)
 	{
 	  asection *sec;
 	  bfd_vma lo;
@@ -858,7 +826,7 @@ alpha_ecoff_get_relocated_section_contents (abfd, link_info, link_order,
 	case ALPHA_R_SREL16:
 	case ALPHA_R_SREL32:
 	case ALPHA_R_SREL64:
-	  if (relocateable
+	  if (relocatable
 	      && ((*rel->sym_ptr_ptr)->flags & BSF_SECTION_SYM) == 0)
 	    {
 	      rel->address += input_section->output_offset;
@@ -991,7 +959,7 @@ alpha_ecoff_get_relocated_section_contents (abfd, link_info, link_order,
 	    asymbol *symbol;
 	    bfd_vma relocation;
 
-	    if (relocateable)
+	    if (relocatable)
 	      {
 		rel->address += input_section->output_offset;
 		break;
@@ -1024,7 +992,7 @@ alpha_ecoff_get_relocated_section_contents (abfd, link_info, link_order,
 	    bfd_vma val;
 	    int offset, size;
 
-	    if (relocateable)
+	    if (relocatable)
 	      {
 		rel->address += input_section->output_offset;
 		break;
@@ -1051,7 +1019,7 @@ alpha_ecoff_get_relocated_section_contents (abfd, link_info, link_order,
 	    asymbol *symbol;
 	    bfd_vma relocation;
 
-	    if (relocateable)
+	    if (relocatable)
 	      {
 		rel->address += input_section->output_offset;
 		break;
@@ -1084,7 +1052,7 @@ alpha_ecoff_get_relocated_section_contents (abfd, link_info, link_order,
 	    asymbol *symbol;
 	    bfd_vma relocation;
 
-	    if (relocateable)
+	    if (relocatable)
 	      {
 		rel->address += input_section->output_offset;
 		break;
@@ -1121,7 +1089,7 @@ alpha_ecoff_get_relocated_section_contents (abfd, link_info, link_order,
 	  abort ();
 	}
 
-      if (relocateable)
+      if (relocatable)
 	{
 	  asection *os = input_section->output_section;
 
@@ -1148,7 +1116,8 @@ alpha_ecoff_get_relocated_section_contents (abfd, link_info, link_order,
 	      break;
 	    case bfd_reloc_overflow:
 	      if (! ((*link_info->callbacks->reloc_overflow)
-		     (link_info, bfd_asymbol_name (*rel->sym_ptr_ptr),
+		     (link_info, NULL,
+		      bfd_asymbol_name (*rel->sym_ptr_ptr),
 		      rel->howto->name, rel->addend, input_bfd,
 		      input_section, rel->address)))
 		goto error_return;
@@ -1178,9 +1147,8 @@ alpha_ecoff_get_relocated_section_contents (abfd, link_info, link_order,
 /* Get the howto structure for a generic reloc type.  */
 
 static reloc_howto_type *
-alpha_bfd_reloc_type_lookup (abfd, code)
-     bfd *abfd ATTRIBUTE_UNUSED;
-     bfd_reloc_code_real_type code;
+alpha_bfd_reloc_type_lookup (bfd *abfd ATTRIBUTE_UNUSED,
+			     bfd_reloc_code_real_type code)
 {
   int alpha_type;
 
@@ -1223,46 +1191,44 @@ alpha_bfd_reloc_type_lookup (abfd, code)
     case BFD_RELOC_64_PCREL:
       alpha_type = ALPHA_R_SREL64;
       break;
-#if 0
-    case ???:
-      alpha_type = ALPHA_R_OP_PUSH;
-      break;
-    case ???:
-      alpha_type = ALPHA_R_OP_STORE;
-      break;
-    case ???:
-      alpha_type = ALPHA_R_OP_PSUB;
-      break;
-    case ???:
-      alpha_type = ALPHA_R_OP_PRSHIFT;
-      break;
-    case ???:
-      alpha_type = ALPHA_R_GPVALUE;
-      break;
-#endif
     default:
       return (reloc_howto_type *) NULL;
     }
 
   return &alpha_howto_table[alpha_type];
 }
+
+static reloc_howto_type *
+alpha_bfd_reloc_name_lookup (bfd *abfd ATTRIBUTE_UNUSED,
+			     const char *r_name)
+{
+  unsigned int i;
+
+  for (i = 0;
+       i < sizeof (alpha_howto_table) / sizeof (alpha_howto_table[0]);
+       i++)
+    if (alpha_howto_table[i].name != NULL
+	&& strcasecmp (alpha_howto_table[i].name, r_name) == 0)
+      return &alpha_howto_table[i];
+
+  return NULL;
+}
 
 /* A helper routine for alpha_relocate_section which converts an
-   external reloc when generating relocateable output.  Returns the
+   external reloc when generating relocatable output.  Returns the
    relocation amount.  */
 
 static bfd_vma
-alpha_convert_external_reloc (output_bfd, info, input_bfd, ext_rel, h)
-     bfd *output_bfd ATTRIBUTE_UNUSED;
-     struct bfd_link_info *info;
-     bfd *input_bfd;
-     struct external_reloc *ext_rel;
-     struct ecoff_link_hash_entry *h;
+alpha_convert_external_reloc (bfd *output_bfd ATTRIBUTE_UNUSED,
+			      struct bfd_link_info *info,
+			      bfd *input_bfd,
+			      struct external_reloc *ext_rel,
+			      struct ecoff_link_hash_entry *h)
 {
   unsigned long r_symndx;
   bfd_vma relocation;
 
-  BFD_ASSERT (info->relocateable);
+  BFD_ASSERT (info->relocatable);
 
   if (h->root.type == bfd_link_hash_defined
       || h->root.type == bfd_link_hash_defweak)
@@ -1369,14 +1335,12 @@ alpha_convert_external_reloc (output_bfd, info, input_bfd, ext_rel, h)
    could be combined somehow.  */
 
 static bfd_boolean
-alpha_relocate_section (output_bfd, info, input_bfd, input_section,
-			contents, external_relocs)
-     bfd *output_bfd;
-     struct bfd_link_info *info;
-     bfd *input_bfd;
-     asection *input_section;
-     bfd_byte *contents;
-     PTR external_relocs;
+alpha_relocate_section (bfd *output_bfd,
+			struct bfd_link_info *info,
+			bfd *input_bfd,
+			asection *input_section,
+			bfd_byte *contents,
+			void * external_relocs)
 {
   asection **symndx_to_section, *lita_sec;
   struct ecoff_link_hash_entry **sym_hashes;
@@ -1443,7 +1407,7 @@ alpha_relocate_section (output_bfd, info, input_bfd, input_section,
 
   lita_sec = symndx_to_section[RELOC_SECTION_LITA];
   gp = _bfd_get_gp_value (output_bfd);
-  if (! info->relocateable && lita_sec != NULL)
+  if (! info->relocatable && lita_sec != NULL)
     {
       struct ecoff_section_tdata *lita_sec_data;
 
@@ -1455,7 +1419,7 @@ alpha_relocate_section (output_bfd, info, input_bfd, input_section,
 	  amt = sizeof (struct ecoff_section_tdata);
 	  lita_sec_data = ((struct ecoff_section_tdata *)
 			   bfd_zalloc (input_bfd, amt));
-	  ecoff_section_data (input_bfd, lita_sec) = lita_sec_data;
+	  lita_sec->used_by_bfd = lita_sec_data;
 	}
 
       if (lita_sec_data->gp != 0)
@@ -1470,9 +1434,7 @@ alpha_relocate_section (output_bfd, info, input_bfd, input_section,
 	  bfd_size_type lita_size;
 
 	  lita_vma = lita_sec->output_offset + lita_sec->output_section->vma;
-	  lita_size = lita_sec->_cooked_size;
-	  if (lita_size == 0)
-	    lita_size = lita_sec->_raw_size;
+	  lita_size = lita_sec->size;
 
 	  if (gp == 0
 	      || lita_vma <  gp - 0x8000
@@ -1542,8 +1504,26 @@ alpha_relocate_section (output_bfd, info, input_bfd, input_section,
 
       switch (r_type)
 	{
+	case ALPHA_R_GPRELHIGH:
+	  (*_bfd_error_handler)
+	    (_("%B: unsupported relocation: ALPHA_R_GPRELHIGH"),
+	     input_bfd);
+	  bfd_set_error (bfd_error_bad_value);
+	  continue;
+
+	case ALPHA_R_GPRELLOW:
+	  (*_bfd_error_handler)
+	    (_("%B: unsupported relocation: ALPHA_R_GPRELLOW"),
+	     input_bfd);
+	  bfd_set_error (bfd_error_bad_value);
+	  continue;
+
 	default:
-	  abort ();
+	  (*_bfd_error_handler)
+	    (_("%B: unknown relocation type %d"),
+	     input_bfd, (int) r_type);
+	  bfd_set_error (bfd_error_bad_value);
+	  continue;
 
 	case ALPHA_R_IGNORE:
 	  /* This reloc appears after a GPDISP reloc.  On earlier
@@ -1552,7 +1532,7 @@ alpha_relocate_section (output_bfd, info, input_bfd, input_section,
 	     not otherwise used for anything.  For some reason, the
 	     address of the relocation does not appear to include the
 	     section VMA, unlike the other relocation types.  */
-	  if (info->relocateable)
+	  if (info->relocatable)
 	    H_PUT_64 (input_bfd, input_section->output_offset + r_vaddr,
 		      ext_rel->r_vaddr);
 	  adjust_addrp = FALSE;
@@ -1705,7 +1685,7 @@ alpha_relocate_section (output_bfd, info, input_bfd, input_section,
 	      if (h == (struct ecoff_link_hash_entry *) NULL)
 		abort ();
 
-	      if (! info->relocateable)
+	      if (! info->relocatable)
 		{
 		  if (h->root.type == bfd_link_hash_defined
 		      || h->root.type == bfd_link_hash_defweak)
@@ -1748,7 +1728,7 @@ alpha_relocate_section (output_bfd, info, input_bfd, input_section,
 
 	  addend += r_vaddr;
 
-	  if (info->relocateable)
+	  if (info->relocatable)
 	    {
 	      /* Adjust r_vaddr by the addend.  */
 	      H_PUT_64 (input_bfd, addend, ext_rel->r_vaddr);
@@ -1782,9 +1762,9 @@ alpha_relocate_section (output_bfd, info, input_bfd, input_section,
 
 	case ALPHA_R_OP_STORE:
 	  /* Store a value from the reloc stack into a bitfield.  If
-	     we are generating relocateable output, all we do is
+	     we are generating relocatable output, all we do is
 	     adjust the address of the reloc.  */
-	  if (! info->relocateable)
+	  if (! info->relocatable)
 	    {
 	      bfd_vma mask;
 	      bfd_vma val;
@@ -1850,9 +1830,9 @@ alpha_relocate_section (output_bfd, info, input_bfd, input_section,
 		abort ();
 	    }
 
-	  if (info->relocateable)
+	  if (info->relocatable)
 	    {
-	      /* We are generating relocateable output, and must
+	      /* We are generating relocatable output, and must
 		 convert the existing reloc.  */
 	      if (r_extern)
 		{
@@ -1965,7 +1945,8 @@ alpha_relocate_section (output_bfd, info, input_bfd, input_section,
 		      name = bfd_section_name (input_bfd,
 					       symndx_to_section[r_symndx]);
 		    if (! ((*info->callbacks->reloc_overflow)
-			   (info, name, alpha_howto_table[r_type].name,
+			   (info, NULL, name,
+			    alpha_howto_table[r_type].name,
 			    (bfd_vma) 0, input_bfd, input_section,
 			    r_vaddr - input_section->vma)))
 		      return FALSE;
@@ -1975,7 +1956,7 @@ alpha_relocate_section (output_bfd, info, input_bfd, input_section,
 	    }
 	}
 
-      if (info->relocateable && adjust_addrp)
+      if (info->relocatable && adjust_addrp)
 	{
 	  /* Change the address of the relocation.  */
 	  H_PUT_64 (input_bfd,
@@ -2009,10 +1990,9 @@ alpha_relocate_section (output_bfd, info, input_bfd, input_section,
    sets the dynamic bits in the file header.  */
 
 static bfd_boolean
-alpha_adjust_headers (abfd, fhdr, ahdr)
-     bfd *abfd;
-     struct internal_filehdr *fhdr;
-     struct internal_aouthdr *ahdr ATTRIBUTE_UNUSED;
+alpha_adjust_headers (bfd *abfd,
+		      struct internal_filehdr *fhdr,
+		      struct internal_aouthdr *ahdr ATTRIBUTE_UNUSED)
 {
   if ((abfd->flags & (DYNAMIC | EXEC_P)) == (DYNAMIC | EXEC_P))
     fhdr->f_flags |= F_ALPHA_CALL_SHARED;
@@ -2033,6 +2013,7 @@ alpha_adjust_headers (abfd, fhdr, ahdr)
   _bfd_ecoff_construct_extended_name_table
 #define alpha_ecoff_truncate_arname _bfd_ecoff_truncate_arname
 #define alpha_ecoff_write_armap _bfd_ecoff_write_armap
+#define alpha_ecoff_write_ar_hdr _bfd_generic_write_ar_hdr
 #define alpha_ecoff_generic_stat_arch_elt _bfd_ecoff_generic_stat_arch_elt
 #define alpha_ecoff_update_armap_timestamp _bfd_ecoff_update_armap_timestamp
 
@@ -2043,9 +2024,8 @@ alpha_adjust_headers (abfd, fhdr, ahdr)
 /* Read an archive header.  This is like the standard routine, but it
    also accepts ARFZMAG.  */
 
-static PTR
-alpha_ecoff_read_ar_hdr (abfd)
-     bfd *abfd;
+static void *
+alpha_ecoff_read_ar_hdr (bfd *abfd)
 {
   struct areltdata *ret;
   struct ar_hdr *h;
@@ -2069,16 +2049,14 @@ alpha_ecoff_read_ar_hdr (abfd)
       ret->parsed_size = H_GET_64 (abfd, ab);
     }
 
-  return (PTR) ret;
+  return ret;
 }
 
 /* Get an archive element at a specified file position.  This is where
    we uncompress the archive element if necessary.  */
 
 static bfd *
-alpha_ecoff_get_elt_at_filepos (archive, filepos)
-     bfd *archive;
-     file_ptr filepos;
+alpha_ecoff_get_elt_at_filepos (bfd *archive, file_ptr filepos)
 {
   bfd *nbfd = NULL;
   struct areltdata *tdata;
@@ -2088,6 +2066,7 @@ alpha_ecoff_get_elt_at_filepos (archive, filepos)
   bfd_byte *buf, *p;
   struct bfd_in_memory *bim;
 
+  buf = NULL;
   nbfd = _bfd_get_elt_at_filepos (archive, filepos);
   if (nbfd == NULL)
     goto error_return;
@@ -2119,16 +2098,14 @@ alpha_ecoff_get_elt_at_filepos (archive, filepos)
     goto error_return;
   size = H_GET_64 (nbfd, ab);
 
-  if (size == 0)
-    buf = NULL;
-  else
+  if (size != 0)
     {
       bfd_size_type left;
       bfd_byte dict[4096];
       unsigned int h;
       bfd_byte b;
 
-      buf = (bfd_byte *) bfd_alloc (nbfd, size);
+      buf = (bfd_byte *) bfd_malloc (size);
       if (buf == NULL)
 	goto error_return;
       p = buf;
@@ -2182,7 +2159,7 @@ alpha_ecoff_get_elt_at_filepos (archive, filepos)
 
   /* Now the uncompressed file contents are in buf.  */
   bim = ((struct bfd_in_memory *)
-	 bfd_alloc (nbfd, (bfd_size_type) sizeof (struct bfd_in_memory)));
+	 bfd_malloc ((bfd_size_type) sizeof (struct bfd_in_memory)));
   if (bim == NULL)
     goto error_return;
   bim->size = size;
@@ -2192,12 +2169,16 @@ alpha_ecoff_get_elt_at_filepos (archive, filepos)
   nbfd->mtime = strtol (hdr->ar_date, (char **) NULL, 10);
 
   nbfd->flags |= BFD_IN_MEMORY;
-  nbfd->iostream = (PTR) bim;
+  nbfd->iostream = bim;
+  nbfd->iovec = &_bfd_memory_iovec;
+  nbfd->origin = 0;
   BFD_ASSERT (! nbfd->cacheable);
 
   return nbfd;
 
  error_return:
+  if (buf != NULL)
+    free (buf);
   if (nbfd != NULL)
     bfd_close (nbfd);
   return NULL;
@@ -2206,9 +2187,7 @@ alpha_ecoff_get_elt_at_filepos (archive, filepos)
 /* Open the next archived file.  */
 
 static bfd *
-alpha_ecoff_openr_next_archived_file (archive, last_file)
-     bfd *archive;
-     bfd *last_file;
+alpha_ecoff_openr_next_archived_file (bfd *archive, bfd *last_file)
 {
   file_ptr filestart;
 
@@ -2229,7 +2208,7 @@ alpha_ecoff_openr_next_archived_file (archive, last_file)
       /* Pad to an even boundary...
 	 Note that last_file->origin can be odd in the case of
 	 BSD-4.4-style element with a long odd size.  */
-      filestart = last_file->origin + size;
+      filestart = last_file->proxy_origin + size;
       filestart += filestart % 2;
     }
 
@@ -2239,13 +2218,11 @@ alpha_ecoff_openr_next_archived_file (archive, last_file)
 /* Open the archive file given an index into the armap.  */
 
 static bfd *
-alpha_ecoff_get_elt_at_index (abfd, index)
-     bfd *abfd;
-     symindex index;
+alpha_ecoff_get_elt_at_index (bfd *abfd, symindex sym_index)
 {
   carsym *entry;
 
-  entry = bfd_ardata (abfd)->symdefs + index;
+  entry = bfd_ardata (abfd)->symdefs + sym_index;
   return alpha_ecoff_get_elt_at_filepos (abfd, entry->file_offset);
 }
 
@@ -2256,23 +2233,24 @@ static const struct ecoff_backend_data alpha_ecoff_backend_data =
 {
   /* COFF backend structure.  */
   {
-    (void (*) PARAMS ((bfd *,PTR,int,int,int,int,PTR))) bfd_void, /* aux_in */
-    (void (*) PARAMS ((bfd *,PTR,PTR))) bfd_void, /* sym_in */
-    (void (*) PARAMS ((bfd *,PTR,PTR))) bfd_void, /* lineno_in */
-    (unsigned (*) PARAMS ((bfd *,PTR,int,int,int,int,PTR)))bfd_void,/*aux_out*/
-    (unsigned (*) PARAMS ((bfd *,PTR,PTR))) bfd_void, /* sym_out */
-    (unsigned (*) PARAMS ((bfd *,PTR,PTR))) bfd_void, /* lineno_out */
-    (unsigned (*) PARAMS ((bfd *,PTR,PTR))) bfd_void, /* reloc_out */
+    (void (*) (bfd *,void *,int,int,int,int,void *)) bfd_void, /* aux_in */
+    (void (*) (bfd *,void *,void *)) bfd_void, /* sym_in */
+    (void (*) (bfd *,void *,void *)) bfd_void, /* lineno_in */
+    (unsigned (*) (bfd *,void *,int,int,int,int,void *)) bfd_void,/*aux_out*/
+    (unsigned (*) (bfd *,void *,void *)) bfd_void, /* sym_out */
+    (unsigned (*) (bfd *,void *,void *)) bfd_void, /* lineno_out */
+    (unsigned (*) (bfd *,void *,void *)) bfd_void, /* reloc_out */
     alpha_ecoff_swap_filehdr_out, alpha_ecoff_swap_aouthdr_out,
     alpha_ecoff_swap_scnhdr_out,
-    FILHSZ, AOUTSZ, SCNHSZ, 0, 0, 0, 0, FILNMLEN, TRUE, FALSE, 4, FALSE, 2,
+    FILHSZ, AOUTSZ, SCNHSZ, 0, 0, 0, 0, FILNMLEN, TRUE,
+    ECOFF_NO_LONG_SECTION_NAMES, 4, FALSE, 2,
     alpha_ecoff_swap_filehdr_in, alpha_ecoff_swap_aouthdr_in,
     alpha_ecoff_swap_scnhdr_in, NULL,
     alpha_ecoff_bad_format_hook, _bfd_ecoff_set_arch_mach_hook,
     alpha_ecoff_mkobject_hook, _bfd_ecoff_styp_to_sec_flags,
     _bfd_ecoff_set_alignment_hook, _bfd_ecoff_slurp_symbol_table,
     NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL,
-    NULL, NULL, NULL
+    NULL, NULL, NULL, NULL
   },
   /* Supported architecture.  */
   bfd_arch_alpha,
@@ -2346,6 +2324,8 @@ static const struct ecoff_backend_data alpha_ecoff_backend_data =
 
 /* Looking up a reloc type is Alpha specific.  */
 #define _bfd_ecoff_bfd_reloc_type_lookup alpha_bfd_reloc_type_lookup
+#define _bfd_ecoff_bfd_reloc_name_lookup \
+  alpha_bfd_reloc_name_lookup
 
 /* So is getting relocated section contents.  */
 #define _bfd_ecoff_bfd_get_relocated_section_contents \
@@ -2355,11 +2335,18 @@ static const struct ecoff_backend_data alpha_ecoff_backend_data =
 #define _bfd_ecoff_get_section_contents_in_window \
   _bfd_generic_get_section_contents_in_window
 
+/* Input section flag lookup is generic.  */
+#define _bfd_ecoff_bfd_lookup_section_flags bfd_generic_lookup_section_flags
+
 /* Relaxing sections is generic.  */
 #define _bfd_ecoff_bfd_relax_section bfd_generic_relax_section
 #define _bfd_ecoff_bfd_gc_sections bfd_generic_gc_sections
 #define _bfd_ecoff_bfd_merge_sections bfd_generic_merge_sections
+#define _bfd_ecoff_bfd_is_group_section bfd_generic_is_group_section
 #define _bfd_ecoff_bfd_discard_group bfd_generic_discard_group
+#define _bfd_ecoff_section_already_linked \
+  _bfd_coff_section_already_linked
+#define _bfd_ecoff_bfd_define_common_symbol bfd_generic_define_common_symbol
 
 const bfd_target ecoffalpha_little_vec =
 {
@@ -2376,6 +2363,7 @@ const bfd_target ecoffalpha_little_vec =
   0,				/* leading underscore */
   ' ',				/* ar_pad_char */
   15,				/* ar_max_namelen */
+  0,				/* match priority.  */
   bfd_getl64, bfd_getl_signed_64, bfd_putl64,
      bfd_getl32, bfd_getl_signed_32, bfd_putl32,
      bfd_getl16, bfd_getl_signed_16, bfd_putl16, /* data */
@@ -2384,7 +2372,7 @@ const bfd_target ecoffalpha_little_vec =
      bfd_getl16, bfd_getl_signed_16, bfd_putl16, /* hdrs */
 
   {_bfd_dummy_target, alpha_ecoff_object_p, /* bfd_check_format */
-     _bfd_ecoff_archive_p, _bfd_dummy_target},
+     bfd_generic_archive_p, _bfd_dummy_target},
   {bfd_false, _bfd_ecoff_mkobject,  /* bfd_set_format */
      _bfd_generic_mkarchive, bfd_false},
   {bfd_false, _bfd_ecoff_write_object_contents, /* bfd_write_contents */
@@ -2402,5 +2390,5 @@ const bfd_target ecoffalpha_little_vec =
 
   NULL,
 
-  (PTR) &alpha_ecoff_backend_data
+  & alpha_ecoff_backend_data
 };

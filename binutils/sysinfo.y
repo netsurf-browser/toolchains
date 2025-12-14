@@ -1,42 +1,39 @@
-/* Copyright 2001 Free Software Foundation, Inc.
+/* Copyright 2001, 2003, 2005, 2007, 2009 Free Software Foundation, Inc.
    Written by Steve Chamberlain of Cygnus Support (steve@cygnus.com).
 
-This file is part of GNU binutils.
+   This file is part of GNU binutils.
 
-This program is free software; you can redistribute it and/or modify
-it under the terms of the GNU General Public License as published by
-the Free Software Foundation; either version 2 of the License, or
-(at your option) any later version.
+   This program is free software; you can redistribute it and/or modify
+   it under the terms of the GNU General Public License as published by
+   the Free Software Foundation; either version 3 of the License, or
+   (at your option) any later version.
 
-This program is distributed in the hope that it will be useful,
-but WITHOUT ANY WARRANTY; without even the implied warranty of
-MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-GNU General Public License for more details.
+   This program is distributed in the hope that it will be useful,
+   but WITHOUT ANY WARRANTY; without even the implied warranty of
+   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+   GNU General Public License for more details.
 
-You should have received a copy of the GNU General Public License
-along with this program; if not, write to the Free Software
-Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.  */
+   You should have received a copy of the GNU General Public License
+   along with this program; if not, write to the Free Software
+   Foundation, Inc., 51 Franklin Street - Fifth Floor, Boston,
+   MA 02110-1301, USA.  */
 
 %{
 #include <stdio.h>
 #include <stdlib.h>
 
-extern char *word;
-extern char writecode;
-extern int number;
-extern int unit;
-char nice_name[1000];
-char *it;
-int sofar;
-int width;
-int code;
-char * repeat;
-char *oldrepeat;
-char *name;
-int rdepth;
-char *loop [] = {"","n","m","/*BAD*/"};
-char *names[] = {" ","[n]","[n][m]"};
-char *pnames[]= {"","*","**"};
+static char writecode;
+static char *it;
+static int code;
+static char * repeat;
+static char *oldrepeat;
+static char *name;
+static int rdepth;
+static char *names[] = {" ","[n]","[n][m]"};
+static char *pnames[]= {"","*","**"};
+
+static int yyerror (char *s);
+extern int yylex (void);
 %}
 
 
@@ -105,45 +102,39 @@ it:
 	  case 'd':
 	    printf("\n\n\n#define IT_%s_CODE 0x%x\n", it,code);
 	    printf("struct IT_%s;\n", it);
-	    printf("extern void sysroff_swap_%s_in PARAMS ((struct IT_%s *));\n",
+	    printf("extern void sysroff_swap_%s_in (struct IT_%s *);\n",
 		   $2, it);
-	    printf("extern void sysroff_swap_%s_out PARAMS ((FILE *, struct IT_%s *));\n",
+	    printf("extern void sysroff_swap_%s_out (FILE *, struct IT_%s *);\n",
 		   $2, it);
-	    printf("extern void sysroff_print_%s_out PARAMS ((struct IT_%s *));\n",
+	    printf("extern void sysroff_print_%s_out (struct IT_%s *);\n",
 		   $2, it);
 	    printf("struct IT_%s { \n", it);
 	    break;
 	  case 'i':
-	    printf("void sysroff_swap_%s_in(ptr)\n",$2);
-	    printf("struct IT_%s *ptr;\n", it);
+	    printf("void sysroff_swap_%s_in (struct IT_%s * ptr)\n",$2,it);
 	    printf("{\n");
-	    printf("char raw[255];\n");
-	    printf("\tint idx = 0 ;\n");
+	    printf("\tunsigned char raw[255];\n");
+	    printf("\tint idx = 0;\n");
 	    printf("\tint size;\n");
-	    printf("memset(raw,0,255);\n");	
-	    printf("memset(ptr,0,sizeof(*ptr));\n");
-	    printf("size = fillup(raw);\n");
+	    printf("\tmemset(raw,0,255);\n");	
+	    printf("\tmemset(ptr,0,sizeof(*ptr));\n");
+	    printf("\tsize = fillup(raw);\n");
 	    break;
 	  case 'g':
-	    printf("void sysroff_swap_%s_out(file,ptr)\n",$2);
-	    printf("FILE * file;\n");
-	    printf("struct IT_%s *ptr;\n", it);
+	    printf("void sysroff_swap_%s_out (FILE * ffile, struct IT_%s * ptr)\n",$2,it);
 	    printf("{\n");
-	    printf("\tchar raw[255];\n");
-	    printf("\tint idx = 16 ;\n");
+	    printf("\tunsigned char raw[255];\n");
+	    printf("\tint idx = 16;\n");
 	    printf("\tmemset (raw, 0, 255);\n");
 	    printf("\tcode = IT_%s_CODE;\n", it);
 	    break;
 	  case 'o':
-	    printf("void sysroff_swap_%s_out(abfd,ptr)\n",$2);
-	    printf("bfd * abfd;\n");
-	    printf("struct IT_%s *ptr;\n",it);
+	    printf("void sysroff_swap_%s_out (bfd * abfd, struct IT_%s * ptr)\n",$2, it);
 	    printf("{\n");
-	    printf("int idx = 0 ;\n");
+	    printf("\tint idx = 0;\n");
 	    break;
 	  case 'c':
-	    printf("void sysroff_print_%s_out(ptr)\n",$2);
-	    printf("struct IT_%s *ptr;\n", it);
+	    printf("void sysroff_print_%s_out (struct IT_%s *ptr)\n",$2,it);
 	    printf("{\n");
 	    printf("itheader(\"%s\", IT_%s_CODE);\n",$2,$2);
 	    break;
@@ -161,7 +152,7 @@ it:
     printf("};\n");
     break;
   case 'g':
-    printf("\tchecksum(file,raw, idx, IT_%s_CODE);\n", it);
+    printf("\tchecksum(ffile,raw, idx, IT_%s_CODE);\n", it);
     
   case 'i':
 
@@ -277,7 +268,7 @@ char *ptr = pnames[rdepth];
 
 		}
 	      else {
-		printf("\twrite%s(ptr->%s%s,raw,&idx,%d,file);\n",
+		printf("\twrite%s(ptr->%s%s,raw,&idx,%d,ffile);\n",
 		       type,
 		       id,
 		       names[rdepth],size/8);
@@ -406,18 +397,15 @@ enum_list:
 %%
 /* four modes
 
-   -d write structure defintions for sysroff in host format
+   -d write structure definitions for sysroff in host format
    -i write functions to swap into sysroff format in
    -o write functions to swap into sysroff format out
    -c write code to print info in human form */
 
 int yydebug;
-char writecode;
 
 int 
-main(ac,av)
-int ac;
-char **av;
+main (int ac, char **av)
 {
   yydebug=0;
   if (ac > 1)
@@ -433,9 +421,8 @@ if (writecode == 'd')
 return 0;
 }
 
-int
-yyerror(s)
-     char *s;
+static int
+yyerror (char *s)
 {
   fprintf(stderr, "%s\n" , s);
   return 0;

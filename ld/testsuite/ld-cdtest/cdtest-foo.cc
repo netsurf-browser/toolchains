@@ -12,7 +12,7 @@ typedef unsigned int size_t;
 #endif
 
 extern "C" {
-    char *strncpy (char* dest, const char* dest, size_t len);
+    char *strncpy (char* dest, const char* src, size_t len);
     int printf (const char*, ...);
 };
 
@@ -38,7 +38,7 @@ Foo::Foo ()
 #endif
 }
 
-Foo::Foo (char* msg)
+Foo::Foo (const char* msg)
 {
     i = ++foos;
     strncpy( message, msg, len);

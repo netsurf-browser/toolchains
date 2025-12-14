@@ -1,11 +1,12 @@
 # This shell script emits a C file. -*- C -*-
-#   Copyright 2000, 2001, 2002, 2003 Free Software Foundation, Inc.
+#   Copyright 2000, 2001, 2002, 2003, 2004, 2005, 2007, 2008, 2009
+#   Free Software Foundation, Inc.
 #
-# This file is part of GLD, the Gnu Linker.
+# This file is part of the GNU Binutils.
 #
 # This program is free software; you can redistribute it and/or modify
 # it under the terms of the GNU General Public License as published by
-# the Free Software Foundation; either version 2 of the License, or
+# the Free Software Foundation; either version 3 of the License, or
 # (at your option) any later version.
 #
 # This program is distributed in the hope that it will be useful,
@@ -15,7 +16,8 @@
 #
 # You should have received a copy of the GNU General Public License
 # along with this program; if not, write to the Free Software
-# Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
+# Foundation, Inc., 51 Franklin Street - Fifth Floor, Boston,
+# MA 02110-1301, USA.
 #
 
 # This file is sourced from elf32.em, and defines extra sh64
@@ -25,16 +27,13 @@
 LDEMUL_AFTER_ALLOCATION=sh64_elf_${EMULATION_NAME}_after_allocation
 LDEMUL_BEFORE_ALLOCATION=sh64_elf_${EMULATION_NAME}_before_allocation
 
-cat >>e${EMULATION_NAME}.c <<EOF
+fragment <<EOF
 
 #include "libiberty.h"
 #include "libbfd.h"
 #include "elf-bfd.h"
 #include "elf/sh.h"
 #include "elf32-sh64.h"
-
-static void sh64_elf_${EMULATION_NAME}_before_allocation PARAMS ((void));
-static void sh64_elf_${EMULATION_NAME}_after_allocation PARAMS ((void));
 
 /* Check if we need a .cranges section and create it if it's not in any
    input file.  It might seem better to always create it and if unneeded,
@@ -47,7 +46,7 @@ static void sh64_elf_${EMULATION_NAME}_after_allocation PARAMS ((void));
    they will be linked.  */
 
 static void
-sh64_elf_${EMULATION_NAME}_before_allocation ()
+sh64_elf_${EMULATION_NAME}_before_allocation (void)
 {
   asection *cranges;
   asection *osec;
@@ -55,11 +54,12 @@ sh64_elf_${EMULATION_NAME}_before_allocation ()
   /* Call main function; we're just extending it.  */
   gld${EMULATION_NAME}_before_allocation ();
 
-  cranges = bfd_get_section_by_name (output_bfd, SH64_CRANGES_SECTION_NAME);
+  cranges = bfd_get_section_by_name (link_info.output_bfd,
+				     SH64_CRANGES_SECTION_NAME);
 
   if (cranges != NULL)
     {
-      if (command_line.relax)
+      if (RELAXATION_ENABLED)
 	{
 	  /* FIXME: Look through incoming sections with .cranges
 	     descriptors, build up some kind of descriptors that the
@@ -82,7 +82,7 @@ sh64_elf_${EMULATION_NAME}_before_allocation ()
 	      }
 	  }
 
-	  command_line.relax = FALSE;
+	  DISABLE_RELAXATION;
 	}
 
       /* We wouldn't need to do anything when there's already a .cranges
@@ -91,13 +91,14 @@ sh64_elf_${EMULATION_NAME}_before_allocation ()
 	 .cranges section.  */
     }
 
-  if (command_line.relax)
+  if (RELAXATION_ENABLED)
     {
       LANG_FOR_EACH_INPUT_STATEMENT (f)
 	{
 	  if (bfd_get_flavour (f->the_bfd) == bfd_target_elf_flavour)
 	    {
 	      asection *isec;
+
 	      for (isec = f->the_bfd->sections;
 		   isec != NULL;
 		   isec = isec->next)
@@ -107,7 +108,7 @@ sh64_elf_${EMULATION_NAME}_before_allocation ()
 		    {
 		      einfo (_("%P: Sorry, turning off relaxing: SHmedia sections present.\n"));
 		      einfo ("  %I\n", f);
-		      command_line.relax = FALSE;
+		      DISABLE_RELAXATION;
 		      goto done_scanning_shmedia_sections;
 		    }
 		}
@@ -119,7 +120,7 @@ sh64_elf_${EMULATION_NAME}_before_allocation ()
   /* For each non-empty input section in each output section, check if it
      has the same SH64-specific flags.  If some input section differs, we
      need a .cranges section.  */
-  for (osec = output_bfd->sections;
+  for (osec = link_info.output_bfd->sections;
        osec != NULL;
        osec = osec->next)
     {
@@ -127,13 +128,13 @@ sh64_elf_${EMULATION_NAME}_before_allocation ()
       bfd_vma oflags_isa = 0;
       bfd_vma iflags_isa = 0;
 
-      if (bfd_get_flavour (output_bfd) != bfd_target_elf_flavour)
+      if (bfd_get_flavour (link_info.output_bfd) != bfd_target_elf_flavour)
 	einfo (_("%FError: non-ELF output formats are not supported by this target's linker.\n"));
 
       sh64_sec_data = sh64_elf_section_data (osec)->sh64_info;
 
       /* Omit excluded or garbage-collected sections.  */
-      if (bfd_get_section_flags (output_bfd, osec) & SEC_EXCLUDE)
+      if (bfd_get_section_flags (link_info.output_bfd, osec) & SEC_EXCLUDE)
 	continue;
 
       /* Make sure we have the target section data initialized.  */
@@ -155,7 +156,7 @@ sh64_elf_${EMULATION_NAME}_before_allocation ()
 		 isec = isec->next)
 	      {
 		if (isec->output_section == osec
-		    && isec->_raw_size != 0
+		    && isec->size != 0
 		    && (bfd_get_section_flags (isec->owner, isec)
 			& SEC_EXCLUDE) == 0)
 		  {
@@ -182,7 +183,7 @@ sh64_elf_${EMULATION_NAME}_before_allocation ()
 		 isec = isec->next)
 	      {
 		if (isec->output_section == osec
-		    && isec->_raw_size != 0
+		    && isec->size != 0
 		    && (bfd_get_section_flags (isec->owner, isec)
 			& SEC_EXCLUDE) == 0)
 		  {
@@ -203,15 +204,13 @@ sh64_elf_${EMULATION_NAME}_before_allocation ()
 			       sh64_elf_section_data; no need to set it
 			       specifically here.  */
 			    cranges
-			      = bfd_make_section (output_bfd,
-						  SH64_CRANGES_SECTION_NAME);
-			    if (cranges == NULL
-				|| !bfd_set_section_flags (output_bfd,
-							   cranges,
-							   SEC_LINKER_CREATED
-							   | SEC_KEEP
-							   | SEC_HAS_CONTENTS
-							   | SEC_DEBUGGING))
+			      = bfd_make_section_with_flags (link_info.output_bfd,
+							     SH64_CRANGES_SECTION_NAME,
+							     SEC_LINKER_CREATED
+							     | SEC_KEEP
+							     | SEC_HAS_CONTENTS
+							     | SEC_DEBUGGING);
+			    if (cranges == NULL)
 			      einfo
 				(_("%P%E%F: Can't make .cranges section\n"));
 			  }
@@ -240,18 +239,18 @@ sh64_elf_${EMULATION_NAME}_before_allocation ()
 /* Size up and extend the .cranges section, merging generated entries.  */
 
 static void
-sh64_elf_${EMULATION_NAME}_after_allocation ()
+sh64_elf_${EMULATION_NAME}_after_allocation (void)
 {
   bfd_vma new_cranges = 0;
   bfd_vma cranges_growth = 0;
   asection *osec;
   bfd_byte *crangesp;
+  asection *cranges;
 
-  asection *cranges
-    = bfd_get_section_by_name (output_bfd, SH64_CRANGES_SECTION_NAME);
+  gld${EMULATION_NAME}_after_allocation ();
 
-  /* If this ever starts doing something, we will pick it up.  */
-  after_allocation_default ();
+  cranges = bfd_get_section_by_name (link_info.output_bfd,
+				     SH64_CRANGES_SECTION_NAME);
 
   /* If there is no .cranges section, it is because it was seen earlier on
      that none was needed.  Otherwise it must have been created then, or
@@ -263,7 +262,7 @@ sh64_elf_${EMULATION_NAME}_after_allocation ()
      first non-discarded section.  For each input section in osec, we
      check if it has the same flags.  If it does not, we set flags to mark
      a mixed section (and exit the loop early).  */
-  for (osec = output_bfd->sections;
+  for (osec = link_info.output_bfd->sections;
        osec != NULL;
        osec = osec->next)
     {
@@ -271,7 +270,7 @@ sh64_elf_${EMULATION_NAME}_after_allocation ()
       bfd_boolean need_check_cranges = FALSE;
 
       /* Omit excluded or garbage-collected sections.  */
-      if (bfd_get_section_flags (output_bfd, osec) & SEC_EXCLUDE)
+      if (bfd_get_section_flags (link_info.output_bfd, osec) & SEC_EXCLUDE)
 	continue;
 
       /* First find an input section so we have flags to compare with; the
@@ -286,7 +285,7 @@ sh64_elf_${EMULATION_NAME}_after_allocation ()
 		 isec = isec->next)
 	      {
 		if (isec->output_section == osec
-		    && isec->_raw_size != 0
+		    && isec->size != 0
 		    && (bfd_get_section_flags (isec->owner, isec)
 			& SEC_EXCLUDE) == 0)
 		  {
@@ -313,7 +312,7 @@ sh64_elf_${EMULATION_NAME}_after_allocation ()
 		 isec = isec->next)
 	      {
 		if (isec->output_section == osec
-		    && isec->_raw_size != 0
+		    && isec->size != 0
 		    && (bfd_get_section_flags (isec->owner, isec)
 			& SEC_EXCLUDE) == 0)
 		  {
@@ -366,7 +365,7 @@ sh64_elf_${EMULATION_NAME}_after_allocation ()
 		 isec = isec->next)
 	      {
 		if (isec->output_section == osec
-		    && isec->_raw_size != 0
+		    && isec->size != 0
 		    && (bfd_get_section_flags (isec->owner, isec)
 			& SEC_EXCLUDE) == 0
 		    && ((elf_section_data (isec)->this_hdr.sh_flags
@@ -378,14 +377,15 @@ sh64_elf_${EMULATION_NAME}_after_allocation ()
       }
     }
 
-  BFD_ASSERT (cranges->contents == NULL);
+  if (cranges->contents != NULL)
+    free (cranges->contents);
+
   BFD_ASSERT (sh64_elf_section_data (cranges)->sh64_info != NULL);
 
   /* Make sure we have .cranges in memory even if there were only
      assembler-generated .cranges.  */
   cranges_growth = new_cranges * SH64_CRANGE_SIZE;
-  cranges->contents
-    = (bfd_byte *) xcalloc (cranges->_raw_size + cranges_growth, 1);
+  cranges->contents = xcalloc (cranges->size + cranges_growth, 1);
   bfd_set_section_flags (cranges->owner, cranges,
 			 bfd_get_section_flags (cranges->owner, cranges)
 			 | SEC_IN_MEMORY);
@@ -400,11 +400,11 @@ sh64_elf_${EMULATION_NAME}_after_allocation ()
       return;
     }
 
-  crangesp = cranges->contents + cranges->_raw_size;
+  crangesp = cranges->contents + cranges->size;
 
   /* Now pass over the sections again, and make reloc orders for the new
      .cranges entries.  Constants are set as we go.  */
-  for (osec = output_bfd->sections;
+  for (osec = link_info.output_bfd->sections;
        osec != NULL;
        osec = osec->next)
     {
@@ -415,7 +415,7 @@ sh64_elf_${EMULATION_NAME}_after_allocation ()
 
       /* Omit excluded or garbage-collected sections, and output sections
 	 which were not marked as needing further processing.  */
-      if ((bfd_get_section_flags (output_bfd, osec) & SEC_EXCLUDE) != 0
+      if ((bfd_get_section_flags (link_info.output_bfd, osec) & SEC_EXCLUDE) != 0
 	  || (sh64_elf_section_data (osec)->sh64_info->contents_flags
 	      != SHF_SH5_ISA32_MIXED))
 	continue;
@@ -434,7 +434,7 @@ sh64_elf_${EMULATION_NAME}_after_allocation ()
 		   as containing mixed data, thus already having .cranges
 		   entries.  */
 		if (isec->output_section == osec
-		    && isec->_raw_size != 0
+		    && isec->size != 0
 		    && (bfd_get_section_flags (isec->owner, isec)
 			& SEC_EXCLUDE) == 0
 		    && ((elf_section_data (isec)->this_hdr.sh_flags
@@ -455,9 +455,7 @@ sh64_elf_${EMULATION_NAME}_after_allocation ()
 		    else
 		      cr_type = CRT_SH5_ISA16;
 
-		    cr_size
-		      = (isec->_cooked_size
-			 ? isec->_cooked_size : isec->_raw_size);
+		    cr_size = isec->size;
 
 		    /* Sections can be empty, like .text in a file that
 		       only contains other sections.  Ranges shouldn't be
@@ -475,7 +473,7 @@ sh64_elf_${EMULATION_NAME}_after_allocation ()
 			    == osec->vma + isec->output_offset))
 		      {
 			last_cr_size += cr_size;
-			bfd_put_32 (output_bfd, last_cr_size,
+			bfd_put_32 (link_info.output_bfd, last_cr_size,
 				    crangesp - SH64_CRANGE_SIZE
 				    + SH64_CRANGE_CR_SIZE_OFFSET);
 
@@ -483,16 +481,16 @@ sh64_elf_${EMULATION_NAME}_after_allocation ()
 			continue;
 		      }
 
-		    /* If we emit relocateable contents, we need a
+		    /* If we emit relocatable contents, we need a
 		       relocation for the start address.  */
-		    if (link_info.relocateable || link_info.emitrelocations)
+		    if (link_info.relocatable || link_info.emitrelocations)
 		      {
 			/* FIXME: We could perhaps use lang_add_reloc and
 			   friends here, but I'm not really sure that
 			   would leave us free to do some optimizations
 			   later.  */
 			cr_addr_order
-			  = bfd_new_link_order (output_bfd, cranges);
+			  = bfd_new_link_order (link_info.output_bfd, cranges);
 
 			if (cr_addr_order == NULL)
 			  {
@@ -507,8 +505,7 @@ sh64_elf_${EMULATION_NAME}_after_allocation ()
 			     - cranges->contents);
 			cr_addr_order->size = 4;
 			cr_addr_order->u.reloc.p
-			  = ((struct bfd_link_order_reloc *)
-			     xmalloc (sizeof (struct bfd_link_order_reloc)));
+			  = xmalloc (sizeof (struct bfd_link_order_reloc));
 
 			cr_addr_order->u.reloc.p->reloc = BFD_RELOC_32;
 			cr_addr_order->u.reloc.p->u.section = osec;
@@ -517,19 +514,12 @@ sh64_elf_${EMULATION_NAME}_after_allocation ()
 			   "partial inplace" REL-like relocation for this,
 			   we put the addend in the contents and specify 0
 			   for the reloc.  */
-			bfd_put_32 (output_bfd, isec->output_offset,
+			bfd_put_32 (link_info.output_bfd, isec->output_offset,
 				    crangesp + SH64_CRANGE_CR_ADDR_OFFSET);
 			cr_addr_order->u.reloc.p->addend = 0;
-
-			/* We must update the number of relocations here,
-			   since the elf linker does not take link orders
-			   into account when setting header sizes.  The
-			   actual relocation orders are however executed
-			   correctly.  */
-			elf_section_data(cranges)->rel_count++;
 		      }
 		    else
-		      bfd_put_32 (output_bfd,
+		      bfd_put_32 (link_info.output_bfd,
 				  osec->vma + isec->output_offset,
 				  crangesp + SH64_CRANGE_CR_ADDR_OFFSET);
 
@@ -537,10 +527,10 @@ sh64_elf_${EMULATION_NAME}_after_allocation ()
 		       it, but we would have to have a symbol for the size
 		       of the _input_ section and there's no way to
 		       generate that.  */
-		    bfd_put_32 (output_bfd, cr_size,
+		    bfd_put_32 (link_info.output_bfd, cr_size,
 				crangesp + SH64_CRANGE_CR_SIZE_OFFSET);
 
-		    bfd_put_16 (output_bfd, (bfd_vma) cr_type,
+		    bfd_put_16 (link_info.output_bfd, cr_type,
 				crangesp + SH64_CRANGE_CR_TYPE_OFFSET);
 
 		    last_cr_type = cr_type;
@@ -555,14 +545,17 @@ sh64_elf_${EMULATION_NAME}_after_allocation ()
     }
 
   /* The .cranges section will have this size, no larger or smaller.
-     Since relocs (if relocateable linking) will be emitted into the
+     Since relocs (if relocatable linking) will be emitted into the
      "extended" size, we must set the raw size to the total.  We have to
      keep track of the number of new .cranges entries.
 
      Sorting before writing is done by sh64_elf_final_write_processing.  */
 
-  cranges->_cooked_size = crangesp - cranges->contents;
   sh64_elf_section_data (cranges)->sh64_info->cranges_growth
-    = cranges->_cooked_size - cranges->_raw_size;
-  cranges->_raw_size = cranges->_cooked_size;
+    = crangesp - cranges->contents - cranges->size;
+  cranges->size = crangesp - cranges->contents;
+  cranges->rawsize = cranges->size;
 }
+EOF
+
+

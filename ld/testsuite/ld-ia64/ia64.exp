@@ -1,9 +1,11 @@
 # Expect script for ld-ia64 tests
-#   Copyright (C) 2002, 2003 Free Software Foundation
+#   Copyright (C) 2002, 2003, 2005, 2007 Free Software Foundation
 #
-# This file is free software; you can redistribute it and/or modify
+# This file is part of the GNU Binutils.
+#
+# This program is free software; you can redistribute it and/or modify
 # it under the terms of the GNU General Public License as published by
-# the Free Software Foundation; either version 2 of the License, or
+# the Free Software Foundation; either version 3 of the License, or
 # (at your option) any later version.
 #
 # This program is distributed in the hope that it will be useful,
@@ -13,7 +15,8 @@
 #
 # You should have received a copy of the GNU General Public License
 # along with this program; if not, write to the Free Software
-# Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
+# Foundation, Inc., 51 Franklin Street - Fifth Floor, Boston,
+# MA 02110-1301, USA.
 #
 
 # Test ia64 linking; all types of relocs.  This tests the assembler and
@@ -25,8 +28,8 @@ if { !([istarget "ia64-*-elf*"]
 }
 
 # List contains test-items with 3 items followed by 2 lists:
-# 0:name 1:ld options 2:assembler options
-# 3:filenames of assembler files 4: action and options. 5: name of output file
+# 0:name 1:ld early options 2:ld late options 3:assembler options
+# 4:filenames of assembler files 5: action and options. 6: name of output file
 
 # Actions:
 # objdump: Apply objdump options on result.  Compare with regex (last arg).
@@ -34,21 +37,28 @@ if { !([istarget "ia64-*-elf*"]
 # readelf: Apply readelf options on result.  Compare with regex (last arg).
 
 set ia64tests {
-    {"TLS -fpic -shared" "-shared -melf64_ia64"
-     "" {tlspic1.s tlspic2.s}
+    {"TLS -fpic -shared" "-shared" ""
+     "-mtune=itanium1" {tlspic1.s tlspic2.s}
      {{readelf -WSsrl tlspic.rd} {objdump -drj.text tlspic.dd}
       {objdump -sj.got tlspic.sd} {objdump -sj.tdata tlspic.td}}
       "libtlspic.so"}
-    {"Helper shared library" "-shared -melf64_ia64"
+    {"Helper shared library" "-shared" ""
      "" {tlslib.s} {} "libtlslib.so"}
     {"TLS -fpic and -fno-pic exec"
-     "-melf64_ia64 tmpdir/libtlslib.so" "" {tlsbinpic.s tlsbin.s}
+     "tmpdir/libtlslib.so" "" "-mtune=itanium1" {tlsbinpic.s tlsbin.s}
      {{readelf -WSsrl tlsbin.rd} {objdump -drj.text tlsbin.dd}
       {objdump -sj.got tlsbin.sd} {objdump -sj.tdata tlsbin.td}}
       "tlsbin"}
-    {"TLS in debug sections" "-melf64_ia64"
+    {"TLS in debug sections" "" ""
      "" {tlsg.s}
      {{objdump -sj.debug_foobar tlsg.sd}} "tlsg"}
 }
 
 run_ld_link_tests $ia64tests
+
+set test_list [lsort [glob -nocomplain $srcdir/$subdir/*.d]]
+foreach t $test_list {
+    # We need to strip the ".d", but can leave the dirname.
+    verbose [file rootname $t]
+    run_dump_test [file rootname $t]
+}

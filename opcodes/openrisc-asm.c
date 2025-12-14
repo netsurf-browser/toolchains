@@ -1,26 +1,28 @@
 /* Assembler interface for targets using CGEN. -*- C -*-
    CGEN: Cpu tools GENerator
 
-THIS FILE IS MACHINE GENERATED WITH CGEN.
-- the resultant file is machine generated, cgen-asm.in isn't
+   THIS FILE IS MACHINE GENERATED WITH CGEN.
+   - the resultant file is machine generated, cgen-asm.in isn't
 
-Copyright 1996, 1997, 1998, 1999, 2000, 2001 Free Software Foundation, Inc.
+   Copyright 1996, 1997, 1998, 1999, 2000, 2001, 2005, 2007, 2008, 2010
+   Free Software Foundation, Inc.
 
-This file is part of the GNU Binutils and GDB, the GNU debugger.
+   This file is part of libopcodes.
 
-This program is free software; you can redistribute it and/or modify
-it under the terms of the GNU General Public License as published by
-the Free Software Foundation; either version 2, or (at your option)
-any later version.
+   This library is free software; you can redistribute it and/or modify
+   it under the terms of the GNU General Public License as published by
+   the Free Software Foundation; either version 3, or (at your option)
+   any later version.
 
-This program is distributed in the hope that it will be useful,
-but WITHOUT ANY WARRANTY; without even the implied warranty of
-MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-GNU General Public License for more details.
+   It is distributed in the hope that it will be useful, but WITHOUT
+   ANY WARRANTY; without even the implied warranty of MERCHANTABILITY
+   or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU General Public
+   License for more details.
 
-You should have received a copy of the GNU General Public License
-along with this program; if not, write to the Free Software Foundation, Inc.,
-59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.  */
+   You should have received a copy of the GNU General Public License
+   along with this program; if not, write to the Free Software Foundation, Inc.,
+   51 Franklin Street - Fifth Floor, Boston, MA 02110-1301, USA.  */
+
 
 /* ??? Eventually more and more of this stuff can go to cpu-independent files.
    Keep that in mind.  */
@@ -43,127 +45,123 @@ along with this program; if not, write to the Free Software Foundation, Inc.,
 #define max(a,b) ((a) > (b) ? (a) : (b))
 
 static const char * parse_insn_normal
-     PARAMS ((CGEN_CPU_DESC, const CGEN_INSN *, const char **, CGEN_FIELDS *));
+  (CGEN_CPU_DESC, const CGEN_INSN *, const char **, CGEN_FIELDS *);
 
 /* -- assembler routines inserted here.  */
 
 /* -- asm.c */
 
+static const char * MISSING_CLOSING_PARENTHESIS = N_("missing `)'");
+
 #define CGEN_VERBOSE_ASSEMBLER_ERRORS
 
-static const char * parse_hi16
-  PARAMS ((CGEN_CPU_DESC, const char **, int, unsigned long *));
-static const char * parse_lo16
-  PARAMS ((CGEN_CPU_DESC, const char **, int, unsigned long *));
-
 long
-openrisc_sign_extend_16bit (value)
-     long value;
+openrisc_sign_extend_16bit (long value)
 {
-  return (long) (short) value;
+  return ((value & 0xffff) ^ 0x8000) - 0x8000;
 }
 
 /* Handle hi().  */
 
 static const char *
-parse_hi16 (cd, strp, opindex, valuep)
-     CGEN_CPU_DESC cd;
-     const char **strp;
-     int opindex;
-     unsigned long *valuep;
+parse_hi16 (CGEN_CPU_DESC cd, const char ** strp, int opindex, long * valuep)
 {
   const char *errmsg;
   enum cgen_parse_operand_result result_type;
-  bfd_vma value;
+  unsigned long ret;
 
   if (**strp == '#')
     ++*strp;
 
   if (strncasecmp (*strp, "hi(", 3) == 0)
     {
-      *strp += 3;
+      bfd_vma value;
 
-#if 0
-      errmsg = cgen_parse_signed_integer (cd, strp, opindex, valuep);
-      if (errmsg != NULL)
-        fprintf (stderr, "parse_hi: %s\n", errmsg);
-      if (errmsg != NULL)
-#endif
-        errmsg = cgen_parse_address (cd, strp, opindex, BFD_RELOC_HI16,
-                                     &result_type, &value);
+      *strp += 3;
+      errmsg = cgen_parse_address (cd, strp, opindex, BFD_RELOC_HI16,
+				   & result_type, & value);
       if (**strp != ')')
-        return "missing `)'";
+        return MISSING_CLOSING_PARENTHESIS;
+
       ++*strp;
       if (errmsg == NULL
           && result_type == CGEN_PARSE_OPERAND_RESULT_NUMBER)
         value >>= 16;
-      *valuep = (long) (short) value;
-
-      return errmsg;
+      ret = value;
     }
   else
     {
       if (**strp == '-')
-        errmsg = cgen_parse_signed_integer (cd, strp, opindex, (long *) &value);
+	{
+	  long value;
+
+	  errmsg = cgen_parse_signed_integer (cd, strp, opindex, &value);
+	  ret = value;
+	}
       else
-        errmsg = cgen_parse_unsigned_integer (cd, strp, opindex, (unsigned long *) &value);
+	{
+	  unsigned long value;
+
+	  errmsg = cgen_parse_unsigned_integer (cd, strp, opindex, &value);
+	  ret = value;
+	}
     }
-  *valuep = (long) (short) (value & 0xffff);
+
+  *valuep = ((ret & 0xffff) ^ 0x8000) - 0x8000;
   return errmsg;
 }
 
 /* Handle lo().  */
 
 static const char *
-parse_lo16 (cd, strp, opindex, valuep)
-     CGEN_CPU_DESC cd;
-     const char **strp;
-     int opindex;
-     unsigned long *valuep;
+parse_lo16 (CGEN_CPU_DESC cd, const char ** strp, int opindex, long * valuep)
 {
   const char *errmsg;
   enum cgen_parse_operand_result result_type;
-  bfd_vma value;
+  unsigned long ret;
 
   if (**strp == '#')
     ++*strp;
 
   if (strncasecmp (*strp, "lo(", 3) == 0)
     {
+      bfd_vma value;
+
       *strp += 3;
-
-#if 0 
-      errmsg = cgen_parse_signed_integer (cd, strp, opindex, valuep);
-      if (errmsg != NULL)
-        fprintf (stderr, "parse_lo: %s\n", errmsg);
-
-      if (errmsg != NULL)
-#endif
-        errmsg = cgen_parse_address (cd, strp, opindex, BFD_RELOC_LO16,
-                                     &result_type, &value);
+      errmsg = cgen_parse_address (cd, strp, opindex, BFD_RELOC_LO16,
+				   & result_type, & value);
       if (**strp != ')')
-        return "missing `)'";
-      ++*strp;
-      if (errmsg == NULL
-          && result_type == CGEN_PARSE_OPERAND_RESULT_NUMBER)
-        value &= 0xffff;
-      *valuep = (long) (short) value;
+        return MISSING_CLOSING_PARENTHESIS;
 
-      return errmsg;
+      ++*strp;
+      ret = value;
+    }
+  else
+    {
+      if (**strp == '-')
+	{
+	  long value;
+
+	  errmsg = cgen_parse_signed_integer (cd, strp, opindex, &value);
+	  ret = value;
+	}
+      else
+	{
+	  unsigned long value;
+
+	  errmsg = cgen_parse_unsigned_integer (cd, strp, opindex, &value);
+	  ret = value;
+	}
     }
 
-  if (**strp == '-')
-    errmsg = cgen_parse_signed_integer (cd, strp, opindex, (long *) &value);
-  else
-    errmsg = cgen_parse_unsigned_integer (cd, strp, opindex, (unsigned long *) &value);
-  *valuep = (long) (short) (value & 0xffff);
+  *valuep = ((ret & 0xffff) ^ 0x8000) - 0x8000;
   return errmsg;
 }
 
 /* -- */
 
 const char * openrisc_cgen_parse_operand
-  PARAMS ((CGEN_CPU_DESC, int, const char **, CGEN_FIELDS *));
+  (CGEN_CPU_DESC, int, const char **, CGEN_FIELDS *);
 
 /* Main entry point for operand parsing.
 
@@ -179,11 +177,10 @@ const char * openrisc_cgen_parse_operand
    the handlers.  */
 
 const char *
-openrisc_cgen_parse_operand (cd, opindex, strp, fields)
-     CGEN_CPU_DESC cd;
-     int opindex;
-     const char ** strp;
-     CGEN_FIELDS * fields;
+openrisc_cgen_parse_operand (CGEN_CPU_DESC cd,
+			   int opindex,
+			   const char ** strp,
+			   CGEN_FIELDS * fields)
 {
   const char * errmsg = NULL;
   /* Used by scalar operands that still need to be parsed.  */
@@ -193,29 +190,29 @@ openrisc_cgen_parse_operand (cd, opindex, strp, fields)
     {
     case OPENRISC_OPERAND_ABS_26 :
       {
-        bfd_vma value;
+        bfd_vma value = 0;
         errmsg = cgen_parse_address (cd, strp, OPENRISC_OPERAND_ABS_26, 0, NULL,  & value);
         fields->f_abs26 = value;
       }
       break;
     case OPENRISC_OPERAND_DISP_26 :
       {
-        bfd_vma value;
+        bfd_vma value = 0;
         errmsg = cgen_parse_address (cd, strp, OPENRISC_OPERAND_DISP_26, 0, NULL,  & value);
         fields->f_disp26 = value;
       }
       break;
     case OPENRISC_OPERAND_HI16 :
-      errmsg = parse_hi16 (cd, strp, OPENRISC_OPERAND_HI16, &fields->f_simm16);
+      errmsg = parse_hi16 (cd, strp, OPENRISC_OPERAND_HI16, (long *) (& fields->f_simm16));
       break;
     case OPENRISC_OPERAND_LO16 :
-      errmsg = parse_lo16 (cd, strp, OPENRISC_OPERAND_LO16, &fields->f_lo16);
+      errmsg = parse_lo16 (cd, strp, OPENRISC_OPERAND_LO16, (long *) (& fields->f_lo16));
       break;
     case OPENRISC_OPERAND_OP_F_23 :
-      errmsg = cgen_parse_unsigned_integer (cd, strp, OPENRISC_OPERAND_OP_F_23, &fields->f_op4);
+      errmsg = cgen_parse_unsigned_integer (cd, strp, OPENRISC_OPERAND_OP_F_23, (unsigned long *) (& fields->f_op4));
       break;
     case OPENRISC_OPERAND_OP_F_3 :
-      errmsg = cgen_parse_unsigned_integer (cd, strp, OPENRISC_OPERAND_OP_F_3, &fields->f_op5);
+      errmsg = cgen_parse_unsigned_integer (cd, strp, OPENRISC_OPERAND_OP_F_3, (unsigned long *) (& fields->f_op5));
       break;
     case OPENRISC_OPERAND_RA :
       errmsg = cgen_parse_keyword (cd, strp, & openrisc_cgen_opval_h_gr, & fields->f_r2);
@@ -227,16 +224,16 @@ openrisc_cgen_parse_operand (cd, opindex, strp, fields)
       errmsg = cgen_parse_keyword (cd, strp, & openrisc_cgen_opval_h_gr, & fields->f_r1);
       break;
     case OPENRISC_OPERAND_SIMM_16 :
-      errmsg = cgen_parse_signed_integer (cd, strp, OPENRISC_OPERAND_SIMM_16, &fields->f_simm16);
+      errmsg = cgen_parse_signed_integer (cd, strp, OPENRISC_OPERAND_SIMM_16, (long *) (& fields->f_simm16));
       break;
     case OPENRISC_OPERAND_UI16NC :
-      errmsg = parse_lo16 (cd, strp, OPENRISC_OPERAND_UI16NC, &fields->f_i16nc);
+      errmsg = parse_lo16 (cd, strp, OPENRISC_OPERAND_UI16NC, (long *) (& fields->f_i16nc));
       break;
     case OPENRISC_OPERAND_UIMM_16 :
-      errmsg = cgen_parse_unsigned_integer (cd, strp, OPENRISC_OPERAND_UIMM_16, &fields->f_uimm16);
+      errmsg = cgen_parse_unsigned_integer (cd, strp, OPENRISC_OPERAND_UIMM_16, (unsigned long *) (& fields->f_uimm16));
       break;
     case OPENRISC_OPERAND_UIMM_5 :
-      errmsg = cgen_parse_unsigned_integer (cd, strp, OPENRISC_OPERAND_UIMM_5, &fields->f_uimm5);
+      errmsg = cgen_parse_unsigned_integer (cd, strp, OPENRISC_OPERAND_UIMM_5, (unsigned long *) (& fields->f_uimm5));
       break;
 
     default :
@@ -254,13 +251,15 @@ cgen_parse_fn * const openrisc_cgen_parse_handlers[] =
 };
 
 void
-openrisc_cgen_init_asm (cd)
-     CGEN_CPU_DESC cd;
+openrisc_cgen_init_asm (CGEN_CPU_DESC cd)
 {
   openrisc_cgen_init_opcode_table (cd);
   openrisc_cgen_init_ibld_table (cd);
   cd->parse_handlers = & openrisc_cgen_parse_handlers[0];
   cd->parse_operand = openrisc_cgen_parse_operand;
+#ifdef CGEN_ASM_INIT_HOOK
+CGEN_ASM_INIT_HOOK
+#endif
 }
 
 
@@ -277,8 +276,7 @@ openrisc_cgen_init_asm (cd)
    Returns NULL for success, an error message for failure.  */
 
 char * 
-openrisc_cgen_build_insn_regex (insn)
-     CGEN_INSN *insn;
+openrisc_cgen_build_insn_regex (CGEN_INSN *insn)
 {  
   CGEN_OPCODE *opc = (CGEN_OPCODE *) CGEN_INSN_OPCODE (insn);
   const char *mnem = CGEN_INSN_MNEMONIC (insn);
@@ -401,11 +399,10 @@ openrisc_cgen_build_insn_regex (insn)
    Returns NULL for success, an error message for failure.  */
 
 static const char *
-parse_insn_normal (cd, insn, strp, fields)
-     CGEN_CPU_DESC cd;
-     const CGEN_INSN *insn;
-     const char **strp;
-     CGEN_FIELDS *fields;
+parse_insn_normal (CGEN_CPU_DESC cd,
+		   const CGEN_INSN *insn,
+		   const char **strp,
+		   CGEN_FIELDS *fields)
 {
   /* ??? Runtime added insns not handled yet.  */
   const CGEN_SYNTAX *syntax = CGEN_INSN_SYNTAX (insn);
@@ -491,9 +488,11 @@ parse_insn_normal (cd, insn, strp, fields)
 	  continue;
 	}
 
+#ifdef CGEN_MNEMONIC_OPERANDS
+      (void) past_opcode_p;
+#endif
       /* We have an operand of some sort.  */
-      errmsg = cd->parse_operand (cd, CGEN_SYNTAX_FIELD (*syn),
-					  &str, fields);
+      errmsg = cd->parse_operand (cd, CGEN_SYNTAX_FIELD (*syn), &str, fields);
       if (errmsg)
 	return errmsg;
 
@@ -543,12 +542,11 @@ parse_insn_normal (cd, insn, strp, fields)
    mind helps keep the design clean.  */
 
 const CGEN_INSN *
-openrisc_cgen_assemble_insn (cd, str, fields, buf, errmsg)
-     CGEN_CPU_DESC cd;
-     const char *str;
-     CGEN_FIELDS *fields;
-     CGEN_INSN_BYTES_PTR buf;
-     char **errmsg;
+openrisc_cgen_assemble_insn (CGEN_CPU_DESC cd,
+			   const char *str,
+			   CGEN_FIELDS *fields,
+			   CGEN_INSN_BYTES_PTR buf,
+			   char **errmsg)
 {
   const char *start;
   CGEN_INSN_LIST *ilist;
@@ -578,10 +576,10 @@ openrisc_cgen_assemble_insn (cd, str, fields, buf, errmsg)
       if (! openrisc_cgen_insn_supported (cd, insn))
 	continue;
 #endif
-      /* If the RELAX attribute is set, this is an insn that shouldn't be
+      /* If the RELAXED attribute is set, this is an insn that shouldn't be
 	 chosen immediately.  Instead, it is used during assembler/linker
 	 relaxation if possible.  */
-      if (CGEN_INSN_ATTR_VALUE (insn, CGEN_INSN_RELAX) != 0)
+      if (CGEN_INSN_ATTR_VALUE (insn, CGEN_INSN_RELAXED) != 0)
 	continue;
 
       str = start;
@@ -611,62 +609,41 @@ openrisc_cgen_assemble_insn (cd, str, fields, buf, errmsg)
 
   {
     static char errbuf[150];
-#ifdef CGEN_VERBOSE_ASSEMBLER_ERRORS
     const char *tmp_errmsg;
-
-    /* If requesting verbose error messages, use insert_errmsg.
-       Failing that, use parse_errmsg.  */
-    tmp_errmsg = (insert_errmsg ? insert_errmsg :
-		  parse_errmsg ? parse_errmsg :
-		  recognized_mnemonic ?
-		  _("unrecognized form of instruction") :
-		  _("unrecognized instruction"));
-
-    if (strlen (start) > 50)
-      /* xgettext:c-format */
-      sprintf (errbuf, "%s `%.50s...'", tmp_errmsg, start);
-    else 
-      /* xgettext:c-format */
-      sprintf (errbuf, "%s `%.50s'", tmp_errmsg, start);
+#ifdef CGEN_VERBOSE_ASSEMBLER_ERRORS
+#define be_verbose 1
 #else
-    if (strlen (start) > 50)
-      /* xgettext:c-format */
-      sprintf (errbuf, _("bad instruction `%.50s...'"), start);
-    else 
-      /* xgettext:c-format */
-      sprintf (errbuf, _("bad instruction `%.50s'"), start);
+#define be_verbose 0
 #endif
+
+    if (be_verbose)
+      {
+	/* If requesting verbose error messages, use insert_errmsg.
+	   Failing that, use parse_errmsg.  */
+	tmp_errmsg = (insert_errmsg ? insert_errmsg :
+		      parse_errmsg ? parse_errmsg :
+		      recognized_mnemonic ?
+		      _("unrecognized form of instruction") :
+		      _("unrecognized instruction"));
+
+	if (strlen (start) > 50)
+	  /* xgettext:c-format */
+	  sprintf (errbuf, "%s `%.50s...'", tmp_errmsg, start);
+	else 
+	  /* xgettext:c-format */
+	  sprintf (errbuf, "%s `%.50s'", tmp_errmsg, start);
+      }
+    else
+      {
+	if (strlen (start) > 50)
+	  /* xgettext:c-format */
+	  sprintf (errbuf, _("bad instruction `%.50s...'"), start);
+	else 
+	  /* xgettext:c-format */
+	  sprintf (errbuf, _("bad instruction `%.50s'"), start);
+      }
       
     *errmsg = errbuf;
     return NULL;
   }
 }
-
-#if 0 /* This calls back to GAS which we can't do without care.  */
-
-/* Record each member of OPVALS in the assembler's symbol table.
-   This lets GAS parse registers for us.
-   ??? Interesting idea but not currently used.  */
-
-/* Record each member of OPVALS in the assembler's symbol table.
-   FIXME: Not currently used.  */
-
-void
-openrisc_cgen_asm_hash_keywords (cd, opvals)
-     CGEN_CPU_DESC cd;
-     CGEN_KEYWORD *opvals;
-{
-  CGEN_KEYWORD_SEARCH search = cgen_keyword_search_init (opvals, NULL);
-  const CGEN_KEYWORD_ENTRY * ke;
-
-  while ((ke = cgen_keyword_search_next (& search)) != NULL)
-    {
-#if 0 /* Unnecessary, should be done in the search routine.  */
-      if (! openrisc_cgen_opval_supported (ke))
-	continue;
-#endif
-      cgen_asm_record_register (cd, ke->name, ke->value);
-    }
-}
-
-#endif /* 0 */

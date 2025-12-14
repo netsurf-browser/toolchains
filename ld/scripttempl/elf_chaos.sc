@@ -10,7 +10,7 @@
 #	OTHER_TEXT_SECTIONS - these get put in .text when relocating
 #	OTHER_READWRITE_SECTIONS - other than .data .bss .ctors .sdata ...
 #		(e.g., .PARISC.global)
-#	OTHER_BSS_SECTIONS - other than .bss .sbss ...
+#	ATTRS_SECTIONS - at the end
 #	OTHER_SECTIONS - at the end
 #	EXECUTABLE_SYMBOLS - symbols that must be defined for an
 #		executable (e.g., _DYNAMIC_LINK)
@@ -36,7 +36,7 @@
 #	FINI_START, FINI_END - statements just before and just after
 # 	combination of .fini sections.
 #	STACK_ADDR - start of a .stack section.
-#	OTHER_END_SYMBOLS - symbols to place right at the end of the script.
+#	OTHER_SYMBOLS - symbols to place right at the end of the script.
 #
 # When adding sections, do note that the names of some sections are used
 # when specifying the start address of the next.
@@ -69,6 +69,7 @@ test -z "${LITTLE_OUTPUT_FORMAT}" && LITTLE_OUTPUT_FORMAT=${OUTPUT_FORMAT}
 if [ -z "$MACHINE" ]; then OUTPUT_ARCH=${ARCH}; else OUTPUT_ARCH=${ARCH}:${MACHINE}; fi
 test -z "${ELFSIZE}" && ELFSIZE=32
 test -z "${ALIGNMENT}" && ALIGNMENT="${ELFSIZE} / 8"
+test -z "$ATTRS_SECTIONS" && ATTRS_SECTIONS=".gnu.attributes 0 : { KEEP (*(.gnu.attributes)) }"
 test "$LD_FLAG" = "N" && DATA_ADDR=.
 INTERP=".interp       ${RELOCATING-0} : { *(.interp) }"
 PLT=".plt          ${RELOCATING-0} : { *(.plt) }"
@@ -116,22 +117,24 @@ CTOR="
        doesn't matter which directory crtbegin.o
        is in.  */
 
-    KEEP (*crtbegin*.o(.ctors))
+    KEEP (*crtbegin.o(.ctors))
+    KEEP (*crtbegin?.o(.ctors))
 
     /* We don't want to include the .ctor section from
-       from the crtend.o file until after the sorted ctors.
+       the crtend.o file until after the sorted ctors.
        The .ctor section from the crtend file contains the
        end of ctors marker and it must be last */
 
-    KEEP (*(EXCLUDE_FILE (*crtend*.o $OTHER_EXCLUDE_FILES) .ctors))
+    KEEP (*(EXCLUDE_FILE (*crtend.o *crtend?.o $OTHER_EXCLUDE_FILES) .ctors))
     KEEP (*(SORT(.ctors.*)))
     KEEP (*(.ctors))
     ${CONSTRUCTING+${CTOR_END}}
 "
 DTOR="
     ${CONSTRUCTING+${DTOR_START}}
-    KEEP (*crtbegin*.o(.dtors))
-    KEEP (*(EXCLUDE_FILE (*crtend*.o $OTHER_EXCLUDE_FILES) .dtors))
+    KEEP (*crtbegin.o(.dtors))
+    KEEP (*crtbegin?.o(.dtors))
+    KEEP (*(EXCLUDE_FILE (*crtend.o *crtend?.o $OTHER_EXCLUDE_FILES) .dtors))
     KEEP (*(SORT(.dtors.*)))
     KEEP (*(.dtors))
     ${CONSTRUCTING+${DTOR_END}}
@@ -148,7 +151,7 @@ cat <<EOF
 OUTPUT_FORMAT("${OUTPUT_FORMAT}", "${BIG_OUTPUT_FORMAT}",
 	      "${LITTLE_OUTPUT_FORMAT}")
 OUTPUT_ARCH(${OUTPUT_ARCH})
-ENTRY(${ENTRY})
+${RELOCATING+ENTRY(${ENTRY})}
 
 ${RELOCATING+${LIB_SEARCH_DIRS}}
 ${RELOCATING+/* Do we need any of these for elf?
@@ -298,10 +301,10 @@ cat <<EOF
       .bss section disappears because there are no input sections.  */
    ${RELOCATING+. = ALIGN(${ALIGNMENT});}
   }
-  ${OTHER_BSS_SECTIONS}
-  ${RELOCATING+. = ALIGN(${ALIGNMENT});}
-  ${RELOCATING+_end = .;}
   ${RELOCATING+${OTHER_BSS_END_SYMBOLS}}
+  ${RELOCATING+. = ALIGN(${ALIGNMENT});}
+  ${RELOCATING+${OTHER_END_SYMBOLS}}
+  ${RELOCATING+_end = .;}
   ${RELOCATING+PROVIDE (end = .);}
 
   /* Stabs debugging sections.  */
@@ -316,39 +319,14 @@ cat <<EOF
   . = ALIGN(0x1000);
   .comment       0 : { *(.comment) }
 
-  /* DWARF debug sections.
-     Symbols in the DWARF debugging sections are relative to the beginning
-     of the section so we begin them at 0.  */
+EOF
 
-  /* DWARF 1 */
-  .debug          0 : { *(.debug) }
-  .line           0 : { *(.line) }
+. $srcdir/scripttempl/DWARF.sc
 
-  /* GNU DWARF 1 extensions */
-  .debug_srcinfo  0 : { *(.debug_srcinfo) }
-  .debug_sfnames  0 : { *(.debug_sfnames) }
-
-  /* DWARF 1.1 and DWARF 2 */
-  .debug_aranges  0 : { *(.debug_aranges) }
-  .debug_pubnames 0 : { *(.debug_pubnames) }
-
-  /* DWARF 2 */
-  .debug_info     0 : { *(.debug_info .gnu.linkonce.wi.*) }
-  .debug_abbrev   0 : { *(.debug_abbrev) }
-  .debug_line     0 : { *(.debug_line) }
-  .debug_frame    0 : { *(.debug_frame) }
-  .debug_str      0 : { *(.debug_str) }
-  .debug_loc      0 : { *(.debug_loc) }
-  .debug_macinfo  0 : { *(.debug_macinfo) }
-
-  /* SGI/MIPS DWARF 2 extensions */
-  .debug_weaknames 0 : { *(.debug_weaknames) }
-  .debug_funcnames 0 : { *(.debug_funcnames) }
-  .debug_typenames 0 : { *(.debug_typenames) }
-  .debug_varnames  0 : { *(.debug_varnames) }
-
+cat <<EOF
   ${STACK_ADDR+${STACK}}
+  ${ATTRS_SECTIONS}
   ${OTHER_SECTIONS}
-  ${RELOCATING+${OTHER_END_SYMBOLS}}
+  ${RELOCATING+${OTHER_SYMBOLS}}
 }
 EOF

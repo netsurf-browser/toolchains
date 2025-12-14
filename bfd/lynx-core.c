@@ -1,25 +1,27 @@
 /* BFD back end for Lynx core files
-   Copyright 1993, 1994, 1995, 2001, 2002 Free Software Foundation, Inc.
+   Copyright 1993, 1994, 1995, 2001, 2002, 2004, 2005, 2006, 2007
+   Free Software Foundation, Inc.
    Written by Stu Grossman of Cygnus Support.
 
-This file is part of BFD, the Binary File Descriptor library.
+   This file is part of BFD, the Binary File Descriptor library.
 
-This program is free software; you can redistribute it and/or modify
-it under the terms of the GNU General Public License as published by
-the Free Software Foundation; either version 2 of the License, or
-(at your option) any later version.
+   This program is free software; you can redistribute it and/or modify
+   it under the terms of the GNU General Public License as published by
+   the Free Software Foundation; either version 3 of the License, or
+   (at your option) any later version.
 
-This program is distributed in the hope that it will be useful,
-but WITHOUT ANY WARRANTY; without even the implied warranty of
-MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-GNU General Public License for more details.
+   This program is distributed in the hope that it will be useful,
+   but WITHOUT ANY WARRANTY; without even the implied warranty of
+   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+   GNU General Public License for more details.
 
-You should have received a copy of the GNU General Public License
-along with this program; if not, write to the Free Software
-Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.  */
+   You should have received a copy of the GNU General Public License
+   along with this program; if not, write to the Free Software
+   Foundation, Inc., 51 Franklin Street - Fifth Floor, Boston,
+   MA 02110-1301, USA.  */
 
-#include "bfd.h"
 #include "sysdep.h"
+#include "bfd.h"
 #include "libbfd.h"
 
 #ifdef LYNX_CORE
@@ -50,16 +52,18 @@ struct lynx_core_struct
 #define core_signal(bfd) (core_hdr(bfd)->sig)
 #define core_command(bfd) (core_hdr(bfd)->cmd)
 
+#define lynx_core_file_matches_executable_p generic_core_file_matches_executable_p
+#define lynx_core_file_pid _bfd_nocore_core_file_pid
+
 /* Handle Lynx core dump file.  */
 
 static asection *
-make_bfd_asection (abfd, name, flags, _raw_size, vma, filepos)
-     bfd *abfd;
-     const char *name;
-     flagword flags;
-     bfd_size_type _raw_size;
-     bfd_vma vma;
-     file_ptr filepos;
+make_bfd_asection (bfd *abfd,
+		   const char *name,
+		   flagword flags,
+		   bfd_size_type size,
+		   bfd_vma vma,
+		   file_ptr filepos)
 {
   asection *asect;
   char *newname;
@@ -70,12 +74,11 @@ make_bfd_asection (abfd, name, flags, _raw_size, vma, filepos)
 
   strcpy (newname, name);
 
-  asect = bfd_make_section (abfd, newname);
+  asect = bfd_make_section_with_flags (abfd, newname, flags);
   if (!asect)
     return NULL;
 
-  asect->flags = flags;
-  asect->_raw_size = _raw_size;
+  asect->size = size;
   asect->vma = vma;
   asect->filepos = filepos;
   asect->alignment_power = 2;
@@ -84,8 +87,7 @@ make_bfd_asection (abfd, name, flags, _raw_size, vma, filepos)
 }
 
 const bfd_target *
-lynx_core_file_p (abfd)
-     bfd *abfd;
+lynx_core_file_p (bfd *abfd)
 {
   int secnum;
   struct pssentry pss;
@@ -211,24 +213,15 @@ lynx_core_file_p (abfd)
 }
 
 char *
-lynx_core_file_failing_command (abfd)
-     bfd *abfd;
+lynx_core_file_failing_command (bfd *abfd)
 {
   return core_command (abfd);
 }
 
 int
-lynx_core_file_failing_signal (abfd)
-     bfd *abfd;
+lynx_core_file_failing_signal (bfd *abfd)
 {
   return core_signal (abfd);
-}
-
-bfd_boolean
-lynx_core_file_matches_executable_p  (core_bfd, exec_bfd)
-     bfd *core_bfd, *exec_bfd;
-{
-  return TRUE;		/* FIXME, We have no way of telling at this point */
 }
 
 #endif /* LYNX_CORE */

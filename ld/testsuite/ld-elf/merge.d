@@ -1,10 +1,12 @@
 #source: merge.s
 #ld: -T merge.ld
 #objdump: -s
-#xfail: "arc-*-*" "avr-*-*" "cris-*-*" "dlx-*-*" "fr30-*-*" "frv-*-*"
-#xfail: "hppa*-*-*" "h8300-*-*" "i960-*-*" "ip2k-*-*" "m32r-*-*" "mcore-*-*"
-#xfail: "mn10*-*-*" "mips64*-*-linux*" "openrisc-*-*" "pj-*-*" "sparc*-*-*"
-#xfail: "xtensa-*-*"
+#xfail: "arc-*-*" "avr-*-*" "bfin-*-*" "cr16-*-*" "cris*-*-*" "crx-*-*" "d10v-*-*" "d30v-*-*"
+#xfail: "dlx-*-*" "fr30-*-*" "frv-*-*" "hppa*64*-*-*" "h8300-*-*" "score-*-*"
+#xfail: "i370-*-*" "i860-*-*" "i960-*-*" "ip2k-*-*" "iq2000-*-*" "lm32-*-*"
+#xfail: "mcore-*-*" "mn102*-*-*" "mips*-*-*" "ms1-*-*" "mep-*-*"
+#xfail: "or32-*-*" "pj-*-*" "sparc*-*-*" "tic6x-*-*" "vax-*-*" "xstormy16-*-*"
+#xfail: "xtensa*-*-*" "metag-*-*"
 
 .*:     file format .*elf.*
 

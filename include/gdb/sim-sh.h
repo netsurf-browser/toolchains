@@ -1,21 +1,20 @@
 /* This file defines the interface between the sh simulator and gdb.
-   Copyright (C) 2000, 2002 Free Software Foundation, Inc.
+   Copyright (C) 2000-2013 Free Software Foundation, Inc.
 
-This file is part of GDB.
+   This file is part of GDB.
 
-This program is free software; you can redistribute it and/or modify
-it under the terms of the GNU General Public License as published by
-the Free Software Foundation; either version 2 of the License, or
-(at your option) any later version.
+   This program is free software; you can redistribute it and/or modify
+   it under the terms of the GNU General Public License as published by
+   the Free Software Foundation; either version 3 of the License, or
+   (at your option) any later version.
 
-This program is distributed in the hope that it will be useful,
-but WITHOUT ANY WARRANTY; without even the implied warranty of
-MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-GNU General Public License for more details.
+   This program is distributed in the hope that it will be useful,
+   but WITHOUT ANY WARRANTY; without even the implied warranty of
+   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+   GNU General Public License for more details.
 
-You should have received a copy of the GNU General Public License
-along with this program; if not, write to the Free Software
-Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.  */
+   You should have received a copy of the GNU General Public License
+   along with this program.  If not, see <http://www.gnu.org/licenses/>.  */
 
 #if !defined (SIM_SH_H)
 #define SIM_SH_H
@@ -129,8 +128,17 @@ enum
   SIM_SH_R4_BANK_REGNUM,
   SIM_SH_R5_BANK_REGNUM,
   SIM_SH_R6_BANK_REGNUM,
-  SIM_SH_R7_BANK_REGNUM
-  /* 100..127: room for expansion.  */
+  SIM_SH_R7_BANK_REGNUM,
+  /* 109..127: room for expansion.  */
+  SIM_SH_TBR_REGNUM,
+  SIM_SH_IBNR_REGNUM,
+  SIM_SH_IBCR_REGNUM,
+  SIM_SH_BANK_REGNUM,
+  SIM_SH_BANK_MACL_REGNUM,
+  SIM_SH_BANK_GBR_REGNUM,
+  SIM_SH_BANK_PR_REGNUM,
+  SIM_SH_BANK_IVN_REGNUM,
+  SIM_SH_BANK_MACH_REGNUM
 };
 
 enum

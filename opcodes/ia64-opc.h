@@ -1,23 +1,24 @@
 /* ia64-opc.h -- IA-64 opcode table.
-   Copyright 1998, 1999, 2000 Free Software Foundation, Inc.
+   Copyright 1998, 1999, 2000, 2002, 2005, 2006, 2007
+   Free Software Foundation, Inc.
    Contributed by David Mosberger-Tang <davidm@hpl.hp.com>
 
-   This file is part of GDB, GAS, and the GNU binutils.
+   This file is part of the GNU opcodes library.
 
-   GDB, GAS, and the GNU binutils are free software; you can redistribute
-   them and/or modify them under the terms of the GNU General Public
-   License as published by the Free Software Foundation; either version
-   2, or (at your option) any later version.
+   This library is free software; you can redistribute it and/or modify
+   it under the terms of the GNU General Public License as published by
+   the Free Software Foundation; either version 3, or (at your option)
+   any later version.
 
-   GDB, GAS, and the GNU binutils are distributed in the hope that they
-   will be useful, but WITHOUT ANY WARRANTY; without even the implied
-   warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See
-   the GNU General Public License for more details.
+   It is distributed in the hope that it will be useful, but WITHOUT
+   ANY WARRANTY; without even the implied warranty of MERCHANTABILITY
+   or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU General Public
+   License for more details.
 
    You should have received a copy of the GNU General Public License
    along with this file; see the file COPYING.  If not, write to the
-   Free Software Foundation, 59 Temple Place - Suite 330, Boston, MA
-   02111-1307, USA.  */
+   Free Software Foundation, 51 Franklin Street - Fifth Floor, Boston,
+   MA 02110-1301, USA.  */
 
 #ifndef IA64_OPC_H
 #define IA64_OPC_H
@@ -70,6 +71,7 @@
 #define R2	IA64_OPND_R2
 #define R3	IA64_OPND_R3
 #define R3_2	IA64_OPND_R3_2
+#define DAHR	IA64_OPND_DAHR3
 
 #define CPUID_R3 IA64_OPND_CPUID_R3
 #define DBR_R3	IA64_OPND_DBR_R3
@@ -81,6 +83,7 @@
 #define PKR_R3	IA64_OPND_PKR_R3
 #define PMC_R3	IA64_OPND_PMC_R3
 #define PMD_R3	IA64_OPND_PMD_R3
+#define DAHR_R3	IA64_OPND_DAHR_R3
 #define RR_R3	IA64_OPND_RR_R3
 
 #define CCNT5	IA64_OPND_CCNT5
@@ -108,10 +111,13 @@
 #define IMM9a	IA64_OPND_IMM9a
 #define IMM9b	IA64_OPND_IMM9b
 #define IMMU2	IA64_OPND_IMMU2
+#define IMMU16	IA64_OPND_IMMU16
+#define IMMU19	IA64_OPND_IMMU19
 #define IMMU21	IA64_OPND_IMMU21
 #define IMMU24	IA64_OPND_IMMU24
 #define IMMU62	IA64_OPND_IMMU62
 #define IMMU64	IA64_OPND_IMMU64
+#define IMMU5b	IA64_OPND_IMMU5b
 #define IMMU7a	IA64_OPND_IMMU7a
 #define IMMU7b	IA64_OPND_IMMU7b
 #define IMMU9	IA64_OPND_IMMU9
@@ -127,5 +133,7 @@
 #define TGT25b	IA64_OPND_TGT25b
 #define TGT25c	IA64_OPND_TGT25c
 #define TGT64   IA64_OPND_TGT64
+#define CNT6a	IA64_OPND_CNT6a
+#define STRD5b	IA64_OPND_STRD5b
 
 #endif

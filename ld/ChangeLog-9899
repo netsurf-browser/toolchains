@@ -1884,11 +1884,6 @@ Sun Mar  8 23:34:14 1998  Stan Cox  <scox@equinox.cygnus.com>
 
 	* configure.tgt (sparclite*-*-elf): Added.
 
-Sun Mar  8 20:25:09 1998  Daniel Verite  <daniel@brainstorm.fr>
-
-	* ldlang.c (new_afile): Remove obsolete references to
- 	amiga_attribute.
-
 Mon Mar  2 19:24:08 1998  Michael Meissner  <meissner@cygnus.com>
 
 	* ldlang.c (lang_size_sections): If the default memory region is
@@ -2105,6 +2100,12 @@ Thu Jan  1 18:04:51 1998  Jeffrey A Law  (law@cygnus.com)
 
 For older changes see ChangeLog-9197
 
+Copyright (C) 1998-1999 Free Software Foundation, Inc.
+
+Copying and distribution of this file, with or without modification,
+are permitted in any medium without royalty provided the copyright
+notice and this notice are preserved.
+
 Local Variables:
 mode: change-log
 left-margin: 8

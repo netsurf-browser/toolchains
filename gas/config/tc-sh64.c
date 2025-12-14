@@ -1,11 +1,12 @@
 /* tc-sh64.c -- Assemble code for the SuperH SH SHcompact and SHmedia.
-   Copyright 2000, 2001, 2002, 2003 Free Software Foundation.
+   Copyright 2000, 2001, 2002, 2003, 2004, 2005, 2006, 2007, 2008, 2009
+   Free Software Foundation.
 
    This file is part of GAS, the GNU Assembler.
 
    GAS is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License as published by
-   the Free Software Foundation; either version 2, or (at your option)
+   the Free Software Foundation; either version 3, or (at your option)
    any later version.
 
    GAS is distributed in the hope that it will be useful,
@@ -15,8 +16,8 @@
 
    You should have received a copy of the GNU General Public License
    along with GAS; see the file COPYING.  If not, write to
-   the Free Software Foundation, 59 Temple Place - Suite 330,
-   Boston, MA 02111-1307, USA.  */
+   the Free Software Foundation, 51 Franklin Street - Fifth Floor,
+   Boston, MA 02110-1301, USA.  */
 
 /* This file defines SHmedia ISA-specific functions and includes tc-sh.c.
    The SHcompact ISA is in all useful aspects the "old" sh4 as implemented
@@ -25,7 +26,6 @@
 
 #define HAVE_SH64
 
-#include <stdio.h>
 #include "as.h"
 #include "safe-ctype.h"
 #include "opcodes/sh64-opc.h"
@@ -39,7 +39,7 @@
    symbol" or local symbol.  */
 #define DATALABEL_SUFFIX " DL"
 
-/* See shmedia_md_apply_fix3 and shmedia_md_pcrel_from_section for usage.  */
+/* See shmedia_md_apply_fix and shmedia_md_pcrel_from_section for usage.  */
 #define SHMEDIA_MD_PCREL_FROM_FIX(FIXP) \
  ((FIXP)->fx_size + (FIXP)->fx_where + (FIXP)->fx_frag->fr_address - 4)
 
@@ -133,63 +133,43 @@ static const unsigned char shmedia_little_nop_pattern[4] =
    (SHMEDIA_NOP_OPC >> 16) & 255, (SHMEDIA_NOP_OPC >> 24) & 255
  };
 
-static void shmedia_md_begin
-  PARAMS ((void));
-static int shmedia_parse_reg
-  PARAMS ((char *, int *, int *, shmedia_arg_type));
-static void shmedia_md_assemble
-  PARAMS ((char *));
-static void shmedia_md_apply_fix3
-  PARAMS ((fixS *, valueT *));
-static int shmedia_md_estimate_size_before_relax
-  PARAMS ((fragS *, segT));
-static int shmedia_init_reloc
-  PARAMS ((arelent *, fixS *));
-static char *shmedia_get_operands
-  PARAMS ((shmedia_opcode_info *, char *, shmedia_operands_info *));
-static void s_sh64_mode
-  PARAMS ((int));
-static void s_sh64_abi
-  PARAMS ((int));
-static void shmedia_md_convert_frag
-  PARAMS ((bfd *, segT, fragS *, bfd_boolean));
-static void shmedia_check_limits
-  PARAMS ((offsetT *, bfd_reloc_code_real_type, fixS *));
-static void sh64_set_contents_type
-  PARAMS ((enum sh64_elf_cr_type));
-static void shmedia_get_operand
-  PARAMS ((char **, shmedia_operand_info *, shmedia_arg_type));
-static unsigned long shmedia_immediate_op
-  PARAMS ((char *, shmedia_operand_info *, int, bfd_reloc_code_real_type));
-static char *shmedia_parse_exp
-  PARAMS ((char *, shmedia_operand_info *));
-static void shmedia_frob_file_before_adjust
-  PARAMS ((void));
-static void sh64_emit_crange
-  PARAMS ((symbolS *, symbolS *, enum sh64_elf_cr_type));
-static void sh64_flush_last_crange
-  PARAMS ((bfd *, asection *, PTR));
-static void sh64_flag_output
-  PARAMS ((void));
-static void sh64_update_contents_mark
-  PARAMS ((bfd_boolean));
-static void sh64_vtable_entry
-  PARAMS ((int));
-static void sh64_vtable_inherit
-  PARAMS ((int));
-static char * strip_datalabels
-  PARAMS ((void));
-static int shmedia_build_Mytes
-  PARAMS ((shmedia_opcode_info *, shmedia_operands_info *));
-static shmedia_opcode_info * shmedia_find_cooked_opcode
-  PARAMS ((char **));
-static unsigned long shmedia_mask_number
-  PARAMS ((unsigned long, bfd_reloc_code_real_type));
+static void shmedia_md_begin (void);
+static int shmedia_parse_reg (char *, int *, int *, shmedia_arg_type);
+static void shmedia_md_assemble (char *);
+static void shmedia_md_apply_fix (fixS *, valueT *);
+static int shmedia_md_estimate_size_before_relax (fragS *, segT);
+static int shmedia_init_reloc (arelent *, fixS *);
+static char *shmedia_get_operands (shmedia_opcode_info *, char *,
+				   shmedia_operands_info *);
+static void s_sh64_mode (int);
+static void s_sh64_abi (int);
+static void shmedia_md_convert_frag (bfd *, segT, fragS *, bfd_boolean);
+static void shmedia_check_limits  (offsetT *, bfd_reloc_code_real_type,
+				   fixS *);
+static void sh64_set_contents_type (enum sh64_elf_cr_type);
+static void shmedia_get_operand (char **, shmedia_operand_info *,
+				 shmedia_arg_type);
+static unsigned long shmedia_immediate_op (char *, shmedia_operand_info *,
+					   int, bfd_reloc_code_real_type);
+static char *shmedia_parse_exp (char *, shmedia_operand_info *);
+static void shmedia_frob_file_before_adjust (void);
+static void sh64_emit_crange (symbolS *, symbolS *, enum sh64_elf_cr_type);
+static void sh64_flush_last_crange (bfd *, asection *, void *);
+static void sh64_flag_output (void);
+static void sh64_update_contents_mark (bfd_boolean);
+static void sh64_vtable_entry (int);
+static void sh64_vtable_inherit (int);
+static char *strip_datalabels (void);
+static int shmedia_build_Mytes (shmedia_opcode_info *,
+				shmedia_operands_info *);
+static shmedia_opcode_info *shmedia_find_cooked_opcode (char **);
+static unsigned long shmedia_mask_number (unsigned long,
+					  bfd_reloc_code_real_type);
 
 #include "tc-sh.c"
 
 void
-shmedia_md_end ()
+shmedia_md_end (void)
 {
   symbolS *symp;
 
@@ -295,7 +275,7 @@ shmedia_md_end ()
    + offset" value.  */
 
 static void
-shmedia_frob_file_before_adjust ()
+shmedia_frob_file_before_adjust (void)
 {
   symbolS *symp;
   for (symp = symbol_rootP; symp != NULL; symp = symp->sy_next)
@@ -304,7 +284,7 @@ shmedia_frob_file_before_adjust ()
 
       if (mainsym != NULL
 	  && S_GET_OTHER (mainsym) != STO_SH5_ISA32
-	  && (S_IS_EXTERN (mainsym) || S_IS_WEAK (mainsym)))
+	  && (S_IS_EXTERNAL (mainsym) || S_IS_WEAK (mainsym)))
 	{
 	  symp->sy_value.X_op = O_symbol;
 	  symp->sy_value.X_add_symbol = mainsym;
@@ -334,11 +314,7 @@ shmedia_frob_file_before_adjust ()
    static in read.c.  That solution was discarded a too kludgy.  */
 
 void
-sh64_do_align (n, fill, len, max)
-     int n;
-     const char *fill;
-     int len;
-     int max;
+sh64_do_align (int n, const char *fill, int len, int max)
 {
   /* Update region, or put a data region in front.  */
   sh64_update_contents_mark (TRUE);
@@ -371,7 +347,7 @@ sh64_do_align (n, fill, len, max)
    assembly).  */
 
 int
-sh64_max_mem_for_rs_align_code ()
+sh64_max_mem_for_rs_align_code (void)
 {
   segment_info_type *seginfo;
   fragS *mode_start_frag;
@@ -403,8 +379,7 @@ sh64_max_mem_for_rs_align_code ()
 /* Put in SHmedia NOP:s if the alignment was created when in SHmedia mode.  */
 
 void
-sh64_handle_align (frag)
-     fragS * frag;
+sh64_handle_align (fragS * frag)
 {
   int bytes = frag->fr_next->fr_address - frag->fr_address - frag->fr_fix;
   char * p  = frag->fr_literal + frag->fr_fix;
@@ -440,8 +415,7 @@ sh64_handle_align (frag)
 /* Set SEC_SH64_ISA32 for SHmedia sections.  */
 
 void
-shmedia_frob_section_type (sec)
-     asection *sec;
+shmedia_frob_section_type (asection *sec)
 {
   segment_info_type *seginfo;
   seginfo = seg_info (sec);
@@ -453,7 +427,7 @@ shmedia_frob_section_type (sec)
      target-specific semantics.  This target is ELF only (semantics not
      defined for other formats), so we use the target-specific pointer
      field of the ELF section data.  */
-  if (seginfo)
+  if (seginfo && sh64_abi == sh64_abi_32)
     {
       struct sh64_section_data *sec_elf_data;
       flagword sec_type = 0;
@@ -486,7 +460,7 @@ shmedia_frob_section_type (sec)
    seems too much for little benefit.  */
 
 void
-sh64_adjust_symtab ()
+sh64_adjust_symtab (void)
 {
   symbolS *symp;
 
@@ -534,9 +508,7 @@ sh64_adjust_symtab ()
 /* Fill-in an allocated arelent.  */
 
 static int
-shmedia_init_reloc (rel, fixP)
-     arelent *rel;
-     fixS *fixP;
+shmedia_init_reloc (arelent *rel, fixS *fixP)
 {
   /* Adjust parts of *relp according to *fixp, and tell that it has been
      done, so default initializations will not happen.   */
@@ -605,12 +577,10 @@ shmedia_init_reloc (rel, fixP)
   return 0;
 }
 
-/* Hook called from md_apply_fix3 in tc-sh.c.  */
+/* Hook called from md_apply_fix in tc-sh.c.  */
 
 static void
-shmedia_md_apply_fix3 (fixP, valp)
-     fixS *fixP;
-     valueT *valp;
+shmedia_md_apply_fix (fixS *fixP, valueT *valp)
 {
   offsetT val = *valp;
   char *buf = fixP->fx_where + fixP->fx_frag->fr_literal;
@@ -632,7 +602,7 @@ shmedia_md_apply_fix3 (fixP, valp)
 	  /* Because write.c calls MD_PCREL_FROM_SECTION twice, we need to
 	     undo one of the adjustments, if the relocation is not
 	     actually for a symbol within the same segment (which we
-	     cannot check, because we're not called from md_apply_fix3, so
+	     cannot check, because we're not called from md_apply_fix, so
 	     we have to keep the reloc).  FIXME: This is a bug in
 	     write.c:fixup_segment affecting most targets that change
 	     ordinary relocs to pcrel relocs in md_apply_fix.  */
@@ -721,7 +691,7 @@ shmedia_md_apply_fix3 (fixP, valp)
   if (fixP->fx_addsy == NULL && fixP->fx_pcrel == 0)
     {
       /* Emit error for an out-of-range value.  */
-      shmedia_check_limits (valp, fixP->fx_r_type, fixP);
+      shmedia_check_limits ((offsetT *) valp, fixP->fx_r_type, fixP);
 
       switch (fixP->fx_r_type)
 	{
@@ -767,6 +737,11 @@ shmedia_md_apply_fix3 (fixP, valp)
 	case BFD_RELOC_SH_IMMS10BY4:
 	  md_number_to_chars (buf,
 			      insn | ((val & (0x3ff << 2)) << (10 - 2)), 4);
+	  break;
+
+	case BFD_RELOC_SH_IMMS10BY8:
+	  md_number_to_chars (buf,
+			      insn | ((val & (0x3ff << 3)) << (10 - 3)), 4);
 	  break;
 
 	case BFD_RELOC_SH_SHMEDIA_CODE:
@@ -823,11 +798,9 @@ shmedia_md_apply_fix3 (fixP, valp)
 /* Hook called from md_convert_frag in tc-sh.c.  */
 
 static void
-shmedia_md_convert_frag (output_bfd, seg, fragP, final)
-     bfd *output_bfd ATTRIBUTE_UNUSED;
-     segT seg ATTRIBUTE_UNUSED;
-     fragS *fragP;
-     bfd_boolean final;
+shmedia_md_convert_frag (bfd *output_bfd ATTRIBUTE_UNUSED,
+			 segT seg ATTRIBUTE_UNUSED, fragS *fragP,
+			 bfd_boolean final)
 {
   /* Pointer to first byte in variable-sized part of the frag.	*/
   char *var_partp;
@@ -850,7 +823,7 @@ shmedia_md_convert_frag (output_bfd, seg, fragP, final)
        || sh_relax
        || symbolP == NULL
        || ! S_IS_DEFINED (symbolP)
-       || S_IS_EXTERN (symbolP)
+       || S_IS_EXTERNAL (symbolP)
        || S_IS_WEAK (symbolP)
        || (S_GET_SEGMENT (fragP->fr_symbol) != absolute_section
 	   && S_GET_SEGMENT (fragP->fr_symbol) != seg));
@@ -1447,9 +1420,7 @@ shmedia_md_convert_frag (output_bfd, seg, fragP, final)
    reloc.  */
 
 static unsigned long
-shmedia_mask_number (number, how)
-     unsigned long number;
-     bfd_reloc_code_real_type how;
+shmedia_mask_number (unsigned long number, bfd_reloc_code_real_type how)
 {
   switch (how)
     {
@@ -1498,10 +1469,8 @@ shmedia_mask_number (number, how)
    non-NULL, as_bad otherwise.  */
 
 static void
-shmedia_check_limits (valp, reloc, fixp)
-     offsetT *valp;
-     bfd_reloc_code_real_type reloc;
-     fixS *fixp;
+shmedia_check_limits (offsetT *valp, bfd_reloc_code_real_type reloc,
+		      fixS *fixp)
 {
   offsetT val = *valp;
 
@@ -1564,7 +1533,7 @@ shmedia_check_limits (valp, reloc, fixp)
 
     case BFD_RELOC_SH_IMMU16:
       if (val < 0 || val > (1 << 16) - 1)
-	msg = _("invalid operand, not an 16-bit unsigned value: %d");
+	msg = _("invalid operand, not a 16-bit unsigned value: %d");
       break;
 
     case BFD_RELOC_SH_PT_16:
@@ -1611,11 +1580,8 @@ shmedia_check_limits (valp, reloc, fixp)
    "or" into the opcode (non-zero if the value was a constant number).  */
 
 static unsigned long
-shmedia_immediate_op (where, op, pcrel, how)
-     char *where;
-     shmedia_operand_info *op;
-     int pcrel;
-     bfd_reloc_code_real_type how;
+shmedia_immediate_op (char *where, shmedia_operand_info *op, int pcrel,
+		      bfd_reloc_code_real_type how)
 {
   unsigned long retval = 0;
 
@@ -1646,11 +1612,7 @@ shmedia_immediate_op (where, op, pcrel, how)
    chars consumed.  */
 
 static int
-shmedia_parse_reg (src, mode, reg, argtype)
-     char *src;
-     int *mode;
-     int *reg;
-     shmedia_arg_type argtype;
+shmedia_parse_reg (char *src, int *mode, int *reg, shmedia_arg_type argtype)
 {
   int l0 = TOLOWER (src[0]);
   int l1 = l0 ? TOLOWER (src[1]) : 0;
@@ -1933,9 +1895,8 @@ shmedia_parse_reg (src, mode, reg, argtype)
 /* Called from md_estimate_size_before_relax in tc-sh.c  */
 
 static int
-shmedia_md_estimate_size_before_relax (fragP, segment_type)
-     fragS *fragP;
-     segT segment_type ATTRIBUTE_UNUSED;
+shmedia_md_estimate_size_before_relax (fragS *fragP,
+				       segT segment_type ATTRIBUTE_UNUSED)
 {
   int old_fr_fix;
   expressionS *exp;
@@ -2240,30 +2201,26 @@ shmedia_md_estimate_size_before_relax (fragP, segment_type)
    datatypes adjusted.  */
 
 static char *
-shmedia_parse_exp (s, op)
-     char *s;
-     shmedia_operand_info *op;
+shmedia_parse_exp (char *s, shmedia_operand_info *op)
 {
   char *save;
-  char *new;
+  char *new_pointer;
 
   save = input_line_pointer;
   input_line_pointer = s;
   expression (&op->immediate);
   if (op->immediate.X_op == O_absent)
     as_bad (_("missing operand"));
-  new = input_line_pointer;
+  new_pointer = input_line_pointer;
   input_line_pointer = save;
-  return new;
+  return new_pointer;
 }
 
 /* Parse an operand.  Store pointer to next character in *PTR.  */
 
 static void
-shmedia_get_operand (ptr, op, argtype)
-     char **ptr;
-     shmedia_operand_info *op;
-     shmedia_arg_type argtype;
+shmedia_get_operand (char **ptr, shmedia_operand_info *op,
+		     shmedia_arg_type argtype)
 {
   char *src = *ptr;
   int mode = -1;
@@ -2291,10 +2248,8 @@ shmedia_get_operand (ptr, op, argtype)
    how much text was consumed.  */
 
 static char *
-shmedia_get_operands (info, args, operands)
-     shmedia_opcode_info *info;
-     char *args;
-     shmedia_operands_info *operands;
+shmedia_get_operands (shmedia_opcode_info *info, char *args,
+		      shmedia_operands_info *operands)
 {
   char *ptr = args;
   int i;
@@ -2484,8 +2439,7 @@ shmedia_get_operands (info, args, operands)
    *STR_P to the first character after the last one read.  */
 
 static shmedia_opcode_info *
-shmedia_find_cooked_opcode (str_p)
-     char **str_p;
+shmedia_find_cooked_opcode (char **str_p)
 {
   char *str = *str_p;
   char *op_start;
@@ -2510,7 +2464,7 @@ shmedia_find_cooked_opcode (str_p)
       /* The machine independent code will convert CMP/EQ into cmp/EQ
 	 because it thinks the '/' is the end of the symbol.  Moreover,
 	 all but the first sub-insn is a parallel processing insn won't
-	 be capitailzed.  Instead of hacking up the machine independent
+	 be capitalized.  Instead of hacking up the machine independent
 	 code, we just deal with it here.  */
       c = TOLOWER (c);
       name[nlen] = c;
@@ -2530,9 +2484,8 @@ shmedia_find_cooked_opcode (str_p)
 /* Build up an instruction, including allocating the frag.  */
 
 static int
-shmedia_build_Mytes (opcode, operands)
-     shmedia_opcode_info *opcode;
-     shmedia_operands_info *operands;
+shmedia_build_Mytes (shmedia_opcode_info *opcode,
+		     shmedia_operands_info *operands)
 {
   unsigned long insn = opcode->opcode_base;
   int i, j;
@@ -2724,7 +2677,10 @@ shmedia_build_Mytes (opcode, operands)
 
 	    /* Don't allow complex expressions here.  */
 	    if (opjp->immediate.X_op_symbol != NULL)
-	      return 0;
+	      {
+		as_bad (_("invalid operand: expression in PT target"));
+		return 0;
+	      }
 
 	    if (opjp->reloctype == BFD_RELOC_32_PLT_PCREL)
 	      init = max = min = SH64PCRELPLT;
@@ -2761,7 +2717,10 @@ shmedia_build_Mytes (opcode, operands)
 
 	    /* Don't allow complex expressions here.  */
 	    if (opjp->immediate.X_op_symbol != NULL)
-	      return 0;
+	      {
+		as_bad (_("invalid operand: expression in PT target"));
+		return 0;
+	      }
 
 	    if (opjp->reloctype == BFD_RELOC_32_PLT_PCREL)
 	      init = max = min = SH64PCRELPLT;
@@ -2777,7 +2736,7 @@ shmedia_build_Mytes (opcode, operands)
 			insn_loc);
 	    else
 	      /* This reloc-type is just temporary, so we can distinguish
-		 PTA from PT.  It is changed in shmedia_md_apply_fix3 to
+		 PTA from PT.  It is changed in shmedia_md_apply_fix to
 		 BFD_RELOC_SH_PT_16.  */
 	      insn |= shmedia_immediate_op (insn_loc, opjp, 1,
 					    opjp->reloctype == BFD_RELOC_NONE
@@ -2821,8 +2780,7 @@ shmedia_build_Mytes (opcode, operands)
 /* Assemble a SHmedia instruction.  */
 
 static void
-shmedia_md_assemble (str)
-     char *str;
+shmedia_md_assemble (char *str)
 {
   char *op_end;
   shmedia_opcode_info *opcode;
@@ -2869,7 +2827,7 @@ shmedia_md_assemble (str)
 /* Hook called from md_begin in tc-sh.c.  */
 
 void
-shmedia_md_begin ()
+shmedia_md_begin (void)
 {
   const shmedia_opcode_info *shmedia_opcode;
   shmedia_opcode_hash_control = hash_new ();
@@ -2886,8 +2844,7 @@ shmedia_md_begin ()
    options was specified.  */
 
 static void
-s_sh64_mode (ignore)
-    int ignore ATTRIBUTE_UNUSED;
+s_sh64_mode (int ignore ATTRIBUTE_UNUSED)
 {
   char *name = input_line_pointer, ch;
 
@@ -2929,8 +2886,7 @@ s_sh64_mode (ignore)
    --abi options was specified.  */
 
 static void
-s_sh64_abi (ignore)
-    int ignore ATTRIBUTE_UNUSED;
+s_sh64_abi (int ignore ATTRIBUTE_UNUSED)
 {
   char *name = input_line_pointer, ch;
 
@@ -2968,18 +2924,18 @@ s_sh64_abi (ignore)
    when options were being parsed.  */
 
 const char *
-sh64_target_format ()
+sh64_target_format (void)
 {
 #ifdef TE_NetBSD
   /* For NetBSD, if the ISA is unspecified, always use SHmedia.  */
-  if (sh64_isa_mode == sh64_isa_unspecified)
+  if (preset_target_arch == 0 && sh64_isa_mode == sh64_isa_unspecified)
     sh64_isa_mode = sh64_isa_shmedia;
 
   /* If the ABI is unspecified, select a default: based on how
      we were configured: sh64 == sh64_abi_64, else sh64_abi_32.  */
   if (sh64_abi == sh64_abi_unspecified)
     {
-      if (sh64_isa_mode == sh64_isa_shcompact)
+      if (preset_target_arch != 0 || sh64_isa_mode == sh64_isa_shcompact)
 	sh64_abi = sh64_abi_32;
       else if (strncmp (TARGET_CPU, "sh64", 4) == 0)
         sh64_abi = sh64_abi_64;
@@ -2989,7 +2945,7 @@ sh64_target_format ()
 #endif
 
 #ifdef TE_LINUX
-  if (sh64_isa_mode == sh64_isa_unspecified)
+  if (preset_target_arch == 0 && sh64_isa_mode == sh64_isa_unspecified)
     sh64_isa_mode = sh64_isa_shmedia;
 
   if (sh64_abi == sh64_abi_unspecified)
@@ -3052,7 +3008,7 @@ sh64_target_format ()
 /* The worker function of TARGET_MACH.  */
 
 int
-sh64_target_mach ()
+sh64_target_mach (void)
 {
   /* We need to explicitly set bfd_mach_sh5 instead of the default 0.  But
      we only do this for the 64-bit ABI: if we do it for the 32-bit ABI,
@@ -3077,12 +3033,8 @@ sh64_target_mach ()
    md_pcrel_from (in tc-sh.c).  */
 
 valueT
-shmedia_md_pcrel_from_section (fixP, sec)
-     struct fix *fixP;
-     segT sec ATTRIBUTE_UNUSED;
+shmedia_md_pcrel_from_section (struct fix *fixP, segT sec ATTRIBUTE_UNUSED)
 {
-  know (fixP->fx_frag->fr_type == rs_machine_dependent);
-
   /* Use the ISA for the instruction to decide which offset to use.  We
      can glean it from the fisup type.  */
   switch (fixP->fx_r_type)
@@ -3112,8 +3064,7 @@ shmedia_md_pcrel_from_section (fixP, sec)
 
     case BFD_RELOC_64:
     case BFD_RELOC_64_PCREL:
-      know (0 /* Shouldn't get here.  */);
-      break;
+      /* Fall through.  */
 
     default:
       /* If section was SHcompact, use its function.  */
@@ -3128,10 +3079,8 @@ shmedia_md_pcrel_from_section (fixP, sec)
    and ENDSYM marking end, and CR_TYPE specifying the type.  */
 
 static void
-sh64_emit_crange (startsym, endsym, cr_type)
-     symbolS *startsym;
-     symbolS *endsym;
-     enum sh64_elf_cr_type cr_type;
+sh64_emit_crange (symbolS *startsym, symbolS *endsym,
+		  enum sh64_elf_cr_type cr_type)
 {
   expressionS exp;
   segT current_seg = now_seg;
@@ -3176,8 +3125,7 @@ sh64_emit_crange (startsym, endsym, cr_type)
    function isn't called.  */
 
 static void
-sh64_set_contents_type (new_contents_type)
-     enum sh64_elf_cr_type new_contents_type;
+sh64_set_contents_type (enum sh64_elf_cr_type new_contents_type)
 {
   segment_info_type *seginfo;
 
@@ -3275,8 +3223,7 @@ _("SHmedia code not allowed in same section as constants and SHcompact code"));
    doesn't matter whether or not an assembled opcode is nearby.  */
 
 void
-sh64_frob_label (symp)
-     symbolS *symp;
+sh64_frob_label (symbolS *symp)
 {
   segT seg = S_GET_SEGMENT (symp);
   static const symbolS *null = NULL;
@@ -3294,11 +3241,9 @@ sh64_frob_label (symp)
    symbol hook.  */
 
 int
-sh64_consume_datalabel (name, exp, cp, operandf)
-     const char *name;
-     expressionS *exp;
-     char *cp;
-     segT (*operandf) PARAMS ((expressionS *));
+sh64_consume_datalabel (const char *name, expressionS *exp,
+			enum expr_mode mode, char *cp,
+			segT (*operandf) (expressionS *, enum expr_mode))
 {
   static int parsing_datalabel = 0;
 
@@ -3311,7 +3256,7 @@ sh64_consume_datalabel (name, exp, cp, operandf)
 
       *input_line_pointer = *cp;
       parsing_datalabel = 1;
-      (*operandf) (exp);
+      (*operandf) (exp, expr_normal);
       parsing_datalabel = save_parsing_datalabel;
 
       if (exp->X_op == O_symbol || exp->X_op == O_PIC_reloc)
@@ -3328,9 +3273,9 @@ sh64_consume_datalabel (name, exp, cp, operandf)
 	  else
 	    {
 	      symbolS *dl_symp;
-	      const char *name = S_GET_NAME (symp);
+	      const char * sname = S_GET_NAME (symp);
 	      char *dl_name
-		= xmalloc (strlen (name) + sizeof (DATALABEL_SUFFIX));
+		= xmalloc (strlen (sname) + sizeof (DATALABEL_SUFFIX));
 
 	      /* Now we copy the datalabel-qualified symbol into a symbol
 		 with the same name, but with " DL" appended.  We mark the
@@ -3338,13 +3283,13 @@ sh64_consume_datalabel (name, exp, cp, operandf)
 		 the main symbol, so we don't have to inspect all symbol
 		 names.  Note that use of "datalabel" is not expected to
 		 be a common case.  */
-	      strcpy (dl_name, name);
+	      strcpy (dl_name, sname);
 	      strcat (dl_name, DATALABEL_SUFFIX);
 
 	      /* A FAKE_LABEL_NAME marks "$" or ".".  There can be any
 		 number of them and all have the same (faked) name; we
 		 must make a new one each time.  */
-	      if (strcmp (name, FAKE_LABEL_NAME) == 0)
+	      if (strcmp (sname, FAKE_LABEL_NAME) == 0)
 		dl_symp = symbol_make (dl_name);
 	      else
 		dl_symp = symbol_find_or_make (dl_name);
@@ -3384,7 +3329,7 @@ sh64_consume_datalabel (name, exp, cp, operandf)
       return 1;
     }
 
-  return sh_parse_name (name, exp, cp);
+  return sh_parse_name (name, exp, mode, cp);
 }
 
 /* This function is called just before symbols are being output.  It
@@ -3397,8 +3342,7 @@ sh64_consume_datalabel (name, exp, cp, operandf)
    then we need not output the main symbol.  */
 
 int
-sh64_exclude_symbol (symp)
-     symbolS *symp;
+sh64_exclude_symbol (symbolS *symp)
 {
   symbolS *main_symbol = *symbol_get_tc (symp);
 
@@ -3412,8 +3356,7 @@ sh64_exclude_symbol (symp)
    a new region if needed.  */
 
 static void
-sh64_update_contents_mark (update_type)
-     bfd_boolean update_type;
+sh64_update_contents_mark (bfd_boolean update_type)
 {
   segment_info_type *seginfo;
   seginfo = seg_info (now_seg);
@@ -3466,7 +3409,7 @@ sh64_update_contents_mark (update_type)
    just switching segments.  */
 
 void
-sh64_flush_pending_output ()
+sh64_flush_pending_output (void)
 {
   sh64_update_contents_mark (TRUE);
   sh_flush_pending_output ();
@@ -3475,10 +3418,8 @@ sh64_flush_pending_output ()
 /* Flush out the last crange descriptor after all insns have been emitted.  */
 
 static void
-sh64_flush_last_crange (abfd, seg, countparg)
-     bfd *abfd ATTRIBUTE_UNUSED;
-     asection *seg;
-     PTR countparg ATTRIBUTE_UNUSED;
+sh64_flush_last_crange (bfd *abfd ATTRIBUTE_UNUSED, asection *seg,
+			void *countparg ATTRIBUTE_UNUSED)
 {
   segment_info_type *seginfo;
 
@@ -3517,7 +3458,7 @@ sh64_flush_last_crange (abfd, seg, countparg)
    descriptors.  */
 
 static void
-sh64_flag_output ()
+sh64_flag_output (void)
 {
   if (sh64_isa_mode != sh64_isa_unspecified
       && !seen_insn
@@ -3533,7 +3474,7 @@ sh64_flag_output ()
    any we find.  */
 
 static char *
-strip_datalabels ()
+strip_datalabels (void)
 {
   char *src, *dest, *start=input_line_pointer;
 
@@ -3553,8 +3494,7 @@ strip_datalabels ()
 }
 
 static void
-sh64_vtable_entry (ignore)
-     int ignore ATTRIBUTE_UNUSED;
+sh64_vtable_entry (int ignore ATTRIBUTE_UNUSED)
 {
   char *eol = strip_datalabels ();
 
@@ -3563,11 +3503,26 @@ sh64_vtable_entry (ignore)
 }
 
 static void
-sh64_vtable_inherit (ignore)
-     int ignore ATTRIBUTE_UNUSED;
+sh64_vtable_inherit (int ignore ATTRIBUTE_UNUSED)
 {
   char *eol = strip_datalabels ();
 
   obj_elf_vtable_inherit (0);
   input_line_pointer = eol;
+}
+
+int
+sh64_fake_label (const char *name)
+{
+  size_t len;
+
+  if (strcmp (name, FAKE_LABEL_NAME) == 0)
+    return 1;
+
+  len = strlen (name);
+  if (len >= (sizeof (DATALABEL_SUFFIX) - 1))
+    return strcmp (&name [len - sizeof (DATALABEL_SUFFIX) + 1],
+		   DATALABEL_SUFFIX) == 0;
+
+  return 0;
 }

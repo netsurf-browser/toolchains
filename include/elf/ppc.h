@@ -1,26 +1,28 @@
 /* PPC ELF support for BFD.
-   Copyright 1995, 1996, 1998, 2000, 2001, 2002, 2003
-   Free Software Foundation, Inc.
+   Copyright 1995, 1996, 1998, 2000, 2001, 2002, 2003, 2005, 2007, 2008,
+   2009, 2010 Free Software Foundation, Inc.
 
-   By Michael Meissner, Cygnus Support, <meissner@cygnus.com>, from information
-   in the System V Application Binary Interface, PowerPC Processor Supplement
-   and the PowerPC Embedded Application Binary Interface (eabi).
+   By Michael Meissner, Cygnus Support, <meissner@cygnus.com>,
+   from information in the System V Application Binary Interface,
+   PowerPC Processor Supplement and the PowerPC Embedded Application
+   Binary Interface (eabi).
 
-This file is part of BFD, the Binary File Descriptor library.
+   This file is part of BFD, the Binary File Descriptor library.
 
-This program is free software; you can redistribute it and/or modify
-it under the terms of the GNU General Public License as published by
-the Free Software Foundation; either version 2 of the License, or
-(at your option) any later version.
+   This program is free software; you can redistribute it and/or modify
+   it under the terms of the GNU General Public License as published by
+   the Free Software Foundation; either version 3 of the License, or
+   (at your option) any later version.
 
-This program is distributed in the hope that it will be useful,
-but WITHOUT ANY WARRANTY; without even the implied warranty of
-MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-GNU General Public License for more details.
+   This program is distributed in the hope that it will be useful,
+   but WITHOUT ANY WARRANTY; without even the implied warranty of
+   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+   GNU General Public License for more details.
 
-You should have received a copy of the GNU General Public License
-along with this program; if not, write to the Free Software
-Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.  */
+   You should have received a copy of the GNU General Public License
+   along with this program; if not, write to the Free Software
+   Foundation, Inc., 51 Franklin Street - Fifth Floor, Boston,
+   MA 02110-1301, USA.  */
 
 /* This file holds definitions specific to the PPC ELF ABI.  Note
    that most of this is not actually implemented by BFD.  */
@@ -71,6 +73,13 @@ START_RELOC_NUMBERS (elf_ppc_reloc_type)
   RELOC_NUMBER (R_PPC_SECTOFF_HA,	 36)
   RELOC_NUMBER (R_PPC_ADDR30,		 37)
 
+#ifndef RELOC_MACROS_GEN_FUNC
+/* Fake relocations for branch stubs, only used internally by ld.  */
+  RELOC_NUMBER (R_PPC_RELAX,		 48)
+  RELOC_NUMBER (R_PPC_RELAX_PLT,	 49)
+  RELOC_NUMBER (R_PPC_RELAX_PLTREL24,	 50)
+#endif
+
   /* Relocs added to support TLS.  */
   RELOC_NUMBER (R_PPC_TLS,		 67)
   RELOC_NUMBER (R_PPC_DTPMOD32,		 68)
@@ -100,6 +109,8 @@ START_RELOC_NUMBERS (elf_ppc_reloc_type)
   RELOC_NUMBER (R_PPC_GOT_DTPREL16_LO,	 92)
   RELOC_NUMBER (R_PPC_GOT_DTPREL16_HI,	 93)
   RELOC_NUMBER (R_PPC_GOT_DTPREL16_HA,	 94)
+  RELOC_NUMBER (R_PPC_TLSGD,		 95)
+  RELOC_NUMBER (R_PPC_TLSLD,		 96)
 
 /* The remaining relocs are from the Embedded ELF ABI, and are not
    in the SVR4 ELF ABI.  */
@@ -120,19 +131,35 @@ START_RELOC_NUMBERS (elf_ppc_reloc_type)
   RELOC_NUMBER (R_PPC_EMB_BIT_FLD,	115)
   RELOC_NUMBER (R_PPC_EMB_RELSDA,	116)
 
-  /* Special MorphOS relocs. */
-  RELOC_NUMBER (R_PPC_MORPHOS_DREL,	200)
-  RELOC_NUMBER (R_PPC_MORPHOS_DREL_LO,	201)
-  RELOC_NUMBER (R_PPC_MORPHOS_DREL_HI,	202)
-  RELOC_NUMBER (R_PPC_MORPHOS_DREL_HA,	203)
- 
-  /* AmigaOS4 relocs */
-  RELOC_NUMBER (R_PPC_AMIGAOS_BREL,	210)
-  RELOC_NUMBER (R_PPC_AMIGAOS_BREL_LO,	211)
-  RELOC_NUMBER (R_PPC_AMIGAOS_BREL_HI,  212)
-  RELOC_NUMBER (R_PPC_AMIGAOS_BREL_HA,  213)
- 
-  /* These are GNU extensions to enable C++ vtable garbage collection.  */
+/* PowerPC VLE relocations.  */
+  RELOC_NUMBER (R_PPC_VLE_REL8,		216)
+  RELOC_NUMBER (R_PPC_VLE_REL15,	217)
+  RELOC_NUMBER (R_PPC_VLE_REL24,	218)
+  RELOC_NUMBER (R_PPC_VLE_LO16A,	219)
+  RELOC_NUMBER (R_PPC_VLE_LO16D,	220)
+  RELOC_NUMBER (R_PPC_VLE_HI16A,	221)
+  RELOC_NUMBER (R_PPC_VLE_HI16D,	222)
+  RELOC_NUMBER (R_PPC_VLE_HA16A,	223)
+  RELOC_NUMBER (R_PPC_VLE_HA16D,	224)
+  RELOC_NUMBER (R_PPC_VLE_SDA21,	225)
+  RELOC_NUMBER (R_PPC_VLE_SDA21_LO,	226)
+  RELOC_NUMBER (R_PPC_VLE_SDAREL_LO16A,	227)
+  RELOC_NUMBER (R_PPC_VLE_SDAREL_LO16D,	228)
+  RELOC_NUMBER (R_PPC_VLE_SDAREL_HI16A,	229)
+  RELOC_NUMBER (R_PPC_VLE_SDAREL_HI16D,	230)
+  RELOC_NUMBER (R_PPC_VLE_SDAREL_HA16A,	231)
+  RELOC_NUMBER (R_PPC_VLE_SDAREL_HA16D,	232)
+
+/* Support STT_GNU_IFUNC plt calls.  */
+  RELOC_NUMBER (R_PPC_IRELATIVE,	248)
+
+/* These are GNU extensions used in PIC code sequences.  */
+  RELOC_NUMBER (R_PPC_REL16,		249)
+  RELOC_NUMBER (R_PPC_REL16_LO,		250)
+  RELOC_NUMBER (R_PPC_REL16_HI,		251)
+  RELOC_NUMBER (R_PPC_REL16_HA,		252)
+
+/* These are GNU extensions to enable C++ vtable garbage collection.  */
   RELOC_NUMBER (R_PPC_GNU_VTINHERIT,	253)
   RELOC_NUMBER (R_PPC_GNU_VTENTRY,	254)
 
@@ -145,12 +172,25 @@ END_RELOC_NUMBERS (R_PPC_max)
 #define IS_PPC_TLS_RELOC(R) \
   ((R) >= R_PPC_TLS && (R) <= R_PPC_GOT_DTPREL16_HA)
 
+/* Specify the value of _GLOBAL_OFFSET_TABLE_.  */
+#define DT_PPC_GOT		(DT_LOPROC)
+
+/* Specify that tls descriptors should be optimized.  */
+#define DT_PPC_OPT		(DT_LOPROC + 1)
+#define PPC_OPT_TLS		1
+
 /* Processor specific flags for the ELF header e_flags field.  */
 
 #define	EF_PPC_EMB		0x80000000	/* PowerPC embedded flag.  */
 
 #define	EF_PPC_RELOCATABLE	0x00010000	/* PowerPC -mrelocatable flag.  */
 #define	EF_PPC_RELOCATABLE_LIB	0x00008000	/* PowerPC -mrelocatable-lib flag.  */
+
+/* Processor specific program headers, p_flags field.  */
+#define PF_PPC_VLE		0x10000000	/* PowerPC VLE.  */
+
+/* Processor specific section headers, sh_flags field.  */
+#define SHF_PPC_VLE		0x10000000	/* PowerPC VLE text section.  */
 
 /* Processor specific section headers, sh_type field.  */
 
@@ -160,12 +200,25 @@ END_RELOC_NUMBERS (R_PPC_max)
 						   specified in the associated \
 						   symbol table entry.  */
 
-/* Processor specific section flags, sh_flags field.  */
+/* Object attribute tags.  */
+enum
+{
+  /* 0-3 are generic.  */
+  Tag_GNU_Power_ABI_FP = 4, /* Value 1 for hard-float, 2 for
+			       soft-float, 3 for single=precision 
+			       hard-float; 0 for not tagged or not
+			       using any ABIs affected by the
+			       differences.  */
 
-#define SHF_EXCLUDE		0x80000000	/* Link editor is to exclude \
-						   this section from executable \
-						   and shared objects that it \
-						   builds when those objects \
-						   are not to be furhter \
-						   relocated.  */
+  /* Value 1 for general purpose registers only, 2 for AltiVec
+     registers, 3 for SPE registers; 0 for not tagged or not using any
+     ABIs affected by the differences.  */
+  Tag_GNU_Power_ABI_Vector = 8,
+
+  /* Value 1 for ABIs using r3/r4 for returning structures <= 8 bytes,
+     2 for ABIs using memory; 0 for not tagged or not using any ABIs
+     affected by the differences.  */
+  Tag_GNU_Power_ABI_Struct_Return = 12
+};
+
 #endif /* _ELF_PPC_H */

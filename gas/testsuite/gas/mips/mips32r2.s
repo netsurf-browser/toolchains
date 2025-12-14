@@ -1,4 +1,4 @@
-# source file to test assembly of mips32r2 instructions
+# source file to test assembly of mips32r2 *non-fp* instructions
 
         .set noreorder
 	.set noat
@@ -63,19 +63,7 @@ text_label:
 
 	wrpgpr	$10, $25
 
-      # FPU (cp1) instructions
-      #
-      # Even registers are supported w/ 32-bit FPU, odd
-      # registers supported only for 64-bit FPU.
-      # Only the 32-bit FPU instructions are tested here.
-     
-	mfhc1	$17, $f0
-	mthc1	$17, $f0
-
-      # cp2 instructions
-
-	mfhc2	$17, 0x5555
-	mthc2	$17, 0x5555
+	pause
 
 # Force at least 8 (non-delay-slot) zero bytes, to make 'objdump' print ...
 	.space  8

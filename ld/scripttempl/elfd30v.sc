@@ -12,14 +12,15 @@ CTOR=".ctors ${CONSTRUCTING-0} :
        doesn't matter which directory crtbegin.o
        is in.  */
 
-    KEEP (*crtbegin*.o(.ctors))
+    KEEP (*crtbegin.o(.ctors))
+    KEEP (*crtbegin?.o(.ctors))
 
     /* We don't want to include the .ctor section from
-       from the crtend.o file until after the sorted ctors.
+       the crtend.o file until after the sorted ctors.
        The .ctor section from the crtend file contains the
        end of ctors marker and it must be last */
 
-    KEEP (*(EXCLUDE_FILE (*crtend*.o) .ctors))
+    KEEP (*(EXCLUDE_FILE (*crtend.o *crtend?.o) .ctors))
     KEEP (*(SORT(.ctors.*)))
     KEEP (*(.ctors))
     ${CONSTRUCTING+ __CTOR_END__ = .; }
@@ -28,8 +29,9 @@ CTOR=".ctors ${CONSTRUCTING-0} :
 DTOR="  .dtors	${CONSTRUCTING-0} :
   {
     ${CONSTRUCTING+ __DTOR_LIST__ = .; }
-    KEEP (*crtbegin*.o(.dtors))
-    KEEP (*(EXCLUDE_FILE (*crtend*.o) .dtors))
+    KEEP (*crtbegin.o(.dtors))
+    KEEP (*crtbegin?.o(.dtors))
+    KEEP (*(EXCLUDE_FILE (*crtend.o *crtend?.o) .dtors))
     KEEP (*(SORT(.dtors.*)))
     KEEP (*(.dtors))
     ${CONSTRUCTING+ __DTOR_END__ = .; }
@@ -108,8 +110,8 @@ SECTIONS
   {
     *(.text)
     *(.gnu.linkonce.t*)
-    *(.init)
-    *(.fini)
+    *(SORT_NONE(.init))
+    *(SORT_NONE(.fini))
     ${RELOCATING+ _etext = . ; }
   } ${RELOCATING+ > ${TEXT_MEMORY}}
 
@@ -189,31 +191,11 @@ SECTIONS
 
   .comment	 0 : { *(.comment) }
 
-  /* DWARF debug sections.
-     Symbols in the DWARF debugging sections are relative to the beginning
-     of the section so we begin them at 0.  */
+EOF
 
-  /* DWARF 1 */
-  .debug	 0 : { *(.debug) }
-  .line		 0 : { *(.line) }
+. $srcdir/scripttempl/DWARF.sc
 
-  /* GNU DWARF 1 extensions */
-  .debug_srcinfo 0 : { *(.debug_srcinfo) }
-  .debug_sfnames 0 : { *(.debug_sfnames) }
-
-  /* DWARF 1.1 and DWARF 2 */
-  .debug_aranges  0 : { *(.debug_aranges) }
-  .debug_pubnames 0 : { *(.debug_pubnames) }
-
-  /* DWARF 2 */
-  .debug_info     0 : { *(.debug_info) *(.gnu.linkonce.wi.*) }
-  .debug_abbrev   0 : { *(.debug_abbrev) }
-  .debug_line     0 : { *(.debug_line) }
-  .debug_frame    0 : { *(.debug_frame) }
-  .debug_str      0 : { *(.debug_str) }
-  .debug_loc      0 : { *(.debug_loc) }
-  .debug_macinfo  0 : { *(.debug_macinfo) }
-
+cat <<EOF  
   PROVIDE (__stack = ${STACK_START_ADDR});
 }
 EOF

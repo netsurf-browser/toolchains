@@ -3577,10 +3577,6 @@ Wed Jun  3 09:16:00 1998  Catherine Moore  <clm@cygnus.com>
 	* config/tc-v850.c (md_begin):  Don't create special
 	sections by default.
 
-1998-06-02  David Zaroski  <zaroski@firewall.ninemoons.com>
-
-	* config/tc-m68k.c: Add missing param to add_fix in "case '_'"
-
 Tue Jun  2 14:52:56 1998  Jeffrey A Law  (law@cygnus.com)
 
 	* config/tc-mips.c (macro): For div and udiv, close the
@@ -4862,3 +4858,16 @@ Fri Jan  2 16:08:54 1998  Ian Lance Taylor  <ian@cygnus.com>
 	unrecognized characters after an expression.
 
 For older changes see ChangeLog-9697
+
+Copyright (C) 1998,1999 Free Software Foundation, Inc.
+
+Copying and distribution of this file, with or without modification,
+are permitted in any medium without royalty provided the copyright
+notice and this notice are preserved.
+
+Local Variables:
+mode: change-log
+left-margin: 8
+fill-column: 74
+version-control: never
+End:

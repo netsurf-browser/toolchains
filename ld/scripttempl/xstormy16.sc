@@ -7,7 +7,6 @@
 #	OTHER_TEXT_SECTIONS - these get put in .text when relocating
 #	OTHER_READWRITE_SECTIONS - other than .data .bss .ctors .sdata ...
 #		(e.g., .PARISC.global)
-#	OTHER_BSS_SECTIONS - other than .bss .sbss ...
 #	OTHER_SECTIONS - at the end
 #	EXECUTABLE_SYMBOLS - symbols that must be defined for an
 #		executable (e.g., _DYNAMIC_LINK)
@@ -68,14 +67,15 @@ CTOR=".ctors ${CONSTRUCTING-0} :
        doesn't matter which directory crtbegin.o
        is in.  */
 
-    KEEP (*crtbegin*.o(.ctors))
+    KEEP (*crtbegin.o(.ctors))
+    KEEP (*crtbegin?.o(.ctors))
 
     /* We don't want to include the .ctor section from
-       from the crtend.o file until after the sorted ctors.
+       the crtend.o file until after the sorted ctors.
        The .ctor section from the crtend file contains the
        end of ctors marker and it must be last */
 
-    KEEP (*(EXCLUDE_FILE (*crtend*.o $OTHER_EXCLUDE_FILES) .ctors))
+    KEEP (*(EXCLUDE_FILE (*crtend.o *crtend?.o $OTHER_EXCLUDE_FILES) .ctors))
     KEEP (*(SORT(.ctors.*)))
     KEEP (*(.ctors))
     ${CONSTRUCTING+${CTOR_END}}
@@ -84,8 +84,9 @@ CTOR=".ctors ${CONSTRUCTING-0} :
 DTOR=" .dtors       ${CONSTRUCTING-0} :
   {
     ${CONSTRUCTING+${DTOR_START}}
-    KEEP (*crtbegin*.o(.dtors))
-    KEEP (*(EXCLUDE_FILE (*crtend*.o $OTHER_EXCLUDE_FILES) .dtors))
+    KEEP (*crtbegin.o(.dtors))
+    KEEP (*crtbegin?.o(.dtors))
+    KEEP (*(EXCLUDE_FILE (*crtend.o *crtend?.o $OTHER_EXCLUDE_FILES) .dtors))
     KEEP (*(SORT(.dtors.*)))
     KEEP (*(.dtors))
     ${CONSTRUCTING+${DTOR_END}}
@@ -95,7 +96,7 @@ cat <<EOF
 OUTPUT_FORMAT("${OUTPUT_FORMAT}", "${BIG_OUTPUT_FORMAT}",
 	      "${LITTLE_OUTPUT_FORMAT}")
 OUTPUT_ARCH(${OUTPUT_ARCH})
-ENTRY(${ENTRY})
+${RELOCATING+ENTRY(${ENTRY})}
 
 ${RELOCATING+${LIB_SEARCH_DIRS}}
 ${RELOCATING+${EXECUTABLE_SYMBOLS}}
@@ -144,23 +145,23 @@ SECTIONS
       .bss section disappears because there are no input sections.  */
    ${RELOCATING+. = ALIGN(${ALIGNMENT});}
   } > RAM
-  ${RELOCATING+${OTHER_BSS_SECTIONS}}
+  ${RELOCATING+${OTHER_BSS_END_SYMBOLS}}
   ${RELOCATING+. = ALIGN(${ALIGNMENT});}
+  ${RELOCATING+${OTHER_END_SYMBOLS}}
   ${RELOCATING+_end = .;}
   ${RELOCATING+__stack = .;}
-  ${RELOCATING+${OTHER_BSS_END_SYMBOLS}}
   ${RELOCATING+PROVIDE (end = .);}
 
   /* Read-only sections in ROM.  */
-  .int_vec     ${RELOCATING-0} : { *(.int_vec)	} > ROM
+  .int_vec     ${RELOCATING-0} : { *(.int_vec)	} ${RELOCATING+> ROM}
 
-  .rodata ${RELOCATING-0} : { *(.rodata) ${RELOCATING+*(.rodata.*)} ${RELOCATING+*(.gnu.linkonce.r.*)} } > ROM
+  .rodata ${RELOCATING-0} : { *(.rodata) ${RELOCATING+*(.rodata.*)} ${RELOCATING+*(.gnu.linkonce.r.*)} } ${RELOCATING+> ROM}
   ${RELOCATING+${CTOR}}
   ${RELOCATING+${DTOR}}
-  .jcr : { KEEP (*(.jcr)) } > ROM
-  .eh_frame : { KEEP (*(.eh_frame)) } > ROM
-  .gcc_except_table : { *(.gcc_except_table) } > ROM
-  .plt : { *(.plt) } > ROM
+  .jcr : { KEEP (*(.jcr)) } ${RELOCATING+> ROM}
+  .eh_frame : { KEEP (*(.eh_frame)) } ${RELOCATING+> ROM}
+  .gcc_except_table : { *(.gcc_except_table) *(.gcc_except_table.*) } ${RELOCATING+> ROM}
+  .plt : { *(.plt) } ${RELOCATING+> ROM}
 
   .text    ${RELOCATING-0} :
   {
@@ -172,19 +173,19 @@ SECTIONS
     *(.gnu.warning)
     ${RELOCATING+*(.gnu.linkonce.t.*)}
     ${RELOCATING+${OTHER_TEXT_SECTIONS}}
-  } > ROM =${NOP-0}
+  } ${RELOCATING+> ROM =${NOP-0}}
   .init        ${RELOCATING-0} : 
   { 
     ${RELOCATING+${INIT_START}}
     KEEP (*(.init))
     ${RELOCATING+${INIT_END}}
-  } > ROM =${NOP-0}
+  } ${RELOCATING+> ROM =${NOP-0}}
   .fini    ${RELOCATING-0} :
   {
     ${RELOCATING+${FINI_START}}
     KEEP (*(.fini))
     ${RELOCATING+${FINI_END}}
-  } > ROM =${NOP-0}
+  } ${RELOCATING+> ROM =${NOP-0}}
   ${RELOCATING+PROVIDE (__etext = .);}
   ${RELOCATING+PROVIDE (_etext = .);}
   ${RELOCATING+PROVIDE (etext = .);}
@@ -201,37 +202,11 @@ SECTIONS
 
   .comment 0 : { *(.comment) }
 
-  /* DWARF debug sections.
-     Symbols in the DWARF debugging sections are relative to the beginning
-     of the section so we begin them at 0.  */
+EOF
 
-  /* DWARF 1 */
-  .debug          0 : { *(.debug) }
-  .line           0 : { *(.line) }
+. $srcdir/scripttempl/DWARF.sc
 
-  /* GNU DWARF 1 extensions */
-  .debug_srcinfo  0 : { *(.debug_srcinfo) }
-  .debug_sfnames  0 : { *(.debug_sfnames) }
-
-  /* DWARF 1.1 and DWARF 2 */
-  .debug_aranges  0 : { *(.debug_aranges) }
-  .debug_pubnames 0 : { *(.debug_pubnames) }
-
-  /* DWARF 2 */
-  .debug_info     0 : { *(.debug_info) *(.gnu.linkonce.wi.*) }
-  .debug_abbrev   0 : { *(.debug_abbrev) }
-  .debug_line     0 : { *(.debug_line) }
-  .debug_frame    0 : { *(.debug_frame) }
-  .debug_str      0 : { *(.debug_str) }
-  .debug_loc      0 : { *(.debug_loc) }
-  .debug_macinfo  0 : { *(.debug_macinfo) }
-
-  /* SGI/MIPS DWARF 2 extensions */
-  .debug_weaknames 0 : { *(.debug_weaknames) }
-  .debug_funcnames 0 : { *(.debug_funcnames) }
-  .debug_typenames 0 : { *(.debug_typenames) }
-  .debug_varnames  0 : { *(.debug_varnames) }
-
+cat <<EOF
   ${RELOCATING+${OTHER_RELOCATING_SECTIONS}}
 
   /* These must appear regardless of ${RELOCATING}.  */

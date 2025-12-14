@@ -1,19 +1,22 @@
 # Expect script for LD section checks tests
-#   Copyright 1999, 2001 Free Software Foundation, Inc.
+#   Copyright 1999, 2001, 2003, 2005, 2007, 2009 Free Software Foundation, Inc.
 #
-# This file is free software; you can redistribute it and/or modify
+# This file is part of the GNU Binutils.
+#
+# This program is free software; you can redistribute it and/or modify
 # it under the terms of the GNU General Public License as published by
-# the Free Software Foundation; either version 2 of the License, or
+# the Free Software Foundation; either version 3 of the License, or
 # (at your option) any later version.
-# 
+#
 # This program is distributed in the hope that it will be useful,
 # but WITHOUT ANY WARRANTY; without even the implied warranty of
 # MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
 # GNU General Public License for more details.
-# 
+#
 # You should have received a copy of the GNU General Public License
 # along with this program; if not, write to the Free Software
-# Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
+# Foundation, Inc., 51 Franklin Street - Fifth Floor, Boston,
+# MA 02110-1301, USA.
 #
 # Written by Nick Clifton (nickc@cygnus.com)
 
@@ -23,16 +26,17 @@ proc section_check {} {
     global ld
     global srcdir
     global subdir
-    
+
     # The usage of .lcomm in asm.s is incompatible with ia64 and ppc coff.
-    if { [istarget ia64-*-elf*] || [istarget ia64-*-linux*]
-	 || [istarget powerpc*-*-aix*] || [istarget powerpc-*-beos*]
+    if { [istarget ia64-*-*]
+	 || [istarget powerpc*-*-aix*]
+	 || [istarget powerpc-*-beos*]
 	 || [istarget rs6000-*-*] } {
 	return
     }
     set test "check sections 1"
-    
-    set ldflags "--check-sections"
+
+    set ldflags "--check-sections -e foo"
 
     if { ![ld_assemble $as $srcdir/$subdir/asm.s tmpdir/asm.o]} {
 	unresolved $test
@@ -52,15 +56,15 @@ proc section_check {} {
     set ldflags "--check-sections -T $srcdir/$subdir/script -e foo"
 
     # Perform the equivalent of invoking ld_simple_link
-    # except that we need to massage the output futher.
-    
-    catch "exec $ld -o tmpdir/asm.x $ldflags tmpdir/asm.o" exec_output
+    # except that we need to massage the output further.
+
+    set exec_output [run_host_cmd "$ld" "-o tmpdir/asm.x $ldflags tmpdir/asm.o"]
     set exec_output [prune_warnings $exec_output]
 
     # Make sure that we got some output from the linker
     if [string match "" $exec_output] then {
 	fail $test
-    } 
+    }
 
     # Now remove our expected error message
     regsub -all ".*: section .data .* overlaps section .text .*" $exec_output "" exec_output
@@ -75,5 +79,3 @@ proc section_check {} {
 }
 
 section_check
-
-

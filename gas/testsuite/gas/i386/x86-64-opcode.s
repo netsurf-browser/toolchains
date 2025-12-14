@@ -20,22 +20,16 @@
 	# CMP
 
 	# MOV
-	MOVw %cs,(%r8)		      # 66  --  -- 41   8C 08				 ; REX to access upper reg. O16 for 16-bit operand size
-	MOVw %cs,(%rax)		      # 66  --  -- --   8C 08				 ; O16 for 16-bit operand size
-	MOVw %ss,(%r8)		      # 66  --  -- 41   8C 10				 ; REX to access upper reg. O16 for 16-bit operand size
-	MOVw %ss,(%rax)		      # 66  --  -- --   8C 10				 ; O16 for 16-bit operand size
-	MOVw %fs,(%r8)		      # 66  --  -- 41   8C 20				 ; REX to access upper reg. O16 for 16-bit operand size
-	MOVw %fs,(%rax)		      # 66  --  -- --   8C 20				 ; O16 for 16-bit operand size
-	MOVl %cs,(%r8)		      # --  --  -- 41   8C 08				 ; REX to access upper reg.
-	MOVl %cs,(%rax)		      # --  --  -- --   8C 08
-	MOVl %ss,(%r8)		      # --  --  -- 41   8C 10				 ; REX to access upper reg.
-	MOVl %ss,(%rax)		      # --  --  -- --   8C 10
-	MOVl %fs,(%r8)		      # --  --  -- 41   8C 20				 ; REX to access upper reg.
-	MOVl %fs,(%rax)		      # --  --  -- --   8C 20
-	MOVl (%r8),%ss		      # --  --  -- 41   8E 10				 ; REX to access upper reg.
-	MOVl (%rax),%ss		      # --  --  -- --   8E 10
-	MOVl (%r8),%fs		      # --  --  -- 41   8E 20				 ; REX to access upper reg.
-	MOVl (%rax),%fs		      # --  --  -- --   8E 20
+	MOVw %cs,(%r8)		      # --  --  -- 41   8C 08				 ; REX to access upper reg.
+	MOVw %cs,(%rax)		      # --  --  -- --   8C 08
+	MOVw %ss,(%r8)		      # --  --  -- 41   8C 10				 ; REX to access upper reg.
+	MOVw %ss,(%rax)		      # --  --  -- --   8C 10
+	MOVw %fs,(%r8)		      # --  --  -- 41   8C 20				 ; REX to access upper reg.
+	MOVw %fs,(%rax)		      # --  --  -- --   8C 20
+	MOVw (%r8),%ss		      # --  --  -- 41   8E 10				 ; REX to access upper reg.
+	MOVw (%rax),%ss		      # --  --  -- --   8E 10
+	MOVw (%r8),%fs		      # --  --  -- 41   8E 20				 ; REX to access upper reg.
+	MOVw (%rax),%fs		      # --  --  -- --   8E 20
 	MOVb $0,(%r8)		      # --  --  -- 41   C6 00 00			 ; REX to access upper reg.
 	MOVb $0,(%rax)		      # --  --  -- --   C6 00 00
 	MOVw $0x7000,(%r8)	      # 66  --  -- 41   C7 00 00 70			 ; REX to access upper reg. O16 for 16-bit operand size
@@ -67,15 +61,18 @@
 	# Conditionals
 
 	# LOOP
+	LOOP .			      #	 --  --	 -- --	 E2 FE				 ; RCX used as counter.
+	LOOPq .			      #	 --  --	 -- --	 E2 FE				 ; RCX used as counter.
+	LOOPl .			      #	 --  67	 -- --	 E2 FD				 ; ECX used as counter.
 
 
 	# Jcc
-				      #	 66  --	 -- --	 77 FD				 ; A16 override: (Addr64) = ZEXT(Addr16)
-				      #	 66  --	 -- --	 0F 87 F9 FF FF FF		 ; A16 override: (Addr64) = ZEXT(Addr16)
+				      #	 66  --	 -- --	 77 FD				 ; O16 override: (Addr64) = ZEXT(Addr16)
+				      #	 66  --	 -- --	 0F 87 F9 FF FF FF		 ; O16 override: (Addr64) = ZEXT(Addr16)
 
 	# J*CXZ
-				      #	 66  67	 -- --	 E3 FC				 ; ECX used as counter. A16 override: (Addr64) = ZEXT(Addr16)
-				      #	 66  --	 -- --	 E3 FD				 ; A16 override: (Addr64) = ZEXT(Addr16)
+	JRCXZ .			      #	 --  --	 -- --	 E3 FE				 ; RCX used as counter.
+	JECXZ .			      #	 --  67	 -- --	 E3 FD				 ; ECX used as counter.
 
 
 
@@ -379,6 +376,9 @@
 	# SLDT
 #        SLDT (%eax)	              #  --  67	 -- --	 0F 00 00	                 ; A32 override: (Addr64) = ZEXT(Addr32 )
         SLDT %eax	              #  --  --	 -- --	 0F 00 C0
+        SLDT %rax	              #  --  --	 -- 48	 0F 00 C0
+        SLDT %ax	              #  66  --	 -- --	 0F 00 C0
+        SLDT (%rax)	              #  --  --	 -- --	 0F 00 00
 
 	# SWAPGS
 
@@ -393,4 +393,37 @@
 
 	# IN
 
- .p2align 4,0
+
+
+	xchg %ax,%ax		      # 66  --	 -- --	 90
+	xchg %eax,%eax		      # --  --	 -- --	 87 C0
+	xchg %rax,%rax		      # --  --	 -- --	 90
+	rex64 xchg %rax,%rax	      # --  --	 -- 48	 90
+	xchg %rax,%r8		      # --  --	 -- 49	 90
+	xchg %eax,%r8d		      # --  --	 -- 41	 90
+	xchg %r8d,%eax		      # --  --	 -- 41	 90
+	xchg %eax,%r9d		      # --  --	 -- 41	 91
+	xchg %r9d,%eax		      # --  --	 -- 41	 91
+	xchg %ebx,%eax		      # --  --	 -- 93
+	xchg %eax,%ebx		      # --  --	 -- 93
+	xchg %ax,%r8w		      # --  --	 -- 66 41 90
+	xchg %r8w,%ax		      # --  --	 -- 66 41 90
+	xchg %ax,%r9w		      # --  --	 -- 66 41 91
+	xchg %r9w,%ax		      # --  --	 -- 66 41 91
+
+        smsw %rax	              #  --  --	 -- 48	 0F 01 e0
+        smsw %eax	              #  --  --	 -- --	 0F 01 e0
+        smsw %ax	              #  66  --	 -- --	 0F 01 e0
+        smsw (%rax)	              #  --  --	 -- --	 0F 01 20
+
+        str %rax	              #  --  --	 -- 48	 0F 00 c8
+        str %eax	              #  --  --	 -- --	 0F 00 c8
+        str %ax		              #  66  --	 -- --	 0F 00 c8
+        str (%rax)	              #  --  --	 -- --	 0F 00 08
+
+        syscall		              #  --  --	 -- --	 0F 05
+        sysret		              #  --  --	 -- --	 0F 07
+
+        swapgs		              #  --  --	 -- --	 0F 01 f8
+
+	pushw $0x2222

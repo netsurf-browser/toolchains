@@ -8,7 +8,6 @@
 #	OTHER_TEXT_SECTIONS - these get put in .text when relocating
 #	OTHER_READWRITE_SECTIONS - other than .data .bss .ctors .sdata ...
 #		(e.g., .PARISC.global)
-#	OTHER_BSS_SECTIONS - other than .bss .sbss ...
 #	OTHER_SECTIONS - at the end
 #	EXECUTABLE_SYMBOLS - symbols that must be defined for an
 #		executable (e.g., _DYNAMIC_LINK)
@@ -84,14 +83,15 @@ CTOR=".ctors ${CONSTRUCTING-0} :
        doesn't matter which directory crtbegin.o
        is in.  */
 
-    KEEP (*crtbegin*.o(.ctors))
+    KEEP (*crtbegin.o(.ctors))
+    KEEP (*crtbegin?.o(.ctors))
 
     /* We don't want to include the .ctor section from
-       from the crtend.o file until after the sorted ctors.
+       the crtend.o file until after the sorted ctors.
        The .ctor section from the crtend file contains the
        end of ctors marker and it must be last */
 
-    KEEP (*(EXCLUDE_FILE (*crtend*.o $OTHER_EXCLUDE_FILES) .ctors))
+    KEEP (*(EXCLUDE_FILE (*crtend.o *crtend?.o $OTHER_EXCLUDE_FILES) .ctors))
     KEEP (*(SORT(.ctors.*)))
     KEEP (*(.ctors))
     ${CONSTRUCTING+${CTOR_END}}
@@ -100,8 +100,9 @@ CTOR=".ctors ${CONSTRUCTING-0} :
 DTOR=" .dtors       ${CONSTRUCTING-0} :
   {
     ${CONSTRUCTING+${DTOR_START}}
-    KEEP (*crtbegin*.o(.dtors))
-    KEEP (*(EXCLUDE_FILE (*crtend*.o $OTHER_EXCLUDE_FILES) .dtors))
+    KEEP (*crtbegin.o(.dtors))
+    KEEP (*crtbegin?.o(.dtors))
+    KEEP (*(EXCLUDE_FILE (*crtend.o *crtend?.o $OTHER_EXCLUDE_FILES) .dtors))
     KEEP (*(SORT(.dtors.*)))
     KEEP (*(.dtors))
     ${CONSTRUCTING+${DTOR_END}}
@@ -118,7 +119,7 @@ cat <<EOF
 OUTPUT_FORMAT("${OUTPUT_FORMAT}", "${BIG_OUTPUT_FORMAT}",
 	      "${LITTLE_OUTPUT_FORMAT}")
 OUTPUT_ARCH(${OUTPUT_ARCH})
-ENTRY(${ENTRY})
+${RELOCATING+ENTRY(${ENTRY})}
 
 ${RELOCATING+${LIB_SEARCH_DIRS}}
 ${RELOCATING+/* Do we need any of these for elf?
@@ -388,10 +389,10 @@ cat <<EOF
       .bss section disappears because there are no input sections.  */
    ${RELOCATING+. = ALIGN(${ALIGNMENT});}
   }
-  ${RELOCATING+${OTHER_BSS_SECTIONS}}
-  ${RELOCATING+. = ALIGN(${ALIGNMENT});}
-  ${RELOCATING+_end = .;}
   ${RELOCATING+${OTHER_BSS_END_SYMBOLS}}
+  ${RELOCATING+. = ALIGN(${ALIGNMENT});}
+  ${RELOCATING+${OTHER_END_SYMBOLS}}
+  ${RELOCATING+_end = .;}
   ${RELOCATING+PROVIDE (end = .);}
 
   /* Stabs debugging sections.  */
@@ -404,37 +405,11 @@ cat <<EOF
 
   .comment 0 : { *(.comment) }
 
-  /* DWARF debug sections.
-     Symbols in the DWARF debugging sections are relative to the beginning
-     of the section so we begin them at 0.  */
+EOF
 
-  /* DWARF 1 */
-  .debug          0 : { *(.debug) }
-  .line           0 : { *(.line) }
+. $srcdir/scripttempl/DWARF.sc
 
-  /* GNU DWARF 1 extensions */
-  .debug_srcinfo  0 : { *(.debug_srcinfo) }
-  .debug_sfnames  0 : { *(.debug_sfnames) }
-
-  /* DWARF 1.1 and DWARF 2 */
-  .debug_aranges  0 : { *(.debug_aranges) }
-  .debug_pubnames 0 : { *(.debug_pubnames) }
-
-  /* DWARF 2 */
-  .debug_info     0 : { *(.debug_info) *(.gnu.linkonce.wi.*) }
-  .debug_abbrev   0 : { *(.debug_abbrev) }
-  .debug_line     0 : { *(.debug_line) }
-  .debug_frame    0 : { *(.debug_frame) }
-  .debug_str      0 : { *(.debug_str) }
-  .debug_loc      0 : { *(.debug_loc) }
-  .debug_macinfo  0 : { *(.debug_macinfo) }
-
-  /* SGI/MIPS DWARF 2 extensions */
-  .debug_weaknames 0 : { *(.debug_weaknames) }
-  .debug_funcnames 0 : { *(.debug_funcnames) }
-  .debug_typenames 0 : { *(.debug_typenames) }
-  .debug_varnames  0 : { *(.debug_varnames) }
-
+cat <<EOF
   ${RELOCATING+${OTHER_RELOCATING_SECTIONS}}
 
   /* These must appear regardless of ${RELOCATING}.  */

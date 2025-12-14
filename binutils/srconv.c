@@ -1,12 +1,12 @@
 /* srconv.c -- Sysroff conversion program
-   Copyright 1994, 1995, 1996, 1998, 1999, 2000, 2001, 2002
-   Free Software Foundation, Inc.
+   Copyright 1994, 1995, 1996, 1998, 1999, 2000, 2001, 2002, 2003, 2004,
+   2005, 2007, 2008, 2009 Free Software Foundation, Inc.
 
    This file is part of GNU Binutils.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License as published by
-   the Free Software Foundation; either version 2 of the License, or
+   the Free Software Foundation; either version 3 of the License, or
    (at your option) any later version.
 
    This program is distributed in the hope that it will be useful,
@@ -16,8 +16,8 @@
 
    You should have received a copy of the GNU General Public License
    along with this program; if not, write to the Free Software
-   Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA
-   02111-1307, USA.  */
+   Foundation, Inc., 51 Franklin Street - Fifth Floor, Boston, MA
+   02110-1301, USA.  */
 
 /* Written by Steve Chamberlain (sac@cygnus.com)
 
@@ -26,11 +26,13 @@
 
    All debugging information is preserved */
 
+#include "sysdep.h"
 #include "bfd.h"
 #include "bucomm.h"
 #include "sysroff.h"
 #include "coffgrok.h"
 #include "libiberty.h"
+#include "filenames.h"
 #include "getopt.h"
 
 #include "coff/internal.h"
@@ -42,61 +44,52 @@ static int addrsize;
 static char *toolname;
 static char **rnames;
 
-static int get_member_id PARAMS ((int));
-static int get_ordinary_id PARAMS ((int));
-static char *section_translate PARAMS ((char *));
-static char *strip_suffix PARAMS ((char *));
-static void checksum PARAMS ((FILE *, char *, int, int));
-static void writeINT PARAMS ((int, char *, int *, int, FILE *));
-static void writeBITS PARAMS ((int, char *, int *, int));
-static void writeBARRAY PARAMS ((barray, char *, int *, int, FILE *));
-static void writeCHARS PARAMS ((char *, char *, int *, int, FILE *));
-static void wr_tr PARAMS ((void));
-static void wr_un PARAMS ((struct coff_ofile *, struct coff_sfile *, int, int));
-static void wr_hd PARAMS ((struct coff_ofile *));
-static void wr_sh PARAMS ((struct coff_ofile *, struct coff_section *));
-static void wr_ob PARAMS ((struct coff_ofile *, struct coff_section *));
-static void wr_rl PARAMS ((struct coff_ofile *, struct coff_section *));
-static void wr_object_body PARAMS ((struct coff_ofile *));
+static int get_member_id (int);
+static int get_ordinary_id (int);
+static char *section_translate (char *);
+static char *strip_suffix (const char *);
+static void checksum (FILE *, unsigned char *, int, int);
+static void writeINT (int, unsigned char *, int *, int, FILE *);
+static void writeBITS (int, unsigned char *, int *, int);
+static void writeBARRAY (barray, unsigned char *, int *, int, FILE *);
+static void writeCHARS (char *, unsigned char *, int *, int, FILE *);
+static void wr_tr (void);
+static void wr_un (struct coff_ofile *, struct coff_sfile *, int, int);
+static void wr_hd (struct coff_ofile *);
+static void wr_sh (struct coff_ofile *, struct coff_section *);
+static void wr_ob (struct coff_ofile *, struct coff_section *);
+static void wr_rl (struct coff_ofile *, struct coff_section *);
+static void wr_object_body (struct coff_ofile *);
 static void wr_dps_start
-  PARAMS ((struct coff_sfile *, struct coff_section *, struct coff_scope *,
-	   int, int));
-static void wr_dps_end
-  PARAMS ((struct coff_section *, struct coff_scope *, int));
-static int *nints PARAMS ((int));
+  (struct coff_sfile *, struct coff_section *, struct coff_scope *, int, int);
+static void wr_dps_end (struct coff_section *, struct coff_scope *, int);
+static int *nints (int);
 static void walk_tree_type_1
-  PARAMS ((struct coff_sfile *, struct coff_symbol *, struct coff_type *,
-	   int));
+  (struct coff_sfile *, struct coff_symbol *, struct coff_type *, int);
 static void walk_tree_type
-  PARAMS ((struct coff_sfile *, struct coff_symbol *, struct coff_type *,
-	   int));
+  (struct coff_sfile *, struct coff_symbol *, struct coff_type *, int);
 static void walk_tree_symbol
-  PARAMS ((struct coff_sfile *, struct coff_section *,
-	   struct coff_symbol *, int));
+  (struct coff_sfile *, struct coff_section *, struct coff_symbol *, int);
 static void walk_tree_scope
-  PARAMS ((struct coff_section *, struct coff_sfile *, struct coff_scope *,
-	   int, int));
-static void walk_tree_sfile
-  PARAMS ((struct coff_section *, struct coff_sfile *));
-static void wr_program_structure
-  PARAMS ((struct coff_ofile *, struct coff_sfile *));
-static void wr_du PARAMS ((struct coff_ofile *, struct coff_sfile *, int));
-static void wr_dus PARAMS ((struct coff_ofile *, struct coff_sfile *));
-static int find_base PARAMS ((struct coff_sfile *, struct coff_section *));
-static void wr_dln PARAMS ((struct coff_ofile *, struct coff_sfile *, int));
-static void wr_globals
-  PARAMS ((struct coff_ofile *, struct coff_sfile *, int));
-static void wr_debug PARAMS ((struct coff_ofile *));
-static void wr_cs PARAMS ((void));
-static int wr_sc PARAMS ((struct coff_ofile *, struct coff_sfile *));
-static void wr_er PARAMS ((struct coff_ofile *, struct coff_sfile *, int));
-static void wr_ed PARAMS ((struct coff_ofile *, struct coff_sfile *, int));
-static void wr_unit_info PARAMS ((struct coff_ofile *));
-static void wr_module PARAMS ((struct coff_ofile *));
-static int align PARAMS ((int));
-static void prescan PARAMS ((struct coff_ofile *));
-static void show_usage PARAMS ((FILE *, int));
-extern int main PARAMS ((int, char **));
+  (struct coff_section *, struct coff_sfile *, struct coff_scope *, int, int);
+static void walk_tree_sfile (struct coff_section *, struct coff_sfile *);
+static void wr_program_structure (struct coff_ofile *, struct coff_sfile *);
+static void wr_du (struct coff_ofile *, struct coff_sfile *, int);
+static void wr_dus (struct coff_ofile *, struct coff_sfile *);
+static int find_base (struct coff_sfile *, struct coff_section *);
+static void wr_dln (struct coff_ofile *, struct coff_sfile *, int);
+static void wr_globals (struct coff_ofile *, struct coff_sfile *, int);
+static void wr_debug (struct coff_ofile *);
+static void wr_cs (void);
+static int wr_sc (struct coff_ofile *, struct coff_sfile *);
+static void wr_er (struct coff_ofile *, struct coff_sfile *, int);
+static void wr_ed (struct coff_ofile *, struct coff_sfile *, int);
+static void wr_unit_info (struct coff_ofile *);
+static void wr_module (struct coff_ofile *);
+static int align (int);
+static void prescan (struct coff_ofile *);
+static void show_usage (FILE *, int);
+extern int main (int, char **);
 
 static FILE *file;
 static bfd *abfd;
@@ -118,8 +111,7 @@ static int base1 = 0x18;
 static int base2 = 0x2018;
 
 static int
-get_member_id (x)
-     int x;
+get_member_id (int x)
 {
   if (ids2[x])
     return ids2[x];
@@ -129,8 +121,7 @@ get_member_id (x)
 }
 
 static int
-get_ordinary_id (x)
-     int x;
+get_ordinary_id (int x)
 {
   if (ids1[x])
     return ids1[x];
@@ -139,8 +130,7 @@ get_ordinary_id (x)
   return ids1[x];
 }
 static char *
-section_translate (n)
-     char *n;
+section_translate (char *n)
 {
   if (strcmp (n, ".text") == 0)
     return "P";
@@ -153,10 +143,8 @@ section_translate (n)
 
 #define DATE "940201073000";	/* Just a time on my birthday */
 
-static
-char *
-strip_suffix (name)
-     char *name;
+static char *
+strip_suffix (const char *name)
 {
   int i;
   char *res;
@@ -171,21 +159,17 @@ strip_suffix (name)
 
 /* IT LEN stuff CS */
 static void
-checksum (file, ptr, size, code)
-     FILE *file;
-     char *ptr;
-     int size;
-     int code;
+checksum (FILE *ffile, unsigned char *ptr, int size, int ccode)
 {
   int j;
   int last;
   int sum = 0;
   int bytes = size / 8;
 
-  last = !(code & 0xff00);
+  last = !(ccode & 0xff00);
   if (size & 0x7)
     abort ();
-  ptr[0] = code | (last ? 0x80 : 0);
+  ptr[0] = ccode | (last ? 0x80 : 0);
   ptr[1] = bytes + 1;
 
   for (j = 0; j < bytes; j++)
@@ -193,17 +177,14 @@ checksum (file, ptr, size, code)
 
   /* Glue on a checksum too.  */
   ptr[bytes] = ~sum;
-  fwrite (ptr, bytes + 1, 1, file);
+  if (fwrite (ptr, bytes + 1, 1, ffile) != 1)
+    /* FIXME: Return error status.  */
+    abort ();
 }
 
 
 static void
-writeINT (n, ptr, idx, size, file)
-     int n;
-     char *ptr;
-     int *idx;
-     int size;
-     FILE *file;
+writeINT (int n, unsigned char *ptr, int *idx, int size, FILE *ffile)
 {
   int byte = *idx / 8;
 
@@ -215,7 +196,7 @@ writeINT (n, ptr, idx, size, file)
   if (byte > 240)
     {
       /* Lets write out that record and do another one.  */
-      checksum (file, ptr, *idx, code | 0x1000);
+      checksum (ffile, ptr, *idx, code | 0x1000);
       *idx = 16;
       byte = *idx / 8;
     }
@@ -244,11 +225,7 @@ writeINT (n, ptr, idx, size, file)
 }
 
 static void
-writeBITS (val, ptr, idx, size)
-     int val;
-     char *ptr;
-     int *idx;
-     int size;
+writeBITS (int val, unsigned char *ptr, int *idx, int size)
 {
   int byte = *idx / 8;
   int bit = *idx % 8;
@@ -265,34 +242,25 @@ writeBITS (val, ptr, idx, size)
 }
 
 static void
-writeBARRAY (data, ptr, idx, size, file)
-     barray data;
-     char *ptr;
-     int *idx;
-     int size ATTRIBUTE_UNUSED;
-     FILE *file;
+writeBARRAY (barray data, unsigned char *ptr, int *idx,
+	     int size ATTRIBUTE_UNUSED, FILE *ffile)
 {
   int i;
 
-  writeINT (data.len, ptr, idx, 1, file);
+  writeINT (data.len, ptr, idx, 1, ffile);
   for (i = 0; i < data.len; i++)
-    writeINT (data.data[i], ptr, idx, 1, file);
+    writeINT (data.data[i], ptr, idx, 1, ffile);
 }
 
 static void
-writeCHARS (string, ptr, idx, size, file)
-     char *string;
-     char *ptr;
-     int *idx;
-     int size;
-     FILE *file;
+writeCHARS (char *string, unsigned char *ptr, int *idx, int size, FILE *ffile)
 {
   int i = *idx / 8;
 
   if (i > 240)
     {
       /* Lets write out that record and do another one.  */
-      checksum (file, ptr, *idx, code | 0x1000);
+      checksum (ffile, ptr, *idx, code | 0x1000);
       *idx = 16;
       i = *idx / 8;
     }
@@ -324,7 +292,7 @@ static char *rname_h8300[] =
 };
 
 static void
-wr_tr ()
+wr_tr (void)
 {
   /* The TR block is not normal - it doesn't have any contents.  */
 
@@ -334,15 +302,15 @@ wr_tr ()
       0x03,			/* RL */
       0xfd,			/* CS */
     };
-  fwrite (b, 1, sizeof (b), file);
+
+  if (fwrite (b, sizeof (b), 1, file) != 1)
+    /* FIXME: Return error status.  */
+    abort ();
 }
 
 static void
-wr_un (ptr, sfile, first, nsecs)
-     struct coff_ofile *ptr;
-     struct coff_sfile *sfile;
-     int first;
-     int nsecs ATTRIBUTE_UNUSED;
+wr_un (struct coff_ofile *ptr, struct coff_sfile *sfile, int first,
+       int nsecs ATTRIBUTE_UNUSED)
 {
   struct IT_un un;
   struct coff_symbol *s;
@@ -355,12 +323,8 @@ wr_un (ptr, sfile, first, nsecs)
     un.format = FORMAT_OM;
   un.spare1 = 0;
 
-#if 1
-  un.nsections = ptr->nsections - 1;	/*  Don't count the abs section.  */
-#else
-  /*NEW - only count sections with size.  */
-  un.nsections = nsecs;
-#endif
+  /* Don't count the abs section.  */
+  un.nsections = ptr->nsections - 1;
 
   un.nextdefs = 0;
   un.nextrefs = 0;
@@ -387,8 +351,7 @@ wr_un (ptr, sfile, first, nsecs)
 }
 
 static void
-wr_hd (p)
-     struct coff_ofile *p;
+wr_hd (struct coff_ofile *p)
 {
   struct IT_hd hd;
 
@@ -453,7 +416,7 @@ wr_hd (p)
       abort ();
     }
 
-  if (! bfd_get_file_flags(abfd) & EXEC_P)
+  if (! (bfd_get_file_flags(abfd) & EXEC_P))
     {
       hd.ep = 0;
     }
@@ -475,9 +438,7 @@ wr_hd (p)
 
 
 static void
-wr_sh (p, sec)
-     struct coff_ofile *p ATTRIBUTE_UNUSED;
-     struct coff_section *sec;
+wr_sh (struct coff_ofile *p ATTRIBUTE_UNUSED, struct coff_section *sec)
 {
   struct IT_sh sh;
   sh.unit = 0;
@@ -490,23 +451,21 @@ wr_sh (p, sec)
 
 
 static void
-wr_ob (p, section)
-     struct coff_ofile *p ATTRIBUTE_UNUSED;
-     struct coff_section *section;
+wr_ob (struct coff_ofile *p ATTRIBUTE_UNUSED, struct coff_section *section)
 {
   bfd_size_type i;
   int first = 1;
   unsigned char stuff[200];
 
   i = 0;
-  while (i < section->bfd_section->_raw_size)
+  while (i < bfd_get_section_size (section->bfd_section))
     {
       struct IT_ob ob;
       int todo = 200;		/* Copy in 200 byte lumps.  */
 
       ob.spare = 0;
-      if (i + todo > section->bfd_section->_raw_size)
-	todo = section->bfd_section->_raw_size - i;
+      if (i + todo > bfd_get_section_size (section->bfd_section))
+	todo = bfd_get_section_size (section->bfd_section) - i;
 
       if (first)
 	{
@@ -553,9 +512,7 @@ wr_ob (p, section)
 }
 
 static void
-wr_rl (ptr, sec)
-     struct coff_ofile *ptr ATTRIBUTE_UNUSED;
-     struct coff_section *sec;
+wr_rl (struct coff_ofile *ptr ATTRIBUTE_UNUSED, struct coff_section *sec)
 {
   int nr = sec->nrelocs;
   int i;
@@ -613,8 +570,7 @@ wr_rl (ptr, sec)
 }
 
 static void
-wr_object_body (p)
-     struct coff_ofile *p;
+wr_object_body (struct coff_ofile *p)
 {
   int i;
 
@@ -627,12 +583,9 @@ wr_object_body (p)
 }
 
 static void
-wr_dps_start (sfile, section, scope, type, nest)
-     struct coff_sfile *sfile;
-     struct coff_section *section ATTRIBUTE_UNUSED;
-     struct coff_scope *scope;
-     int type;
-     int nest;
+wr_dps_start (struct coff_sfile *sfile,
+	      struct coff_section *section ATTRIBUTE_UNUSED,
+	      struct coff_scope *scope, int type, int nest)
 {
   struct IT_dps dps;
 
@@ -667,10 +620,8 @@ wr_dps_start (sfile, section, scope, type, nest)
 }
 
 static void
-wr_dps_end (section, scope, type)
-     struct coff_section *section ATTRIBUTE_UNUSED;
-     struct coff_scope *scope ATTRIBUTE_UNUSED;
-     int type;
+wr_dps_end (struct coff_section *section ATTRIBUTE_UNUSED,
+	    struct coff_scope *scope ATTRIBUTE_UNUSED, int type)
 {
   struct IT_dps dps;
 
@@ -680,18 +631,14 @@ wr_dps_end (section, scope, type)
 }
 
 static int *
-nints (x)
-     int x;
+nints (int x)
 {
   return (int *) (xcalloc (sizeof (int), x));
 }
 
 static void
-walk_tree_type_1 (sfile, symbol, type, nest)
-     struct coff_sfile *sfile;
-     struct coff_symbol *symbol;
-     struct coff_type *type;
-     int nest;
+walk_tree_type_1 (struct coff_sfile *sfile, struct coff_symbol *symbol,
+		  struct coff_type *type, int nest)
 {
   switch (type->type)
     {
@@ -763,6 +710,7 @@ walk_tree_type_1 (sfile, symbol, type, nest)
       {
 	struct IT_dpt dpt;
 
+	dpt.dunno = 0;
 	walk_tree_type_1 (sfile, symbol, type->u.pointer.points_to, nest + 1);
 	dpt.neg = 0x1001;
 	sysroff_swap_dpt_out (file, &dpt);
@@ -962,11 +910,8 @@ walk_tree_type_1 (sfile, symbol, type, nest)
  */
 
 static void
-walk_tree_type (sfile, symbol, type, nest)
-     struct coff_sfile *sfile;
-     struct coff_symbol *symbol;
-     struct coff_type *type;
-     int nest;
+walk_tree_type (struct coff_sfile *sfile, struct coff_symbol *symbol,
+		struct coff_type *type, int nest)
 {
   if (symbol->type->type == coff_function_type)
     {
@@ -1012,11 +957,7 @@ walk_tree_type (sfile, symbol, type, nest)
 }
 
 static void
-walk_tree_symbol (sfile, section, symbol, nest)
-     struct coff_sfile *sfile;
-     struct coff_section *section ATTRIBUTE_UNUSED;
-     struct coff_symbol *symbol;
-     int nest;
+walk_tree_symbol (struct coff_sfile *sfile, struct coff_section *section ATTRIBUTE_UNUSED, struct coff_symbol *symbol, int nest)
 {
   struct IT_dsy dsy;
 
@@ -1230,12 +1171,7 @@ walk_tree_symbol (sfile, section, symbol, nest)
 }
 
 static void
-walk_tree_scope (section, sfile, scope, nest, type)
-     struct coff_section *section;
-     struct coff_sfile *sfile;
-     struct coff_scope *scope;
-     int nest;
-     int type;
+walk_tree_scope (struct coff_section *section, struct coff_sfile *sfile, struct coff_scope *scope, int nest, int type)
 {
   struct coff_symbol *vars;
   struct coff_scope *child;
@@ -1259,34 +1195,22 @@ walk_tree_scope (section, sfile, scope, nest, type)
 }
 
 static void
-walk_tree_sfile (section, sfile)
-     struct coff_section *section;
-     struct coff_sfile *sfile;
+walk_tree_sfile (struct coff_section *section, struct coff_sfile *sfile)
 {
   walk_tree_scope (section, sfile, sfile->scope, 0, BLOCK_TYPE_COMPUNIT);
 }
 
 static void
-wr_program_structure (p, sfile)
-     struct coff_ofile *p;
-     struct coff_sfile *sfile;
+wr_program_structure (struct coff_ofile *p, struct coff_sfile *sfile)
 {
   walk_tree_sfile (p->sections + 4, sfile);
 }
 
 static void
-wr_du (p, sfile, n)
-     struct coff_ofile *p;
-     struct coff_sfile *sfile;
-     int n;
+wr_du (struct coff_ofile *p, struct coff_sfile *sfile, int n)
 {
   struct IT_du du;
   int lim;
-#if 0
-  struct coff_symbol *symbol;
-  static int incit = 0x500000;
-  int used = 0;
-#endif
   int i;
   int j;
   unsigned int *lowest = (unsigned *) nints (p->nsections);
@@ -1307,47 +1231,6 @@ wr_du (p, sfile, n)
       lowest[i] = ~0;
       highest[i] = 0;
     }
-
-  /* Look through all the symbols and try and work out the extents in this
-     source file.  */
-#if 0
-  for (symbol = sfile->scope->vars_head;
-       symbol;
-       symbol = symbol->next)
-    {
-      if (symbol->type->type == coff_secdef_type)
-	{
-	  unsigned int low = symbol->where->offset;
-	  unsigned int high = symbol->where->offset + symbol->type->size - 1;
-	  struct coff_section *section = symbol->where->section;
-
-	  int sn = section->number;
-	  if (low < lowest[sn])
-	    lowest[sn] = low;
-	  if (high > highest[sn])
-	    highest[sn] = high;
-	}
-    }
-
-  for (i = 0; i < du.sections; i++)
-    {
-      if (highest[i] == 0)
-	lowest[i] = highest[i] = incit;
-
-      du.san[used] = i;
-      du.length[used] = highest[i] - lowest[i];
-      du.address[used] = bfd_get_file_flags (abfd) & EXEC_P ? lowest[i] : 0;
-
-      if (debug)
-	{
-	  printf (" section %6s 0x%08x..0x%08x\n",
-		  p->sections[i + 1].name,
-		  lowest[i],
-		  highest[i]);
-	}
-      used++;
-    }
-#endif
 
   lim = du.sections;
   for (j = 0; j < lim; j++)
@@ -1391,9 +1274,7 @@ wr_du (p, sfile, n)
 }
 
 static void
-wr_dus (p, sfile)
-     struct coff_ofile *p ATTRIBUTE_UNUSED;
-     struct coff_sfile *sfile;
+wr_dus (struct coff_ofile *p ATTRIBUTE_UNUSED, struct coff_sfile *sfile)
 {
   struct IT_dus dus;
 
@@ -1404,22 +1285,8 @@ wr_dus (p, sfile)
   dus.spare = nints (dus.ns);
   dus.ndir = 0;
   /* Find the filenames.  */
-#if 0
-  i = 0;
-
-  for (sfile = p->source_head;
-       sfile;
-       sfile = sfile->next)
-    {
-      dus.drb[i] = 0;
-      dus.spare[i] = 0;
-      dus.fname[i] = sfile->name;
-      i++;
-    }
-#else
   dus.drb[0] = 0;
   dus.fname[0] = sfile->name;
-#endif
 
   sysroff_swap_dus_out (file, &dus);
 
@@ -1429,83 +1296,15 @@ wr_dus (p, sfile)
    .text section for the output file.  */
 
 static int
-find_base (sfile, section)
-     struct coff_sfile *sfile;
-     struct coff_section *section;
+find_base (struct coff_sfile *sfile, struct coff_section *section)
 {
   return sfile->section[section->number].low;
 }
 
 static void
-wr_dln (p, sfile, n)
-     struct coff_ofile *p ATTRIBUTE_UNUSED;
-     struct coff_sfile *sfile;
-     int n ATTRIBUTE_UNUSED;
-
+wr_dln (struct coff_ofile *p ATTRIBUTE_UNUSED, struct coff_sfile *sfile,
+	int n ATTRIBUTE_UNUSED)
 {
-#if 0
-  if (n == 0)
-    {
-      /* Count up all the linenumbers */
-      struct coff_symbol *sy;
-      int lc = 0;
-      struct IT_dln dln;
-
-      int idx;
-
-      for (sy = p->symbol_list_head;
-	   sy;
-	   sy = sy->next_in_ofile_list)
-	{
-	  struct coff_type *t = sy->type;
-	  if (t->type == coff_function_type)
-	    {
-	      struct coff_line *l = t->u.function.lines;
-	      lc += l->nlines;
-	    }
-	}
-
-      dln.sfn = nints (lc);
-      dln.sln = nints (lc);
-      dln.lln = nints (lc);
-      dln.section = nints (lc);
-
-      dln.from_address = nints (lc);
-      dln.to_address = nints (lc);
-
-
-      dln.neg = 0x1001;
-
-      dln.nln = lc;
-
-      /* Run through once more and fill up the structure */
-      idx = 0;
-      for (sy = p->symbol_list_head;
-	   sy;
-	   sy = sy->next_in_ofile_list)
-	{
-	  if (sy->type->type == coff_function_type)
-	    {
-	      int i;
-	      struct coff_line *l = sy->type->u.function.lines;
-	      for (i = 0; i < l->nlines; i++)
-		{
-		  dln.section[idx] = sy->where->section->number;
-		  dln.sfn[idx] = n;
-		  dln.sln[idx] = l->lines[i];
-		  dln.from_address[idx] = l->addresses[i];
-		  if (idx)
-		    dln.to_address[idx - 1] = dln.from_address[idx];
-		  idx++;
-		}
-	    }
-	  n++;
-	}
-      sysroff_swap_dln_out (file, &dln);
-    }
-
-#endif
-#if 1
   /* Count up all the linenumbers */
 
   struct coff_symbol *sy;
@@ -1572,16 +1371,13 @@ wr_dln (p, sfile, n)
     }
   if (lc)
     sysroff_swap_dln_out (file, &dln);
-#endif
 }
 
 /* Write the global symbols out to the debug info.  */
 
 static void
-wr_globals (p, sfile, n)
-     struct coff_ofile *p;
-     struct coff_sfile *sfile;
-     int n ATTRIBUTE_UNUSED;
+wr_globals (struct coff_ofile *p, struct coff_sfile *sfile,
+	    int n ATTRIBUTE_UNUSED)
 {
   struct coff_symbol *sy;
 
@@ -1601,8 +1397,7 @@ wr_globals (p, sfile, n)
 }
 
 static void
-wr_debug (p)
-     struct coff_ofile *p;
+wr_debug (struct coff_ofile *p)
 {
   struct coff_sfile *sfile;
   int n = 0;
@@ -1623,7 +1418,7 @@ wr_debug (p)
 }
 
 static void
-wr_cs ()
+wr_cs (void)
 {
   /* It seems that the CS struct is not normal - the size is wrong
      heres one I prepared earlier.  */
@@ -1663,7 +1458,10 @@ wr_cs ()
     0x00,			/* dot */
     0xDE			/* CS */
   };
-  fwrite (b, 1, sizeof (b), file);
+
+  if (fwrite (b, sizeof (b), 1, file) != 1)
+    /* FIXME: Return error status.  */
+    abort ();
 }
 
 /* Write out the SC records for a unit.  Create an SC
@@ -1671,9 +1469,7 @@ wr_cs ()
    if there isn't an equivalent one on the input.  */
 
 static int
-wr_sc (ptr, sfile)
-     struct coff_ofile *ptr;
-     struct coff_sfile *sfile;
+wr_sc (struct coff_ofile *ptr, struct coff_sfile *sfile)
 {
   int i;
   int scount = 0;
@@ -1778,16 +1574,9 @@ wr_sc (ptr, sfile)
 	{
 	  sc.contents = CONTENTS_CODE;
 	}
-#if 0
-      /* NEW */
-      if (sc.length)
-	{
-#endif
-	  sysroff_swap_sc_out (file, &sc);
-	  scount++;
-#if 0
-	}
-#endif
+
+      sysroff_swap_sc_out (file, &sc);
+      scount++;
     }
   return scount;
 }
@@ -1795,10 +1584,8 @@ wr_sc (ptr, sfile)
 /* Write out the ER records for a unit.  */
 
 static void
-wr_er (ptr, sfile, first)
-     struct coff_ofile *ptr;
-     struct coff_sfile *sfile ATTRIBUTE_UNUSED;
-     int first;
+wr_er (struct coff_ofile *ptr, struct coff_sfile *sfile ATTRIBUTE_UNUSED,
+       int first)
 {
   int idx = 0;
   struct coff_symbol *sym;
@@ -1824,10 +1611,8 @@ wr_er (ptr, sfile, first)
 /* Write out the ED records for a unit.  */
 
 static void
-wr_ed (ptr, sfile, first)
-     struct coff_ofile *ptr;
-     struct coff_sfile *sfile ATTRIBUTE_UNUSED;
-     int first;
+wr_ed (struct coff_ofile *ptr, struct coff_sfile *sfile ATTRIBUTE_UNUSED,
+       int first)
 {
   struct coff_symbol *s;
 
@@ -1866,8 +1651,7 @@ wr_ed (ptr, sfile, first)
 }
 
 static void
-wr_unit_info (ptr)
-     struct coff_ofile *ptr;
+wr_unit_info (struct coff_ofile *ptr)
 {
   struct coff_sfile *sfile;
   int first = 1;
@@ -1894,8 +1678,7 @@ wr_unit_info (ptr)
 }
 
 static void
-wr_module (p)
-     struct coff_ofile *p;
+wr_module (struct coff_ofile *p)
 {
   wr_cs ();
   wr_hd (p);
@@ -1906,8 +1689,7 @@ wr_module (p)
 }
 
 static int
-align (x)
-     int x;
+align (int x)
 {
   return (x + 3) & ~3;
 }
@@ -1916,22 +1698,22 @@ align (x)
    ordinary defs - dunno why, but thats what hitachi does with 'em.  */
 
 static void
-prescan (tree)
-     struct coff_ofile *tree;
+prescan (struct coff_ofile *otree)
 {
   struct coff_symbol *s;
   struct coff_section *common_section;
 
   /* Find the common section - always section 3.  */
-  common_section = tree->sections + 3;
+  common_section = otree->sections + 3;
 
-  for (s = tree->symbol_list_head;
+  for (s = otree->symbol_list_head;
        s;
        s = s->next_in_ofile_list)
     {
       if (s->visible->type == coff_vis_common)
 	{
 	  struct coff_where *w = s->where;
+
 	  /*      s->visible->type = coff_vis_ext_def; leave it as common */
 	  common_section->size = align (common_section->size);
 	  w->offset = common_section->size + common_section->address;
@@ -1945,28 +1727,25 @@ prescan (tree)
 char *program_name;
 
 static void
-show_usage (file, status)
-     FILE *file;
-     int status;
+show_usage (FILE *ffile, int status)
 {
-  fprintf (file, _("Usage: %s [option(s)] in-file [out-file]\n"), program_name);
-  fprintf (file, _("Convert a COFF object file into a SYSROFF object file\n"));
-  fprintf (file, _(" The options are:\n\
-  -q --quick       (Obsolete - ignoerd)\n\
+  fprintf (ffile, _("Usage: %s [option(s)] in-file [out-file]\n"), program_name);
+  fprintf (ffile, _("Convert a COFF object file into a SYSROFF object file\n"));
+  fprintf (ffile, _(" The options are:\n\
+  -q --quick       (Obsolete - ignored)\n\
   -n --noprescan   Do not perform a scan to convert commons into defs\n\
   -d --debug       Display information about what is being done\n\
+  @<file>          Read options from <file>\n\
   -h --help        Display this information\n\
   -v --version     Print the program's version number\n"));
 
-  if (status == 0)
-    fprintf (file, _("Report bugs to %s\n"), REPORT_BUGS_TO);
+  if (REPORT_BUGS_TO[0] && status == 0)
+    fprintf (ffile, _("Report bugs to %s\n"), REPORT_BUGS_TO);
   exit (status);
 }
 
 int
-main (ac, av)
-     int ac;
-     char *av[];
+main (int ac, char **av)
 {
   int opt;
   static struct option long_options[] =
@@ -1993,6 +1772,8 @@ main (ac, av)
 
   program_name = av[0];
   xmalloc_set_program_name (program_name);
+
+  expandargv (&ac, &av);
 
   while ((opt = getopt_long (ac, av, "dHhVvqn", long_options,
 			     (int *) NULL))
@@ -2038,7 +1819,7 @@ main (ac, av)
 	  ++optind;
 	  if (optind < ac)
 	    show_usage (stderr, 1);
-	  if (strcmp (input_file, output_file) == 0)
+	  if (filename_cmp (input_file, output_file) == 0)
 	    {
 	      fatal (_("input and output files must be different"));
 	    }

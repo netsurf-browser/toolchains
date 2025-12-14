@@ -45,40 +45,42 @@
 #define Jxx_FUNC_RET		2
 #define Jxx_FUNC_JSR_COROUTINE	3
 
-#if 0
+/* *INDENT-OFF* */
 /* Here to document only.  We can't use this when cross compiling as
-   the bitfield layout might not be the same as native.  */
-typedef union
-  {
-    struct
-      {
-	unsigned other:26;
-	unsigned op_code:6;
-      }
-    a;				/* any format */
-    struct
-      {
-	int disp:21;
-	unsigned ra:5;
-	unsigned op_code:6;
-      }
-    b;				/* branch format */
-    struct
-      {
-	int hint:14;
-	unsigned func:2;
-	unsigned rb:5;
-	unsigned ra:5;
-	unsigned op_code:6;
-      }
-    j;				/* jump format */
-  }
-alpha_Instruction;
-#endif
+   the bitfield layout might not be the same as native.
+
+   typedef union
+     {
+       struct
+         {
+	   unsigned other:26;
+	   unsigned op_code:6;
+         }
+       a;				-- any format
+       struct
+         {
+	   int disp:21;
+	   unsigned ra:5;
+	   unsigned op_code:6;
+         }
+       b;				-- branch format
+       struct
+         {
+	   int hint:14;
+	   unsigned func:2;
+	   unsigned rb:5;
+	   unsigned ra:5;
+	   unsigned op_code:6;
+         }
+       j;				-- jump format
+     }
+    alpha_Instruction;
+*/
+/* *INDENT-ON* */
 
 static Sym indirect_child;
 
-void alpha_find_call PARAMS ((Sym *, bfd_vma, bfd_vma));
+void alpha_find_call (Sym *, bfd_vma, bfd_vma);
 
 /*
  * On the Alpha we can only detect PC relative calls, which are
@@ -88,10 +90,7 @@ void alpha_find_call PARAMS ((Sym *, bfd_vma, bfd_vma));
  *  potentially call integer division routines, for example.)
  */
 void
-alpha_find_call (parent, p_lowpc, p_highpc)
-     Sym *parent;
-     bfd_vma p_lowpc;
-     bfd_vma p_highpc;
+alpha_find_call (Sym *parent, bfd_vma p_lowpc, bfd_vma p_highpc)
 {
   bfd_vma pc, dest_pc;
   unsigned int insn;
@@ -105,18 +104,6 @@ alpha_find_call (parent, p_lowpc, p_highpc)
       indirect_child.cg.cyc.head = &indirect_child;
     }
 
-  if (!core_text_space)
-    {
-      return;
-    }
-  if (p_lowpc < s_lowpc)
-    {
-      p_lowpc = s_lowpc;
-    }
-  if (p_highpc > s_highpc)
-    {
-      p_highpc = s_highpc;
-    }
   DBG (CALLDEBUG, printf (_("[find_call] %s: 0x%lx to 0x%lx\n"),
 			  parent->name, (unsigned long) p_lowpc,
 			  (unsigned long) p_highpc));
@@ -158,20 +145,23 @@ alpha_find_call (parent, p_lowpc, p_highpc)
 	   */
 	  dest_pc = pc + 4 + (((bfd_signed_vma) (insn & 0x1fffff)
 			       ^ 0x100000) - 0x100000);
-	  if (dest_pc >= s_lowpc && dest_pc <= s_highpc)
+	  if (hist_check_address (dest_pc))
 	    {
 	      child = sym_lookup (&symtab, dest_pc);
-	      DBG (CALLDEBUG,
-		   printf (" 0x%lx\t; name=%s, addr=0x%lx",
-			   (unsigned long) dest_pc, child->name,
-			   (unsigned long) child->addr));
-	      if (child->addr == dest_pc || child->addr == dest_pc - 8)
-		{
-		  DBG (CALLDEBUG, printf ("\n"));
-		  /* a hit:  */
-		  arc_add (parent, child, (unsigned long) 0);
-		  continue;
-		}
+              if (child)
+                {
+	          DBG (CALLDEBUG,
+		       printf (" 0x%lx\t; name=%s, addr=0x%lx",
+			       (unsigned long) dest_pc, child->name,
+			       (unsigned long) child->addr));
+	          if (child->addr == dest_pc || child->addr == dest_pc - 8)
+		    {
+		      DBG (CALLDEBUG, printf ("\n"));
+		      /* a hit:  */
+		      arc_add (parent, child, (unsigned long) 0);
+		      continue;
+		    }
+                }
 	    }
 	  /*
 	   * Something funny going on.

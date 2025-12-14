@@ -26,8 +26,8 @@
  * OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF
  * SUCH DAMAGE.
  */
-#include "libiberty.h"
 #include "gprof.h"
+#include "libiberty.h"
 #include "search_list.h"
 #include "source.h"
 #include "symtab.h"
@@ -38,13 +38,13 @@
 #include "utils.h"
 #include "sym_ids.h"
 
-static int cmp_topo PARAMS ((const PTR, const PTR));
-static void propagate_time PARAMS ((Sym *));
-static void cycle_time PARAMS ((void));
-static void cycle_link PARAMS ((void));
-static void inherit_flags PARAMS ((Sym *));
-static void propagate_flags PARAMS ((Sym **));
-static int cmp_total PARAMS ((const PTR, const PTR));
+static int cmp_topo (const PTR, const PTR);
+static void propagate_time (Sym *);
+static void cycle_time (void);
+static void cycle_link (void);
+static void inherit_flags (Sym *);
+static void propagate_flags (Sym **);
+static int cmp_total (const PTR, const PTR);
 
 Sym *cycle_header;
 unsigned int num_cycles;
@@ -56,9 +56,7 @@ unsigned int numarcs;
  * range covered by CHILD.
  */
 Arc *
-arc_lookup (parent, child)
-     Sym *parent;
-     Sym *child;
+arc_lookup (Sym *parent, Sym *child)
 {
   Arc *arc;
 
@@ -87,10 +85,7 @@ arc_lookup (parent, child)
  * Add (or just increment) an arc:
  */
 void
-arc_add (parent, child, count)
-     Sym *parent;
-     Sym *child;
-     unsigned long count;
+arc_add (Sym *parent, Sym *child, unsigned long count)
 {
   static unsigned int maxarcs = 0;
   Arc *arc, **newarcs;
@@ -156,9 +151,7 @@ arc_add (parent, child, count)
 
 
 static int
-cmp_topo (lp, rp)
-     const PTR lp;
-     const PTR rp;
+cmp_topo (const PTR lp, const PTR rp)
 {
   const Sym *left = *(const Sym **) lp;
   const Sym *right = *(const Sym **) rp;
@@ -168,8 +161,7 @@ cmp_topo (lp, rp)
 
 
 static void
-propagate_time (parent)
-     Sym *parent;
+propagate_time (Sym *parent)
 {
   Arc *arc;
   Sym *child;
@@ -365,8 +357,7 @@ cycle_link ()
  * fractions from parents.
  */
 static void
-inherit_flags (child)
-     Sym *child;
+inherit_flags (Sym *child)
 {
   Sym *head, *parent, *member;
   Arc *arc;
@@ -444,16 +435,15 @@ inherit_flags (child)
  * and while we're here, sum time for functions.
  */
 static void
-propagate_flags (symbols)
-     Sym **symbols;
+propagate_flags (Sym **symbols)
 {
-  int index;
+  int sym_index;
   Sym *old_head, *child;
 
   old_head = 0;
-  for (index = symtab.len - 1; index >= 0; --index)
+  for (sym_index = symtab.len - 1; sym_index >= 0; --sym_index)
     {
-      child = symbols[index];
+      child = symbols[sym_index];
       /*
        * If we haven't done this function or cycle, inherit things
        * from parent.  This way, we are linear in the number of arcs
@@ -545,9 +535,7 @@ propagate_flags (symbols)
  * first.  All else being equal, compare by names.
  */
 static int
-cmp_total (lp, rp)
-     const PTR lp;
-     const PTR rp;
+cmp_total (const PTR lp, const PTR rp)
 {
   const Sym *left = *(const Sym **) lp;
   const Sym *right = *(const Sym **) rp;
@@ -599,23 +587,20 @@ cmp_total (lp, rp)
 }
 
 
-/*
- * Topologically sort the graph (collapsing cycles), and propagates
- * time bottom up and flags top down.
- */
+/* Topologically sort the graph (collapsing cycles), and propagates
+   time bottom up and flags top down.  */
+
 Sym **
-cg_assemble ()
+cg_assemble (void)
 {
   Sym *parent, **time_sorted_syms, **top_sorted_syms;
-  unsigned int index;
+  unsigned int sym_index;
   Arc *arc;
 
-  /*
-   * initialize various things:
-   *      zero out child times.
-   *      count self-recursive calls.
-   *      indicate that nothing is on cycles.
-   */
+  /* Initialize various things:
+       Zero out child times.
+       Count self-recursive calls.
+       Indicate that nothing is on cycles.  */
   for (parent = symtab.base; parent < symtab.limit; parent++)
     {
       parent->cg.child_time = 0.0;
@@ -638,80 +623,65 @@ cg_assemble ()
       parent->cg.cyc.head = parent;
       parent->cg.cyc.next = 0;
       if (ignore_direct_calls)
-	{
-	  find_call (parent, parent->addr, (parent + 1)->addr);
-	}
+	find_call (parent, parent->addr, (parent + 1)->addr);
     }
-  /*
-   * Topologically order things.  If any node is unnumbered, number
-   * it and any of its descendents.
-   */
+
+  /* Topologically order things.  If any node is unnumbered, number
+     it and any of its descendents.  */
   for (parent = symtab.base; parent < symtab.limit; parent++)
     {
       if (parent->cg.top_order == DFN_NAN)
-	{
-	  cg_dfn (parent);
-	}
+	cg_dfn (parent);
     }
 
-  /* link together nodes on the same cycle: */
+  /* Link together nodes on the same cycle.  */
   cycle_link ();
 
-  /* sort the symbol table in reverse topological order: */
+  /* Sort the symbol table in reverse topological order.  */
   top_sorted_syms = (Sym **) xmalloc (symtab.len * sizeof (Sym *));
-  for (index = 0; index < symtab.len; ++index)
-    {
-      top_sorted_syms[index] = &symtab.base[index];
-    }
+  for (sym_index = 0; sym_index < symtab.len; ++sym_index)
+    top_sorted_syms[sym_index] = &symtab.base[sym_index];
+
   qsort (top_sorted_syms, symtab.len, sizeof (Sym *), cmp_topo);
   DBG (DFNDEBUG,
        printf ("[cg_assemble] topological sort listing\n");
-       for (index = 0; index < symtab.len; ++index)
-       {
-       printf ("[cg_assemble] ");
-       printf ("%d:", top_sorted_syms[index]->cg.top_order);
-       print_name (top_sorted_syms[index]);
-       printf ("\n");
-       }
+       for (sym_index = 0; sym_index < symtab.len; ++sym_index)
+	 {
+	   printf ("[cg_assemble] ");
+	   printf ("%d:", top_sorted_syms[sym_index]->cg.top_order);
+	   print_name (top_sorted_syms[sym_index]);
+	   printf ("\n");
+	 }
   );
-  /*
-   * Starting from the topological top, propagate print flags to
-   * children.  also, calculate propagation fractions.  this happens
-   * before time propagation since time propagation uses the
-   * fractions.
-   */
+
+  /* Starting from the topological top, propagate print flags to
+     children.  also, calculate propagation fractions.  this happens
+     before time propagation since time propagation uses the
+     fractions.  */
   propagate_flags (top_sorted_syms);
 
-  /*
-   * Starting from the topological bottom, propogate children times
-   * up to parents.
-   */
+  /* Starting from the topological bottom, propogate children times
+     up to parents.  */
   cycle_time ();
-  for (index = 0; index < symtab.len; ++index)
-    {
-      propagate_time (top_sorted_syms[index]);
-    }
+  for (sym_index = 0; sym_index < symtab.len; ++sym_index)
+    propagate_time (top_sorted_syms[sym_index]);
 
   free (top_sorted_syms);
 
-  /*
-   * Now, sort by CG.PROP.SELF + CG.PROP.CHILD.  Sorting both the regular
-   * function names and cycle headers.
-   */
+  /* Now, sort by CG.PROP.SELF + CG.PROP.CHILD.  Sorting both the regular
+     function names and cycle headers.  */
   time_sorted_syms = (Sym **) xmalloc ((symtab.len + num_cycles) * sizeof (Sym *));
-  for (index = 0; index < symtab.len; index++)
-    {
-      time_sorted_syms[index] = &symtab.base[index];
-    }
-  for (index = 1; index <= num_cycles; index++)
-    {
-      time_sorted_syms[symtab.len + index - 1] = &cycle_header[index];
-    }
+  for (sym_index = 0; sym_index < symtab.len; sym_index++)
+    time_sorted_syms[sym_index] = &symtab.base[sym_index];
+
+  for (sym_index = 1; sym_index <= num_cycles; sym_index++)
+    time_sorted_syms[symtab.len + sym_index - 1] = &cycle_header[sym_index];
+
   qsort (time_sorted_syms, symtab.len + num_cycles, sizeof (Sym *),
 	 cmp_total);
-  for (index = 0; index < symtab.len + num_cycles; index++)
-    {
-      time_sorted_syms[index]->cg.index = index + 1;
-    }
+
+  for (sym_index = 0; sym_index < symtab.len + num_cycles; sym_index++)
+    time_sorted_syms[sym_index]->cg.index = sym_index + 1;
+
   return time_sorted_syms;
 }

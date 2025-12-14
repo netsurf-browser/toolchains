@@ -1,25 +1,26 @@
 /* Instruction building/extraction support for frv. -*- C -*-
 
-THIS FILE IS MACHINE GENERATED WITH CGEN: Cpu tools GENerator.
-- the resultant file is machine generated, cgen-ibld.in isn't
+   THIS FILE IS MACHINE GENERATED WITH CGEN: Cpu tools GENerator.
+   - the resultant file is machine generated, cgen-ibld.in isn't
 
-Copyright 1996, 1997, 1998, 1999, 2000, 2001 Free Software Foundation, Inc.
+   Copyright 1996, 1997, 1998, 1999, 2000, 2001, 2005, 2006, 2007,
+   2008, 2010  Free Software Foundation, Inc.
 
-This file is part of the GNU Binutils and GDB, the GNU debugger.
+   This file is part of libopcodes.
 
-This program is free software; you can redistribute it and/or modify
-it under the terms of the GNU General Public License as published by
-the Free Software Foundation; either version 2, or (at your option)
-any later version.
+   This library is free software; you can redistribute it and/or modify
+   it under the terms of the GNU General Public License as published by
+   the Free Software Foundation; either version 3, or (at your option)
+   any later version.
 
-This program is distributed in the hope that it will be useful,
-but WITHOUT ANY WARRANTY; without even the implied warranty of
-MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-GNU General Public License for more details.
+   It is distributed in the hope that it will be useful, but WITHOUT
+   ANY WARRANTY; without even the implied warranty of MERCHANTABILITY
+   or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU General Public
+   License for more details.
 
-You should have received a copy of the GNU General Public License
-along with this program; if not, write to the Free Software Foundation, Inc.,
-59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.  */
+   You should have received a copy of the GNU General Public License
+   along with this program; if not, write to the Free Software Foundation, Inc.,
+   51 Franklin Street - Fifth Floor, Boston, MA 02110-1301, USA.  */
 
 /* ??? Eventually more and more of this stuff can go to cpu-independent files.
    Keep that in mind.  */
@@ -32,42 +33,42 @@ along with this program; if not, write to the Free Software Foundation, Inc.,
 #include "symcat.h"
 #include "frv-desc.h"
 #include "frv-opc.h"
+#include "cgen/basic-modes.h"
 #include "opintl.h"
 #include "safe-ctype.h"
 
-#undef min
+#undef  min
 #define min(a,b) ((a) < (b) ? (a) : (b))
-#undef max
+#undef  max
 #define max(a,b) ((a) > (b) ? (a) : (b))
 
 /* Used by the ifield rtx function.  */
 #define FLD(f) (fields->f)
 
 static const char * insert_normal
-     PARAMS ((CGEN_CPU_DESC, long, unsigned int, unsigned int, unsigned int,
-	      unsigned int, unsigned int, unsigned int, CGEN_INSN_BYTES_PTR));
+  (CGEN_CPU_DESC, long, unsigned int, unsigned int, unsigned int,
+   unsigned int, unsigned int, unsigned int, CGEN_INSN_BYTES_PTR);
 static const char * insert_insn_normal
-     PARAMS ((CGEN_CPU_DESC, const CGEN_INSN *,
-	      CGEN_FIELDS *, CGEN_INSN_BYTES_PTR, bfd_vma));
+  (CGEN_CPU_DESC, const CGEN_INSN *,
+   CGEN_FIELDS *, CGEN_INSN_BYTES_PTR, bfd_vma);
 static int extract_normal
-     PARAMS ((CGEN_CPU_DESC, CGEN_EXTRACT_INFO *, CGEN_INSN_INT,
-	      unsigned int, unsigned int, unsigned int, unsigned int,
-	      unsigned int, unsigned int, bfd_vma, long *));
+  (CGEN_CPU_DESC, CGEN_EXTRACT_INFO *, CGEN_INSN_INT,
+   unsigned int, unsigned int, unsigned int, unsigned int,
+   unsigned int, unsigned int, bfd_vma, long *);
 static int extract_insn_normal
-     PARAMS ((CGEN_CPU_DESC, const CGEN_INSN *, CGEN_EXTRACT_INFO *,
-	      CGEN_INSN_INT, CGEN_FIELDS *, bfd_vma));
+  (CGEN_CPU_DESC, const CGEN_INSN *, CGEN_EXTRACT_INFO *,
+   CGEN_INSN_INT, CGEN_FIELDS *, bfd_vma);
 #if CGEN_INT_INSN_P
 static void put_insn_int_value
-     PARAMS ((CGEN_CPU_DESC, CGEN_INSN_BYTES_PTR, int, int, CGEN_INSN_INT));
+  (CGEN_CPU_DESC, CGEN_INSN_BYTES_PTR, int, int, CGEN_INSN_INT);
 #endif
 #if ! CGEN_INT_INSN_P
 static CGEN_INLINE void insert_1
-     PARAMS ((CGEN_CPU_DESC, unsigned long, int, int, int, unsigned char *));
+  (CGEN_CPU_DESC, unsigned long, int, int, int, unsigned char *);
 static CGEN_INLINE int fill_cache
-     PARAMS ((CGEN_CPU_DESC, CGEN_EXTRACT_INFO *,  int, int, bfd_vma));
+  (CGEN_CPU_DESC, CGEN_EXTRACT_INFO *,  int, int, bfd_vma);
 static CGEN_INLINE long extract_1
-     PARAMS ((CGEN_CPU_DESC, CGEN_EXTRACT_INFO *, int, int, int,
-	      unsigned char *, bfd_vma));
+  (CGEN_CPU_DESC, CGEN_EXTRACT_INFO *, int, int, int, unsigned char *, bfd_vma);
 #endif
 
 /* Operand insertion.  */
@@ -77,11 +78,12 @@ static CGEN_INLINE long extract_1
 /* Subroutine of insert_normal.  */
 
 static CGEN_INLINE void
-insert_1 (cd, value, start, length, word_length, bufp)
-     CGEN_CPU_DESC cd;
-     unsigned long value;
-     int start,length,word_length;
-     unsigned char *bufp;
+insert_1 (CGEN_CPU_DESC cd,
+	  unsigned long value,
+	  int start,
+	  int length,
+	  int word_length,
+	  unsigned char *bufp)
 {
   unsigned long x,mask;
   int shift;
@@ -118,13 +120,15 @@ insert_1 (cd, value, start, length, word_length, bufp)
    necessary.  */
 
 static const char *
-insert_normal (cd, value, attrs, word_offset, start, length, word_length,
-	       total_length, buffer)
-     CGEN_CPU_DESC cd;
-     long value;
-     unsigned int attrs;
-     unsigned int word_offset, start, length, word_length, total_length;
-     CGEN_INSN_BYTES_PTR buffer;
+insert_normal (CGEN_CPU_DESC cd,
+	       long value,
+	       unsigned int attrs,
+	       unsigned int word_offset,
+	       unsigned int start,
+	       unsigned int length,
+	       unsigned int word_length,
+	       unsigned int total_length,
+	       CGEN_INSN_BYTES_PTR buffer)
 {
   static char errbuf[100];
   /* Written this way to avoid undefined behaviour.  */
@@ -134,13 +138,7 @@ insert_normal (cd, value, attrs, word_offset, start, length, word_length,
   if (length == 0)
     return NULL;
 
-#if 0
-  if (CGEN_INT_INSN_P
-      && word_offset != 0)
-    abort ();
-#endif
-
-  if (word_length > 32)
+  if (word_length > 8 * sizeof (CGEN_INSN_INT))
     abort ();
 
   /* For architectures with insns smaller than the base-insn-bitsize,
@@ -171,13 +169,21 @@ insert_normal (cd, value, attrs, word_offset, start, length, word_length,
   else if (! CGEN_BOOL_ATTR (attrs, CGEN_IFLD_SIGNED))
     {
       unsigned long maxval = mask;
-      
-      if ((unsigned long) value > maxval)
+      unsigned long val = (unsigned long) value;
+
+      /* For hosts with a word size > 32 check to see if value has been sign
+	 extended beyond 32 bits.  If so then ignore these higher sign bits
+	 as the user is attempting to store a 32-bit signed value into an
+	 unsigned 32-bit field which is allowed.  */
+      if (sizeof (unsigned long) > 4 && ((value >> 32) == -1))
+	val &= 0xFFFFFFFF;
+
+      if (val > maxval)
 	{
 	  /* xgettext:c-format */
 	  sprintf (errbuf,
-		   _("operand out of range (%lu not between 0 and %lu)"),
-		   value, maxval);
+		   _("operand out of range (0x%lx not between 0 and 0x%lx)"),
+		   val, maxval);
 	  return errbuf;
 	}
     }
@@ -232,12 +238,11 @@ insert_normal (cd, value, attrs, word_offset, start, length, word_length,
    The result is an error message or NULL if success.  */
 
 static const char *
-insert_insn_normal (cd, insn, fields, buffer, pc)
-     CGEN_CPU_DESC cd;
-     const CGEN_INSN * insn;
-     CGEN_FIELDS * fields;
-     CGEN_INSN_BYTES_PTR buffer;
-     bfd_vma pc;
+insert_insn_normal (CGEN_CPU_DESC cd,
+		    const CGEN_INSN * insn,
+		    CGEN_FIELDS * fields,
+		    CGEN_INSN_BYTES_PTR buffer,
+		    bfd_vma pc)
 {
   const CGEN_SYNTAX *syntax = CGEN_INSN_SYNTAX (insn);
   unsigned long value;
@@ -285,15 +290,14 @@ insert_insn_normal (cd, insn, fields, buffer, pc)
 
 #if CGEN_INT_INSN_P
 /* Cover function to store an insn value into an integral insn.  Must go here
- because it needs <prefix>-desc.h for CGEN_INT_INSN_P.  */
+   because it needs <prefix>-desc.h for CGEN_INT_INSN_P.  */
 
 static void
-put_insn_int_value (cd, buf, length, insn_length, value)
-     CGEN_CPU_DESC cd ATTRIBUTE_UNUSED;
-     CGEN_INSN_BYTES_PTR buf;
-     int length;
-     int insn_length;
-     CGEN_INSN_INT value;
+put_insn_int_value (CGEN_CPU_DESC cd ATTRIBUTE_UNUSED,
+		    CGEN_INSN_BYTES_PTR buf,
+		    int length,
+		    int insn_length,
+		    CGEN_INSN_INT value)
 {
   /* For architectures with insns smaller than the base-insn-bitsize,
      length may be too big.  */
@@ -304,6 +308,7 @@ put_insn_int_value (cd, buf, length, insn_length, value)
       int shift = insn_length - length;
       /* Written this way to avoid undefined behaviour.  */
       CGEN_INSN_INT mask = (((1L << (length - 1)) - 1) << 1) | 1;
+
       *buf = (*buf & ~(mask << shift)) | ((value & mask) << shift);
     }
 }
@@ -320,11 +325,11 @@ put_insn_int_value (cd, buf, length, insn_length, value)
    Returns 1 for success, 0 for failure.  */
 
 static CGEN_INLINE int
-fill_cache (cd, ex_info, offset, bytes, pc)
-     CGEN_CPU_DESC cd ATTRIBUTE_UNUSED;
-     CGEN_EXTRACT_INFO *ex_info;
-     int offset, bytes;
-     bfd_vma pc;
+fill_cache (CGEN_CPU_DESC cd ATTRIBUTE_UNUSED,
+	    CGEN_EXTRACT_INFO *ex_info,
+	    int offset,
+	    int bytes,
+	    bfd_vma pc)
 {
   /* It's doubtful that the middle part has already been fetched so
      we don't optimize that case.  kiss.  */
@@ -364,18 +369,17 @@ fill_cache (cd, ex_info, offset, bytes, pc)
 /* Subroutine of extract_normal.  */
 
 static CGEN_INLINE long
-extract_1 (cd, ex_info, start, length, word_length, bufp, pc)
-     CGEN_CPU_DESC cd;
-     CGEN_EXTRACT_INFO *ex_info ATTRIBUTE_UNUSED;
-     int start,length,word_length;
-     unsigned char *bufp;
-     bfd_vma pc ATTRIBUTE_UNUSED;
+extract_1 (CGEN_CPU_DESC cd,
+	   CGEN_EXTRACT_INFO *ex_info ATTRIBUTE_UNUSED,
+	   int start,
+	   int length,
+	   int word_length,
+	   unsigned char *bufp,
+	   bfd_vma pc ATTRIBUTE_UNUSED)
 {
   unsigned long x;
   int shift;
-#if 0
-  int big_p = CGEN_CPU_INSN_ENDIAN (cd) == CGEN_ENDIAN_BIG;
-#endif
+
   x = cgen_get_insn_value (cd, bufp, word_length);
 
   if (CGEN_INSN_LSB0_P)
@@ -408,23 +412,25 @@ extract_1 (cd, ex_info, start, length, word_length, bufp, pc)
    necessary.  */
 
 static int
-extract_normal (cd, ex_info, insn_value, attrs, word_offset, start, length,
-		word_length, total_length, pc, valuep)
-     CGEN_CPU_DESC cd;
+extract_normal (CGEN_CPU_DESC cd,
 #if ! CGEN_INT_INSN_P
-     CGEN_EXTRACT_INFO *ex_info;
+		CGEN_EXTRACT_INFO *ex_info,
 #else
-     CGEN_EXTRACT_INFO *ex_info ATTRIBUTE_UNUSED;
+		CGEN_EXTRACT_INFO *ex_info ATTRIBUTE_UNUSED,
 #endif
-     CGEN_INSN_INT insn_value;
-     unsigned int attrs;
-     unsigned int word_offset, start, length, word_length, total_length;
+		CGEN_INSN_INT insn_value,
+		unsigned int attrs,
+		unsigned int word_offset,
+		unsigned int start,
+		unsigned int length,
+		unsigned int word_length,
+		unsigned int total_length,
 #if ! CGEN_INT_INSN_P
-     bfd_vma pc;
+		bfd_vma pc,
 #else
-     bfd_vma pc ATTRIBUTE_UNUSED;
+		bfd_vma pc ATTRIBUTE_UNUSED,
 #endif
-     long *valuep;
+		long *valuep)
 {
   long value, mask;
 
@@ -436,22 +442,15 @@ extract_normal (cd, ex_info, insn_value, attrs, word_offset, start, length,
       return 1;
     }
 
-#if 0
-  if (CGEN_INT_INSN_P
-      && word_offset != 0)
-    abort ();
-#endif
-
-  if (word_length > 32)
+  if (word_length > 8 * sizeof (CGEN_INSN_INT))
     abort ();
 
   /* For architectures with insns smaller than the insn-base-bitsize,
      word_length may be too big.  */
   if (cd->min_insn_bitsize < cd->base_insn_bitsize)
     {
-      if (word_offset == 0
-	  && word_length > total_length)
-	word_length = total_length;
+      if (word_offset + word_length > total_length)
+	word_length = total_length - word_offset;
     }
 
   /* Does the value reside in INSN_VALUE, and at the right alignment?  */
@@ -470,7 +469,7 @@ extract_normal (cd, ex_info, insn_value, attrs, word_offset, start, length,
     {
       unsigned char *bufp = ex_info->insn_bytes + word_offset / 8;
 
-      if (word_length > 32)
+      if (word_length > 8 * sizeof (CGEN_INSN_INT))
 	abort ();
 
       if (fill_cache (cd, ex_info, word_offset / 8, word_length / 8, pc) == 0)
@@ -505,13 +504,12 @@ extract_normal (cd, ex_info, insn_value, attrs, word_offset, start, length,
    been called).  */
 
 static int
-extract_insn_normal (cd, insn, ex_info, insn_value, fields, pc)
-     CGEN_CPU_DESC cd;
-     const CGEN_INSN *insn;
-     CGEN_EXTRACT_INFO *ex_info;
-     CGEN_INSN_INT insn_value;
-     CGEN_FIELDS *fields;
-     bfd_vma pc;
+extract_insn_normal (CGEN_CPU_DESC cd,
+		     const CGEN_INSN *insn,
+		     CGEN_EXTRACT_INFO *ex_info,
+		     CGEN_INSN_INT insn_value,
+		     CGEN_FIELDS *fields,
+		     bfd_vma pc)
 {
   const CGEN_SYNTAX *syntax = CGEN_INSN_SYNTAX (insn);
   const CGEN_SYNTAX_CHAR_TYPE *syn;
@@ -537,10 +535,10 @@ extract_insn_normal (cd, insn, ex_info, insn_value, fields, pc)
   return CGEN_INSN_BITSIZE (insn);
 }
 
-/* machine generated code added here */
+/* Machine generated code added here.  */
 
 const char * frv_cgen_insert_operand
-  PARAMS ((CGEN_CPU_DESC, int, CGEN_FIELDS *, CGEN_INSN_BYTES_PTR, bfd_vma));
+  (CGEN_CPU_DESC, int, CGEN_FIELDS *, CGEN_INSN_BYTES_PTR, bfd_vma);
 
 /* Main entry point for operand insertion.
 
@@ -557,19 +555,21 @@ const char * frv_cgen_insert_operand
    resolved during parsing.  */
 
 const char *
-frv_cgen_insert_operand (cd, opindex, fields, buffer, pc)
-     CGEN_CPU_DESC cd;
-     int opindex;
-     CGEN_FIELDS * fields;
-     CGEN_INSN_BYTES_PTR buffer;
-     bfd_vma pc ATTRIBUTE_UNUSED;
+frv_cgen_insert_operand (CGEN_CPU_DESC cd,
+			     int opindex,
+			     CGEN_FIELDS * fields,
+			     CGEN_INSN_BYTES_PTR buffer,
+			     bfd_vma pc ATTRIBUTE_UNUSED)
 {
   const char * errmsg = NULL;
   unsigned int total_length = CGEN_FIELDS_BITSIZE (fields);
 
   switch (opindex)
     {
-    case FRV_OPERAND_A :
+    case FRV_OPERAND_A0 :
+      errmsg = insert_normal (cd, fields->f_A, 0, 0, 17, 1, 32, total_length, buffer);
+      break;
+    case FRV_OPERAND_A1 :
       errmsg = insert_normal (cd, fields->f_A, 0, 0, 17, 1, 32, total_length, buffer);
       break;
     case FRV_OPERAND_ACC40SI :
@@ -651,10 +651,19 @@ frv_cgen_insert_operand (cd, opindex, fields, buffer, pc)
     case FRV_OPERAND_FRINTI :
       errmsg = insert_normal (cd, fields->f_FRi, 0, 0, 17, 6, 32, total_length, buffer);
       break;
+    case FRV_OPERAND_FRINTIEVEN :
+      errmsg = insert_normal (cd, fields->f_FRi, 0, 0, 17, 6, 32, total_length, buffer);
+      break;
     case FRV_OPERAND_FRINTJ :
       errmsg = insert_normal (cd, fields->f_FRj, 0, 0, 5, 6, 32, total_length, buffer);
       break;
+    case FRV_OPERAND_FRINTJEVEN :
+      errmsg = insert_normal (cd, fields->f_FRj, 0, 0, 5, 6, 32, total_length, buffer);
+      break;
     case FRV_OPERAND_FRINTK :
+      errmsg = insert_normal (cd, fields->f_FRk, 0, 0, 30, 6, 32, total_length, buffer);
+      break;
+    case FRV_OPERAND_FRINTKEVEN :
       errmsg = insert_normal (cd, fields->f_FRk, 0, 0, 30, 6, 32, total_length, buffer);
       break;
     case FRV_OPERAND_FRJ :
@@ -699,8 +708,26 @@ frv_cgen_insert_operand (cd, opindex, fields, buffer, pc)
     case FRV_OPERAND_LI :
       errmsg = insert_normal (cd, fields->f_LI, 0, 0, 25, 1, 32, total_length, buffer);
       break;
+    case FRV_OPERAND_LRAD :
+      errmsg = insert_normal (cd, fields->f_LRAD, 0, 0, 4, 1, 32, total_length, buffer);
+      break;
+    case FRV_OPERAND_LRAE :
+      errmsg = insert_normal (cd, fields->f_LRAE, 0, 0, 5, 1, 32, total_length, buffer);
+      break;
+    case FRV_OPERAND_LRAS :
+      errmsg = insert_normal (cd, fields->f_LRAS, 0, 0, 3, 1, 32, total_length, buffer);
+      break;
+    case FRV_OPERAND_TLBPRL :
+      errmsg = insert_normal (cd, fields->f_TLBPRL, 0, 0, 25, 1, 32, total_length, buffer);
+      break;
+    case FRV_OPERAND_TLBPROPX :
+      errmsg = insert_normal (cd, fields->f_TLBPRopx, 0, 0, 28, 3, 32, total_length, buffer);
+      break;
     case FRV_OPERAND_AE :
       errmsg = insert_normal (cd, fields->f_ae, 0, 0, 25, 1, 32, total_length, buffer);
+      break;
+    case FRV_OPERAND_CALLANN :
+      errmsg = insert_normal (cd, fields->f_reloc_ann, 0, 0, 0, 0, 32, total_length, buffer);
       break;
     case FRV_OPERAND_CCOND :
       errmsg = insert_normal (cd, fields->f_ccond, 0, 0, 12, 1, 32, total_length, buffer);
@@ -729,15 +756,15 @@ frv_cgen_insert_operand (cd, opindex, fields, buffer, pc)
     case FRV_OPERAND_LABEL16 :
       {
         long value = fields->f_label16;
-        value = ((int) (((value) - (pc))) >> (2));
+        value = ((SI) (((value) - (pc))) >> (2));
         errmsg = insert_normal (cd, value, 0|(1<<CGEN_IFLD_SIGNED)|(1<<CGEN_IFLD_PCREL_ADDR), 0, 15, 16, 32, total_length, buffer);
       }
       break;
     case FRV_OPERAND_LABEL24 :
       {
 {
-  FLD (f_labelH6) = ((int) (((FLD (f_label24)) - (pc))) >> (20));
-  FLD (f_labelL18) = ((((unsigned int) (((FLD (f_label24)) - (pc))) >> (2))) & (262143));
+  FLD (f_labelH6) = ((SI) (((FLD (f_label24)) - (pc))) >> (20));
+  FLD (f_labelL18) = ((((UINT) (((FLD (f_label24)) - (pc))) >> (2))) & (262143));
 }
         errmsg = insert_normal (cd, fields->f_labelH6, 0|(1<<CGEN_IFLD_SIGNED), 0, 30, 6, 32, total_length, buffer);
         if (errmsg)
@@ -746,6 +773,12 @@ frv_cgen_insert_operand (cd, opindex, fields, buffer, pc)
         if (errmsg)
           break;
       }
+      break;
+    case FRV_OPERAND_LDANN :
+      errmsg = insert_normal (cd, fields->f_reloc_ann, 0, 0, 0, 0, 32, total_length, buffer);
+      break;
+    case FRV_OPERAND_LDDANN :
+      errmsg = insert_normal (cd, fields->f_reloc_ann, 0, 0, 0, 0, 32, total_length, buffer);
       break;
     case FRV_OPERAND_LOCK :
       errmsg = insert_normal (cd, fields->f_lock, 0, 0, 25, 1, 32, total_length, buffer);
@@ -777,7 +810,7 @@ frv_cgen_insert_operand (cd, opindex, fields, buffer, pc)
     case FRV_OPERAND_SPR :
       {
 {
-  FLD (f_spr_h) = ((unsigned int) (FLD (f_spr)) >> (6));
+  FLD (f_spr_h) = ((UINT) (FLD (f_spr)) >> (6));
   FLD (f_spr_l) = ((FLD (f_spr)) & (63));
 }
         errmsg = insert_normal (cd, fields->f_spr_h, 0, 0, 30, 6, 32, total_length, buffer);
@@ -791,7 +824,7 @@ frv_cgen_insert_operand (cd, opindex, fields, buffer, pc)
     case FRV_OPERAND_U12 :
       {
 {
-  FLD (f_u12_h) = ((int) (FLD (f_u12)) >> (6));
+  FLD (f_u12_h) = ((SI) (FLD (f_u12)) >> (6));
   FLD (f_u12_l) = ((FLD (f_u12)) & (63));
 }
         errmsg = insert_normal (cd, fields->f_u12_h, 0|(1<<CGEN_IFLD_SIGNED), 0, 17, 6, 32, total_length, buffer);
@@ -826,8 +859,7 @@ frv_cgen_insert_operand (cd, opindex, fields, buffer, pc)
 }
 
 int frv_cgen_extract_operand
-  PARAMS ((CGEN_CPU_DESC, int, CGEN_EXTRACT_INFO *, CGEN_INSN_INT,
-           CGEN_FIELDS *, bfd_vma));
+  (CGEN_CPU_DESC, int, CGEN_EXTRACT_INFO *, CGEN_INSN_INT, CGEN_FIELDS *, bfd_vma);
 
 /* Main entry point for operand extraction.
    The result is <= 0 for error, >0 for success.
@@ -845,13 +877,12 @@ int frv_cgen_extract_operand
    the handlers.  */
 
 int
-frv_cgen_extract_operand (cd, opindex, ex_info, insn_value, fields, pc)
-     CGEN_CPU_DESC cd;
-     int opindex;
-     CGEN_EXTRACT_INFO *ex_info;
-     CGEN_INSN_INT insn_value;
-     CGEN_FIELDS * fields;
-     bfd_vma pc;
+frv_cgen_extract_operand (CGEN_CPU_DESC cd,
+			     int opindex,
+			     CGEN_EXTRACT_INFO *ex_info,
+			     CGEN_INSN_INT insn_value,
+			     CGEN_FIELDS * fields,
+			     bfd_vma pc)
 {
   /* Assume success (for those operands that are nops).  */
   int length = 1;
@@ -859,7 +890,10 @@ frv_cgen_extract_operand (cd, opindex, ex_info, insn_value, fields, pc)
 
   switch (opindex)
     {
-    case FRV_OPERAND_A :
+    case FRV_OPERAND_A0 :
+      length = extract_normal (cd, ex_info, insn_value, 0, 0, 17, 1, 32, total_length, pc, & fields->f_A);
+      break;
+    case FRV_OPERAND_A1 :
       length = extract_normal (cd, ex_info, insn_value, 0, 0, 17, 1, 32, total_length, pc, & fields->f_A);
       break;
     case FRV_OPERAND_ACC40SI :
@@ -942,10 +976,19 @@ frv_cgen_extract_operand (cd, opindex, ex_info, insn_value, fields, pc)
     case FRV_OPERAND_FRINTI :
       length = extract_normal (cd, ex_info, insn_value, 0, 0, 17, 6, 32, total_length, pc, & fields->f_FRi);
       break;
+    case FRV_OPERAND_FRINTIEVEN :
+      length = extract_normal (cd, ex_info, insn_value, 0, 0, 17, 6, 32, total_length, pc, & fields->f_FRi);
+      break;
     case FRV_OPERAND_FRINTJ :
       length = extract_normal (cd, ex_info, insn_value, 0, 0, 5, 6, 32, total_length, pc, & fields->f_FRj);
       break;
+    case FRV_OPERAND_FRINTJEVEN :
+      length = extract_normal (cd, ex_info, insn_value, 0, 0, 5, 6, 32, total_length, pc, & fields->f_FRj);
+      break;
     case FRV_OPERAND_FRINTK :
+      length = extract_normal (cd, ex_info, insn_value, 0, 0, 30, 6, 32, total_length, pc, & fields->f_FRk);
+      break;
+    case FRV_OPERAND_FRINTKEVEN :
       length = extract_normal (cd, ex_info, insn_value, 0, 0, 30, 6, 32, total_length, pc, & fields->f_FRk);
       break;
     case FRV_OPERAND_FRJ :
@@ -990,8 +1033,26 @@ frv_cgen_extract_operand (cd, opindex, ex_info, insn_value, fields, pc)
     case FRV_OPERAND_LI :
       length = extract_normal (cd, ex_info, insn_value, 0, 0, 25, 1, 32, total_length, pc, & fields->f_LI);
       break;
+    case FRV_OPERAND_LRAD :
+      length = extract_normal (cd, ex_info, insn_value, 0, 0, 4, 1, 32, total_length, pc, & fields->f_LRAD);
+      break;
+    case FRV_OPERAND_LRAE :
+      length = extract_normal (cd, ex_info, insn_value, 0, 0, 5, 1, 32, total_length, pc, & fields->f_LRAE);
+      break;
+    case FRV_OPERAND_LRAS :
+      length = extract_normal (cd, ex_info, insn_value, 0, 0, 3, 1, 32, total_length, pc, & fields->f_LRAS);
+      break;
+    case FRV_OPERAND_TLBPRL :
+      length = extract_normal (cd, ex_info, insn_value, 0, 0, 25, 1, 32, total_length, pc, & fields->f_TLBPRL);
+      break;
+    case FRV_OPERAND_TLBPROPX :
+      length = extract_normal (cd, ex_info, insn_value, 0, 0, 28, 3, 32, total_length, pc, & fields->f_TLBPRopx);
+      break;
     case FRV_OPERAND_AE :
       length = extract_normal (cd, ex_info, insn_value, 0, 0, 25, 1, 32, total_length, pc, & fields->f_ae);
+      break;
+    case FRV_OPERAND_CALLANN :
+      length = extract_normal (cd, ex_info, insn_value, 0, 0, 0, 0, 32, total_length, pc, & fields->f_reloc_ann);
       break;
     case FRV_OPERAND_CCOND :
       length = extract_normal (cd, ex_info, insn_value, 0, 0, 12, 1, 32, total_length, pc, & fields->f_ccond);
@@ -1035,6 +1096,12 @@ frv_cgen_extract_operand (cd, opindex, ex_info, insn_value, fields, pc)
   FLD (f_label24) = ((((((((FLD (f_labelH6)) << (18))) | (FLD (f_labelL18)))) << (2))) + (pc));
 }
       }
+      break;
+    case FRV_OPERAND_LDANN :
+      length = extract_normal (cd, ex_info, insn_value, 0, 0, 0, 0, 32, total_length, pc, & fields->f_reloc_ann);
+      break;
+    case FRV_OPERAND_LDDANN :
+      length = extract_normal (cd, ex_info, insn_value, 0, 0, 0, 0, 32, total_length, pc, & fields->f_reloc_ann);
       break;
     case FRV_OPERAND_LOCK :
       length = extract_normal (cd, ex_info, insn_value, 0, 0, 25, 1, 32, total_length, pc, & fields->f_lock);
@@ -1118,10 +1185,8 @@ cgen_extract_fn * const frv_cgen_extract_handlers[] =
   extract_insn_normal,
 };
 
-int frv_cgen_get_int_operand
-  PARAMS ((CGEN_CPU_DESC, int, const CGEN_FIELDS *));
-bfd_vma frv_cgen_get_vma_operand
-  PARAMS ((CGEN_CPU_DESC, int, const CGEN_FIELDS *));
+int frv_cgen_get_int_operand     (CGEN_CPU_DESC, int, const CGEN_FIELDS *);
+bfd_vma frv_cgen_get_vma_operand (CGEN_CPU_DESC, int, const CGEN_FIELDS *);
 
 /* Getting values from cgen_fields is handled by a collection of functions.
    They are distinguished by the type of the VALUE argument they return.
@@ -1129,16 +1194,18 @@ bfd_vma frv_cgen_get_vma_operand
    not appropriate.  */
 
 int
-frv_cgen_get_int_operand (cd, opindex, fields)
-     CGEN_CPU_DESC cd ATTRIBUTE_UNUSED;
-     int opindex;
-     const CGEN_FIELDS * fields;
+frv_cgen_get_int_operand (CGEN_CPU_DESC cd ATTRIBUTE_UNUSED,
+			     int opindex,
+			     const CGEN_FIELDS * fields)
 {
   int value;
 
   switch (opindex)
     {
-    case FRV_OPERAND_A :
+    case FRV_OPERAND_A0 :
+      value = fields->f_A;
+      break;
+    case FRV_OPERAND_A1 :
       value = fields->f_A;
       break;
     case FRV_OPERAND_ACC40SI :
@@ -1216,10 +1283,19 @@ frv_cgen_get_int_operand (cd, opindex, fields)
     case FRV_OPERAND_FRINTI :
       value = fields->f_FRi;
       break;
+    case FRV_OPERAND_FRINTIEVEN :
+      value = fields->f_FRi;
+      break;
     case FRV_OPERAND_FRINTJ :
       value = fields->f_FRj;
       break;
+    case FRV_OPERAND_FRINTJEVEN :
+      value = fields->f_FRj;
+      break;
     case FRV_OPERAND_FRINTK :
+      value = fields->f_FRk;
+      break;
+    case FRV_OPERAND_FRINTKEVEN :
       value = fields->f_FRk;
       break;
     case FRV_OPERAND_FRJ :
@@ -1264,8 +1340,26 @@ frv_cgen_get_int_operand (cd, opindex, fields)
     case FRV_OPERAND_LI :
       value = fields->f_LI;
       break;
+    case FRV_OPERAND_LRAD :
+      value = fields->f_LRAD;
+      break;
+    case FRV_OPERAND_LRAE :
+      value = fields->f_LRAE;
+      break;
+    case FRV_OPERAND_LRAS :
+      value = fields->f_LRAS;
+      break;
+    case FRV_OPERAND_TLBPRL :
+      value = fields->f_TLBPRL;
+      break;
+    case FRV_OPERAND_TLBPROPX :
+      value = fields->f_TLBPRopx;
+      break;
     case FRV_OPERAND_AE :
       value = fields->f_ae;
+      break;
+    case FRV_OPERAND_CALLANN :
+      value = fields->f_reloc_ann;
       break;
     case FRV_OPERAND_CCOND :
       value = fields->f_ccond;
@@ -1296,6 +1390,12 @@ frv_cgen_get_int_operand (cd, opindex, fields)
       break;
     case FRV_OPERAND_LABEL24 :
       value = fields->f_label24;
+      break;
+    case FRV_OPERAND_LDANN :
+      value = fields->f_reloc_ann;
+      break;
+    case FRV_OPERAND_LDDANN :
+      value = fields->f_reloc_ann;
       break;
     case FRV_OPERAND_LOCK :
       value = fields->f_lock;
@@ -1354,16 +1454,18 @@ frv_cgen_get_int_operand (cd, opindex, fields)
 }
 
 bfd_vma
-frv_cgen_get_vma_operand (cd, opindex, fields)
-     CGEN_CPU_DESC cd ATTRIBUTE_UNUSED;
-     int opindex;
-     const CGEN_FIELDS * fields;
+frv_cgen_get_vma_operand (CGEN_CPU_DESC cd ATTRIBUTE_UNUSED,
+			     int opindex,
+			     const CGEN_FIELDS * fields)
 {
   bfd_vma value;
 
   switch (opindex)
     {
-    case FRV_OPERAND_A :
+    case FRV_OPERAND_A0 :
+      value = fields->f_A;
+      break;
+    case FRV_OPERAND_A1 :
       value = fields->f_A;
       break;
     case FRV_OPERAND_ACC40SI :
@@ -1441,10 +1543,19 @@ frv_cgen_get_vma_operand (cd, opindex, fields)
     case FRV_OPERAND_FRINTI :
       value = fields->f_FRi;
       break;
+    case FRV_OPERAND_FRINTIEVEN :
+      value = fields->f_FRi;
+      break;
     case FRV_OPERAND_FRINTJ :
       value = fields->f_FRj;
       break;
+    case FRV_OPERAND_FRINTJEVEN :
+      value = fields->f_FRj;
+      break;
     case FRV_OPERAND_FRINTK :
+      value = fields->f_FRk;
+      break;
+    case FRV_OPERAND_FRINTKEVEN :
       value = fields->f_FRk;
       break;
     case FRV_OPERAND_FRJ :
@@ -1489,8 +1600,26 @@ frv_cgen_get_vma_operand (cd, opindex, fields)
     case FRV_OPERAND_LI :
       value = fields->f_LI;
       break;
+    case FRV_OPERAND_LRAD :
+      value = fields->f_LRAD;
+      break;
+    case FRV_OPERAND_LRAE :
+      value = fields->f_LRAE;
+      break;
+    case FRV_OPERAND_LRAS :
+      value = fields->f_LRAS;
+      break;
+    case FRV_OPERAND_TLBPRL :
+      value = fields->f_TLBPRL;
+      break;
+    case FRV_OPERAND_TLBPROPX :
+      value = fields->f_TLBPRopx;
+      break;
     case FRV_OPERAND_AE :
       value = fields->f_ae;
+      break;
+    case FRV_OPERAND_CALLANN :
+      value = fields->f_reloc_ann;
       break;
     case FRV_OPERAND_CCOND :
       value = fields->f_ccond;
@@ -1521,6 +1650,12 @@ frv_cgen_get_vma_operand (cd, opindex, fields)
       break;
     case FRV_OPERAND_LABEL24 :
       value = fields->f_label24;
+      break;
+    case FRV_OPERAND_LDANN :
+      value = fields->f_reloc_ann;
+      break;
+    case FRV_OPERAND_LDDANN :
+      value = fields->f_reloc_ann;
       break;
     case FRV_OPERAND_LOCK :
       value = fields->f_lock;
@@ -1578,10 +1713,8 @@ frv_cgen_get_vma_operand (cd, opindex, fields)
   return value;
 }
 
-void frv_cgen_set_int_operand
-  PARAMS ((CGEN_CPU_DESC, int, CGEN_FIELDS *, int));
-void frv_cgen_set_vma_operand
-  PARAMS ((CGEN_CPU_DESC, int, CGEN_FIELDS *, bfd_vma));
+void frv_cgen_set_int_operand  (CGEN_CPU_DESC, int, CGEN_FIELDS *, int);
+void frv_cgen_set_vma_operand  (CGEN_CPU_DESC, int, CGEN_FIELDS *, bfd_vma);
 
 /* Stuffing values in cgen_fields is handled by a collection of functions.
    They are distinguished by the type of the VALUE argument they accept.
@@ -1589,15 +1722,17 @@ void frv_cgen_set_vma_operand
    not appropriate.  */
 
 void
-frv_cgen_set_int_operand (cd, opindex, fields, value)
-     CGEN_CPU_DESC cd ATTRIBUTE_UNUSED;
-     int opindex;
-     CGEN_FIELDS * fields;
-     int value;
+frv_cgen_set_int_operand (CGEN_CPU_DESC cd ATTRIBUTE_UNUSED,
+			     int opindex,
+			     CGEN_FIELDS * fields,
+			     int value)
 {
   switch (opindex)
     {
-    case FRV_OPERAND_A :
+    case FRV_OPERAND_A0 :
+      fields->f_A = value;
+      break;
+    case FRV_OPERAND_A1 :
       fields->f_A = value;
       break;
     case FRV_OPERAND_ACC40SI :
@@ -1675,10 +1810,19 @@ frv_cgen_set_int_operand (cd, opindex, fields, value)
     case FRV_OPERAND_FRINTI :
       fields->f_FRi = value;
       break;
+    case FRV_OPERAND_FRINTIEVEN :
+      fields->f_FRi = value;
+      break;
     case FRV_OPERAND_FRINTJ :
       fields->f_FRj = value;
       break;
+    case FRV_OPERAND_FRINTJEVEN :
+      fields->f_FRj = value;
+      break;
     case FRV_OPERAND_FRINTK :
+      fields->f_FRk = value;
+      break;
+    case FRV_OPERAND_FRINTKEVEN :
       fields->f_FRk = value;
       break;
     case FRV_OPERAND_FRJ :
@@ -1723,8 +1867,26 @@ frv_cgen_set_int_operand (cd, opindex, fields, value)
     case FRV_OPERAND_LI :
       fields->f_LI = value;
       break;
+    case FRV_OPERAND_LRAD :
+      fields->f_LRAD = value;
+      break;
+    case FRV_OPERAND_LRAE :
+      fields->f_LRAE = value;
+      break;
+    case FRV_OPERAND_LRAS :
+      fields->f_LRAS = value;
+      break;
+    case FRV_OPERAND_TLBPRL :
+      fields->f_TLBPRL = value;
+      break;
+    case FRV_OPERAND_TLBPROPX :
+      fields->f_TLBPRopx = value;
+      break;
     case FRV_OPERAND_AE :
       fields->f_ae = value;
+      break;
+    case FRV_OPERAND_CALLANN :
+      fields->f_reloc_ann = value;
       break;
     case FRV_OPERAND_CCOND :
       fields->f_ccond = value;
@@ -1755,6 +1917,12 @@ frv_cgen_set_int_operand (cd, opindex, fields, value)
       break;
     case FRV_OPERAND_LABEL24 :
       fields->f_label24 = value;
+      break;
+    case FRV_OPERAND_LDANN :
+      fields->f_reloc_ann = value;
+      break;
+    case FRV_OPERAND_LDDANN :
+      fields->f_reloc_ann = value;
       break;
     case FRV_OPERAND_LOCK :
       fields->f_lock = value;
@@ -1811,15 +1979,17 @@ frv_cgen_set_int_operand (cd, opindex, fields, value)
 }
 
 void
-frv_cgen_set_vma_operand (cd, opindex, fields, value)
-     CGEN_CPU_DESC cd ATTRIBUTE_UNUSED;
-     int opindex;
-     CGEN_FIELDS * fields;
-     bfd_vma value;
+frv_cgen_set_vma_operand (CGEN_CPU_DESC cd ATTRIBUTE_UNUSED,
+			     int opindex,
+			     CGEN_FIELDS * fields,
+			     bfd_vma value)
 {
   switch (opindex)
     {
-    case FRV_OPERAND_A :
+    case FRV_OPERAND_A0 :
+      fields->f_A = value;
+      break;
+    case FRV_OPERAND_A1 :
       fields->f_A = value;
       break;
     case FRV_OPERAND_ACC40SI :
@@ -1897,10 +2067,19 @@ frv_cgen_set_vma_operand (cd, opindex, fields, value)
     case FRV_OPERAND_FRINTI :
       fields->f_FRi = value;
       break;
+    case FRV_OPERAND_FRINTIEVEN :
+      fields->f_FRi = value;
+      break;
     case FRV_OPERAND_FRINTJ :
       fields->f_FRj = value;
       break;
+    case FRV_OPERAND_FRINTJEVEN :
+      fields->f_FRj = value;
+      break;
     case FRV_OPERAND_FRINTK :
+      fields->f_FRk = value;
+      break;
+    case FRV_OPERAND_FRINTKEVEN :
       fields->f_FRk = value;
       break;
     case FRV_OPERAND_FRJ :
@@ -1945,8 +2124,26 @@ frv_cgen_set_vma_operand (cd, opindex, fields, value)
     case FRV_OPERAND_LI :
       fields->f_LI = value;
       break;
+    case FRV_OPERAND_LRAD :
+      fields->f_LRAD = value;
+      break;
+    case FRV_OPERAND_LRAE :
+      fields->f_LRAE = value;
+      break;
+    case FRV_OPERAND_LRAS :
+      fields->f_LRAS = value;
+      break;
+    case FRV_OPERAND_TLBPRL :
+      fields->f_TLBPRL = value;
+      break;
+    case FRV_OPERAND_TLBPROPX :
+      fields->f_TLBPRopx = value;
+      break;
     case FRV_OPERAND_AE :
       fields->f_ae = value;
+      break;
+    case FRV_OPERAND_CALLANN :
+      fields->f_reloc_ann = value;
       break;
     case FRV_OPERAND_CCOND :
       fields->f_ccond = value;
@@ -1977,6 +2174,12 @@ frv_cgen_set_vma_operand (cd, opindex, fields, value)
       break;
     case FRV_OPERAND_LABEL24 :
       fields->f_label24 = value;
+      break;
+    case FRV_OPERAND_LDANN :
+      fields->f_reloc_ann = value;
+      break;
+    case FRV_OPERAND_LDDANN :
+      fields->f_reloc_ann = value;
       break;
     case FRV_OPERAND_LOCK :
       fields->f_lock = value;
@@ -2035,8 +2238,7 @@ frv_cgen_set_vma_operand (cd, opindex, fields, value)
 /* Function to call before using the instruction builder tables.  */
 
 void
-frv_cgen_init_ibld_table (cd)
-     CGEN_CPU_DESC cd;
+frv_cgen_init_ibld_table (CGEN_CPU_DESC cd)
 {
   cd->insert_handlers = & frv_cgen_insert_handlers[0];
   cd->extract_handlers = & frv_cgen_extract_handlers[0];

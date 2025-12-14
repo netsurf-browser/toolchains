@@ -27,8 +27,9 @@
  * SUCH DAMAGE.
  */
 
-#include "libiberty.h"
 #include "gprof.h"
+#include "libiberty.h"
+#include "bfdver.h"
 #include "search_list.h"
 #include "source.h"
 #include "symtab.h"
@@ -44,12 +45,12 @@
 #include "demangle.h"
 #include "getopt.h"
 
-static void usage PARAMS ((FILE *, int)) ATTRIBUTE_NORETURN;
-int main PARAMS ((int, char **));
+static void usage (FILE *, int) ATTRIBUTE_NORETURN;
 
-const char *whoami;
-const char *function_mapping_file;
-const char *a_out_name = A_OUTNAME;
+const char * whoami;
+const char * function_mapping_file;
+static const char * external_symbol_table;
+const char * a_out_name = A_OUTNAME;
 long hz = HZ_WRONG;
 
 /*
@@ -60,7 +61,6 @@ int output_style = 0;
 int output_width = 80;
 bfd_boolean bsd_style_output = FALSE;
 bfd_boolean demangle = TRUE;
-bfd_boolean discard_underscores = TRUE;
 bfd_boolean ignore_direct_calls = FALSE;
 bfd_boolean ignore_static_funcs = FALSE;
 bfd_boolean ignore_zeros = TRUE;
@@ -78,8 +78,6 @@ char copyright[] =
 
 static char *gmon_name = GMONNAME;	/* profile filename */
 
-bfd *abfd;
-
 /*
  * Functions that get excluded by default:
  */
@@ -87,7 +85,6 @@ static char *default_excluded_list[] =
 {
   "_gprof_mcount", "mcount", "_mcount", "__mcount", "__mcount_internal",
   "__mcleanup",
-  "<locore>", "<hicore>",
   0
 };
 
@@ -102,6 +99,7 @@ static struct option long_options[] =
   {"line", no_argument, 0, 'l'},
   {"no-static", no_argument, 0, 'a'},
   {"ignore-non-functions", no_argument, 0, 'D'},
+  {"external-symbol-table", required_argument, 0, 'S'},
 
     /* output styles: */
 
@@ -156,12 +154,10 @@ static struct option long_options[] =
 
 
 static void
-usage (stream, status)
-     FILE *stream;
-     int status;
+usage (FILE *stream, int status)
 {
   fprintf (stream, _("\
-Usage: %s [-[abcDhilLsTvwxyz]] [-[ACeEfFJnNOpPqQZ][name]] [-I dirs]\n\
+Usage: %s [-[abcDhilLsTvwxyz]] [-[ACeEfFJnNOpPqSQZ][name]] [-I dirs]\n\
 	[-d[num]] [-k from/to] [-m min-count] [-t table-length]\n\
 	[--[no-]annotated-source[=name]] [--[no-]exec-counts[=name]]\n\
 	[--[no-]flat-profile[=name]] [--[no-]graph[=name]]\n\
@@ -172,19 +168,17 @@ Usage: %s [-[abcDhilLsTvwxyz]] [-[ACeEfFJnNOpPqQZ][name]] [-I dirs]\n\
 	[--no-static] [--print-path] [--separate-files]\n\
 	[--static-call-graph] [--sum] [--table-length=len] [--traditional]\n\
 	[--version] [--width=n] [--ignore-non-functions]\n\
-	[--demangle[=STYLE]] [--no-demangle]\n\
+	[--demangle[=STYLE]] [--no-demangle] [--external-symbol-table=name] [@FILE]\n\
 	[image-file] [profile-file...]\n"),
 	   whoami);
-  if (status == 0)
+  if (REPORT_BUGS_TO[0] && status == 0)
     fprintf (stream, _("Report bugs to %s\n"), REPORT_BUGS_TO);
   done (status);
 }
 
 
 int
-main (argc, argv)
-     int argc;
-     char **argv;
+main (int argc, char **argv)
 {
   char **sp, *str;
   Sym **cg = 0;
@@ -196,14 +190,18 @@ main (argc, argv)
 #if defined (HAVE_SETLOCALE)
   setlocale (LC_CTYPE, "");
 #endif
+#ifdef ENABLE_NLS
   bindtextdomain (PACKAGE, LOCALEDIR);
   textdomain (PACKAGE);
+#endif
 
   whoami = argv[0];
   xmalloc_set_program_name (whoami);
 
+  expandargv (&argc, &argv);
+
   while ((ch = getopt_long (argc, argv,
-	"aA::bBcCd::De:E:f:F:hiI:J::k:lLm:n::N::O:p::P::q::Q::st:Tvw:xyzZ::",
+	"aA::bBcC::d::De:E:f:F:hiI:J::k:lLm:n:N:O:p::P::q::Q::rR:sS:t:Tvw:xyzZ::",
 			    long_options, 0))
 	 != EOF)
     {
@@ -402,6 +400,10 @@ main (argc, argv)
 	  output_style |= STYLE_SUMMARY_FILE;
 	  user_specified |= STYLE_SUMMARY_FILE;
 	  break;
+	case 'S':
+	  external_symbol_table = optarg;
+	  DBG (AOUTDEBUG, printf ("external-symbol-table: %s\n", optarg));
+	  break;
 	case 't':
 	  bb_table_length = atoi (optarg);
 	  if (bb_table_length < 0)
@@ -414,7 +416,7 @@ main (argc, argv)
 	  break;
 	case 'v':
 	  /* This output is intended to follow the GNU standards document.  */
-	  printf (_("GNU gprof %s\n"), VERSION);
+	  printf (_("GNU gprof %s\n"), BFD_VERSION_STRING);
 	  printf (_("Based on BSD gprof, copyright 1983 Regents of the University of California.\n"));
 	  printf (_("\
 This program is free software.  This program has absolutely no warranty.\n"));
@@ -483,31 +485,23 @@ This program is free software.  This program has absolutely no warranty.\n"));
       done (1);
     }
 
-  /* --sum implies --line, otherwise we'd lose b-b counts in gmon.sum */
+  /* --sum implies --line, otherwise we'd lose basic block counts in
+       gmon.sum */
   if (output_style & STYLE_SUMMARY_FILE)
-    {
-      line_granularity = 1;
-    }
+    line_granularity = 1;
 
   /* append value of GPROF_PATH to source search list if set: */
   str = (char *) getenv ("GPROF_PATH");
   if (str)
-    {
-      search_list_append (&src_search_list, str);
-    }
+    search_list_append (&src_search_list, str);
 
   if (optind < argc)
-    {
-      a_out_name = argv[optind++];
-    }
-  if (optind < argc)
-    {
-      gmon_name = argv[optind++];
-    }
+    a_out_name = argv[optind++];
 
-  /*
-   * Turn off default functions:
-   */
+  if (optind < argc)
+    gmon_name = argv[optind++];
+
+  /* Turn off default functions.  */
   for (sp = &default_excluded_list[0]; *sp; sp++)
     {
       sym_id_add (*sp, EXCL_TIME);
@@ -515,107 +509,63 @@ This program is free software.  This program has absolutely no warranty.\n"));
       sym_id_add (*sp, EXCL_FLAT);
     }
 
-  /*
-   * For line-by-line profiling, also want to keep those
-   * functions off the flat profile:
-   */
-  if (line_granularity)
-    {
-      for (sp = &default_excluded_list[0]; *sp; sp++)
-	{
-	  sym_id_add (*sp, EXCL_FLAT);
-	}
-    }
-
-  /*
-   * Read symbol table from core file:
-   */
+  /* Read symbol table from core file.  */
   core_init (a_out_name);
 
-  /*
-   * If we should ignore direct function calls, we need to load
-   * to core's text-space:
-   */
+  /* If we should ignore direct function calls, we need to load to
+     core's text-space.  */
   if (ignore_direct_calls)
-    {
-      core_get_text_space (core_bfd);
-    }
+    core_get_text_space (core_bfd);
 
-  /*
-   * Create symbols from core image:
-   */
-  if (line_granularity)
-    {
-      core_create_line_syms (core_bfd);
-    }
+  /* Create symbols from core image.  */
+  if (external_symbol_table)
+    core_create_syms_from (external_symbol_table);
+  else if (line_granularity)
+    core_create_line_syms ();
   else
-    {
-      core_create_function_syms (core_bfd);
-    }
+    core_create_function_syms ();
 
-  /*
-   * Translate sym specs into syms:
-   */
+  /* Translate sym specs into syms.  */
   sym_id_parse ();
 
   if (file_format == FF_PROF)
     {
-#ifdef PROF_SUPPORT_IMPLEMENTED
-      /*
-       * Get information about mon.out file(s):
-       */
-      do
-	{
-	  mon_out_read (gmon_name);
-	  if (optind < argc)
-	    {
-	      gmon_name = argv[optind];
-	    }
-	}
-      while (optind++ < argc);
-#else
       fprintf (stderr,
 	       _("%s: sorry, file format `prof' is not yet supported\n"),
 	       whoami);
       done (1);
-#endif
     }
   else
     {
-      /*
-       * Get information about gmon.out file(s):
-       */
+      /* Get information about gmon.out file(s).  */
       do
 	{
 	  gmon_out_read (gmon_name);
 	  if (optind < argc)
-	    {
-	      gmon_name = argv[optind];
-	    }
+	    gmon_name = argv[optind];
 	}
       while (optind++ < argc);
     }
 
-  /*
-   * If user did not specify output style, try to guess something
-   * reasonable:
-   */
+  /* If user did not specify output style, try to guess something
+     reasonable.  */
   if (output_style == 0)
     {
       if (gmon_input & (INPUT_HISTOGRAM | INPUT_CALL_GRAPH))
 	{
-	  output_style = STYLE_FLAT_PROFILE | STYLE_CALL_GRAPH;
+	  if (gmon_input & INPUT_HISTOGRAM)
+	    output_style |= STYLE_FLAT_PROFILE;
+	  if (gmon_input & INPUT_CALL_GRAPH)
+	    output_style |= STYLE_CALL_GRAPH;
 	}
       else
-	{
-	  output_style = STYLE_EXEC_COUNTS;
-	}
+	output_style = STYLE_EXEC_COUNTS;
+
       output_style &= ~user_specified;
     }
 
-  /*
-   * Dump a gmon.sum file if requested (before any other processing!):
-   */
+  /* Dump a gmon.sum file if requested (before any other
+     processing!)  */
   if (output_style & STYLE_SUMMARY_FILE)
     {
       gmon_out_write (GMONSUM);
@@ -631,8 +581,7 @@ This program is free software.  This program has absolutely no warranty.\n"));
       cg = cg_assemble ();
     }
 
-  /* do some simple sanity checks: */
-
+  /* Do some simple sanity checks.  */
   if ((output_style & STYLE_FLAT_PROFILE)
       && !(gmon_input & INPUT_HISTOGRAM))
     {
@@ -647,50 +596,46 @@ This program is free software.  This program has absolutely no warranty.\n"));
       done (1);
     }
 
-  /* output whatever user whishes to see: */
-
+  /* Output whatever user whishes to see.  */
   if (cg && (output_style & STYLE_CALL_GRAPH) && bsd_style_output)
     {
-      cg_print (cg);		/* print the dynamic profile */
+      /* Print the dynamic profile.  */
+      cg_print (cg);
     }
 
   if (output_style & STYLE_FLAT_PROFILE)
     {
-      hist_print ();		/* print the flat profile */
+      /* Print the flat profile.  */
+      hist_print ();		
     }
 
   if (cg && (output_style & STYLE_CALL_GRAPH))
     {
       if (!bsd_style_output)
 	{
-	  cg_print (cg);	/* print the dynamic profile */
+	  /* Print the dynamic profile.  */
+	  cg_print (cg);	
 	}
       cg_print_index ();
     }
 
   if (output_style & STYLE_EXEC_COUNTS)
-    {
-      print_exec_counts ();
-    }
-
+    print_exec_counts ();
+  
   if (output_style & STYLE_ANNOTATED_SOURCE)
-    {
-      print_annotated_source ();
-    }
+    print_annotated_source ();
+  
   if (output_style & STYLE_FUNCTION_ORDER)
-    {
-      cg_print_function_ordering ();
-    }
+    cg_print_function_ordering ();
+  
   if (output_style & STYLE_FILE_ORDER)
-    {
-      cg_print_file_ordering ();
-    }
+    cg_print_file_ordering ();
+
   return 0;
 }
 
 void
-done (status)
-     int status;
+done (int status)
 {
   exit (status);
 }

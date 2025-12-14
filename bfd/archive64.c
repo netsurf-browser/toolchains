@@ -1,49 +1,47 @@
-/* MIPS-specific support for 64-bit ELF
-   Copyright 1996, 1997, 1998, 1999, 2000, 2001, 2002
-   Free Software Foundation, Inc.
+/* Support for 64-bit ELF archives.
+   Copyright 1996-2013 Free Software Foundation, Inc.
    Ian Lance Taylor, Cygnus Support
    Linker support added by Mark Mitchell, CodeSourcery, LLC.
    <mark@codesourcery.com>
 
-This file is part of BFD, the Binary File Descriptor library.
+   This file is part of BFD, the Binary File Descriptor library.
 
-This program is free software; you can redistribute it and/or modify
-it under the terms of the GNU General Public License as published by
-the Free Software Foundation; either version 2 of the License, or
-(at your option) any later version.
+   This program is free software; you can redistribute it and/or modify
+   it under the terms of the GNU General Public License as published by
+   the Free Software Foundation; either version 3 of the License, or
+   (at your option) any later version.
 
-This program is distributed in the hope that it will be useful,
-but WITHOUT ANY WARRANTY; without even the implied warranty of
-MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-GNU General Public License for more details.
+   This program is distributed in the hope that it will be useful,
+   but WITHOUT ANY WARRANTY; without even the implied warranty of
+   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+   GNU General Public License for more details.
 
-You should have received a copy of the GNU General Public License
-along with this program; if not, write to the Free Software
-Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.  */
+   You should have received a copy of the GNU General Public License
+   along with this program; if not, write to the Free Software
+   Foundation, Inc., 51 Franklin Street - Fifth Floor, Boston,
+   MA 02110-1301, USA.  */
 
 /* This file supports the 64-bit (MIPS) ELF archives.  */
 
-#include "bfd.h"
 #include "sysdep.h"
+#include "bfd.h"
 #include "libbfd.h"
 #include "aout/ar.h"
 
 /* Irix 6 defines a 64bit archive map format, so that they can
    have archives more than 4 GB in size.  */
 
-bfd_boolean bfd_elf64_archive_slurp_armap PARAMS ((bfd *));
+bfd_boolean bfd_elf64_archive_slurp_armap (bfd *);
 bfd_boolean bfd_elf64_archive_write_armap
-  PARAMS ((bfd *, unsigned int, struct orl *, unsigned int, int));
+  (bfd *, unsigned int, struct orl *, unsigned int, int);
 
 /* Read an Irix 6 armap.  */
 
 bfd_boolean
-bfd_elf64_archive_slurp_armap (abfd)
-     bfd *abfd;
+bfd_elf64_archive_slurp_armap (bfd *abfd)
 {
   struct artdata *ardata = bfd_ardata (abfd);
   char nextname[17];
-  file_ptr arhdrpos;
   bfd_size_type i, parsed_size, nsymz, stringsize, carsym_size, ptrsize;
   struct areltdata *mapdata;
   bfd_byte int_buf[8];
@@ -55,8 +53,7 @@ bfd_elf64_archive_slurp_armap (abfd)
   ardata->symdefs = NULL;
 
   /* Get the name of the first element.  */
-  arhdrpos = bfd_tell (abfd);
-  i = bfd_bread ((PTR) nextname, (bfd_size_type) 16, abfd);
+  i = bfd_bread (nextname, 16, abfd);
   if (i == 0)
     return TRUE;
   if (i != 16)
@@ -66,10 +63,10 @@ bfd_elf64_archive_slurp_armap (abfd)
     return FALSE;
 
   /* Archives with traditional armaps are still permitted.  */
-  if (strncmp (nextname, "/               ", 16) == 0)
+  if (CONST_STRNEQ (nextname, "/               "))
     return bfd_slurp_armap (abfd);
 
-  if (strncmp (nextname, "/SYM64/         ", 16) != 0)
+  if (! CONST_STRNEQ (nextname, "/SYM64/         "))
     {
       bfd_has_map (abfd) = FALSE;
       return TRUE;
@@ -79,9 +76,9 @@ bfd_elf64_archive_slurp_armap (abfd)
   if (mapdata == NULL)
     return FALSE;
   parsed_size = mapdata->parsed_size;
-  bfd_release (abfd, (PTR) mapdata);
+  free (mapdata);
 
-  if (bfd_bread (int_buf, (bfd_size_type) 8, abfd) != 8)
+  if (bfd_bread (int_buf, 8, abfd) != 8)
     {
       if (bfd_get_error () != bfd_error_system_call)
 	bfd_set_error (bfd_error_malformed_archive);
@@ -95,7 +92,7 @@ bfd_elf64_archive_slurp_armap (abfd)
   ptrsize = 8 * nsymz;
 
   amt = carsym_size + stringsize + 1;
-  ardata->symdefs = (carsym *) bfd_zalloc (abfd, amt);
+  ardata->symdefs = (struct carsym *) bfd_zalloc (abfd, amt);
   if (ardata->symdefs == NULL)
     return FALSE;
   carsyms = ardata->symdefs;
@@ -144,12 +141,11 @@ release_symdefs:
    linker crashes.  */
 
 bfd_boolean
-bfd_elf64_archive_write_armap (arch, elength, map, symbol_count, stridx)
-     bfd *arch;
-     unsigned int elength;
-     struct orl *map;
-     unsigned int symbol_count;
-     int stridx;
+bfd_elf64_archive_write_armap (bfd *arch,
+			       unsigned int elength,
+			       struct orl *map,
+			       unsigned int symbol_count,
+			       int stridx)
 {
   unsigned int ranlibsize = (symbol_count * 8) + 8;
   unsigned int stringsize = stridx;
@@ -172,8 +168,8 @@ bfd_elf64_archive_write_armap (arch, elength, map, symbol_count, stridx)
 
   memset (&hdr, ' ', sizeof (struct ar_hdr));
   memcpy (hdr.ar_name, "/SYM64/", strlen ("/SYM64/"));
-  _bfd_ar_spacepad (hdr.ar_size, sizeof (hdr.ar_size), "%-10ld",
-                    mapsize);
+  if (!_bfd_ar_sizepad (hdr.ar_size, sizeof (hdr.ar_size), mapsize))
+    return FALSE;
   _bfd_ar_spacepad (hdr.ar_date, sizeof (hdr.ar_date), "%ld",
                     time (NULL));
   /* This, at least, is what Intel coff sets the values to.: */
@@ -184,12 +180,12 @@ bfd_elf64_archive_write_armap (arch, elength, map, symbol_count, stridx)
 
   /* Write the ar header for this item and the number of symbols */
 
-  if (bfd_bwrite ((PTR) &hdr, (bfd_size_type) sizeof (struct ar_hdr), arch)
+  if (bfd_bwrite (&hdr, sizeof (struct ar_hdr), arch)
       != sizeof (struct ar_hdr))
     return FALSE;
 
   bfd_putb64 ((bfd_vma) symbol_count, buf);
-  if (bfd_bwrite (buf, (bfd_size_type) 8, arch) != 8)
+  if (bfd_bwrite (buf, 8, arch) != 8)
     return FALSE;
 
   /* Two passes, first write the file offsets for each symbol -
@@ -197,27 +193,29 @@ bfd_elf64_archive_write_armap (arch, elength, map, symbol_count, stridx)
 
   /* Write out the file offset for the file associated with each
      symbol, and remember to keep the offsets padded out.  */
-
-  current = arch->archive_head;
   count = 0;
-  while (current != (bfd *) NULL && count < symbol_count)
+  for (current = arch->archive_head;
+       current != NULL && count < symbol_count;
+       current = current->archive_next)
     {
       /* For each symbol which is used defined in this object, write out
-	 the object file's address in the archive */
+	 the object file's address in the archive.  */
 
-      while (map[count].u.abfd == current)
+      for (;
+	   count < symbol_count && map[count].u.abfd == current;
+	   count++)
 	{
 	  bfd_putb64 ((bfd_vma) archive_member_file_ptr, buf);
-	  if (bfd_bwrite (buf, (bfd_size_type) 8, arch) != 8)
+	  if (bfd_bwrite (buf, 8, arch) != 8)
 	    return FALSE;
-	  count++;
 	}
+
       /* Add size of this archive entry */
-      archive_member_file_ptr += (arelt_size (current)
-				  + sizeof (struct ar_hdr));
+      archive_member_file_ptr += sizeof (struct ar_hdr);
+      if (! bfd_is_thin_archive (arch))
+	archive_member_file_ptr += arelt_size (current);
       /* remember about the even alignment */
       archive_member_file_ptr += archive_member_file_ptr % 2;
-      current = current->next;
     }
 
   /* now write the strings themselves */
@@ -225,7 +223,7 @@ bfd_elf64_archive_write_armap (arch, elength, map, symbol_count, stridx)
     {
       size_t len = strlen (*map[count].name) + 1;
 
-      if (bfd_bwrite (*map[count].name, (bfd_size_type) len, arch) != len)
+      if (bfd_bwrite (*map[count].name, len, arch) != len)
 	return FALSE;
     }
 
@@ -233,7 +231,7 @@ bfd_elf64_archive_write_armap (arch, elength, map, symbol_count, stridx)
      However, the Irix 6.2 tools do not appear to do this.  */
   while (padding != 0)
     {
-      if (bfd_bwrite ("", (bfd_size_type) 1, arch) != 1)
+      if (bfd_bwrite ("", 1, arch) != 1)
 	return FALSE;
       --padding;
     }

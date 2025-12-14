@@ -1,12 +1,11 @@
-# Copyright 2002 Free Software Foundation, Inc.
-#   Written by Mitch Lichtenberg <mpl@broadcom.com> and
-#   Chris Demetriou <cgd@broadcom.com> based on m68kelf.em and mipsecoff.em.
+# This shell script emits a C file. -*- C -*-
+#   Copyright 2004, 2006, 2007, 2008 Free Software Foundation, Inc.
 #
-# This file is part of GLD, the Gnu Linker.
+# This file is part of the GNU Binutils.
 #
 # This program is free software; you can redistribute it and/or modify
 # it under the terms of the GNU General Public License as published by
-# the Free Software Foundation; either version 2 of the License, or
+# the Free Software Foundation; either version 3 of the License, or
 # (at your option) any later version.
 #
 # This program is distributed in the hope that it will be useful,
@@ -16,168 +15,272 @@
 #
 # You should have received a copy of the GNU General Public License
 # along with this program; if not, write to the Free Software
-# Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
-# This shell script emits a C file. -*- C -*-
+# Foundation, Inc., 51 Franklin Street - Fifth Floor, Boston,
+# MA 02110-1301, USA.
 
+fragment <<EOF
 
-# This file is sourced from elf32.em, and defines some extra routines for m68k
-# embedded systems using ELF and for some other systems using m68k ELF.  While
-# it is sourced from elf32.em for all m68k ELF configurations, here we include
-# only the features we want depending on the configuration.
+#include "ldctor.h"
+#include "elf/mips.h"
+#include "elfxx-mips.h"
 
-case ${target} in
-  mips*-*-elf)
-    echo "#define SUPPORT_EMBEDDED_RELOCS" >>e${EMULATION_NAME}.c
-    ;;
-esac
+#define is_mips_elf(bfd)				\
+  (bfd_get_flavour (bfd) == bfd_target_elf_flavour	\
+   && elf_tdata (bfd) != NULL				\
+   && elf_object_id (bfd) == MIPS_ELF_DATA)
 
-cat >>e${EMULATION_NAME}.c <<EOF
+/* Fake input file for stubs.  */
+static lang_input_statement_type *stub_file;
+static bfd *stub_bfd;
 
-static void mips_elf${ELFSIZE}_after_open PARAMS ((void));
-#ifdef SUPPORT_EMBEDDED_RELOCS
-static void mips_elf${ELFSIZE}_check_sections PARAMS ((bfd *, asection *,
-						       PTR));
-#endif
-static void mips_elf${ELFSIZE}_after_allocation PARAMS ((void));
-
-/* This function is run after all the input files have been opened.  */
+static bfd_boolean insn32;
 
 static void
-mips_elf${ELFSIZE}_after_open()
+mips_after_parse (void)
 {
-  /* Call the standard elf routine.  */
-  gld${EMULATION_NAME}_after_open ();
-
-#ifdef SUPPORT_EMBEDDED_RELOCS
-  if (command_line.embedded_relocs && (! link_info.relocateable))
-    {  
-      bfd *abfd;
-
-      /* In the embedded relocs mode we create a .rel.sdata section for
-	 each input file with a .sdata section which has has
-	 relocations.  The BFD backend will fill in these sections
-	 with magic numbers which can be used to relocate the data
-	 section at run time.  */
-      for (abfd = link_info.input_bfds; abfd != NULL; abfd = abfd->link_next)
-        {
-          asection *datasec;
-
-	  /* As first-order business, make sure that each input BFD is
-	     ELF.  We need to call a special BFD backend function to
-	     generate the embedded relocs, and we have that function
-	     only for ELF */
-
-          if (bfd_get_flavour (abfd) != bfd_target_elf_flavour)
-	    einfo ("%F%B: all input objects must be ELF for --embedded-relocs\n");
-
-	  if (bfd_get_arch_size (abfd) != ${ELFSIZE})
-	    einfo ("%F%B: all input objects must be ${ELFSIZE}-bit ELF for --embedded-relocs\n");
-
-          datasec = bfd_get_section_by_name (abfd, ".sdata");
-  
-          /* Note that we assume that the reloc_count field has already
-             been set up.  We could call bfd_get_reloc_upper_bound, but
-             that returns the size of a memory buffer rather than a reloc
-             count.  We do not want to call bfd_canonicalize_reloc,
-             because although it would always work it would force us to
-             read in the relocs into BFD canonical form, which would waste
-             a significant amount of time and memory.  */
-
-          if (datasec != NULL && datasec->reloc_count > 0)
- 	    {
-              asection *relsec;
- 
-	      relsec = bfd_make_section (abfd, ".rel.sdata");
-	      if (relsec == NULL
-	          || ! bfd_set_section_flags (abfd, relsec,
-					      (SEC_ALLOC
-					       | SEC_LOAD
-					       | SEC_HAS_CONTENTS
-					       | SEC_IN_MEMORY))
-                  || ! bfd_set_section_alignment (abfd, relsec,
-						  (${ELFSIZE} == 32) ? 2 : 3)
-	          || ! bfd_set_section_size (abfd, relsec,
-		  			     datasec->reloc_count
-					     * ((${ELFSIZE} / 8) + 8)))
-	        einfo ("%F%B: cannot create .rel.sdata section: %E\n");
-	    }
-
-          /* Double check that all other data sections have no relocs,
-             as is required for embedded PIC code.  */
-          bfd_map_over_sections (abfd, mips_elf${ELFSIZE}_check_sections,
-				 (PTR) datasec);
-        }
-    }
-#endif /* SUPPORT_EMBEDDED_RELOCS */
-}
-
-#ifdef SUPPORT_EMBEDDED_RELOCS
-/* Check that of the data sections, only the .sdata section has
-   relocs.  This is called via bfd_map_over_sections.  */
-
-static void
-mips_elf${ELFSIZE}_check_sections (abfd, sec, sdatasec)
-     bfd *abfd;
-     asection *sec;
-     PTR sdatasec;
-{
-  if ((bfd_get_section_flags (abfd, sec) & SEC_DATA)
-      && sec != (asection *) sdatasec
-      && sec->reloc_count != 0)
-    einfo ("%B%X: section %s has relocs; cannot use --embedded-relocs\n",
-	   abfd, bfd_get_section_name (abfd, sec));
-}
-#endif /* SUPPORT_EMBEDDED_RELOCS */
-
-/* This function is called after the section sizes and offsets have
-   been set.  If we are generating embedded relocs, it calls a special
-   BFD backend routine to do the work.  */
-
-static void
-mips_elf${ELFSIZE}_after_allocation ()
-{
-  /* Call the standard elf routine.  */
-  after_allocation_default ();
-
-#ifdef SUPPORT_EMBEDDED_RELOCS
-  if (command_line.embedded_relocs && (! link_info.relocateable))
+  /* .gnu.hash and the MIPS ABI require .dynsym to be sorted in different
+     ways.  .gnu.hash needs symbols to be grouped by hash code whereas the
+     MIPS ABI requires a mapping between the GOT and the symbol table.  */
+  if (link_info.emit_gnu_hash)
     {
-      bfd *abfd;
-      
-      for (abfd = link_info.input_bfds; abfd != NULL; abfd = abfd->link_next)
+      einfo ("%X%P: .gnu.hash is incompatible with the MIPS ABI\n");
+      link_info.emit_hash = TRUE;
+      link_info.emit_gnu_hash = FALSE;
+    }
+  after_parse_default ();
+}
+
+struct hook_stub_info
+{
+  lang_statement_list_type add;
+  asection *input_section;
+};
+
+/* Traverse the linker tree to find the spot where the stub goes.  */
+
+static bfd_boolean
+hook_in_stub (struct hook_stub_info *info, lang_statement_union_type **lp)
+{
+  lang_statement_union_type *l;
+  bfd_boolean ret;
+
+  for (; (l = *lp) != NULL; lp = &l->header.next)
+    {
+      switch (l->header.type)
 	{
-	  asection *datasec, *relsec;
-	  char *errmsg;
+	case lang_constructors_statement_enum:
+	  ret = hook_in_stub (info, &constructor_list.head);
+	  if (ret)
+	    return ret;
+	  break;
 
-	  datasec = bfd_get_section_by_name (abfd, ".sdata");
+	case lang_output_section_statement_enum:
+	  ret = hook_in_stub (info,
+			      &l->output_section_statement.children.head);
+	  if (ret)
+	    return ret;
+	  break;
 
-	  if (datasec == NULL || datasec->reloc_count == 0)
-	    continue;
+	case lang_wild_statement_enum:
+	  ret = hook_in_stub (info, &l->wild_statement.children.head);
+	  if (ret)
+	    return ret;
+	  break;
 
-	  relsec = bfd_get_section_by_name (abfd, ".rel.sdata");
-	  ASSERT (relsec != NULL);
+	case lang_group_statement_enum:
+	  ret = hook_in_stub (info, &l->group_statement.children.head);
+	  if (ret)
+	    return ret;
+	  break;
 
-	  if (! bfd_mips_elf${ELFSIZE}_create_embedded_relocs (abfd,
-							       &link_info,
-							       datasec,
-							       relsec,
-							       &errmsg))
+	case lang_input_section_enum:
+	  if (info->input_section == NULL
+	      || l->input_section.section == info->input_section)
 	    {
-	      if (errmsg == NULL)
-		einfo ("%B%X: can not create runtime reloc information: %E\n",
-		       abfd);
-	      else
-		einfo ("%X%B: can not create runtime reloc information: %s\n",
-		       abfd, errmsg);
+	      /* We've found our section.  Insert the stub immediately
+		 before its associated input section.  */
+	      *lp = info->add.head;
+	      *(info->add.tail) = l;
+	      return TRUE;
 	    }
+	  break;
+
+	case lang_data_statement_enum:
+	case lang_reloc_statement_enum:
+	case lang_object_symbols_statement_enum:
+	case lang_output_statement_enum:
+	case lang_target_statement_enum:
+	case lang_input_statement_enum:
+	case lang_assignment_statement_enum:
+	case lang_padding_statement_enum:
+	case lang_address_statement_enum:
+	case lang_fill_statement_enum:
+	  break;
+
+	default:
+	  FAIL ();
+	  break;
 	}
     }
-#endif /* SUPPORT_EMBEDDED_RELOCS */
+  return FALSE;
 }
+
+/* Create a new stub section called STUB_SEC_NAME and arrange for it to
+   be linked in OUTPUT_SECTION.  The section should go at the beginning of
+   OUTPUT_SECTION if INPUT_SECTION is null, otherwise it must go immediately
+   before INPUT_SECTION.  */
+
+static asection *
+mips_add_stub_section (const char *stub_sec_name, asection *input_section,
+		       asection *output_section)
+{
+  asection *stub_sec;
+  flagword flags;
+  const char *secname;
+  lang_output_section_statement_type *os;
+  struct hook_stub_info info;
+
+  /* PR 12845: If the input section has been garbage collected it will
+     not have its output section set to *ABS*.  */
+  if (bfd_is_abs_section (output_section))
+    return NULL;
+
+  /* Create the stub file, if we haven't already.  */
+  if (stub_file == NULL)
+    {
+      stub_file = lang_add_input_file ("linker stubs",
+				       lang_input_file_is_fake_enum,
+				       NULL);
+      stub_bfd = bfd_create ("linker stubs", link_info.output_bfd);
+      if (stub_bfd == NULL
+	  || !bfd_set_arch_mach (stub_bfd,
+				 bfd_get_arch (link_info.output_bfd),
+				 bfd_get_mach (link_info.output_bfd)))
+	{
+	  einfo ("%F%P: can not create BFD %E\n");
+	  return NULL;
+	}
+      stub_bfd->flags |= BFD_LINKER_CREATED;
+      stub_file->the_bfd = stub_bfd;
+      ldlang_add_file (stub_file);
+    }
+
+  /* Create the section.  */
+  stub_sec = bfd_make_section_anyway (stub_bfd, stub_sec_name);
+  if (stub_sec == NULL)
+    goto err_ret;
+
+  /* Set the flags.  */
+  flags = (SEC_ALLOC | SEC_LOAD | SEC_READONLY | SEC_CODE
+	   | SEC_HAS_CONTENTS | SEC_IN_MEMORY | SEC_KEEP);
+  if (!bfd_set_section_flags (stub_bfd, stub_sec, flags))
+    goto err_ret;
+
+  /* Create an output section statement.  */
+  secname = bfd_get_section_name (output_section->owner, output_section);
+  os = lang_output_section_find (secname);
+
+  /* Initialize a statement list that contains only the new statement.  */
+  lang_list_init (&info.add);
+  lang_add_section (&info.add, stub_sec, NULL, os);
+  if (info.add.head == NULL)
+    goto err_ret;
+
+  /* Insert the new statement in the appropriate place.  */
+  info.input_section = input_section;
+  if (hook_in_stub (&info, &os->children.head))
+    return stub_sec;
+
+ err_ret:
+  einfo ("%X%P: can not make stub section: %E\n");
+  return NULL;
+}
+
+/* This is called before the input files are opened.  */
+
+static void
+mips_create_output_section_statements (void)
+{
+  struct elf_link_hash_table *htab;
+
+  htab = elf_hash_table (&link_info);
+  if (is_elf_hash_table (htab) && is_mips_elf (link_info.output_bfd))
+    _bfd_mips_elf_insn32 (&link_info, insn32);
+
+  if (is_mips_elf (link_info.output_bfd))
+    _bfd_mips_elf_init_stubs (&link_info, mips_add_stub_section);
+}
+
+/* This is called after we have merged the private data of the input bfds.  */
+
+static void
+mips_before_allocation (void)
+{
+  flagword flags;
+
+  flags = elf_elfheader (link_info.output_bfd)->e_flags;
+  if (!link_info.shared
+      && !link_info.nocopyreloc
+      && (flags & (EF_MIPS_PIC | EF_MIPS_CPIC)) == EF_MIPS_CPIC)
+    _bfd_mips_elf_use_plts_and_copy_relocs (&link_info);
+
+  gld${EMULATION_NAME}_before_allocation ();
+}
+
+/* Avoid processing the fake stub_file in vercheck, stat_needed and
+   check_needed routines.  */
+
+static void (*real_func) (lang_input_statement_type *);
+
+static void mips_for_each_input_file_wrapper (lang_input_statement_type *l)
+{
+  if (l != stub_file)
+    (*real_func) (l);
+}
+
+static void
+mips_lang_for_each_input_file (void (*func) (lang_input_statement_type *))
+{
+  real_func = func;
+  lang_for_each_input_file (&mips_for_each_input_file_wrapper);
+}
+
+#define lang_for_each_input_file mips_lang_for_each_input_file
 
 EOF
 
-# We have our own after_open and after_allocation functions, but they call
-# the standard routines, so give them a different name.
-LDEMUL_AFTER_OPEN=mips_elf${ELFSIZE}_after_open
-LDEMUL_AFTER_ALLOCATION=mips_elf${ELFSIZE}_after_allocation
+# Define some shell vars to insert bits of code into the standard elf
+# parse_args and list_options functions.
+#
+PARSE_AND_LIST_PROLOGUE='
+#define OPTION_INSN32			301
+#define OPTION_NO_INSN32		(OPTION_INSN32 + 1)
+'
+
+PARSE_AND_LIST_LONGOPTS='
+  { "insn32", no_argument, NULL, OPTION_INSN32 },
+  { "no-insn32", no_argument, NULL, OPTION_NO_INSN32 },
+'
+
+PARSE_AND_LIST_OPTIONS='
+  fprintf (file, _("\
+  --insn32                    Only generate 32-bit microMIPS instructions\n"
+		   ));
+  fprintf (file, _("\
+  --no-insn32                 Generate all microMIPS instructions\n"
+		   ));
+'
+
+PARSE_AND_LIST_ARGS_CASES='
+    case OPTION_INSN32:
+      insn32 = TRUE;
+      break;
+
+    case OPTION_NO_INSN32:
+      insn32 = FALSE;
+      break;
+'
+
+LDEMUL_AFTER_PARSE=mips_after_parse
+LDEMUL_BEFORE_ALLOCATION=mips_before_allocation
+LDEMUL_CREATE_OUTPUT_SECTION_STATEMENTS=mips_create_output_section_statements

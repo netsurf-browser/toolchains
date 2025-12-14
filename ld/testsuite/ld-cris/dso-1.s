@@ -1,7 +1,8 @@
 	.text
 	.global	dsofn
 	.type	dsofn,@function
+	.p2align 1
 dsofn:
 	nop
-.Lfe:
+.Lfe1:
 	.size	dsofn,.Lfe1-dsofn

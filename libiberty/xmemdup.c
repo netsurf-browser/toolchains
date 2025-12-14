@@ -4,7 +4,8 @@
 
 /*
 
-@deftypefn Replacement void* xmemdup (void *@var{input}, size_t @var{copy_size}, size_t @var{alloc_size})
+@deftypefn Replacement void* xmemdup (void *@var{input}, @
+  size_t @var{copy_size}, size_t @var{alloc_size})
 
 Duplicates a region of memory without fail.  First, @var{alloc_size} bytes
 are allocated, then @var{copy_size} bytes from @var{input} are copied into
@@ -24,15 +25,15 @@ allocated, the remaining memory is zeroed.
 #include <sys/types.h> /* For size_t. */
 #ifdef HAVE_STRING_H
 #include <string.h>
+#else
+# ifdef HAVE_STRINGS_H
+#  include <strings.h>
+# endif
 #endif
 
 PTR
-xmemdup (input, copy_size, alloc_size)
-  const PTR input;
-  size_t copy_size;
-  size_t alloc_size;
+xmemdup (const PTR input, size_t copy_size, size_t alloc_size)
 {
   PTR output = xcalloc (1, alloc_size);
-  memcpy (output, input, copy_size);
-  return output;
+  return (PTR) memcpy (output, input, copy_size);
 }

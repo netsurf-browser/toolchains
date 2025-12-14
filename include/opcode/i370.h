@@ -1,23 +1,25 @@
 /* i370.h -- Header file for S/390 opcode table
-   Copyright 1994, 1995, 1998, 1999, 2000 Free Software Foundation, Inc.
+   Copyright 1994, 1995, 1998, 1999, 2000, 2003, 2010
+   Free Software Foundation, Inc.
    PowerPC version written by Ian Lance Taylor, Cygnus Support
    Rewritten for i370 ESA/390 support, Linas Vepstas <linas@linas.org>
 
-This file is part of GDB, GAS, and the GNU binutils.
+   This file is part of GDB, GAS, and the GNU binutils.
 
-GDB, GAS, and the GNU binutils are free software; you can redistribute
-them and/or modify them under the terms of the GNU General Public
-License as published by the Free Software Foundation; either version
-1, or (at your option) any later version.
+   GDB, GAS, and the GNU binutils are free software; you can redistribute
+   them and/or modify them under the terms of the GNU General Public
+   License as published by the Free Software Foundation; either version 3,
+   or (at your option) any later version.
 
-GDB, GAS, and the GNU binutils are distributed in the hope that they
-will be useful, but WITHOUT ANY WARRANTY; without even the implied
-warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See
-the GNU General Public License for more details.
+   GDB, GAS, and the GNU binutils are distributed in the hope that they
+   will be useful, but WITHOUT ANY WARRANTY; without even the implied
+   warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See
+   the GNU General Public License for more details.
 
-You should have received a copy of the GNU General Public License
-along with this file; see the file COPYING.  If not, write to the Free
-Software Foundation, 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.  */
+   You should have received a copy of the GNU General Public License
+   along with this file; see the file COPYING3.  If not, write to the Free
+   Software Foundation, 51 Franklin Street - Fifth Floor, Boston,
+   MA 02110-1301, USA.  */
 
 #ifndef I370_H
 #define I370_H
@@ -159,8 +161,8 @@ struct i370_operand
      string (the operand will be inserted in any case).  If the
      operand value is legal, *ERRMSG will be unchanged (most operands
      can accept any value).  */
-  i370_insn_t (*insert) PARAMS ((i370_insn_t instruction, long op,
-				   const char **errmsg));
+  i370_insn_t (*insert)
+    (i370_insn_t instruction, long op, const char **errmsg);
 
   /* Extraction function.  This is used by the disassembler.  To
      extract this operand type from an instruction, check this field.
@@ -179,7 +181,7 @@ struct i370_operand
      non-zero if this operand type can not actually be extracted from
      this operand (i.e., the instruction does not match).  If the
      operand is valid, *INVALID will not be changed.  */
-  long (*extract) PARAMS ((i370_insn_t instruction, int *invalid));
+  long (*extract) (i370_insn_t instruction, int *invalid);
 
   /* One bit syntax flags.  */
   unsigned long flags;

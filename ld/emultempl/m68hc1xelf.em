@@ -1,12 +1,12 @@
 # This shell script emits a C file. -*- C -*-
-#   Copyright 1991, 1993, 1994, 1997, 1999, 2000, 2001, 2002, 2003
-#   Free Software Foundation, Inc.
+#   Copyright 1991, 1993, 1994, 1997, 1999, 2000, 2001, 2002, 2003, 2005, 2007,
+#   2008, 2009 Free Software Foundation, Inc.
 #
-# This file is part of GLD, the Gnu Linker.
+# This file is part of the GNU Binutils.
 #
 # This program is free software; you can redistribute it and/or modify
 # it under the terms of the GNU General Public License as published by
-# the Free Software Foundation; either version 2 of the License, or
+# the Free Software Foundation; either version 3 of the License, or
 # (at your option) any later version.
 #
 # This program is distributed in the hope that it will be useful,
@@ -16,7 +16,8 @@
 #
 # You should have received a copy of the GNU General Public License
 # along with this program; if not, write to the Free Software
-# Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
+# Foundation, Inc., 51 Franklin Street - Fifth Floor, Boston,
+# MA 02110-1301, USA.
 #
 
 # This file is sourced from elf32.em, and defines extra m68hc12-elf
@@ -39,17 +40,12 @@
 #
 # Copied from hppaelf and adapted for M68HC11/M68HC12 specific needs.
 #
-cat >>e${EMULATION_NAME}.c <<EOF
+fragment <<EOF
 
 #include "ldctor.h"
 #include "elf32-m68hc1x.h"
 
-static void m68hc11elf_create_output_section_statements PARAMS ((void));
-static asection *m68hc11elf_add_stub_section
-  PARAMS ((const char *, asection *));
-static void gld${EMULATION_NAME}_finish PARAMS ((void));
-static void m68hc11_elf_${EMULATION_NAME}_before_allocation PARAMS ((void));
-
+static asection *m68hc11elf_add_stub_section (const char *, asection *);
 
 /* Fake input file for stubs.  */
 static lang_input_statement_type *stub_file;
@@ -64,7 +60,7 @@ static int no_trampoline = 0;
 static const char* bank_window_name = 0;
 
 static void
-m68hc11_elf_${EMULATION_NAME}_before_allocation ()
+m68hc11_elf_${EMULATION_NAME}_before_allocation (void)
 {
   lang_memory_region_type* region;
   int ret;
@@ -73,10 +69,10 @@ m68hc11_elf_${EMULATION_NAME}_before_allocation ()
 
   /* If generating a relocatable output file, then we don't
      have to generate the trampolines.  */
-  if (link_info.relocateable)
+  if (link_info.relocatable)
     return;
 
-  ret = elf32_m68hc11_setup_section_lists (output_bfd, &link_info);
+  ret = elf32_m68hc11_setup_section_lists (link_info.output_bfd, &link_info);
   if (ret != 0 && no_trampoline == 0)
     {
       if (ret < 0)
@@ -86,10 +82,10 @@ m68hc11_elf_${EMULATION_NAME}_before_allocation ()
 	}
 
       /* Call into the BFD backend to do the real work.  */
-      if (!elf32_m68hc11_size_stubs (output_bfd,
-                                     stub_file->the_bfd,
-                                     &link_info,
-                                     &m68hc11elf_add_stub_section))
+      if (!elf32_m68hc11_size_stubs (link_info.output_bfd,
+				     stub_file->the_bfd,
+				     &link_info,
+				     &m68hc11elf_add_stub_section))
 	{
 	  einfo ("%X%P: can not size stub section: %E\n");
 	  return;
@@ -107,7 +103,7 @@ m68hc11_elf_${EMULATION_NAME}_before_allocation ()
 
      But for 68HC11 this is board specific.  The definition of such
      memory region allows to control how this paged memory is accessed.  */
-  region = lang_memory_region_lookup (bank_window_name);
+  region = lang_memory_region_lookup (bank_window_name, FALSE);
 
   /* Check the length to see if it was defined in the script.  */
   if (region->length != 0)
@@ -123,7 +119,7 @@ m68hc11_elf_${EMULATION_NAME}_before_allocation ()
       pinfo->bank_size = region->length;
       pinfo->bank_shift = 0;
       for (i = pinfo->bank_size; i != 0; i >>= 1)
-        pinfo->bank_shift++;
+	pinfo->bank_shift++;
       pinfo->bank_shift--;
       pinfo->bank_size = 1L << pinfo->bank_shift;
       pinfo->bank_mask = (1 << pinfo->bank_shift) - 1;
@@ -131,12 +127,12 @@ m68hc11_elf_${EMULATION_NAME}_before_allocation ()
       pinfo->bank_physical_end = region->origin + pinfo->bank_size;
 
       if (pinfo->bank_size != region->length)
-        {
-          einfo (_("warning: the size of the 'window' memory region "
-                   "is not a power of 2\n"));
-          einfo (_("warning: its size %d is truncated to %d\n"),
-                 region->length, pinfo->bank_size);
-        }
+	{
+	  einfo (_("warning: the size of the 'window' memory region "
+		   "is not a power of 2\n"));
+	  einfo (_("warning: its size %d is truncated to %d\n"),
+		 region->length, pinfo->bank_size);
+	}
     }
 }
 
@@ -144,16 +140,16 @@ m68hc11_elf_${EMULATION_NAME}_before_allocation ()
    fake input file to hold the stub sections.  */
 
 static void
-m68hc11elf_create_output_section_statements ()
+m68hc11elf_create_output_section_statements (void)
 {
   stub_file = lang_add_input_file ("linker stubs",
 				   lang_input_file_is_fake_enum,
 				   NULL);
-  stub_file->the_bfd = bfd_create ("linker stubs", output_bfd);
+  stub_file->the_bfd = bfd_create ("linker stubs", link_info.output_bfd);
   if (stub_file->the_bfd == NULL
       || !bfd_set_arch_mach (stub_file->the_bfd,
-                             bfd_get_arch (output_bfd),
-                             bfd_get_mach (output_bfd)))
+			     bfd_get_arch (link_info.output_bfd),
+			     bfd_get_mach (link_info.output_bfd)))
     {
       einfo ("%X%P: can not create BFD %E\n");
       return;
@@ -171,13 +167,8 @@ struct hook_stub_info
 
 /* Traverse the linker tree to find the spot where the stub goes.  */
 
-static bfd_boolean hook_in_stub
-  PARAMS ((struct hook_stub_info *, lang_statement_union_type **));
-
 static bfd_boolean
-hook_in_stub (info, lp)
-     struct hook_stub_info *info;
-     lang_statement_union_type **lp;
+hook_in_stub (struct hook_stub_info *info, lang_statement_union_type **lp)
 {
   lang_statement_union_type *l;
   bfd_boolean ret;
@@ -213,10 +204,10 @@ hook_in_stub (info, lp)
 
 	case lang_input_section_enum:
 	  if (l->input_section.section == info->input_section
-              || strcmp (bfd_get_section_name (output_section,
-                                               l->input_section.section),
-                         bfd_get_section_name (output_section,
-                                               info->input_section)) == 0)
+	      || strcmp (bfd_get_section_name (l->input_section.section->owner,
+					       l->input_section.section),
+			 bfd_get_section_name (info->input_section->owner,
+					       info->input_section)) == 0)
 	    {
 	      /* We've found our section.  Insert the stub immediately
 		 before its associated input section.  */
@@ -253,9 +244,8 @@ hook_in_stub (info, lp)
    immediately before INPUT_SECTION.  */
 
 static asection *
-m68hc11elf_add_stub_section (stub_sec_name, tramp_section)
-     const char *stub_sec_name;
-     asection *tramp_section;
+m68hc11elf_add_stub_section (const char *stub_sec_name,
+			     asection *tramp_section)
 {
   asection *stub_sec;
   flagword flags;
@@ -263,14 +253,12 @@ m68hc11elf_add_stub_section (stub_sec_name, tramp_section)
   const char *secname;
   lang_output_section_statement_type *os;
   struct hook_stub_info info;
-  
-  stub_sec = bfd_make_section_anyway (stub_file->the_bfd, stub_sec_name);
-  if (stub_sec == NULL)
-    goto err_ret;
 
   flags = (SEC_ALLOC | SEC_LOAD | SEC_READONLY | SEC_CODE
 	   | SEC_HAS_CONTENTS | SEC_RELOC | SEC_IN_MEMORY | SEC_KEEP);
-  if (!bfd_set_section_flags (stub_file->the_bfd, stub_sec, flags))
+  stub_sec = bfd_make_section_anyway_with_flags (stub_file->the_bfd,
+						 stub_sec_name, flags);
+  if (stub_sec == NULL)
     goto err_ret;
 
   output_section = tramp_section->output_section;
@@ -283,7 +271,7 @@ m68hc11elf_add_stub_section (stub_sec_name, tramp_section)
      at the correct place.  */
   info.input_section = tramp_section;
   lang_list_init (&info.add);
-  lang_add_section (&info.add, stub_sec, os, stub_file);
+  lang_add_section (&info.add, stub_sec, NULL, os);
 
   if (info.add.head == NULL)
     goto err_ret;
@@ -296,52 +284,46 @@ m68hc11elf_add_stub_section (stub_sec_name, tramp_section)
   return NULL;
 }
 
-/* Final emulation specific call.  For the 68HC12 we use this opportunity
-   to build linker stubs.  */
+/* For the 68HC12 we use this opportunity to build linker stubs.  */
 
 static void
-gld${EMULATION_NAME}_finish ()
+m68hc11elf_after_allocation (void)
 {
   /* Now build the linker stubs.  */
   if (stub_file->the_bfd->sections != NULL)
     {
       /* Call again the trampoline analyzer to initialize the trampoline
-         stubs with the correct symbol addresses.  Since there could have
-         been relaxation, the symbol addresses that were found during
-         first call may no longer be correct.  */
-      if (!elf32_m68hc11_size_stubs (output_bfd,
-                                     stub_file->the_bfd,
-                                     &link_info, 0))
+	 stubs with the correct symbol addresses.  Since there could have
+	 been relaxation, the symbol addresses that were found during
+	 first call may no longer be correct.  */
+      if (!elf32_m68hc11_size_stubs (link_info.output_bfd,
+				     stub_file->the_bfd,
+				     &link_info, 0))
 	{
 	  einfo ("%X%P: can not size stub section: %E\n");
 	  return;
 	}
-      if (!elf32_m68hc11_build_stubs (output_bfd, &link_info))
+      if (!elf32_m68hc11_build_stubs (link_info.output_bfd, &link_info))
 	einfo ("%X%P: can not build stubs: %E\n");
     }
+
+  gld${EMULATION_NAME}_after_allocation ();
 }
 
 
 /* Avoid processing the fake stub_file in vercheck, stat_needed and
    check_needed routines.  */
 
-static void m68hc11_for_each_input_file_wrapper
-  PARAMS ((lang_input_statement_type *));
-static void m68hc11_lang_for_each_input_file
-  PARAMS ((void (*) (lang_input_statement_type *)));
+static void (*real_func) (lang_input_statement_type *);
 
-static void (*real_func) PARAMS ((lang_input_statement_type *));
-
-static void m68hc11_for_each_input_file_wrapper (l)
-     lang_input_statement_type *l;
+static void m68hc11_for_each_input_file_wrapper (lang_input_statement_type *l)
 {
   if (l != stub_file)
     (*real_func) (l);
 }
 
 static void
-m68hc11_lang_for_each_input_file (func)
-     void (*func) PARAMS ((lang_input_statement_type *));
+m68hc11_lang_for_each_input_file (void (*func) (lang_input_statement_type *))
 {
   real_func = func;
   lang_for_each_input_file (&m68hc11_for_each_input_file_wrapper);
@@ -355,8 +337,8 @@ EOF
 # parse_args and list_options functions.
 #
 PARSE_AND_LIST_PROLOGUE='
-#define OPTION_NO_TRAMPOLINE            300
-#define OPTION_BANK_WINDOW              301
+#define OPTION_NO_TRAMPOLINE		300
+#define OPTION_BANK_WINDOW		301
 '
 
 # The options are repeated below so that no abbreviations are allowed.
@@ -367,11 +349,11 @@ PARSE_AND_LIST_LONGOPTS='
 '
 
 PARSE_AND_LIST_OPTIONS='
-  fprintf (file, _(""
-"  --no-trampoline         Do not generate the far trampolines used to call\n"
-"                          a far function using 'jsr' or 'bsr'.\n"
-"  --bank-window NAME      Specify the name of the memory region describing\n"
-"                          the layout of the memory bank window.\n"
+  fprintf (file, _(
+"  --no-trampoline             Do not generate the far trampolines used to call\n"
+"                                a far function using 'jsr' or 'bsr'.\n"
+"  --bank-window NAME          Specify the name of the memory region describing\n"
+"                                the layout of the memory bank window.\n"
 		   ));
 '
 
@@ -387,5 +369,5 @@ PARSE_AND_LIST_ARGS_CASES='
 # Put these extra m68hc11elf routines in ld_${EMULATION_NAME}_emulation
 #
 LDEMUL_BEFORE_ALLOCATION=m68hc11_elf_${EMULATION_NAME}_before_allocation
-LDEMUL_FINISH=gld${EMULATION_NAME}_finish
+LDEMUL_AFTER_ALLOCATION=m68hc11elf_after_allocation
 LDEMUL_CREATE_OUTPUT_SECTION_STATEMENTS=m68hc11elf_create_output_section_statements

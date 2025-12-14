@@ -1,22 +1,24 @@
 /* d30v.h -- Header file for D30V opcode table
-   Copyright 1997, 1998, 1999, 2000 Free Software Foundation, Inc.
+   Copyright 1997, 1998, 1999, 2000, 2001, 2003, 2010
+   Free Software Foundation, Inc.
    Written by Martin Hunt (hunt@cygnus.com), Cygnus Solutions
 
-This file is part of GDB, GAS, and the GNU binutils.
+   This file is part of GDB, GAS, and the GNU binutils.
 
-GDB, GAS, and the GNU binutils are free software; you can redistribute
-them and/or modify them under the terms of the GNU General Public
-License as published by the Free Software Foundation; either version
-1, or (at your option) any later version.
+   GDB, GAS, and the GNU binutils are free software; you can redistribute
+   them and/or modify them under the terms of the GNU General Public
+   License as published by the Free Software Foundation; either version 3,
+   or (at your option) any later version.
 
-GDB, GAS, and the GNU binutils are distributed in the hope that they
-will be useful, but WITHOUT ANY WARRANTY; without even the implied
-warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See
-the GNU General Public License for more details.
+   GDB, GAS, and the GNU binutils are distributed in the hope that they
+   will be useful, but WITHOUT ANY WARRANTY; without even the implied
+   warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See
+   the GNU General Public License for more details.
 
-You should have received a copy of the GNU General Public License
-along with this file; see the file COPYING.  If not, write to the Free
-Software Foundation, 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.  */
+   You should have received a copy of the GNU General Public License
+   along with this file; see the file COPYING3.  If not, write to the Free
+   Software Foundation, 51 Franklin Street - Fifth Floor, Boston,
+   MA 02110-1301, USA.  */
 
 #ifndef D30V_H
 #define D30V_H
@@ -32,7 +34,7 @@ struct pd_reg
 };
 
 extern const struct pd_reg pre_defined_registers[];
-int reg_name_cnt PARAMS ((void));
+int reg_name_cnt (void);
 
 /* the number of control registers */
 #define MAX_CONTROL_REG	64

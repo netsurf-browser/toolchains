@@ -1,5 +1,5 @@
 /* tc-i860.h -- Header file for the i860.
-   Copyright 1991, 1992, 1995, 1998, 2000, 2001, 2002
+   Copyright 1991, 1992, 1995, 1998, 2000, 2001, 2002, 2003, 2005, 2007
    Free Software Foundation, Inc.
 
    Brought back from the dead and completely reworked
@@ -9,7 +9,7 @@
 
    GAS is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License as published by
-   the Free Software Foundation; either version 2, or (at your option)
+   the Free Software Foundation; either version 3, or (at your option)
    any later version.
 
    GAS is distributed in the hope that it will be useful,
@@ -19,14 +19,10 @@
 
    You should have received a copy of the GNU General Public License along
    with GAS; see the file COPYING.  If not, write to the Free Software
-   Foundation, 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.  */
+   Foundation, 51 Franklin Street - Fifth Floor, Boston, MA 02110-1301, USA.  */
 
 #ifndef TC_I860
 #define TC_I860 1
-
-#ifndef BFD_ASSEMBLER
-#error i860 support requires BFD_ASSEMBLER
-#endif
 
 enum i860_fix_info
 {
@@ -77,13 +73,24 @@ extern int target_big_endian;
 #define LOCAL_LABELS_FB		1
 #define LISTING_HEADER		"GAS for i860"
 
-#define md_convert_frag(b,s,f)  as_fatal (_("i860_convert_frag\n"));
+#define md_convert_frag(b,s,f)  abort ()
 
-/* Values passed to md_apply_fix3 don't include the symbol value.  */
+/* Values passed to md_apply_fix don't include the symbol value.  */
 #define MD_APPLY_SYM_VALUE(FIX) 0
 
 /* No shared lib support, so we don't need to ensure externally
    visible symbols can be overridden.  */
 #define EXTERN_FORCE_RELOC 0
+
+/* Bits for post-processing of a user defined label to check if
+   it has a double colon (Intel syntax only).  */
+extern void i860_check_label (symbolS *labelsym);
+#define tc_check_label(ls)	i860_check_label (ls)
+
+/* Bits for filling in rs_align_code fragments with NOPs.  */
+extern void i860_handle_align (struct frag *);
+#define HANDLE_ALIGN(fragp) i860_handle_align (fragp)
+
+#define MAX_MEM_FOR_RS_ALIGN_CODE  (3 + 4 + 4)
 
 #endif /* TC_I860 */

@@ -1,21 +1,24 @@
 /* BFD back-end for i386 a.out binaries under dynix.
-   Copyright 1994, 1995, 2001, 2003 Free Software Foundation, Inc.
+   Copyright 1994, 1995, 2001, 2003, 2005, 2007, 2012
+   Free Software Foundation, Inc.
 
-This file is part of BFD, the Binary File Descriptor library.
+   This file is part of BFD, the Binary File Descriptor library.
 
-This program is free software; you can redistribute it and/or modify
-it under the terms of the GNU General Public License as published by
-the Free Software Foundation; either version 2 of the License, or
-(at your option) any later version.
+   This program is free software; you can redistribute it and/or modify
+   it under the terms of the GNU General Public License as published by
+   the Free Software Foundation; either version 3 of the License, or
+   (at your option) any later version.
 
-This program is distributed in the hope that it will be useful,
-but WITHOUT ANY WARRANTY; without even the implied warranty of
-MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-GNU General Public License for more details.
+   This program is distributed in the hope that it will be useful,
+   but WITHOUT ANY WARRANTY; without even the implied warranty of
+   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+   GNU General Public License for more details.
 
-You should have received a copy of the GNU General Public License
-along with this program; if not, write to the Free Software
-Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.  */
+   You should have received a copy of the GNU General Public License
+   along with this program; if not, write to the Free Software
+   Foundation, Inc., 51 Franklin Street - Fifth Floor, Boston,
+   MA 02110-1301, USA.  */
+
 
 /* This BFD is currently only tested with gdb, writing object files
    may not work.  */
@@ -53,10 +56,9 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.  */
 #define a_shdrsize a_dload
 
 void
-i386dynix_32_swap_exec_header_in (abfd, raw_bytes, execp)
-     bfd *abfd;
-     struct external_exec *raw_bytes;
-     struct internal_exec *execp;
+i386dynix_32_swap_exec_header_in (bfd *abfd,
+				  struct external_exec *raw_bytes,
+				  struct internal_exec *execp)
 {
   struct external_exec *bytes = (struct external_exec *)raw_bytes;
 
@@ -64,7 +66,7 @@ i386dynix_32_swap_exec_header_in (abfd, raw_bytes, execp)
      configuration (IE for i960), so ensure that all such uninitialized
      fields are zero'd out.  There are places where two of these structs
      are memcmp'd, and thus the contents do matter. */
-  memset ((PTR) execp, 0, sizeof (struct internal_exec));
+  memset (execp, 0, sizeof (struct internal_exec));
   /* Now fill in fields in the execp, from the bytes in the raw data.  */
   execp->a_info   = H_GET_32 (abfd, bytes->e_info);
   execp->a_text   = GET_WORD (abfd, bytes->e_text);

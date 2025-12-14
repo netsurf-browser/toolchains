@@ -1,4 +1,4 @@
-@c Copyright (C) 2001, 2002 Free Software Foundation, Inc.
+@c Copyright (C) 2002, 2003, 2008, 2011, 2012 Free Software Foundation, Inc.
 @c This is part of the GAS manual.
 @c For copying conditions, see the file as.texinfo.
 @page
@@ -22,6 +22,14 @@
 
 @cindex SH64 ISA options
 @cindex ISA options, SH64
+@item -isa=sh4 | sh4a
+Specify the sh4 or sh4a instruction set.
+@item -isa=dsp
+Enable sh-dsp insns, and disable sh3e / sh4 insns.
+@item -isa=fp
+Enable sh2e, sh3e, sh4, and sh4a insn sets.
+@item -isa=all
+Enable sh1, sh2, sh2e, sh3, sh3e, sh4, sh4a, and sh-dsp insn sets.
 @item -isa=shmedia | -isa=shcompact
 Specify the default instruction set.  @code{SHmedia} specifies the
 32-bit opcodes, and @code{SHcompact} specifies the 16-bit opcodes
@@ -57,6 +65,9 @@ Do not expand MOVI, PT, PTA or PTB instructions.
 @item -expand-pt32
 With -abi=64, expand PT, PTA and PTB instructions to 32 bits only.
 
+@item -h-tick-hex
+Support H'00 style hex constants in addition to 0x00 style.
+
 @end table
 
 @node SH64 Syntax
@@ -74,6 +85,11 @@ With -abi=64, expand PT, PTA and PTB instructions to 32 bits only.
 @cindex line comment character, SH64
 @cindex SH64 line comment character
 @samp{!} is the line comment character.
+
+If a @samp{#} appears as the first character of a line then the whole
+line is treated as a comment, but in this case the line could also be
+a logical line number directive (@pxref{Comments}) or a preprocessor
+control command (@pxref{Preprocessing}).
 
 @cindex line separator, SH64
 @cindex statement separator, SH64
@@ -169,12 +185,8 @@ command line.
 
 @item .abi [32|64]
 Specify the ABI for the following instructions.  Note that you cannot use
-this directive unless you specified an ABI on the command line, and the 
+this directive unless you specified an ABI on the command line, and the
 ABIs specified must match.
-
-@item .uaquad
-Like .uaword and .ualong, this allows you to specify an intenionally
-unaligned quadword (64 bit word).
 
 @end table
 

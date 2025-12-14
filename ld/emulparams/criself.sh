@@ -5,6 +5,7 @@ TEMPLATE_NAME=elf32
 
 # Symbols have underscore prepended.
 OUTPUT_FORMAT="elf32-us-cris"
+NO_REL_RELOCS=yes
 ARCH=cris
 MAXPAGESIZE=32
 ENTRY=__start
@@ -13,7 +14,12 @@ ALIGNMENT=32
 TEXT_START_ADDR=0
 
 # Put crt0 for flash/eprom etc. in this section.
-INITIAL_READONLY_SECTIONS='.startup : { KEEP(*(.startup)) }'
+INITIAL_READONLY_SECTIONS=
+if test -z "${CREATE_SHLIB}"; then
+  INITIAL_READONLY_SECTIONS=".interp       ${RELOCATING-0} : { *(.interp) }"
+fi
+INITIAL_READONLY_SECTIONS="${INITIAL_READONLY_SECTIONS}
+  .startup : { KEEP(*(.startup)) }"
 
 # Setting __Stext to . in TEXT_START_SYMBOLS doesn't get what we want
 # most of the time, which is the start of all read-only sections;
@@ -25,8 +31,8 @@ TEXT_START_SYMBOLS='__Stext = ADDR (.startup);'
 # The __start dance is to get us through assumptions about entry
 # symbols, and to clear _start for normal use with sane programs.
 EXECUTABLE_SYMBOLS='
-__start = DEFINED(__start) ? __start : 
-  DEFINED(_start) ? _start : 
+__start = DEFINED(__start) ? __start :
+  DEFINED(_start) ? _start :
     DEFINED(start) ? start :
       DEFINED(.startup) ? .startup + 2 : 2;
 '
@@ -44,21 +50,18 @@ OTHER_SDATA_SECTIONS="${RELOCATING+PROVIDE (__Edata = .);}"
 # end symbol.
 OTHER_BSS_END_SYMBOLS='
  PROVIDE (__Ebss = .);
- PROVIDE (__end = .);
  __Sbss = ADDR (.bss);
  PROVIDE (_bss_start = __Sbss);
 '
+OTHER_END_SYMBOLS='PROVIDE (__end = .);'
 
 INIT_START='
  . = ALIGN(2);
  ___init__start = .;
  PROVIDE (___do_global_ctors = .);
- SHORT (0xe1fc); /* push srp */
- SHORT (0xbe7e);
 '
 
 INIT_END='
- SHORT (0x0d3e); /* jump [sp+] */
  PROVIDE (__init__end = .);
  PROVIDE (___init__end = .);
 '
@@ -67,12 +70,9 @@ FINI_START='
  . = ALIGN (2);
  ___fini__start = .;
  PROVIDE (___do_global_dtors = .);
- SHORT (0xe1fc); /* push srp */
- SHORT (0xbe7e);
 '
 
 FINI_END='
- SHORT (0x0d3e); /* jump [sp+] */
  PROVIDE (__fini__end = .);
  ___fini__end = .;
 '
@@ -96,9 +96,9 @@ CTOR_END='
 '
 
 # Also add the other symbols provided for rsim/xsim and elinux.
-OTHER_END_SYMBOLS='
+OTHER_SYMBOLS='
   PROVIDE (__Eall = .);
-  PROVIDE (__Endmem = 0x10000000); 
+  PROVIDE (__Endmem = 0x10000000);
   PROVIDE (__Stacksize = 0);
 '
 NO_SMALL_DATA=yes

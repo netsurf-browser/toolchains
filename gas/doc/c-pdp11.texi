@@ -1,4 +1,4 @@
-@c Copyright 2001 Free Software Foundation, Inc.
+@c Copyright 2001, 2002, 2006 Free Software Foundation, Inc.
 @c This is part of the GAS manual.
 @c For copying conditions, see the file as.texinfo.
 @ifset GENERIC
@@ -311,7 +311,7 @@ an immediate constants, while in BSD syntax the character for this
 purpose is @code{$}.
 
 @cindex PDP-11 general-purpose register syntax
-eneral-purpose registers are named @code{r0} through @code{r7}.
+general-purpose registers are named @code{r0} through @code{r7}.
 Mnemonic alternatives for @code{r6} and @code{r7} are @code{sp} and
 @code{pc}, respectively.
 
@@ -322,6 +322,9 @@ alternatively @code{fr0} through @code{fr3}.
 @cindex PDP-11 comments
 Comments are started with a @code{#} or a @code{/} character, and extend
 to the end of the line.  (FIXME: clash with immediates?)
+
+@cindex PDP-11 line separator
+Multiple statements on the same line can be separated by the @samp{;} character.
 
 @node PDP-11-Mnemonics
 @section Instruction Naming

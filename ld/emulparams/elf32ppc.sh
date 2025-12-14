@@ -1,39 +1,26 @@
 # If you change this file, please also look at files which source this one:
-# elf32lppc.sh elf32ppclinux.sh elf32ppcsim.sh
+# elf32lppcnto.sh elf32lppc.sh elf32ppclinux.sh elf32ppcnto.sh
+# elf32ppcsim.sh
 
-TEMPLATE_NAME=elf32
-EXTRA_EM_FILE=ppc32elf
-GENERATE_SHLIB_SCRIPT=yes
-SCRIPT_NAME=elf
-OUTPUT_FORMAT="elf32-powerpc"
-TEXT_START_ADDR=0x01800000
-MAXPAGESIZE=0x10000
-ARCH=powerpc:common
-MACHINE=
+. ${srcdir}/emulparams/elf32ppccommon.sh
+. ${srcdir}/emulparams/plt_unwind.sh
+# Yes, we want duplicate .got and .plt sections.  The linker chooses the
+# appropriate one magically in ppc_after_open
+DATA_GOT=
+SDATA_GOT=
+SEPARATE_GOTPLT=0
 BSS_PLT=
-EXECUTABLE_SYMBOLS='PROVIDE (__stack = 0); PROVIDE (___stack = 0);'
-OTHER_BSS_END_SYMBOLS='__end = .;'
-OTHER_READWRITE_SECTIONS="
-  .fixup        ${RELOCATING-0} : { *(.fixup) }
-  .got1         ${RELOCATING-0} : { *(.got1) }
-  .got2         ${RELOCATING-0} : { *(.got2) }
-"
-OTHER_GOT_RELOC_SECTIONS="
-  .rela.got1         ${RELOCATING-0} : { *(.rela.got1) }
-  .rela.got2         ${RELOCATING-0} : { *(.rela.got2) }
-"
-
-# Treat a host that matches the target with the possible exception of "64"
-# in the name as if it were native.
-if test `echo "$host" | sed -e s/64//` = `echo "$target" | sed -e s/64//`; then
-  case " $EMULATION_LIBPATH " in
-    *" ${EMULATION_NAME} "*)
-      NATIVE=yes
-      ;;
-  esac
+GOT=".got          ${RELOCATING-0} : SPECIAL { *(.got) }"
+GOTPLT=".plt          ${RELOCATING-0} : SPECIAL { *(.plt) }"
+PLT=".plt          ${RELOCATING-0} : SPECIAL { *(.plt) }
+  .iplt         ${RELOCATING-0} : { *(.iplt) }"
+OTHER_TEXT_SECTIONS="*(.glink)"
+EXTRA_EM_FILE=ppc32elf
+if grep -q 'ld_elf32_spu_emulation' ldemul-list.h; then
+# crt1.o defines data_start and __data_start.  Keep them first.
+# Next put all the .data.spehandle sections, with a trailing zero word.
+  DATA_START_SYMBOLS="${RELOCATING+*crt1.o(.data .data.* .gnu.linkonce.d.*)
+    PROVIDE (__spe_handle = .);
+    *(.data.spehandle)
+    . += 4 * (DEFINED (__spe_handle) || . != 0);}"
 fi
-
-# Look for 64 bit target libraries in /lib64, /usr/lib64 etc., first.
-case "$EMULATION_NAME" in
-  *64*) LIBPATH_SUFFIX=64 ;;
-esac

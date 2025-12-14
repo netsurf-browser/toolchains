@@ -4,9 +4,8 @@
 #as: --32
 #ld: -shared -melf_i386 -z nocombreloc
 #objdump: -hw
-#target: i?86-*-*
 
-.*: +file format elf32-i386
+.*: +file format elf32-i386.*
 #...
 .*\.relplatypus.*
 #...

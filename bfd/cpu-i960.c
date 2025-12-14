@@ -1,41 +1,36 @@
 /* BFD library support routines for the i960 architecture.
-   Copyright 1990, 1991, 1993, 1994, 1996, 1999, 2000, 2001, 2002
-   Free Software Foundation, Inc.
+   Copyright 1990, 1991, 1993, 1994, 1996, 1999, 2000, 2001, 2002, 2005, 2006,
+   2007, 2012 Free Software Foundation, Inc.
    Hacked by Steve Chamberlain of Cygnus Support.
 
-This file is part of BFD, the Binary File Descriptor library.
+   This file is part of BFD, the Binary File Descriptor library.
 
-This program is free software; you can redistribute it and/or modify
-it under the terms of the GNU General Public License as published by
-the Free Software Foundation; either version 2 of the License, or
-(at your option) any later version.
+   This program is free software; you can redistribute it and/or modify
+   it under the terms of the GNU General Public License as published by
+   the Free Software Foundation; either version 3 of the License, or
+   (at your option) any later version.
 
-This program is distributed in the hope that it will be useful,
-but WITHOUT ANY WARRANTY; without even the implied warranty of
-MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-GNU General Public License for more details.
+   This program is distributed in the hope that it will be useful,
+   but WITHOUT ANY WARRANTY; without even the implied warranty of
+   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+   GNU General Public License for more details.
 
-You should have received a copy of the GNU General Public License
-along with this program; if not, write to the Free Software
-Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.  */
+   You should have received a copy of the GNU General Public License
+   along with this program; if not, write to the Free Software
+   Foundation, Inc., 51 Franklin Street - Fifth Floor, Boston,
+   MA 02110-1301, USA.  */
 
-#include "bfd.h"
 #include "sysdep.h"
+#include "bfd.h"
 #include "libbfd.h"
-
-static bfd_boolean scan_960_mach
-  PARAMS ((const bfd_arch_info_type *, const char *));
-static const bfd_arch_info_type *compatible
-  PARAMS ((const bfd_arch_info_type *, const bfd_arch_info_type *));
 
 /* This routine is provided a string, and tries to work out if it
    could possibly refer to the i960 machine pointed at in the
    info_struct pointer */
 
 static bfd_boolean
-scan_960_mach (ap, string)
-     const bfd_arch_info_type *ap;
-     const char *string;
+scan_960_mach (const bfd_arch_info_type *ap,
+	       const char *string)
 {
   unsigned long machine;
   int fail_because_not_80960 = FALSE;
@@ -57,7 +52,7 @@ scan_960_mach (ap, string)
     }
   /* In some bfds the cpu-id is written as "80960KA", "80960KB",
      "80960CA" or "80960MC".  */
-  else if (strncmp ("80960", string, 5) == 0)
+  else if (CONST_STRNEQ (string, "80960"))
     {
       string += 5;
 
@@ -116,9 +111,8 @@ scan_960_mach (ap, string)
    to its info structure */
 
 static const bfd_arch_info_type *
-compatible (a,b)
-     const bfd_arch_info_type *a;
-     const bfd_arch_info_type *b;
+compatible (const bfd_arch_info_type *a,
+	    const bfd_arch_info_type *b)
 {
 
   /* The i960 has distinct subspecies which may not interbreed:
@@ -155,17 +149,14 @@ compatible (a,b)
     };
 
   if (a->arch != b->arch || matrix[a->mach][b->mach] == ERROR)
-    {
     return NULL;
-    }
-  else
-    {
-    return (a->mach  ==  matrix[a->mach][b->mach]) ?  a : b;
-    }
+
+  return (a->mach  ==  matrix[a->mach][b->mach]) ?  a : b;
 }
 
 #define N(a,b,d,n) \
-{ 32, 32, 8,bfd_arch_i960,a,"i960",b,3,d,compatible,scan_960_mach,n,}
+{ 32, 32, 8,bfd_arch_i960,a,"i960",b,3,d,compatible,scan_960_mach, \
+  bfd_arch_default_fill, n,}
 
 static const bfd_arch_info_type arch_info_struct[] =
 {

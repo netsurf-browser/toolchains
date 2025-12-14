@@ -1,42 +1,37 @@
 /* BFD back-end for WDC 65816 COFF binaries.
-   Copyright 1995, 1996, 1997, 1999, 2000, 2001, 2002
-   Free Software Foundation, Inc.
+   Copyright 1995, 1996, 1997, 1999, 2000, 2001, 2002, 2003, 2004, 2005,
+   2006, 2007, 2008, 2012  Free Software Foundation, Inc.
    Written by Steve Chamberlain, <sac@cygnus.com>.
 
-This file is part of BFD, the Binary File Descriptor library.
+   This file is part of BFD, the Binary File Descriptor library.
 
-This program is free software; you can redistribute it and/or modify
-it under the terms of the GNU General Public License as published by
-the Free Software Foundation; either version 2 of the License, or
-(at your option) any later version.
+   This program is free software; you can redistribute it and/or modify
+   it under the terms of the GNU General Public License as published by
+   the Free Software Foundation; either version 3 of the License, or
+   (at your option) any later version.
 
-This program is distributed in the hope that it will be useful,
-but WITHOUT ANY WARRANTY; without even the implied warranty of
-MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-GNU General Public License for more details.
+   This program is distributed in the hope that it will be useful,
+   but WITHOUT ANY WARRANTY; without even the implied warranty of
+   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+   GNU General Public License for more details.
 
-You should have received a copy of the GNU General Public License
-along with this program; if not, write to the Free Software
-Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.  */
+   You should have received a copy of the GNU General Public License
+   along with this program; if not, write to the Free Software
+   Foundation, Inc., 51 Franklin Street - Fifth Floor, Boston,
+   MA 02110-1301, USA.  */
 
-#include "bfd.h"
 #include "sysdep.h"
+#include "bfd.h"
 #include "libbfd.h"
 #include "bfdlink.h"
 #include "coff/w65.h"
 #include "coff/internal.h"
 #include "libcoff.h"
 
-static int  select_reloc              PARAMS ((reloc_howto_type *));
-static void rtype2howto               PARAMS ((arelent *, struct internal_reloc *));
-static void reloc_processing          PARAMS ((arelent *, struct internal_reloc *, asymbol **, bfd *, asection *));
-static int  w65_reloc16_estimate    PARAMS ((bfd *, asection *, arelent *, unsigned int, struct bfd_link_info *));
-static void w65_reloc16_extra_cases PARAMS ((bfd *,struct bfd_link_info *, struct bfd_link_order *, arelent *, bfd_byte *, unsigned int *, unsigned int *));
-
 #define COFF_DEFAULT_SECTION_ALIGNMENT_POWER (1)
 static reloc_howto_type howto_table[] =
-  {
-    HOWTO (R_W65_ABS8,    0,  0, 8,  FALSE, 0, complain_overflow_bitfield, 0, "abs8", TRUE, 0x000000ff, 0x000000ff, FALSE),
+{
+  HOWTO (R_W65_ABS8,    0,  0, 8,  FALSE, 0, complain_overflow_bitfield, 0, "abs8", TRUE, 0x000000ff, 0x000000ff, FALSE),
     HOWTO (R_W65_ABS16,   1,  0, 16, FALSE, 0, complain_overflow_bitfield, 0, "abs16", TRUE, 0x0000ffff, 0x0000ffff, FALSE),
     HOWTO (R_W65_ABS24,   0,  2, 32, FALSE, 0, complain_overflow_bitfield, 0, "abs24", TRUE, 0x00ffffff, 0x00ffffff, FALSE),
     HOWTO (R_W65_ABS8S8,  0,  0, 8,  FALSE, 0, complain_overflow_bitfield, 0, ">abs8", TRUE, 0x000000ff, 0x000000ff, FALSE),
@@ -65,8 +60,7 @@ static reloc_howto_type howto_table[] =
   dst->r_stuff[1] = 'C';
 
 static int
-select_reloc (howto)
-     reloc_howto_type *howto;
+select_reloc (reloc_howto_type *howto)
 {
   return howto->type ;
 }
@@ -74,9 +68,8 @@ select_reloc (howto)
 /* Code to turn a r_type into a howto ptr, uses the above howto table.  */
 
 static void
-rtype2howto (internal, dst)
-     arelent *internal;
-     struct internal_reloc *dst;
+rtype2howto (arelent *internal,
+	     struct internal_reloc *dst)
 {
   internal->howto = howto_table + dst->r_type - 1;
 }
@@ -92,12 +85,11 @@ rtype2howto (internal, dst)
  reloc_processing(relent, reloc, symbols, abfd, section)
 
 static void
-reloc_processing (relent, reloc, symbols, abfd, section)
-     arelent * relent;
-     struct internal_reloc *reloc;
-     asymbol ** symbols;
-     bfd * abfd;
-     asection * section;
+reloc_processing (arelent * relent,
+		  struct internal_reloc *reloc,
+		  asymbol ** symbols,
+		  bfd * abfd,
+		  asection * section)
 {
   relent->address = reloc->r_vaddr;
   rtype2howto (relent, reloc);
@@ -105,7 +97,7 @@ reloc_processing (relent, reloc, symbols, abfd, section)
   if (((int) reloc->r_symndx) > 0)
     relent->sym_ptr_ptr = symbols + obj_convert (abfd)[reloc->r_symndx];
   else
-    relent->sym_ptr_ptr = (asymbol **)&(bfd_abs_symbol);
+    relent->sym_ptr_ptr = (asymbol **) bfd_abs_section_ptr->symbol_ptr_ptr;
 
   relent->addend = reloc->r_offset;
 
@@ -114,21 +106,20 @@ reloc_processing (relent, reloc, symbols, abfd, section)
 }
 
 static int
-w65_reloc16_estimate (abfd, input_section, reloc, shrink, link_info)
-     bfd *abfd;
-     asection *input_section;
-     arelent *reloc;
-     unsigned int shrink;
-     struct bfd_link_info *link_info;
+w65_reloc16_estimate (bfd *abfd,
+		      asection *input_section,
+		      arelent *reloc,
+		      unsigned int shrink,
+		      struct bfd_link_info *link_info)
 {
   bfd_vma value;
   bfd_vma dot;
   bfd_vma gap;
 
   /* The address of the thing to be relocated will have moved back by
-   the size of the shrink  - but we don't change reloc->address here,
-   since we need it to know where the relocation lives in the source
-   uncooked section.  */
+     the size of the shrink  - but we don't change reloc->address here,
+     since we need it to know where the relocation lives in the source
+     uncooked section.  */
 
   /*  reloc->address -= shrink;   conceptual */
 
@@ -221,15 +212,13 @@ w65_reloc16_estimate (abfd, input_section, reloc, shrink, link_info)
    R_MOV24B1		R_MOV24B2	24 or 8 bit reloc for mov.b  */
 
 static void
-w65_reloc16_extra_cases (abfd, link_info, link_order, reloc, data, src_ptr,
-			   dst_ptr)
-     bfd *abfd;
-     struct bfd_link_info *link_info;
-     struct bfd_link_order *link_order;
-     arelent *reloc;
-     bfd_byte *data;
-     unsigned int *src_ptr;
-     unsigned int *dst_ptr;
+w65_reloc16_extra_cases (bfd *abfd,
+			 struct bfd_link_info *link_info,
+			 struct bfd_link_order *link_order,
+			 arelent *reloc,
+			 bfd_byte *data,
+			 unsigned int *src_ptr,
+			 unsigned int *dst_ptr)
 {
   unsigned int src_address = *src_ptr;
   unsigned int dst_address = *dst_ptr;
@@ -316,15 +305,16 @@ w65_reloc16_extra_cases (abfd, link_info, link_order, reloc, data, src_ptr,
       {
 	int gap = bfd_coff_reloc16_get_value (reloc, link_info,
 					      input_section);
-	bfd_vma dot = link_order->offset
-	  + dst_address
-	    + link_order->u.indirect.section->output_section->vma;
+	bfd_vma dot = (dst_address
+		       + input_section->output_offset
+		       + input_section->output_section->vma);
 
 	gap -= dot + 1;
 	if (gap < -128 || gap > 127)
 	  {
 	    if (! ((*link_info->callbacks->reloc_overflow)
-		   (link_info, bfd_asymbol_name (*reloc->sym_ptr_ptr),
+		   (link_info, NULL,
+		    bfd_asymbol_name (*reloc->sym_ptr_ptr),
 		    reloc->howto->name, reloc->addend, input_section->owner,
 		    input_section, reloc->address)))
 	      abort ();
@@ -339,16 +329,17 @@ w65_reloc16_extra_cases (abfd, link_info, link_order, reloc, data, src_ptr,
       {
 	bfd_vma gap = bfd_coff_reloc16_get_value (reloc, link_info,
 						  input_section);
-	bfd_vma dot = link_order->offset
-	  + dst_address
-	    + link_order->u.indirect.section->output_section->vma;
+	bfd_vma dot = (dst_address
+		       + input_section->output_offset
+		       + input_section->output_section->vma);
 
 	/* This wraps within the page, so ignore the relativeness, look at the
 	   high part.  */
 	if ((gap & 0xf0000) != (dot & 0xf0000))
 	  {
 	    if (! ((*link_info->callbacks->reloc_overflow)
-		   (link_info, bfd_asymbol_name (*reloc->sym_ptr_ptr),
+		   (link_info, NULL,
+		    bfd_asymbol_name (*reloc->sym_ptr_ptr),
 		    reloc->howto->name, reloc->addend, input_section->owner,
 		    input_section, reloc->address)))
 	      abort ();
@@ -372,6 +363,10 @@ w65_reloc16_extra_cases (abfd, link_info, link_order, reloc, data, src_ptr,
 #define coff_reloc16_extra_cases w65_reloc16_extra_cases
 #define coff_reloc16_estimate w65_reloc16_estimate
 
+#ifndef bfd_pe_print_pdata
+#define bfd_pe_print_pdata	NULL
+#endif
+
 #include "coffcode.h"
 
 #undef coff_bfd_get_relocated_section_contents
@@ -380,4 +375,4 @@ w65_reloc16_extra_cases (abfd, link_info, link_order, reloc, data, src_ptr,
   bfd_coff_reloc16_get_relocated_section_contents
 #define coff_bfd_relax_section bfd_coff_reloc16_relax_section
 
-CREATE_LITTLE_COFF_TARGET_VEC (w65_vec, "coff-w65", BFD_IS_RELAXABLE, 0, '_', NULL)
+CREATE_LITTLE_COFF_TARGET_VEC (w65_vec, "coff-w65", BFD_IS_RELAXABLE, 0, '_', NULL, COFF_SWAP_TABLE)

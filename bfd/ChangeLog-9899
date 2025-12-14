@@ -5573,11 +5573,6 @@ Mon Jan 19 12:49:52 1998  Ian Lance Taylor  <ian@cygnus.com>
 
 	* cpu-sh.c (arch_info_struct): Correct next field of sh3e.
 
-Sun Jan 18 10:39:52 1998  Daniel Verite <daniel@brainstorm.fr>
-
-	* amigaos.c (CAN_WRITE_OUTSYM): New macro.
-	(amiga_write_object_contents): Use CAN_WRITE_OUTSYM
-
 Wed Jan 14 17:23:27 1998  Nick Clifton  <nickc@cygnus.com>
 
 	* elf32-m32r.c: Add macros to handle NOP insertion.
@@ -5596,6 +5591,12 @@ Wed Jan 14 16:03:11 1998  Richard Henderson  <rth@cygnus.com>
 
 For older changes see ChangeLog-9697
 
+Copyright (C) 1998,1999 Free Software Foundation, Inc.
+
+Copying and distribution of this file, with or without modification,
+are permitted in any medium without royalty provided the copyright
+notice and this notice are preserved.
+
 Local Variables:
 mode: change-log
 left-margin: 8

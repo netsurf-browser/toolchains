@@ -1,12 +1,13 @@
 # This shell script emits a C file. -*- C -*-
-#   Copyright 2000, 2001 Free Software Foundation, Inc.
+#   Copyright 2000, 2001, 2003, 2005, 2007, 2008, 2009
+#   Free Software Foundation, Inc.
 #   Written by Michael Sokolov <msokolov@ivan.Harhan.ORG>, based on armelf.em
 #
-# This file is part of GLD, the Gnu Linker.
+# This file is part of the GNU Binutils.
 #
 # This program is free software; you can redistribute it and/or modify
 # it under the terms of the GNU General Public License as published by
-# the Free Software Foundation; either version 2 of the License, or
+# the Free Software Foundation; either version 3 of the License, or
 # (at your option) any later version.
 #
 # This program is distributed in the hope that it will be useful,
@@ -16,7 +17,9 @@
 #
 # You should have received a copy of the GNU General Public License
 # along with this program; if not, write to the Free Software
-# Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
+# Foundation, Inc., 51 Franklin Street - Fifth Floor, Boston,
+# MA 02110-1301, USA.
+
 
 # This file is sourced from elf32.em, and defines some extra routines for m68k
 # embedded systems using ELF and for some other systems using m68k ELF.  While
@@ -29,25 +32,43 @@ case ${target} in
     ;;
 esac
 
-cat >>e${EMULATION_NAME}.c <<EOF
+case ${target} in
+  *-linux*)
+# Don't use multi-GOT by default due to glibc linker's assumption
+# that GOT pointer points to GOT[0].
+#   got_handling_target_default=GOT_HANDLING_MULTIGOT
+    got_handling_target_default=GOT_HANDLING_SINGLE
+    ;;
+  *)
+    got_handling_target_default=GOT_HANDLING_SINGLE
+    ;;
+esac
 
-static void m68k_elf_after_open PARAMS ((void));
+fragment <<EOF
+
+#define GOT_HANDLING_SINGLE   (0)
+#define GOT_HANDLING_NEGATIVE (1)
+#define GOT_HANDLING_MULTIGOT (2)
+#define GOT_HANDLING_TARGET_DEFAULT ${got_handling_target_default}
+
+/* How to generate GOT.  */
+static int got_handling = GOT_HANDLING_DEFAULT;
+
 #ifdef SUPPORT_EMBEDDED_RELOCS
-static void check_sections PARAMS ((bfd *, asection *, PTR));
+static void check_sections (bfd *, asection *, void *);
 #endif
-static void m68k_elf_after_allocation PARAMS ((void));
 
 /* This function is run after all the input files have been opened.  */
 
 static void
-m68k_elf_after_open ()
+m68k_elf_after_open (void)
 {
   /* Call the standard elf routine.  */
   gld${EMULATION_NAME}_after_open ();
 
 #ifdef SUPPORT_EMBEDDED_RELOCS
   if (command_line.embedded_relocs
-      && (! link_info.relocateable))
+      && (! link_info.relocatable))
     {
       bfd *abfd;
 
@@ -80,13 +101,12 @@ m68k_elf_after_open ()
 	    {
 	      asection *relsec;
 
-	      relsec = bfd_make_section (abfd, ".emreloc");
+	      relsec = bfd_make_section_with_flags (abfd, ".emreloc",
+						    (SEC_ALLOC
+						    | SEC_LOAD
+						    | SEC_HAS_CONTENTS
+						    | SEC_IN_MEMORY));
 	      if (relsec == NULL
-		  || ! bfd_set_section_flags (abfd, relsec,
-					      (SEC_ALLOC
-					       | SEC_LOAD
-					       | SEC_HAS_CONTENTS
-					       | SEC_IN_MEMORY))
 		  || ! bfd_set_section_alignment (abfd, relsec, 2)
 		  || ! bfd_set_section_size (abfd, relsec,
 					     datasec->reloc_count * 12))
@@ -95,7 +115,7 @@ m68k_elf_after_open ()
 
 	  /* Double check that all other data sections are empty, as is
 	     required for embedded PIC code.  */
-	  bfd_map_over_sections (abfd, check_sections, (PTR) datasec);
+	  bfd_map_over_sections (abfd, check_sections, datasec);
 	}
     }
 #endif /* SUPPORT_EMBEDDED_RELOCS */
@@ -106,13 +126,10 @@ m68k_elf_after_open ()
    relocs.  This is called via bfd_map_over_sections.  */
 
 static void
-check_sections (abfd, sec, datasec)
-     bfd *abfd;
-     asection *sec;
-     PTR datasec;
+check_sections (bfd *abfd, asection *sec, void *datasec)
 {
   if ((bfd_get_section_flags (abfd, sec) & SEC_DATA)
-      && sec != (asection *) datasec
+      && sec != datasec
       && sec->reloc_count != 0)
     einfo ("%B%X: section %s has relocs; can not use --embedded-relocs\n",
 	   abfd, bfd_get_section_name (abfd, sec));
@@ -124,14 +141,14 @@ check_sections (abfd, sec, datasec)
    been set.  */
 
 static void
-m68k_elf_after_allocation ()
+m68k_elf_after_allocation (void)
 {
   /* Call the standard elf routine.  */
-  after_allocation_default ();
+  gld${EMULATION_NAME}_after_allocation ();
 
 #ifdef SUPPORT_EMBEDDED_RELOCS
   if (command_line.embedded_relocs
-      && (! link_info.relocateable))
+      && (! link_info.relocatable))
     {
       bfd *abfd;
 
@@ -185,9 +202,49 @@ m68k_elf_after_allocation ()
 #endif /* SUPPORT_EMBEDDED_RELOCS */
 }
 
+/* This is a convenient point to tell BFD about target specific flags.
+   After the output has been created, but before inputs are read.  */
+
+static void
+elf_m68k_create_output_section_statements (void)
+{
+  bfd_elf_m68k_set_target_options (&link_info, got_handling);
+}
+
 EOF
+
+# Define some shell vars to insert bits of code into the standard elf
+# parse_args and list_options functions.
+#
+PARSE_AND_LIST_PROLOGUE='
+#define OPTION_GOT	301
+'
+
+PARSE_AND_LIST_LONGOPTS='
+  { "got", required_argument, NULL, OPTION_GOT},
+'
+
+PARSE_AND_LIST_OPTIONS='
+  fprintf (file, _("  --got=<type>                Specify GOT handling scheme\n"));
+'
+
+PARSE_AND_LIST_ARGS_CASES='
+    case OPTION_GOT:
+      if (strcmp (optarg, "target") == 0)
+        got_handling = GOT_HANDLING_TARGET_DEFAULT;
+      else if (strcmp (optarg, "single") == 0)
+        got_handling = 0;
+      else if (strcmp (optarg, "negative") == 0)
+        got_handling = 1;
+      else if (strcmp (optarg, "multigot") == 0)
+        got_handling = 2;
+      else
+        einfo (_("Unrecognized --got argument '\''%s'\''.\n"), optarg);
+      break;
+'
 
 # We have our own after_open and after_allocation functions, but they call
 # the standard routines, so give them a different name.
 LDEMUL_AFTER_OPEN=m68k_elf_after_open
 LDEMUL_AFTER_ALLOCATION=m68k_elf_after_allocation
+LDEMUL_CREATE_OUTPUT_SECTION_STATEMENTS=elf_m68k_create_output_section_statements

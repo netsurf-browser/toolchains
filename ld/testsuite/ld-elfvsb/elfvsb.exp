@@ -1,19 +1,23 @@
 # Expect script for ld-visibility tests
-#   Copyright 2000, 2001, 2003 Free Software Foundation, Inc.
+#   Copyright 2000, 2001, 2002, 2003, 2004, 2005, 2006, 2007, 2010, 2012
+#   Free Software Foundation, Inc.
 #
-# This file is free software; you can redistribute it and/or modify
+# This file is part of the GNU Binutils.
+#
+# This program is free software; you can redistribute it and/or modify
 # it under the terms of the GNU General Public License as published by
-# the Free Software Foundation; either version 2 of the License, or
+# the Free Software Foundation; either version 3 of the License, or
 # (at your option) any later version.
-# 
+#
 # This program is distributed in the hope that it will be useful,
 # but WITHOUT ANY WARRANTY; without even the implied warranty of
 # MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
 # GNU General Public License for more details.
-# 
+#
 # You should have received a copy of the GNU General Public License
 # along with this program; if not, write to the Free Software
-# Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
+# Foundation, Inc., 51 Franklin Street - Fifth Floor, Boston,
+# MA 02110-1301, USA.
 #
 # Written by Ian Lance Taylor (ian@cygnus.com)
 #	     and H.J. Lu (hjl@gnu.org)
@@ -26,10 +30,12 @@
 if { ![istarget hppa*64*-*-hpux*] \
      && ![istarget hppa*-*-linux*] \
      && ![istarget i?86-*-linux*] \
+     && ![istarget i?86-*-gnu*] \
+     && ![istarget *-*-nacl*] \
      && ![istarget ia64-*-linux*] \
      && ![istarget m68k-*-linux*] \
      && ![istarget mips*-*-linux*] \
-     && ![istarget powerpc-*-linux*] \
+     && ![istarget powerpc*-*-linux*] \
      && ![istarget arm*-*-linux*] \
      && ![istarget alpha*-*-linux*] \
      && ![istarget sparc*-*-linux*] \
@@ -56,6 +62,7 @@ if ![isnative] then {return}
 
 set tmpdir tmpdir
 set SHCFLAG ""
+set shared_needs_pic "no"
 
 if { [istarget rs6000*-*-aix*] || [istarget powerpc*-*-aix*] } {
 
@@ -87,11 +94,34 @@ if { [istarget rs6000*-*-aix*] || [istarget powerpc*-*-aix*] } {
     close $file
 }
 
+if [istarget arm*-*-linux*] {
+    # On ARM section anchors can change the symbol pre-emptability for
+    # non-PIC shared libraries, causing these tests to fail.  Turn section
+    # anchors off.
+    set SHCFLAG "-fno-section-anchors"
+
+    # On targets that have MOVW the compiler will emit relocations which
+    # the linker doesn't support when compiling -shared without -fpic.  The
+    # test to find out whether we want to XFAIL the non-PIC tests requires
+    # a compile - so we pre-calculate it here.  We also note that this can
+    # only affect arm*-*-*eabi* targets as the old ABI doesn't support v7.
+    if [istarget arm*-*-*eabi*] {
+	set file [open $tmpdir/movw-detect.c w]
+	puts $file "void foo(void) { __asm (\"movw r0, #0\"); }"
+	close $file
+	if [run_host_cmd_yesno "$CC" "$CFLAGS -c $tmpdir/movw-detect.c -o $tmpdir/movw-detect.o"] {
+	    set shared_needs_pic "yes"
+	}
+    }
+}
+
 set support_protected "no"
 
-if [istarget *-*-linux*] {
+if { [istarget *-*-linux*]
+     || [istarget *-*-nacl*]
+     || [istarget *-*-gnu*] } {
     if [ld_compile "$CC -g $CFLAGS -DPROTECTED_CHECK" $srcdir/$subdir/main.c $tmpdir/main.o] {
-      if [ld_link $ld $tmpdir/main "$tmpdir/main.o"] {
+      if [ld_simple_link $CC $tmpdir/main "$tmpdir/main.o"] {
 	catch "exec $tmpdir/main" support_protected
       }
     }
@@ -99,7 +129,7 @@ if [istarget *-*-linux*] {
 
 # The test procedure.
 proc visibility_test { visibility progname testname main sh1 sh2 dat args } {
-    global ld
+    global CC
     global srcdir
     global subdir
     global exec_output
@@ -115,14 +145,14 @@ proc visibility_test { visibility progname testname main sh1 sh2 dat args } {
     if { [istarget rs6000*-*-aix*] || [istarget powerpc*-*-aix*] } {
 	set shared "-bM:SRE -bE:$tmpdir/xcoff.exp"
     }
-    if {![ld_simple_link $ld $tmpdir/$progname.so "$shared $shldflags $tmpdir/$sh1 $tmpdir/$sh2"]} {
+    if {![ld_simple_link $CC $tmpdir/$progname.so "$shared $shldflags $tmpdir/$sh1 $tmpdir/$sh2"]} {
 	if { [ string match $visibility "hidden_undef" ]
-	     && [regexp ".*/sh1.c.*: undefined reference to \`visibility\'" $link_output]
-	     && [regexp ".*/sh1.c.*: undefined reference to \`visibility_var\'" $link_output] } {
+	     && [regexp "undefined reference to \`\.?visibility\'" $link_output]
+	     && [regexp "undefined reference to \`visibility_var\'" $link_output] } {
     	    pass "$testname"
 	} else { if { [ string match $visibility "protected_undef" ]
-	     && [regexp ".*/sh1.c.*: undefined reference to \`visibility\'" $link_output]
-	     && [regexp ".*/sh1.c.*: undefined reference to \`visibility_var\'" $link_output] } {
+	     && [regexp "undefined reference to \`\.?visibility\'" $link_output]
+	     && [regexp "undefined reference to \`visibility_var\'" $link_output] } {
     	    pass "$testname"
 	} else {
 	    fail "$testname"
@@ -138,16 +168,16 @@ proc visibility_test { visibility progname testname main sh1 sh2 dat args } {
     if { [istarget rs6000*-*-aix*] || [istarget powerpc*-*-aix*] } {
 	set rpath /lib:$tmpdir
     }
-    if ![ld_link $ld $tmpdir/$progname "-rpath $rpath $tmpdir/$main $tmpdir/$progname.so"] {
+    if ![ld_simple_link $CC $tmpdir/$progname "-Wl,-rpath,$rpath $tmpdir/$main $tmpdir/$progname.so"] {
 	if { [ string match $visibility "hidden" ]
-	     && [regexp ".*/main.c.*: undefined reference to \`visibility\'" $link_output]
-	     && [regexp ".*/main.c.*: undefined reference to \`visibility_var\'" $link_output] } {
+	     && [regexp "undefined reference to \`\.?visibility\'" $link_output]
+	     && [regexp "undefined reference to \`visibility_var\'" $link_output] } {
     	    pass "$testname"
 	} else { if { [ string match $visibility "hidden_undef_def" ]
-	     && [regexp ".*/main.c.*: undefined reference to \`visibility\'" $link_output]
-	     && [regexp ".*/main.c.*: undefined reference to \`visibility_def\'" $link_output]
-	     && [regexp ".*/main.c.*: undefined reference to \`visibility_func\'" $link_output]
-	     && [regexp ".*/main.c.*: undefined reference to \`visibility_var\'" $link_output] } {
+	     && [regexp "undefined reference to \`\.?visibility\'" $link_output]
+	     && [regexp "undefined reference to \`visibility_def\'" $link_output]
+	     && [regexp "undefined reference to \`\.?visibility_func\'" $link_output]
+	     && [regexp "undefined reference to \`visibility_var\'" $link_output] } {
     	    pass "$testname"
 	} else {
     	    fail "$testname"
@@ -197,6 +227,7 @@ proc visibility_run {visibility} {
     global picflag
     global target_triplet
     global support_protected
+    global shared_needs_pic
 
     if [ string match $visibility "hidden" ] {
 	set VSBCFLAG "-DHIDDEN_TEST"
@@ -220,6 +251,15 @@ proc visibility_run {visibility} {
 	set VSBCFLAG ""
     }}}}}}}}}
 
+    if { [istarget powerpc*-*-linux*] \
+	 || ( [istarget mips*-*-linux*] && [at_least_gcc_version 4 3] )} {
+	# Testing non-PIC libraries is a waste of effort on any target.
+	# If you don't pass -fpic or -fPIC to gcc, gcc will assume quite
+	# reasonably that you are not compiling for a shared library.
+	# It can then make optimisations that result in shared library
+	# functions and variables not being overridable.  Newer versions
+	# of gcc are more likely to do this.
+    } else {
     # Compile the main program.
     if ![ld_compile "$CC -g $CFLAGS $SHCFLAG $VSBCFLAG" $srcdir/$subdir/main.c $tmpdir/mainnp.o] {
 	unresolved "visibility ($visibility) (non PIC)"
@@ -247,10 +287,6 @@ proc visibility_run {visibility} {
 	    } else {
 		setup_xfail "*-*-sunos4*"
 	    }
-	    if { [ string match $visibility "hidden_weak" ]
-		 || [ string match $visibility "protected_weak" ] } {
-		setup_xfail "powerpc-*-linux*"
-	    }
 
 	    # Non-pic code uses name binding rules for applications to
 	    # reference variables by gp-relative relocs, which can't be
@@ -265,8 +301,20 @@ proc visibility_run {visibility} {
 		 && ![ string match $visibility "hidden_undef_def" ]
 		 && ![ string match $visibility "protected_undef" ] } {
 		setup_xfail "s390x-*-linux*"
+		if { [istarget sparc*-*-linux*] && [is_elf64 $tmpdir/mainnp.o] } {
+		    setup_xfail "sparc*-*-linux*"
+		}
 	    }
-	    setup_xfail "x86_64-*-linux*"
+	    if { [is_elf64 $tmpdir/mainnp.o] } {
+		setup_xfail "x86_64-*-linux*"
+	    }
+	    setup_xfail "x86_64-*-linux-gnux32"
+	    if { ![istarget hppa*64*-*-linux*] } {
+		setup_xfail "hppa*-*-linux*"
+	    }
+	    if [ string match $shared_needs_pic "yes" ] {
+		setup_xfail "arm*-*-linux*"
+	    }
 
 	    visibility_test $visibility vnp "visibility ($visibility) (non PIC)" mainnp.o sh1np.o sh2np.o elfvsb
 
@@ -290,6 +338,10 @@ proc visibility_run {visibility} {
 		 || [ string match $visibility "protected_weak" ]
 		 || [ string match $visibility "normal" ] } {
 		setup_xfail "powerpc-*-linux*"
+		setup_xfail "s390x-*-linux*"
+		if { [istarget sparc*-*-linux*] && [is_elf64 $tmpdir/mainnp.o] } {
+		    setup_xfail "sparc*-*-linux*"
+		}
 	    }
 	    if { ![ string match $visibility "hidden_undef" ]
 		 && ![ string match $visibility "protected_undef" ] } {
@@ -297,7 +349,17 @@ proc visibility_run {visibility} {
 		setup_xfail "alpha*-*-linux*"
 		setup_xfail "mips*-*-linux*"
 	    }
-	    setup_xfail "x86_64-*-linux*"
+	    if { [is_elf64 $tmpdir/mainnp.o] } {
+		setup_xfail "x86_64-*-linux*"
+	    }
+	    setup_xfail "x86_64-*-linux-gnux32"
+	    if { ![istarget hppa*64*-*-linux*] } {
+		setup_xfail "hppa*-*-linux*"
+	    }
+	    if [ string match $shared_needs_pic "yes" ] {
+		setup_xfail "arm*-*-linux*"
+	    }
+
 	    visibility_test $visibility vnp "visibility ($visibility) (non PIC, load offset)" \
 		mainnp.o sh1np.o sh2np.o elfvsb \
 		"-T $srcdir/$subdir/elf-offset.ld"
@@ -305,8 +367,8 @@ proc visibility_run {visibility} {
 
 	# Now compile the code using -fpic.
 
-	if { ![ld_compile "$CC -g $CFLAGS $SHCFLAG $VSBCFLAG $picflag" $srcdir/$subdir/sh1.c $tmpdir/sh1p.o] 
-	    || ![ld_compile "$CC -g $CFLAGS $SHCFLAG $VSBCFLAG $picflag" $srcdir/$subdir/sh2.c $tmpdir/sh2p.o] } {
+	if { ![ld_compile "$CC -g $CFLAGS $SHCFLAG $VSBCFLAG -DSHARED $picflag" $srcdir/$subdir/sh1.c $tmpdir/sh1p.o]
+	    || ![ld_compile "$CC -g $CFLAGS $SHCFLAG $VSBCFLAG -DSHARED $picflag" $srcdir/$subdir/sh2.c $tmpdir/sh2p.o] } {
 	    unresolved "visibility ($visibility)"
 	} else {
 	    if { [ string match $visibility "protected" ]
@@ -324,10 +386,13 @@ proc visibility_run {visibility} {
 		visibility_test $visibility vp "visibility ($visibility)" mainnp.o sh1p.o sh2p.o elfvsb
 	    } }
 	}
-    }
+    }}
 
+    if { [istarget powerpc*-*-linux*] } {
+	# Don't bother.
+    } else {
     # Now do the same tests again, but this time compile main.c PIC.
-    if ![ld_compile "$CC -g $CFLAGS $SHCFLAG $VSBCFLAG $picflag" $srcdir/$subdir/main.c $tmpdir/mainp.o] {
+    if ![ld_compile "$CC -g $CFLAGS $SHCFLAG $VSBCFLAG -DSHARED $picflag" $srcdir/$subdir/main.c $tmpdir/mainp.o] {
 	unresolved "visibility ($visibility) (PIC main, non PIC so)"
 	unresolved "visibility ($visibility) (PIC main)"
     } else {
@@ -345,10 +410,6 @@ proc visibility_run {visibility} {
 		} else {
 		    setup_xfail "*-*-sunos4*"
 		}
-		if { [ string match $visibility "hidden_weak" ]
-		     || [ string match $visibility "protected_weak" ] } {
-		    setup_xfail "powerpc-*-linux*"
-		}
 		if { ![ string match $visibility "hidden_undef" ]
 		     && ![ string match $visibility "protected_undef" ] } {
 		    setup_xfail "ia64-*-linux*"
@@ -359,8 +420,21 @@ proc visibility_run {visibility} {
 		     && ![ string match $visibility "hidden_undef_def" ]
 		     && ![ string match $visibility "protected_undef" ] } {
 		    setup_xfail "s390x-*-linux*"
+		    if { [istarget sparc*-*-linux*] && [is_elf64 $tmpdir/mainp.o] } {
+			setup_xfail "sparc*-*-linux*"
+		    }
 		}
-		setup_xfail "x86_64-*-linux*"
+		if { [is_elf64 $tmpdir/mainp.o] } {
+		    setup_xfail "x86_64-*-linux*"
+		}
+		setup_xfail "x86_64-*-linux-gnux32"
+		if { ![istarget hppa*64*-*-linux*] } {
+		    setup_xfail "hppa*-*-linux*"
+		}
+		if [ string match $shared_needs_pic "yes" ] {
+		    setup_xfail "arm*-*-linux*"
+		}
+
 		visibility_test $visibility vmpnp "visibility ($visibility) (PIC main, non PIC so)" mainp.o sh1np.o sh2np.o elfvsb
 	    }
 	} else {
@@ -382,10 +456,12 @@ proc visibility_run {visibility} {
 	} else {
 	    unresolved "visibility ($visibility) (PIC main)"
 	}
-    }
+    }}
 }
 
-if [istarget mips*-*-*] {
+# Old version of GCC for MIPS default to enabling -fpic
+# and get confused if it is used on the command line.
+if { [istarget mips*-*-*] && ! [at_least_gcc_version 4 3] } then {
     set picflag ""
 } else {
     # Unfortunately, the gcc argument is -fpic and the cc argument is
@@ -433,7 +509,7 @@ if { ![ld_compile "$CC -g $CFLAGS" $srcdir/$subdir/common.c tmpdir/common.o] } {
 if { ![ld_compile "$CC -g $CFLAGS" $srcdir/$subdir/test.c tmpdir/test.o] } {
     unresolved "weak hidden symbol"
 } else {
-   if { ![ld_compile "$CC -g $CFLAGS $picflag" $srcdir/$subdir/sh3.c tmpdir/sh3.o] } {
+   if { ![ld_compile "$CC -g $CFLAGS -DSHARED $picflag" $srcdir/$subdir/sh3.c tmpdir/sh3.o] } {
 	unresolved "weak hidden symbol"
     } else {
 	if ![ld_simple_link $ld tmpdir/sh3.so "-shared tmpdir/sh3.o"] {

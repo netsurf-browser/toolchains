@@ -1,32 +1,32 @@
 /* Support for memory-mapped windows into a BFD.
-   Copyright 1995, 1996, 2001, 2002 Free Software Foundation, Inc.
+   Copyright 1995, 1996, 2001, 2002, 2003, 2005, 2007, 2008, 2009, 2011
+   Free Software Foundation, Inc.
    Written by Cygnus Support.
 
-This file is part of BFD, the Binary File Descriptor library.
+   This file is part of BFD, the Binary File Descriptor library.
 
-This program is free software; you can redistribute it and/or modify
-it under the terms of the GNU General Public License as published by
-the Free Software Foundation; either version 2 of the License, or
-(at your option) any later version.
+   This program is free software; you can redistribute it and/or modify
+   it under the terms of the GNU General Public License as published by
+   the Free Software Foundation; either version 3 of the License, or
+   (at your option) any later version.
 
-This program is distributed in the hope that it will be useful,
-but WITHOUT ANY WARRANTY; without even the implied warranty of
-MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-GNU General Public License for more details.
+   This program is distributed in the hope that it will be useful,
+   but WITHOUT ANY WARRANTY; without even the implied warranty of
+   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+   GNU General Public License for more details.
 
-You should have received a copy of the GNU General Public License
-along with this program; if not, write to the Free Software
-Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.  */
+   You should have received a copy of the GNU General Public License
+   along with this program; if not, write to the Free Software
+   Foundation, Inc., 51 Franklin Street - Fifth Floor, Boston,
+   MA 02110-1301, USA.  */
 
 #include "sysdep.h"
 
 #include "bfd.h"
 #include "libbfd.h"
 
-/* Currently, if USE_MMAP is undefined, none if the window stuff is
-   used.  Okay, so it's mis-named.  At least the command-line option
-   "--without-mmap" is more obvious than "--without-windows" or some
-   such.  */
+/* Currently, if USE_MMAP is undefined, none of the window stuff is
+   used.  Enabled by --with-mmap.  */
 
 #ifdef USE_MMAP
 
@@ -52,7 +52,7 @@ INTERNAL_DEFINITION
 
 .struct _bfd_window_internal {
 .  struct _bfd_window_internal *next;
-.  PTR data;
+.  void *data;
 .  bfd_size_type size;
 .  int refcount : 31;		{* should be enough...  *}
 .  unsigned mapped : 1;		{* 1 = mmap, 0 = malloc *}
@@ -60,8 +60,7 @@ INTERNAL_DEFINITION
 */
 
 void
-bfd_init_window (windowp)
-     bfd_window *windowp;
+bfd_init_window (bfd_window *windowp)
 {
   windowp->data = 0;
   windowp->i = 0;
@@ -69,8 +68,7 @@ bfd_init_window (windowp)
 }
 
 void
-bfd_free_window (windowp)
-     bfd_window *windowp;
+bfd_free_window (bfd_window *windowp)
 {
   bfd_window_internal *i = windowp->i;
   windowp->i = 0;
@@ -80,7 +78,7 @@ bfd_free_window (windowp)
   i->refcount--;
   if (debug_windows)
     fprintf (stderr, "freeing window @%p<%p,%lx,%p>\n",
-	     windowp, windowp->data, windowp->size, windowp->i);
+	     windowp, windowp->data, (unsigned long) windowp->size, windowp->i);
   if (i->refcount != 0)
     return;
 
@@ -108,12 +106,11 @@ bfd_free_window (windowp)
 static int ok_to_map = 1;
 
 bfd_boolean
-bfd_get_file_window (abfd, offset, size, windowp, writable)
-     bfd *abfd;
-     file_ptr offset;
-     bfd_size_type size;
-     bfd_window *windowp;
-     bfd_boolean writable;
+bfd_get_file_window (bfd *abfd,
+		     file_ptr offset,
+		     bfd_size_type size,
+		     bfd_window *windowp,
+		     bfd_boolean writable)
 {
   static size_t pagesize;
   bfd_window_internal *i = windowp->i;
@@ -131,24 +128,21 @@ bfd_get_file_window (abfd, offset, size, windowp, writable)
   if (pagesize == 0)
     abort ();
 
-  if (i == 0)
+  if (i == NULL)
     {
-      i = ((bfd_window_internal *)
-	   bfd_zmalloc ((bfd_size_type) sizeof (bfd_window_internal)));
-      windowp->i = i;
-      if (i == 0)
+      i = bfd_zmalloc (sizeof (bfd_window_internal));
+      if (i == NULL)
 	return FALSE;
-      i->data = 0;
+      i->data = NULL;
     }
 #ifdef HAVE_MMAP
   if (ok_to_map
-      && (i->data == 0 || i->mapped == 1)
+      && (i->data == NULL || i->mapped == 1)
       && (abfd->flags & BFD_IN_MEMORY) == 0)
     {
       file_ptr file_offset, offset2;
       size_t real_size;
       int fd;
-      FILE *f;
 
       /* Find the real file and the real offset into it.  */
       while (abfd->my_archive != NULL)
@@ -156,9 +150,14 @@ bfd_get_file_window (abfd, offset, size, windowp, writable)
 	  offset += abfd->origin;
 	  abfd = abfd->my_archive;
 	}
-      f = bfd_cache_lookup (abfd);
-      fd = fileno (f);
 
+      /* Seek into the file, to ensure it is open if cacheable.  */
+      if (abfd->iostream == NULL
+	  && (abfd->iovec == NULL
+	      || abfd->iovec->bseek (abfd, offset, SEEK_SET) != 0))
+	goto free_and_fail;
+
+      fd = fileno ((FILE *) abfd->iostream);
       /* Compute offsets and size for mmap and for the user's data.  */
       offset2 = offset % pagesize;
       if (offset2 < 0)
@@ -169,10 +168,10 @@ bfd_get_file_window (abfd, offset, size, windowp, writable)
       real_size -= real_size % pagesize;
 
       /* If we're re-using a memory region, make sure it's big enough.  */
-      if (i->data && i->size < size)
+      if (i->data != NULL && i->size < size)
 	{
 	  munmap (i->data, i->size);
-	  i->data = 0;
+	  i->data = NULL;
 	}
       i->data = mmap (i->data, real_size,
 		      writable ? PROT_WRITE | PROT_READ : PROT_READ,
@@ -180,24 +179,25 @@ bfd_get_file_window (abfd, offset, size, windowp, writable)
 		       ? MAP_FILE | MAP_PRIVATE
 		       : MAP_FILE | MAP_SHARED),
 		      fd, file_offset);
-      if (i->data == (PTR) -1)
+      if (i->data == (void *) -1)
 	{
 	  /* An error happened.  Report it, or try using malloc, or
 	     something.  */
 	  bfd_set_error (bfd_error_system_call);
-	  i->data = 0;
 	  windowp->data = 0;
 	  if (debug_windows)
 	    fprintf (stderr, "\t\tmmap failed!\n");
-	  return FALSE;
+	  goto free_and_fail;
 	}
       if (debug_windows)
 	fprintf (stderr, "\n\tmapped %ld at %p, offset is %ld\n",
 		 (long) real_size, i->data, (long) offset2);
       i->size = real_size;
-      windowp->data = (PTR) ((bfd_byte *) i->data + offset2);
+      windowp->data = (bfd_byte *) i->data + offset2;
       windowp->size = size;
       i->mapped = 1;
+      i->refcount = 1;
+      windowp->i = i;
       return TRUE;
     }
   else if (debug_windows)
@@ -222,21 +222,24 @@ bfd_get_file_window (abfd, offset, size, windowp, writable)
   if (debug_windows)
     fprintf (stderr, "\n\t%s(%6ld)",
 	     i->data ? "realloc" : " malloc", (long) size_to_alloc);
-  i->data = (PTR) bfd_realloc (i->data, size_to_alloc);
+  i->data = bfd_realloc_or_free (i->data, size_to_alloc);
   if (debug_windows)
     fprintf (stderr, "\t-> %p\n", i->data);
-  i->refcount = 1;
   if (i->data == NULL)
     {
       if (size_to_alloc == 0)
-	return TRUE;
-      return FALSE;
+	{
+	  windowp->i = i;
+	  return TRUE;
+	}
+      goto free_and_fail;
     }
+  i->refcount = 1;
   if (bfd_seek (abfd, offset, SEEK_SET) != 0)
-    return FALSE;
+    goto free_and_fail;
   i->size = bfd_bread (i->data, size, abfd);
   if (i->size != size)
-    return FALSE;
+    goto free_and_fail;
   i->mapped = 0;
 #ifdef HAVE_MPROTECT
   if (!writable)
@@ -249,7 +252,13 @@ bfd_get_file_window (abfd, offset, size, windowp, writable)
 #endif
   windowp->data = i->data;
   windowp->size = i->size;
+  windowp->i = i;
   return TRUE;
+
+ free_and_fail:
+  /* We have a bfd_window_internal, but an error occurred.  Free it. */
+  free (i);
+  return FALSE;
 }
 
 #endif /* USE_MMAP */

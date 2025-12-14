@@ -1,11 +1,12 @@
 /* itbl-ops.c
-   Copyright 1997, 1999, 2000, 2001 Free Software Foundation, Inc.
+   Copyright 1997, 1999, 2000, 2001, 2002, 2003, 2005, 2006, 2007,
+   2009, 2010  Free Software Foundation, Inc.
 
    This file is part of GAS, the GNU Assembler.
 
    GAS is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License as published by
-   the Free Software Foundation; either version 2, or (at your option)
+   the Free Software Foundation; either version 3, or (at your option)
    any later version.
 
    GAS is distributed in the hope that it will be useful,
@@ -15,8 +16,8 @@
 
    You should have received a copy of the GNU General Public License
    along with GAS; see the file COPYING.  If not, write to the Free
-   Software Foundation, 59 Temple Place - Suite 330, Boston, MA
-   02111-1307, USA.  */
+   Software Foundation, 51 Franklin Street - Fifth Floor, Boston, MA
+   02110-1301, USA.  */
 
 /*======================================================================*/
 /*
@@ -88,9 +89,7 @@
  *
  */
 
-#include <stdio.h>
-#include <stdlib.h>
-#include <string.h>
+#include "as.h"
 #include "itbl-ops.h"
 #include <itbl-parse.h>
 
@@ -98,7 +97,7 @@
 
 #ifdef DEBUG
 #include <assert.h>
-#define ASSERT(x) assert(x)
+#define ASSERT(x) gas_assert (x)
 #define DBG(x) printf x
 #else
 #define ASSERT(x)
@@ -146,31 +145,24 @@ struct itbl_entry {
 
 static int itbl_num_opcodes = 0;
 /* Array of entries for each processor and entry type */
-static struct itbl_entry *entries[e_nprocs][e_ntypes] = {
-  {0, 0, 0, 0, 0, 0},
-  {0, 0, 0, 0, 0, 0},
-  {0, 0, 0, 0, 0, 0},
-  {0, 0, 0, 0, 0, 0}
-};
+static struct itbl_entry *entries[e_nprocs][e_ntypes];
 
 /* local prototypes */
-static unsigned long build_opcode PARAMS ((struct itbl_entry *e));
-static e_type get_type PARAMS ((int yytype));
-static e_processor get_processor PARAMS ((int yyproc));
-static struct itbl_entry **get_entries PARAMS ((e_processor processor,
-						e_type type));
-static struct itbl_entry *find_entry_byname PARAMS ((e_processor processor,
-					e_type type, char *name));
-static struct itbl_entry *find_entry_byval PARAMS ((e_processor processor,
-			e_type type, unsigned long val, struct itbl_range *r));
-static struct itbl_entry *alloc_entry PARAMS ((e_processor processor,
-		e_type type, char *name, unsigned long value));
-static unsigned long apply_range PARAMS ((unsigned long value,
-						struct itbl_range r));
-static unsigned long extract_range PARAMS ((unsigned long value,
-						struct itbl_range r));
-static struct itbl_field *alloc_field PARAMS ((e_type type, int sbit,
-					int ebit, unsigned long flags));
+static unsigned long build_opcode (struct itbl_entry *e);
+static e_type get_type (int yytype);
+static e_processor get_processor (int yyproc);
+static struct itbl_entry **get_entries (e_processor processor,
+					e_type type);
+static struct itbl_entry *find_entry_byname (e_processor processor,
+					e_type type, char *name);
+static struct itbl_entry *find_entry_byval (e_processor processor,
+			e_type type, unsigned long val, struct itbl_range *r);
+static struct itbl_entry *alloc_entry (e_processor processor,
+		e_type type, char *name, unsigned long value);
+static unsigned long apply_range (unsigned long value, struct itbl_range r);
+static unsigned long extract_range (unsigned long value, struct itbl_range r);
+static struct itbl_field *alloc_field (e_type type, int sbit,
+					int ebit, unsigned long flags);
 
 /*======================================================================*/
 /* Interfaces to the parser */
@@ -206,18 +198,6 @@ struct itbl_entry *
 itbl_add_reg (int yyprocessor, int yytype, char *regname,
 	      int regnum)
 {
-#if 0
-#include "as.h"
-#include "symbols.h"
-  /* Since register names don't have a prefix, we put them in the symbol table so
-     they can't be used as symbols.  This also simplifies argument parsing as
-     we can let gas parse registers for us.  The recorded register number is
-     regnum.  */
-  /* Use symbol_create here instead of symbol_new so we don't try to
-     output registers into the object file's symbol table.  */
-  symbol_table_insert (symbol_create (regname, reg_section,
-				      regnum, &zero_address_frag));
-#endif
   return alloc_entry (get_processor (yyprocessor), get_type (yytype), regname,
 		      (unsigned long) regnum);
 }
@@ -266,8 +246,6 @@ itbl_add_operand (struct itbl_entry *e, int yytype, int sbit,
 /* Interfaces for assembler and disassembler */
 
 #ifndef STAND_ALONE
-#include "as.h"
-#include "symbols.h"
 static void append_insns_as_macros (void);
 
 /* Initialize for gas.  */
@@ -322,7 +300,10 @@ append_insns_as_macros (void)
 {
   struct ITBL_OPCODE_STRUCT *new_opcodes, *o;
   struct itbl_entry *e, **es;
-  int n, id, size, new_size, new_num_opcodes;
+  int n, size, new_size, new_num_opcodes;
+#ifdef USE_MACROS
+  int id;
+#endif
 
   if (!itbl_have_entries)
     return;
@@ -351,13 +332,15 @@ append_insns_as_macros (void)
       printf (_("Unable to allocate memory for new instructions\n"));
       return;
     }
-  if (size)			/* copy prexisting opcodes table */
+  if (size)			/* copy preexisting opcodes table */
     memcpy (new_opcodes, ITBL_OPCODES, size);
 
   /* FIXME! some NUMOPCODES are calculated expressions.
 		These need to be changed before itbls can be supported.  */
 
+#ifdef USE_MACROS
   id = ITBL_NUM_MACROS;		/* begin the next macro id after the last */
+#endif
   o = &new_opcodes[ITBL_NUM_OPCODES];	/* append macro to opcodes list */
   for (n = e_p0; n < e_nprocs; n++)
     {
@@ -372,13 +355,13 @@ append_insns_as_macros (void)
 	  o->name = e->name;
 	  o->args = strdup (form_args (e));
 	  o->mask = apply_range (e->value, e->range);
-	  /* FIXME how to catch durring assembly? */
+	  /* FIXME how to catch during assembly? */
 	  /* mask to identify this insn */
 	  o->match = apply_range (e->value, e->range);
 	  o->pinfo = 0;
 
 #ifdef USE_MACROS
-	  o->mask = id++;	/* FIXME how to catch durring assembly? */
+	  o->mask = id++;	/* FIXME how to catch during assembly? */
 	  o->match = 0;		/* for macros, the insn_isa number */
 	  o->pinfo = INSN_MACRO;
 #endif
@@ -615,8 +598,9 @@ itbl_disassemble (char *s, unsigned long insn)
     {
       struct itbl_entry *r;
       unsigned long value;
+      char s_value[20];
 
-      if (f == e->fields)	/* First operand is preceeded by tab.  */
+      if (f == e->fields)	/* First operand is preceded by tab.  */
 	strcat (s, "\t");
       else			/* ','s separate following operands.  */
 	strcat (s, ",");
@@ -633,14 +617,18 @@ itbl_disassemble (char *s, unsigned long insn)
 	  if (r)
 	    strcat (s, r->name);
 	  else
-	    sprintf (s, "%s$%lu", s, value);
+	    {
+	      sprintf (s_value, "$%lu", value);
+	      strcat (s, s_value);
+	    }
 	  break;
 	case e_addr:
 	  /* Use assembler's symbol table to find symbol.  */
 	  /* FIXME!! Do we need this?  If so, what about relocs??  */
 	  /* If not a symbol, fall through to IMMED.  */
 	case e_immed:
-	  sprintf (s, "%s0x%lx", s, value);
+	  sprintf (s_value, "0x%lx", value);
+	  strcat (s, s_value);
 	  break;
 	default:
 	  return 0;		/* error; invalid field spec */

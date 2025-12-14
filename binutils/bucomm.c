@@ -1,12 +1,13 @@
 /* bucomm.c -- Bin Utils COMmon code.
-   Copyright 1991, 1992, 1993, 1994, 1995, 1997, 1998, 2000, 2001, 2002, 2003
+   Copyright 1991, 1992, 1993, 1994, 1995, 1997, 1998, 2000, 2001, 2002,
+   2003, 2005, 2006, 2007, 2008, 2009, 2010, 2011, 2012
    Free Software Foundation, Inc.
 
    This file is part of GNU Binutils.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License as published by
-   the Free Software Foundation; either version 2 of the License, or
+   the Free Software Foundation; either version 3 of the License, or
    (at your option) any later version.
 
    This program is distributed in the hope that it will be useful,
@@ -16,21 +17,21 @@
 
    You should have received a copy of the GNU General Public License
    along with this program; if not, write to the Free Software
-   Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA
-   02111-1307, USA.  */
+   Foundation, Inc., 51 Franklin Street - Fifth Floor, Boston, MA
+   02110-1301, USA.  */
 
 /* We might put this in a library someday so it could be dynamically
    loaded, but for now it's not necessary.  */
 
+#include "sysdep.h"
 #include "bfd.h"
-#include "bfdver.h"
 #include "libiberty.h"
-#include "bucomm.h"
 #include "filenames.h"
 #include "libbfd.h"
 
-#include <sys/stat.h>
 #include <time.h>		/* ctime, maybe time_t */
+#include <assert.h>
+#include "bucomm.h"
 
 #ifndef HAVE_TIME_T_IN_TIME_H
 #ifndef HAVE_TIME_T_IN_TYPES_H
@@ -38,40 +39,88 @@ typedef long time_t;
 #endif
 #endif
 
-static const char * endian_string PARAMS ((enum bfd_endian));
-static int display_target_list PARAMS ((void));
-static int display_info_table PARAMS ((int, int));
-static int display_target_tables PARAMS ((void));
+static const char * endian_string (enum bfd_endian);
+static int display_target_list (void);
+static int display_info_table (int, int);
+static int display_target_tables (void);
 
 /* Error reporting.  */
 
 char *program_name;
 
 void
-bfd_nonfatal (string)
-     const char *string;
+bfd_nonfatal (const char *string)
 {
-  const char *errmsg = bfd_errmsg (bfd_get_error ());
+  const char *errmsg;
 
+  errmsg = bfd_errmsg (bfd_get_error ());
+  fflush (stdout);
   if (string)
     fprintf (stderr, "%s: %s: %s\n", program_name, string, errmsg);
   else
     fprintf (stderr, "%s: %s\n", program_name, errmsg);
 }
 
+/* Issue a non fatal error message.  FILENAME, or if NULL then BFD,
+   are used to indicate the problematic file.  SECTION, if non NULL,
+   is used to provide a section name.  If FORMAT is non-null, then it
+   is used to print additional information via vfprintf.  Finally the
+   bfd error message is printed.  In summary, error messages are of
+   one of the following forms:
+
+   PROGRAM:file: bfd-error-message
+   PROGRAM:file[section]: bfd-error-message
+   PROGRAM:file: printf-message: bfd-error-message
+   PROGRAM:file[section]: printf-message: bfd-error-message.  */
+
 void
-bfd_fatal (string)
-     const char *string;
+bfd_nonfatal_message (const char *filename,
+		      const bfd *abfd,
+		      const asection *section,
+		      const char *format, ...)
+{
+  const char *errmsg;
+  const char *section_name;
+  va_list args;
+
+  errmsg = bfd_errmsg (bfd_get_error ());
+  fflush (stdout);
+  section_name = NULL;
+  va_start (args, format);
+  fprintf (stderr, "%s", program_name);
+  
+  if (abfd)
+    {
+      if (!filename)
+	filename = bfd_get_archive_filename (abfd);
+      if (section)
+	section_name = bfd_get_section_name (abfd, section);
+    }
+  if (section_name)
+    fprintf (stderr, ":%s[%s]", filename, section_name);
+  else
+    fprintf (stderr, ":%s", filename);
+
+  if (format)
+    {
+      fprintf (stderr, ": ");
+      vfprintf (stderr, format, args);
+    }
+  fprintf (stderr, ": %s\n", errmsg);
+  va_end (args);
+}
+
+void
+bfd_fatal (const char *string)
 {
   bfd_nonfatal (string);
   xexit (1);
 }
 
 void
-report (format, args)
-     const char * format;
-     va_list args;
+report (const char * format, va_list args)
 {
+  fflush (stdout);
   fprintf (stderr, "%s: ", program_name);
   vfprintf (stderr, format, args);
   putc ('\n', stderr);
@@ -104,7 +153,7 @@ non_fatal VPARAMS ((const char *format, ...))
    different target.  */
 
 void
-set_default_bfd_target ()
+set_default_bfd_target (void)
 {
   /* The macro TARGET is defined by Makefile.  */
   const char *target = TARGET;
@@ -119,9 +168,9 @@ set_default_bfd_target ()
    the possible matching targets.  */
 
 void
-list_matching_formats (p)
-     char **p;
+list_matching_formats (char **p)
 {
+  fflush (stdout);
   fprintf (stderr, _("%s: Matching formats:"), program_name);
   while (*p)
     fprintf (stderr, " %s", *p++);
@@ -131,18 +180,17 @@ list_matching_formats (p)
 /* List the supported targets.  */
 
 void
-list_supported_targets (name, f)
-     const char *name;
-     FILE *f;
+list_supported_targets (const char *name, FILE *f)
 {
   int t;
-  const char **targ_names = bfd_target_list ();
+  const char **targ_names;
 
   if (name == NULL)
     fprintf (f, _("Supported targets:"));
   else
     fprintf (f, _("%s: supported targets:"), name);
 
+  targ_names = bfd_target_list ();
   for (t = 0; targ_names[t] != NULL; t++)
     fprintf (f, " %s", targ_names[t]);
   fprintf (f, "\n");
@@ -152,34 +200,33 @@ list_supported_targets (name, f)
 /* List the supported architectures.  */
 
 void
-list_supported_architectures (name, f)
-     const char *name;
-     FILE *f;
+list_supported_architectures (const char *name, FILE *f)
 {
-  const char **arch;
+  const char ** arch;
+  const char ** arches;
 
   if (name == NULL)
     fprintf (f, _("Supported architectures:"));
   else
     fprintf (f, _("%s: supported architectures:"), name);
 
-  for (arch = bfd_arch_list (); *arch; arch++)
+  for (arch = arches = bfd_arch_list (); *arch; arch++)
     fprintf (f, " %s", *arch);
   fprintf (f, "\n");
+  free (arches);
 }
 
 /* The length of the longest architecture name + 1.  */
 #define LONGEST_ARCH sizeof ("powerpc:common")
 
 static const char *
-endian_string (endian)
-     enum bfd_endian endian;
+endian_string (enum bfd_endian endian)
 {
   switch (endian)
     {
-    case BFD_ENDIAN_BIG: return "big endian";
-    case BFD_ENDIAN_LITTLE: return "little endian";
-    default: return "endianness unknown";
+    case BFD_ENDIAN_BIG: return _("big endian");
+    case BFD_ENDIAN_LITTLE: return _("little endian");
+    default: return _("endianness unknown");
     }
 }
 
@@ -187,7 +234,7 @@ endian_string (endian)
    by its endianness and the architectures it supports.  */
 
 static int
-display_target_list ()
+display_target_list (void)
 {
   char *dummy_name;
   int t;
@@ -200,7 +247,7 @@ display_target_list ()
       bfd *abfd = bfd_openw (dummy_name, p->name);
       int a;
 
-      printf ("%s\n (header %s, data %s)\n", p->name,
+      printf (_("%s\n (header %s, data %s)\n"), p->name,
 	      endian_string (p->header_byteorder),
 	      endian_string (p->byteorder));
 
@@ -222,7 +269,7 @@ display_target_list ()
 	  continue;
 	}
 
-      for (a = (int) bfd_arch_obscure + 1; a < (int) bfd_arch_last; a++)
+      for (a = bfd_arch_obscure + 1; a < bfd_arch_last; a++)
 	if (bfd_set_arch_mach (abfd, (enum bfd_architecture) a, 0))
 	  printf ("  %s\n",
 		  bfd_printable_arch_mach ((enum bfd_architecture) a, 0));
@@ -239,14 +286,12 @@ display_target_list ()
    architectures down).  */
 
 static int
-display_info_table (first, last)
-     int first;
-     int last;
+display_info_table (int first, int last)
 {
   int t;
-  int a;
   int ret = 1;
   char *dummy_name;
+  int a;
 
   /* Print heading of target names.  */
   printf ("\n%*s", (int) LONGEST_ARCH, " ");
@@ -255,11 +300,12 @@ display_info_table (first, last)
   putchar ('\n');
 
   dummy_name = make_temp_file (NULL);
-  for (a = (int) bfd_arch_obscure + 1; a < (int) bfd_arch_last; a++)
-    if (strcmp (bfd_printable_arch_mach (a, 0), "UNKNOWN!") != 0)
+  for (a = bfd_arch_obscure + 1; a < bfd_arch_last; a++)
+    if (strcmp (bfd_printable_arch_mach ((enum bfd_architecture) a, 0),
+                "UNKNOWN!") != 0)
       {
 	printf ("%*s ", (int) LONGEST_ARCH - 1,
-		bfd_printable_arch_mach (a, 0));
+		bfd_printable_arch_mach ((enum bfd_architecture) a, 0));
 	for (t = first; t < last && bfd_target_vector[t]; t++)
 	  {
 	    const bfd_target *p = bfd_target_vector[t];
@@ -288,7 +334,7 @@ display_info_table (first, last)
 
 	    if (ok)
 	      {
-		if (! bfd_set_arch_mach (abfd, a, 0))
+		if (! bfd_set_arch_mach (abfd, (enum bfd_architecture) a, 0))
 		  ok = FALSE;
 	      }
 
@@ -316,7 +362,7 @@ display_info_table (first, last)
    BFD has been configured to support.  */
 
 static int
-display_target_tables ()
+display_target_tables (void)
 {
   int t;
   int columns;
@@ -355,7 +401,7 @@ display_target_tables ()
 }
 
 int
-display_info ()
+display_info (void)
 {
   printf (_("BFD header file version %s\n"), BFD_VERSION_STRING);
   if (! display_target_list () || ! display_target_tables ())
@@ -369,10 +415,7 @@ display_info ()
    Mode       User\tGroup\tSize\tDate               Name */
 
 void
-print_arelt_descr (file, abfd, verbose)
-     FILE *file;
-     bfd *abfd;
-     bfd_boolean verbose;
+print_arelt_descr (FILE *file, bfd *abfd, bfd_boolean verbose)
 {
   struct stat buf;
 
@@ -384,79 +427,129 @@ print_arelt_descr (file, abfd, verbose)
 	  char timebuf[40];
 	  time_t when = buf.st_mtime;
 	  const char *ctime_result = (const char *) ctime (&when);
+	  bfd_size_type size;
 
 	  /* POSIX format:  skip weekday and seconds from ctime output.  */
 	  sprintf (timebuf, "%.12s %.4s", ctime_result + 4, ctime_result + 20);
 
 	  mode_string (buf.st_mode, modebuf);
 	  modebuf[10] = '\0';
+	  size = buf.st_size;
 	  /* POSIX 1003.2/D11 says to skip first character (entry type).  */
-	  fprintf (file, "%s %ld/%ld %6ld %s ", modebuf + 1,
+	  fprintf (file, "%s %ld/%ld %6" BFD_VMA_FMT "u %s ", modebuf + 1,
 		   (long) buf.st_uid, (long) buf.st_gid,
-		   (long) buf.st_size, timebuf);
+		   size, timebuf);
 	}
     }
 
   fprintf (file, "%s\n", bfd_get_filename (abfd));
 }
 
-/* Return the name of a temporary file in the same directory as FILENAME.  */
+/* Return a path for a new temporary file in the same directory
+   as file PATH.  */
 
-char *
-make_tempname (filename)
-     char *filename;
+static char *
+template_in_dir (const char *path)
 {
-  static char template[] = "stXXXXXX";
+#define template "stXXXXXX"
+  const char *slash = strrchr (path, '/');
   char *tmpname;
-  char *slash = strrchr (filename, '/');
+  size_t len;
 
 #ifdef HAVE_DOS_BASED_FILE_SYSTEM
   {
     /* We could have foo/bar\\baz, or foo\\bar, or d:bar.  */
-    char *bslash = strrchr (filename, '\\');
+    char *bslash = strrchr (path, '\\');
+
     if (slash == NULL || (bslash != NULL && bslash > slash))
       slash = bslash;
-    if (slash == NULL && filename[0] != '\0' && filename[1] == ':')
-      slash = filename + 1;
+    if (slash == NULL && path[0] != '\0' && path[1] == ':')
+      slash = path + 1;
   }
 #endif
 
   if (slash != (char *) NULL)
     {
-      char c;
+      len = slash - path;
+      tmpname = (char *) xmalloc (len + sizeof (template) + 2);
+      memcpy (tmpname, path, len);
 
-      c = *slash;
-      *slash = 0;
-      tmpname = xmalloc (strlen (filename) + sizeof (template) + 2);
-      strcpy (tmpname, filename);
 #ifdef HAVE_DOS_BASED_FILE_SYSTEM
       /* If tmpname is "X:", appending a slash will make it a root
 	 directory on drive X, which is NOT the same as the current
 	 directory on drive X.  */
-      if (tmpname[1] == ':' && tmpname[2] == '\0')
-	strcat (tmpname, ".");
+      if (len == 2 && tmpname[1] == ':')
+	tmpname[len++] = '.';
 #endif
-      strcat (tmpname, "/");
-      strcat (tmpname, template);
-      mktemp (tmpname);
-      *slash = c;
+      tmpname[len++] = '/';
     }
   else
     {
-      tmpname = xmalloc (sizeof (template));
-      strcpy (tmpname, template);
-      mktemp (tmpname);
+      tmpname = (char *) xmalloc (sizeof (template));
+      len = 0;
     }
+
+  memcpy (tmpname + len, template, sizeof (template));
   return tmpname;
+#undef template
+}
+
+/* Return the name of a created temporary file in the same directory
+   as FILENAME.  */
+
+char *
+make_tempname (char *filename)
+{
+  char *tmpname = template_in_dir (filename);
+  int fd;
+
+#ifdef HAVE_MKSTEMP
+  fd = mkstemp (tmpname);
+#else
+  tmpname = mktemp (tmpname);
+  if (tmpname == NULL)
+    return NULL;
+  fd = open (tmpname, O_RDWR | O_CREAT | O_EXCL, 0600);
+#endif
+  if (fd == -1)
+    {
+      free (tmpname);
+      return NULL;
+    }
+  close (fd);
+  return tmpname;
+}
+
+/* Return the name of a created temporary directory inside the
+   directory containing FILENAME.  */
+
+char *
+make_tempdir (char *filename)
+{
+  char *tmpname = template_in_dir (filename);
+
+#ifdef HAVE_MKDTEMP
+  return mkdtemp (tmpname);
+#else
+  tmpname = mktemp (tmpname);
+  if (tmpname == NULL)
+    return NULL;
+#if defined (_WIN32) && !defined (__CYGWIN32__)
+  if (mkdir (tmpname) != 0)
+    return NULL;
+#else
+  if (mkdir (tmpname, 0700) != 0)
+    return NULL;
+#endif
+  return tmpname;
+#endif
 }
 
 /* Parse a string into a VMA, with a fatal error if it can't be
    parsed.  */
 
 bfd_vma
-parse_vma (s, arg)
-     const char *s;
-     const char *arg;
+parse_vma (const char *s, const char *arg)
 {
   bfd_vma ret;
   const char *end;
@@ -467,4 +560,67 @@ parse_vma (s, arg)
     fatal (_("%s: bad number: %s"), arg, s);
 
   return ret;
+}
+
+/* Returns the size of the named file.  If the file does not
+   exist, or if it is not a real file, then a suitable non-fatal
+   error message is printed and (off_t) -1 is returned.  */
+
+off_t
+get_file_size (const char * file_name)
+{
+  struct stat statbuf;
+  
+  if (stat (file_name, &statbuf) < 0)
+    {
+      if (errno == ENOENT)
+	non_fatal (_("'%s': No such file"), file_name);
+      else
+	non_fatal (_("Warning: could not locate '%s'.  reason: %s"),
+		   file_name, strerror (errno));
+    }  
+  else if (! S_ISREG (statbuf.st_mode))
+    non_fatal (_("Warning: '%s' is not an ordinary file"), file_name);
+  else if (statbuf.st_size < 0)
+    non_fatal (_("Warning: '%s' has negative size, probably it is too large"),
+               file_name);
+  else
+    return statbuf.st_size;
+
+  return (off_t) -1;
+}
+
+/* Return the filename in a static buffer.  */
+
+const char *
+bfd_get_archive_filename (const bfd *abfd)
+{
+  static size_t curr = 0;
+  static char *buf;
+  size_t needed;
+
+  assert (abfd != NULL);
+  
+  if (!abfd->my_archive)
+    return bfd_get_filename (abfd);
+
+  needed = (strlen (bfd_get_filename (abfd->my_archive))
+	    + strlen (bfd_get_filename (abfd)) + 3);
+  if (needed > curr)
+    {
+      if (curr)
+	free (buf);
+      curr = needed + (needed >> 1);
+      buf = (char *) bfd_malloc (curr);
+      /* If we can't malloc, fail safe by returning just the file name.
+	 This function is only used when building error messages.  */
+      if (!buf)
+	{
+	  curr = 0;
+	  return bfd_get_filename (abfd);
+	}
+    }
+  sprintf (buf, "%s(%s)", bfd_get_filename (abfd->my_archive),
+	   bfd_get_filename (abfd));
+  return buf;
 }

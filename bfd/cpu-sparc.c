@@ -1,25 +1,26 @@
 /* BFD support for the SPARC architecture.
-   Copyright 1992, 1995, 1996, 1998, 2000, 2002
+   Copyright 1992, 1995, 1996, 1998, 2000, 2002, 2005, 2007
    Free Software Foundation, Inc.
 
-This file is part of BFD, the Binary File Descriptor library.
+   This file is part of BFD, the Binary File Descriptor library.
 
-This program is free software; you can redistribute it and/or modify
-it under the terms of the GNU General Public License as published by
-the Free Software Foundation; either version 2 of the License, or
-(at your option) any later version.
+   This program is free software; you can redistribute it and/or modify
+   it under the terms of the GNU General Public License as published by
+   the Free Software Foundation; either version 3 of the License, or
+   (at your option) any later version.
 
-This program is distributed in the hope that it will be useful,
-but WITHOUT ANY WARRANTY; without even the implied warranty of
-MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-GNU General Public License for more details.
+   This program is distributed in the hope that it will be useful,
+   but WITHOUT ANY WARRANTY; without even the implied warranty of
+   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+   GNU General Public License for more details.
 
-You should have received a copy of the GNU General Public License
-along with this program; if not, write to the Free Software
-Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.  */
+   You should have received a copy of the GNU General Public License
+   along with this program; if not, write to the Free Software
+   Foundation, Inc., 51 Franklin Street - Fifth Floor, Boston,
+   MA 02110-1301, USA.  */
 
-#include "bfd.h"
 #include "sysdep.h"
+#include "bfd.h"
 #include "libbfd.h"
 
 static const bfd_arch_info_type arch_info_struct[] =
@@ -36,6 +37,7 @@ static const bfd_arch_info_type arch_info_struct[] =
     FALSE,
     bfd_default_compatible,
     bfd_default_scan,
+    bfd_arch_default_fill,
     &arch_info_struct[1],
   },
   {
@@ -50,6 +52,7 @@ static const bfd_arch_info_type arch_info_struct[] =
     FALSE,
     bfd_default_compatible,
     bfd_default_scan,
+    bfd_arch_default_fill,
     &arch_info_struct[2],
   },
   {
@@ -64,6 +67,7 @@ static const bfd_arch_info_type arch_info_struct[] =
     FALSE,
     bfd_default_compatible,
     bfd_default_scan,
+    bfd_arch_default_fill,
     &arch_info_struct[3],
   },
   {
@@ -78,6 +82,7 @@ static const bfd_arch_info_type arch_info_struct[] =
     FALSE,
     bfd_default_compatible,
     bfd_default_scan,
+    bfd_arch_default_fill,
     &arch_info_struct[4],
   },
   {
@@ -92,6 +97,7 @@ static const bfd_arch_info_type arch_info_struct[] =
     FALSE,
     bfd_default_compatible,
     bfd_default_scan,
+    bfd_arch_default_fill,
     &arch_info_struct[5],
   },
   {
@@ -106,6 +112,7 @@ static const bfd_arch_info_type arch_info_struct[] =
     FALSE,
     bfd_default_compatible,
     bfd_default_scan,
+    bfd_arch_default_fill,
     &arch_info_struct[6],
   },
   {
@@ -120,6 +127,7 @@ static const bfd_arch_info_type arch_info_struct[] =
     FALSE,
     bfd_default_compatible,
     bfd_default_scan,
+    bfd_arch_default_fill,
     &arch_info_struct[7],
   },
   {
@@ -134,6 +142,7 @@ static const bfd_arch_info_type arch_info_struct[] =
     FALSE,
     bfd_default_compatible,
     bfd_default_scan,
+    bfd_arch_default_fill,
     &arch_info_struct[8],
   },
   {
@@ -148,6 +157,7 @@ static const bfd_arch_info_type arch_info_struct[] =
     FALSE,
     bfd_default_compatible,
     bfd_default_scan,
+    bfd_arch_default_fill,
     0,
   }
 };
@@ -165,5 +175,6 @@ const bfd_arch_info_type bfd_sparc_arch =
     TRUE, /* the default */
     bfd_default_compatible,
     bfd_default_scan,
+    bfd_arch_default_fill,
     &arch_info_struct[0],
   };

@@ -1,3 +1,4 @@
+@node typedef bfd, Error reporting, BFD front end, BFD front end
 @section @code{typedef bfd}
 A BFD has type @code{bfd}; objects of this type are the
 cornerstone of any application using BFD. Using BFD
@@ -10,6 +11,14 @@ to the rest of the data.
 
 @example
 
+enum bfd_direction
+  @{
+    no_direction = 0,
+    read_direction = 1,
+    write_direction = 2,
+    both_direction = 3
+  @};
+
 struct bfd
 @{
   /* A unique identifier of the BFD  */
@@ -21,23 +30,10 @@ struct bfd
   /* A pointer to the target jump table.  */
   const struct bfd_target *xvec;
 
-  /* To avoid dragging too many header files into every file that
-     includes `@code{bfd.h}', IOSTREAM has been declared as a "char *",
-     and MTIME as a "long".  Their correct types, to which they
-     are cast when used, are "FILE *" and "time_t".    The iostream
-     is the result of an fopen on the filename.  However, if the
-     BFD_IN_MEMORY flag is set, then iostream is actually a pointer
-     to a bfd_in_memory struct.  */
-  PTR iostream;
-
-  /* Is the file descriptor being cached?  That is, can it be closed as
-     needed, and re-opened when accessed later?  */
-  bfd_boolean cacheable;
-
-  /* Marks whether there was a default target specified when the
-     BFD was opened. This is used to select which matching algorithm
-     to use to choose the back end.  */
-  bfd_boolean target_defaulted;
+  /* The IOSTREAM, and corresponding IO vector that provide access
+     to the file backing the BFD.  */
+  void *iostream;
+  const struct bfd_iovec *iovec;
 
   /* The caching routines use these to maintain a
      least-recently-used list of BFDs.  */
@@ -46,13 +42,6 @@ struct bfd
   /* When a file is closed by the caching routines, BFD retains
      state information on the file here...  */
   ufile_ptr where;
-
-  /* ... and here: (``once'' means at least once).  */
-  bfd_boolean opened_once;
-
-  /* Set if we have a locally maintained mtime value, rather than
-     getting it from the file each time.  */
-  bfd_boolean mtime_set;
 
   /* File modified time, if mtime_set is TRUE.  */
   long mtime;
@@ -64,35 +53,118 @@ struct bfd
   bfd_format format;
 
   /* The direction with which the BFD was opened.  */
-  enum bfd_direction
-    @{
-      no_direction = 0,
-      read_direction = 1,
-      write_direction = 2,
-      both_direction = 3
-    @}
-  direction;
+  enum bfd_direction direction;
 
   /* Format_specific flags.  */
   flagword flags;
+
+  /* Values that may appear in the flags field of a BFD.  These also
+     appear in the object_flags field of the bfd_target structure, where
+     they indicate the set of flags used by that backend (not all flags
+     are meaningful for all object file formats) (FIXME: at the moment,
+     the object_flags values have mostly just been copied from backend
+     to another, and are not necessarily correct).  */
+
+#define BFD_NO_FLAGS   0x00
+
+  /* BFD contains relocation entries.  */
+#define HAS_RELOC      0x01
+
+  /* BFD is directly executable.  */
+#define EXEC_P         0x02
+
+  /* BFD has line number information (basically used for F_LNNO in a
+     COFF header).  */
+#define HAS_LINENO     0x04
+
+  /* BFD has debugging information.  */
+#define HAS_DEBUG      0x08
+
+  /* BFD has symbols.  */
+#define HAS_SYMS       0x10
+
+  /* BFD has local symbols (basically used for F_LSYMS in a COFF
+     header).  */
+#define HAS_LOCALS     0x20
+
+  /* BFD is a dynamic object.  */
+#define DYNAMIC        0x40
+
+  /* Text section is write protected (if D_PAGED is not set, this is
+     like an a.out NMAGIC file) (the linker sets this by default, but
+     clears it for -r or -N).  */
+#define WP_TEXT        0x80
+
+  /* BFD is dynamically paged (this is like an a.out ZMAGIC file) (the
+     linker sets this by default, but clears it for -r or -n or -N).  */
+#define D_PAGED        0x100
+
+  /* BFD is relaxable (this means that bfd_relax_section may be able to
+     do something) (sometimes bfd_relax_section can do something even if
+     this is not set).  */
+#define BFD_IS_RELAXABLE 0x200
+
+  /* This may be set before writing out a BFD to request using a
+     traditional format.  For example, this is used to request that when
+     writing out an a.out object the symbols not be hashed to eliminate
+     duplicates.  */
+#define BFD_TRADITIONAL_FORMAT 0x400
+
+  /* This flag indicates that the BFD contents are actually cached
+     in memory.  If this is set, iostream points to a bfd_in_memory
+     struct.  */
+#define BFD_IN_MEMORY 0x800
+
+  /* The sections in this BFD specify a memory page.  */
+#define HAS_LOAD_PAGE 0x1000
+
+  /* This BFD has been created by the linker and doesn't correspond
+     to any input file.  */
+#define BFD_LINKER_CREATED 0x2000
+
+  /* This may be set before writing out a BFD to request that it
+     be written using values for UIDs, GIDs, timestamps, etc. that
+     will be consistent from run to run.  */
+#define BFD_DETERMINISTIC_OUTPUT 0x4000
+
+  /* Compress sections in this BFD.  */
+#define BFD_COMPRESS 0x8000
+
+  /* Decompress sections in this BFD.  */
+#define BFD_DECOMPRESS 0x10000
+
+  /* BFD is a dummy, for plugins.  */
+#define BFD_PLUGIN 0x20000
+
+  /* Flags bits to be saved in bfd_preserve_save.  */
+#define BFD_FLAGS_SAVED \
+  (BFD_IN_MEMORY | BFD_COMPRESS | BFD_DECOMPRESS | BFD_PLUGIN)
+
+  /* Flags bits which are for BFD use only.  */
+#define BFD_FLAGS_FOR_BFD_USE_MASK \
+  (BFD_IN_MEMORY | BFD_COMPRESS | BFD_DECOMPRESS | BFD_LINKER_CREATED \
+   | BFD_PLUGIN | BFD_TRADITIONAL_FORMAT | BFD_DETERMINISTIC_OUTPUT)
 
   /* Currently my_archive is tested before adding origin to
      anything. I believe that this can become always an add of
      origin, with origin set to 0 for non archive files.  */
   ufile_ptr origin;
 
-  /* Remember when output has begun, to stop strange things
-     from happening.  */
-  bfd_boolean output_has_begun;
+  /* The origin in the archive of the proxy entry.  This will
+     normally be the same as origin, except for thin archives,
+     when it will contain the current offset of the proxy in the
+     thin archive rather than the offset of the bfd in its actual
+     container.  */
+  ufile_ptr proxy_origin;
 
   /* A hash table for section names.  */
   struct bfd_hash_table section_htab;
 
   /* Pointer to linked list of sections.  */
-  struct sec *sections;
+  struct bfd_section *sections;
 
-  /* The place where we add to the section list.  */
-  struct sec **section_tail;
+  /* The last section on the section list.  */
+  struct bfd_section *section_last;
 
   /* The number of sections.  */
   unsigned int section_count;
@@ -104,8 +176,9 @@ struct bfd
   /* Used for input and output.  */
   unsigned int symcount;
 
-  /* Symbol table for output BFD (with symcount entries).  */
-  struct symbol_cache_entry  **outsymbols;
+  /* Symbol table for output BFD (with symcount entries).
+     Also used by the linker to cache input BFD symbols.  */
+  struct bfd_symbol  **outsymbols;
 
   /* Used for slurped dynamic symbol tables.  */
   unsigned int dynsymcount;
@@ -114,11 +187,12 @@ struct bfd
   const struct bfd_arch_info *arch_info;
 
   /* Stuff only useful for archives.  */
-  PTR arelt_data;
+  void *arelt_data;
   struct bfd *my_archive;      /* The containing archive BFD.  */
-  struct bfd *next;            /* The next BFD in the archive.  */
+  struct bfd *archive_next;    /* The next BFD in the archive.  */
   struct bfd *archive_head;    /* The first BFD in the archive.  */
-  bfd_boolean has_armap;
+  struct bfd *nested_archives; /* List of nested archive in a flattened
+                                  thin archive.  */
 
   /* A chain of BFD structures involved in a link.  */
   struct bfd *link_next;
@@ -141,6 +215,7 @@ struct bfd
       struct ieee_data_struct *ieee_data;
       struct ieee_ar_data_struct *ieee_ar_data;
       struct srec_data_struct *srec_data;
+      struct verilog_data_struct *verilog_data;
       struct ihex_data_struct *ihex_data;
       struct tekhex_data_struct *tekhex_data;
       struct elf_obj_tdata *elf_obj_data;
@@ -161,23 +236,58 @@ struct bfd
       struct netbsd_core_struct *netbsd_core_data;
       struct mach_o_data_struct *mach_o_data;
       struct mach_o_fat_data_struct *mach_o_fat_data;
+      struct plugin_data_struct *plugin_data;
       struct bfd_pef_data_struct *pef_data;
       struct bfd_pef_xlib_data_struct *pef_xlib_data;
       struct bfd_sym_data_struct *sym_data;
-      PTR any;
+      void *any;
     @}
   tdata;
 
   /* Used by the application to hold private data.  */
-  PTR usrdata;
+  void *usrdata;
 
   /* Where all the allocated stuff under this BFD goes.  This is a
-     struct objalloc *, but we use PTR to avoid requiring the inclusion of
-     objalloc.h.  */
-  PTR memory;
+     struct objalloc *, but we use void * to avoid requiring the inclusion
+     of objalloc.h.  */
+  void *memory;
+
+  /* Is the file descriptor being cached?  That is, can it be closed as
+     needed, and re-opened when accessed later?  */
+  unsigned int cacheable : 1;
+
+  /* Marks whether there was a default target specified when the
+     BFD was opened. This is used to select which matching algorithm
+     to use to choose the back end.  */
+  unsigned int target_defaulted : 1;
+
+  /* ... and here: (``once'' means at least once).  */
+  unsigned int opened_once : 1;
+
+  /* Set if we have a locally maintained mtime value, rather than
+     getting it from the file each time.  */
+  unsigned int mtime_set : 1;
+
+  /* Flag set if symbols from this BFD should not be exported.  */
+  unsigned int no_export : 1;
+
+  /* Remember when output has begun, to stop strange things
+     from happening.  */
+  unsigned int output_has_begun : 1;
+
+  /* Have archive map.  */
+  unsigned int has_armap : 1;
+
+  /* Set if this is a thin archive.  */
+  unsigned int is_thin_archive : 1;
+
+  /* Set if only required symbols should be added in the link hash table for
+     this object.  Used by VMS linkers.  */
+  unsigned int selective_search : 1;
 @};
 
 @end example
+@node Error reporting, Miscellaneous, typedef bfd, BFD front end
 @section Error reporting
 Most BFD functions return nonzero on success (check their
 individual documentation for precise semantics).  On an error,
@@ -209,6 +319,7 @@ typedef enum bfd_error
   bfd_error_no_armap,
   bfd_error_no_more_archived_files,
   bfd_error_malformed_archive,
+  bfd_error_missing_dso,
   bfd_error_file_not_recognized,
   bfd_error_file_ambiguously_recognized,
   bfd_error_no_contents,
@@ -217,6 +328,7 @@ typedef enum bfd_error
   bfd_error_bad_value,
   bfd_error_file_truncated,
   bfd_error_file_too_big,
+  bfd_error_on_input,
   bfd_error_invalid_error_code
 @}
 bfd_error_type;
@@ -235,10 +347,13 @@ Return the current BFD error condition.
 @subsubsection @code{bfd_set_error}
 @strong{Synopsis}
 @example
-void bfd_set_error (bfd_error_type error_tag);
+void bfd_set_error (bfd_error_type error_tag, ...);
 @end example
 @strong{Description}@*
 Set the BFD error condition to be @var{error_tag}.
+If @var{error_tag} is bfd_error_on_input, then this function
+takes two more parameters, the input bfd where the error
+occurred, and the bfd_error_type error.
 
 @findex bfd_errmsg
 @subsubsection @code{bfd_errmsg}
@@ -266,14 +381,14 @@ by @var{message}, a colon, and a space.  It is followed by a newline.
 @subsection BFD error handler
 Some BFD functions want to print messages describing the
 problem.  They call a BFD error handler function.  This
-function may be overriden by the program.
+function may be overridden by the program.
 
 The BFD error handler acts like printf.
 
 
 @example
 
-typedef void (*bfd_error_handler_type) PARAMS ((const char *, ...));
+typedef void (*bfd_error_handler_type) (const char *, ...);
 
 @end example
 @findex bfd_set_error_handler
@@ -307,18 +422,48 @@ bfd_error_handler_type bfd_get_error_handler (void);
 @strong{Description}@*
 Return the BFD error handler function.
 
-@findex bfd_archive_filename
-@subsubsection @code{bfd_archive_filename}
+@subsection BFD assert handler
+If BFD finds an internal inconsistency, the bfd assert
+handler is called with information on the BFD version, BFD
+source file and line.  If this happens, most programs linked
+against BFD are expected to want to exit with an error, or mark
+the current BFD operation as failed, so it is recommended to
+override the default handler, which just calls
+_bfd_error_handler and continues.
+
+
+@example
+
+typedef void (*bfd_assert_handler_type) (const char *bfd_formatmsg,
+                                         const char *bfd_version,
+                                         const char *bfd_file,
+                                         int bfd_line);
+
+@end example
+@findex bfd_set_assert_handler
+@subsubsection @code{bfd_set_assert_handler}
 @strong{Synopsis}
 @example
-const char *bfd_archive_filename (bfd *);
+bfd_assert_handler_type bfd_set_assert_handler (bfd_assert_handler_type);
 @end example
 @strong{Description}@*
-For a BFD that is a component of an archive, returns a string
-with both the archive name and file name.  For other BFDs, just
-returns the file name.
+Set the BFD assert handler function.  Returns the previous
+function.
 
-@section Symbols
+@findex bfd_get_assert_handler
+@subsubsection @code{bfd_get_assert_handler}
+@strong{Synopsis}
+@example
+bfd_assert_handler_type bfd_get_assert_handler (void);
+@end example
+@strong{Description}@*
+Return the BFD assert handler function.
+
+@node Miscellaneous, Memory Usage, Error reporting, BFD front end
+@section Miscellaneous
+
+
+@subsection Miscellaneous functions
 
 
 @findex bfd_get_reloc_upper_bound
@@ -337,10 +482,7 @@ attached to bfd @var{abfd}.  If an error occurs, return -1.
 @strong{Synopsis}
 @example
 long bfd_canonicalize_reloc
-   (bfd *abfd,
-    asection *sec,
-    arelent **loc,
-    asymbol **syms);
+   (bfd *abfd, asection *sec, arelent **loc, asymbol **syms);
 @end example
 @strong{Description}@*
 Call the back end associated with the open BFD
@@ -475,6 +617,31 @@ in octal if a leading zero is found, otherwise in decimal.
 If the value would overflow, the maximum @code{bfd_vma} value is
 returned.
 
+@findex bfd_copy_private_header_data
+@subsubsection @code{bfd_copy_private_header_data}
+@strong{Synopsis}
+@example
+bfd_boolean bfd_copy_private_header_data (bfd *ibfd, bfd *obfd);
+@end example
+@strong{Description}@*
+Copy private BFD header information from the BFD @var{ibfd} to the
+the BFD @var{obfd}.  This copies information that may require
+sections to exist, but does not require symbol tables.  Return
+@code{true} on success, @code{false} on error.
+Possible error returns are:
+
+@itemize @bullet
+
+@item
+@code{bfd_error_no_memory} -
+Not enough memory exists to create private data for @var{obfd}.
+@end itemize
+@example
+#define bfd_copy_private_header_data(ibfd, obfd) \
+     BFD_SEND (obfd, _bfd_copy_private_header_data, \
+               (ibfd, obfd))
+@end example
+
 @findex bfd_copy_private_bfd_data
 @subsubsection @code{bfd_copy_private_bfd_data}
 @strong{Synopsis}
@@ -548,12 +715,25 @@ Not enough memory exists to create private data for @var{obfd}.
 @strong{Description}@*
 The following functions exist but have not yet been documented.
 @example
-#define bfd_sizeof_headers(abfd, reloc) \
-       BFD_SEND (abfd, _bfd_sizeof_headers, (abfd, reloc))
+#define bfd_sizeof_headers(abfd, info) \
+       BFD_SEND (abfd, _bfd_sizeof_headers, (abfd, info))
 
 #define bfd_find_nearest_line(abfd, sec, syms, off, file, func, line) \
        BFD_SEND (abfd, _bfd_find_nearest_line, \
                  (abfd, sec, syms, off, file, func, line))
+
+#define bfd_find_nearest_line_discriminator(abfd, sec, syms, off, file, func, \
+                                            line, disc) \
+       BFD_SEND (abfd, _bfd_find_nearest_line_discriminator, \
+                 (abfd, sec, syms, off, file, func, line, disc))
+
+#define bfd_find_line(abfd, syms, sym, file, line) \
+       BFD_SEND (abfd, _bfd_find_line, \
+                 (abfd, syms, sym, file, line))
+
+#define bfd_find_inliner_info(abfd, file, func, line) \
+       BFD_SEND (abfd, _bfd_find_inliner_info, \
+                 (abfd, file, func, line))
 
 #define bfd_debug_info_start(abfd) \
        BFD_SEND (abfd, _bfd_debug_info_start, (abfd))
@@ -579,8 +759,14 @@ The following functions exist but have not yet been documented.
 #define bfd_gc_sections(abfd, link_info) \
        BFD_SEND (abfd, _bfd_gc_sections, (abfd, link_info))
 
+#define bfd_lookup_section_flags(link_info, flag_info, section) \
+       BFD_SEND (abfd, _bfd_lookup_section_flags, (link_info, flag_info, section))
+
 #define bfd_merge_sections(abfd, link_info) \
        BFD_SEND (abfd, _bfd_merge_sections, (abfd, link_info))
+
+#define bfd_is_group_section(abfd, sec) \
+       BFD_SEND (abfd, _bfd_is_group_section, (abfd, sec))
 
 #define bfd_discard_group(abfd, sec) \
        BFD_SEND (abfd, _bfd_discard_group, (abfd, sec))
@@ -594,7 +780,7 @@ The following functions exist but have not yet been documented.
 #define bfd_link_add_symbols(abfd, info) \
        BFD_SEND (abfd, _bfd_link_add_symbols, (abfd, info))
 
-#define bfd_link_just_syms(sec, info) \
+#define bfd_link_just_syms(abfd, sec, info) \
        BFD_SEND (abfd, _bfd_link_just_syms, (sec, info))
 
 #define bfd_final_link(abfd, info) \
@@ -612,6 +798,10 @@ The following functions exist but have not yet been documented.
 #define bfd_canonicalize_dynamic_symtab(abfd, asymbols) \
        BFD_SEND (abfd, _bfd_canonicalize_dynamic_symtab, (abfd, asymbols))
 
+#define bfd_get_synthetic_symtab(abfd, count, syms, dyncount, dynsyms, ret) \
+       BFD_SEND (abfd, _bfd_get_synthetic_symtab, (abfd, count, syms, \
+                                                   dyncount, dynsyms, ret))
+
 #define bfd_get_dynamic_reloc_upper_bound(abfd) \
        BFD_SEND (abfd, _bfd_get_dynamic_reloc_upper_bound, (abfd))
 
@@ -619,9 +809,8 @@ The following functions exist but have not yet been documented.
        BFD_SEND (abfd, _bfd_canonicalize_dynamic_reloc, (abfd, arels, asyms))
 
 extern bfd_byte *bfd_get_relocated_section_contents
-       PARAMS ((bfd *, struct bfd_link_info *,
-                 struct bfd_link_order *, bfd_byte *,
-                 bfd_boolean, asymbol **));
+  (bfd *, struct bfd_link_info *, struct bfd_link_order *, bfd_byte *,
+   bfd_boolean, asymbol **);
 
 @end example
 
@@ -638,57 +827,62 @@ the preferred one (alternative == 0) and any others.  Currently,
 only ELF supports this feature, with up to two alternate
 machine codes.
 
-
-@example
-struct bfd_preserve
-@{
-  PTR marker;
-  PTR tdata;
-  flagword flags;
-  const struct bfd_arch_info *arch_info;
-  struct sec *sections;
-  struct sec **section_tail;
-  unsigned int section_count;
-  struct bfd_hash_table section_htab;
-@};
-
-@end example
-@findex bfd_preserve_save
-@subsubsection @code{bfd_preserve_save}
+@findex bfd_emul_get_maxpagesize
+@subsubsection @code{bfd_emul_get_maxpagesize}
 @strong{Synopsis}
 @example
-bfd_boolean bfd_preserve_save (bfd *, struct bfd_preserve *);
+bfd_vma bfd_emul_get_maxpagesize (const char *);
 @end example
 @strong{Description}@*
-When testing an object for compatibility with a particular
-target back-end, the back-end object_p function needs to set
-up certain fields in the bfd on successfully recognizing the
-object.  This typically happens in a piecemeal fashion, with
-failures possible at many points.  On failure, the bfd is
-supposed to be restored to its initial state, which is
-virtually impossible.  However, restoring a subset of the bfd
-state works in practice.  This function stores the subset and
-reinitializes the bfd.
+Returns the maximum page size, in bytes, as determined by
+emulation.
 
-@findex bfd_preserve_restore
-@subsubsection @code{bfd_preserve_restore}
+@strong{Returns}@*
+Returns the maximum page size in bytes for ELF, 0 otherwise.
+
+@findex bfd_emul_set_maxpagesize
+@subsubsection @code{bfd_emul_set_maxpagesize}
 @strong{Synopsis}
 @example
-void bfd_preserve_restore (bfd *, struct bfd_preserve *);
+void bfd_emul_set_maxpagesize (const char *, bfd_vma);
 @end example
 @strong{Description}@*
-This function restores bfd state saved by bfd_preserve_save.
-If MARKER is non-NULL in struct bfd_preserve then that block
-and all subsequently bfd_alloc'd memory is freed.
+For ELF, set the maximum page size for the emulation.  It is
+a no-op for other formats.
 
-@findex bfd_preserve_finish
-@subsubsection @code{bfd_preserve_finish}
+@findex bfd_emul_get_commonpagesize
+@subsubsection @code{bfd_emul_get_commonpagesize}
 @strong{Synopsis}
 @example
-void bfd_preserve_finish (bfd *, struct bfd_preserve *);
+bfd_vma bfd_emul_get_commonpagesize (const char *);
 @end example
 @strong{Description}@*
-This function should be called when the bfd state saved by
-bfd_preserve_save is no longer needed.  ie. when the back-end
-object_p function returns with success.
+Returns the common page size, in bytes, as determined by
+emulation.
+
+@strong{Returns}@*
+Returns the common page size in bytes for ELF, 0 otherwise.
+
+@findex bfd_emul_set_commonpagesize
+@subsubsection @code{bfd_emul_set_commonpagesize}
+@strong{Synopsis}
+@example
+void bfd_emul_set_commonpagesize (const char *, bfd_vma);
+@end example
+@strong{Description}@*
+For ELF, set the common page size for the emulation.  It is
+a no-op for other formats.
+
+@findex bfd_demangle
+@subsubsection @code{bfd_demangle}
+@strong{Synopsis}
+@example
+char *bfd_demangle (bfd *, const char *, int);
+@end example
+@strong{Description}@*
+Wrapper around cplus_demangle.  Strips leading underscores and
+other such chars that would otherwise confuse the demangler.
+If passed a g++ v3 ABI mangled name, returns a buffer allocated
+with malloc holding the demangled name.  Returns NULL otherwise
+and on memory alloc failure.
 

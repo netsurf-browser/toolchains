@@ -1,23 +1,23 @@
 /* ldctor.h - linker constructor support
-   Copyright 1991, 1992, 1993, 1994, 1995, 1998, 2000, 2002
-   Free Software Foundation, Inc.
+   Copyright 1991, 1992, 1993, 1994, 1995, 1998, 2000, 2002, 2003, 2005,
+   2007, 2008  Free Software Foundation, Inc.
 
-This file is part of GLD, the Gnu Linker.
+   This file is part of the GNU Binutils.
 
-GLD is free software; you can redistribute it and/or modify
-it under the terms of the GNU General Public License as published by
-the Free Software Foundation; either version 2, or (at your option)
-any later version.
+   This program is free software; you can redistribute it and/or modify
+   it under the terms of the GNU General Public License as published by
+   the Free Software Foundation; either version 3 of the License, or
+   (at your option) any later version.
 
-GLD is distributed in the hope that it will be useful,
-but WITHOUT ANY WARRANTY; without even the implied warranty of
-MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-GNU General Public License for more details.
+   This program is distributed in the hope that it will be useful,
+   but WITHOUT ANY WARRANTY; without even the implied warranty of
+   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+   GNU General Public License for more details.
 
-You should have received a copy of the GNU General Public License
-along with GLD; see the file COPYING.  If not, write to the Free
-Software Foundation, 59 Temple Place - Suite 330, Boston, MA
-02111-1307, USA.  */
+   You should have received a copy of the GNU General Public License
+   along with this program; if not, write to the Free Software
+   Foundation, Inc., 51 Franklin Street - Fifth Floor, Boston,
+   MA 02110-1301, USA.  */
 
 #ifndef LDCTOR_H
 #define LDCTOR_H
@@ -52,9 +52,9 @@ struct set_element {
 extern struct set_info *sets;
 
 extern void ldctor_add_set_entry
-  PARAMS ((struct bfd_link_hash_entry *, bfd_reloc_code_real_type,
-	   const char *, asection *, bfd_vma));
+  (struct bfd_link_hash_entry *, bfd_reloc_code_real_type, const char *,
+   asection *, bfd_vma);
 extern void ldctor_build_sets
-  PARAMS ((void));
+  (void);
 
 #endif

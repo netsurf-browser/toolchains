@@ -1,5 +1,6 @@
 /* Opcode table for the ARC.
-   Copyright 1994, 1995, 1997, 2001 Free Software Foundation, Inc.
+   Copyright 1994, 1995, 1997, 2001, 2002, 2003, 2010
+   Free Software Foundation, Inc.
    Contributed by Doug Evans (dje@cygnus.com).
 
    This file is part of GAS, the GNU Assembler, GDB, the GNU debugger, and
@@ -7,7 +8,7 @@
 
    GAS/GDB is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License as published by
-   the Free Software Foundation; either version 2, or (at your option)
+   the Free Software Foundation; either version 3, or (at your option)
    any later version.
 
    GAS/GDB is distributed in the hope that it will be useful,
@@ -16,9 +17,9 @@
    GNU General Public License for more details.
 
    You should have received a copy of the GNU General Public License
-   along with GAS or GDB; see the file COPYING.	If not, write to
-   the Free Software Foundation, 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.  */
-
+   along with GAS or GDB; see the file COPYING3.  If not, write to
+   the Free Software Foundation, 51 Franklin Street - Fifth Floor, Boston,
+   MA 02110-1301, USA.  */
 
 /* List of the various cpu types.
    The tables currently use bit masks to say whether the instruction or
@@ -226,10 +227,9 @@ struct arc_operand {
 
    REG is non-NULL when inserting a register value.  */
 
-  arc_insn (*insert) PARAMS ((arc_insn insn,
-			      const struct arc_operand *operand, int mods,
-			      const struct arc_operand_value *reg, long value,
-			      const char **errmsg));
+  arc_insn (*insert)
+    (arc_insn insn, const struct arc_operand *operand, int mods,
+     const struct arc_operand_value *reg, long value, const char **errmsg);
 
 /* Extraction function.  This is used by the disassembler.  To
    extract this operand type from an instruction, check this field.
@@ -255,10 +255,9 @@ struct arc_operand {
    Operands that have a printable form like registers and suffixes have
    their struct arc_operand_value pointer stored in OPVAL.  */
 
-  long (*extract) PARAMS ((arc_insn *insn,
-			   const struct arc_operand *operand,
-			   int mods, const struct arc_operand_value **opval,
-			   int *invalid));
+  long (*extract)
+    (arc_insn *insn, const struct arc_operand *operand, int mods,
+     const struct arc_operand_value **opval, int *invalid);
 };
 
 /* Bits that say what version of cpu we have. These should be passed to
@@ -302,22 +301,22 @@ extern const int arc_reg_names_count;
 extern unsigned char arc_operand_map[];
 
 /* Utility fns in arc-opc.c.  */
-int arc_get_opcode_mach PARAMS ((int, int));
+int arc_get_opcode_mach (int, int);
 
 /* `arc_opcode_init_tables' must be called before `arc_xxx_supported'.  */
-void arc_opcode_init_tables PARAMS ((int));
-void arc_opcode_init_insert PARAMS ((void));
-void arc_opcode_init_extract PARAMS ((void));
-const struct arc_opcode *arc_opcode_lookup_asm PARAMS ((const char *));
-const struct arc_opcode *arc_opcode_lookup_dis PARAMS ((unsigned int));
-int arc_opcode_limm_p PARAMS ((long *));
+void arc_opcode_init_tables (int);
+void arc_opcode_init_insert (void);
+void arc_opcode_init_extract (void);
+const struct arc_opcode *arc_opcode_lookup_asm (const char *);
+const struct arc_opcode *arc_opcode_lookup_dis (unsigned int);
+int arc_opcode_limm_p (long *);
 const struct arc_operand_value *arc_opcode_lookup_suffix
-  PARAMS ((const struct arc_operand *type, int value));
-int arc_opcode_supported PARAMS ((const struct arc_opcode *));
-int arc_opval_supported PARAMS ((const struct arc_operand_value *));
-int arc_limm_fixup_adjust PARAMS ((arc_insn));
-int arc_insn_is_j PARAMS ((arc_insn));
-int arc_insn_not_jl PARAMS ((arc_insn));
-int arc_operand_type PARAMS ((int));
-struct arc_operand_value *get_ext_suffix PARAMS ((char *));
-int arc_get_noshortcut_flag PARAMS ((void));
+  (const struct arc_operand *type, int value);
+int arc_opcode_supported (const struct arc_opcode *);
+int arc_opval_supported (const struct arc_operand_value *);
+int arc_limm_fixup_adjust (arc_insn);
+int arc_insn_is_j (arc_insn);
+int arc_insn_not_jl (arc_insn);
+int arc_operand_type (int);
+struct arc_operand_value *get_ext_suffix (char *);
+int arc_get_noshortcut_flag (void);

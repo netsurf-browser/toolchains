@@ -1,10 +1,11 @@
 TEMPLATE_NAME=elf32
 SCRIPT_NAME=elf
 OUTPUT_FORMAT="elf32-powerpc"
+NO_REL_RELOCS=yes
 ARCH=powerpc
 MACHINE=
 EMBEDDED=yes
-MAXPAGESIZE=0x10000
+MAXPAGESIZE="CONSTANT (MAXPAGESIZE)"
 
 # The data below is taken from the windiss.dld linker script that comes with
 # the Diab linker.

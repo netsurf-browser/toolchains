@@ -26,21 +26,21 @@
  * OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF
  * SUCH DAMAGE.
  */
-#include "demangle.h"
 #include "gprof.h"
+#include "demangle.h"
 #include "search_list.h"
 #include "source.h"
 #include "symtab.h"
 #include "cg_arcs.h"
 #include "utils.h"
+#include "corefile.h"
 
 
 /*
  * Print name of symbol.  Return number of characters printed.
  */
 int
-print_name_only (self)
-     Sym *self;
+print_name_only (Sym *self)
 {
   const char *name = self->name;
   const char *filename;
@@ -50,20 +50,11 @@ print_name_only (self)
 
   if (name)
     {
-      if (!bsd_style_output)
+      if (!bsd_style_output && demangle)
 	{
-	  if (name[0] == '_' && name[1] && discard_underscores)
-	    {
-	      name++;
-	    }
-	  if (demangle)
-	    {
-	      demangled = cplus_demangle (name, DMGL_ANSI | DMGL_PARAMS);
-	      if (demangled)
-		{
-		  name = demangled;
-		}
-	    }
+	  demangled = bfd_demangle (core_bfd, name, DMGL_ANSI | DMGL_PARAMS);
+	  if (demangled)
+	    name = demangled;
 	}
       printf ("%s", name);
       size = strlen (name);
@@ -99,8 +90,7 @@ print_name_only (self)
 
 
 void
-print_name (self)
-     Sym *self;
+print_name (Sym *self)
 {
   print_name_only (self);
 

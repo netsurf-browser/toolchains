@@ -48,7 +48,7 @@ Disassembly of section .text:
 [ 	]*74: [A-Z0-9_]*HI[A-Z0-9_]*	.bss.*
 0+0078 <[^>]*> lb	a0,[0-9]+\(a0\)
 [ 	]*78: [A-Z0-9_]*LO[A-Z0-9_]*	.bss.*
-0+007c <[^>]*> lb	a0,-16384\(gp\)
+0+007c <[^>]*> lb	a0,0\(gp\)
 [ 	]*7c: [A-Z0-9_]*GPREL[A-Z0-9_]*	.sbss.*
 0+0080 <[^>]*> lui	a0,0x0
 [ 	]*80: [A-Z0-9_]*HI[A-Z0-9_]*	.data.*
@@ -388,7 +388,7 @@ Disassembly of section .text:
 0+0378 <[^>]*> lw	a0,0\(zero\)
 0+037c <[^>]*> lwl	a0,0\(zero\)
 0+0380 <[^>]*> lwr	a0,0\(zero\)
-0+0384 <[^>]*> lwc0	\$4,0\(zero\)
+0+0384 <[^>]*> lwc0	(c0_context|\$4),0\(zero\)
 0+0388 <[^>]*> lwc1	\$f4,0\(zero\)
 0+038c <[^>]*> lwc2	\$4,0\(zero\)
 0+0390 <[^>]*> lwc3	\$4,0\(zero\)

@@ -1,11 +1,12 @@
 /* This file is tc-sh64.h
-   Copyright 2000, 2001, 2002, 2003 Free Software Foundation, Inc.
+   Copyright 2000, 2001, 2002, 2003, 2005, 2007, 2008
+   Free Software Foundation, Inc.
 
    This file is part of GAS, the GNU Assembler.
 
    GAS is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License as published by
-   the Free Software Foundation; either version 2, or (at your option)
+   the Free Software Foundation; either version 3, or (at your option)
    any later version.
 
    GAS is distributed in the hope that it will be useful,
@@ -15,8 +16,8 @@
 
    You should have received a copy of the GNU General Public License
    along with GAS; see the file COPYING.  If not, write to
-   the Free Software Foundation, 59 Temple Place - Suite 330,
-   Boston, MA 02111-1307, USA.  */
+   the Free Software Foundation, 51 Franklin Street - Fifth Floor,
+   Boston, MA 02110-1301, USA.  */
 
 #define TC_SH64
 #include "config/tc-sh.h"
@@ -28,11 +29,11 @@
    SHcompact NOP:s.  */
 #undef  HANDLE_ALIGN
 #define HANDLE_ALIGN(frag) sh64_handle_align (frag)
-extern void sh64_handle_align PARAMS ((fragS *));
+extern void sh64_handle_align (fragS *);
 
 #undef  MAX_MEM_FOR_RS_ALIGN_CODE
 #define MAX_MEM_FOR_RS_ALIGN_CODE sh64_max_mem_for_rs_align_code ()
-extern int sh64_max_mem_for_rs_align_code PARAMS ((void));
+extern int sh64_max_mem_for_rs_align_code (void);
 
 #undef  LISTING_HEADER
 #define LISTING_HEADER					\
@@ -41,7 +42,7 @@ extern int sh64_max_mem_for_rs_align_code PARAMS ((void));
    : "SuperH SHcompact/SHmedia Little Endian GAS")
 
 /* We need to record the new frag position after an .align.  */
-extern void sh64_do_align PARAMS ((int, const char *, int, int));
+extern void sh64_do_align (int, const char *, int, int);
 #define md_do_align(n, fill, len, max, l) \
  do { sh64_do_align (n, fill, len, max); goto l; } while (0)
 
@@ -71,15 +72,14 @@ struct sh64_segment_info_type
 
 #undef  TARGET_FORMAT
 #define TARGET_FORMAT sh64_target_format ()
-extern const char *sh64_target_format PARAMS ((void));
+extern const char *sh64_target_format (void);
 
 #define TARGET_MACH sh64_target_mach ()
-extern int sh64_target_mach PARAMS ((void));
+extern int sh64_target_mach (void);
 
 #undef TC_FORCE_RELOCATION_LOCAL
 #define TC_FORCE_RELOCATION_LOCAL(FIX)			\
   (!(FIX)->fx_pcrel					\
-   || (FIX)->fx_plt					\
    || (FIX)->fx_r_type == BFD_RELOC_32_PLT_PCREL	\
    || (FIX)->fx_r_type == BFD_RELOC_SH_PLT_LOW16	\
    || (FIX)->fx_r_type == BFD_RELOC_SH_PLT_MEDLOW16	\
@@ -115,19 +115,21 @@ extern int sh64_target_mach PARAMS ((void));
 
 /* Don't complain when we leave fx_subsy around.  */
 #undef TC_VALIDATE_FIX_SUB
-#define TC_VALIDATE_FIX_SUB(FIX)			\
-  ((FIX)->fx_r_type == BFD_RELOC_32_PLT_PCREL		\
-   || (sh_relax && SWITCH_TABLE (FIX))			\
-   || *symbol_get_tc ((FIX)->fx_addsy) != NULL)
+#define TC_VALIDATE_FIX_SUB(FIX, SEG)			\
+  ((md_register_arithmetic || (SEG) != reg_section)	\
+   && ((FIX)->fx_r_type == BFD_RELOC_32_PLT_PCREL	\
+       || (sh_relax && SWITCH_TABLE (FIX))		\
+       || *symbol_get_tc ((FIX)->fx_addsy) != NULL))
 
 /* Note the kludge: we want to put back C, and we also want to consume the
    expression, since we have handled it ourselves.  FIXME: What we really
    need is a new GAS infrastructure feature: md_qualifier.  */
 #undef md_parse_name
-#define md_parse_name(NAME, EXP, CP) \
- sh64_consume_datalabel (NAME, EXP, CP, operand)
-extern int sh64_consume_datalabel
- PARAMS ((const char *, expressionS *, char *, segT (*) (expressionS *)));
+#define md_parse_name(NAME, EXP, MODE, CP) \
+ sh64_consume_datalabel (NAME, EXP, MODE, CP, operand)
+extern int sh64_consume_datalabel (const char *, expressionS *,
+				   enum expr_mode, char *,
+				   segT (*) (expressionS *, enum expr_mode));
 
 /* Saying "$" is the same as saying ".".  */
 #define DOLLAR_DOT
@@ -136,15 +138,15 @@ extern int sh64_consume_datalabel
 #define MD_PCREL_FROM_SECTION(FIX, SEC)		\
   shmedia_md_pcrel_from_section (FIX, SEC)
 
-extern valueT shmedia_md_pcrel_from_section PARAMS ((struct fix *, segT));
+extern valueT shmedia_md_pcrel_from_section (struct fix *, segT);
 
 /* We need to mark this symbol as a BranchTarget; setting st_other for it
    and adding 1 to its value (temporarily).  */
-extern void sh64_frob_label PARAMS ((symbolS *));
+extern void sh64_frob_label (symbolS *);
 
 #undef  tc_frob_label
 #define tc_frob_label(sym) \
-  do { sh_frob_label (); sh64_frob_label (sym); } while (0)
+  do { sh_frob_label (sym); sh64_frob_label (sym); } while (0)
 
 #define tc_symbol_new_hook(s) sh64_frob_label (s)
 
@@ -160,22 +162,19 @@ extern void sh64_frob_label PARAMS ((symbolS *));
    }						\
  while (0)
 
-extern int sh64_exclude_symbol PARAMS ((symbolS *));
+extern int sh64_exclude_symbol (symbolS *);
 
-extern void sh64_adjust_symtab PARAMS ((void));
+extern void sh64_adjust_symtab (void);
 #define tc_adjust_symtab sh64_adjust_symtab
 
 #undef  md_flush_pending_output
 #define md_flush_pending_output() sh64_flush_pending_output ()
-extern void sh64_flush_pending_output PARAMS ((void));
+extern void sh64_flush_pending_output (void);
 
 /* Note that tc-sh.c has a sh_frob_section, but it's called from
    tc_frob_file_before_adjust.  */
 #define tc_frob_section(sec) shmedia_frob_section_type (sec)
-extern void shmedia_frob_section_type PARAMS ((asection *));
-
-#define ELF_TC_SPECIAL_SECTIONS \
-  { ".cranges",	SHT_PROGBITS,	0 },
+extern void shmedia_frob_section_type (asection *);
 
 /* We need to emit fixups relative to the frag in which the instruction
    resides.  Safest way without calculating max fragment growth or making
@@ -218,9 +217,12 @@ extern enum sh64_isa_values sh64_isa_mode;
 extern fragS *sh64_last_insn_frag;
 
 #define md_end() shmedia_md_end ()
-void shmedia_md_end PARAMS ((void));
+void shmedia_md_end (void);
 
 /* Because we make .debug_line hold the SHmedia instruction address | 1,
    we have to say we only have minimum byte-size insns.  */
 #undef  DWARF2_LINE_MIN_INSN_LENGTH
 #define DWARF2_LINE_MIN_INSN_LENGTH 1
+
+#define TC_FAKE_LABEL(NAME) sh64_fake_label(NAME)
+extern int sh64_fake_label (const char *);

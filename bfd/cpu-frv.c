@@ -1,32 +1,26 @@
 /* BFD support for the FRV processor.
-   Copyright 2002 Free Software Foundation, Inc.
+   Copyright 2002, 2003, 2004, 2005, 2007 Free Software Foundation, Inc.
 
-This file is part of BFD, the Binary File Descriptor library.
+   This file is part of BFD, the Binary File Descriptor library.
 
-This program is free software; you can redistribute it and/or modify
-it under the terms of the GNU General Public License as published by
-the Free Software Foundation; either version 2 of the License, or
-(at your option) any later version.
+   This program is free software; you can redistribute it and/or modify
+   it under the terms of the GNU General Public License as published by
+   the Free Software Foundation; either version 3 of the License, or
+   (at your option) any later version.
 
-This program is distributed in the hope that it will be useful,
-but WITHOUT ANY WARRANTY; without even the implied warranty of
-MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-GNU General Public License for more details.
+   This program is distributed in the hope that it will be useful,
+   but WITHOUT ANY WARRANTY; without even the implied warranty of
+   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+   GNU General Public License for more details.
 
-You should have received a copy of the GNU General Public License
-along with this program; if not, write to the Free Software
-Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.  */
+   You should have received a copy of the GNU General Public License
+   along with this program; if not, write to the Free Software
+   Foundation, Inc., 51 Franklin Street - Fifth Floor, Boston,
+   MA 02110-1301, USA.  */
 
-#include "bfd.h"
 #include "sysdep.h"
+#include "bfd.h"
 #include "libbfd.h"
-
-enum {
-  I_frv_generic,
-  I_frv_simple,
-  I_frv_500,
-  I_frv_300,
-};
 
 #define FRV_ARCH(MACHINE, NAME, DEFAULT, NEXT)				\
 {									\
@@ -41,6 +35,7 @@ enum {
   DEFAULT,			/* is this the default? */		\
   bfd_default_compatible,	/* architecture comparison fn */	\
   bfd_default_scan,		/* string to architecture convert fn */	\
+  bfd_arch_default_fill,	/* Default fill.  */			\
   NEXT				/* next in list */			\
 }
 
@@ -50,11 +45,17 @@ static const bfd_arch_info_type arch_info_300
 static const bfd_arch_info_type arch_info_400
   = FRV_ARCH (bfd_mach_fr400, "fr400", FALSE, &arch_info_300);
 
+static const bfd_arch_info_type arch_info_450
+  = FRV_ARCH (bfd_mach_fr450, "fr450", FALSE, &arch_info_400);
+
 static const bfd_arch_info_type arch_info_500
-  = FRV_ARCH (bfd_mach_fr500, "fr500", FALSE, &arch_info_400);
+  = FRV_ARCH (bfd_mach_fr500, "fr500", FALSE, &arch_info_450);
+
+static const bfd_arch_info_type arch_info_550
+  = FRV_ARCH (bfd_mach_fr550, "fr550", FALSE, &arch_info_500);
 
 static const bfd_arch_info_type arch_info_simple
-  = FRV_ARCH (bfd_mach_frvsimple, "simple", FALSE, &arch_info_500);
+  = FRV_ARCH (bfd_mach_frvsimple, "simple", FALSE, &arch_info_550);
 
 static const bfd_arch_info_type arch_info_tomcat
   = FRV_ARCH (bfd_mach_frvtomcat, "tomcat", FALSE, &arch_info_simple);

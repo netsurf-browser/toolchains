@@ -1,18 +1,19 @@
 /* BFD back-end for HP PA-RISC ELF files.
-   Copyright 1990, 1991, 1992, 1993, 1994, 1995, 1996, 1999, 2000, 2001,
-   2002, 2003 Free Software Foundation, Inc.
+   Copyright 1990-2013 Free Software Foundation, Inc.
 
    Original code by
 	Center for Software Science
 	Department of Computer Science
 	University of Utah
    Largely rewritten by Alan Modra <alan@linuxcare.com.au>
+   Naming cleanup by Carlos O'Donell <carlos@systemhalted.org>
+   TLS support written by Randolph Chung <tausq@debian.org>
 
    This file is part of BFD, the Binary File Descriptor library.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License as published by
-   the Free Software Foundation; either version 2 of the License, or
+   the Free Software Foundation; either version 3 of the License, or
    (at your option) any later version.
 
    This program is distributed in the hope that it will be useful,
@@ -22,10 +23,11 @@
 
    You should have received a copy of the GNU General Public License
    along with this program; if not, write to the Free Software
-   Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.  */
+   Foundation, Inc., 51 Franklin Street - Fifth Floor, Boston,
+   MA 02110-1301, USA.  */
 
-#include "bfd.h"
 #include "sysdep.h"
+#include "bfd.h"
 #include "libbfd.h"
 #include "elf-bfd.h"
 #include "elf/hppa.h"
@@ -113,6 +115,27 @@
    :		mtsp %r1,%sr0
    :		be,n 0(%sr0,%rp)		; inter-space return.  */
 
+
+/* Variable names follow a coding style.
+   Please follow this (Apps Hungarian) style:
+
+   Structure/Variable         		Prefix
+   elf_link_hash_table			"etab"
+   elf_link_hash_entry			"eh"
+
+   elf32_hppa_link_hash_table		"htab"
+   elf32_hppa_link_hash_entry		"hh"
+
+   bfd_hash_table			"btab"
+   bfd_hash_entry			"bh"
+
+   bfd_hash_table containing stubs	"bstab"
+   elf32_hppa_stub_hash_entry		"hsh"
+
+   elf32_hppa_dyn_reloc_entry		"hdh"
+
+   Always remember to use GNU Coding Style. */
+
 #define PLT_ENTRY_SIZE 8
 #define GOT_ENTRY_SIZE 4
 #define ELF_DYNAMIC_INTERPRETER "/lib/ld.so.1"
@@ -141,7 +164,14 @@ static const bfd_byte plt_stub[] =
 #define IS_ABSOLUTE_RELOC(r_type) 1
 #endif
 
-enum elf32_hppa_stub_type {
+/* If ELIMINATE_COPY_RELOCS is non-zero, the linker will try to avoid
+   copying dynamic variables from a shared lib into an app's dynbss
+   section, and instead use a dynamic relocation to point into the
+   shared lib.  */
+#define ELIMINATE_COPY_RELOCS 1
+
+enum elf32_hppa_stub_type
+{
   hppa_stub_long_branch,
   hppa_stub_long_branch_shared,
   hppa_stub_import,
@@ -150,10 +180,10 @@ enum elf32_hppa_stub_type {
   hppa_stub_none
 };
 
-struct elf32_hppa_stub_hash_entry {
-
+struct elf32_hppa_stub_hash_entry
+{
   /* Base hash table entry structure.  */
-  struct bfd_hash_entry root;
+  struct bfd_hash_entry bh_root;
 
   /* The stub section.  */
   asection *stub_sec;
@@ -169,27 +199,27 @@ struct elf32_hppa_stub_hash_entry {
   enum elf32_hppa_stub_type stub_type;
 
   /* The symbol table entry, if any, that this was derived from.  */
-  struct elf32_hppa_link_hash_entry *h;
+  struct elf32_hppa_link_hash_entry *hh;
 
   /* Where this stub is being called from, or, in the case of combined
      stub sections, the first input section in the group.  */
   asection *id_sec;
 };
 
-struct elf32_hppa_link_hash_entry {
-
-  struct elf_link_hash_entry elf;
+struct elf32_hppa_link_hash_entry
+{
+  struct elf_link_hash_entry eh;
 
   /* A pointer to the most recently used stub hash entry against this
      symbol.  */
-  struct elf32_hppa_stub_hash_entry *stub_cache;
+  struct elf32_hppa_stub_hash_entry *hsh_cache;
 
   /* Used to count relocations for delayed sizing of relocation
      sections.  */
-  struct elf32_hppa_dyn_reloc_entry {
-
+  struct elf32_hppa_dyn_reloc_entry
+  {
     /* Next relocation in the chain.  */
-    struct elf32_hppa_dyn_reloc_entry *next;
+    struct elf32_hppa_dyn_reloc_entry *hdh_next;
 
     /* The input section of the reloc.  */
     asection *sec;
@@ -203,32 +233,34 @@ struct elf32_hppa_link_hash_entry {
 #endif
   } *dyn_relocs;
 
-  /* Set if the only reason we need a .plt entry is for a non-PIC to
-     PIC function call.  */
-  unsigned int pic_call:1;
+  enum
+  {
+    GOT_UNKNOWN = 0, GOT_NORMAL = 1, GOT_TLS_GD = 2, GOT_TLS_LDM = 4, GOT_TLS_IE = 8
+  } tls_type;
 
   /* Set if this symbol is used by a plabel reloc.  */
   unsigned int plabel:1;
 };
 
-struct elf32_hppa_link_hash_table {
-
+struct elf32_hppa_link_hash_table
+{
   /* The main hash table.  */
-  struct elf_link_hash_table elf;
+  struct elf_link_hash_table etab;
 
   /* The stub hash table.  */
-  struct bfd_hash_table stub_hash_table;
+  struct bfd_hash_table bstab;
 
   /* Linker stub bfd.  */
   bfd *stub_bfd;
 
   /* Linker call-backs.  */
-  asection * (*add_stub_section) PARAMS ((const char *, asection *));
-  void (*layout_sections_again) PARAMS ((void));
+  asection * (*add_stub_section) (const char *, asection *);
+  void (*layout_sections_again) (void);
 
   /* Array to keep track of which stub sections have been created, and
      information on stub grouping.  */
-  struct map_stub {
+  struct map_stub
+  {
     /* This is the section to which stubs in the group will be
        attached.  */
     asection *link_sec;
@@ -267,151 +299,49 @@ struct elf32_hppa_link_hash_table {
   /* Set if we need a .plt stub to support lazy dynamic linking.  */
   unsigned int need_plt_stub:1;
 
-  /* Small local sym to section mapping cache.  */
-  struct sym_sec_cache sym_sec;
+  /* Small local sym cache.  */
+  struct sym_cache sym_cache;
+
+  /* Data for LDM relocations.  */
+  union
+  {
+    bfd_signed_vma refcount;
+    bfd_vma offset;
+  } tls_ldm_got;
 };
 
 /* Various hash macros and functions.  */
 #define hppa_link_hash_table(p) \
-  ((struct elf32_hppa_link_hash_table *) ((p)->hash))
+  (elf_hash_table_id ((struct elf_link_hash_table *) ((p)->hash)) \
+  == HPPA32_ELF_DATA ? ((struct elf32_hppa_link_hash_table *) ((p)->hash)) : NULL)
+
+#define hppa_elf_hash_entry(ent) \
+  ((struct elf32_hppa_link_hash_entry *)(ent))
+
+#define hppa_stub_hash_entry(ent) \
+  ((struct elf32_hppa_stub_hash_entry *)(ent))
 
 #define hppa_stub_hash_lookup(table, string, create, copy) \
   ((struct elf32_hppa_stub_hash_entry *) \
    bfd_hash_lookup ((table), (string), (create), (copy)))
 
-static struct bfd_hash_entry *stub_hash_newfunc
-  PARAMS ((struct bfd_hash_entry *, struct bfd_hash_table *, const char *));
+#define hppa_elf_local_got_tls_type(abfd) \
+  ((char *)(elf_local_got_offsets (abfd) + (elf_tdata (abfd)->symtab_hdr.sh_info * 2)))
 
-static struct bfd_hash_entry *hppa_link_hash_newfunc
-  PARAMS ((struct bfd_hash_entry *, struct bfd_hash_table *, const char *));
+#define hh_name(hh) \
+  (hh ? hh->eh.root.root.string : "<undef>")
 
-static struct bfd_link_hash_table *elf32_hppa_link_hash_table_create
-  PARAMS ((bfd *));
-
-static void elf32_hppa_link_hash_table_free
-  PARAMS ((struct bfd_link_hash_table *));
-
-/* Stub handling functions.  */
-static char *hppa_stub_name
-  PARAMS ((const asection *, const asection *,
-	   const struct elf32_hppa_link_hash_entry *,
-	   const Elf_Internal_Rela *));
-
-static struct elf32_hppa_stub_hash_entry *hppa_get_stub_entry
-  PARAMS ((const asection *, const asection *,
-	   struct elf32_hppa_link_hash_entry *,
-	   const Elf_Internal_Rela *,
-	   struct elf32_hppa_link_hash_table *));
-
-static struct elf32_hppa_stub_hash_entry *hppa_add_stub
-  PARAMS ((const char *, asection *, struct elf32_hppa_link_hash_table *));
-
-static enum elf32_hppa_stub_type hppa_type_of_stub
-  PARAMS ((asection *, const Elf_Internal_Rela *,
-	   struct elf32_hppa_link_hash_entry *, bfd_vma));
-
-static bfd_boolean hppa_build_one_stub
-  PARAMS ((struct bfd_hash_entry *, PTR));
-
-static bfd_boolean hppa_size_one_stub
-  PARAMS ((struct bfd_hash_entry *, PTR));
-
-/* BFD and elf backend functions.  */
-static bfd_boolean elf32_hppa_object_p PARAMS ((bfd *));
-
-static bfd_boolean elf32_hppa_add_symbol_hook
-  PARAMS ((bfd *, struct bfd_link_info *, const Elf_Internal_Sym *,
-	   const char **, flagword *, asection **, bfd_vma *));
-
-static bfd_boolean elf32_hppa_create_dynamic_sections
-  PARAMS ((bfd *, struct bfd_link_info *));
-
-static void elf32_hppa_copy_indirect_symbol
-  PARAMS ((struct elf_backend_data *, struct elf_link_hash_entry *,
-	   struct elf_link_hash_entry *));
-
-static bfd_boolean elf32_hppa_check_relocs
-  PARAMS ((bfd *, struct bfd_link_info *,
-	   asection *, const Elf_Internal_Rela *));
-
-static asection *elf32_hppa_gc_mark_hook
-  PARAMS ((asection *, struct bfd_link_info *, Elf_Internal_Rela *,
-	   struct elf_link_hash_entry *, Elf_Internal_Sym *));
-
-static bfd_boolean elf32_hppa_gc_sweep_hook
-  PARAMS ((bfd *, struct bfd_link_info *,
-	   asection *, const Elf_Internal_Rela *));
-
-static void elf32_hppa_hide_symbol
-  PARAMS ((struct bfd_link_info *, struct elf_link_hash_entry *, bfd_boolean));
-
-static bfd_boolean elf32_hppa_adjust_dynamic_symbol
-  PARAMS ((struct bfd_link_info *, struct elf_link_hash_entry *));
-
-static bfd_boolean mark_PIC_calls
-  PARAMS ((struct elf_link_hash_entry *, PTR));
-
-static bfd_boolean allocate_plt_static
-  PARAMS ((struct elf_link_hash_entry *, PTR));
-
-static bfd_boolean allocate_dynrelocs
-  PARAMS ((struct elf_link_hash_entry *, PTR));
-
-static bfd_boolean readonly_dynrelocs
-  PARAMS ((struct elf_link_hash_entry *, PTR));
-
-static bfd_boolean clobber_millicode_symbols
-  PARAMS ((struct elf_link_hash_entry *, struct bfd_link_info *));
-
-static bfd_boolean elf32_hppa_size_dynamic_sections
-  PARAMS ((bfd *, struct bfd_link_info *));
-
-static void group_sections
-  PARAMS ((struct elf32_hppa_link_hash_table *, bfd_size_type, bfd_boolean));
-
-static int get_local_syms
-  PARAMS ((bfd *, bfd *, struct bfd_link_info *));
-
-static bfd_boolean elf32_hppa_final_link
-  PARAMS ((bfd *, struct bfd_link_info *));
-
-static void hppa_record_segment_addr
-  PARAMS ((bfd *, asection *, PTR));
-
-static bfd_reloc_status_type final_link_relocate
-  PARAMS ((asection *, bfd_byte *, const Elf_Internal_Rela *,
-	   bfd_vma, struct elf32_hppa_link_hash_table *, asection *,
-	   struct elf32_hppa_link_hash_entry *));
-
-static bfd_boolean elf32_hppa_relocate_section
-  PARAMS ((bfd *, struct bfd_link_info *, bfd *, asection *,
-	   bfd_byte *, Elf_Internal_Rela *, Elf_Internal_Sym *, asection **));
-
-static bfd_boolean elf32_hppa_finish_dynamic_symbol
-  PARAMS ((bfd *, struct bfd_link_info *,
-	   struct elf_link_hash_entry *, Elf_Internal_Sym *));
-
-static enum elf_reloc_type_class elf32_hppa_reloc_type_class
-  PARAMS ((const Elf_Internal_Rela *));
-
-static bfd_boolean elf32_hppa_finish_dynamic_sections
-  PARAMS ((bfd *, struct bfd_link_info *));
-
-static void elf32_hppa_post_process_headers
-  PARAMS ((bfd *, struct bfd_link_info *));
-
-static int elf32_hppa_elf_get_symbol_type
-  PARAMS ((Elf_Internal_Sym *, int));
+#define eh_name(eh) \
+  (eh ? eh->root.root.string : "<undef>")
 
 /* Assorted hash table functions.  */
 
 /* Initialize an entry in the stub hash table.  */
 
 static struct bfd_hash_entry *
-stub_hash_newfunc (entry, table, string)
-     struct bfd_hash_entry *entry;
-     struct bfd_hash_table *table;
-     const char *string;
+stub_hash_newfunc (struct bfd_hash_entry *entry,
+		   struct bfd_hash_table *table,
+		   const char *string)
 {
   /* Allocate the structure if it has not already been allocated by a
      subclass.  */
@@ -427,17 +357,17 @@ stub_hash_newfunc (entry, table, string)
   entry = bfd_hash_newfunc (entry, table, string);
   if (entry != NULL)
     {
-      struct elf32_hppa_stub_hash_entry *eh;
+      struct elf32_hppa_stub_hash_entry *hsh;
 
       /* Initialize the local fields.  */
-      eh = (struct elf32_hppa_stub_hash_entry *) entry;
-      eh->stub_sec = NULL;
-      eh->stub_offset = 0;
-      eh->target_value = 0;
-      eh->target_section = NULL;
-      eh->stub_type = hppa_stub_long_branch;
-      eh->h = NULL;
-      eh->id_sec = NULL;
+      hsh = hppa_stub_hash_entry (entry);
+      hsh->stub_sec = NULL;
+      hsh->stub_offset = 0;
+      hsh->target_value = 0;
+      hsh->target_section = NULL;
+      hsh->stub_type = hppa_stub_long_branch;
+      hsh->hh = NULL;
+      hsh->id_sec = NULL;
     }
 
   return entry;
@@ -446,10 +376,9 @@ stub_hash_newfunc (entry, table, string)
 /* Initialize an entry in the link hash table.  */
 
 static struct bfd_hash_entry *
-hppa_link_hash_newfunc (entry, table, string)
-     struct bfd_hash_entry *entry;
-     struct bfd_hash_table *table;
-     const char *string;
+hppa_link_hash_newfunc (struct bfd_hash_entry *entry,
+			struct bfd_hash_table *table,
+			const char *string)
 {
   /* Allocate the structure if it has not already been allocated by a
      subclass.  */
@@ -465,14 +394,14 @@ hppa_link_hash_newfunc (entry, table, string)
   entry = _bfd_elf_link_hash_newfunc (entry, table, string);
   if (entry != NULL)
     {
-      struct elf32_hppa_link_hash_entry *eh;
+      struct elf32_hppa_link_hash_entry *hh;
 
       /* Initialize the local fields.  */
-      eh = (struct elf32_hppa_link_hash_entry *) entry;
-      eh->stub_cache = NULL;
-      eh->dyn_relocs = NULL;
-      eh->pic_call = 0;
-      eh->plabel = 0;
+      hh = hppa_elf_hash_entry (entry);
+      hh->hsh_cache = NULL;
+      hh->dyn_relocs = NULL;
+      hh->plabel = 0;
+      hh->tls_type = GOT_UNKNOWN;
     }
 
   return entry;
@@ -483,97 +412,76 @@ hppa_link_hash_newfunc (entry, table, string)
    using static variables).  */
 
 static struct bfd_link_hash_table *
-elf32_hppa_link_hash_table_create (abfd)
-     bfd *abfd;
+elf32_hppa_link_hash_table_create (bfd *abfd)
 {
-  struct elf32_hppa_link_hash_table *ret;
-  bfd_size_type amt = sizeof (*ret);
+  struct elf32_hppa_link_hash_table *htab;
+  bfd_size_type amt = sizeof (*htab);
 
-  ret = (struct elf32_hppa_link_hash_table *) bfd_malloc (amt);
-  if (ret == NULL)
+  htab = bfd_zmalloc (amt);
+  if (htab == NULL)
     return NULL;
 
-  if (!_bfd_elf_link_hash_table_init (&ret->elf, abfd, hppa_link_hash_newfunc))
+  if (!_bfd_elf_link_hash_table_init (&htab->etab, abfd, hppa_link_hash_newfunc,
+				      sizeof (struct elf32_hppa_link_hash_entry),
+				      HPPA32_ELF_DATA))
     {
-      free (ret);
+      free (htab);
       return NULL;
     }
 
   /* Init the stub hash table too.  */
-  if (!bfd_hash_table_init (&ret->stub_hash_table, stub_hash_newfunc))
+  if (!bfd_hash_table_init (&htab->bstab, stub_hash_newfunc,
+			    sizeof (struct elf32_hppa_stub_hash_entry)))
     return NULL;
 
-  ret->stub_bfd = NULL;
-  ret->add_stub_section = NULL;
-  ret->layout_sections_again = NULL;
-  ret->stub_group = NULL;
-  ret->sgot = NULL;
-  ret->srelgot = NULL;
-  ret->splt = NULL;
-  ret->srelplt = NULL;
-  ret->sdynbss = NULL;
-  ret->srelbss = NULL;
-  ret->text_segment_base = (bfd_vma) -1;
-  ret->data_segment_base = (bfd_vma) -1;
-  ret->multi_subspace = 0;
-  ret->has_12bit_branch = 0;
-  ret->has_17bit_branch = 0;
-  ret->has_22bit_branch = 0;
-  ret->need_plt_stub = 0;
-  ret->sym_sec.abfd = NULL;
-
-  return &ret->elf.root;
+  htab->text_segment_base = (bfd_vma) -1;
+  htab->data_segment_base = (bfd_vma) -1;
+  return &htab->etab.root;
 }
 
 /* Free the derived linker hash table.  */
 
 static void
-elf32_hppa_link_hash_table_free (hash)
-     struct bfd_link_hash_table *hash;
+elf32_hppa_link_hash_table_free (struct bfd_link_hash_table *btab)
 {
-  struct elf32_hppa_link_hash_table *ret
-    = (struct elf32_hppa_link_hash_table *) hash;
+  struct elf32_hppa_link_hash_table *htab
+    = (struct elf32_hppa_link_hash_table *) btab;
 
-  bfd_hash_table_free (&ret->stub_hash_table);
-  _bfd_generic_link_hash_table_free (hash);
+  bfd_hash_table_free (&htab->bstab);
+  _bfd_elf_link_hash_table_free (btab);
 }
 
 /* Build a name for an entry in the stub hash table.  */
 
 static char *
-hppa_stub_name (input_section, sym_sec, hash, rel)
-     const asection *input_section;
-     const asection *sym_sec;
-     const struct elf32_hppa_link_hash_entry *hash;
-     const Elf_Internal_Rela *rel;
+hppa_stub_name (const asection *input_section,
+		const asection *sym_sec,
+		const struct elf32_hppa_link_hash_entry *hh,
+		const Elf_Internal_Rela *rela)
 {
   char *stub_name;
   bfd_size_type len;
 
-  if (hash)
+  if (hh)
     {
-      len = 8 + 1 + strlen (hash->elf.root.root.string) + 1 + 8 + 1;
+      len = 8 + 1 + strlen (hh_name (hh)) + 1 + 8 + 1;
       stub_name = bfd_malloc (len);
       if (stub_name != NULL)
-	{
-	  sprintf (stub_name, "%08x_%s+%x",
-		   input_section->id & 0xffffffff,
-		   hash->elf.root.root.string,
-		   (int) rel->r_addend & 0xffffffff);
-	}
+	sprintf (stub_name, "%08x_%s+%x",
+		 input_section->id & 0xffffffff,
+		 hh_name (hh),
+		 (int) rela->r_addend & 0xffffffff);
     }
   else
     {
       len = 8 + 1 + 8 + 1 + 8 + 1 + 8 + 1;
       stub_name = bfd_malloc (len);
       if (stub_name != NULL)
-	{
-	  sprintf (stub_name, "%08x_%x:%x+%x",
-		   input_section->id & 0xffffffff,
-		   sym_sec->id & 0xffffffff,
-		   (int) ELF32_R_SYM (rel->r_info) & 0xffffffff,
-		   (int) rel->r_addend & 0xffffffff);
-	}
+	sprintf (stub_name, "%08x_%x:%x+%x",
+		 input_section->id & 0xffffffff,
+		 sym_sec->id & 0xffffffff,
+		 (int) ELF32_R_SYM (rela->r_info) & 0xffffffff,
+		 (int) rela->r_addend & 0xffffffff);
     }
   return stub_name;
 }
@@ -582,14 +490,13 @@ hppa_stub_name (input_section, sym_sec, hash, rel)
    creating the stub name takes a bit of time.  */
 
 static struct elf32_hppa_stub_hash_entry *
-hppa_get_stub_entry (input_section, sym_sec, hash, rel, htab)
-     const asection *input_section;
-     const asection *sym_sec;
-     struct elf32_hppa_link_hash_entry *hash;
-     const Elf_Internal_Rela *rel;
-     struct elf32_hppa_link_hash_table *htab;
+hppa_get_stub_entry (const asection *input_section,
+		     const asection *sym_sec,
+		     struct elf32_hppa_link_hash_entry *hh,
+		     const Elf_Internal_Rela *rela,
+		     struct elf32_hppa_link_hash_table *htab)
 {
-  struct elf32_hppa_stub_hash_entry *stub_entry;
+  struct elf32_hppa_stub_hash_entry *hsh_entry;
   const asection *id_sec;
 
   /* If this input section is part of a group of sections sharing one
@@ -599,43 +506,42 @@ hppa_get_stub_entry (input_section, sym_sec, hash, rel, htab)
      distinguish between them.  */
   id_sec = htab->stub_group[input_section->id].link_sec;
 
-  if (hash != NULL && hash->stub_cache != NULL
-      && hash->stub_cache->h == hash
-      && hash->stub_cache->id_sec == id_sec)
+  if (hh != NULL && hh->hsh_cache != NULL
+      && hh->hsh_cache->hh == hh
+      && hh->hsh_cache->id_sec == id_sec)
     {
-      stub_entry = hash->stub_cache;
+      hsh_entry = hh->hsh_cache;
     }
   else
     {
       char *stub_name;
 
-      stub_name = hppa_stub_name (id_sec, sym_sec, hash, rel);
+      stub_name = hppa_stub_name (id_sec, sym_sec, hh, rela);
       if (stub_name == NULL)
 	return NULL;
 
-      stub_entry = hppa_stub_hash_lookup (&htab->stub_hash_table,
+      hsh_entry = hppa_stub_hash_lookup (&htab->bstab,
 					  stub_name, FALSE, FALSE);
-      if (hash != NULL)
-	hash->stub_cache = stub_entry;
+      if (hh != NULL)
+	hh->hsh_cache = hsh_entry;
 
       free (stub_name);
     }
 
-  return stub_entry;
+  return hsh_entry;
 }
 
 /* Add a new stub entry to the stub hash.  Not all fields of the new
    stub entry are initialised.  */
 
 static struct elf32_hppa_stub_hash_entry *
-hppa_add_stub (stub_name, section, htab)
-     const char *stub_name;
-     asection *section;
-     struct elf32_hppa_link_hash_table *htab;
+hppa_add_stub (const char *stub_name,
+	       asection *section,
+	       struct elf32_hppa_link_hash_table *htab)
 {
   asection *link_sec;
   asection *stub_sec;
-  struct elf32_hppa_stub_hash_entry *stub_entry;
+  struct elf32_hppa_stub_hash_entry *hsh;
 
   link_sec = htab->stub_group[section->id].link_sec;
   stub_sec = htab->stub_group[section->id].stub_sec;
@@ -665,40 +571,43 @@ hppa_add_stub (stub_name, section, htab)
     }
 
   /* Enter this entry into the linker stub hash table.  */
-  stub_entry = hppa_stub_hash_lookup (&htab->stub_hash_table, stub_name,
+  hsh = hppa_stub_hash_lookup (&htab->bstab, stub_name,
 				      TRUE, FALSE);
-  if (stub_entry == NULL)
+  if (hsh == NULL)
     {
-      (*_bfd_error_handler) (_("%s: cannot create stub entry %s"),
-			     bfd_archive_filename (section->owner),
+      (*_bfd_error_handler) (_("%B: cannot create stub entry %s"),
+			     section->owner,
 			     stub_name);
       return NULL;
     }
 
-  stub_entry->stub_sec = stub_sec;
-  stub_entry->stub_offset = 0;
-  stub_entry->id_sec = link_sec;
-  return stub_entry;
+  hsh->stub_sec = stub_sec;
+  hsh->stub_offset = 0;
+  hsh->id_sec = link_sec;
+  return hsh;
 }
 
 /* Determine the type of stub needed, if any, for a call.  */
 
 static enum elf32_hppa_stub_type
-hppa_type_of_stub (input_sec, rel, hash, destination)
-     asection *input_sec;
-     const Elf_Internal_Rela *rel;
-     struct elf32_hppa_link_hash_entry *hash;
-     bfd_vma destination;
+hppa_type_of_stub (asection *input_sec,
+		   const Elf_Internal_Rela *rela,
+		   struct elf32_hppa_link_hash_entry *hh,
+		   bfd_vma destination,
+		   struct bfd_link_info *info)
 {
   bfd_vma location;
   bfd_vma branch_offset;
   bfd_vma max_branch_offset;
   unsigned int r_type;
 
-  if (hash != NULL
-      && hash->elf.plt.offset != (bfd_vma) -1
-      && (hash->elf.dynindx != -1 || hash->pic_call)
-      && !hash->plabel)
+  if (hh != NULL
+      && hh->eh.plt.offset != (bfd_vma) -1
+      && hh->eh.dynindx != -1
+      && !hh->plabel
+      && (info->shared
+	  || !hh->eh.def_regular
+	  || hh->eh.root.type == bfd_link_hash_defweak))
     {
       /* We need an import stub.  Decide between hppa_stub_import
 	 and hppa_stub_import_shared later.  */
@@ -708,27 +617,23 @@ hppa_type_of_stub (input_sec, rel, hash, destination)
   /* Determine where the call point is.  */
   location = (input_sec->output_offset
 	      + input_sec->output_section->vma
-	      + rel->r_offset);
+	      + rela->r_offset);
 
   branch_offset = destination - location - 8;
-  r_type = ELF32_R_TYPE (rel->r_info);
+  r_type = ELF32_R_TYPE (rela->r_info);
 
   /* Determine if a long branch stub is needed.  parisc branch offsets
      are relative to the second instruction past the branch, ie. +8
      bytes on from the branch instruction location.  The offset is
      signed and counts in units of 4 bytes.  */
   if (r_type == (unsigned int) R_PARISC_PCREL17F)
-    {
-      max_branch_offset = (1 << (17-1)) << 2;
-    }
+    max_branch_offset = (1 << (17 - 1)) << 2;
+
   else if (r_type == (unsigned int) R_PARISC_PCREL12F)
-    {
-      max_branch_offset = (1 << (12-1)) << 2;
-    }
+    max_branch_offset = (1 << (12 - 1)) << 2;
+
   else /* R_PARISC_PCREL22F.  */
-    {
-      max_branch_offset = (1 << (22-1)) << 2;
-    }
+    max_branch_offset = (1 << (22 - 1)) << 2;
 
   if (branch_offset + max_branch_offset >= 2*max_branch_offset)
     return hppa_stub_long_branch;
@@ -777,11 +682,9 @@ hppa_type_of_stub (input_sec, rel, hash, destination)
 #endif
 
 static bfd_boolean
-hppa_build_one_stub (gen_entry, in_arg)
-     struct bfd_hash_entry *gen_entry;
-     PTR in_arg;
+hppa_build_one_stub (struct bfd_hash_entry *bh, void *in_arg)
 {
-  struct elf32_hppa_stub_hash_entry *stub_entry;
+  struct elf32_hppa_stub_hash_entry *hsh;
   struct bfd_link_info *info;
   struct elf32_hppa_link_hash_table *htab;
   asection *stub_sec;
@@ -794,34 +697,37 @@ hppa_build_one_stub (gen_entry, in_arg)
   int size;
 
   /* Massage our args to the form they really have.  */
-  stub_entry = (struct elf32_hppa_stub_hash_entry *) gen_entry;
-  info = (struct bfd_link_info *) in_arg;
+  hsh = hppa_stub_hash_entry (bh);
+  info = (struct bfd_link_info *)in_arg;
 
   htab = hppa_link_hash_table (info);
-  stub_sec = stub_entry->stub_sec;
+  if (htab == NULL)
+    return FALSE;
+
+  stub_sec = hsh->stub_sec;
 
   /* Make a note of the offset within the stubs for this entry.  */
-  stub_entry->stub_offset = stub_sec->_raw_size;
-  loc = stub_sec->contents + stub_entry->stub_offset;
+  hsh->stub_offset = stub_sec->size;
+  loc = stub_sec->contents + hsh->stub_offset;
 
   stub_bfd = stub_sec->owner;
 
-  switch (stub_entry->stub_type)
+  switch (hsh->stub_type)
     {
     case hppa_stub_long_branch:
       /* Create the long branch.  A long branch is formed with "ldil"
 	 loading the upper bits of the target address into a register,
 	 then branching with "be" which adds in the lower bits.
 	 The "be" has its delay slot nullified.  */
-      sym_value = (stub_entry->target_value
-		   + stub_entry->target_section->output_offset
-		   + stub_entry->target_section->output_section->vma);
+      sym_value = (hsh->target_value
+		   + hsh->target_section->output_offset
+		   + hsh->target_section->output_section->vma);
 
-      val = hppa_field_adjust (sym_value, (bfd_signed_vma) 0, e_lrsel);
+      val = hppa_field_adjust (sym_value, 0, e_lrsel);
       insn = hppa_rebuild_insn ((int) LDIL_R1, val, 21);
       bfd_put_32 (stub_bfd, insn, loc);
 
-      val = hppa_field_adjust (sym_value, (bfd_signed_vma) 0, e_rrsel) >> 2;
+      val = hppa_field_adjust (sym_value, 0, e_rrsel) >> 2;
       insn = hppa_rebuild_insn ((int) BE_SR4_R1, val, 17);
       bfd_put_32 (stub_bfd, insn, loc + 4);
 
@@ -830,12 +736,12 @@ hppa_build_one_stub (gen_entry, in_arg)
 
     case hppa_stub_long_branch_shared:
       /* Branches are relative.  This is where we are going to.  */
-      sym_value = (stub_entry->target_value
-		   + stub_entry->target_section->output_offset
-		   + stub_entry->target_section->output_section->vma);
+      sym_value = (hsh->target_value
+		   + hsh->target_section->output_offset
+		   + hsh->target_section->output_section->vma);
 
       /* And this is where we are coming from, more or less.  */
-      sym_value -= (stub_entry->stub_offset
+      sym_value -= (hsh->stub_offset
 		    + stub_sec->output_offset
 		    + stub_sec->output_section->vma);
 
@@ -852,7 +758,7 @@ hppa_build_one_stub (gen_entry, in_arg)
 
     case hppa_stub_import:
     case hppa_stub_import_shared:
-      off = stub_entry->h->elf.plt.offset;
+      off = hsh->hh->eh.plt.offset;
       if (off >= (bfd_vma) -2)
 	abort ();
 
@@ -864,10 +770,10 @@ hppa_build_one_stub (gen_entry, in_arg)
 
       insn = ADDIL_DP;
 #if R19_STUBS
-      if (stub_entry->stub_type == hppa_stub_import_shared)
+      if (hsh->stub_type == hppa_stub_import_shared)
 	insn = ADDIL_R19;
 #endif
-      val = hppa_field_adjust (sym_value, (bfd_signed_vma) 0, e_lrsel),
+      val = hppa_field_adjust (sym_value, 0, e_lrsel),
       insn = hppa_rebuild_insn ((int) insn, val, 21);
       bfd_put_32 (stub_bfd, insn, loc);
 
@@ -876,7 +782,7 @@ hppa_build_one_stub (gen_entry, in_arg)
 	 lsel/rsel then with unfortunate sym_values we will round
 	 sym_value+4 up to the next 2k block leading to a mis-match
 	 between the lsel and rsel value.  */
-      val = hppa_field_adjust (sym_value, (bfd_signed_vma) 0, e_rrsel);
+      val = hppa_field_adjust (sym_value, 0, e_rrsel);
       insn = hppa_rebuild_insn ((int) LDW_R1_R21, val, 14);
       bfd_put_32 (stub_bfd, insn, loc + 4);
 
@@ -903,49 +809,16 @@ hppa_build_one_stub (gen_entry, in_arg)
 	  size = 16;
 	}
 
-      if (!info->shared
-	  && stub_entry->h != NULL
-	  && stub_entry->h->pic_call)
-	{
-	  /* Build the .plt entry needed to call a PIC function from
-	     statically linked code.  We don't need any relocs.  */
-	  bfd *dynobj;
-	  struct elf32_hppa_link_hash_entry *eh;
-	  bfd_vma value;
-
-	  dynobj = htab->elf.dynobj;
-	  eh = (struct elf32_hppa_link_hash_entry *) stub_entry->h;
-
-	  if (eh->elf.root.type != bfd_link_hash_defined
-	      && eh->elf.root.type != bfd_link_hash_defweak)
-	    abort ();
-
-	  value = (eh->elf.root.u.def.value
-		   + eh->elf.root.u.def.section->output_offset
-		   + eh->elf.root.u.def.section->output_section->vma);
-
-	  /* Fill in the entry in the procedure linkage table.
-
-	     The format of a plt entry is
-	     <funcaddr>
-	     <__gp>.  */
-
-	  bfd_put_32 (htab->splt->owner, value,
-		      htab->splt->contents + off);
-	  value = elf_gp (htab->splt->output_section->owner);
-	  bfd_put_32 (htab->splt->owner, value,
-		      htab->splt->contents + off + 4);
-	}
       break;
 
     case hppa_stub_export:
       /* Branches are relative.  This is where we are going to.  */
-      sym_value = (stub_entry->target_value
-		   + stub_entry->target_section->output_offset
-		   + stub_entry->target_section->output_section->vma);
+      sym_value = (hsh->target_value
+		   + hsh->target_section->output_offset
+		   + hsh->target_section->output_section->vma);
 
       /* And this is where we are coming from.  */
-      sym_value -= (stub_entry->stub_offset
+      sym_value -= (hsh->stub_offset
 		    + stub_sec->output_offset
 		    + stub_sec->output_section->vma);
 
@@ -954,11 +827,11 @@ hppa_build_one_stub (gen_entry, in_arg)
 	      || sym_value - 8 + (1 << (22 + 1)) >= (1 << (22 + 2))))
 	{
 	  (*_bfd_error_handler)
-	    (_("%s(%s+0x%lx): cannot reach %s, recompile with -ffunction-sections"),
-	     bfd_archive_filename (stub_entry->target_section->owner),
-	     stub_sec->name,
-	     (long) stub_entry->stub_offset,
-	     stub_entry->root.string);
+	    (_("%B(%A+0x%lx): cannot reach %s, recompile with -ffunction-sections"),
+	     hsh->target_section->owner,
+	     stub_sec,
+	     (long) hsh->stub_offset,
+	     hsh->bh_root.string);
 	  bfd_set_error (bfd_error_bad_value);
 	  return FALSE;
 	}
@@ -977,8 +850,8 @@ hppa_build_one_stub (gen_entry, in_arg)
       bfd_put_32 (stub_bfd, (bfd_vma) BE_SR0_RP,   loc + 20);
 
       /* Point the function symbol at the stub.  */
-      stub_entry->h->elf.root.u.def.section = stub_sec;
-      stub_entry->h->elf.root.u.def.value = stub_sec->_raw_size;
+      hsh->hh->eh.root.u.def.section = stub_sec;
+      hsh->hh->eh.root.u.def.value = stub_sec->size;
 
       size = 24;
       break;
@@ -988,7 +861,7 @@ hppa_build_one_stub (gen_entry, in_arg)
       return FALSE;
     }
 
-  stub_sec->_raw_size += size;
+  stub_sec->size += size;
   return TRUE;
 }
 
@@ -997,7 +870,6 @@ hppa_build_one_stub (gen_entry, in_arg)
 #undef BL_R1
 #undef ADDIL_R1
 #undef DEPI_R1
-#undef ADDIL_DP
 #undef LDW_R1_R21
 #undef LDW_R1_DLT
 #undef LDW_R1_R19
@@ -1018,23 +890,21 @@ hppa_build_one_stub (gen_entry, in_arg)
    we know stub section sizes.  */
 
 static bfd_boolean
-hppa_size_one_stub (gen_entry, in_arg)
-     struct bfd_hash_entry *gen_entry;
-     PTR in_arg;
+hppa_size_one_stub (struct bfd_hash_entry *bh, void *in_arg)
 {
-  struct elf32_hppa_stub_hash_entry *stub_entry;
+  struct elf32_hppa_stub_hash_entry *hsh;
   struct elf32_hppa_link_hash_table *htab;
   int size;
 
   /* Massage our args to the form they really have.  */
-  stub_entry = (struct elf32_hppa_stub_hash_entry *) gen_entry;
-  htab = (struct elf32_hppa_link_hash_table *) in_arg;
+  hsh = hppa_stub_hash_entry (bh);
+  htab = in_arg;
 
-  if (stub_entry->stub_type == hppa_stub_long_branch)
+  if (hsh->stub_type == hppa_stub_long_branch)
     size = 8;
-  else if (stub_entry->stub_type == hppa_stub_long_branch_shared)
+  else if (hsh->stub_type == hppa_stub_long_branch_shared)
     size = 12;
-  else if (stub_entry->stub_type == hppa_stub_export)
+  else if (hsh->stub_type == hppa_stub_export)
     size = 24;
   else /* hppa_stub_import or hppa_stub_import_shared.  */
     {
@@ -1044,7 +914,7 @@ hppa_size_one_stub (gen_entry, in_arg)
 	size = 16;
     }
 
-  stub_entry->stub_sec->_raw_size += size;
+  hsh->stub_sec->size += size;
   return TRUE;
 }
 
@@ -1052,8 +922,7 @@ hppa_size_one_stub (gen_entry, in_arg)
    Additionally we set the default architecture and machine.  */
 
 static bfd_boolean
-elf32_hppa_object_p (abfd)
-     bfd *abfd;
+elf32_hppa_object_p (bfd *abfd)
 {
   Elf_Internal_Ehdr * i_ehdrp;
   unsigned int flags;
@@ -1061,7 +930,18 @@ elf32_hppa_object_p (abfd)
   i_ehdrp = elf_elfheader (abfd);
   if (strcmp (bfd_get_target (abfd), "elf32-hppa-linux") == 0)
     {
-      if (i_ehdrp->e_ident[EI_OSABI] != ELFOSABI_LINUX)
+      /* GCC on hppa-linux produces binaries with OSABI=GNU,
+	 but the kernel produces corefiles with OSABI=SysV.  */
+      if (i_ehdrp->e_ident[EI_OSABI] != ELFOSABI_GNU &&
+	  i_ehdrp->e_ident[EI_OSABI] != ELFOSABI_NONE) /* aka SYSV */
+	return FALSE;
+    }
+  else if (strcmp (bfd_get_target (abfd), "elf32-hppa-netbsd") == 0)
+    {
+      /* GCC on hppa-netbsd produces binaries with OSABI=NetBSD,
+	 but the kernel produces corefiles with OSABI=SysV.  */
+      if (i_ehdrp->e_ident[EI_OSABI] != ELFOSABI_NETBSD &&
+	  i_ehdrp->e_ident[EI_OSABI] != ELFOSABI_NONE) /* aka SYSV */
 	return FALSE;
     }
   else
@@ -1085,35 +965,19 @@ elf32_hppa_object_p (abfd)
   return TRUE;
 }
 
-/* Undo the generic ELF code's subtraction of section->vma from the
-   value of each external symbol.  */
-
-static bfd_boolean
-elf32_hppa_add_symbol_hook (abfd, info, sym, namep, flagsp, secp, valp)
-     bfd *abfd ATTRIBUTE_UNUSED;
-     struct bfd_link_info *info ATTRIBUTE_UNUSED;
-     const Elf_Internal_Sym *sym ATTRIBUTE_UNUSED;
-     const char **namep ATTRIBUTE_UNUSED;
-     flagword *flagsp ATTRIBUTE_UNUSED;
-     asection **secp;
-     bfd_vma *valp;
-{
-  *valp += (*secp)->vma;
-  return TRUE;
-}
-
 /* Create the .plt and .got sections, and set up our hash table
    short-cuts to various dynamic sections.  */
 
 static bfd_boolean
-elf32_hppa_create_dynamic_sections (abfd, info)
-     bfd *abfd;
-     struct bfd_link_info *info;
+elf32_hppa_create_dynamic_sections (bfd *abfd, struct bfd_link_info *info)
 {
   struct elf32_hppa_link_hash_table *htab;
+  struct elf_link_hash_entry *eh;
 
   /* Don't try to create the .plt and .got twice.  */
   htab = hppa_link_hash_table (info);
+  if (htab == NULL)
+    return FALSE;
   if (htab->splt != NULL)
     return TRUE;
 
@@ -1121,78 +985,134 @@ elf32_hppa_create_dynamic_sections (abfd, info)
   if (! _bfd_elf_create_dynamic_sections (abfd, info))
     return FALSE;
 
-  htab->splt = bfd_get_section_by_name (abfd, ".plt");
-  htab->srelplt = bfd_get_section_by_name (abfd, ".rela.plt");
+  htab->splt = bfd_get_linker_section (abfd, ".plt");
+  htab->srelplt = bfd_get_linker_section (abfd, ".rela.plt");
 
-  htab->sgot = bfd_get_section_by_name (abfd, ".got");
-  htab->srelgot = bfd_make_section (abfd, ".rela.got");
-  if (htab->srelgot == NULL
-      || ! bfd_set_section_flags (abfd, htab->srelgot,
-				  (SEC_ALLOC
-				   | SEC_LOAD
-				   | SEC_HAS_CONTENTS
-				   | SEC_IN_MEMORY
-				   | SEC_LINKER_CREATED
-				   | SEC_READONLY))
-      || ! bfd_set_section_alignment (abfd, htab->srelgot, 2))
-    return FALSE;
+  htab->sgot = bfd_get_linker_section (abfd, ".got");
+  htab->srelgot = bfd_get_linker_section (abfd, ".rela.got");
 
-  htab->sdynbss = bfd_get_section_by_name (abfd, ".dynbss");
-  htab->srelbss = bfd_get_section_by_name (abfd, ".rela.bss");
+  htab->sdynbss = bfd_get_linker_section (abfd, ".dynbss");
+  htab->srelbss = bfd_get_linker_section (abfd, ".rela.bss");
 
-  return TRUE;
+  /* hppa-linux needs _GLOBAL_OFFSET_TABLE_ to be visible from the main
+     application, because __canonicalize_funcptr_for_compare needs it.  */
+  eh = elf_hash_table (info)->hgot;
+  eh->forced_local = 0;
+  eh->other = STV_DEFAULT;
+  return bfd_elf_link_record_dynamic_symbol (info, eh);
 }
 
 /* Copy the extra info we tack onto an elf_link_hash_entry.  */
 
 static void
-elf32_hppa_copy_indirect_symbol (bed, dir, ind)
-     struct elf_backend_data *bed;
-     struct elf_link_hash_entry *dir, *ind;
+elf32_hppa_copy_indirect_symbol (struct bfd_link_info *info,
+				 struct elf_link_hash_entry *eh_dir,
+				 struct elf_link_hash_entry *eh_ind)
 {
-  struct elf32_hppa_link_hash_entry *edir, *eind;
+  struct elf32_hppa_link_hash_entry *hh_dir, *hh_ind;
 
-  edir = (struct elf32_hppa_link_hash_entry *) dir;
-  eind = (struct elf32_hppa_link_hash_entry *) ind;
+  hh_dir = hppa_elf_hash_entry (eh_dir);
+  hh_ind = hppa_elf_hash_entry (eh_ind);
 
-  if (eind->dyn_relocs != NULL)
+  if (hh_ind->dyn_relocs != NULL)
     {
-      if (edir->dyn_relocs != NULL)
+      if (hh_dir->dyn_relocs != NULL)
 	{
-	  struct elf32_hppa_dyn_reloc_entry **pp;
-	  struct elf32_hppa_dyn_reloc_entry *p;
+	  struct elf32_hppa_dyn_reloc_entry **hdh_pp;
+	  struct elf32_hppa_dyn_reloc_entry *hdh_p;
 
-	  if (ind->root.type == bfd_link_hash_indirect)
-	    abort ();
-
-	  /* Add reloc counts against the weak sym to the strong sym
+	  /* Add reloc counts against the indirect sym to the direct sym
 	     list.  Merge any entries against the same section.  */
-	  for (pp = &eind->dyn_relocs; (p = *pp) != NULL; )
+	  for (hdh_pp = &hh_ind->dyn_relocs; (hdh_p = *hdh_pp) != NULL; )
 	    {
-	      struct elf32_hppa_dyn_reloc_entry *q;
+	      struct elf32_hppa_dyn_reloc_entry *hdh_q;
 
-	      for (q = edir->dyn_relocs; q != NULL; q = q->next)
-		if (q->sec == p->sec)
+	      for (hdh_q = hh_dir->dyn_relocs;
+		   hdh_q != NULL;
+		   hdh_q = hdh_q->hdh_next)
+		if (hdh_q->sec == hdh_p->sec)
 		  {
 #if RELATIVE_DYNRELOCS
-		    q->relative_count += p->relative_count;
+		    hdh_q->relative_count += hdh_p->relative_count;
 #endif
-		    q->count += p->count;
-		    *pp = p->next;
+		    hdh_q->count += hdh_p->count;
+		    *hdh_pp = hdh_p->hdh_next;
 		    break;
 		  }
-	      if (q == NULL)
-		pp = &p->next;
+	      if (hdh_q == NULL)
+		hdh_pp = &hdh_p->hdh_next;
 	    }
-	  *pp = edir->dyn_relocs;
+	  *hdh_pp = hh_dir->dyn_relocs;
 	}
 
-      edir->dyn_relocs = eind->dyn_relocs;
-      eind->dyn_relocs = NULL;
+      hh_dir->dyn_relocs = hh_ind->dyn_relocs;
+      hh_ind->dyn_relocs = NULL;
     }
 
-  _bfd_elf_link_hash_copy_indirect (bed, dir, ind);
+  if (ELIMINATE_COPY_RELOCS
+      && eh_ind->root.type != bfd_link_hash_indirect
+      && eh_dir->dynamic_adjusted)
+    {
+      /* If called to transfer flags for a weakdef during processing
+	 of elf_adjust_dynamic_symbol, don't copy non_got_ref.
+	 We clear it ourselves for ELIMINATE_COPY_RELOCS.  */
+      eh_dir->ref_dynamic |= eh_ind->ref_dynamic;
+      eh_dir->ref_regular |= eh_ind->ref_regular;
+      eh_dir->ref_regular_nonweak |= eh_ind->ref_regular_nonweak;
+      eh_dir->needs_plt |= eh_ind->needs_plt;
+    }
+  else
+    {
+      if (eh_ind->root.type == bfd_link_hash_indirect
+          && eh_dir->got.refcount <= 0)
+        {
+          hh_dir->tls_type = hh_ind->tls_type;
+          hh_ind->tls_type = GOT_UNKNOWN;
+        }
+
+      _bfd_elf_link_hash_copy_indirect (info, eh_dir, eh_ind);
+    }
 }
+
+static int
+elf32_hppa_optimized_tls_reloc (struct bfd_link_info *info ATTRIBUTE_UNUSED,
+				int r_type, int is_local ATTRIBUTE_UNUSED)
+{
+  /* For now we don't support linker optimizations.  */
+  return r_type;
+}
+
+/* Return a pointer to the local GOT, PLT and TLS reference counts
+   for ABFD.  Returns NULL if the storage allocation fails.  */
+
+static bfd_signed_vma *
+hppa32_elf_local_refcounts (bfd *abfd)
+{
+  Elf_Internal_Shdr *symtab_hdr = &elf_tdata (abfd)->symtab_hdr;
+  bfd_signed_vma *local_refcounts;
+
+  local_refcounts = elf_local_got_refcounts (abfd);
+  if (local_refcounts == NULL)
+    {
+      bfd_size_type size;
+
+      /* Allocate space for local GOT and PLT reference
+	 counts.  Done this way to save polluting elf_obj_tdata
+	 with another target specific pointer.  */
+      size = symtab_hdr->sh_info;
+      size *= 2 * sizeof (bfd_signed_vma);
+      /* Add in space to store the local GOT TLS types.  */
+      size += symtab_hdr->sh_info;
+      local_refcounts = bfd_zalloc (abfd, size);
+      if (local_refcounts == NULL)
+	return NULL;
+      elf_local_got_refcounts (abfd) = local_refcounts;
+      memset (hppa_elf_local_got_tls_type (abfd), GOT_UNKNOWN,
+	      symtab_hdr->sh_info);
+    }
+  return local_refcounts;
+}
+
 
 /* Look through the relocs for a section during the first phase, and
    calculate needed space in the global offset table, procedure linkage
@@ -1200,31 +1120,31 @@ elf32_hppa_copy_indirect_symbol (bed, dir, ind)
    necessarily read all the input files.  */
 
 static bfd_boolean
-elf32_hppa_check_relocs (abfd, info, sec, relocs)
-     bfd *abfd;
-     struct bfd_link_info *info;
-     asection *sec;
-     const Elf_Internal_Rela *relocs;
+elf32_hppa_check_relocs (bfd *abfd,
+			 struct bfd_link_info *info,
+			 asection *sec,
+			 const Elf_Internal_Rela *relocs)
 {
   Elf_Internal_Shdr *symtab_hdr;
-  struct elf_link_hash_entry **sym_hashes;
-  const Elf_Internal_Rela *rel;
-  const Elf_Internal_Rela *rel_end;
+  struct elf_link_hash_entry **eh_syms;
+  const Elf_Internal_Rela *rela;
+  const Elf_Internal_Rela *rela_end;
   struct elf32_hppa_link_hash_table *htab;
   asection *sreloc;
-  asection *stubreloc;
+  int tls_type = GOT_UNKNOWN, old_tls_type = GOT_UNKNOWN;
 
-  if (info->relocateable)
+  if (info->relocatable)
     return TRUE;
 
   htab = hppa_link_hash_table (info);
+  if (htab == NULL)
+    return FALSE;
   symtab_hdr = &elf_tdata (abfd)->symtab_hdr;
-  sym_hashes = elf_sym_hashes (abfd);
+  eh_syms = elf_sym_hashes (abfd);
   sreloc = NULL;
-  stubreloc = NULL;
 
-  rel_end = relocs + sec->reloc_count;
-  for (rel = relocs; rel < rel_end; rel++)
+  rela_end = relocs + sec->reloc_count;
+  for (rela = relocs; rela < rela_end; rela++)
     {
       enum {
 	NEED_GOT = 1,
@@ -1234,18 +1154,27 @@ elf32_hppa_check_relocs (abfd, info, sec, relocs)
       };
 
       unsigned int r_symndx, r_type;
-      struct elf32_hppa_link_hash_entry *h;
-      int need_entry;
+      struct elf32_hppa_link_hash_entry *hh;
+      int need_entry = 0;
 
-      r_symndx = ELF32_R_SYM (rel->r_info);
+      r_symndx = ELF32_R_SYM (rela->r_info);
 
       if (r_symndx < symtab_hdr->sh_info)
-	h = NULL;
+	hh = NULL;
       else
-	h = ((struct elf32_hppa_link_hash_entry *)
-	     sym_hashes[r_symndx - symtab_hdr->sh_info]);
+	{
+	  hh =  hppa_elf_hash_entry (eh_syms[r_symndx - symtab_hdr->sh_info]);
+	  while (hh->eh.root.type == bfd_link_hash_indirect
+		 || hh->eh.root.type == bfd_link_hash_warning)
+	    hh = hppa_elf_hash_entry (hh->eh.root.u.i.link);
 
-      r_type = ELF32_R_TYPE (rel->r_info);
+	  /* PR15323, ref flags aren't set for references in the same
+	     object.  */
+	  hh->eh.root.non_ir_ref = 1;
+	}
+
+      r_type = ELF32_R_TYPE (rela->r_info);
+      r_type = elf32_hppa_optimized_tls_reloc (info, r_type, hh == NULL);
 
       switch (r_type)
 	{
@@ -1254,16 +1183,13 @@ elf32_hppa_check_relocs (abfd, info, sec, relocs)
 	case R_PARISC_DLTIND21L:
 	  /* This symbol requires a global offset table entry.  */
 	  need_entry = NEED_GOT;
-
-	  /* Mark this section as containing PIC code.  */
-	  sec->flags |= SEC_HAS_GOT_REF;
 	  break;
 
 	case R_PARISC_PLABEL14R: /* "Official" procedure labels.  */
 	case R_PARISC_PLABEL21L:
 	case R_PARISC_PLABEL32:
 	  /* If the addend is non-zero, we break badly.  */
-	  if (rel->r_addend != 0)
+	  if (rela->r_addend != 0)
 	    abort ();
 
 	  /* If we are creating a shared library, then we need to
@@ -1271,6 +1197,7 @@ elf32_hppa_check_relocs (abfd, info, sec, relocs)
 	     local symbols may be passed via a pointer to another
 	     object.  Additionally, output a dynamic relocation
 	     pointing to the PLT entry.
+
 	     For executables, the original 32-bit ABI allowed two
 	     different styles of PLABELs (function pointers):  For
 	     global functions, the PLABEL word points into the .plt
@@ -1299,7 +1226,7 @@ elf32_hppa_check_relocs (abfd, info, sec, relocs)
 	branch_common:
 	  /* Function calls might need to go through the .plt, and
 	     might require long branch stubs.  */
-	  if (h == NULL)
+	  if (hh == NULL)
 	    {
 	      /* We know local syms won't need a .plt entry, and if
 		 they need a long branch stub we can't guarantee that
@@ -1316,17 +1243,18 @@ elf32_hppa_check_relocs (abfd, info, sec, relocs)
 		 where a symbol is forced local by versioning, or due
 		 to symbolic linking, and we lose the .plt entry.  */
 	      need_entry = NEED_PLT;
-	      if (h->elf.type == STT_PARISC_MILLI)
+	      if (hh->eh.type == STT_PARISC_MILLI)
 		need_entry = 0;
 	    }
 	  break;
 
-	case R_PARISC_SEGBASE: /* Used to set segment base.  */
+	case R_PARISC_SEGBASE:  /* Used to set segment base.  */
 	case R_PARISC_SEGREL32: /* Relative reloc, used for unwind.  */
 	case R_PARISC_PCREL14F: /* PC relative load/store.  */
 	case R_PARISC_PCREL14R:
 	case R_PARISC_PCREL17R: /* External branches.  */
 	case R_PARISC_PCREL21L: /* As above, and for load/store too.  */
+	case R_PARISC_PCREL32:
 	  /* We don't need to propagate the relocation if linking a
 	     shared object since these are section relative.  */
 	  continue;
@@ -1337,8 +1265,8 @@ elf32_hppa_check_relocs (abfd, info, sec, relocs)
 	  if (info->shared)
 	    {
 	      (*_bfd_error_handler)
-		(_("%s: relocation %s can not be used when making a shared object; recompile with -fPIC"),
-		 bfd_archive_filename (abfd),
+		(_("%B: relocation %s can not be used when making a shared object; recompile with -fPIC"),
+		 abfd,
 		 elf_hppa_howto_table[r_type].name);
 	      bfd_set_error (bfd_error_bad_value);
 	      return FALSE;
@@ -1350,20 +1278,6 @@ elf32_hppa_check_relocs (abfd, info, sec, relocs)
 	case R_PARISC_DIR14F: /* Used for load/store from absolute locn.  */
 	case R_PARISC_DIR14R:
 	case R_PARISC_DIR21L: /* As above, and for ext branches too.  */
-#if 0
-	  /* Help debug shared library creation.  Any of the above
-	     relocs can be used in shared libs, but they may cause
-	     pages to become unshared.  */
-	  if (info->shared)
-	    {
-	      (*_bfd_error_handler)
-		(_("%s: relocation %s should not be used when making a shared object; recompile with -fPIC"),
-		 bfd_archive_filename (abfd),
-		 elf_hppa_howto_table[r_type].name);
-	    }
-	  /* Fall through.  */
-#endif
-
 	case R_PARISC_DIR32: /* .word relocs.  */
 	  /* We may want to output a dynamic relocation later.  */
 	  need_entry = NEED_DYNREL;
@@ -1372,18 +1286,32 @@ elf32_hppa_check_relocs (abfd, info, sec, relocs)
 	  /* This relocation describes the C++ object vtable hierarchy.
 	     Reconstruct it for later use during GC.  */
 	case R_PARISC_GNU_VTINHERIT:
-	  if (!_bfd_elf32_gc_record_vtinherit (abfd, sec,
-					       &h->elf, rel->r_offset))
+	  if (!bfd_elf_gc_record_vtinherit (abfd, sec, &hh->eh, rela->r_offset))
 	    return FALSE;
 	  continue;
 
 	  /* This relocation describes which C++ vtable entries are actually
 	     used.  Record for later use during GC.  */
 	case R_PARISC_GNU_VTENTRY:
-	  if (!_bfd_elf32_gc_record_vtentry (abfd, sec,
-					     &h->elf, rel->r_addend))
+	  BFD_ASSERT (hh != NULL);
+	  if (hh != NULL
+	      && !bfd_elf_gc_record_vtentry (abfd, sec, &hh->eh, rela->r_addend))
 	    return FALSE;
 	  continue;
+
+	case R_PARISC_TLS_GD21L:
+	case R_PARISC_TLS_GD14R:
+	case R_PARISC_TLS_LDM21L:
+	case R_PARISC_TLS_LDM14R:
+	  need_entry = NEED_GOT;
+	  break;
+
+	case R_PARISC_TLS_IE21L:
+	case R_PARISC_TLS_IE14R:
+	  if (info->shared)
+            info->flags |= DF_STATIC_TLS;
+	  need_entry = NEED_GOT;
+	  break;
 
 	default:
 	  continue;
@@ -1392,43 +1320,68 @@ elf32_hppa_check_relocs (abfd, info, sec, relocs)
       /* Now carry out our orders.  */
       if (need_entry & NEED_GOT)
 	{
+	  switch (r_type)
+	    {
+	    default:
+	      tls_type = GOT_NORMAL;
+	      break;
+	    case R_PARISC_TLS_GD21L:
+	    case R_PARISC_TLS_GD14R:
+	      tls_type |= GOT_TLS_GD;
+	      break;
+	    case R_PARISC_TLS_LDM21L:
+	    case R_PARISC_TLS_LDM14R:
+	      tls_type |= GOT_TLS_LDM;
+	      break;
+	    case R_PARISC_TLS_IE21L:
+	    case R_PARISC_TLS_IE14R:
+	      tls_type |= GOT_TLS_IE;
+	      break;
+	    }
+
 	  /* Allocate space for a GOT entry, as well as a dynamic
 	     relocation for this entry.  */
 	  if (htab->sgot == NULL)
 	    {
-	      if (htab->elf.dynobj == NULL)
-		htab->elf.dynobj = abfd;
-	      if (!elf32_hppa_create_dynamic_sections (htab->elf.dynobj, info))
+	      if (htab->etab.dynobj == NULL)
+		htab->etab.dynobj = abfd;
+	      if (!elf32_hppa_create_dynamic_sections (htab->etab.dynobj, info))
 		return FALSE;
 	    }
 
-	  if (h != NULL)
-	    {
-	      h->elf.got.refcount += 1;
-	    }
+	  if (r_type == R_PARISC_TLS_LDM21L
+	      || r_type == R_PARISC_TLS_LDM14R)
+	    htab->tls_ldm_got.refcount += 1;
 	  else
 	    {
-	      bfd_signed_vma *local_got_refcounts;
+	      if (hh != NULL)
+	        {
+	          hh->eh.got.refcount += 1;
+	          old_tls_type = hh->tls_type;
+	        }
+	      else
+	        {
+	          bfd_signed_vma *local_got_refcounts;
 
-	      /* This is a global offset table entry for a local symbol.  */
-	      local_got_refcounts = elf_local_got_refcounts (abfd);
-	      if (local_got_refcounts == NULL)
-		{
-		  bfd_size_type size;
-
-		  /* Allocate space for local got offsets and local
-		     plt offsets.  Done this way to save polluting
-		     elf_obj_tdata with another target specific
-		     pointer.  */
-		  size = symtab_hdr->sh_info;
-		  size *= 2 * sizeof (bfd_signed_vma);
-		  local_got_refcounts = ((bfd_signed_vma *)
-					 bfd_zalloc (abfd, size));
-		  if (local_got_refcounts == NULL)
+	          /* This is a global offset table entry for a local symbol.  */
+	          local_got_refcounts = hppa32_elf_local_refcounts (abfd);
+	          if (local_got_refcounts == NULL)
 		    return FALSE;
-		  elf_local_got_refcounts (abfd) = local_got_refcounts;
-		}
-	      local_got_refcounts[r_symndx] += 1;
+	          local_got_refcounts[r_symndx] += 1;
+
+	          old_tls_type = hppa_elf_local_got_tls_type (abfd) [r_symndx];
+	        }
+
+	      tls_type |= old_tls_type;
+
+	      if (old_tls_type != tls_type)
+	        {
+	          if (hh != NULL)
+		    hh->tls_type = tls_type;
+	          else
+		    hppa_elf_local_got_tls_type (abfd) [r_symndx] = tls_type;
+	        }
+
 	    }
 	}
 
@@ -1444,37 +1397,25 @@ elf32_hppa_check_relocs (abfd, info, sec, relocs)
 	     clean up later in adjust_dynamic_symbol.  */
 	  if ((sec->flags & SEC_ALLOC) != 0)
 	    {
-	      if (h != NULL)
+	      if (hh != NULL)
 		{
-		  h->elf.elf_link_hash_flags |= ELF_LINK_HASH_NEEDS_PLT;
-		  h->elf.plt.refcount += 1;
+		  hh->eh.needs_plt = 1;
+		  hh->eh.plt.refcount += 1;
 
 		  /* If this .plt entry is for a plabel, mark it so
 		     that adjust_dynamic_symbol will keep the entry
 		     even if it appears to be local.  */
 		  if (need_entry & PLT_PLABEL)
-		    h->plabel = 1;
+		    hh->plabel = 1;
 		}
 	      else if (need_entry & PLT_PLABEL)
 		{
 		  bfd_signed_vma *local_got_refcounts;
 		  bfd_signed_vma *local_plt_refcounts;
 
-		  local_got_refcounts = elf_local_got_refcounts (abfd);
+		  local_got_refcounts = hppa32_elf_local_refcounts (abfd);
 		  if (local_got_refcounts == NULL)
-		    {
-		      bfd_size_type size;
-
-		      /* Allocate space for local got offsets and local
-			 plt offsets.  */
-		      size = symtab_hdr->sh_info;
-		      size *= 2 * sizeof (bfd_signed_vma);
-		      local_got_refcounts = ((bfd_signed_vma *)
-					     bfd_zalloc (abfd, size));
-		      if (local_got_refcounts == NULL)
-			return FALSE;
-		      elf_local_got_refcounts (abfd) = local_got_refcounts;
-		    }
+		    return FALSE;
 		  local_plt_refcounts = (local_got_refcounts
 					 + symtab_hdr->sh_info);
 		  local_plt_refcounts[r_symndx] += 1;
@@ -1487,8 +1428,8 @@ elf32_hppa_check_relocs (abfd, info, sec, relocs)
 	  /* Flag this symbol as having a non-got, non-plt reference
 	     so that we generate copy relocs if it turns out to be
 	     dynamic.  */
-	  if (h != NULL && !info->shared)
-	    h->elf.elf_link_hash_flags |= ELF_LINK_NON_GOT_REF;
+	  if (hh != NULL && !info->shared)
+	    hh->eh.non_got_ref = 1;
 
 	  /* If we are creating a shared library then we need to copy
 	     the reloc into the shared library.  However, if we are
@@ -1521,107 +1462,84 @@ elf32_hppa_check_relocs (abfd, info, sec, relocs)
 	  if ((info->shared
 	       && (sec->flags & SEC_ALLOC) != 0
 	       && (IS_ABSOLUTE_RELOC (r_type)
-		   || (h != NULL
+		   || (hh != NULL
 		       && (!info->symbolic
-			   || h->elf.root.type == bfd_link_hash_defweak
-			   || (h->elf.elf_link_hash_flags
-			       & ELF_LINK_HASH_DEF_REGULAR) == 0))))
-	      || (!info->shared
+			   || hh->eh.root.type == bfd_link_hash_defweak
+			   || !hh->eh.def_regular))))
+	      || (ELIMINATE_COPY_RELOCS
+		  && !info->shared
 		  && (sec->flags & SEC_ALLOC) != 0
-		  && h != NULL
-		  && (h->elf.root.type == bfd_link_hash_defweak
-		      || (h->elf.elf_link_hash_flags
-			  & ELF_LINK_HASH_DEF_REGULAR) == 0)))
+		  && hh != NULL
+		  && (hh->eh.root.type == bfd_link_hash_defweak
+		      || !hh->eh.def_regular)))
 	    {
-	      struct elf32_hppa_dyn_reloc_entry *p;
-	      struct elf32_hppa_dyn_reloc_entry **head;
+	      struct elf32_hppa_dyn_reloc_entry *hdh_p;
+	      struct elf32_hppa_dyn_reloc_entry **hdh_head;
 
 	      /* Create a reloc section in dynobj and make room for
 		 this reloc.  */
 	      if (sreloc == NULL)
 		{
-		  char *name;
-		  bfd *dynobj;
+		  if (htab->etab.dynobj == NULL)
+		    htab->etab.dynobj = abfd;
 
-		  name = (bfd_elf_string_from_elf_section
-			  (abfd,
-			   elf_elfheader (abfd)->e_shstrndx,
-			   elf_section_data (sec)->rel_hdr.sh_name));
-		  if (name == NULL)
+		  sreloc = _bfd_elf_make_dynamic_reloc_section
+		    (sec, htab->etab.dynobj, 2, abfd, /*rela?*/ TRUE);
+
+		  if (sreloc == NULL)
 		    {
-		      (*_bfd_error_handler)
-			(_("Could not find relocation section for %s"),
-			 sec->name);
 		      bfd_set_error (bfd_error_bad_value);
 		      return FALSE;
 		    }
-
-		  if (htab->elf.dynobj == NULL)
-		    htab->elf.dynobj = abfd;
-
-		  dynobj = htab->elf.dynobj;
-		  sreloc = bfd_get_section_by_name (dynobj, name);
-		  if (sreloc == NULL)
-		    {
-		      flagword flags;
-
-		      sreloc = bfd_make_section (dynobj, name);
-		      flags = (SEC_HAS_CONTENTS | SEC_READONLY
-			       | SEC_IN_MEMORY | SEC_LINKER_CREATED);
-		      if ((sec->flags & SEC_ALLOC) != 0)
-			flags |= SEC_ALLOC | SEC_LOAD;
-		      if (sreloc == NULL
-			  || !bfd_set_section_flags (dynobj, sreloc, flags)
-			  || !bfd_set_section_alignment (dynobj, sreloc, 2))
-			return FALSE;
-		    }
-
-		  elf_section_data (sec)->sreloc = sreloc;
 		}
 
 	      /* If this is a global symbol, we count the number of
 		 relocations we need for this symbol.  */
-	      if (h != NULL)
+	      if (hh != NULL)
 		{
-		  head = &h->dyn_relocs;
+		  hdh_head = &hh->dyn_relocs;
 		}
 	      else
 		{
 		  /* Track dynamic relocs needed for local syms too.
 		     We really need local syms available to do this
 		     easily.  Oh well.  */
+		  asection *sr;
+		  void *vpp;
+		  Elf_Internal_Sym *isym;
 
-		  asection *s;
-		  s = bfd_section_from_r_symndx (abfd, &htab->sym_sec,
-						 sec, r_symndx);
-		  if (s == NULL)
+		  isym = bfd_sym_from_r_symndx (&htab->sym_cache,
+						abfd, r_symndx);
+		  if (isym == NULL)
 		    return FALSE;
 
-		  head = ((struct elf32_hppa_dyn_reloc_entry **)
-			  &elf_section_data (s)->local_dynrel);
+		  sr = bfd_section_from_elf_index (abfd, isym->st_shndx);
+		  if (sr == NULL)
+		    sr = sec;
+
+		  vpp = &elf_section_data (sr)->local_dynrel;
+		  hdh_head = (struct elf32_hppa_dyn_reloc_entry **) vpp;
 		}
 
-	      p = *head;
-	      if (p == NULL || p->sec != sec)
+	      hdh_p = *hdh_head;
+	      if (hdh_p == NULL || hdh_p->sec != sec)
 		{
-		  p = ((struct elf32_hppa_dyn_reloc_entry *)
-		       bfd_alloc (htab->elf.dynobj,
-				  (bfd_size_type) sizeof *p));
-		  if (p == NULL)
+		  hdh_p = bfd_alloc (htab->etab.dynobj, sizeof *hdh_p);
+		  if (hdh_p == NULL)
 		    return FALSE;
-		  p->next = *head;
-		  *head = p;
-		  p->sec = sec;
-		  p->count = 0;
+		  hdh_p->hdh_next = *hdh_head;
+		  *hdh_head = hdh_p;
+		  hdh_p->sec = sec;
+		  hdh_p->count = 0;
 #if RELATIVE_DYNRELOCS
-		  p->relative_count = 0;
+		  hdh_p->relative_count = 0;
 #endif
 		}
 
-	      p->count += 1;
+	      hdh_p->count += 1;
 #if RELATIVE_DYNRELOCS
 	      if (!IS_ABSOLUTE_RELOC (rtype))
-		p->relative_count += 1;
+		hdh_p->relative_count += 1;
 #endif
 	    }
 	}
@@ -1634,103 +1552,100 @@ elf32_hppa_check_relocs (abfd, info, sec, relocs)
    for a given relocation.  */
 
 static asection *
-elf32_hppa_gc_mark_hook (sec, info, rel, h, sym)
-     asection *sec;
-     struct bfd_link_info *info ATTRIBUTE_UNUSED;
-     Elf_Internal_Rela *rel;
-     struct elf_link_hash_entry *h;
-     Elf_Internal_Sym *sym;
+elf32_hppa_gc_mark_hook (asection *sec,
+			 struct bfd_link_info *info,
+			 Elf_Internal_Rela *rela,
+			 struct elf_link_hash_entry *hh,
+			 Elf_Internal_Sym *sym)
 {
-  if (h != NULL)
-    {
-      switch ((unsigned int) ELF32_R_TYPE (rel->r_info))
-	{
-	case R_PARISC_GNU_VTINHERIT:
-	case R_PARISC_GNU_VTENTRY:
-	  break;
+  if (hh != NULL)
+    switch ((unsigned int) ELF32_R_TYPE (rela->r_info))
+      {
+      case R_PARISC_GNU_VTINHERIT:
+      case R_PARISC_GNU_VTENTRY:
+	return NULL;
+      }
 
-	default:
-	  switch (h->root.type)
-	    {
-	    case bfd_link_hash_defined:
-	    case bfd_link_hash_defweak:
-	      return h->root.u.def.section;
-
-	    case bfd_link_hash_common:
-	      return h->root.u.c.p->section;
-
-	    default:
-	      break;
-	    }
-	}
-    }
-  else
-    return bfd_section_from_elf_index (sec->owner, sym->st_shndx);
-
-  return NULL;
+  return _bfd_elf_gc_mark_hook (sec, info, rela, hh, sym);
 }
 
 /* Update the got and plt entry reference counts for the section being
    removed.  */
 
 static bfd_boolean
-elf32_hppa_gc_sweep_hook (abfd, info, sec, relocs)
-     bfd *abfd;
-     struct bfd_link_info *info ATTRIBUTE_UNUSED;
-     asection *sec;
-     const Elf_Internal_Rela *relocs;
+elf32_hppa_gc_sweep_hook (bfd *abfd,
+			  struct bfd_link_info *info ATTRIBUTE_UNUSED,
+			  asection *sec,
+			  const Elf_Internal_Rela *relocs)
 {
   Elf_Internal_Shdr *symtab_hdr;
-  struct elf_link_hash_entry **sym_hashes;
+  struct elf_link_hash_entry **eh_syms;
   bfd_signed_vma *local_got_refcounts;
   bfd_signed_vma *local_plt_refcounts;
-  const Elf_Internal_Rela *rel, *relend;
+  const Elf_Internal_Rela *rela, *relend;
+  struct elf32_hppa_link_hash_table *htab;
+
+  if (info->relocatable)
+    return TRUE;
+
+  htab = hppa_link_hash_table (info);
+  if (htab == NULL)
+    return FALSE;
 
   elf_section_data (sec)->local_dynrel = NULL;
 
   symtab_hdr = &elf_tdata (abfd)->symtab_hdr;
-  sym_hashes = elf_sym_hashes (abfd);
+  eh_syms = elf_sym_hashes (abfd);
   local_got_refcounts = elf_local_got_refcounts (abfd);
   local_plt_refcounts = local_got_refcounts;
   if (local_plt_refcounts != NULL)
     local_plt_refcounts += symtab_hdr->sh_info;
 
   relend = relocs + sec->reloc_count;
-  for (rel = relocs; rel < relend; rel++)
+  for (rela = relocs; rela < relend; rela++)
     {
       unsigned long r_symndx;
       unsigned int r_type;
-      struct elf_link_hash_entry *h = NULL;
+      struct elf_link_hash_entry *eh = NULL;
 
-      r_symndx = ELF32_R_SYM (rel->r_info);
+      r_symndx = ELF32_R_SYM (rela->r_info);
       if (r_symndx >= symtab_hdr->sh_info)
 	{
-	  struct elf32_hppa_link_hash_entry *eh;
-	  struct elf32_hppa_dyn_reloc_entry **pp;
-	  struct elf32_hppa_dyn_reloc_entry *p;
+	  struct elf32_hppa_link_hash_entry *hh;
+	  struct elf32_hppa_dyn_reloc_entry **hdh_pp;
+	  struct elf32_hppa_dyn_reloc_entry *hdh_p;
 
-	  h = sym_hashes[r_symndx - symtab_hdr->sh_info];
-	  eh = (struct elf32_hppa_link_hash_entry *) h;
+	  eh = eh_syms[r_symndx - symtab_hdr->sh_info];
+	  while (eh->root.type == bfd_link_hash_indirect
+		 || eh->root.type == bfd_link_hash_warning)
+	    eh = (struct elf_link_hash_entry *) eh->root.u.i.link;
+	  hh = hppa_elf_hash_entry (eh);
 
-	  for (pp = &eh->dyn_relocs; (p = *pp) != NULL; pp = &p->next)
-	    if (p->sec == sec)
+	  for (hdh_pp = &hh->dyn_relocs; (hdh_p = *hdh_pp) != NULL; hdh_pp = &hdh_p->hdh_next)
+	    if (hdh_p->sec == sec)
 	      {
 		/* Everything must go for SEC.  */
-		*pp = p->next;
+		*hdh_pp = hdh_p->hdh_next;
 		break;
 	      }
 	}
 
-      r_type = ELF32_R_TYPE (rel->r_info);
+      r_type = ELF32_R_TYPE (rela->r_info);
+      r_type = elf32_hppa_optimized_tls_reloc (info, r_type, eh != NULL);
+
       switch (r_type)
 	{
 	case R_PARISC_DLTIND14F:
 	case R_PARISC_DLTIND14R:
 	case R_PARISC_DLTIND21L:
-	  if (h != NULL)
+	case R_PARISC_TLS_GD21L:
+	case R_PARISC_TLS_GD14R:
+	case R_PARISC_TLS_IE21L:
+	case R_PARISC_TLS_IE14R:
+	  if (eh != NULL)
 	    {
-	      if (h->got.refcount > 0)
-		h->got.refcount -= 1;
+	      if (eh->got.refcount > 0)
+		eh->got.refcount -= 1;
 	    }
 	  else if (local_got_refcounts != NULL)
 	    {
@@ -1739,24 +1654,29 @@ elf32_hppa_gc_sweep_hook (abfd, info, sec, relocs)
 	    }
 	  break;
 
+	case R_PARISC_TLS_LDM21L:
+	case R_PARISC_TLS_LDM14R:
+	  htab->tls_ldm_got.refcount -= 1;
+	  break;
+
 	case R_PARISC_PCREL12F:
 	case R_PARISC_PCREL17C:
 	case R_PARISC_PCREL17F:
 	case R_PARISC_PCREL22F:
-	  if (h != NULL)
+	  if (eh != NULL)
 	    {
-	      if (h->plt.refcount > 0)
-		h->plt.refcount -= 1;
+	      if (eh->plt.refcount > 0)
+		eh->plt.refcount -= 1;
 	    }
 	  break;
 
 	case R_PARISC_PLABEL14R:
 	case R_PARISC_PLABEL21L:
 	case R_PARISC_PLABEL32:
-	  if (h != NULL)
+	  if (eh != NULL)
 	    {
-	      if (h->plt.refcount > 0)
-		h->plt.refcount -= 1;
+	      if (eh->plt.refcount > 0)
+		eh->plt.refcount -= 1;
 	    }
 	  else if (local_plt_refcounts != NULL)
 	    {
@@ -1773,43 +1693,94 @@ elf32_hppa_gc_sweep_hook (abfd, info, sec, relocs)
   return TRUE;
 }
 
+/* Support for core dump NOTE sections.  */
+
+static bfd_boolean
+elf32_hppa_grok_prstatus (bfd *abfd, Elf_Internal_Note *note)
+{
+  int offset;
+  size_t size;
+
+  switch (note->descsz)
+    {
+      default:
+	return FALSE;
+
+      case 396:		/* Linux/hppa */
+	/* pr_cursig */
+	elf_tdata (abfd)->core->signal = bfd_get_16 (abfd, note->descdata + 12);
+
+	/* pr_pid */
+	elf_tdata (abfd)->core->lwpid = bfd_get_32 (abfd, note->descdata + 24);
+
+	/* pr_reg */
+	offset = 72;
+	size = 320;
+
+	break;
+    }
+
+  /* Make a ".reg/999" section.  */
+  return _bfd_elfcore_make_pseudosection (abfd, ".reg",
+					  size, note->descpos + offset);
+}
+
+static bfd_boolean
+elf32_hppa_grok_psinfo (bfd *abfd, Elf_Internal_Note *note)
+{
+  switch (note->descsz)
+    {
+      default:
+	return FALSE;
+
+      case 124:		/* Linux/hppa elf_prpsinfo.  */
+	elf_tdata (abfd)->core->program
+	  = _bfd_elfcore_strndup (abfd, note->descdata + 28, 16);
+	elf_tdata (abfd)->core->command
+	  = _bfd_elfcore_strndup (abfd, note->descdata + 44, 80);
+    }
+
+  /* Note that for some reason, a spurious space is tacked
+     onto the end of the args in some (at least one anyway)
+     implementations, so strip it off if it exists.  */
+  {
+    char *command = elf_tdata (abfd)->core->command;
+    int n = strlen (command);
+
+    if (0 < n && command[n - 1] == ' ')
+      command[n - 1] = '\0';
+  }
+
+  return TRUE;
+}
+
 /* Our own version of hide_symbol, so that we can keep plt entries for
    plabels.  */
 
 static void
-elf32_hppa_hide_symbol (info, h, force_local)
-     struct bfd_link_info *info;
-     struct elf_link_hash_entry *h;
-     bfd_boolean force_local;
+elf32_hppa_hide_symbol (struct bfd_link_info *info,
+			struct elf_link_hash_entry *eh,
+			bfd_boolean force_local)
 {
   if (force_local)
     {
-      h->elf_link_hash_flags |= ELF_LINK_FORCED_LOCAL;
-      if (h->dynindx != -1)
+      eh->forced_local = 1;
+      if (eh->dynindx != -1)
 	{
-	  h->dynindx = -1;
+	  eh->dynindx = -1;
 	  _bfd_elf_strtab_delref (elf_hash_table (info)->dynstr,
-				  h->dynstr_index);
+				  eh->dynstr_index);
 	}
     }
 
-  if (! ((struct elf32_hppa_link_hash_entry *) h)->plabel)
+  /* STT_GNU_IFUNC symbol must go through PLT.  */
+  if (! hppa_elf_hash_entry (eh)->plabel
+      && eh->type != STT_GNU_IFUNC)
     {
-      h->elf_link_hash_flags &= ~ELF_LINK_HASH_NEEDS_PLT;
-      h->plt.offset = (bfd_vma) -1;
+      eh->needs_plt = 0;
+      eh->plt = elf_hash_table (info)->init_plt_offset;
     }
 }
-
-/* This is the condition under which elf32_hppa_finish_dynamic_symbol
-   will be called from elflink.h.  If elflink.h doesn't call our
-   finish_dynamic_symbol routine, we'll need to do something about
-   initializing any .plt and .got entries in elf32_hppa_relocate_section.  */
-#define WILL_CALL_FINISH_DYNAMIC_SYMBOL(DYN, INFO, H) \
-  ((DYN)								\
-   && ((INFO)->shared							\
-       || ((H)->elf_link_hash_flags & ELF_LINK_FORCED_LOCAL) == 0)	\
-   && ((H)->dynindx != -1						\
-       || ((H)->elf_link_hash_flags & ELF_LINK_FORCED_LOCAL) != 0))
 
 /* Adjust a symbol defined by a dynamic object and referenced by a
    regular object.  The current definition is in some section of the
@@ -1818,25 +1789,28 @@ elf32_hppa_hide_symbol (info, h, force_local)
    understand.  */
 
 static bfd_boolean
-elf32_hppa_adjust_dynamic_symbol (info, h)
-     struct bfd_link_info *info;
-     struct elf_link_hash_entry *h;
+elf32_hppa_adjust_dynamic_symbol (struct bfd_link_info *info,
+				  struct elf_link_hash_entry *eh)
 {
   struct elf32_hppa_link_hash_table *htab;
-  struct elf32_hppa_link_hash_entry *eh;
-  struct elf32_hppa_dyn_reloc_entry *p;
-  asection *s;
-  unsigned int power_of_two;
+  asection *sec;
 
   /* If this is a function, put it in the procedure linkage table.  We
      will fill in the contents of the procedure linkage table later.  */
-  if (h->type == STT_FUNC
-      || (h->elf_link_hash_flags & ELF_LINK_HASH_NEEDS_PLT) != 0)
+  if (eh->type == STT_FUNC
+      || eh->needs_plt)
     {
-      if (h->plt.refcount <= 0
-	  || ((h->elf_link_hash_flags & ELF_LINK_HASH_DEF_REGULAR) != 0
-	      && h->root.type != bfd_link_hash_defweak
-	      && ! ((struct elf32_hppa_link_hash_entry *) h)->plabel
+      /* If the symbol is used by a plabel, we must allocate a PLT slot.
+	 The refcounts are not reliable when it has been hidden since
+	 hide_symbol can be called before the plabel flag is set.  */
+      if (hppa_elf_hash_entry (eh)->plabel
+	  && eh->plt.refcount <= 0)
+	eh->plt.refcount = 1;
+
+      if (eh->plt.refcount <= 0
+	  || (eh->def_regular
+	      && eh->root.type != bfd_link_hash_defweak
+	      && ! hppa_elf_hash_entry (eh)->plabel
 	      && (!info->shared || info->symbolic)))
 	{
 	  /* The .plt entry is not needed when:
@@ -1847,35 +1821,27 @@ elf32_hppa_adjust_dynamic_symbol (info, h)
 	     used by a plabel relocation.  Either this object is the
 	     application or we are doing a shared symbolic link.  */
 
-	  /* As a special sop to the hppa ABI, we keep a .plt entry
-	     for functions in sections containing PIC code.  */
-	  if (!info->shared
-	      && h->plt.refcount > 0
-	      && (h->elf_link_hash_flags & ELF_LINK_HASH_DEF_REGULAR) != 0
-	      && (h->root.u.def.section->flags & SEC_HAS_GOT_REF) != 0)
-	    ((struct elf32_hppa_link_hash_entry *) h)->pic_call = 1;
-	  else
-	    {
-	      h->plt.offset = (bfd_vma) -1;
-	      h->elf_link_hash_flags &= ~ELF_LINK_HASH_NEEDS_PLT;
-	    }
+	  eh->plt.offset = (bfd_vma) -1;
+	  eh->needs_plt = 0;
 	}
 
       return TRUE;
     }
   else
-    h->plt.offset = (bfd_vma) -1;
+    eh->plt.offset = (bfd_vma) -1;
 
   /* If this is a weak symbol, and there is a real definition, the
      processor independent code will have arranged for us to see the
      real definition first, and we can just use the same value.  */
-  if (h->weakdef != NULL)
+  if (eh->u.weakdef != NULL)
     {
-      if (h->weakdef->root.type != bfd_link_hash_defined
-	  && h->weakdef->root.type != bfd_link_hash_defweak)
+      if (eh->u.weakdef->root.type != bfd_link_hash_defined
+	  && eh->u.weakdef->root.type != bfd_link_hash_defweak)
 	abort ();
-      h->root.u.def.section = h->weakdef->root.u.def.section;
-      h->root.u.def.value = h->weakdef->root.u.def.value;
+      eh->root.u.def.section = eh->u.weakdef->root.u.def.section;
+      eh->root.u.def.value = eh->u.weakdef->root.u.def.value;
+      if (ELIMINATE_COPY_RELOCS)
+	eh->non_got_ref = eh->u.weakdef->non_got_ref;
       return TRUE;
     }
 
@@ -1891,23 +1857,29 @@ elf32_hppa_adjust_dynamic_symbol (info, h)
 
   /* If there are no references to this symbol that do not use the
      GOT, we don't need to generate a copy reloc.  */
-  if ((h->elf_link_hash_flags & ELF_LINK_NON_GOT_REF) == 0)
+  if (!eh->non_got_ref)
     return TRUE;
 
-  eh = (struct elf32_hppa_link_hash_entry *) h;
-  for (p = eh->dyn_relocs; p != NULL; p = p->next)
+  if (ELIMINATE_COPY_RELOCS)
     {
-      s = p->sec->output_section;
-      if (s != NULL && (s->flags & SEC_READONLY) != 0)
-	break;
-    }
+      struct elf32_hppa_link_hash_entry *hh;
+      struct elf32_hppa_dyn_reloc_entry *hdh_p;
 
-  /* If we didn't find any dynamic relocs in read-only sections, then
-     we'll be keeping the dynamic relocs and avoiding the copy reloc.  */
-  if (p == NULL)
-    {
-      h->elf_link_hash_flags &= ~ELF_LINK_NON_GOT_REF;
-      return TRUE;
+      hh = hppa_elf_hash_entry (eh);
+      for (hdh_p = hh->dyn_relocs; hdh_p != NULL; hdh_p = hdh_p->hdh_next)
+	{
+	  sec = hdh_p->sec->output_section;
+	  if (sec != NULL && (sec->flags & SEC_READONLY) != 0)
+	    break;
+	}
+
+      /* If we didn't find any dynamic relocs in read-only sections, then
+	 we'll be keeping the dynamic relocs and avoiding the copy reloc.  */
+      if (hdh_p == NULL)
+	{
+	  eh->non_got_ref = 0;
+	  return TRUE;
+	}
     }
 
   /* We must allocate the symbol in our .dynbss section, which will
@@ -1921,140 +1893,84 @@ elf32_hppa_adjust_dynamic_symbol (info, h)
      same memory location for the variable.  */
 
   htab = hppa_link_hash_table (info);
+  if (htab == NULL)
+    return FALSE;
 
   /* We must generate a COPY reloc to tell the dynamic linker to
      copy the initial value out of the dynamic object and into the
      runtime process image.  */
-  if ((h->root.u.def.section->flags & SEC_ALLOC) != 0)
+  if ((eh->root.u.def.section->flags & SEC_ALLOC) != 0 && eh->size != 0)
     {
-      htab->srelbss->_raw_size += sizeof (Elf32_External_Rela);
-      h->elf_link_hash_flags |= ELF_LINK_HASH_NEEDS_COPY;
+      htab->srelbss->size += sizeof (Elf32_External_Rela);
+      eh->needs_copy = 1;
     }
 
-  /* We need to figure out the alignment required for this symbol.  I
-     have no idea how other ELF linkers handle this.  */
+  sec = htab->sdynbss;
 
-  power_of_two = bfd_log2 (h->size);
-  if (power_of_two > 3)
-    power_of_two = 3;
-
-  /* Apply the required alignment.  */
-  s = htab->sdynbss;
-  s->_raw_size = BFD_ALIGN (s->_raw_size,
-			    (bfd_size_type) (1 << power_of_two));
-  if (power_of_two > bfd_get_section_alignment (htab->elf.dynobj, s))
-    {
-      if (! bfd_set_section_alignment (htab->elf.dynobj, s, power_of_two))
-	return FALSE;
-    }
-
-  /* Define the symbol as being at this point in the section.  */
-  h->root.u.def.section = s;
-  h->root.u.def.value = s->_raw_size;
-
-  /* Increment the section size to make room for the symbol.  */
-  s->_raw_size += h->size;
-
-  return TRUE;
-}
-
-/* Called via elf_link_hash_traverse to create .plt entries for an
-   application that uses statically linked PIC functions.  Similar to
-   the first part of elf32_hppa_adjust_dynamic_symbol.  */
-
-static bfd_boolean
-mark_PIC_calls (h, inf)
-     struct elf_link_hash_entry *h;
-     PTR inf ATTRIBUTE_UNUSED;
-{
-  if (h->root.type == bfd_link_hash_warning)
-    h = (struct elf_link_hash_entry *) h->root.u.i.link;
-
-  if (! (h->plt.refcount > 0
-	 && (h->root.type == bfd_link_hash_defined
-	     || h->root.type == bfd_link_hash_defweak)
-	 && (h->root.u.def.section->flags & SEC_HAS_GOT_REF) != 0))
-    {
-      h->plt.offset = (bfd_vma) -1;
-      h->elf_link_hash_flags &= ~ELF_LINK_HASH_NEEDS_PLT;
-      return TRUE;
-    }
-
-  h->elf_link_hash_flags |= ELF_LINK_HASH_NEEDS_PLT;
-  ((struct elf32_hppa_link_hash_entry *) h)->pic_call = 1;
-
-  return TRUE;
+  return _bfd_elf_adjust_dynamic_copy (eh, sec);
 }
 
 /* Allocate space in the .plt for entries that won't have relocations.
-   ie. pic_call and plabel entries.  */
+   ie. plabel entries.  */
 
 static bfd_boolean
-allocate_plt_static (h, inf)
-     struct elf_link_hash_entry *h;
-     PTR inf;
+allocate_plt_static (struct elf_link_hash_entry *eh, void *inf)
 {
   struct bfd_link_info *info;
   struct elf32_hppa_link_hash_table *htab;
-  asection *s;
+  struct elf32_hppa_link_hash_entry *hh;
+  asection *sec;
 
-  if (h->root.type == bfd_link_hash_indirect)
+  if (eh->root.type == bfd_link_hash_indirect)
     return TRUE;
 
-  if (h->root.type == bfd_link_hash_warning)
-    h = (struct elf_link_hash_entry *) h->root.u.i.link;
-
   info = (struct bfd_link_info *) inf;
+  hh = hppa_elf_hash_entry (eh);
   htab = hppa_link_hash_table (info);
-  if (((struct elf32_hppa_link_hash_entry *) h)->pic_call)
-    {
-      /* Make an entry in the .plt section for non-pic code that is
-	 calling pic code.  */
-      ((struct elf32_hppa_link_hash_entry *) h)->plabel = 0;
-      s = htab->splt;
-      h->plt.offset = s->_raw_size;
-      s->_raw_size += PLT_ENTRY_SIZE;
-    }
-  else if (htab->elf.dynamic_sections_created
-	   && h->plt.refcount > 0)
+  if (htab == NULL)
+    return FALSE;
+
+  if (htab->etab.dynamic_sections_created
+      && eh->plt.refcount > 0)
     {
       /* Make sure this symbol is output as a dynamic symbol.
 	 Undefined weak syms won't yet be marked as dynamic.  */
-      if (h->dynindx == -1
-	  && (h->elf_link_hash_flags & ELF_LINK_FORCED_LOCAL) == 0
-	  && h->type != STT_PARISC_MILLI)
+      if (eh->dynindx == -1
+	  && !eh->forced_local
+	  && eh->type != STT_PARISC_MILLI)
 	{
-	  if (! bfd_elf32_link_record_dynamic_symbol (info, h))
+	  if (! bfd_elf_link_record_dynamic_symbol (info, eh))
 	    return FALSE;
 	}
 
-      if (WILL_CALL_FINISH_DYNAMIC_SYMBOL (1, info, h))
+      if (WILL_CALL_FINISH_DYNAMIC_SYMBOL (1, info->shared, eh))
 	{
 	  /* Allocate these later.  From this point on, h->plabel
 	     means that the plt entry is only used by a plabel.
 	     We'll be using a normal plt entry for this symbol, so
 	     clear the plabel indicator.  */
-	  ((struct elf32_hppa_link_hash_entry *) h)->plabel = 0;
+
+	  hh->plabel = 0;
 	}
-      else if (((struct elf32_hppa_link_hash_entry *) h)->plabel)
+      else if (hh->plabel)
 	{
 	  /* Make an entry in the .plt section for plabel references
 	     that won't have a .plt entry for other reasons.  */
-	  s = htab->splt;
-	  h->plt.offset = s->_raw_size;
-	  s->_raw_size += PLT_ENTRY_SIZE;
+	  sec = htab->splt;
+	  eh->plt.offset = sec->size;
+	  sec->size += PLT_ENTRY_SIZE;
 	}
       else
 	{
 	  /* No .plt entry needed.  */
-	  h->plt.offset = (bfd_vma) -1;
-	  h->elf_link_hash_flags &= ~ELF_LINK_HASH_NEEDS_PLT;
+	  eh->plt.offset = (bfd_vma) -1;
+	  eh->needs_plt = 0;
 	}
     }
   else
     {
-      h->plt.offset = (bfd_vma) -1;
-      h->elf_link_hash_flags &= ~ELF_LINK_HASH_NEEDS_PLT;
+      eh->plt.offset = (bfd_vma) -1;
+      eh->needs_plt = 0;
     }
 
   return TRUE;
@@ -2064,67 +1980,75 @@ allocate_plt_static (h, inf)
    global syms.  */
 
 static bfd_boolean
-allocate_dynrelocs (h, inf)
-     struct elf_link_hash_entry *h;
-     PTR inf;
+allocate_dynrelocs (struct elf_link_hash_entry *eh, void *inf)
 {
   struct bfd_link_info *info;
   struct elf32_hppa_link_hash_table *htab;
-  asection *s;
-  struct elf32_hppa_link_hash_entry *eh;
-  struct elf32_hppa_dyn_reloc_entry *p;
+  asection *sec;
+  struct elf32_hppa_link_hash_entry *hh;
+  struct elf32_hppa_dyn_reloc_entry *hdh_p;
 
-  if (h->root.type == bfd_link_hash_indirect)
+  if (eh->root.type == bfd_link_hash_indirect)
     return TRUE;
 
-  if (h->root.type == bfd_link_hash_warning)
-    h = (struct elf_link_hash_entry *) h->root.u.i.link;
-
-  info = (struct bfd_link_info *) inf;
+  info = inf;
   htab = hppa_link_hash_table (info);
-  if (htab->elf.dynamic_sections_created
-      && h->plt.offset != (bfd_vma) -1
-      && !((struct elf32_hppa_link_hash_entry *) h)->pic_call
-      && !((struct elf32_hppa_link_hash_entry *) h)->plabel)
+  if (htab == NULL)
+    return FALSE;
+
+  hh = hppa_elf_hash_entry (eh);
+
+  if (htab->etab.dynamic_sections_created
+      && eh->plt.offset != (bfd_vma) -1
+      && !hh->plabel
+      && eh->plt.refcount > 0)
     {
       /* Make an entry in the .plt section.  */
-      s = htab->splt;
-      h->plt.offset = s->_raw_size;
-      s->_raw_size += PLT_ENTRY_SIZE;
+      sec = htab->splt;
+      eh->plt.offset = sec->size;
+      sec->size += PLT_ENTRY_SIZE;
 
       /* We also need to make an entry in the .rela.plt section.  */
-      htab->srelplt->_raw_size += sizeof (Elf32_External_Rela);
+      htab->srelplt->size += sizeof (Elf32_External_Rela);
       htab->need_plt_stub = 1;
     }
 
-  if (h->got.refcount > 0)
+  if (eh->got.refcount > 0)
     {
       /* Make sure this symbol is output as a dynamic symbol.
 	 Undefined weak syms won't yet be marked as dynamic.  */
-      if (h->dynindx == -1
-	  && (h->elf_link_hash_flags & ELF_LINK_FORCED_LOCAL) == 0
-	  && h->type != STT_PARISC_MILLI)
+      if (eh->dynindx == -1
+	  && !eh->forced_local
+	  && eh->type != STT_PARISC_MILLI)
 	{
-	  if (! bfd_elf32_link_record_dynamic_symbol (info, h))
+	  if (! bfd_elf_link_record_dynamic_symbol (info, eh))
 	    return FALSE;
 	}
 
-      s = htab->sgot;
-      h->got.offset = s->_raw_size;
-      s->_raw_size += GOT_ENTRY_SIZE;
-      if (htab->elf.dynamic_sections_created
+      sec = htab->sgot;
+      eh->got.offset = sec->size;
+      sec->size += GOT_ENTRY_SIZE;
+      /* R_PARISC_TLS_GD* needs two GOT entries */
+      if ((hh->tls_type & (GOT_TLS_GD | GOT_TLS_IE)) == (GOT_TLS_GD | GOT_TLS_IE))
+      	sec->size += GOT_ENTRY_SIZE * 2;
+      else if ((hh->tls_type & GOT_TLS_GD) == GOT_TLS_GD)
+      	sec->size += GOT_ENTRY_SIZE;
+      if (htab->etab.dynamic_sections_created
 	  && (info->shared
-	      || (h->dynindx != -1
-		  && h->elf_link_hash_flags & ELF_LINK_FORCED_LOCAL) == 0))
+	      || (eh->dynindx != -1
+		  && !eh->forced_local)))
 	{
-	  htab->srelgot->_raw_size += sizeof (Elf32_External_Rela);
+	  htab->srelgot->size += sizeof (Elf32_External_Rela);
+	  if ((hh->tls_type & (GOT_TLS_GD | GOT_TLS_IE)) == (GOT_TLS_GD | GOT_TLS_IE))
+	    htab->srelgot->size += 2 * sizeof (Elf32_External_Rela);
+	  else if ((hh->tls_type & GOT_TLS_GD) == GOT_TLS_GD)
+	    htab->srelgot->size += sizeof (Elf32_External_Rela);
 	}
     }
   else
-    h->got.offset = (bfd_vma) -1;
+    eh->got.offset = (bfd_vma) -1;
 
-  eh = (struct elf32_hppa_link_hash_entry *) h;
-  if (eh->dyn_relocs == NULL)
+  if (hh->dyn_relocs == NULL)
     return TRUE;
 
   /* If this is a -Bsymbolic shared link, then we need to discard all
@@ -2135,63 +2059,81 @@ allocate_dynrelocs (h, inf)
   if (info->shared)
     {
 #if RELATIVE_DYNRELOCS
-      if ((h->elf_link_hash_flags & ELF_LINK_HASH_DEF_REGULAR) != 0
-	  && ((h->elf_link_hash_flags & ELF_LINK_FORCED_LOCAL) != 0
-	      || info->symbolic))
+      if (SYMBOL_CALLS_LOCAL (info, eh))
 	{
-	  struct elf32_hppa_dyn_reloc_entry **pp;
+	  struct elf32_hppa_dyn_reloc_entry **hdh_pp;
 
-	  for (pp = &eh->dyn_relocs; (p = *pp) != NULL; )
+	  for (hdh_pp = &hh->dyn_relocs; (hdh_p = *hdh_pp) != NULL; )
 	    {
-	      p->count -= p->relative_count;
-	      p->relative_count = 0;
-	      if (p->count == 0)
-		*pp = p->next;
+	      hdh_p->count -= hdh_p->relative_count;
+	      hdh_p->relative_count = 0;
+	      if (hdh_p->count == 0)
+		*hdh_pp = hdh_p->hdh_next;
 	      else
-		pp = &p->next;
+		hdh_pp = &hdh_p->hdh_next;
 	    }
 	}
 #endif
+
+      /* Also discard relocs on undefined weak syms with non-default
+	 visibility.  */
+      if (hh->dyn_relocs != NULL
+	  && eh->root.type == bfd_link_hash_undefweak)
+	{
+	  if (ELF_ST_VISIBILITY (eh->other) != STV_DEFAULT)
+	    hh->dyn_relocs = NULL;
+
+	  /* Make sure undefined weak symbols are output as a dynamic
+	     symbol in PIEs.  */
+	  else if (eh->dynindx == -1
+		   && !eh->forced_local)
+	    {
+	      if (! bfd_elf_link_record_dynamic_symbol (info, eh))
+		return FALSE;
+	    }
+	}
     }
   else
     {
       /* For the non-shared case, discard space for relocs against
 	 symbols which turn out to need copy relocs or are not
 	 dynamic.  */
-      if ((h->elf_link_hash_flags & ELF_LINK_NON_GOT_REF) == 0
-	  && (((h->elf_link_hash_flags & ELF_LINK_HASH_DEF_DYNAMIC) != 0
-	       && (h->elf_link_hash_flags & ELF_LINK_HASH_DEF_REGULAR) == 0)
-	      || (htab->elf.dynamic_sections_created
-		  && (h->root.type == bfd_link_hash_undefweak
-		      || h->root.type == bfd_link_hash_undefined))))
+
+      if (!eh->non_got_ref
+	  && ((ELIMINATE_COPY_RELOCS
+	       && eh->def_dynamic
+	       && !eh->def_regular)
+	       || (htab->etab.dynamic_sections_created
+		   && (eh->root.type == bfd_link_hash_undefweak
+		       || eh->root.type == bfd_link_hash_undefined))))
 	{
 	  /* Make sure this symbol is output as a dynamic symbol.
 	     Undefined weak syms won't yet be marked as dynamic.  */
-	  if (h->dynindx == -1
-	      && (h->elf_link_hash_flags & ELF_LINK_FORCED_LOCAL) == 0
-	      && h->type != STT_PARISC_MILLI)
+	  if (eh->dynindx == -1
+	      && !eh->forced_local
+	      && eh->type != STT_PARISC_MILLI)
 	    {
-	      if (! bfd_elf32_link_record_dynamic_symbol (info, h))
+	      if (! bfd_elf_link_record_dynamic_symbol (info, eh))
 		return FALSE;
 	    }
 
 	  /* If that succeeded, we know we'll be keeping all the
 	     relocs.  */
-	  if (h->dynindx != -1)
+	  if (eh->dynindx != -1)
 	    goto keep;
 	}
 
-      eh->dyn_relocs = NULL;
+      hh->dyn_relocs = NULL;
       return TRUE;
 
     keep: ;
     }
 
   /* Finally, allocate space.  */
-  for (p = eh->dyn_relocs; p != NULL; p = p->next)
+  for (hdh_p = hh->dyn_relocs; hdh_p != NULL; hdh_p = hdh_p->hdh_next)
     {
-      asection *sreloc = elf_section_data (p->sec)->sreloc;
-      sreloc->_raw_size += p->count * sizeof (Elf32_External_Rela);
+      asection *sreloc = elf_section_data (hdh_p->sec)->sreloc;
+      sreloc->size += hdh_p->count * sizeof (Elf32_External_Rela);
     }
 
   return TRUE;
@@ -2205,17 +2147,13 @@ allocate_dynrelocs (h, inf)
    elf_adjust_dynamic_symbol.  */
 
 static bfd_boolean
-clobber_millicode_symbols (h, info)
-     struct elf_link_hash_entry *h;
-     struct bfd_link_info *info;
+clobber_millicode_symbols (struct elf_link_hash_entry *eh,
+			   struct bfd_link_info *info)
 {
-  if (h->root.type == bfd_link_hash_warning)
-    h = (struct elf_link_hash_entry *) h->root.u.i.link;
-
-  if (h->type == STT_PARISC_MILLI
-      && (h->elf_link_hash_flags & ELF_LINK_FORCED_LOCAL) == 0)
+  if (eh->type == STT_PARISC_MILLI
+      && !eh->forced_local)
     {
-      elf32_hppa_hide_symbol (info, h, TRUE);
+      elf32_hppa_hide_symbol (info, eh, TRUE);
     }
   return TRUE;
 }
@@ -2223,24 +2161,19 @@ clobber_millicode_symbols (h, info)
 /* Find any dynamic relocs that apply to read-only sections.  */
 
 static bfd_boolean
-readonly_dynrelocs (h, inf)
-     struct elf_link_hash_entry *h;
-     PTR inf;
+readonly_dynrelocs (struct elf_link_hash_entry *eh, void *inf)
 {
-  struct elf32_hppa_link_hash_entry *eh;
-  struct elf32_hppa_dyn_reloc_entry *p;
+  struct elf32_hppa_link_hash_entry *hh;
+  struct elf32_hppa_dyn_reloc_entry *hdh_p;
 
-  if (h->root.type == bfd_link_hash_warning)
-    h = (struct elf_link_hash_entry *) h->root.u.i.link;
-
-  eh = (struct elf32_hppa_link_hash_entry *) h;
-  for (p = eh->dyn_relocs; p != NULL; p = p->next)
+  hh = hppa_elf_hash_entry (eh);
+  for (hdh_p = hh->dyn_relocs; hdh_p != NULL; hdh_p = hdh_p->hdh_next)
     {
-      asection *s = p->sec->output_section;
+      asection *sec = hdh_p->sec->output_section;
 
-      if (s != NULL && (s->flags & SEC_READONLY) != 0)
+      if (sec != NULL && (sec->flags & SEC_READONLY) != 0)
 	{
-	  struct bfd_link_info *info = (struct bfd_link_info *) inf;
+	  struct bfd_link_info *info = inf;
 
 	  info->flags |= DF_TEXTREL;
 
@@ -2254,45 +2187,39 @@ readonly_dynrelocs (h, inf)
 /* Set the sizes of the dynamic sections.  */
 
 static bfd_boolean
-elf32_hppa_size_dynamic_sections (output_bfd, info)
-     bfd *output_bfd ATTRIBUTE_UNUSED;
-     struct bfd_link_info *info;
+elf32_hppa_size_dynamic_sections (bfd *output_bfd ATTRIBUTE_UNUSED,
+				  struct bfd_link_info *info)
 {
   struct elf32_hppa_link_hash_table *htab;
   bfd *dynobj;
   bfd *ibfd;
-  asection *s;
+  asection *sec;
   bfd_boolean relocs;
 
   htab = hppa_link_hash_table (info);
-  dynobj = htab->elf.dynobj;
+  if (htab == NULL)
+    return FALSE;
+
+  dynobj = htab->etab.dynobj;
   if (dynobj == NULL)
     abort ();
 
-  if (htab->elf.dynamic_sections_created)
+  if (htab->etab.dynamic_sections_created)
     {
       /* Set the contents of the .interp section to the interpreter.  */
-      if (! info->shared)
+      if (info->executable)
 	{
-	  s = bfd_get_section_by_name (dynobj, ".interp");
-	  if (s == NULL)
+	  sec = bfd_get_linker_section (dynobj, ".interp");
+	  if (sec == NULL)
 	    abort ();
-	  s->_raw_size = sizeof ELF_DYNAMIC_INTERPRETER;
-	  s->contents = (unsigned char *) ELF_DYNAMIC_INTERPRETER;
+	  sec->size = sizeof ELF_DYNAMIC_INTERPRETER;
+	  sec->contents = (unsigned char *) ELF_DYNAMIC_INTERPRETER;
 	}
 
       /* Force millicode symbols local.  */
-      elf_link_hash_traverse (&htab->elf,
+      elf_link_hash_traverse (&htab->etab,
 			      clobber_millicode_symbols,
 			      info);
-    }
-  else
-    {
-      /* Run through the function symbols, looking for any that are
-	 PIC, and mark them as needing .plt entries so that %r19 will
-	 be set up.  */
-      if (! info->shared)
-	elf_link_hash_traverse (&htab->elf, mark_PIC_calls, (PTR) info);
     }
 
   /* Set up .got and .plt offsets for local syms, and space for local
@@ -2306,32 +2233,33 @@ elf32_hppa_size_dynamic_sections (output_bfd, info)
       bfd_size_type locsymcount;
       Elf_Internal_Shdr *symtab_hdr;
       asection *srel;
+      char *local_tls_type;
 
       if (bfd_get_flavour (ibfd) != bfd_target_elf_flavour)
 	continue;
 
-      for (s = ibfd->sections; s != NULL; s = s->next)
+      for (sec = ibfd->sections; sec != NULL; sec = sec->next)
 	{
-	  struct elf32_hppa_dyn_reloc_entry *p;
+	  struct elf32_hppa_dyn_reloc_entry *hdh_p;
 
-	  for (p = ((struct elf32_hppa_dyn_reloc_entry *)
-		    elf_section_data (s)->local_dynrel);
-	       p != NULL;
-	       p = p->next)
+	  for (hdh_p = ((struct elf32_hppa_dyn_reloc_entry *)
+		    elf_section_data (sec)->local_dynrel);
+	       hdh_p != NULL;
+	       hdh_p = hdh_p->hdh_next)
 	    {
-	      if (!bfd_is_abs_section (p->sec)
-		  && bfd_is_abs_section (p->sec->output_section))
+	      if (!bfd_is_abs_section (hdh_p->sec)
+		  && bfd_is_abs_section (hdh_p->sec->output_section))
 		{
 		  /* Input section has been discarded, either because
 		     it is a copy of a linkonce section or due to
 		     linker script /DISCARD/, so we'll be discarding
 		     the relocs too.  */
 		}
-	      else if (p->count != 0)
+	      else if (hdh_p->count != 0)
 		{
-		  srel = elf_section_data (p->sec)->sreloc;
-		  srel->_raw_size += p->count * sizeof (Elf32_External_Rela);
-		  if ((p->sec->output_section->flags & SEC_READONLY) != 0)
+		  srel = elf_section_data (hdh_p->sec)->sreloc;
+		  srel->size += hdh_p->count * sizeof (Elf32_External_Rela);
+		  if ((hdh_p->sec->output_section->flags & SEC_READONLY) != 0)
 		    info->flags |= DF_TEXTREL;
 		}
 	    }
@@ -2344,24 +2272,37 @@ elf32_hppa_size_dynamic_sections (output_bfd, info)
       symtab_hdr = &elf_tdata (ibfd)->symtab_hdr;
       locsymcount = symtab_hdr->sh_info;
       end_local_got = local_got + locsymcount;
-      s = htab->sgot;
+      local_tls_type = hppa_elf_local_got_tls_type (ibfd);
+      sec = htab->sgot;
       srel = htab->srelgot;
       for (; local_got < end_local_got; ++local_got)
 	{
 	  if (*local_got > 0)
 	    {
-	      *local_got = s->_raw_size;
-	      s->_raw_size += GOT_ENTRY_SIZE;
+	      *local_got = sec->size;
+	      sec->size += GOT_ENTRY_SIZE;
+	      if ((*local_tls_type & (GOT_TLS_GD | GOT_TLS_IE)) == (GOT_TLS_GD | GOT_TLS_IE))
+		sec->size += 2 * GOT_ENTRY_SIZE;
+	      else if ((*local_tls_type & GOT_TLS_GD) == GOT_TLS_GD)
+		sec->size += GOT_ENTRY_SIZE;
 	      if (info->shared)
-		srel->_raw_size += sizeof (Elf32_External_Rela);
+	        {
+		  srel->size += sizeof (Elf32_External_Rela);
+		  if ((*local_tls_type & (GOT_TLS_GD | GOT_TLS_IE)) == (GOT_TLS_GD | GOT_TLS_IE))
+		    srel->size += 2 * sizeof (Elf32_External_Rela);
+		  else if ((*local_tls_type & GOT_TLS_GD) == GOT_TLS_GD)
+		    srel->size += sizeof (Elf32_External_Rela);
+	        }
 	    }
 	  else
 	    *local_got = (bfd_vma) -1;
+
+	  ++local_tls_type;
 	}
 
       local_plt = end_local_got;
       end_local_plt = local_plt + locsymcount;
-      if (! htab->elf.dynamic_sections_created)
+      if (! htab->etab.dynamic_sections_created)
 	{
 	  /* Won't be used, but be safe.  */
 	  for (; local_plt < end_local_plt; ++local_plt)
@@ -2369,16 +2310,16 @@ elf32_hppa_size_dynamic_sections (output_bfd, info)
 	}
       else
 	{
-	  s = htab->splt;
+	  sec = htab->splt;
 	  srel = htab->srelplt;
 	  for (; local_plt < end_local_plt; ++local_plt)
 	    {
 	      if (*local_plt > 0)
 		{
-		  *local_plt = s->_raw_size;
-		  s->_raw_size += PLT_ENTRY_SIZE;
+		  *local_plt = sec->size;
+		  sec->size += PLT_ENTRY_SIZE;
 		  if (info->shared)
-		    srel->_raw_size += sizeof (Elf32_External_Rela);
+		    srel->size += sizeof (Elf32_External_Rela);
 		}
 	      else
 		*local_plt = (bfd_vma) -1;
@@ -2386,25 +2327,36 @@ elf32_hppa_size_dynamic_sections (output_bfd, info)
 	}
     }
 
+  if (htab->tls_ldm_got.refcount > 0)
+    {
+      /* Allocate 2 got entries and 1 dynamic reloc for
+         R_PARISC_TLS_DTPMOD32 relocs.  */
+      htab->tls_ldm_got.offset = htab->sgot->size;
+      htab->sgot->size += (GOT_ENTRY_SIZE * 2);
+      htab->srelgot->size += sizeof (Elf32_External_Rela);
+    }
+  else
+    htab->tls_ldm_got.offset = -1;
+
   /* Do all the .plt entries without relocs first.  The dynamic linker
      uses the last .plt reloc to find the end of the .plt (and hence
      the start of the .got) for lazy linking.  */
-  elf_link_hash_traverse (&htab->elf, allocate_plt_static, (PTR) info);
+  elf_link_hash_traverse (&htab->etab, allocate_plt_static, info);
 
   /* Allocate global sym .plt and .got entries, and space for global
      sym dynamic relocs.  */
-  elf_link_hash_traverse (&htab->elf, allocate_dynrelocs, (PTR) info);
+  elf_link_hash_traverse (&htab->etab, allocate_dynrelocs, info);
 
   /* The check_relocs and adjust_dynamic_symbol entry points have
      determined the sizes of the various dynamic sections.  Allocate
      memory for them.  */
   relocs = FALSE;
-  for (s = dynobj->sections; s != NULL; s = s->next)
+  for (sec = dynobj->sections; sec != NULL; sec = sec->next)
     {
-      if ((s->flags & SEC_LINKER_CREATED) == 0)
+      if ((sec->flags & SEC_LINKER_CREATED) == 0)
 	continue;
 
-      if (s == htab->splt)
+      if (sec == htab->splt)
 	{
 	  if (htab->need_plt_stub)
 	    {
@@ -2412,29 +2364,30 @@ elf32_hppa_size_dynamic_sections (output_bfd, info)
 		 section.  We want this stub right at the end, up
 		 against the .got section.  */
 	      int gotalign = bfd_section_alignment (dynobj, htab->sgot);
-	      int pltalign = bfd_section_alignment (dynobj, s);
+	      int pltalign = bfd_section_alignment (dynobj, sec);
 	      bfd_size_type mask;
 
 	      if (gotalign > pltalign)
-		bfd_set_section_alignment (dynobj, s, gotalign);
+		(void) bfd_set_section_alignment (dynobj, sec, gotalign);
 	      mask = ((bfd_size_type) 1 << gotalign) - 1;
-	      s->_raw_size = (s->_raw_size + sizeof (plt_stub) + mask) & ~mask;
+	      sec->size = (sec->size + sizeof (plt_stub) + mask) & ~mask;
 	    }
 	}
-      else if (s == htab->sgot)
+      else if (sec == htab->sgot
+	       || sec == htab->sdynbss)
 	;
-      else if (strncmp (bfd_get_section_name (dynobj, s), ".rela", 5) == 0)
+      else if (CONST_STRNEQ (bfd_get_section_name (dynobj, sec), ".rela"))
 	{
-	  if (s->_raw_size != 0)
+	  if (sec->size != 0)
 	    {
 	      /* Remember whether there are any reloc sections other
 		 than .rela.plt.  */
-	      if (s != htab->srelplt)
+	      if (sec != htab->srelplt)
 		relocs = TRUE;
 
 	      /* We use the reloc_count field as a counter if we need
 		 to copy relocs into the output file.  */
-	      s->reloc_count = 0;
+	      sec->reloc_count = 0;
 	    }
 	}
       else
@@ -2443,7 +2396,7 @@ elf32_hppa_size_dynamic_sections (output_bfd, info)
 	  continue;
 	}
 
-      if (s->_raw_size == 0)
+      if (sec->size == 0)
 	{
 	  /* If we don't need this section, strip it from the
 	     output file.  This is mostly to handle .rela.bss and
@@ -2454,25 +2407,28 @@ elf32_hppa_size_dynamic_sections (output_bfd, info)
 	     adjust_dynamic_symbol is called, and it is that
 	     function which decides whether anything needs to go
 	     into these sections.  */
-	  _bfd_strip_section_from_output (info, s);
+	  sec->flags |= SEC_EXCLUDE;
 	  continue;
 	}
 
+      if ((sec->flags & SEC_HAS_CONTENTS) == 0)
+	continue;
+
       /* Allocate memory for the section contents.  Zero it, because
 	 we may not fill in all the reloc sections.  */
-      s->contents = (bfd_byte *) bfd_zalloc (dynobj, s->_raw_size);
-      if (s->contents == NULL && s->_raw_size != 0)
+      sec->contents = bfd_zalloc (dynobj, sec->size);
+      if (sec->contents == NULL)
 	return FALSE;
     }
 
-  if (htab->elf.dynamic_sections_created)
+  if (htab->etab.dynamic_sections_created)
     {
       /* Like IA-64 and HPPA64, always create a DT_PLTGOT.  It
 	 actually has nothing to do with the PLT, it is how we
 	 communicate the LTP value of a load module to the dynamic
 	 linker.  */
 #define add_dynamic_entry(TAG, VAL) \
-  bfd_elf32_add_dynamic_entry (info, (bfd_vma) (TAG), (bfd_vma) (VAL))
+  _bfd_elf_add_dynamic_entry (info, TAG, VAL)
 
       if (!add_dynamic_entry (DT_PLTGOT, 0))
 	return FALSE;
@@ -2482,13 +2438,13 @@ elf32_hppa_size_dynamic_sections (output_bfd, info)
 	 must add the entries now so that we get the correct size for
 	 the .dynamic section.  The DT_DEBUG entry is filled in by the
 	 dynamic linker and used by the debugger.  */
-      if (!info->shared)
+      if (info->executable)
 	{
 	  if (!add_dynamic_entry (DT_DEBUG, 0))
 	    return FALSE;
 	}
 
-      if (htab->srelplt->_raw_size != 0)
+      if (htab->srelplt->size != 0)
 	{
 	  if (!add_dynamic_entry (DT_PLTRELSZ, 0)
 	      || !add_dynamic_entry (DT_PLTREL, DT_RELA)
@@ -2506,8 +2462,7 @@ elf32_hppa_size_dynamic_sections (output_bfd, info)
 	  /* If any dynamic relocs apply to a read-only section,
 	     then we need a DT_TEXTREL entry.  */
 	  if ((info->flags & DF_TEXTREL) == 0)
-	    elf_link_hash_traverse (&htab->elf, readonly_dynrelocs,
-				    (PTR) info);
+	    elf_link_hash_traverse (&htab->etab, readonly_dynrelocs, info);
 
 	  if ((info->flags & DF_TEXTREL) != 0)
 	    {
@@ -2528,9 +2483,7 @@ elf32_hppa_size_dynamic_sections (output_bfd, info)
    0 when no stubs will be needed, and 1 on success.  */
 
 int
-elf32_hppa_setup_section_lists (output_bfd, info)
-     bfd *output_bfd;
-     struct bfd_link_info *info;
+elf32_hppa_setup_section_lists (bfd *output_bfd, struct bfd_link_info *info)
 {
   bfd *input_bfd;
   unsigned int bfd_count;
@@ -2540,8 +2493,8 @@ elf32_hppa_setup_section_lists (output_bfd, info)
   bfd_size_type amt;
   struct elf32_hppa_link_hash_table *htab = hppa_link_hash_table (info);
 
-  if (htab->elf.root.creator->flavour != bfd_target_elf_flavour)
-    return 0;
+  if (htab == NULL)
+    return -1;
 
   /* Count the number of input BFDs and find the top input section id.  */
   for (input_bfd = info->input_bfds, bfd_count = 0, top_id = 0;
@@ -2560,13 +2513,13 @@ elf32_hppa_setup_section_lists (output_bfd, info)
   htab->bfd_count = bfd_count;
 
   amt = sizeof (struct map_stub) * (top_id + 1);
-  htab->stub_group = (struct map_stub *) bfd_zmalloc (amt);
+  htab->stub_group = bfd_zmalloc (amt);
   if (htab->stub_group == NULL)
     return -1;
 
   /* We can't use output_bfd->section_count here to find the top output
      section index as some sections may have been removed, and
-     _bfd_strip_section_from_output doesn't renumber the indices.  */
+     strip_excluded_output_sections doesn't renumber the indices.  */
   for (section = output_bfd->sections, top_index = 0;
        section != NULL;
        section = section->next)
@@ -2577,7 +2530,7 @@ elf32_hppa_setup_section_lists (output_bfd, info)
 
   htab->top_index = top_index;
   amt = sizeof (asection *) * (top_index + 1);
-  input_list = (asection **) bfd_malloc (amt);
+  input_list = bfd_malloc (amt);
   htab->input_list = input_list;
   if (input_list == NULL)
     return -1;
@@ -2606,11 +2559,12 @@ elf32_hppa_setup_section_lists (output_bfd, info)
    we may insert linker stubs.  */
 
 void
-elf32_hppa_next_input_section (info, isec)
-     struct bfd_link_info *info;
-     asection *isec;
+elf32_hppa_next_input_section (struct bfd_link_info *info, asection *isec)
 {
   struct elf32_hppa_link_hash_table *htab = hppa_link_hash_table (info);
+
+  if (htab == NULL)
+    return;
 
   if (isec->output_section->index <= htab->top_index)
     {
@@ -2635,10 +2589,9 @@ elf32_hppa_next_input_section (info, isec)
    the middle of a function is not a good idea.  */
 
 static void
-group_sections (htab, stub_group_size, stubs_always_before_branch)
-     struct elf32_hppa_link_hash_table *htab;
-     bfd_size_type stub_group_size;
-     bfd_boolean stubs_always_before_branch;
+group_sections (struct elf32_hppa_link_hash_table *htab,
+		bfd_size_type stub_group_size,
+		bfd_boolean stubs_always_before_branch)
 {
   asection **list = htab->input_list + htab->top_index;
   do
@@ -2654,10 +2607,7 @@ group_sections (htab, stub_group_size, stubs_always_before_branch)
 	  bfd_boolean big_sec;
 
 	  curr = tail;
-	  if (tail->_cooked_size)
-	    total = tail->_cooked_size;
-	  else
-	    total = tail->_raw_size;
+	  total = tail->size;
 	  big_sec = total >= stub_group_size;
 
 	  while ((prev = PREV_SEC (curr)) != NULL
@@ -2716,21 +2666,21 @@ group_sections (htab, stub_group_size, stubs_always_before_branch)
    Returns -1 on error, 1 if export stubs created, 0 otherwise.  */
 
 static int
-get_local_syms (output_bfd, input_bfd, info)
-     bfd *output_bfd;
-     bfd *input_bfd;
-     struct bfd_link_info *info;
+get_local_syms (bfd *output_bfd, bfd *input_bfd, struct bfd_link_info *info)
 {
   unsigned int bfd_indx;
   Elf_Internal_Sym *local_syms, **all_local_syms;
   int stub_changed = 0;
   struct elf32_hppa_link_hash_table *htab = hppa_link_hash_table (info);
 
+  if (htab == NULL)
+    return -1;
+
   /* We want to read in symbol extension records only once.  To do this
      we need to read in the local symbols in parallel and save them for
      later use; so hold pointers to the local symbols in an array.  */
   bfd_size_type amt = sizeof (Elf_Internal_Sym *) * htab->bfd_count;
-  all_local_syms = (Elf_Internal_Sym **) bfd_zmalloc (amt);
+  all_local_syms = bfd_zmalloc (amt);
   htab->all_local_syms = all_local_syms;
   if (all_local_syms == NULL)
     return -1;
@@ -2766,67 +2716,66 @@ get_local_syms (output_bfd, input_bfd, info)
 
       if (info->shared && htab->multi_subspace)
 	{
-	  struct elf_link_hash_entry **sym_hashes;
-	  struct elf_link_hash_entry **end_hashes;
+	  struct elf_link_hash_entry **eh_syms;
+	  struct elf_link_hash_entry **eh_symend;
 	  unsigned int symcount;
 
 	  symcount = (symtab_hdr->sh_size / sizeof (Elf32_External_Sym)
 		      - symtab_hdr->sh_info);
-	  sym_hashes = elf_sym_hashes (input_bfd);
-	  end_hashes = sym_hashes + symcount;
+	  eh_syms = (struct elf_link_hash_entry **) elf_sym_hashes (input_bfd);
+	  eh_symend = (struct elf_link_hash_entry **) (eh_syms + symcount);
 
 	  /* Look through the global syms for functions;  We need to
 	     build export stubs for all globally visible functions.  */
-	  for (; sym_hashes < end_hashes; sym_hashes++)
+	  for (; eh_syms < eh_symend; eh_syms++)
 	    {
-	      struct elf32_hppa_link_hash_entry *hash;
+	      struct elf32_hppa_link_hash_entry *hh;
 
-	      hash = (struct elf32_hppa_link_hash_entry *) *sym_hashes;
+	      hh = hppa_elf_hash_entry (*eh_syms);
 
-	      while (hash->elf.root.type == bfd_link_hash_indirect
-		     || hash->elf.root.type == bfd_link_hash_warning)
-		hash = ((struct elf32_hppa_link_hash_entry *)
-			hash->elf.root.u.i.link);
+	      while (hh->eh.root.type == bfd_link_hash_indirect
+		     || hh->eh.root.type == bfd_link_hash_warning)
+		   hh = hppa_elf_hash_entry (hh->eh.root.u.i.link);
 
 	      /* At this point in the link, undefined syms have been
 		 resolved, so we need to check that the symbol was
 		 defined in this BFD.  */
-	      if ((hash->elf.root.type == bfd_link_hash_defined
-		   || hash->elf.root.type == bfd_link_hash_defweak)
-		  && hash->elf.type == STT_FUNC
-		  && hash->elf.root.u.def.section->output_section != NULL
-		  && (hash->elf.root.u.def.section->output_section->owner
+	      if ((hh->eh.root.type == bfd_link_hash_defined
+		   || hh->eh.root.type == bfd_link_hash_defweak)
+		  && hh->eh.type == STT_FUNC
+		  && hh->eh.root.u.def.section->output_section != NULL
+		  && (hh->eh.root.u.def.section->output_section->owner
 		      == output_bfd)
-		  && hash->elf.root.u.def.section->owner == input_bfd
-		  && (hash->elf.elf_link_hash_flags & ELF_LINK_HASH_DEF_REGULAR)
-		  && !(hash->elf.elf_link_hash_flags & ELF_LINK_FORCED_LOCAL)
-		  && ELF_ST_VISIBILITY (hash->elf.other) == STV_DEFAULT)
+		  && hh->eh.root.u.def.section->owner == input_bfd
+		  && hh->eh.def_regular
+		  && !hh->eh.forced_local
+		  && ELF_ST_VISIBILITY (hh->eh.other) == STV_DEFAULT)
 		{
 		  asection *sec;
 		  const char *stub_name;
-		  struct elf32_hppa_stub_hash_entry *stub_entry;
+		  struct elf32_hppa_stub_hash_entry *hsh;
 
-		  sec = hash->elf.root.u.def.section;
-		  stub_name = hash->elf.root.root.string;
-		  stub_entry = hppa_stub_hash_lookup (&htab->stub_hash_table,
+		  sec = hh->eh.root.u.def.section;
+		  stub_name = hh_name (hh);
+		  hsh = hppa_stub_hash_lookup (&htab->bstab,
 						      stub_name,
 						      FALSE, FALSE);
-		  if (stub_entry == NULL)
+		  if (hsh == NULL)
 		    {
-		      stub_entry = hppa_add_stub (stub_name, sec, htab);
-		      if (!stub_entry)
+		      hsh = hppa_add_stub (stub_name, sec, htab);
+		      if (!hsh)
 			return -1;
 
-		      stub_entry->target_value = hash->elf.root.u.def.value;
-		      stub_entry->target_section = hash->elf.root.u.def.section;
-		      stub_entry->stub_type = hppa_stub_export;
-		      stub_entry->h = hash;
+		      hsh->target_value = hh->eh.root.u.def.value;
+		      hsh->target_section = hh->eh.root.u.def.section;
+		      hsh->stub_type = hppa_stub_export;
+		      hsh->hh = hh;
 		      stub_changed = 1;
 		    }
 		  else
 		    {
-		      (*_bfd_error_handler) (_("%s: duplicate export stub %s"),
-					     bfd_archive_filename (input_bfd),
+		      (*_bfd_error_handler) (_("%B: duplicate export stub %s"),
+					     input_bfd,
 					     stub_name);
 		    }
 		}
@@ -2844,20 +2793,19 @@ get_local_syms (output_bfd, input_bfd, info)
    instruction.  */
 
 bfd_boolean
-elf32_hppa_size_stubs (output_bfd, stub_bfd, info, multi_subspace, group_size,
-		       add_stub_section, layout_sections_again)
-     bfd *output_bfd;
-     bfd *stub_bfd;
-     struct bfd_link_info *info;
-     bfd_boolean multi_subspace;
-     bfd_signed_vma group_size;
-     asection * (*add_stub_section) PARAMS ((const char *, asection *));
-     void (*layout_sections_again) PARAMS ((void));
+elf32_hppa_size_stubs
+  (bfd *output_bfd, bfd *stub_bfd, struct bfd_link_info *info,
+   bfd_boolean multi_subspace, bfd_signed_vma group_size,
+   asection * (*add_stub_section) (const char *, asection *),
+   void (*layout_sections_again) (void))
 {
   bfd_size_type stub_group_size;
   bfd_boolean stubs_always_before_branch;
   bfd_boolean stub_changed;
   struct elf32_hppa_link_hash_table *htab = hppa_link_hash_table (info);
+
+  if (htab == NULL)
+    return FALSE;
 
   /* Stash our params away.  */
   htab->stub_bfd = stub_bfd;
@@ -2950,9 +2898,8 @@ elf32_hppa_size_stubs (output_bfd, stub_bfd, info, multi_subspace, group_size,
 
 	      /* Get the relocs.  */
 	      internal_relocs
-		= _bfd_elf32_link_read_relocs (input_bfd, section, NULL,
-					       (Elf_Internal_Rela *) NULL,
-					       info->keep_memory);
+		= _bfd_elf_link_read_relocs (input_bfd, section, NULL, NULL,
+					     info->keep_memory);
 	      if (internal_relocs == NULL)
 		goto error_ret_free_local;
 
@@ -2963,11 +2910,11 @@ elf32_hppa_size_stubs (output_bfd, stub_bfd, info, multi_subspace, group_size,
 		{
 		  unsigned int r_type, r_indx;
 		  enum elf32_hppa_stub_type stub_type;
-		  struct elf32_hppa_stub_hash_entry *stub_entry;
+		  struct elf32_hppa_stub_hash_entry *hsh;
 		  asection *sym_sec;
 		  bfd_vma sym_value;
 		  bfd_vma destination;
-		  struct elf32_hppa_link_hash_entry *hash;
+		  struct elf32_hppa_link_hash_entry *hh;
 		  char *stub_name;
 		  const asection *id_sec;
 
@@ -2994,21 +2941,26 @@ elf32_hppa_size_stubs (output_bfd, stub_bfd, info, multi_subspace, group_size,
 		  sym_sec = NULL;
 		  sym_value = 0;
 		  destination = 0;
-		  hash = NULL;
+		  hh = NULL;
 		  if (r_indx < symtab_hdr->sh_info)
 		    {
 		      /* It's a local symbol.  */
 		      Elf_Internal_Sym *sym;
 		      Elf_Internal_Shdr *hdr;
+		      unsigned int shndx;
 
 		      sym = local_syms + r_indx;
-		      hdr = elf_elfsections (input_bfd)[sym->st_shndx];
-		      sym_sec = hdr->bfd_section;
 		      if (ELF_ST_TYPE (sym->st_info) != STT_SECTION)
 			sym_value = sym->st_value;
-		      destination = (sym_value + irela->r_addend
-				     + sym_sec->output_offset
-				     + sym_sec->output_section->vma);
+		      shndx = sym->st_shndx;
+		      if (shndx < elf_numsections (input_bfd))
+			{
+			  hdr = elf_elfsections (input_bfd)[shndx];
+			  sym_sec = hdr->bfd_section;
+			  destination = (sym_value + irela->r_addend
+					 + sym_sec->output_offset
+					 + sym_sec->output_section->vma);
+			}
 		    }
 		  else
 		    {
@@ -3016,36 +2968,33 @@ elf32_hppa_size_stubs (output_bfd, stub_bfd, info, multi_subspace, group_size,
 		      int e_indx;
 
 		      e_indx = r_indx - symtab_hdr->sh_info;
-		      hash = ((struct elf32_hppa_link_hash_entry *)
-			      elf_sym_hashes (input_bfd)[e_indx]);
+		      hh = hppa_elf_hash_entry (elf_sym_hashes (input_bfd)[e_indx]);
 
-		      while (hash->elf.root.type == bfd_link_hash_indirect
-			     || hash->elf.root.type == bfd_link_hash_warning)
-			hash = ((struct elf32_hppa_link_hash_entry *)
-				hash->elf.root.u.i.link);
+		      while (hh->eh.root.type == bfd_link_hash_indirect
+			     || hh->eh.root.type == bfd_link_hash_warning)
+			hh = hppa_elf_hash_entry (hh->eh.root.u.i.link);
 
-		      if (hash->elf.root.type == bfd_link_hash_defined
-			  || hash->elf.root.type == bfd_link_hash_defweak)
+		      if (hh->eh.root.type == bfd_link_hash_defined
+			  || hh->eh.root.type == bfd_link_hash_defweak)
 			{
-			  sym_sec = hash->elf.root.u.def.section;
-			  sym_value = hash->elf.root.u.def.value;
+			  sym_sec = hh->eh.root.u.def.section;
+			  sym_value = hh->eh.root.u.def.value;
 			  if (sym_sec->output_section != NULL)
 			    destination = (sym_value + irela->r_addend
 					   + sym_sec->output_offset
 					   + sym_sec->output_section->vma);
 			}
-		      else if (hash->elf.root.type == bfd_link_hash_undefweak)
+		      else if (hh->eh.root.type == bfd_link_hash_undefweak)
 			{
 			  if (! info->shared)
 			    continue;
 			}
-		      else if (hash->elf.root.type == bfd_link_hash_undefined)
+		      else if (hh->eh.root.type == bfd_link_hash_undefined)
 			{
-			  if (! (info->shared
-				 && !info->no_undefined
-				 && (ELF_ST_VISIBILITY (hash->elf.other)
+			  if (! (info->unresolved_syms_in_objects == RM_IGNORE
+				 && (ELF_ST_VISIBILITY (hh->eh.other)
 				     == STV_DEFAULT)
-				 && hash->elf.type != STT_PARISC_MILLI))
+				 && hh->eh.type != STT_PARISC_MILLI))
 			    continue;
 			}
 		      else
@@ -3056,8 +3005,8 @@ elf32_hppa_size_stubs (output_bfd, stub_bfd, info, multi_subspace, group_size,
 		    }
 
 		  /* Determine what (if any) linker stub is needed.  */
-		  stub_type = hppa_type_of_stub (section, irela, hash,
-						 destination);
+		  stub_type = hppa_type_of_stub (section, irela, hh,
+						 destination, info);
 		  if (stub_type == hppa_stub_none)
 		    continue;
 
@@ -3065,38 +3014,38 @@ elf32_hppa_size_stubs (output_bfd, stub_bfd, info, multi_subspace, group_size,
 		  id_sec = htab->stub_group[section->id].link_sec;
 
 		  /* Get the name of this stub.  */
-		  stub_name = hppa_stub_name (id_sec, sym_sec, hash, irela);
+		  stub_name = hppa_stub_name (id_sec, sym_sec, hh, irela);
 		  if (!stub_name)
 		    goto error_ret_free_internal;
 
-		  stub_entry = hppa_stub_hash_lookup (&htab->stub_hash_table,
+		  hsh = hppa_stub_hash_lookup (&htab->bstab,
 						      stub_name,
 						      FALSE, FALSE);
-		  if (stub_entry != NULL)
+		  if (hsh != NULL)
 		    {
 		      /* The proper stub has already been created.  */
 		      free (stub_name);
 		      continue;
 		    }
 
-		  stub_entry = hppa_add_stub (stub_name, section, htab);
-		  if (stub_entry == NULL)
+		  hsh = hppa_add_stub (stub_name, section, htab);
+		  if (hsh == NULL)
 		    {
 		      free (stub_name);
 		      goto error_ret_free_internal;
 		    }
 
-		  stub_entry->target_value = sym_value;
-		  stub_entry->target_section = sym_sec;
-		  stub_entry->stub_type = stub_type;
+		  hsh->target_value = sym_value;
+		  hsh->target_section = sym_sec;
+		  hsh->stub_type = stub_type;
 		  if (info->shared)
 		    {
 		      if (stub_type == hppa_stub_import)
-			stub_entry->stub_type = hppa_stub_import_shared;
+			hsh->stub_type = hppa_stub_import_shared;
 		      else if (stub_type == hppa_stub_long_branch)
-			stub_entry->stub_type = hppa_stub_long_branch_shared;
+			hsh->stub_type = hppa_stub_long_branch_shared;
 		    }
-		  stub_entry->h = hash;
+		  hsh->hh = hh;
 		  stub_changed = TRUE;
 		}
 
@@ -3114,12 +3063,9 @@ elf32_hppa_size_stubs (output_bfd, stub_bfd, info, multi_subspace, group_size,
       for (stub_sec = htab->stub_bfd->sections;
 	   stub_sec != NULL;
 	   stub_sec = stub_sec->next)
-	{
-	  stub_sec->_raw_size = 0;
-	  stub_sec->_cooked_size = 0;
-	}
+	stub_sec->size = 0;
 
-      bfd_hash_traverse (&htab->stub_hash_table, hppa_size_one_stub, htab);
+      bfd_hash_traverse (&htab->bstab, hppa_size_one_stub, htab);
 
       /* Ask the linker to do its stuff.  */
       (*htab->layout_sections_again) ();
@@ -3138,9 +3084,7 @@ elf32_hppa_size_stubs (output_bfd, stub_bfd, info, multi_subspace, group_size,
    stubs to provide a value for __gp.  */
 
 bfd_boolean
-elf32_hppa_set_gp (abfd, info)
-     bfd *abfd;
-     struct bfd_link_info *info;
+elf32_hppa_set_gp (bfd *abfd, struct bfd_link_info *info)
 {
   struct bfd_link_hash_entry *h;
   asection *sec = NULL;
@@ -3148,7 +3092,10 @@ elf32_hppa_set_gp (abfd, info)
   struct elf32_hppa_link_hash_table *htab;
 
   htab = hppa_link_hash_table (info);
-  h = bfd_link_hash_lookup (&htab->elf.root, "$global$", FALSE, FALSE, FALSE);
+  if (htab == NULL)
+    return FALSE;
+
+  h = bfd_link_hash_lookup (&htab->etab.root, "$global$", FALSE, FALSE, FALSE);
 
   if (h != NULL
       && (h->type == bfd_link_hash_defined
@@ -3159,21 +3106,8 @@ elf32_hppa_set_gp (abfd, info)
     }
   else
     {
-      asection *splt;
-      asection *sgot;
-
-      if (htab->elf.root.creator->flavour == bfd_target_elf_flavour)
-	{
-	  splt = htab->splt;
-	  sgot = htab->sgot;
-	}
-      else
-	{
-	  /* If we're not elf, look up the output sections in the
-	     hope we may actually find them.  */
-	  splt = bfd_get_section_by_name (abfd, ".plt");
-	  sgot = bfd_get_section_by_name (abfd, ".got");
-	}
+      asection *splt = bfd_get_section_by_name (abfd, ".plt");
+      asection *sgot = bfd_get_section_by_name (abfd, ".got");
 
       /* Choose to point our LTP at, in this order, one of .plt, .got,
 	 or .data, if these sections exist.  In the case of choosing
@@ -3183,11 +3117,12 @@ elf32_hppa_set_gp (abfd, info)
 	 if either the .plt or .got is larger than 0x2000.  If both
 	 the .plt and .got are smaller than 0x2000, choose the end of
 	 the .plt section.  */
-      sec = splt;
+      sec = strcmp (bfd_get_target (abfd), "elf32-hppa-netbsd") == 0
+	  ? NULL : splt;
       if (sec != NULL)
 	{
-	  gp_val = sec->_raw_size;
-	  if (gp_val > 0x2000 || (sgot && sgot->_raw_size > 0x2000))
+	  gp_val = sec->size;
+	  if (gp_val > 0x2000 || (sgot && sgot->size > 0x2000))
 	    {
 	      gp_val = 0x2000;
 	    }
@@ -3197,10 +3132,13 @@ elf32_hppa_set_gp (abfd, info)
 	  sec = sgot;
 	  if (sec != NULL)
 	    {
-	      /* We know we don't have a .plt.  If .got is large,
-		 offset our LTP.  */
-	      if (sec->_raw_size > 0x2000)
-		gp_val = 0x2000;
+	      if (strcmp (bfd_get_target (abfd), "elf32-hppa-netbsd") != 0)
+		{
+	          /* We know we don't have a .plt.  If .got is large,
+		     offset our LTP.  */
+	          if (sec->size > 0x2000)
+		    gp_val = 0x2000;
+		}
 	    }
 	  else
 	    {
@@ -3234,14 +3172,15 @@ elf32_hppa_set_gp (abfd, info)
    linker.  */
 
 bfd_boolean
-elf32_hppa_build_stubs (info)
-     struct bfd_link_info *info;
+elf32_hppa_build_stubs (struct bfd_link_info *info)
 {
   asection *stub_sec;
   struct bfd_hash_table *table;
   struct elf32_hppa_link_hash_table *htab;
 
   htab = hppa_link_hash_table (info);
+  if (htab == NULL)
+    return FALSE;
 
   for (stub_sec = htab->stub_bfd->sections;
        stub_sec != NULL;
@@ -3250,51 +3189,85 @@ elf32_hppa_build_stubs (info)
       bfd_size_type size;
 
       /* Allocate memory to hold the linker stubs.  */
-      size = stub_sec->_raw_size;
-      stub_sec->contents = (unsigned char *) bfd_zalloc (htab->stub_bfd, size);
+      size = stub_sec->size;
+      stub_sec->contents = bfd_zalloc (htab->stub_bfd, size);
       if (stub_sec->contents == NULL && size != 0)
 	return FALSE;
-      stub_sec->_raw_size = 0;
+      stub_sec->size = 0;
     }
 
   /* Build the stubs as directed by the stub hash table.  */
-  table = &htab->stub_hash_table;
+  table = &htab->bstab;
   bfd_hash_traverse (table, hppa_build_one_stub, info);
 
   return TRUE;
 }
 
+/* Return the base vma address which should be subtracted from the real
+   address when resolving a dtpoff relocation.
+   This is PT_TLS segment p_vaddr.  */
+
+static bfd_vma
+dtpoff_base (struct bfd_link_info *info)
+{
+  /* If tls_sec is NULL, we should have signalled an error already.  */
+  if (elf_hash_table (info)->tls_sec == NULL)
+    return 0;
+  return elf_hash_table (info)->tls_sec->vma;
+}
+
+/* Return the relocation value for R_PARISC_TLS_TPOFF*..  */
+
+static bfd_vma
+tpoff (struct bfd_link_info *info, bfd_vma address)
+{
+  struct elf_link_hash_table *htab = elf_hash_table (info);
+
+  /* If tls_sec is NULL, we should have signalled an error already.  */
+  if (htab->tls_sec == NULL)
+    return 0;
+  /* hppa TLS ABI is variant I and static TLS block start just after
+     tcbhead structure which has 2 pointer fields.  */
+  return (address - htab->tls_sec->vma
+	  + align_power ((bfd_vma) 8, htab->tls_sec->alignment_power));
+}
+
 /* Perform a final link.  */
 
 static bfd_boolean
-elf32_hppa_final_link (abfd, info)
-     bfd *abfd;
-     struct bfd_link_info *info;
+elf32_hppa_final_link (bfd *abfd, struct bfd_link_info *info)
 {
   /* Invoke the regular ELF linker to do all the work.  */
-  if (!bfd_elf32_bfd_final_link (abfd, info))
+  if (!bfd_elf_final_link (abfd, info))
     return FALSE;
 
   /* If we're producing a final executable, sort the contents of the
      unwind section.  */
+  if (info->relocatable)
+    return TRUE;
+
   return elf_hppa_sort_unwind (abfd);
 }
 
 /* Record the lowest address for the data and text segments.  */
 
 static void
-hppa_record_segment_addr (abfd, section, data)
-     bfd *abfd ATTRIBUTE_UNUSED;
-     asection *section;
-     PTR data;
+hppa_record_segment_addr (bfd *abfd, asection *section, void *data)
 {
   struct elf32_hppa_link_hash_table *htab;
 
-  htab = (struct elf32_hppa_link_hash_table *) data;
+  htab = (struct elf32_hppa_link_hash_table*) data;
+  if (htab == NULL)
+    return;
 
   if ((section->flags & (SEC_ALLOC | SEC_LOAD)) == (SEC_ALLOC | SEC_LOAD))
     {
-      bfd_vma value = section->vma - section->filepos;
+      bfd_vma value;
+      Elf_Internal_Phdr *p;
+
+      p = _bfd_elf_find_segment_containing_section (abfd, section->output_section);
+      BFD_ASSERT (p != NULL);
+      value = p->p_vaddr;
 
       if ((section->flags & SEC_READONLY) != 0)
 	{
@@ -3312,27 +3285,28 @@ hppa_record_segment_addr (abfd, section, data)
 /* Perform a relocation as part of a final link.  */
 
 static bfd_reloc_status_type
-final_link_relocate (input_section, contents, rel, value, htab, sym_sec, h)
-     asection *input_section;
-     bfd_byte *contents;
-     const Elf_Internal_Rela *rel;
-     bfd_vma value;
-     struct elf32_hppa_link_hash_table *htab;
-     asection *sym_sec;
-     struct elf32_hppa_link_hash_entry *h;
+final_link_relocate (asection *input_section,
+		     bfd_byte *contents,
+		     const Elf_Internal_Rela *rela,
+		     bfd_vma value,
+		     struct elf32_hppa_link_hash_table *htab,
+		     asection *sym_sec,
+		     struct elf32_hppa_link_hash_entry *hh,
+		     struct bfd_link_info *info)
 {
   int insn;
-  unsigned int r_type = ELF32_R_TYPE (rel->r_info);
+  unsigned int r_type = ELF32_R_TYPE (rela->r_info);
+  unsigned int orig_r_type = r_type;
   reloc_howto_type *howto = elf_hppa_howto_table + r_type;
   int r_format = howto->bitsize;
   enum hppa_reloc_field_selector_type_alt r_field;
   bfd *input_bfd = input_section->owner;
-  bfd_vma offset = rel->r_offset;
+  bfd_vma offset = rela->r_offset;
   bfd_vma max_branch_offset = 0;
   bfd_byte *hit_data = contents + offset;
-  bfd_signed_vma addend = rel->r_addend;
+  bfd_signed_vma addend = rela->r_addend;
   bfd_vma location;
-  struct elf32_hppa_stub_hash_entry *stub_entry = NULL;
+  struct elf32_hppa_stub_hash_entry *hsh = NULL;
   int val;
 
   if (r_type == R_PARISC_NONE)
@@ -3345,6 +3319,32 @@ final_link_relocate (input_section, contents, rel, value, htab, sym_sec, h)
 	      input_section->output_offset +
 	      input_section->output_section->vma);
 
+  /* If we are not building a shared library, convert DLTIND relocs to
+     DPREL relocs.  */
+  if (!info->shared)
+    {
+      switch (r_type)
+	{
+	  case R_PARISC_DLTIND21L:
+	  case R_PARISC_TLS_GD21L:
+	  case R_PARISC_TLS_LDM21L:
+	  case R_PARISC_TLS_IE21L:
+	    r_type = R_PARISC_DPREL21L;
+	    break;
+
+	  case R_PARISC_DLTIND14R:
+	  case R_PARISC_TLS_GD14R:
+	  case R_PARISC_TLS_LDM14R:
+	  case R_PARISC_TLS_IE14R:
+	    r_type = R_PARISC_DPREL14R;
+	    break;
+
+	  case R_PARISC_DLTIND14F:
+	    r_type = R_PARISC_DPREL14F;
+	    break;
+	}
+    }
+
   switch (r_type)
     {
     case R_PARISC_PCREL12F:
@@ -3354,22 +3354,25 @@ final_link_relocate (input_section, contents, rel, value, htab, sym_sec, h)
 	 the stub hash.  */
       if (sym_sec == NULL
 	  || sym_sec->output_section == NULL
-	  || (h != NULL
-	      && h->elf.plt.offset != (bfd_vma) -1
-	      && (h->elf.dynindx != -1 || h->pic_call)
-	      && !h->plabel))
+	  || (hh != NULL
+	      && hh->eh.plt.offset != (bfd_vma) -1
+	      && hh->eh.dynindx != -1
+	      && !hh->plabel
+	      && (info->shared
+		  || !hh->eh.def_regular
+		  || hh->eh.root.type == bfd_link_hash_defweak)))
 	{
-	  stub_entry = hppa_get_stub_entry (input_section, sym_sec,
-					    h, rel, htab);
-	  if (stub_entry != NULL)
+	  hsh = hppa_get_stub_entry (input_section, sym_sec,
+					    hh, rela, htab);
+	  if (hsh != NULL)
 	    {
-	      value = (stub_entry->stub_offset
-		       + stub_entry->stub_sec->output_offset
-		       + stub_entry->stub_sec->output_section->vma);
+	      value = (hsh->stub_offset
+		       + hsh->stub_sec->output_offset
+		       + hsh->stub_sec->output_section->vma);
 	      addend = 0;
 	    }
-	  else if (sym_sec == NULL && h != NULL
-		   && h->elf.root.type == bfd_link_hash_undefweak)
+	  else if (sym_sec == NULL && hh != NULL
+		   && hh->eh.root.type == bfd_link_hash_undefweak)
 	    {
 	      /* It's OK if undefined weak.  Calls to undefined weak
 		 symbols behave as if the "called" function
@@ -3389,6 +3392,7 @@ final_link_relocate (input_section, contents, rel, value, htab, sym_sec, h)
     case R_PARISC_PCREL17R:
     case R_PARISC_PCREL14R:
     case R_PARISC_PCREL14F:
+    case R_PARISC_PCREL32:
       /* Make it a pc relative offset.  */
       value -= location;
       addend -= 8;
@@ -3397,28 +3401,54 @@ final_link_relocate (input_section, contents, rel, value, htab, sym_sec, h)
     case R_PARISC_DPREL21L:
     case R_PARISC_DPREL14R:
     case R_PARISC_DPREL14F:
-    /* For all the DP relative relocations, we need to examine the symbol's
-       section.  If it has no section or if it's a code section, then
-       "data pointer relative" makes no sense.  In that case we don't
-       adjust the "value", and for 21 bit addil instructions, we change the
-       source addend register from %dp to %r0.  This situation commonly
-       arises for undefined weak symbols and when a variable's "constness"
-       is declared differently from the way the variable is defined.  For
-       instance: "extern int foo" with foo defined as "const int foo".  */
+      /* Convert instructions that use the linkage table pointer (r19) to
+	 instructions that use the global data pointer (dp).  This is the
+	 most efficient way of using PIC code in an incomplete executable,
+	 but the user must follow the standard runtime conventions for
+	 accessing data for this to work.  */
+      if (orig_r_type != r_type)
+	{
+	  if (r_type == R_PARISC_DPREL21L)
+	    {
+	      /* GCC sometimes uses a register other than r19 for the
+		 operation, so we must convert any addil instruction
+		 that uses this relocation.  */
+	      if ((insn & 0xfc000000) == ((int) OP_ADDIL << 26))
+		insn = ADDIL_DP;
+	      else
+		/* We must have a ldil instruction.  It's too hard to find
+		   and convert the associated add instruction, so issue an
+		   error.  */
+		(*_bfd_error_handler)
+		  (_("%B(%A+0x%lx): %s fixup for insn 0x%x is not supported in a non-shared link"),
+		   input_bfd,
+		   input_section,
+		   (long) offset,
+		   howto->name,
+		   insn);
+	    }
+	  else if (r_type == R_PARISC_DPREL14F)
+	    {
+	      /* This must be a format 1 load/store.  Change the base
+		 register to dp.  */
+	      insn = (insn & 0xfc1ffff) | (27 << 21);
+	    }
+	}
+
+      /* For all the DP relative relocations, we need to examine the symbol's
+	 section.  If it has no section or if it's a code section, then
+	 "data pointer relative" makes no sense.  In that case we don't
+	 adjust the "value", and for 21 bit addil instructions, we change the
+	 source addend register from %dp to %r0.  This situation commonly
+	 arises for undefined weak symbols and when a variable's "constness"
+	 is declared differently from the way the variable is defined.  For
+	 instance: "extern int foo" with foo defined as "const int foo".  */
       if (sym_sec == NULL || (sym_sec->flags & SEC_CODE) != 0)
 	{
 	  if ((insn & ((0x3f << 26) | (0x1f << 21)))
 	      == (((int) OP_ADDIL << 26) | (27 << 21)))
 	    {
 	      insn &= ~ (0x1f << 21);
-#if 0 /* debug them.  */
-	      (*_bfd_error_handler)
-		(_("%s(%s+0x%lx): fixing %s"),
-		 bfd_archive_filename (input_bfd),
-		 input_section->name,
-		 (long) rel->r_offset,
-		 howto->name);
-#endif
 	    }
 	  /* Now try to make things easy for the dynamic linker.  */
 
@@ -3429,6 +3459,12 @@ final_link_relocate (input_section, contents, rel, value, htab, sym_sec, h)
     case R_PARISC_DLTIND21L:
     case R_PARISC_DLTIND14R:
     case R_PARISC_DLTIND14F:
+    case R_PARISC_TLS_GD21L:
+    case R_PARISC_TLS_LDM21L:
+    case R_PARISC_TLS_IE21L:
+    case R_PARISC_TLS_GD14R:
+    case R_PARISC_TLS_LDM14R:
+    case R_PARISC_TLS_IE14R:
       value -= elf_gp (input_section->output_section->owner);
       break;
 
@@ -3450,11 +3486,15 @@ final_link_relocate (input_section, contents, rel, value, htab, sym_sec, h)
     case R_PARISC_DIR17F:
     case R_PARISC_PCREL17C:
     case R_PARISC_PCREL14F:
+    case R_PARISC_PCREL32:
     case R_PARISC_DPREL14F:
     case R_PARISC_PLABEL32:
     case R_PARISC_DLTIND14F:
     case R_PARISC_SEGBASE:
     case R_PARISC_SEGREL32:
+    case R_PARISC_TLS_DTPMOD32:
+    case R_PARISC_TLS_DTPOFF32:
+    case R_PARISC_TLS_TPREL32:
       r_field = e_fsel;
       break;
 
@@ -3466,6 +3506,11 @@ final_link_relocate (input_section, contents, rel, value, htab, sym_sec, h)
 
     case R_PARISC_DIR21L:
     case R_PARISC_DPREL21L:
+    case R_PARISC_TLS_GD21L:
+    case R_PARISC_TLS_LDM21L:
+    case R_PARISC_TLS_LDO21L:
+    case R_PARISC_TLS_IE21L:
+    case R_PARISC_TLS_LE21L:
       r_field = e_lrsel;
       break;
 
@@ -3479,6 +3524,11 @@ final_link_relocate (input_section, contents, rel, value, htab, sym_sec, h)
     case R_PARISC_DIR17R:
     case R_PARISC_DIR14R:
     case R_PARISC_DPREL14R:
+    case R_PARISC_TLS_GD14R:
+    case R_PARISC_TLS_LDM14R:
+    case R_PARISC_TLS_LDO14R:
+    case R_PARISC_TLS_IE14R:
+    case R_PARISC_TLS_LE14R:
       r_field = e_rrsel;
       break;
 
@@ -3510,16 +3560,16 @@ final_link_relocate (input_section, contents, rel, value, htab, sym_sec, h)
 	 call to the local stub for this function.  */
       if (value + addend + max_branch_offset >= 2*max_branch_offset)
 	{
-	  stub_entry = hppa_get_stub_entry (input_section, sym_sec,
-					    h, rel, htab);
-	  if (stub_entry == NULL)
+	  hsh = hppa_get_stub_entry (input_section, sym_sec,
+					    hh, rela, htab);
+	  if (hsh == NULL)
 	    return bfd_reloc_undefined;
 
 	  /* Munge up the value and addend so that we call the stub
 	     rather than the procedure directly.  */
-	  value = (stub_entry->stub_offset
-		   + stub_entry->stub_sec->output_offset
-		   + stub_entry->stub_sec->output_section->vma
+	  value = (hsh->stub_offset
+		   + hsh->stub_sec->output_offset
+		   + hsh->stub_sec->output_section->vma
 		   - location);
 	  addend = -8;
 	}
@@ -3535,11 +3585,11 @@ final_link_relocate (input_section, contents, rel, value, htab, sym_sec, h)
       && value + addend + max_branch_offset >= 2*max_branch_offset)
     {
       (*_bfd_error_handler)
-	(_("%s(%s+0x%lx): cannot reach %s, recompile with -ffunction-sections"),
-	 bfd_archive_filename (input_bfd),
-	 input_section->name,
-	 (long) rel->r_offset,
-	 stub_entry->root.string);
+	(_("%B(%A+0x%lx): cannot reach %s, recompile with -ffunction-sections"),
+	 input_bfd,
+	 input_section,
+	 (long) offset,
+	 hsh->bh_root.string);
       bfd_set_error (bfd_error_bad_value);
       return bfd_reloc_notsupported;
     }
@@ -3576,48 +3626,46 @@ final_link_relocate (input_section, contents, rel, value, htab, sym_sec, h)
 /* Relocate an HPPA ELF section.  */
 
 static bfd_boolean
-elf32_hppa_relocate_section (output_bfd, info, input_bfd, input_section,
-			     contents, relocs, local_syms, local_sections)
-     bfd *output_bfd;
-     struct bfd_link_info *info;
-     bfd *input_bfd;
-     asection *input_section;
-     bfd_byte *contents;
-     Elf_Internal_Rela *relocs;
-     Elf_Internal_Sym *local_syms;
-     asection **local_sections;
+elf32_hppa_relocate_section (bfd *output_bfd,
+			     struct bfd_link_info *info,
+			     bfd *input_bfd,
+			     asection *input_section,
+			     bfd_byte *contents,
+			     Elf_Internal_Rela *relocs,
+			     Elf_Internal_Sym *local_syms,
+			     asection **local_sections)
 {
   bfd_vma *local_got_offsets;
   struct elf32_hppa_link_hash_table *htab;
   Elf_Internal_Shdr *symtab_hdr;
-  Elf_Internal_Rela *rel;
+  Elf_Internal_Rela *rela;
   Elf_Internal_Rela *relend;
-
-  if (info->relocateable)
-    return TRUE;
 
   symtab_hdr = &elf_tdata (input_bfd)->symtab_hdr;
 
   htab = hppa_link_hash_table (info);
+  if (htab == NULL)
+    return FALSE;
+
   local_got_offsets = elf_local_got_offsets (input_bfd);
 
-  rel = relocs;
+  rela = relocs;
   relend = relocs + input_section->reloc_count;
-  for (; rel < relend; rel++)
+  for (; rela < relend; rela++)
     {
       unsigned int r_type;
       reloc_howto_type *howto;
       unsigned int r_symndx;
-      struct elf32_hppa_link_hash_entry *h;
+      struct elf32_hppa_link_hash_entry *hh;
       Elf_Internal_Sym *sym;
       asection *sym_sec;
       bfd_vma relocation;
-      bfd_reloc_status_type r;
+      bfd_reloc_status_type rstatus;
       const char *sym_name;
       bfd_boolean plabel;
       bfd_boolean warned_undef;
 
-      r_type = ELF32_R_TYPE (rel->r_info);
+      r_type = ELF32_R_TYPE (rela->r_info);
       if (r_type >= (unsigned int) R_PARISC_UNIMPLEMENTED)
 	{
 	  bfd_set_error (bfd_error_bad_value);
@@ -3627,9 +3675,8 @@ elf32_hppa_relocate_section (output_bfd, info, input_bfd, input_section,
 	  || r_type == (unsigned int) R_PARISC_GNU_VTINHERIT)
 	continue;
 
-      /* This is a final link.  */
-      r_symndx = ELF32_R_SYM (rel->r_info);
-      h = NULL;
+      r_symndx = ELF32_R_SYM (rela->r_info);
+      hh = NULL;
       sym = NULL;
       sym_sec = NULL;
       warned_undef = FALSE;
@@ -3638,48 +3685,47 @@ elf32_hppa_relocate_section (output_bfd, info, input_bfd, input_section,
 	  /* This is a local symbol, h defaults to NULL.  */
 	  sym = local_syms + r_symndx;
 	  sym_sec = local_sections[r_symndx];
-	  relocation = _bfd_elf_rela_local_sym (output_bfd, sym, sym_sec, rel);
+	  relocation = _bfd_elf_rela_local_sym (output_bfd, sym, &sym_sec, rela);
 	}
       else
 	{
-	  int indx;
+	  struct elf_link_hash_entry *eh;
+	  bfd_boolean unresolved_reloc;
+	  struct elf_link_hash_entry **sym_hashes = elf_sym_hashes (input_bfd);
 
-	  /* It's a global; Find its entry in the link hash.  */
-	  indx = r_symndx - symtab_hdr->sh_info;
-	  h = ((struct elf32_hppa_link_hash_entry *)
-	       elf_sym_hashes (input_bfd)[indx]);
-	  while (h->elf.root.type == bfd_link_hash_indirect
-		 || h->elf.root.type == bfd_link_hash_warning)
-	    h = (struct elf32_hppa_link_hash_entry *) h->elf.root.u.i.link;
+	  RELOC_FOR_GLOBAL_SYMBOL (info, input_bfd, input_section, rela,
+				   r_symndx, symtab_hdr, sym_hashes,
+				   eh, sym_sec, relocation,
+				   unresolved_reloc, warned_undef);
 
-	  relocation = 0;
-	  if (h->elf.root.type == bfd_link_hash_defined
-	      || h->elf.root.type == bfd_link_hash_defweak)
+	  if (!info->relocatable
+	      && relocation == 0
+	      && eh->root.type != bfd_link_hash_defined
+	      && eh->root.type != bfd_link_hash_defweak
+	      && eh->root.type != bfd_link_hash_undefweak)
 	    {
-	      sym_sec = h->elf.root.u.def.section;
-	      /* If sym_sec->output_section is NULL, then it's a
-		 symbol defined in a shared library.  */
-	      if (sym_sec->output_section != NULL)
-		relocation = (h->elf.root.u.def.value
-			      + sym_sec->output_offset
-			      + sym_sec->output_section->vma);
+	      if (info->unresolved_syms_in_objects == RM_IGNORE
+		  && ELF_ST_VISIBILITY (eh->other) == STV_DEFAULT
+		  && eh->type == STT_PARISC_MILLI)
+		{
+		  if (! info->callbacks->undefined_symbol
+		      (info, eh_name (eh), input_bfd,
+		       input_section, rela->r_offset, FALSE))
+		    return FALSE;
+		  warned_undef = TRUE;
+		}
 	    }
-	  else if (h->elf.root.type == bfd_link_hash_undefweak)
-	    ;
-	  else if (info->shared
-		   && !info->no_undefined
-		   && ELF_ST_VISIBILITY (h->elf.other) == STV_DEFAULT
-		   && h->elf.type != STT_PARISC_MILLI)
-	    ;
-	  else
-	    {
-	      if (!((*info->callbacks->undefined_symbol)
-		    (info, h->elf.root.root.string, input_bfd,
-		     input_section, rel->r_offset, TRUE)))
-		return FALSE;
-	      warned_undef = TRUE;
-	    }
+	  hh = hppa_elf_hash_entry (eh);
 	}
+
+      if (sym_sec != NULL && discarded_section (sym_sec))
+	RELOC_AGAINST_DISCARDED_SECTION (info, input_bfd, input_section,
+					 rela, 1, relend,
+					 elf_hppa_howto_table + r_type, 0,
+					 contents);
+
+      if (info->relocatable)
+	continue;
 
       /* Do any required modifications to the relocation value, and
 	 determine what types of dynamic info we need to output, if
@@ -3696,13 +3742,14 @@ elf32_hppa_relocate_section (output_bfd, info, input_bfd, input_section,
 
 	    /* Relocation is to the entry for this symbol in the
 	       global offset table.  */
-	    if (h != NULL)
+	    if (hh != NULL)
 	      {
 		bfd_boolean dyn;
 
-		off = h->elf.got.offset;
-		dyn = htab->elf.dynamic_sections_created;
-		if (! WILL_CALL_FINISH_DYNAMIC_SYMBOL (dyn, info, &h->elf))
+		off = hh->eh.got.offset;
+		dyn = htab->etab.dynamic_sections_created;
+		if (! WILL_CALL_FINISH_DYNAMIC_SYMBOL (dyn, info->shared,
+						       &hh->eh))
 		  {
 		    /* If we aren't going to call finish_dynamic_symbol,
 		       then we need to handle initialisation of the .got
@@ -3714,7 +3761,7 @@ elf32_hppa_relocate_section (output_bfd, info, input_bfd, input_section,
 		      off &= ~1;
 		    else
 		      {
-			h->elf.got.offset |= 1;
+			hh->eh.got.offset |= 1;
 			do_got = 1;
 		      }
 		  }
@@ -3748,15 +3795,15 @@ elf32_hppa_relocate_section (output_bfd, info, input_bfd, input_section,
 		       object because the symbol index is zero.  */
 		    Elf_Internal_Rela outrel;
 		    bfd_byte *loc;
-		    asection *s = htab->srelgot;
+		    asection *sec = htab->srelgot;
 
 		    outrel.r_offset = (off
 				       + htab->sgot->output_offset
 				       + htab->sgot->output_section->vma);
 		    outrel.r_info = ELF32_R_INFO (0, R_PARISC_DIR32);
 		    outrel.r_addend = relocation;
-		    loc = s->contents;
-		    loc += s->reloc_count++ * sizeof (Elf32_External_Rela);
+		    loc = sec->contents;
+		    loc += sec->reloc_count++ * sizeof (Elf32_External_Rela);
 		    bfd_elf32_swap_reloca_out (output_bfd, &outrel, loc);
 		  }
 		else
@@ -3784,17 +3831,17 @@ elf32_hppa_relocate_section (output_bfd, info, input_bfd, input_section,
 	case R_PARISC_PLABEL14R:
 	case R_PARISC_PLABEL21L:
 	case R_PARISC_PLABEL32:
-	  if (htab->elf.dynamic_sections_created)
+	  if (htab->etab.dynamic_sections_created)
 	    {
 	      bfd_vma off;
 	      bfd_boolean do_plt = 0;
-
 	      /* If we have a global symbol with a PLT slot, then
 		 redirect this relocation to it.  */
-	      if (h != NULL)
+	      if (hh != NULL)
 		{
-		  off = h->elf.plt.offset;
-		  if (! WILL_CALL_FINISH_DYNAMIC_SYMBOL (1, info, &h->elf))
+		  off = hh->eh.plt.offset;
+		  if (! WILL_CALL_FINISH_DYNAMIC_SYMBOL (1, info->shared,
+							 &hh->eh))
 		    {
 		      /* In a non-shared link, adjust_dynamic_symbols
 			 isn't called for symbols forced local.  We
@@ -3803,7 +3850,7 @@ elf32_hppa_relocate_section (output_bfd, info, input_bfd, input_section,
 			off &= ~1;
 		      else
 			{
-			  h->elf.plt.offset |= 1;
+			  hh->eh.plt.offset |= 1;
 			  do_plt = 1;
 			}
 		    }
@@ -3869,9 +3916,9 @@ elf32_hppa_relocate_section (output_bfd, info, input_bfd, input_section,
 		 is in the .plt and thus has a gp pointer too.
 		 Exception:  Undefined PLABELs should have a value of
 		 zero.  */
-	      if (h == NULL
-		  || (h->elf.root.type != bfd_link_hash_undefweak
-		      && h->elf.root.type != bfd_link_hash_undefined))
+	      if (hh == NULL
+		  || (hh->eh.root.type != bfd_link_hash_undefweak
+		      && hh->eh.root.type != bfd_link_hash_undefined))
 		{
 		  relocation = (off
 				+ htab->splt->output_offset
@@ -3891,11 +3938,7 @@ elf32_hppa_relocate_section (output_bfd, info, input_bfd, input_section,
 	case R_PARISC_DPREL14R:
 	case R_PARISC_DPREL21L:
 	case R_PARISC_DIR32:
-	  /* r_symndx will be zero only for relocs against symbols
-	     from removed linkonce sections, or sections discarded by
-	     a linker script.  */
-	  if (r_symndx == 0
-	      || (input_section->flags & SEC_ALLOC) == 0)
+	  if ((input_section->flags & SEC_ALLOC) == 0)
 	    break;
 
 	  /* The reloc types handled here and this conditional
@@ -3911,22 +3954,20 @@ elf32_hppa_relocate_section (output_bfd, info, input_bfd, input_section,
 	     Conversely, DEF_DYNAMIC can't be used in check_relocs as
 	     there all files have not been loaded.  */
 	  if ((info->shared
+	       && (hh == NULL
+		   || ELF_ST_VISIBILITY (hh->eh.other) == STV_DEFAULT
+		   || hh->eh.root.type != bfd_link_hash_undefweak)
 	       && (IS_ABSOLUTE_RELOC (r_type)
-		   || (h != NULL
-		       && h->elf.dynindx != -1
-		       && (!info->symbolic
-			   || (h->elf.elf_link_hash_flags
-			       & ELF_LINK_HASH_DEF_REGULAR) == 0))))
+		   || !SYMBOL_CALLS_LOCAL (info, &hh->eh)))
 	      || (!info->shared
-		  && h != NULL
-		  && h->elf.dynindx != -1
-		  && (h->elf.elf_link_hash_flags & ELF_LINK_NON_GOT_REF) == 0
-		  && (((h->elf.elf_link_hash_flags
-			& ELF_LINK_HASH_DEF_DYNAMIC) != 0
-		       && (h->elf.elf_link_hash_flags
-			   & ELF_LINK_HASH_DEF_REGULAR) == 0)
-		      || h->elf.root.type == bfd_link_hash_undefweak
-		      || h->elf.root.type == bfd_link_hash_undefined)))
+		  && hh != NULL
+		  && hh->eh.dynindx != -1
+		  && !hh->eh.non_got_ref
+		  && ((ELIMINATE_COPY_RELOCS
+		       && hh->eh.def_dynamic
+		       && !hh->eh.def_regular)
+		      || hh->eh.root.type == bfd_link_hash_undefweak
+		      || hh->eh.root.type == bfd_link_hash_undefined)))
 	    {
 	      Elf_Internal_Rela outrel;
 	      bfd_boolean skip;
@@ -3937,10 +3978,10 @@ elf32_hppa_relocate_section (output_bfd, info, input_bfd, input_section,
 		 are copied into the output file to be resolved at run
 		 time.  */
 
-	      outrel.r_addend = rel->r_addend;
+	      outrel.r_addend = rela->r_addend;
 	      outrel.r_offset =
 		_bfd_elf_section_offset (output_bfd, info, input_section,
-					 rel->r_offset);
+					 rela->r_offset);
 	      skip = (outrel.r_offset == (bfd_vma) -1
 		      || outrel.r_offset == (bfd_vma) -2);
 	      outrel.r_offset += (input_section->output_offset
@@ -3950,16 +3991,15 @@ elf32_hppa_relocate_section (output_bfd, info, input_bfd, input_section,
 		{
 		  memset (&outrel, 0, sizeof (outrel));
 		}
-	      else if (h != NULL
-		       && h->elf.dynindx != -1
+	      else if (hh != NULL
+		       && hh->eh.dynindx != -1
 		       && (plabel
 			   || !IS_ABSOLUTE_RELOC (r_type)
 			   || !info->shared
 			   || !info->symbolic
-			   || (h->elf.elf_link_hash_flags
-			       & ELF_LINK_HASH_DEF_REGULAR) == 0))
+			   || !hh->eh.def_regular))
 		{
-		  outrel.r_info = ELF32_R_INFO (h->elf.dynindx, r_type);
+		  outrel.r_info = ELF32_R_INFO (hh->eh.dynindx, r_type);
 		}
 	      else /* It's a local symbol, or one marked to become local.  */
 		{
@@ -3979,23 +4019,26 @@ elf32_hppa_relocate_section (output_bfd, info, input_bfd, input_section,
 		      && sym_sec->output_section != NULL
 		      && ! bfd_is_abs_section (sym_sec))
 		    {
-		      indx = elf_section_data (sym_sec->output_section)->dynindx;
+		      asection *osec;
+
+		      osec = sym_sec->output_section;
+		      indx = elf_section_data (osec)->dynindx;
+		      if (indx == 0)
+			{
+			  osec = htab->etab.text_index_section;
+			  indx = elf_section_data (osec)->dynindx;
+			}
+		      BFD_ASSERT (indx != 0);
+
 		      /* We are turning this relocation into one
 			 against a section symbol, so subtract out the
 			 output section's address but not the offset
 			 of the input section in the output section.  */
-		      outrel.r_addend -= sym_sec->output_section->vma;
+		      outrel.r_addend -= osec->vma;
 		    }
 
 		  outrel.r_info = ELF32_R_INFO (indx, r_type);
 		}
-#if 0
-	      /* EH info can cause unaligned DIR32 relocs.
-		 Tweak the reloc type for the dynamic linker.  */
-	      if (r_type == R_PARISC_DIR32 && (outrel.r_offset & 3) != 0)
-		outrel.r_info = ELF32_R_INFO (ELF32_R_SYM (outrel.r_info),
-					      R_PARISC_DIR32U);
-#endif
 	      sreloc = elf_section_data (input_section)->sreloc;
 	      if (sreloc == NULL)
 		abort ();
@@ -4006,18 +4049,210 @@ elf32_hppa_relocate_section (output_bfd, info, input_bfd, input_section,
 	    }
 	  break;
 
+	case R_PARISC_TLS_LDM21L:
+	case R_PARISC_TLS_LDM14R:
+	  {
+	    bfd_vma off;
+
+	    off = htab->tls_ldm_got.offset;
+	    if (off & 1)
+	      off &= ~1;
+	    else
+	      {
+		Elf_Internal_Rela outrel;
+		bfd_byte *loc;
+
+		outrel.r_offset = (off
+				   + htab->sgot->output_section->vma
+				   + htab->sgot->output_offset);
+		outrel.r_addend = 0;
+		outrel.r_info = ELF32_R_INFO (0, R_PARISC_TLS_DTPMOD32);
+		loc = htab->srelgot->contents;
+		loc += htab->srelgot->reloc_count++ * sizeof (Elf32_External_Rela);
+
+		bfd_elf32_swap_reloca_out (output_bfd, &outrel, loc);
+		htab->tls_ldm_got.offset |= 1;
+	      }
+
+	    /* Add the base of the GOT to the relocation value.  */
+	    relocation = (off
+			  + htab->sgot->output_offset
+			  + htab->sgot->output_section->vma);
+
+	    break;
+	  }
+
+	case R_PARISC_TLS_LDO21L:
+	case R_PARISC_TLS_LDO14R:
+	  relocation -= dtpoff_base (info);
+	  break;
+
+	case R_PARISC_TLS_GD21L:
+	case R_PARISC_TLS_GD14R:
+	case R_PARISC_TLS_IE21L:
+	case R_PARISC_TLS_IE14R:
+	  {
+	    bfd_vma off;
+	    int indx;
+	    char tls_type;
+
+	    indx = 0;
+	    if (hh != NULL)
+	      {
+	        bfd_boolean dyn;
+	        dyn = htab->etab.dynamic_sections_created;
+
+		if (WILL_CALL_FINISH_DYNAMIC_SYMBOL (dyn, info->shared, &hh->eh)
+		    && (!info->shared
+			|| !SYMBOL_REFERENCES_LOCAL (info, &hh->eh)))
+		  {
+		    indx = hh->eh.dynindx;
+		  }
+		off = hh->eh.got.offset;
+		tls_type = hh->tls_type;
+	      }
+	    else
+	      {
+		off = local_got_offsets[r_symndx];
+		tls_type = hppa_elf_local_got_tls_type (input_bfd)[r_symndx];
+	      }
+
+	    if (tls_type == GOT_UNKNOWN)
+	      abort ();
+
+	    if ((off & 1) != 0)
+	      off &= ~1;
+	    else
+	      {
+		bfd_boolean need_relocs = FALSE;
+		Elf_Internal_Rela outrel;
+		bfd_byte *loc = NULL;
+		int cur_off = off;
+
+	        /* The GOT entries have not been initialized yet.  Do it
+	           now, and emit any relocations.  If both an IE GOT and a
+	           GD GOT are necessary, we emit the GD first.  */
+
+		if ((info->shared || indx != 0)
+		    && (hh == NULL
+			|| ELF_ST_VISIBILITY (hh->eh.other) == STV_DEFAULT
+			|| hh->eh.root.type != bfd_link_hash_undefweak))
+		  {
+		    need_relocs = TRUE;
+		    loc = htab->srelgot->contents;
+		    /* FIXME (CAO): Should this be reloc_count++ ? */
+		    loc += htab->srelgot->reloc_count * sizeof (Elf32_External_Rela);
+		  }
+
+		if (tls_type & GOT_TLS_GD)
+		  {
+		    if (need_relocs)
+		      {
+			outrel.r_offset = (cur_off
+					   + htab->sgot->output_section->vma
+					   + htab->sgot->output_offset);
+			outrel.r_info = ELF32_R_INFO (indx,R_PARISC_TLS_DTPMOD32);
+			outrel.r_addend = 0;
+			bfd_put_32 (output_bfd, 0, htab->sgot->contents + cur_off);
+			bfd_elf32_swap_reloca_out (output_bfd, &outrel, loc);
+			htab->srelgot->reloc_count++;
+			loc += sizeof (Elf32_External_Rela);
+
+			if (indx == 0)
+			  bfd_put_32 (output_bfd, relocation - dtpoff_base (info),
+				      htab->sgot->contents + cur_off + 4);
+			else
+			  {
+			    bfd_put_32 (output_bfd, 0,
+					htab->sgot->contents + cur_off + 4);
+			    outrel.r_info = ELF32_R_INFO (indx, R_PARISC_TLS_DTPOFF32);
+			    outrel.r_offset += 4;
+			    bfd_elf32_swap_reloca_out (output_bfd, &outrel,loc);
+			    htab->srelgot->reloc_count++;
+			    loc += sizeof (Elf32_External_Rela);
+			  }
+		      }
+		    else
+		      {
+		        /* If we are not emitting relocations for a
+		           general dynamic reference, then we must be in a
+		           static link or an executable link with the
+		           symbol binding locally.  Mark it as belonging
+		           to module 1, the executable.  */
+		        bfd_put_32 (output_bfd, 1,
+				    htab->sgot->contents + cur_off);
+		        bfd_put_32 (output_bfd, relocation - dtpoff_base (info),
+				    htab->sgot->contents + cur_off + 4);
+		      }
+
+
+		    cur_off += 8;
+		  }
+
+		if (tls_type & GOT_TLS_IE)
+		  {
+		    if (need_relocs)
+		      {
+			outrel.r_offset = (cur_off
+					   + htab->sgot->output_section->vma
+					   + htab->sgot->output_offset);
+			outrel.r_info = ELF32_R_INFO (indx, R_PARISC_TLS_TPREL32);
+
+			if (indx == 0)
+			  outrel.r_addend = relocation - dtpoff_base (info);
+			else
+			  outrel.r_addend = 0;
+
+			bfd_elf32_swap_reloca_out (output_bfd, &outrel, loc);
+			htab->srelgot->reloc_count++;
+			loc += sizeof (Elf32_External_Rela);
+		      }
+		    else
+		      bfd_put_32 (output_bfd, tpoff (info, relocation),
+				  htab->sgot->contents + cur_off);
+
+		    cur_off += 4;
+		  }
+
+		if (hh != NULL)
+		  hh->eh.got.offset |= 1;
+		else
+		  local_got_offsets[r_symndx] |= 1;
+	      }
+
+	    if ((tls_type & GOT_TLS_GD)
+	  	&& r_type != R_PARISC_TLS_GD21L
+	  	&& r_type != R_PARISC_TLS_GD14R)
+	      off += 2 * GOT_ENTRY_SIZE;
+
+	    /* Add the base of the GOT to the relocation value.  */
+	    relocation = (off
+			  + htab->sgot->output_offset
+			  + htab->sgot->output_section->vma);
+
+	    break;
+	  }
+
+	case R_PARISC_TLS_LE21L:
+	case R_PARISC_TLS_LE14R:
+	  {
+	    relocation = tpoff (info, relocation);
+	    break;
+	  }
+	  break;
+
 	default:
 	  break;
 	}
 
-      r = final_link_relocate (input_section, contents, rel, relocation,
-			       htab, sym_sec, h);
+      rstatus = final_link_relocate (input_section, contents, rela, relocation,
+			       htab, sym_sec, hh, info);
 
-      if (r == bfd_reloc_ok)
+      if (rstatus == bfd_reloc_ok)
 	continue;
 
-      if (h != NULL)
-	sym_name = h->elf.root.root.string;
+      if (hh != NULL)
+	sym_name = hh_name (hh);
       else
 	{
 	  sym_name = bfd_elf_string_from_elf_section (input_bfd,
@@ -4031,15 +4266,15 @@ elf32_hppa_relocate_section (output_bfd, info, input_bfd, input_section,
 
       howto = elf_hppa_howto_table + r_type;
 
-      if (r == bfd_reloc_undefined || r == bfd_reloc_notsupported)
+      if (rstatus == bfd_reloc_undefined || rstatus == bfd_reloc_notsupported)
 	{
-	  if (r == bfd_reloc_notsupported || !warned_undef)
+	  if (rstatus == bfd_reloc_notsupported || !warned_undef)
 	    {
 	      (*_bfd_error_handler)
-		(_("%s(%s+0x%lx): cannot handle %s for %s"),
-		 bfd_archive_filename (input_bfd),
-		 input_section->name,
-		 (long) rel->r_offset,
+		(_("%B(%A+0x%lx): cannot handle %s for %s"),
+		 input_bfd,
+		 input_section,
+		 (long) rela->r_offset,
 		 howto->name,
 		 sym_name);
 	      bfd_set_error (bfd_error_bad_value);
@@ -4049,8 +4284,8 @@ elf32_hppa_relocate_section (output_bfd, info, input_bfd, input_section,
       else
 	{
 	  if (!((*info->callbacks->reloc_overflow)
-		(info, sym_name, howto->name, (bfd_vma) 0,
-		 input_bfd, input_section, rel->r_offset)))
+		(info, (hh ? &hh->eh.root : NULL), sym_name, howto->name,
+		 (bfd_vma) 0, input_bfd, input_section, rela->r_offset)))
 	    return FALSE;
 	}
     }
@@ -4062,21 +4297,24 @@ elf32_hppa_relocate_section (output_bfd, info, input_bfd, input_section,
    dynamic sections here.  */
 
 static bfd_boolean
-elf32_hppa_finish_dynamic_symbol (output_bfd, info, h, sym)
-     bfd *output_bfd;
-     struct bfd_link_info *info;
-     struct elf_link_hash_entry *h;
-     Elf_Internal_Sym *sym;
+elf32_hppa_finish_dynamic_symbol (bfd *output_bfd,
+				  struct bfd_link_info *info,
+				  struct elf_link_hash_entry *eh,
+				  Elf_Internal_Sym *sym)
 {
   struct elf32_hppa_link_hash_table *htab;
+  Elf_Internal_Rela rela;
+  bfd_byte *loc;
 
   htab = hppa_link_hash_table (info);
+  if (htab == NULL)
+    return FALSE;
 
-  if (h->plt.offset != (bfd_vma) -1)
+  if (eh->plt.offset != (bfd_vma) -1)
     {
       bfd_vma value;
 
-      if (h->plt.offset & 1)
+      if (eh->plt.offset & 1)
 	abort ();
 
       /* This symbol has an entry in the procedure linkage table.  Set
@@ -4087,53 +4325,37 @@ elf32_hppa_finish_dynamic_symbol (output_bfd, info, h, sym)
 	 <__gp>
       */
       value = 0;
-      if (h->root.type == bfd_link_hash_defined
-	  || h->root.type == bfd_link_hash_defweak)
+      if (eh->root.type == bfd_link_hash_defined
+	  || eh->root.type == bfd_link_hash_defweak)
 	{
-	  value = h->root.u.def.value;
-	  if (h->root.u.def.section->output_section != NULL)
-	    value += (h->root.u.def.section->output_offset
-		      + h->root.u.def.section->output_section->vma);
+	  value = eh->root.u.def.value;
+	  if (eh->root.u.def.section->output_section != NULL)
+	    value += (eh->root.u.def.section->output_offset
+		      + eh->root.u.def.section->output_section->vma);
 	}
 
-      if (! ((struct elf32_hppa_link_hash_entry *) h)->pic_call)
+      /* Create a dynamic IPLT relocation for this entry.  */
+      rela.r_offset = (eh->plt.offset
+		      + htab->splt->output_offset
+		      + htab->splt->output_section->vma);
+      if (eh->dynindx != -1)
 	{
-	  Elf_Internal_Rela rel;
-	  bfd_byte *loc;
-
-	  /* Create a dynamic IPLT relocation for this entry.  */
-	  rel.r_offset = (h->plt.offset
-			  + htab->splt->output_offset
-			  + htab->splt->output_section->vma);
-	  if (h->dynindx != -1)
-	    {
-	      rel.r_info = ELF32_R_INFO (h->dynindx, R_PARISC_IPLT);
-	      rel.r_addend = 0;
-	    }
-	  else
-	    {
-	      /* This symbol has been marked to become local, and is
-		 used by a plabel so must be kept in the .plt.  */
-	      rel.r_info = ELF32_R_INFO (0, R_PARISC_IPLT);
-	      rel.r_addend = value;
-	    }
-
-	  loc = htab->srelplt->contents;
-	  loc += htab->srelplt->reloc_count++ * sizeof (Elf32_External_Rela);
-	  bfd_elf32_swap_reloca_out (htab->splt->output_section->owner,
-				     &rel, loc);
+	  rela.r_info = ELF32_R_INFO (eh->dynindx, R_PARISC_IPLT);
+	  rela.r_addend = 0;
 	}
       else
 	{
-	  bfd_put_32 (htab->splt->owner,
-		      value,
-		      htab->splt->contents + h->plt.offset);
-	  bfd_put_32 (htab->splt->owner,
-		      elf_gp (htab->splt->output_section->owner),
-		      htab->splt->contents + h->plt.offset + 4);
+	  /* This symbol has been marked to become local, and is
+	     used by a plabel so must be kept in the .plt.  */
+	  rela.r_info = ELF32_R_INFO (0, R_PARISC_IPLT);
+	  rela.r_addend = value;
 	}
 
-      if ((h->elf_link_hash_flags & ELF_LINK_HASH_DEF_REGULAR) == 0)
+      loc = htab->srelplt->contents;
+      loc += htab->srelplt->reloc_count++ * sizeof (Elf32_External_Rela);
+      bfd_elf32_swap_reloca_out (htab->splt->output_section->owner, &rela, loc);
+
+      if (!eh->def_regular)
 	{
 	  /* Mark the symbol as undefined, rather than as defined in
 	     the .plt section.  Leave the value alone.  */
@@ -4141,15 +4363,14 @@ elf32_hppa_finish_dynamic_symbol (output_bfd, info, h, sym)
 	}
     }
 
-  if (h->got.offset != (bfd_vma) -1)
+  if (eh->got.offset != (bfd_vma) -1
+      && (hppa_elf_hash_entry (eh)->tls_type & GOT_TLS_GD) == 0
+      && (hppa_elf_hash_entry (eh)->tls_type & GOT_TLS_IE) == 0)
     {
-      Elf_Internal_Rela rel;
-      bfd_byte *loc;
-
       /* This symbol has an entry in the global offset table.  Set it
 	 up.  */
 
-      rel.r_offset = ((h->got.offset &~ (bfd_vma) 1)
+      rela.r_offset = ((eh->got.offset &~ (bfd_vma) 1)
 		      + htab->sgot->output_offset
 		      + htab->sgot->output_section->vma);
 
@@ -4159,57 +4380,53 @@ elf32_hppa_finish_dynamic_symbol (output_bfd, info, h, sym)
 	 global offset table will already have been initialized in the
 	 relocate_section function.  */
       if (info->shared
-	  && (info->symbolic || h->dynindx == -1)
-	  && (h->elf_link_hash_flags & ELF_LINK_HASH_DEF_REGULAR))
+	  && (info->symbolic || eh->dynindx == -1)
+	  && eh->def_regular)
 	{
-	  rel.r_info = ELF32_R_INFO (0, R_PARISC_DIR32);
-	  rel.r_addend = (h->root.u.def.value
-			  + h->root.u.def.section->output_offset
-			  + h->root.u.def.section->output_section->vma);
+	  rela.r_info = ELF32_R_INFO (0, R_PARISC_DIR32);
+	  rela.r_addend = (eh->root.u.def.value
+			  + eh->root.u.def.section->output_offset
+			  + eh->root.u.def.section->output_section->vma);
 	}
       else
 	{
-	  if ((h->got.offset & 1) != 0)
+	  if ((eh->got.offset & 1) != 0)
 	    abort ();
-	  bfd_put_32 (output_bfd, (bfd_vma) 0,
-		      htab->sgot->contents + h->got.offset);
-	  rel.r_info = ELF32_R_INFO (h->dynindx, R_PARISC_DIR32);
-	  rel.r_addend = 0;
+
+	  bfd_put_32 (output_bfd, 0, htab->sgot->contents + (eh->got.offset & ~1));
+	  rela.r_info = ELF32_R_INFO (eh->dynindx, R_PARISC_DIR32);
+	  rela.r_addend = 0;
 	}
 
       loc = htab->srelgot->contents;
       loc += htab->srelgot->reloc_count++ * sizeof (Elf32_External_Rela);
-      bfd_elf32_swap_reloca_out (output_bfd, &rel, loc);
+      bfd_elf32_swap_reloca_out (output_bfd, &rela, loc);
     }
 
-  if ((h->elf_link_hash_flags & ELF_LINK_HASH_NEEDS_COPY) != 0)
+  if (eh->needs_copy)
     {
-      asection *s;
-      Elf_Internal_Rela rel;
-      bfd_byte *loc;
+      asection *sec;
 
       /* This symbol needs a copy reloc.  Set it up.  */
 
-      if (! (h->dynindx != -1
-	     && (h->root.type == bfd_link_hash_defined
-		 || h->root.type == bfd_link_hash_defweak)))
+      if (! (eh->dynindx != -1
+	     && (eh->root.type == bfd_link_hash_defined
+		 || eh->root.type == bfd_link_hash_defweak)))
 	abort ();
 
-      s = htab->srelbss;
+      sec = htab->srelbss;
 
-      rel.r_offset = (h->root.u.def.value
-		      + h->root.u.def.section->output_offset
-		      + h->root.u.def.section->output_section->vma);
-      rel.r_addend = 0;
-      rel.r_info = ELF32_R_INFO (h->dynindx, R_PARISC_COPY);
-      loc = s->contents + s->reloc_count++ * sizeof (Elf32_External_Rela);
-      bfd_elf32_swap_reloca_out (output_bfd, &rel, loc);
+      rela.r_offset = (eh->root.u.def.value
+		      + eh->root.u.def.section->output_offset
+		      + eh->root.u.def.section->output_section->vma);
+      rela.r_addend = 0;
+      rela.r_info = ELF32_R_INFO (eh->dynindx, R_PARISC_COPY);
+      loc = sec->contents + sec->reloc_count++ * sizeof (Elf32_External_Rela);
+      bfd_elf32_swap_reloca_out (output_bfd, &rela, loc);
     }
 
   /* Mark _DYNAMIC and _GLOBAL_OFFSET_TABLE_ as absolute.  */
-  if (h->root.root.string[0] == '_'
-      && (strcmp (h->root.root.string, "_DYNAMIC") == 0
-	  || strcmp (h->root.root.string, "_GLOBAL_OFFSET_TABLE_") == 0))
+  if (eh == htab->etab.hdynamic || eh == htab->etab.hgot)
     {
       sym->st_shndx = SHN_ABS;
     }
@@ -4221,10 +4438,22 @@ elf32_hppa_finish_dynamic_symbol (output_bfd, info, h, sym)
    dynamic linker, before writing them out.  */
 
 static enum elf_reloc_type_class
-elf32_hppa_reloc_type_class (rela)
-     const Elf_Internal_Rela *rela;
+elf32_hppa_reloc_type_class (const struct bfd_link_info *info ATTRIBUTE_UNUSED,
+			     const asection *rel_sec ATTRIBUTE_UNUSED,
+			     const Elf_Internal_Rela *rela)
 {
-  if (ELF32_R_SYM (rela->r_info) == 0)
+  /* Handle TLS relocs first; we don't want them to be marked
+     relative by the "if (ELF32_R_SYM (rela->r_info) == STN_UNDEF)"
+     check below.  */
+  switch ((int) ELF32_R_TYPE (rela->r_info))
+    {
+      case R_PARISC_TLS_DTPMOD32:
+      case R_PARISC_TLS_DTPOFF32:
+      case R_PARISC_TLS_TPREL32:
+        return reloc_class_normal;
+    }
+
+  if (ELF32_R_SYM (rela->r_info) == STN_UNDEF)
     return reloc_class_relative;
 
   switch ((int) ELF32_R_TYPE (rela->r_info))
@@ -4241,20 +4470,29 @@ elf32_hppa_reloc_type_class (rela)
 /* Finish up the dynamic sections.  */
 
 static bfd_boolean
-elf32_hppa_finish_dynamic_sections (output_bfd, info)
-     bfd *output_bfd;
-     struct bfd_link_info *info;
+elf32_hppa_finish_dynamic_sections (bfd *output_bfd,
+				    struct bfd_link_info *info)
 {
   bfd *dynobj;
   struct elf32_hppa_link_hash_table *htab;
   asection *sdyn;
+  asection * sgot;
 
   htab = hppa_link_hash_table (info);
-  dynobj = htab->elf.dynobj;
+  if (htab == NULL)
+    return FALSE;
 
-  sdyn = bfd_get_section_by_name (dynobj, ".dynamic");
+  dynobj = htab->etab.dynobj;
 
-  if (htab->elf.dynamic_sections_created)
+  sgot = htab->sgot;
+  /* A broken linker script might have discarded the dynamic sections.
+     Catch this here so that we do not seg-fault later on.  */
+  if (sgot != NULL && bfd_is_abs_section (sgot->output_section))
+    return FALSE;
+
+  sdyn = bfd_get_linker_section (dynobj, ".dynamic");
+
+  if (htab->etab.dynamic_sections_created)
     {
       Elf32_External_Dyn *dyncon, *dynconend;
 
@@ -4262,7 +4500,7 @@ elf32_hppa_finish_dynamic_sections (output_bfd, info)
 	abort ();
 
       dyncon = (Elf32_External_Dyn *) sdyn->contents;
-      dynconend = (Elf32_External_Dyn *) (sdyn->contents + sdyn->_raw_size);
+      dynconend = (Elf32_External_Dyn *) (sdyn->contents + sdyn->size);
       for (; dyncon < dynconend; dyncon++)
 	{
 	  Elf_Internal_Dyn dyn;
@@ -4287,7 +4525,7 @@ elf32_hppa_finish_dynamic_sections (output_bfd, info)
 
 	    case DT_PLTRELSZ:
 	      s = htab->srelplt;
-	      dyn.d_un.d_val = s->_raw_size;
+	      dyn.d_un.d_val = s->size;
 	      break;
 
 	    case DT_RELASZ:
@@ -4296,7 +4534,7 @@ elf32_hppa_finish_dynamic_sections (output_bfd, info)
 	      s = htab->srelplt;
 	      if (s == NULL)
 		continue;
-	      dyn.d_un.d_val -= s->_raw_size;
+	      dyn.d_un.d_val -= s->size;
 	      break;
 
 	    case DT_RELA:
@@ -4308,7 +4546,7 @@ elf32_hppa_finish_dynamic_sections (output_bfd, info)
 		continue;
 	      if (dyn.d_un.d_ptr != s->output_section->vma + s->output_offset)
 		continue;
-	      dyn.d_un.d_ptr += s->_raw_size;
+	      dyn.d_un.d_ptr += s->size;
 	      break;
 	    }
 
@@ -4316,25 +4554,23 @@ elf32_hppa_finish_dynamic_sections (output_bfd, info)
 	}
     }
 
-  if (htab->sgot != NULL && htab->sgot->_raw_size != 0)
+  if (sgot != NULL && sgot->size != 0)
     {
       /* Fill in the first entry in the global offset table.
 	 We use it to point to our dynamic section, if we have one.  */
       bfd_put_32 (output_bfd,
-		  (sdyn != NULL
-		   ? sdyn->output_section->vma + sdyn->output_offset
-		   : (bfd_vma) 0),
-		  htab->sgot->contents);
+		  sdyn ? sdyn->output_section->vma + sdyn->output_offset : 0,
+		  sgot->contents);
 
       /* The second entry is reserved for use by the dynamic linker.  */
-      memset (htab->sgot->contents + GOT_ENTRY_SIZE, 0, GOT_ENTRY_SIZE);
+      memset (sgot->contents + GOT_ENTRY_SIZE, 0, GOT_ENTRY_SIZE);
 
       /* Set .got entry size.  */
-      elf_section_data (htab->sgot->output_section)
+      elf_section_data (sgot->output_section)
 	->this_hdr.sh_entsize = GOT_ENTRY_SIZE;
     }
 
-  if (htab->splt != NULL && htab->splt->_raw_size != 0)
+  if (htab->splt != NULL && htab->splt->size != 0)
     {
       /* Set plt entry size.  */
       elf_section_data (htab->splt->output_section)
@@ -4344,14 +4580,14 @@ elf32_hppa_finish_dynamic_sections (output_bfd, info)
 	{
 	  /* Set up the .plt stub.  */
 	  memcpy (htab->splt->contents
-		  + htab->splt->_raw_size - sizeof (plt_stub),
+		  + htab->splt->size - sizeof (plt_stub),
 		  plt_stub, sizeof (plt_stub));
 
 	  if ((htab->splt->output_offset
 	       + htab->splt->output_section->vma
-	       + htab->splt->_raw_size)
-	      != (htab->sgot->output_offset
-		  + htab->sgot->output_section->vma))
+	       + htab->splt->size)
+	      != (sgot->output_offset
+		  + sgot->output_section->vma))
 	    {
 	      (*_bfd_error_handler)
 		(_(".got section not immediately after .plt section"));
@@ -4363,33 +4599,10 @@ elf32_hppa_finish_dynamic_sections (output_bfd, info)
   return TRUE;
 }
 
-/* Tweak the OSABI field of the elf header.  */
-
-static void
-elf32_hppa_post_process_headers (abfd, link_info)
-     bfd *abfd;
-     struct bfd_link_info *link_info ATTRIBUTE_UNUSED;
-{
-  Elf_Internal_Ehdr * i_ehdrp;
-
-  i_ehdrp = elf_elfheader (abfd);
-
-  if (strcmp (bfd_get_target (abfd), "elf32-hppa-linux") == 0)
-    {
-      i_ehdrp->e_ident[EI_OSABI] = ELFOSABI_LINUX;
-    }
-  else
-    {
-      i_ehdrp->e_ident[EI_OSABI] = ELFOSABI_HPUX;
-    }
-}
-
 /* Called when writing out an object file to decide the type of a
    symbol.  */
 static int
-elf32_hppa_elf_get_symbol_type (elf_sym, type)
-     Elf_Internal_Sym *elf_sym;
-     int type;
+elf32_hppa_elf_get_symbol_type (Elf_Internal_Sym *elf_sym, int type)
 {
   if (ELF_ST_TYPE (elf_sym->st_info) == STT_PARISC_MILLI)
     return STT_PARISC_MILLI;
@@ -4400,6 +4613,7 @@ elf32_hppa_elf_get_symbol_type (elf_sym, type)
 /* Misc BFD support code.  */
 #define bfd_elf32_bfd_is_local_label_name    elf_hppa_is_local_label_name
 #define bfd_elf32_bfd_reloc_type_lookup	     elf_hppa_reloc_type_lookup
+#define bfd_elf32_bfd_reloc_name_lookup      elf_hppa_reloc_name_lookup
 #define elf_info_to_howto		     elf_hppa_info_to_howto
 #define elf_info_to_howto_rel		     elf_hppa_info_to_howto_rel
 
@@ -4407,7 +4621,6 @@ elf32_hppa_elf_get_symbol_type (elf_sym, type)
 #define bfd_elf32_bfd_final_link	     elf32_hppa_final_link
 #define bfd_elf32_bfd_link_hash_table_create elf32_hppa_link_hash_table_create
 #define bfd_elf32_bfd_link_hash_table_free   elf32_hppa_link_hash_table_free
-#define elf_backend_add_symbol_hook	     elf32_hppa_add_symbol_hook
 #define elf_backend_adjust_dynamic_symbol    elf32_hppa_adjust_dynamic_symbol
 #define elf_backend_copy_indirect_symbol     elf32_hppa_copy_indirect_symbol
 #define elf_backend_check_relocs	     elf32_hppa_check_relocs
@@ -4418,13 +4631,17 @@ elf32_hppa_elf_get_symbol_type (elf_sym, type)
 #define elf_backend_finish_dynamic_symbol    elf32_hppa_finish_dynamic_symbol
 #define elf_backend_finish_dynamic_sections  elf32_hppa_finish_dynamic_sections
 #define elf_backend_size_dynamic_sections    elf32_hppa_size_dynamic_sections
+#define elf_backend_init_index_section	     _bfd_elf_init_1_index_section
 #define elf_backend_gc_mark_hook	     elf32_hppa_gc_mark_hook
 #define elf_backend_gc_sweep_hook	     elf32_hppa_gc_sweep_hook
+#define elf_backend_grok_prstatus	     elf32_hppa_grok_prstatus
+#define elf_backend_grok_psinfo		     elf32_hppa_grok_psinfo
 #define elf_backend_object_p		     elf32_hppa_object_p
 #define elf_backend_final_write_processing   elf_hppa_final_write_processing
-#define elf_backend_post_process_headers     elf32_hppa_post_process_headers
+#define elf_backend_post_process_headers     _bfd_elf_set_osabi
 #define elf_backend_get_symbol_type	     elf32_hppa_elf_get_symbol_type
 #define elf_backend_reloc_type_class	     elf32_hppa_reloc_type_class
+#define elf_backend_action_discarded	     elf_hppa_action_discarded
 
 #define elf_backend_can_gc_sections	     1
 #define elf_backend_can_refcount	     1
@@ -4438,15 +4655,32 @@ elf32_hppa_elf_get_symbol_type (elf_sym, type)
 #define TARGET_BIG_SYM		bfd_elf32_hppa_vec
 #define TARGET_BIG_NAME		"elf32-hppa"
 #define ELF_ARCH		bfd_arch_hppa
+#define ELF_TARGET_ID		HPPA32_ELF_DATA
 #define ELF_MACHINE_CODE	EM_PARISC
 #define ELF_MAXPAGESIZE		0x1000
+#define ELF_OSABI		ELFOSABI_HPUX
+#define elf32_bed		elf32_hppa_hpux_bed
 
 #include "elf32-target.h"
 
 #undef TARGET_BIG_SYM
-#define TARGET_BIG_SYM			bfd_elf32_hppa_linux_vec
+#define TARGET_BIG_SYM		bfd_elf32_hppa_linux_vec
 #undef TARGET_BIG_NAME
-#define TARGET_BIG_NAME			"elf32-hppa-linux"
+#define TARGET_BIG_NAME		"elf32-hppa-linux"
+#undef ELF_OSABI
+#define ELF_OSABI		ELFOSABI_GNU
+#undef elf32_bed
+#define elf32_bed		elf32_hppa_linux_bed
 
-#define INCLUDED_TARGET_FILE 1
+#include "elf32-target.h"
+
+#undef TARGET_BIG_SYM
+#define TARGET_BIG_SYM		bfd_elf32_hppa_nbsd_vec
+#undef TARGET_BIG_NAME
+#define TARGET_BIG_NAME		"elf32-hppa-netbsd"
+#undef ELF_OSABI
+#define ELF_OSABI		ELFOSABI_NETBSD
+#undef elf32_bed
+#define elf32_bed		elf32_hppa_netbsd_bed
+
 #include "elf32-target.h"

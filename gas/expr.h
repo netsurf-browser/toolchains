@@ -1,12 +1,12 @@
 /* expr.h -> header file for expr.c
-   Copyright 1987, 1992, 1993, 1994, 1995, 1996, 1997, 1998, 1999, 2000
-   Free Software Foundation, Inc.
+   Copyright 1987, 1992, 1993, 1994, 1995, 1996, 1997, 1998, 1999, 2000,
+   2002, 2003, 2005, 2007, 2009 Free Software Foundation, Inc.
 
    This file is part of GAS, the GNU Assembler.
 
    GAS is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License as published by
-   the Free Software Foundation; either version 2, or (at your option)
+   the Free Software Foundation; either version 3, or (at your option)
    any later version.
 
    GAS is distributed in the hope that it will be useful,
@@ -16,8 +16,8 @@
 
    You should have received a copy of the GNU General Public License
    along with GAS; see the file COPYING.  If not, write to the Free
-   Software Foundation, 59 Temple Place - Suite 330, Boston, MA
-   02111-1307, USA.  */
+   Software Foundation, 51 Franklin Street - Fifth Floor, Boston, MA
+   02110-1301, USA.  */
 
 /*
  * By popular demand, we define a struct to represent an expression.
@@ -136,6 +136,11 @@ typedef struct expressionS {
      when performing arithmetic on these values).
      FIXME: This field is not set very reliably.  */
   unsigned int X_unsigned : 1;
+  /* This is used to implement "word size + 1 bit" arithmetic, so that e.g.
+     expressions used with .sleb128 directives can use the full range available
+     for an unsigned word, but can also properly represent all values of a
+     signed word.  */
+  unsigned int X_extrabit : 1;
 
   /* 7 additional bits can be defined if needed.  */
 
@@ -143,8 +148,17 @@ typedef struct expressionS {
   unsigned short X_md;
 } expressionS;
 
+enum expr_mode
+{
+  expr_evaluate,
+  expr_normal,
+  expr_defer
+};
+
 /* "result" should be type (expressionS *).  */
-#define expression(result) expr (0, result)
+#define expression(result) expr (0, result, expr_normal)
+#define expression_and_evaluate(result) expr (0, result, expr_evaluate)
+#define deferred_expression(result) expr (0, result, expr_defer)
 
 /* If an expression is O_big, look here for its value. These common
    data may be clobbered whenever expr() is called.  */
@@ -157,16 +171,19 @@ extern LITTLENUM_TYPE generic_bignum[];
 
 typedef char operator_rankT;
 
-extern char get_symbol_end PARAMS ((void));
-extern void expr_begin PARAMS ((void));
-extern void expr_set_precedence PARAMS ((void));
-extern segT expr PARAMS ((int rank, expressionS * resultP));
-extern unsigned int get_single_number PARAMS ((void));
-extern symbolS *make_expr_symbol PARAMS ((expressionS * expressionP));
-extern int expr_symbol_where
-  PARAMS ((symbolS *, char **, unsigned int *));
+extern char get_symbol_end (void);
+extern void expr_begin (void);
+extern void expr_set_precedence (void);
+extern void expr_set_rank (operatorT, operator_rankT);
+extern void add_to_result (expressionS *, offsetT, int);
+extern void subtract_from_result (expressionS *, offsetT, int);
+extern segT expr (int, expressionS *, enum expr_mode);
+extern unsigned int get_single_number (void);
+extern symbolS *make_expr_symbol (expressionS * expressionP);
+extern int expr_symbol_where (symbolS *, char **, unsigned int *);
+extern void current_location (expressionS *);
 
-extern symbolS *expr_build_uconstant PARAMS ((offsetT));
-extern symbolS *expr_build_unary PARAMS ((operatorT, symbolS *));
-extern symbolS *expr_build_binary PARAMS ((operatorT, symbolS *, symbolS *));
-extern symbolS *expr_build_dot PARAMS ((void));
+extern symbolS *expr_build_uconstant (offsetT);
+extern symbolS *expr_build_dot (void);
+
+int resolve_expression (expressionS *);

@@ -1,12 +1,12 @@
 /* cond.c - conditional assembly pseudo-ops, and .include
-   Copyright 1990, 1991, 1992, 1993, 1995, 1997, 1998, 2000, 2001
-   Free Software Foundation, Inc.
+   Copyright 1990, 1991, 1992, 1993, 1995, 1997, 1998, 2000, 2001, 2002,
+   2003, 2005, 2006, 2007 Free Software Foundation, Inc.
 
    This file is part of GAS, the GNU Assembler.
 
    GAS is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License as published by
-   the Free Software Foundation; either version 2, or (at your option)
+   the Free Software Foundation; either version 3, or (at your option)
    any later version.
 
    GAS is distributed in the hope that it will be useful,
@@ -16,10 +16,11 @@
 
    You should have received a copy of the GNU General Public License
    along with GAS; see the file COPYING.  If not, write to the Free
-   Software Foundation, 59 Temple Place - Suite 330, Boston, MA
-   02111-1307, USA.  */
+   Software Foundation, 51 Franklin Street - Fifth Floor, Boston, MA
+   02110-1301, USA.  */
 
 #include "as.h"
+#include "sb.h"
 #include "macro.h"
 
 #include "obstack.h"
@@ -55,8 +56,8 @@ struct conditional_frame {
   int macro_nest;
 };
 
-static void initialize_cframe PARAMS ((struct conditional_frame *cframe));
-static char *get_mri_string PARAMS ((int, int *));
+static void initialize_cframe (struct conditional_frame *cframe);
+static char *get_mri_string (int, int *);
 
 static struct conditional_frame *current_cframe = NULL;
 
@@ -64,8 +65,7 @@ static struct conditional_frame *current_cframe = NULL;
    the .ifndef (test_defined == 0) pseudo op.  */
 
 void
-s_ifdef (test_defined)
-     int test_defined;
+s_ifdef (int test_defined)
 {
   /* Points to name of symbol.  */
   char *name;
@@ -91,7 +91,7 @@ s_ifdef (test_defined)
   *input_line_pointer = c;
 
   initialize_cframe (&cframe);
-  
+
   if (cframe.dead_tree)
     cframe.ignoring = 1;
   else
@@ -103,7 +103,7 @@ s_ifdef (test_defined)
 	 considered to be undefined.  */
       is_defined =
 	symbolP != NULL
-	&& S_IS_DEFINED (symbolP)
+	&& (S_IS_DEFINED (symbolP) || symbol_equated_p (symbolP))
 	&& S_GET_SEGMENT (symbolP) != reg_section;
 
       cframe.ignoring = ! (test_defined ^ is_defined);
@@ -123,8 +123,7 @@ s_ifdef (test_defined)
 }
 
 void
-s_if (arg)
-     int arg;
+s_if (int arg)
 {
   expressionS operand;
   struct conditional_frame cframe;
@@ -146,7 +145,7 @@ s_if (arg)
     }
   else
     {
-      expression (&operand);
+      expression_and_evaluate (&operand);
       if (operand.X_op != O_constant)
 	as_bad (_("non-constant expression in \".if\" statement"));
     }
@@ -183,12 +182,44 @@ s_if (arg)
   demand_empty_rest_of_line ();
 }
 
+/* Performs the .ifb (test_blank == 1) and
+   the .ifnb (test_blank == 0) pseudo op.  */
+
+void
+s_ifb (int test_blank)
+{
+  struct conditional_frame cframe;
+
+  initialize_cframe (&cframe);
+
+  if (cframe.dead_tree)
+    cframe.ignoring = 1;
+  else
+    {
+      int is_eol;
+
+      SKIP_WHITESPACE ();
+      is_eol = is_end_of_line[(unsigned char) *input_line_pointer];
+      cframe.ignoring = (test_blank == !is_eol);
+    }
+
+  current_cframe = ((struct conditional_frame *)
+		    obstack_copy (&cond_obstack, &cframe,
+				  sizeof (cframe)));
+
+  if (LISTING_SKIP_COND ()
+      && cframe.ignoring
+      && (cframe.previous_cframe == NULL
+	  || ! cframe.previous_cframe->ignoring))
+    listing_list (2);
+
+  ignore_rest_of_line ();
+}
+
 /* Get a string for the MRI IFC or IFNC pseudo-ops.  */
 
 static char *
-get_mri_string (terminator, len)
-     int terminator;
-     int *len;
+get_mri_string (int terminator, int *len)
 {
   char *ret;
   char *s;
@@ -228,8 +259,7 @@ get_mri_string (terminator, len)
 /* The MRI IFC and IFNC pseudo-ops.  */
 
 void
-s_ifc (arg)
-     int arg;
+s_ifc (int arg)
 {
   char *stop = NULL;
   char stopc;
@@ -270,8 +300,7 @@ s_ifc (arg)
 }
 
 void
-s_elseif (arg)
-     int arg;
+s_elseif (int arg)
 {
   if (current_cframe == NULL)
     {
@@ -282,10 +311,10 @@ s_elseif (arg)
       as_bad (_("\".elseif\" after \".else\""));
       as_bad_where (current_cframe->else_file_line.file,
 		    current_cframe->else_file_line.line,
-		    _("here is the previous \"else\""));
+		    _("here is the previous \".else\""));
       as_bad_where (current_cframe->if_file_line.file,
 		    current_cframe->if_file_line.line,
-		    _("here is the previous \"if\""));
+		    _("here is the previous \".if\""));
     }
   else
     {
@@ -312,7 +341,7 @@ s_elseif (arg)
       /* Leading whitespace is part of operand.  */
       SKIP_WHITESPACE ();
 
-      expression (&operand);
+      expression_and_evaluate (&operand);
       if (operand.X_op != O_constant)
 	as_bad (_("non-constant expression in \".elseif\" statement"));
 
@@ -346,8 +375,7 @@ s_elseif (arg)
 }
 
 void
-s_endif (arg)
-     int arg ATTRIBUTE_UNUSED;
+s_endif (int arg ATTRIBUTE_UNUSED)
 {
   struct conditional_frame *hold;
 
@@ -378,8 +406,7 @@ s_endif (arg)
 }
 
 void
-s_else (arg)
-     int arg ATTRIBUTE_UNUSED;
+s_else (int arg ATTRIBUTE_UNUSED)
 {
   if (current_cframe == NULL)
     {
@@ -387,13 +414,13 @@ s_else (arg)
     }
   else if (current_cframe->else_seen)
     {
-      as_bad (_("duplicate \"else\""));
+      as_bad (_("duplicate \".else\""));
       as_bad_where (current_cframe->else_file_line.file,
 		    current_cframe->else_file_line.line,
-		    _("here is the previous \"else\""));
+		    _("here is the previous \".else\""));
       as_bad_where (current_cframe->if_file_line.file,
 		    current_cframe->if_file_line.line,
-		    _("here is the previous \"if\""));
+		    _("here is the previous \".if\""));
     }
   else
     {
@@ -426,8 +453,7 @@ s_else (arg)
 }
 
 void
-s_ifeqs (arg)
-     int arg;
+s_ifeqs (int arg)
 {
   char *s1, *s2;
   int len1, len2;
@@ -465,7 +491,7 @@ s_ifeqs (arg)
 }
 
 int
-ignore_input ()
+ignore_input (void)
 {
   char *s;
 
@@ -499,8 +525,7 @@ ignore_input ()
 }
 
 static void
-initialize_cframe (cframe)
-     struct conditional_frame *cframe;
+initialize_cframe (struct conditional_frame *cframe)
 {
   memset (cframe, 0, sizeof (*cframe));
   as_where (&cframe->if_file_line.file,
@@ -516,8 +541,7 @@ initialize_cframe (cframe)
    negative, we are being called at the of the input files.  */
 
 void
-cond_finish_check (nest)
-     int nest;
+cond_finish_check (int nest)
 {
   if (current_cframe != NULL && current_cframe->macro_nest >= nest)
     {
@@ -540,8 +564,7 @@ cond_finish_check (nest)
    nested, and just pop them off the stack.  */
 
 void
-cond_exit_macro (nest)
-     int nest;
+cond_exit_macro (int nest)
 {
   while (current_cframe != NULL && current_cframe->macro_nest >= nest)
     {

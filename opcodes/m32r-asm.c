@@ -1,26 +1,28 @@
 /* Assembler interface for targets using CGEN. -*- C -*-
    CGEN: Cpu tools GENerator
 
-THIS FILE IS MACHINE GENERATED WITH CGEN.
-- the resultant file is machine generated, cgen-asm.in isn't
+   THIS FILE IS MACHINE GENERATED WITH CGEN.
+   - the resultant file is machine generated, cgen-asm.in isn't
 
-Copyright 1996, 1997, 1998, 1999, 2000, 2001 Free Software Foundation, Inc.
+   Copyright 1996, 1997, 1998, 1999, 2000, 2001, 2005, 2007, 2008, 2010
+   Free Software Foundation, Inc.
 
-This file is part of the GNU Binutils and GDB, the GNU debugger.
+   This file is part of libopcodes.
 
-This program is free software; you can redistribute it and/or modify
-it under the terms of the GNU General Public License as published by
-the Free Software Foundation; either version 2, or (at your option)
-any later version.
+   This library is free software; you can redistribute it and/or modify
+   it under the terms of the GNU General Public License as published by
+   the Free Software Foundation; either version 3, or (at your option)
+   any later version.
 
-This program is distributed in the hope that it will be useful,
-but WITHOUT ANY WARRANTY; without even the implied warranty of
-MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-GNU General Public License for more details.
+   It is distributed in the hope that it will be useful, but WITHOUT
+   ANY WARRANTY; without even the implied warranty of MERCHANTABILITY
+   or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU General Public
+   License for more details.
 
-You should have received a copy of the GNU General Public License
-along with this program; if not, write to the Free Software Foundation, Inc.,
-59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.  */
+   You should have received a copy of the GNU General Public License
+   along with this program; if not, write to the Free Software Foundation, Inc.,
+   51 Franklin Street - Fifth Floor, Boston, MA 02110-1301, USA.  */
+
 
 /* ??? Eventually more and more of this stuff can go to cpu-independent files.
    Keep that in mind.  */
@@ -43,28 +45,20 @@ along with this program; if not, write to the Free Software Foundation, Inc.,
 #define max(a,b) ((a) > (b) ? (a) : (b))
 
 static const char * parse_insn_normal
-     PARAMS ((CGEN_CPU_DESC, const CGEN_INSN *, const char **, CGEN_FIELDS *));
+  (CGEN_CPU_DESC, const CGEN_INSN *, const char **, CGEN_FIELDS *);
 
 /* -- assembler routines inserted here.  */
 
 /* -- asm.c */
-static const char * parse_hash
-  PARAMS ((CGEN_CPU_DESC, const char **, int, unsigned long *));
-static const char * parse_hi16
-  PARAMS ((CGEN_CPU_DESC, const char **, int, unsigned long *));
-static const char * parse_slo16
-  PARAMS ((CGEN_CPU_DESC, const char **, int, long *));
-static const char * parse_ulo16
-  PARAMS ((CGEN_CPU_DESC, const char **, int, unsigned long *));
+static const char * MISSING_CLOSING_PARENTHESIS = N_("missing `)'");
 
 /* Handle '#' prefixes (i.e. skip over them).  */
 
 static const char *
-parse_hash (cd, strp, opindex, valuep)
-     CGEN_CPU_DESC cd ATTRIBUTE_UNUSED;
-     const char **strp;
-     int opindex ATTRIBUTE_UNUSED;
-     unsigned long *valuep ATTRIBUTE_UNUSED;
+parse_hash (CGEN_CPU_DESC cd ATTRIBUTE_UNUSED,
+	    const char **strp,
+	    int opindex ATTRIBUTE_UNUSED,
+	    long *valuep ATTRIBUTE_UNUSED)
 {
   if (**strp == '#')
     ++*strp;
@@ -74,11 +68,10 @@ parse_hash (cd, strp, opindex, valuep)
 /* Handle shigh(), high().  */
 
 static const char *
-parse_hi16 (cd, strp, opindex, valuep)
-     CGEN_CPU_DESC cd;
-     const char **strp;
-     int opindex;
-     unsigned long *valuep;
+parse_hi16 (CGEN_CPU_DESC cd,
+	    const char **strp,
+	    int opindex,
+	    unsigned long *valuep)
 {
   const char *errmsg;
   enum cgen_parse_operand_result result_type;
@@ -91,13 +84,16 @@ parse_hi16 (cd, strp, opindex, valuep)
     {
       *strp += 5;
       errmsg = cgen_parse_address (cd, strp, opindex, BFD_RELOC_M32R_HI16_ULO,
-				   &result_type, &value);
+				   & result_type, & value);
       if (**strp != ')')
-	return "missing `)'";
+	return MISSING_CLOSING_PARENTHESIS;
       ++*strp;
       if (errmsg == NULL
-  	  && result_type == CGEN_PARSE_OPERAND_RESULT_NUMBER)
-	value >>= 16;
+	  && result_type == CGEN_PARSE_OPERAND_RESULT_NUMBER)
+	{
+	  value >>= 16;
+	  value &= 0xffff;
+	}
       *valuep = value;
       return errmsg;
     }
@@ -105,13 +101,17 @@ parse_hi16 (cd, strp, opindex, valuep)
     {
       *strp += 6;
       errmsg = cgen_parse_address (cd, strp, opindex, BFD_RELOC_M32R_HI16_SLO,
- 				   &result_type, &value);
+				   & result_type, & value);
       if (**strp != ')')
-	return "missing `)'";
+	return MISSING_CLOSING_PARENTHESIS;
       ++*strp;
       if (errmsg == NULL
 	  && result_type == CGEN_PARSE_OPERAND_RESULT_NUMBER)
-	value = (value >> 16) + (value & 0x8000 ? 1 : 0);
+	{
+	  value += 0x8000;
+	  value >>= 16;
+	  value &= 0xffff;
+	}
       *valuep = value;
       return errmsg;
     }
@@ -124,11 +124,10 @@ parse_hi16 (cd, strp, opindex, valuep)
    handles the case where low() isn't present.  */
 
 static const char *
-parse_slo16 (cd, strp, opindex, valuep)
-     CGEN_CPU_DESC cd;
-     const char **strp;
-     int opindex;
-     long *valuep;
+parse_slo16 (CGEN_CPU_DESC cd,
+	     const char ** strp,
+	     int opindex,
+	     long * valuep)
 {
   const char *errmsg;
   enum cgen_parse_operand_result result_type;
@@ -141,13 +140,13 @@ parse_slo16 (cd, strp, opindex, valuep)
     {
       *strp += 4;
       errmsg = cgen_parse_address (cd, strp, opindex, BFD_RELOC_M32R_LO16,
-				   &result_type, &value);
+				   & result_type, & value);
       if (**strp != ')')
-	return "missing `)'";
+	return MISSING_CLOSING_PARENTHESIS;
       ++*strp;
       if (errmsg == NULL
 	  && result_type == CGEN_PARSE_OPERAND_RESULT_NUMBER)
-	value &= 0xffff;
+	value = ((value & 0xffff) ^ 0x8000) - 0x8000;
       *valuep = value;
       return errmsg;
     }
@@ -156,9 +155,9 @@ parse_slo16 (cd, strp, opindex, valuep)
     {
       *strp += 4;
       errmsg = cgen_parse_address (cd, strp, opindex, BFD_RELOC_M32R_SDA16,
-				   NULL, &value);
+				   NULL, & value);
       if (**strp != ')')
-	return "missing `)'";
+	return MISSING_CLOSING_PARENTHESIS;
       ++*strp;
       *valuep = value;
       return errmsg;
@@ -172,11 +171,10 @@ parse_slo16 (cd, strp, opindex, valuep)
    handles the case where low() isn't present.  */
 
 static const char *
-parse_ulo16 (cd, strp, opindex, valuep)
-     CGEN_CPU_DESC cd;
-     const char **strp;
-     int opindex;
-     unsigned long *valuep;
+parse_ulo16 (CGEN_CPU_DESC cd,
+	     const char **strp,
+	     int opindex,
+	     unsigned long *valuep)
 {
   const char *errmsg;
   enum cgen_parse_operand_result result_type;
@@ -189,9 +187,9 @@ parse_ulo16 (cd, strp, opindex, valuep)
     {
       *strp += 4;
       errmsg = cgen_parse_address (cd, strp, opindex, BFD_RELOC_M32R_LO16,
-				   &result_type, &value);
+				   & result_type, & value);
       if (**strp != ')')
-	return "missing `)'";
+	return MISSING_CLOSING_PARENTHESIS;
       ++*strp;
       if (errmsg == NULL
 	  && result_type == CGEN_PARSE_OPERAND_RESULT_NUMBER)
@@ -206,7 +204,7 @@ parse_ulo16 (cd, strp, opindex, valuep)
 /* -- */
 
 const char * m32r_cgen_parse_operand
-  PARAMS ((CGEN_CPU_DESC, int, const char **, CGEN_FIELDS *));
+  (CGEN_CPU_DESC, int, const char **, CGEN_FIELDS *);
 
 /* Main entry point for operand parsing.
 
@@ -222,11 +220,10 @@ const char * m32r_cgen_parse_operand
    the handlers.  */
 
 const char *
-m32r_cgen_parse_operand (cd, opindex, strp, fields)
-     CGEN_CPU_DESC cd;
-     int opindex;
-     const char ** strp;
-     CGEN_FIELDS * fields;
+m32r_cgen_parse_operand (CGEN_CPU_DESC cd,
+			   int opindex,
+			   const char ** strp,
+			   CGEN_FIELDS * fields)
 {
   const char * errmsg = NULL;
   /* Used by scalar operands that still need to be parsed.  */
@@ -248,21 +245,21 @@ m32r_cgen_parse_operand (cd, opindex, strp, fields)
       break;
     case M32R_OPERAND_DISP16 :
       {
-        bfd_vma value;
+        bfd_vma value = 0;
         errmsg = cgen_parse_address (cd, strp, M32R_OPERAND_DISP16, 0, NULL,  & value);
         fields->f_disp16 = value;
       }
       break;
     case M32R_OPERAND_DISP24 :
       {
-        bfd_vma value;
+        bfd_vma value = 0;
         errmsg = cgen_parse_address (cd, strp, M32R_OPERAND_DISP24, 0, NULL,  & value);
         fields->f_disp24 = value;
       }
       break;
     case M32R_OPERAND_DISP8 :
       {
-        bfd_vma value;
+        bfd_vma value = 0;
         errmsg = cgen_parse_address (cd, strp, M32R_OPERAND_DISP8, 0, NULL,  & value);
         fields->f_disp8 = value;
       }
@@ -271,25 +268,25 @@ m32r_cgen_parse_operand (cd, opindex, strp, fields)
       errmsg = cgen_parse_keyword (cd, strp, & m32r_cgen_opval_gr_names, & fields->f_r1);
       break;
     case M32R_OPERAND_HASH :
-      errmsg = parse_hash (cd, strp, M32R_OPERAND_HASH, &junk);
+      errmsg = parse_hash (cd, strp, M32R_OPERAND_HASH, (long *) (& junk));
       break;
     case M32R_OPERAND_HI16 :
-      errmsg = parse_hi16 (cd, strp, M32R_OPERAND_HI16, &fields->f_hi16);
+      errmsg = parse_hi16 (cd, strp, M32R_OPERAND_HI16, (unsigned long *) (& fields->f_hi16));
       break;
     case M32R_OPERAND_IMM1 :
-      errmsg = cgen_parse_unsigned_integer (cd, strp, M32R_OPERAND_IMM1, &fields->f_imm1);
+      errmsg = cgen_parse_unsigned_integer (cd, strp, M32R_OPERAND_IMM1, (unsigned long *) (& fields->f_imm1));
       break;
     case M32R_OPERAND_SCR :
       errmsg = cgen_parse_keyword (cd, strp, & m32r_cgen_opval_cr_names, & fields->f_r2);
       break;
     case M32R_OPERAND_SIMM16 :
-      errmsg = cgen_parse_signed_integer (cd, strp, M32R_OPERAND_SIMM16, &fields->f_simm16);
+      errmsg = cgen_parse_signed_integer (cd, strp, M32R_OPERAND_SIMM16, (long *) (& fields->f_simm16));
       break;
     case M32R_OPERAND_SIMM8 :
-      errmsg = cgen_parse_signed_integer (cd, strp, M32R_OPERAND_SIMM8, &fields->f_simm8);
+      errmsg = cgen_parse_signed_integer (cd, strp, M32R_OPERAND_SIMM8, (long *) (& fields->f_simm8));
       break;
     case M32R_OPERAND_SLO16 :
-      errmsg = parse_slo16 (cd, strp, M32R_OPERAND_SLO16, &fields->f_simm16);
+      errmsg = parse_slo16 (cd, strp, M32R_OPERAND_SLO16, (long *) (& fields->f_simm16));
       break;
     case M32R_OPERAND_SR :
       errmsg = cgen_parse_keyword (cd, strp, & m32r_cgen_opval_gr_names, & fields->f_r2);
@@ -301,23 +298,29 @@ m32r_cgen_parse_operand (cd, opindex, strp, fields)
       errmsg = cgen_parse_keyword (cd, strp, & m32r_cgen_opval_gr_names, & fields->f_r2);
       break;
     case M32R_OPERAND_UIMM16 :
-      errmsg = cgen_parse_unsigned_integer (cd, strp, M32R_OPERAND_UIMM16, &fields->f_uimm16);
+      errmsg = cgen_parse_unsigned_integer (cd, strp, M32R_OPERAND_UIMM16, (unsigned long *) (& fields->f_uimm16));
       break;
     case M32R_OPERAND_UIMM24 :
       {
-        bfd_vma value;
+        bfd_vma value = 0;
         errmsg = cgen_parse_address (cd, strp, M32R_OPERAND_UIMM24, 0, NULL,  & value);
         fields->f_uimm24 = value;
       }
       break;
+    case M32R_OPERAND_UIMM3 :
+      errmsg = cgen_parse_unsigned_integer (cd, strp, M32R_OPERAND_UIMM3, (unsigned long *) (& fields->f_uimm3));
+      break;
     case M32R_OPERAND_UIMM4 :
-      errmsg = cgen_parse_unsigned_integer (cd, strp, M32R_OPERAND_UIMM4, &fields->f_uimm4);
+      errmsg = cgen_parse_unsigned_integer (cd, strp, M32R_OPERAND_UIMM4, (unsigned long *) (& fields->f_uimm4));
       break;
     case M32R_OPERAND_UIMM5 :
-      errmsg = cgen_parse_unsigned_integer (cd, strp, M32R_OPERAND_UIMM5, &fields->f_uimm5);
+      errmsg = cgen_parse_unsigned_integer (cd, strp, M32R_OPERAND_UIMM5, (unsigned long *) (& fields->f_uimm5));
+      break;
+    case M32R_OPERAND_UIMM8 :
+      errmsg = cgen_parse_unsigned_integer (cd, strp, M32R_OPERAND_UIMM8, (unsigned long *) (& fields->f_uimm8));
       break;
     case M32R_OPERAND_ULO16 :
-      errmsg = parse_ulo16 (cd, strp, M32R_OPERAND_ULO16, &fields->f_uimm16);
+      errmsg = parse_ulo16 (cd, strp, M32R_OPERAND_ULO16, (unsigned long *) (& fields->f_uimm16));
       break;
 
     default :
@@ -335,13 +338,15 @@ cgen_parse_fn * const m32r_cgen_parse_handlers[] =
 };
 
 void
-m32r_cgen_init_asm (cd)
-     CGEN_CPU_DESC cd;
+m32r_cgen_init_asm (CGEN_CPU_DESC cd)
 {
   m32r_cgen_init_opcode_table (cd);
   m32r_cgen_init_ibld_table (cd);
   cd->parse_handlers = & m32r_cgen_parse_handlers[0];
   cd->parse_operand = m32r_cgen_parse_operand;
+#ifdef CGEN_ASM_INIT_HOOK
+CGEN_ASM_INIT_HOOK
+#endif
 }
 
 
@@ -358,8 +363,7 @@ m32r_cgen_init_asm (cd)
    Returns NULL for success, an error message for failure.  */
 
 char * 
-m32r_cgen_build_insn_regex (insn)
-     CGEN_INSN *insn;
+m32r_cgen_build_insn_regex (CGEN_INSN *insn)
 {  
   CGEN_OPCODE *opc = (CGEN_OPCODE *) CGEN_INSN_OPCODE (insn);
   const char *mnem = CGEN_INSN_MNEMONIC (insn);
@@ -482,11 +486,10 @@ m32r_cgen_build_insn_regex (insn)
    Returns NULL for success, an error message for failure.  */
 
 static const char *
-parse_insn_normal (cd, insn, strp, fields)
-     CGEN_CPU_DESC cd;
-     const CGEN_INSN *insn;
-     const char **strp;
-     CGEN_FIELDS *fields;
+parse_insn_normal (CGEN_CPU_DESC cd,
+		   const CGEN_INSN *insn,
+		   const char **strp,
+		   CGEN_FIELDS *fields)
 {
   /* ??? Runtime added insns not handled yet.  */
   const CGEN_SYNTAX *syntax = CGEN_INSN_SYNTAX (insn);
@@ -572,9 +575,11 @@ parse_insn_normal (cd, insn, strp, fields)
 	  continue;
 	}
 
+#ifdef CGEN_MNEMONIC_OPERANDS
+      (void) past_opcode_p;
+#endif
       /* We have an operand of some sort.  */
-      errmsg = cd->parse_operand (cd, CGEN_SYNTAX_FIELD (*syn),
-					  &str, fields);
+      errmsg = cd->parse_operand (cd, CGEN_SYNTAX_FIELD (*syn), &str, fields);
       if (errmsg)
 	return errmsg;
 
@@ -624,12 +629,11 @@ parse_insn_normal (cd, insn, strp, fields)
    mind helps keep the design clean.  */
 
 const CGEN_INSN *
-m32r_cgen_assemble_insn (cd, str, fields, buf, errmsg)
-     CGEN_CPU_DESC cd;
-     const char *str;
-     CGEN_FIELDS *fields;
-     CGEN_INSN_BYTES_PTR buf;
-     char **errmsg;
+m32r_cgen_assemble_insn (CGEN_CPU_DESC cd,
+			   const char *str,
+			   CGEN_FIELDS *fields,
+			   CGEN_INSN_BYTES_PTR buf,
+			   char **errmsg)
 {
   const char *start;
   CGEN_INSN_LIST *ilist;
@@ -659,10 +663,10 @@ m32r_cgen_assemble_insn (cd, str, fields, buf, errmsg)
       if (! m32r_cgen_insn_supported (cd, insn))
 	continue;
 #endif
-      /* If the RELAX attribute is set, this is an insn that shouldn't be
+      /* If the RELAXED attribute is set, this is an insn that shouldn't be
 	 chosen immediately.  Instead, it is used during assembler/linker
 	 relaxation if possible.  */
-      if (CGEN_INSN_ATTR_VALUE (insn, CGEN_INSN_RELAX) != 0)
+      if (CGEN_INSN_ATTR_VALUE (insn, CGEN_INSN_RELAXED) != 0)
 	continue;
 
       str = start;
@@ -692,62 +696,41 @@ m32r_cgen_assemble_insn (cd, str, fields, buf, errmsg)
 
   {
     static char errbuf[150];
-#ifdef CGEN_VERBOSE_ASSEMBLER_ERRORS
     const char *tmp_errmsg;
-
-    /* If requesting verbose error messages, use insert_errmsg.
-       Failing that, use parse_errmsg.  */
-    tmp_errmsg = (insert_errmsg ? insert_errmsg :
-		  parse_errmsg ? parse_errmsg :
-		  recognized_mnemonic ?
-		  _("unrecognized form of instruction") :
-		  _("unrecognized instruction"));
-
-    if (strlen (start) > 50)
-      /* xgettext:c-format */
-      sprintf (errbuf, "%s `%.50s...'", tmp_errmsg, start);
-    else 
-      /* xgettext:c-format */
-      sprintf (errbuf, "%s `%.50s'", tmp_errmsg, start);
+#ifdef CGEN_VERBOSE_ASSEMBLER_ERRORS
+#define be_verbose 1
 #else
-    if (strlen (start) > 50)
-      /* xgettext:c-format */
-      sprintf (errbuf, _("bad instruction `%.50s...'"), start);
-    else 
-      /* xgettext:c-format */
-      sprintf (errbuf, _("bad instruction `%.50s'"), start);
+#define be_verbose 0
 #endif
+
+    if (be_verbose)
+      {
+	/* If requesting verbose error messages, use insert_errmsg.
+	   Failing that, use parse_errmsg.  */
+	tmp_errmsg = (insert_errmsg ? insert_errmsg :
+		      parse_errmsg ? parse_errmsg :
+		      recognized_mnemonic ?
+		      _("unrecognized form of instruction") :
+		      _("unrecognized instruction"));
+
+	if (strlen (start) > 50)
+	  /* xgettext:c-format */
+	  sprintf (errbuf, "%s `%.50s...'", tmp_errmsg, start);
+	else 
+	  /* xgettext:c-format */
+	  sprintf (errbuf, "%s `%.50s'", tmp_errmsg, start);
+      }
+    else
+      {
+	if (strlen (start) > 50)
+	  /* xgettext:c-format */
+	  sprintf (errbuf, _("bad instruction `%.50s...'"), start);
+	else 
+	  /* xgettext:c-format */
+	  sprintf (errbuf, _("bad instruction `%.50s'"), start);
+      }
       
     *errmsg = errbuf;
     return NULL;
   }
 }
-
-#if 0 /* This calls back to GAS which we can't do without care.  */
-
-/* Record each member of OPVALS in the assembler's symbol table.
-   This lets GAS parse registers for us.
-   ??? Interesting idea but not currently used.  */
-
-/* Record each member of OPVALS in the assembler's symbol table.
-   FIXME: Not currently used.  */
-
-void
-m32r_cgen_asm_hash_keywords (cd, opvals)
-     CGEN_CPU_DESC cd;
-     CGEN_KEYWORD *opvals;
-{
-  CGEN_KEYWORD_SEARCH search = cgen_keyword_search_init (opvals, NULL);
-  const CGEN_KEYWORD_ENTRY * ke;
-
-  while ((ke = cgen_keyword_search_next (& search)) != NULL)
-    {
-#if 0 /* Unnecessary, should be done in the search routine.  */
-      if (! m32r_cgen_opval_supported (ke))
-	continue;
-#endif
-      cgen_asm_record_register (cd, ke->name, ke->value);
-    }
-}
-
-#endif /* 0 */

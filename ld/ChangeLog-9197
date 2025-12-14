@@ -147,11 +147,6 @@ Fri Oct 17 00:00:13 1997  Richard Henderson  <rth@cygnus.com>
 	since we need to be able to export different versions of the same
 	symbol.
 
-Thu Oct 16 13:21:14 1997  Fred Fish  <fnf@ninemoons.com>
-
-	* ldlang.c (new_afile): Only reference amiga_attribute when
-	the target is AmigaOS.
-
 Wed Oct 15 14:52:36 1997  Ian Lance Taylor  <ian@cygnus.com>
 
 	* scripttempl/pe.sc: Put .stab and .stabstr sections at end.
@@ -1288,12 +1283,6 @@ Mon Aug  5 16:26:14 1996  Ian Lance Taylor  <ian@cygnus.com>
 	* ldcref.c (check_nocrossref): Skip symbols with no output
 	sections.
 
-Sun Aug  4 22:15:56 1996  Fred Fish  <fnf@ninemoons.com>
-
-	* ldfile.c (ldfile_open_file_search): Use alloca to allocate
-	dynamically sized array, rather than using a GNU C extension that
-	is not portable.	
-
 Fri Aug  2 14:57:49 1996  Ian Lance Taylor  <ian@cygnus.com>
 
 	* ldgram.y (LOADADDR): New terminal.
@@ -1519,10 +1508,6 @@ Mon Jun 24 12:00:32 1996  Ian Lance Taylor  <ian@cygnus.com>
 	* configure.in: On alpha*-*-osf*, link against libbfd.a if not
 	using shared libraries.
 	* configure: Rebuild with autoconf 2.10.
-
-Sat Jun 22 21:41:37 1996 Daniel Verite <daniel@brainstorm.eu.org>
-
-	* ldfile.c, lexsup.c: Sort the flavors.
 
 Fri Jun 21 17:40:56 1996  Joel Sherrill  <joel@merlin.gcs.redstone.army.mil>
 
@@ -7589,7 +7574,7 @@ Tue Oct  8 16:00:57 1991  Per Bothner  (bothner at cygnus.com)
 	* Makefile.in: Add LIB_PATH macro, which if set is used to replace
 	the SEARCH_DIR commands in the scripts (using ugly sed magic).
 	This is primarily intended for cross-linking, where you would
-	place libaries in a different place than native libraries.
+	place libraries in a different place than native libraries.
 	Also, emulations made from ldtemplate now use $(srcdir).
 	* scripttempl/ldglda29k.sc:  Change SEARCH_DIR commands to a
 	conventional form; people can use the Makefile's LIB_PATH to
@@ -7608,6 +7593,12 @@ Fri Oct  4 21:51:58 1991  John Gilmore  (gnu at cygnus.com)
 	few BFD types & enums.
 
 
+Copyright (C) 1991-1997 Free Software Foundation, Inc.
+
+Copying and distribution of this file, with or without modification,
+are permitted in any medium without royalty provided the copyright
+notice and this notice are preserved.
+
 Local Variables:
 mode: change-log
 left-margin: 8

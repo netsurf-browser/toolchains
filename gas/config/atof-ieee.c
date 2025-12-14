@@ -1,12 +1,12 @@
 /* atof_ieee.c - turn a Flonum into an IEEE floating point number
-   Copyright 1987, 1992, 1994, 1996, 1997, 1998, 1999, 2000, 2001
-   Free Software Foundation, Inc.
+   Copyright 1987, 1992, 1994, 1996, 1997, 1998, 1999, 2000, 2001, 2005,
+   2007, 2009  Free Software Foundation, Inc.
 
    This file is part of GAS, the GNU Assembler.
 
    GAS is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License as published by
-   the Free Software Foundation; either version 2, or (at your option)
+   the Free Software Foundation; either version 3, or (at your option)
    any later version.
 
    GAS is distributed in the hope that it will be useful,
@@ -16,29 +16,25 @@
 
    You should have received a copy of the GNU General Public License
    along with GAS; see the file COPYING.  If not, write to the Free
-   Software Foundation, 59 Temple Place - Suite 330, Boston, MA
-   02111-1307, USA.  */
+   Software Foundation, 51 Franklin Street - Fifth Floor, Boston, MA
+   02110-1301, USA.  */
 
 #include "as.h"
 
 /* Flonums returned here.  */
 extern FLONUM_TYPE generic_floating_point_number;
 
-static int next_bits PARAMS ((int));
-static void unget_bits PARAMS ((int));
-static void make_invalid_floating_point_number PARAMS ((LITTLENUM_TYPE *));
-
 extern const char EXP_CHARS[];
 /* Precision in LittleNums.  */
 /* Don't count the gap in the m68k extended precision format.  */
-#define MAX_PRECISION (5)
-#define F_PRECISION (2)
-#define D_PRECISION (4)
-#define X_PRECISION (5)
-#define P_PRECISION (5)
+#define MAX_PRECISION  5
+#define F_PRECISION    2
+#define D_PRECISION    4
+#define X_PRECISION    5
+#define P_PRECISION    5
 
 /* Length in LittleNums of guard bits.  */
-#define GUARD (2)
+#define GUARD          2
 
 #ifndef TC_LARGEST_EXPONENT_IS_NORMAL
 #define TC_LARGEST_EXPONENT_IS_NORMAL(PRECISION) 0
@@ -86,13 +82,13 @@ static int littlenums_left;
 static LITTLENUM_TYPE *littlenum_pointer;
 
 static int
-next_bits (number_of_bits)
-     int number_of_bits;
+next_bits (int number_of_bits)
 {
   int return_value;
 
   if (!littlenums_left)
-    return (0);
+    return 0;
+
   if (number_of_bits >= bits_left_in_littlenum)
     {
       return_value = mask[bits_left_in_littlenum] & *littlenum_pointer;
@@ -120,8 +116,7 @@ next_bits (number_of_bits)
 /* Num had better be less than LITTLENUM_NUMBER_OF_BITS.  */
 
 static void
-unget_bits (num)
-     int num;
+unget_bits (int num)
 {
   if (!littlenums_left)
     {
@@ -141,8 +136,7 @@ unget_bits (num)
 }
 
 static void
-make_invalid_floating_point_number (words)
-     LITTLENUM_TYPE *words;
+make_invalid_floating_point_number (LITTLENUM_TYPE *words)
 {
   as_bad (_("cannot create floating-point number"));
   /* Zero the leftmost bit.  */
@@ -165,10 +159,9 @@ make_invalid_floating_point_number (words)
 /* Returns pointer past text consumed.  */
 
 char *
-atof_ieee (str, what_kind, words)
-     char *str;			/* Text to convert to binary.  */
-     int what_kind;		/* 'd', 'f', 'g', 'h'.  */
-     LITTLENUM_TYPE *words;	/* Build the binary here.  */
+atof_ieee (char *str,			/* Text to convert to binary.  */
+	   int what_kind,		/* 'd', 'f', 'x', 'p'.  */
+	   LITTLENUM_TYPE *words)	/* Build the binary here.  */
 {
   /* Extra bits for zeroed low-order bits.
      The 1st MAX_PRECISION are zeroed, the last contain flonum bits.  */
@@ -225,7 +218,6 @@ atof_ieee (str, what_kind, words)
 
     case 'p':
     case 'P':
-
       precision = P_PRECISION;
       exponent_bits = -1;
       break;
@@ -242,7 +234,7 @@ atof_ieee (str, what_kind, words)
 		    &generic_floating_point_number))
     {
       make_invalid_floating_point_number (words);
-      return (NULL);
+      return NULL;
     }
   gen_to_words (words, precision, exponent_bits);
 
@@ -256,10 +248,7 @@ atof_ieee (str, what_kind, words)
 /* Turn generic_floating_point_number into a real float/double/extended.  */
 
 int
-gen_to_words (words, precision, exponent_bits)
-     LITTLENUM_TYPE *words;
-     int precision;
-     long exponent_bits;
+gen_to_words (LITTLENUM_TYPE *words, int precision, long exponent_bits)
 {
   int return_value = 0;
 
@@ -296,7 +285,7 @@ gen_to_words (words, precision, exponent_bits)
   if (generic_floating_point_number.sign == 0)
     {
       if (TC_LARGEST_EXPONENT_IS_NORMAL (precision))
-	as_warn ("NaNs are not supported by this target\n");
+	as_warn (_("NaNs are not supported by this target\n"));
       if (precision == F_PRECISION)
 	{
 	  words[0] = 0x7fff;
@@ -335,7 +324,7 @@ gen_to_words (words, precision, exponent_bits)
   else if (generic_floating_point_number.sign == 'P')
     {
       if (TC_LARGEST_EXPONENT_IS_NORMAL (precision))
-	as_warn ("Infinities are not supported by this target\n");
+	as_warn (_("Infinities are not supported by this target\n"));
 
       /* +INF:  Do the right thing.  */
       if (precision == F_PRECISION)
@@ -376,7 +365,7 @@ gen_to_words (words, precision, exponent_bits)
   else if (generic_floating_point_number.sign == 'N')
     {
       if (TC_LARGEST_EXPONENT_IS_NORMAL (precision))
-	as_warn ("Infinities are not supported by this target\n");
+	as_warn (_("Infinities are not supported by this target\n"));
 
       /* Negative INF.  */
       if (precision == F_PRECISION)
@@ -430,7 +419,7 @@ gen_to_words (words, precision, exponent_bits)
 		     - generic_floating_point_number.low);
 
   /* Seek (and forget) 1st significant bit.  */
-  for (exponent_skippage = 0; !next_bits (1); ++exponent_skippage);;
+  for (exponent_skippage = 0; !next_bits (1); ++exponent_skippage);
   exponent_1 = (generic_floating_point_number.exponent
 		+ generic_floating_point_number.leader
 		+ 1
@@ -673,34 +662,10 @@ gen_to_words (words, precision, exponent_bits)
 	     but return a floating exception because we can't encode
 	     the number.  */
 	  *words &= ~(1 << (LITTLENUM_NUMBER_OF_BITS - 1));
-#if 0
-	  make_invalid_floating_point_number (words);
-	  return return_value;
-#endif
 	}
     }
   return return_value;
 }
-
-#if 0
-/* Unused.  */
-/* This routine is a real kludge.  Someone really should do it better,
-   but I'm too lazy, and I don't understand this stuff all too well
-   anyway. (JF)  */
-
-static void
-int_to_gen (x)
-     long x;
-{
-  char buf[20];
-  char *bufp;
-
-  sprintf (buf, "%ld", x);
-  bufp = &buf[0];
-  if (atof_generic (&bufp, ".", EXP_CHARS, &generic_floating_point_number))
-    as_bad (_("Error converting number to floating point (Exponent overflow?)"));
-}
-#endif
 
 #ifdef TEST
 char *
@@ -730,5 +695,119 @@ print_gen (gen)
 
   return (sbuf);
 }
-
 #endif
+
+extern const char FLT_CHARS[];
+#define MAX_LITTLENUMS 6
+
+/* This is a utility function called from various tc-*.c files.  It
+   is here in order to reduce code duplication.
+   
+   Turn a string at input_line_pointer into a floating point constant
+   of type TYPE (a character found in the FLT_CHARS macro), and store
+   it as LITTLENUMS in the bytes buffer LITP.  The number of chars
+   emitted is stored in *SIZEP.  BIG_WORDIAN is TRUE if the littlenums
+   should be emitted most significant littlenum first.
+
+   An error message is returned, or a NULL pointer if everything went OK.  */
+
+char *
+ieee_md_atof (int type,
+	      char *litP,
+	      int *sizeP,
+	      bfd_boolean big_wordian)
+{
+  LITTLENUM_TYPE words[MAX_LITTLENUMS];
+  LITTLENUM_TYPE *wordP;
+  char *t;
+  int prec = 0;
+
+  if (strchr (FLT_CHARS, type) != NULL)
+    {
+      switch (type)
+	{
+	case 'f':
+	case 'F':
+	case 's':
+	case 'S':
+	  prec = F_PRECISION;
+	  break;
+
+	case 'd':
+	case 'D':
+	case 'r':
+	case 'R':
+	  prec = D_PRECISION;
+	  break;
+
+	case 't':
+	case 'T':
+	  prec = X_PRECISION;
+	  type = 'x';		/* This is what atof_ieee() understands.  */
+	  break;
+
+	case 'x':
+	case 'X':
+	case 'p':
+	case 'P':
+#ifdef TC_M68K
+	  /* Note: on the m68k there is a gap of 16 bits (one littlenum)
+	     between the exponent and mantissa.  Hence the precision is
+	     6 and not 5.  */
+	  prec = P_PRECISION + 1;
+#else
+	  prec = P_PRECISION;
+#endif
+	  break;
+
+	default:
+	  break;
+	}
+    }
+  /* The 'f' and 'd' types are always recognised, even if the target has
+     not put them into the FLT_CHARS macro.  This is because the 'f' type
+     can come from the .dc.s, .dcb.s, .float or .single pseudo-ops and the
+     'd' type from the .dc.d, .dbc.d or .double pseudo-ops.
+
+     The 'x' type is not implicitly recongised however, even though it can
+     be generated by the .dc.x and .dbc.x pseudo-ops because not all targets
+     can support floating point values that big.  ie the target has to
+     explicitly allow them by putting them into FLT_CHARS.  */
+  else if (type == 'f')
+    prec = F_PRECISION;
+  else if (type == 'd')
+    prec = D_PRECISION;
+
+  if (prec == 0)
+    {
+      *sizeP = 0;
+      return _("Unrecognized or unsupported floating point constant");
+    }
+
+  gas_assert (prec <= MAX_LITTLENUMS);
+
+  t = atof_ieee (input_line_pointer, type, words);
+  if (t)
+    input_line_pointer = t;
+
+  *sizeP = prec * sizeof (LITTLENUM_TYPE);
+
+  if (big_wordian)
+    {
+      for (wordP = words; prec --;)
+	{
+	  md_number_to_chars (litP, (valueT) (* wordP ++), sizeof (LITTLENUM_TYPE));
+	  litP += sizeof (LITTLENUM_TYPE);
+	}
+    }
+  else
+    {
+      for (wordP = words + prec; prec --;)
+	{
+	  md_number_to_chars (litP, (valueT) (* -- wordP), sizeof (LITTLENUM_TYPE));
+	  litP += sizeof (LITTLENUM_TYPE);
+	}
+    }
+
+  return NULL;
+}

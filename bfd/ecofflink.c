@@ -1,13 +1,13 @@
 /* Routines to link ECOFF debugging information.
-   Copyright 1993, 1994, 1995, 1996, 1997, 2000, 2001, 2002
-   Free Software Foundation, Inc.
+   Copyright 1993, 1994, 1995, 1996, 1997, 1999, 2000, 2001, 2002, 2003,
+   2004, 2005, 2006, 2007, 2008, 2009, 2012  Free Software Foundation, Inc.
    Written by Ian Lance Taylor, Cygnus Support, <ian@cygnus.com>.
 
    This file is part of BFD, the Binary File Descriptor library.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License as published by
-   the Free Software Foundation; either version 2 of the License, or
+   the Free Software Foundation; either version 3 of the License, or
    (at your option) any later version.
 
    This program is distributed in the hope that it will be useful,
@@ -17,10 +17,11 @@
 
    You should have received a copy of the GNU General Public License
    along with this program; if not, write to the Free Software
-   Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.  */
+   Foundation, Inc., 51 Franklin Street - Fifth Floor, Boston,
+   MA 02110-1301, USA.  */
 
-#include "bfd.h"
 #include "sysdep.h"
+#include "bfd.h"
 #include "bfdlink.h"
 #include "libbfd.h"
 #include "objalloc.h"
@@ -32,28 +33,6 @@
 #include "libcoff.h"
 #include "libecoff.h"
 
-static bfd_boolean ecoff_add_bytes
-  PARAMS ((char **buf, char **bufend, size_t need));
-static struct bfd_hash_entry *string_hash_newfunc
-  PARAMS ((struct bfd_hash_entry *, struct bfd_hash_table *,
-	   const char *));
-static void ecoff_align_debug
-  PARAMS ((bfd *abfd, struct ecoff_debug_info *debug,
-	   const struct ecoff_debug_swap *swap));
-static bfd_boolean ecoff_write_symhdr
-  PARAMS ((bfd *, struct ecoff_debug_info *, const struct ecoff_debug_swap *,
-	   file_ptr where));
-static int cmp_fdrtab_entry
-  PARAMS ((const PTR, const PTR));
-static bfd_boolean mk_fdrtab
-  PARAMS ((bfd *, struct ecoff_debug_info * const,
-	   const struct ecoff_debug_swap * const, struct ecoff_find_line *));
-static long fdrtab_lookup
-  PARAMS ((struct ecoff_find_line *, bfd_vma));
-static bfd_boolean lookup_line
-  PARAMS ((bfd *, struct ecoff_debug_info * const,
-	   const struct ecoff_debug_swap * const, struct ecoff_find_line *));
-
 /* Routines to swap auxiliary information in and out.  I am assuming
    that the auxiliary information format is always going to be target
    independent.  */
@@ -63,51 +42,52 @@ static bfd_boolean lookup_line
    info comes from the file header record (fh-fBigendian).  */
 
 void
-_bfd_ecoff_swap_tir_in (bigend, ext_copy, intern)
-     int bigend;
-     const struct tir_ext *ext_copy;
-     TIR *intern;
+_bfd_ecoff_swap_tir_in (int bigend, const struct tir_ext *ext_copy,
+			TIR *intern)
 {
   struct tir_ext ext[1];
 
   *ext = *ext_copy;		/* Make it reasonable to do in-place.  */
 
   /* now the fun stuff...  */
-  if (bigend) {
-    intern->fBitfield   = 0 != (ext->t_bits1[0] & TIR_BITS1_FBITFIELD_BIG);
-    intern->continued   = 0 != (ext->t_bits1[0] & TIR_BITS1_CONTINUED_BIG);
-    intern->bt          = (ext->t_bits1[0] & TIR_BITS1_BT_BIG)
-			>>		    TIR_BITS1_BT_SH_BIG;
-    intern->tq4         = (ext->t_tq45[0] & TIR_BITS_TQ4_BIG)
-			>>		    TIR_BITS_TQ4_SH_BIG;
-    intern->tq5         = (ext->t_tq45[0] & TIR_BITS_TQ5_BIG)
-			>>		    TIR_BITS_TQ5_SH_BIG;
-    intern->tq0         = (ext->t_tq01[0] & TIR_BITS_TQ0_BIG)
-			>>		    TIR_BITS_TQ0_SH_BIG;
-    intern->tq1         = (ext->t_tq01[0] & TIR_BITS_TQ1_BIG)
-			>>		    TIR_BITS_TQ1_SH_BIG;
-    intern->tq2         = (ext->t_tq23[0] & TIR_BITS_TQ2_BIG)
-			>>		    TIR_BITS_TQ2_SH_BIG;
-    intern->tq3         = (ext->t_tq23[0] & TIR_BITS_TQ3_BIG)
-			>>		    TIR_BITS_TQ3_SH_BIG;
-  } else {
-    intern->fBitfield   = 0 != (ext->t_bits1[0] & TIR_BITS1_FBITFIELD_LITTLE);
-    intern->continued   = 0 != (ext->t_bits1[0] & TIR_BITS1_CONTINUED_LITTLE);
-    intern->bt          = (ext->t_bits1[0] & TIR_BITS1_BT_LITTLE)
-			>>		    TIR_BITS1_BT_SH_LITTLE;
-    intern->tq4         = (ext->t_tq45[0] & TIR_BITS_TQ4_LITTLE)
-			>>		    TIR_BITS_TQ4_SH_LITTLE;
-    intern->tq5         = (ext->t_tq45[0] & TIR_BITS_TQ5_LITTLE)
-			>>		    TIR_BITS_TQ5_SH_LITTLE;
-    intern->tq0         = (ext->t_tq01[0] & TIR_BITS_TQ0_LITTLE)
-			>>		    TIR_BITS_TQ0_SH_LITTLE;
-    intern->tq1         = (ext->t_tq01[0] & TIR_BITS_TQ1_LITTLE)
-			>>		    TIR_BITS_TQ1_SH_LITTLE;
-    intern->tq2         = (ext->t_tq23[0] & TIR_BITS_TQ2_LITTLE)
-			>>		    TIR_BITS_TQ2_SH_LITTLE;
-    intern->tq3         = (ext->t_tq23[0] & TIR_BITS_TQ3_LITTLE)
-			>>		    TIR_BITS_TQ3_SH_LITTLE;
-  }
+  if (bigend)
+    {
+      intern->fBitfield   = 0 != (ext->t_bits1[0] & TIR_BITS1_FBITFIELD_BIG);
+      intern->continued   = 0 != (ext->t_bits1[0] & TIR_BITS1_CONTINUED_BIG);
+      intern->bt          = (ext->t_bits1[0] & TIR_BITS1_BT_BIG)
+                          >>                   TIR_BITS1_BT_SH_BIG;
+      intern->tq4         = (ext->t_tq45[0] & TIR_BITS_TQ4_BIG)
+			  >>		      TIR_BITS_TQ4_SH_BIG;
+      intern->tq5         = (ext->t_tq45[0] & TIR_BITS_TQ5_BIG)
+			  >>		      TIR_BITS_TQ5_SH_BIG;
+      intern->tq0         = (ext->t_tq01[0] & TIR_BITS_TQ0_BIG)
+			  >>		      TIR_BITS_TQ0_SH_BIG;
+      intern->tq1         = (ext->t_tq01[0] & TIR_BITS_TQ1_BIG)
+			  >>		      TIR_BITS_TQ1_SH_BIG;
+      intern->tq2         = (ext->t_tq23[0] & TIR_BITS_TQ2_BIG)
+			  >>		      TIR_BITS_TQ2_SH_BIG;
+      intern->tq3         = (ext->t_tq23[0] & TIR_BITS_TQ3_BIG)
+			  >>		      TIR_BITS_TQ3_SH_BIG;
+    }
+  else
+    {
+      intern->fBitfield   = 0 != (ext->t_bits1[0] & TIR_BITS1_FBITFIELD_LITTLE);
+      intern->continued   = 0 != (ext->t_bits1[0] & TIR_BITS1_CONTINUED_LITTLE);
+      intern->bt          = (ext->t_bits1[0] & TIR_BITS1_BT_LITTLE)
+			  >>		    TIR_BITS1_BT_SH_LITTLE;
+      intern->tq4         = (ext->t_tq45[0] & TIR_BITS_TQ4_LITTLE)
+			  >>		    TIR_BITS_TQ4_SH_LITTLE;
+      intern->tq5         = (ext->t_tq45[0] & TIR_BITS_TQ5_LITTLE)
+			  >>		    TIR_BITS_TQ5_SH_LITTLE;
+      intern->tq0         = (ext->t_tq01[0] & TIR_BITS_TQ0_LITTLE)
+			  >>		    TIR_BITS_TQ0_SH_LITTLE;
+      intern->tq1         = (ext->t_tq01[0] & TIR_BITS_TQ1_LITTLE)
+			  >>		    TIR_BITS_TQ1_SH_LITTLE;
+      intern->tq2         = (ext->t_tq23[0] & TIR_BITS_TQ2_LITTLE)
+			  >>		    TIR_BITS_TQ2_SH_LITTLE;
+      intern->tq3         = (ext->t_tq23[0] & TIR_BITS_TQ3_LITTLE)
+			  >>		    TIR_BITS_TQ3_SH_LITTLE;
+    }
 
 #ifdef TEST
   if (memcmp ((char *)ext, (char *)intern, sizeof (*intern)) != 0)
@@ -120,51 +100,53 @@ _bfd_ecoff_swap_tir_in (bigend, ext_copy, intern)
    info comes from the file header record (fh-fBigendian).  */
 
 void
-_bfd_ecoff_swap_tir_out (bigend, intern_copy, ext)
-     int bigend;
-     const TIR *intern_copy;
-     struct tir_ext *ext;
+_bfd_ecoff_swap_tir_out (int bigend,
+			 const TIR *intern_copy,
+			 struct tir_ext *ext)
 {
   TIR intern[1];
 
   *intern = *intern_copy;	/* Make it reasonable to do in-place.  */
 
   /* now the fun stuff...  */
-  if (bigend) {
-    ext->t_bits1[0] = ((intern->fBitfield ? TIR_BITS1_FBITFIELD_BIG : 0)
+  if (bigend)
+    {
+      ext->t_bits1[0] = ((intern->fBitfield ? TIR_BITS1_FBITFIELD_BIG : 0)
 		       | (intern->continued ? TIR_BITS1_CONTINUED_BIG : 0)
 		       | ((intern->bt << TIR_BITS1_BT_SH_BIG)
 			  & TIR_BITS1_BT_BIG));
-    ext->t_tq45[0] = (((intern->tq4 << TIR_BITS_TQ4_SH_BIG)
+      ext->t_tq45[0] = (((intern->tq4 << TIR_BITS_TQ4_SH_BIG)
 		       & TIR_BITS_TQ4_BIG)
 		      | ((intern->tq5 << TIR_BITS_TQ5_SH_BIG)
 			 & TIR_BITS_TQ5_BIG));
-    ext->t_tq01[0] = (((intern->tq0 << TIR_BITS_TQ0_SH_BIG)
+      ext->t_tq01[0] = (((intern->tq0 << TIR_BITS_TQ0_SH_BIG)
 		       & TIR_BITS_TQ0_BIG)
 		      | ((intern->tq1 << TIR_BITS_TQ1_SH_BIG)
 			 & TIR_BITS_TQ1_BIG));
-    ext->t_tq23[0] = (((intern->tq2 << TIR_BITS_TQ2_SH_BIG)
+      ext->t_tq23[0] = (((intern->tq2 << TIR_BITS_TQ2_SH_BIG)
 		       & TIR_BITS_TQ2_BIG)
 		      | ((intern->tq3 << TIR_BITS_TQ3_SH_BIG)
 			 & TIR_BITS_TQ3_BIG));
-  } else {
-    ext->t_bits1[0] = ((intern->fBitfield ? TIR_BITS1_FBITFIELD_LITTLE : 0)
+    }
+  else
+    {
+      ext->t_bits1[0] = ((intern->fBitfield ? TIR_BITS1_FBITFIELD_LITTLE : 0)
 		       | (intern->continued ? TIR_BITS1_CONTINUED_LITTLE : 0)
 		       | ((intern->bt << TIR_BITS1_BT_SH_LITTLE)
 			  & TIR_BITS1_BT_LITTLE));
-    ext->t_tq45[0] = (((intern->tq4 << TIR_BITS_TQ4_SH_LITTLE)
+      ext->t_tq45[0] = (((intern->tq4 << TIR_BITS_TQ4_SH_LITTLE)
 		       & TIR_BITS_TQ4_LITTLE)
 		      | ((intern->tq5 << TIR_BITS_TQ5_SH_LITTLE)
 			 & TIR_BITS_TQ5_LITTLE));
-    ext->t_tq01[0] = (((intern->tq0 << TIR_BITS_TQ0_SH_LITTLE)
+      ext->t_tq01[0] = (((intern->tq0 << TIR_BITS_TQ0_SH_LITTLE)
 		       & TIR_BITS_TQ0_LITTLE)
 		      | ((intern->tq1 << TIR_BITS_TQ1_SH_LITTLE)
 			 & TIR_BITS_TQ1_LITTLE));
-    ext->t_tq23[0] = (((intern->tq2 << TIR_BITS_TQ2_SH_LITTLE)
+      ext->t_tq23[0] = (((intern->tq2 << TIR_BITS_TQ2_SH_LITTLE)
 		       & TIR_BITS_TQ2_LITTLE)
 		      | ((intern->tq3 << TIR_BITS_TQ3_SH_LITTLE)
 			 & TIR_BITS_TQ3_LITTLE));
-  }
+    }
 
 #ifdef TEST
   if (memcmp ((char *)ext, (char *)intern, sizeof (*intern)) != 0)
@@ -176,34 +158,36 @@ _bfd_ecoff_swap_tir_out (bigend, intern_copy, ext)
    big-endian or little-endian format.*/
 
 void
-_bfd_ecoff_swap_rndx_in (bigend, ext_copy, intern)
-     int bigend;
-     const struct rndx_ext *ext_copy;
-     RNDXR *intern;
+_bfd_ecoff_swap_rndx_in (int bigend,
+			 const struct rndx_ext *ext_copy,
+			 RNDXR *intern)
 {
   struct rndx_ext ext[1];
 
   *ext = *ext_copy;		/* Make it reasonable to do in-place.  */
 
   /* now the fun stuff...  */
-  if (bigend) {
-    intern->rfd   = (ext->r_bits[0] << RNDX_BITS0_RFD_SH_LEFT_BIG)
+  if (bigend)
+    {
+      intern->rfd   = (ext->r_bits[0] << RNDX_BITS0_RFD_SH_LEFT_BIG)
 		  | ((ext->r_bits[1] & RNDX_BITS1_RFD_BIG)
 		    		    >> RNDX_BITS1_RFD_SH_BIG);
-    intern->index = ((ext->r_bits[1] & RNDX_BITS1_INDEX_BIG)
+      intern->index = ((ext->r_bits[1] & RNDX_BITS1_INDEX_BIG)
 		    		    << RNDX_BITS1_INDEX_SH_LEFT_BIG)
 		  | (ext->r_bits[2] << RNDX_BITS2_INDEX_SH_LEFT_BIG)
 		  | (ext->r_bits[3] << RNDX_BITS3_INDEX_SH_LEFT_BIG);
-  } else {
-    intern->rfd   = (ext->r_bits[0] << RNDX_BITS0_RFD_SH_LEFT_LITTLE)
+    }
+  else
+    {
+      intern->rfd   = (ext->r_bits[0] << RNDX_BITS0_RFD_SH_LEFT_LITTLE)
 		  | ((ext->r_bits[1] & RNDX_BITS1_RFD_LITTLE)
 		    		    << RNDX_BITS1_RFD_SH_LEFT_LITTLE);
-    intern->index = ((ext->r_bits[1] & RNDX_BITS1_INDEX_LITTLE)
+      intern->index = ((ext->r_bits[1] & RNDX_BITS1_INDEX_LITTLE)
 		    		    >> RNDX_BITS1_INDEX_SH_LITTLE)
 		  | (ext->r_bits[2] << RNDX_BITS2_INDEX_SH_LEFT_LITTLE)
 		  | ((unsigned int) ext->r_bits[3]
 		     << RNDX_BITS3_INDEX_SH_LEFT_LITTLE);
-  }
+    }
 
 #ifdef TEST
   if (memcmp ((char *)ext, (char *)intern, sizeof (*intern)) != 0)
@@ -215,33 +199,35 @@ _bfd_ecoff_swap_rndx_in (bigend, ext_copy, intern)
    big-endian or little-endian format.*/
 
 void
-_bfd_ecoff_swap_rndx_out (bigend, intern_copy, ext)
-     int bigend;
-     const RNDXR *intern_copy;
-     struct rndx_ext *ext;
+_bfd_ecoff_swap_rndx_out (int bigend,
+			  const RNDXR *intern_copy,
+			  struct rndx_ext *ext)
 {
   RNDXR intern[1];
 
   *intern = *intern_copy;	/* Make it reasonable to do in-place.  */
 
   /* now the fun stuff...  */
-  if (bigend) {
-    ext->r_bits[0] = intern->rfd >> RNDX_BITS0_RFD_SH_LEFT_BIG;
-    ext->r_bits[1] = (((intern->rfd << RNDX_BITS1_RFD_SH_BIG)
+  if (bigend)
+    {
+      ext->r_bits[0] = intern->rfd >> RNDX_BITS0_RFD_SH_LEFT_BIG;
+      ext->r_bits[1] = (((intern->rfd << RNDX_BITS1_RFD_SH_BIG)
 		       & RNDX_BITS1_RFD_BIG)
 		      | ((intern->index >> RNDX_BITS1_INDEX_SH_LEFT_BIG)
 			 & RNDX_BITS1_INDEX_BIG));
-    ext->r_bits[2] = intern->index >> RNDX_BITS2_INDEX_SH_LEFT_BIG;
-    ext->r_bits[3] = intern->index >> RNDX_BITS3_INDEX_SH_LEFT_BIG;
-  } else {
-    ext->r_bits[0] = intern->rfd >> RNDX_BITS0_RFD_SH_LEFT_LITTLE;
-    ext->r_bits[1] = (((intern->rfd >> RNDX_BITS1_RFD_SH_LEFT_LITTLE)
+      ext->r_bits[2] = intern->index >> RNDX_BITS2_INDEX_SH_LEFT_BIG;
+      ext->r_bits[3] = intern->index >> RNDX_BITS3_INDEX_SH_LEFT_BIG;
+    }
+  else
+    {
+      ext->r_bits[0] = intern->rfd >> RNDX_BITS0_RFD_SH_LEFT_LITTLE;
+      ext->r_bits[1] = (((intern->rfd >> RNDX_BITS1_RFD_SH_LEFT_LITTLE)
 		       & RNDX_BITS1_RFD_LITTLE)
 		      | ((intern->index << RNDX_BITS1_INDEX_SH_LITTLE)
 			 & RNDX_BITS1_INDEX_LITTLE));
-    ext->r_bits[2] = intern->index >> RNDX_BITS2_INDEX_SH_LEFT_LITTLE;
-    ext->r_bits[3] = intern->index >> RNDX_BITS3_INDEX_SH_LEFT_LITTLE;
-  }
+      ext->r_bits[2] = intern->index >> RNDX_BITS2_INDEX_SH_LEFT_LITTLE;
+      ext->r_bits[3] = intern->index >> RNDX_BITS3_INDEX_SH_LEFT_LITTLE;
+    }
 
 #ifdef TEST
   if (memcmp ((char *)ext, (char *)intern, sizeof (*intern)) != 0)
@@ -255,10 +241,7 @@ _bfd_ecoff_swap_rndx_out (bigend, intern_copy, ext)
 /* Add bytes to a buffer.  Return success.  */
 
 static bfd_boolean
-ecoff_add_bytes (buf, bufend, need)
-     char **buf;
-     char **bufend;
-     size_t need;
+ecoff_add_bytes (char **buf, char **bufend, size_t need)
 {
   size_t have;
   size_t want;
@@ -302,10 +285,9 @@ struct string_hash_table
 /* Routine to create an entry in a string hash table.  */
 
 static struct bfd_hash_entry *
-string_hash_newfunc (entry, table, string)
-     struct bfd_hash_entry *entry;
-     struct bfd_hash_table *table;
-     const char *string;
+string_hash_newfunc (struct bfd_hash_entry *entry,
+		     struct bfd_hash_table *table,
+		     const char *string)
 {
   struct string_hash_entry *ret = (struct string_hash_entry *) entry;
 
@@ -359,7 +341,7 @@ struct shuffle
 	  file_ptr offset;
 	} file;
       /* The data to be written out.  */
-      PTR memory;
+      void * memory;
     } u;
 };
 
@@ -401,18 +383,13 @@ struct accumulate
 
 /* Add a file entry to a shuffle list.  */
 
-static bfd_boolean add_file_shuffle
-  PARAMS ((struct accumulate *, struct shuffle **, struct shuffle **,
-	   bfd *, file_ptr, unsigned long));
-
 static bfd_boolean
-add_file_shuffle (ainfo, head, tail, input_bfd, offset, size)
-     struct accumulate *ainfo;
-     struct shuffle **head;
-     struct shuffle **tail;
-     bfd *input_bfd;
-     file_ptr offset;
-     unsigned long size;
+add_file_shuffle (struct accumulate *ainfo,
+		  struct shuffle **head,
+		  struct shuffle **tail,
+		  bfd *input_bfd,
+		  file_ptr offset,
+		  unsigned long size)
 {
   struct shuffle *n;
 
@@ -452,17 +429,12 @@ add_file_shuffle (ainfo, head, tail, input_bfd, offset, size)
 
 /* Add a memory entry to a shuffle list.  */
 
-static bfd_boolean add_memory_shuffle
-  PARAMS ((struct accumulate *, struct shuffle **head, struct shuffle **tail,
-	   bfd_byte *data, unsigned long size));
-
 static bfd_boolean
-add_memory_shuffle (ainfo, head, tail, data, size)
-     struct accumulate *ainfo;
-     struct shuffle **head;
-     struct shuffle **tail;
-     bfd_byte *data;
-     unsigned long size;
+add_memory_shuffle (struct accumulate *ainfo,
+		    struct shuffle **head,
+		    struct shuffle **tail,
+		    bfd_byte *data,
+		    unsigned long size)
 {
   struct shuffle *n;
 
@@ -476,7 +448,7 @@ add_memory_shuffle (ainfo, head, tail, data, size)
   n->next = NULL;
   n->size = size;
   n->filep = FALSE;
-  n->u.memory = (PTR) data;
+  n->u.memory = data;
   if (*head == (struct shuffle *) NULL)
     *head = n;
   if (*tail != (struct shuffle *) NULL)
@@ -488,12 +460,11 @@ add_memory_shuffle (ainfo, head, tail, data, size)
 /* Initialize the FDR hash table.  This returns a handle which is then
    passed in to bfd_ecoff_debug_accumulate, et. al.  */
 
-PTR
-bfd_ecoff_debug_init (output_bfd, output_debug, output_swap, info)
-     bfd *output_bfd ATTRIBUTE_UNUSED;
-     struct ecoff_debug_info *output_debug;
-     const struct ecoff_debug_swap *output_swap ATTRIBUTE_UNUSED;
-     struct bfd_link_info *info;
+void *
+bfd_ecoff_debug_init (bfd *output_bfd ATTRIBUTE_UNUSED,
+		      struct ecoff_debug_info *output_debug,
+		      const struct ecoff_debug_swap *output_swap ATTRIBUTE_UNUSED,
+		      struct bfd_link_info *info)
 {
   struct accumulate *ainfo;
   bfd_size_type amt = sizeof (struct accumulate);
@@ -501,8 +472,8 @@ bfd_ecoff_debug_init (output_bfd, output_debug, output_swap, info)
   ainfo = (struct accumulate *) bfd_malloc (amt);
   if (!ainfo)
     return NULL;
-  if (! bfd_hash_table_init_n (&ainfo->fdr_hash.table, string_hash_newfunc,
-			       1021))
+  if (!bfd_hash_table_init_n (&ainfo->fdr_hash.table, string_hash_newfunc,
+			      sizeof (struct string_hash_entry), 1021))
     return NULL;
 
   ainfo->line = NULL;
@@ -526,9 +497,10 @@ bfd_ecoff_debug_init (output_bfd, output_debug, output_swap, info)
 
   ainfo->largest_file_shuffle = 0;
 
-  if (! info->relocateable)
+  if (! info->relocatable)
     {
-      if (! bfd_hash_table_init (&ainfo->str_hash.table, string_hash_newfunc))
+      if (!bfd_hash_table_init (&ainfo->str_hash.table, string_hash_newfunc,
+				sizeof (struct string_hash_entry)))
 	return NULL;
 
       /* The first entry in the string table is the empty string.  */
@@ -542,24 +514,23 @@ bfd_ecoff_debug_init (output_bfd, output_debug, output_swap, info)
       return NULL;
     }
 
-  return (PTR) ainfo;
+  return ainfo;
 }
 
 /* Free the accumulated debugging information.  */
 
 void
-bfd_ecoff_debug_free (handle, output_bfd, output_debug, output_swap, info)
-     PTR handle;
-     bfd *output_bfd ATTRIBUTE_UNUSED;
-     struct ecoff_debug_info *output_debug ATTRIBUTE_UNUSED;
-     const struct ecoff_debug_swap *output_swap ATTRIBUTE_UNUSED;
-     struct bfd_link_info *info;
+bfd_ecoff_debug_free (void * handle,
+		      bfd *output_bfd ATTRIBUTE_UNUSED,
+		      struct ecoff_debug_info *output_debug ATTRIBUTE_UNUSED,
+		      const struct ecoff_debug_swap *output_swap ATTRIBUTE_UNUSED,
+		      struct bfd_link_info *info)
 {
   struct accumulate *ainfo = (struct accumulate *) handle;
 
   bfd_hash_table_free (&ainfo->fdr_hash.table);
 
-  if (! info->relocateable)
+  if (! info->relocatable)
     bfd_hash_table_free (&ainfo->str_hash.table);
 
   objalloc_free (ainfo->memory);
@@ -576,28 +547,25 @@ bfd_ecoff_debug_free (handle, output_bfd, output_debug, output_swap, info)
    bfd_ecoff_debug_init.  */
 
 bfd_boolean
-bfd_ecoff_debug_accumulate (handle, output_bfd, output_debug, output_swap,
-			    input_bfd, input_debug, input_swap,
-			    info)
-     PTR handle;
-     bfd *output_bfd;
-     struct ecoff_debug_info *output_debug;
-     const struct ecoff_debug_swap *output_swap;
-     bfd *input_bfd;
-     struct ecoff_debug_info *input_debug;
-     const struct ecoff_debug_swap *input_swap;
-     struct bfd_link_info *info;
+bfd_ecoff_debug_accumulate (void * handle,
+			    bfd *output_bfd,
+			    struct ecoff_debug_info *output_debug,
+			    const struct ecoff_debug_swap *output_swap,
+			    bfd *input_bfd,
+			    struct ecoff_debug_info *input_debug,
+			    const struct ecoff_debug_swap *input_swap,
+			    struct bfd_link_info *info)
 {
   struct accumulate *ainfo = (struct accumulate *) handle;
-  void (* const swap_sym_in) PARAMS ((bfd *, PTR, SYMR *))
+  void (* const swap_sym_in) (bfd *, void *, SYMR *)
     = input_swap->swap_sym_in;
-  void (* const swap_rfd_in) PARAMS ((bfd *, PTR, RFDT *))
+  void (* const swap_rfd_in) (bfd *, void *, RFDT *)
     = input_swap->swap_rfd_in;
-  void (* const swap_sym_out) PARAMS ((bfd *, const SYMR *, PTR))
+  void (* const swap_sym_out) (bfd *, const SYMR *, void *)
     = output_swap->swap_sym_out;
-  void (* const swap_fdr_out) PARAMS ((bfd *, const FDR *, PTR))
+  void (* const swap_fdr_out) (bfd *, const FDR *, void *)
     = output_swap->swap_fdr_out;
-  void (* const swap_rfd_out) PARAMS ((bfd *, const RFDT *, PTR))
+  void (* const swap_rfd_out) (bfd *, const RFDT *, void *)
     = output_swap->swap_rfd_out;
   bfd_size_type external_pdr_size = output_swap->external_pdr_size;
   bfd_size_type external_sym_size = output_swap->external_sym_size;
@@ -625,7 +593,7 @@ bfd_ecoff_debug_accumulate (handle, output_bfd, output_debug, output_swap,
 
   /* Use section_adjust to hold the value to add to a symbol in a
      particular section.  */
-  memset ((PTR) section_adjust, 0, sizeof section_adjust);
+  memset (section_adjust, 0, sizeof section_adjust);
 
 #define SET(name, indx) \
   sec = bfd_get_section_by_name (input_bfd, name); \
@@ -695,7 +663,7 @@ bfd_ecoff_debug_accumulate (handle, output_bfd, output_debug, output_swap,
       if (input_debug->fdr != (FDR *) NULL)
 	fdr = *(FDR *) fdr_ptr;
       else
-	(*input_swap->swap_fdr_in) (input_bfd, (PTR) fdr_ptr, &fdr);
+	(*input_swap->swap_fdr_in) (input_bfd, fdr_ptr, &fdr);
 
       /* See if this FDR can be merged with an existing one.  */
       if (fdr.cbLine == 0 && fdr.rss != -1 && fdr.fMerge)
@@ -716,7 +684,8 @@ bfd_ecoff_debug_accumulate (handle, output_bfd, output_debug, output_swap,
 	  lookup = (char *) bfd_malloc ((bfd_size_type) strlen (name) + 20);
 	  if (lookup == NULL)
 	    return FALSE;
-	  sprintf (lookup, "%s %lx %lx", name, fdr.csym, fdr.caux);
+	  sprintf (lookup, "%s %lx %lx", name, (unsigned long) fdr.csym,
+		   (unsigned long) fdr.caux);
 
 	  fh = string_hash_lookup (&ainfo->fdr_hash, lookup, TRUE, TRUE);
 	  free (lookup);
@@ -726,8 +695,7 @@ bfd_ecoff_debug_accumulate (handle, output_bfd, output_debug, output_swap,
 	  if (fh->val != -1)
 	    {
 	      input_debug->ifdmap[i] = fh->val;
-	      (*swap_rfd_out) (output_bfd, input_debug->ifdmap + i,
-			       (PTR) rfd_out);
+	      (*swap_rfd_out) (output_bfd, input_debug->ifdmap + i, rfd_out);
 
 	      /* Don't copy this FDR.  */
 	      continue;
@@ -737,7 +705,7 @@ bfd_ecoff_debug_accumulate (handle, output_bfd, output_debug, output_swap,
 	}
 
       input_debug->ifdmap[i] = output_symhdr->ifdMax + copied;
-      (*swap_rfd_out) (output_bfd, input_debug->ifdmap + i, (PTR) rfd_out);
+      (*swap_rfd_out) (output_bfd, input_debug->ifdmap + i, rfd_out);
       ++copied;
     }
 
@@ -755,10 +723,10 @@ bfd_ecoff_debug_accumulate (handle, output_bfd, output_debug, output_swap,
     {
       RFDT rfd;
 
-      (*swap_rfd_in) (input_bfd, (PTR) rfd_in, &rfd);
+      (*swap_rfd_in) (input_bfd, rfd_in, &rfd);
       BFD_ASSERT (rfd >= 0 && rfd < input_symhdr->ifdMax);
       rfd = input_debug->ifdmap[rfd];
-      (*swap_rfd_out) (output_bfd, &rfd, (PTR) rfd_out);
+      (*swap_rfd_out) (output_bfd, &rfd, rfd_out);
       rfd_out += external_rfd_size;
     }
 
@@ -781,7 +749,6 @@ bfd_ecoff_debug_accumulate (handle, output_bfd, output_debug, output_swap,
        fdr_ptr += fdr_add, i++)
     {
       FDR fdr;
-      bfd_vma fdr_adr;
       bfd_byte *sym_out;
       bfd_byte *lraw_src;
       bfd_byte *lraw_end;
@@ -796,23 +763,7 @@ bfd_ecoff_debug_accumulate (handle, output_bfd, output_debug, output_swap,
       if (input_debug->fdr != (FDR *) NULL)
 	fdr = *(FDR *) fdr_ptr;
       else
-	(*input_swap->swap_fdr_in) (input_bfd, (PTR) fdr_ptr, &fdr);
-
-      fdr_adr = fdr.adr;
-
-      /* Adjust the FDR address for any changes that may have been
-	 made by relaxing.  */
-      if (input_debug->adjust != (struct ecoff_value_adjust *) NULL)
-	{
-	  struct ecoff_value_adjust *adjust;
-
-	  for (adjust = input_debug->adjust;
-	       adjust != (struct ecoff_value_adjust *) NULL;
-	       adjust = adjust->next)
-	    if (fdr_adr >= adjust->start
-		&& fdr_adr < adjust->end)
-	      fdr.adr += adjust->adjust;
-	}
+	(*input_swap->swap_fdr_in) (input_bfd, fdr_ptr, &fdr);
 
       /* FIXME: It is conceivable that this FDR points to the .init or
 	 .fini section, in which case this will not do the right
@@ -839,7 +790,7 @@ bfd_ecoff_debug_accumulate (handle, output_bfd, output_debug, output_swap,
 	{
 	  SYMR internal_sym;
 
-	  (*swap_sym_in) (input_bfd, (PTR) lraw_src, &internal_sym);
+	  (*swap_sym_in) (input_bfd, lraw_src, &internal_sym);
 
 	  BFD_ASSERT (internal_sym.sc != scCommon
 		      && internal_sym.sc != scSCommon);
@@ -856,19 +807,6 @@ bfd_ecoff_debug_accumulate (handle, output_bfd, output_debug, output_swap,
 	    case stLabel:
 	    case stProc:
 	    case stStaticProc:
-	      if (input_debug->adjust != (struct ecoff_value_adjust *) NULL)
-		{
-		  bfd_vma value;
-		  struct ecoff_value_adjust *adjust;
-
-		  value = internal_sym.value;
-		  for (adjust = input_debug->adjust;
-		       adjust != (struct ecoff_value_adjust *) NULL;
-		       adjust = adjust->next)
-		    if (value >= adjust->start
-			&& value < adjust->end)
-		      internal_sym.value += adjust->adjust;
-		}
 	      internal_sym.value += section_adjust[internal_sym.sc];
 	      break;
 
@@ -879,9 +817,9 @@ bfd_ecoff_debug_accumulate (handle, output_bfd, output_debug, output_swap,
 	  /* If we are doing a final link, we hash all the strings in
 	     the local symbol table together.  This reduces the amount
 	     of space required by debugging information.  We don't do
-	     this when performing a relocateable link because it would
+	     this when performing a relocatable link because it would
 	     prevent us from easily merging different FDR's.  */
-	  if (! info->relocateable)
+	  if (! info->relocatable)
 	    {
 	      bfd_boolean ffilename;
 	      const char *name;
@@ -958,7 +896,7 @@ bfd_ecoff_debug_accumulate (handle, output_bfd, output_debug, output_swap,
 	  fdr.iauxBase = output_symhdr->iauxMax;
 	  output_symhdr->iauxMax += fdr.caux;
 	}
-      if (! info->relocateable)
+      if (! info->relocatable)
 	{
 
 	  /* When are are hashing strings, we lie about the number of
@@ -978,9 +916,8 @@ bfd_ecoff_debug_accumulate (handle, output_bfd, output_debug, output_swap,
 	  output_symhdr->issMax += fdr.cbSs;
 	}
 
-      if ((output_bfd->xvec->header_byteorder
-	   == input_bfd->xvec->header_byteorder)
-	  && input_debug->adjust == (struct ecoff_value_adjust *) NULL)
+      if (output_bfd->xvec->header_byteorder
+	  == input_bfd->xvec->header_byteorder)
 	{
 	  /* The two BFD's have the same endianness, and we don't have
 	     to adjust the PDR addresses, so simply copying the
@@ -1035,25 +972,8 @@ bfd_ecoff_debug_accumulate (handle, output_bfd, output_debug, output_swap,
 	    {
 	      PDR pdr;
 
-	      (*input_swap->swap_pdr_in) (input_bfd, (PTR) in, &pdr);
-
-	      /* If we have been relaxing, we may have to adjust the
-		 address.  */
-	      if (input_debug->adjust != (struct ecoff_value_adjust *) NULL)
-		{
-		  bfd_vma adr;
-		  struct ecoff_value_adjust *adjust;
-
-		  adr = fdr_adr + pdr.adr;
-		  for (adjust = input_debug->adjust;
-		       adjust != (struct ecoff_value_adjust *) NULL;
-		       adjust = adjust->next)
-		    if (adr >= adjust->start
-			&& adr < adjust->end)
-		      pdr.adr += adjust->adjust;
-		}
-
-	      (*output_swap->swap_pdr_out) (output_bfd, &pdr, (PTR) out);
+	      (*input_swap->swap_pdr_in) (input_bfd, in, &pdr);
+	      (*output_swap->swap_pdr_out) (output_bfd, &pdr, out);
 	    }
 
 	  /* Swap over the optimization information.  */
@@ -1076,8 +996,8 @@ bfd_ecoff_debug_accumulate (handle, output_bfd, output_debug, output_swap,
 	    {
 	      OPTR opt;
 
-	      (*input_swap->swap_opt_in) (input_bfd, (PTR) in, &opt);
-	      (*output_swap->swap_opt_out) (output_bfd, &opt, (PTR) out);
+	      (*input_swap->swap_opt_in) (input_bfd, in, &opt);
+	      (*output_swap->swap_opt_out) (output_bfd, &opt, out);
 	    }
 	}
 
@@ -1109,17 +1029,12 @@ bfd_ecoff_debug_accumulate (handle, output_bfd, output_debug, output_swap,
 /* Add a string to the debugging information we are accumulating.
    Return the offset from the fdr string base.  */
 
-static long ecoff_add_string
-  PARAMS ((struct accumulate *, struct bfd_link_info *,
-	   struct ecoff_debug_info *, FDR *fdr, const char *string));
-
 static long
-ecoff_add_string (ainfo, info, debug, fdr, string)
-     struct accumulate *ainfo;
-     struct bfd_link_info *info;
-     struct ecoff_debug_info *debug;
-     FDR *fdr;
-     const char *string;
+ecoff_add_string (struct accumulate *ainfo,
+		  struct bfd_link_info *info,
+		  struct ecoff_debug_info *debug,
+		  FDR *fdr,
+		  const char *string)
 {
   HDRR *symhdr;
   size_t len;
@@ -1127,10 +1042,10 @@ ecoff_add_string (ainfo, info, debug, fdr, string)
 
   symhdr = &debug->symbolic_header;
   len = strlen (string);
-  if (info->relocateable)
+  if (info->relocatable)
     {
-      if (!add_memory_shuffle (ainfo, &ainfo->ss, &ainfo->ss_end, (PTR) string,
-			       len + 1))
+      if (!add_memory_shuffle (ainfo, &ainfo->ss, &ainfo->ss_end,
+                               (bfd_byte *) string, len + 1))
 	return -1;
       ret = symhdr->issMax;
       symhdr->issMax += len + 1;
@@ -1163,17 +1078,15 @@ ecoff_add_string (ainfo, info, debug, fdr, string)
 /* Add debugging information from a non-ECOFF file.  */
 
 bfd_boolean
-bfd_ecoff_debug_accumulate_other (handle, output_bfd, output_debug,
-				  output_swap, input_bfd, info)
-     PTR handle;
-     bfd *output_bfd;
-     struct ecoff_debug_info *output_debug;
-     const struct ecoff_debug_swap *output_swap;
-     bfd *input_bfd;
-     struct bfd_link_info *info;
+bfd_ecoff_debug_accumulate_other (void * handle,
+				  bfd *output_bfd,
+				  struct ecoff_debug_info *output_debug,
+				  const struct ecoff_debug_swap *output_swap,
+				  bfd *input_bfd,
+				  struct bfd_link_info *info)
 {
   struct accumulate *ainfo = (struct accumulate *) handle;
-  void (* const swap_sym_out) PARAMS ((bfd *, const SYMR *, PTR))
+  void (* const swap_sym_out) (bfd *, const SYMR *, void *)
     = output_swap->swap_sym_out;
   HDRR *output_symhdr = &output_debug->symbolic_header;
   FDR fdr;
@@ -1183,9 +1096,9 @@ bfd_ecoff_debug_accumulate_other (handle, output_bfd, output_debug,
   asymbol **sym_end;
   long symsize;
   long symcount;
-  PTR external_fdr;
+  void * external_fdr;
 
-  memset ((PTR) &fdr, 0, sizeof fdr);
+  memset (&fdr, 0, sizeof fdr);
 
   sec = bfd_get_section_by_name (input_bfd, ".text");
   if (sec != NULL)
@@ -1199,7 +1112,7 @@ bfd_ecoff_debug_accumulate_other (handle, output_bfd, output_debug,
   fdr.issBase = output_symhdr->issMax;
   fdr.cbSs = 0;
   fdr.rss = ecoff_add_string (ainfo, info, output_debug, &fdr,
-			      bfd_archive_filename (input_bfd));
+			      input_bfd->filename);
   if (fdr.rss == -1)
     return FALSE;
   fdr.isymBase = output_symhdr->isymMax;
@@ -1222,11 +1135,11 @@ bfd_ecoff_debug_accumulate_other (handle, output_bfd, output_debug,
   for (sym_ptr = symbols; sym_ptr != sym_end; sym_ptr++)
     {
       SYMR internal_sym;
-      PTR external_sym;
+      void * external_sym;
 
       if (((*sym_ptr)->flags & BSF_EXPORT) != 0)
 	continue;
-      memset ((PTR) &internal_sym, 0, sizeof internal_sym);
+      memset (&internal_sym, 0, sizeof internal_sym);
       internal_sym.iss = ecoff_add_string (ainfo, info, output_debug, &fdr,
 					   (*sym_ptr)->name);
 
@@ -1243,8 +1156,8 @@ bfd_ecoff_debug_accumulate_other (handle, output_bfd, output_debug,
       internal_sym.sc = scUndefined;
       internal_sym.index = indexNil;
 
-      external_sym = (PTR) objalloc_alloc (ainfo->memory,
-					   output_swap->external_sym_size);
+      external_sym = objalloc_alloc (ainfo->memory,
+				     output_swap->external_sym_size);
       if (!external_sym)
 	{
 	  bfd_set_error (bfd_error_no_memory);
@@ -1252,20 +1165,20 @@ bfd_ecoff_debug_accumulate_other (handle, output_bfd, output_debug,
 	}
       (*swap_sym_out) (output_bfd, &internal_sym, external_sym);
       add_memory_shuffle (ainfo, &ainfo->sym, &ainfo->sym_end,
-			  external_sym,
+			  (bfd_byte *) external_sym,
 			  (unsigned long) output_swap->external_sym_size);
       ++fdr.csym;
       ++output_symhdr->isymMax;
     }
 
-  bfd_release (output_bfd, (PTR) symbols);
+  bfd_release (output_bfd, symbols);
 
   /* Leave everything else in the FDR zeroed out.  This will cause
      the lang field to be langC.  The fBigendian field will
      indicate little endian format, but it doesn't matter because
      it only applies to aux fields and there are none.  */
-  external_fdr = (PTR) objalloc_alloc (ainfo->memory,
-				       output_swap->external_fdr_size);
+  external_fdr = objalloc_alloc (ainfo->memory,
+				 output_swap->external_fdr_size);
   if (!external_fdr)
     {
       bfd_set_error (bfd_error_no_memory);
@@ -1273,7 +1186,7 @@ bfd_ecoff_debug_accumulate_other (handle, output_bfd, output_debug,
     }
   (*output_swap->swap_fdr_out) (output_bfd, &fdr, external_fdr);
   add_memory_shuffle (ainfo, &ainfo->fdr, &ainfo->fdr_end,
-		      external_fdr,
+		      (bfd_byte *) external_fdr,
 		      (unsigned long) output_swap->external_fdr_size);
 
   ++output_symhdr->ifdMax;
@@ -1287,14 +1200,12 @@ bfd_ecoff_debug_accumulate_other (handle, output_bfd, output_debug,
    this interface, so that must be changed to do something else.  */
 
 bfd_boolean
-bfd_ecoff_debug_externals (abfd, debug, swap, relocateable, get_extr,
-			   set_index)
-     bfd *abfd;
-     struct ecoff_debug_info *debug;
-     const struct ecoff_debug_swap *swap;
-     bfd_boolean relocateable;
-     bfd_boolean (*get_extr) PARAMS ((asymbol *, EXTR *));
-     void (*set_index) PARAMS ((asymbol *, bfd_size_type));
+bfd_ecoff_debug_externals (bfd *abfd,
+			   struct ecoff_debug_info *debug,
+			   const struct ecoff_debug_swap *swap,
+			   bfd_boolean relocatable,
+			   bfd_boolean (*get_extr) (asymbol *, EXTR *),
+			   void (*set_index) (asymbol *, bfd_size_type))
 {
   HDRR * const symhdr = &debug->symbolic_header;
   asymbol **sym_ptr_ptr;
@@ -1317,7 +1228,7 @@ bfd_ecoff_debug_externals (abfd, debug, swap, relocateable, get_extr,
 
       /* If we're producing an executable, move common symbols into
 	 bss.  */
-      if (! relocateable)
+      if (! relocatable)
 	{
 	  if (esym.asym.sc == scCommon)
 	    esym.asym.sc = scBss;
@@ -1356,15 +1267,14 @@ bfd_ecoff_debug_externals (abfd, debug, swap, relocateable, get_extr,
 /* Add a single external symbol to the debugging information.  */
 
 bfd_boolean
-bfd_ecoff_debug_one_external (abfd, debug, swap, name, esym)
-     bfd *abfd;
-     struct ecoff_debug_info *debug;
-     const struct ecoff_debug_swap *swap;
-     const char *name;
-     EXTR *esym;
+bfd_ecoff_debug_one_external (bfd *abfd,
+			      struct ecoff_debug_info *debug,
+			      const struct ecoff_debug_swap *swap,
+			      const char *name,
+			      EXTR *esym)
 {
   const bfd_size_type external_ext_size = swap->external_ext_size;
-  void (* const swap_ext_out) PARAMS ((bfd *, const EXTR *, PTR))
+  void (* const swap_ext_out) (bfd *, const EXTR *, void *)
     = swap->swap_ext_out;
   HDRR * const symhdr = &debug->symbolic_header;
   size_t namelen;
@@ -1383,10 +1293,14 @@ bfd_ecoff_debug_one_external (abfd, debug, swap, name, esym)
 		- (char *) debug->external_ext)
       < (symhdr->iextMax + 1) * external_ext_size)
     {
-      if (! ecoff_add_bytes ((char **) &debug->external_ext,
-			     (char **) &debug->external_ext_end,
+      char *external_ext = (char *) debug->external_ext;
+      char *external_ext_end = (char *) debug->external_ext_end;
+      if (! ecoff_add_bytes ((char **) &external_ext,
+			     (char **) &external_ext_end,
 			     (symhdr->iextMax + 1) * (size_t) external_ext_size))
 	return FALSE;
+      debug->external_ext = external_ext;
+      debug->external_ext_end = external_ext_end;
     }
 
   esym->asym.iss = symhdr->issExtMax;
@@ -1406,10 +1320,9 @@ bfd_ecoff_debug_one_external (abfd, debug, swap, name, esym)
 /* Align the ECOFF debugging information.  */
 
 static void
-ecoff_align_debug (abfd, debug, swap)
-     bfd *abfd ATTRIBUTE_UNUSED;
-     struct ecoff_debug_info *debug;
-     const struct ecoff_debug_swap *swap;
+ecoff_align_debug (bfd *abfd ATTRIBUTE_UNUSED,
+		   struct ecoff_debug_info *debug,
+		   const struct ecoff_debug_swap *swap)
 {
   HDRR * const symhdr = &debug->symbolic_header;
   bfd_size_type debug_align, aux_align, rfd_align;
@@ -1424,7 +1337,7 @@ ecoff_align_debug (abfd, debug, swap)
   if (add != debug_align)
     {
       if (debug->line != (unsigned char *) NULL)
-	memset ((PTR) (debug->line + symhdr->cbLine), 0, add);
+	memset ((debug->line + symhdr->cbLine), 0, add);
       symhdr->cbLine += add;
     }
 
@@ -1432,7 +1345,7 @@ ecoff_align_debug (abfd, debug, swap)
   if (add != debug_align)
     {
       if (debug->ss != (char *) NULL)
-	memset ((PTR) (debug->ss + symhdr->issMax), 0, add);
+	memset ((debug->ss + symhdr->issMax), 0, add);
       symhdr->issMax += add;
     }
 
@@ -1440,7 +1353,7 @@ ecoff_align_debug (abfd, debug, swap)
   if (add != debug_align)
     {
       if (debug->ssext != (char *) NULL)
-	memset ((PTR) (debug->ssext + symhdr->issExtMax), 0, add);
+	memset ((debug->ssext + symhdr->issExtMax), 0, add);
       symhdr->issExtMax += add;
     }
 
@@ -1448,7 +1361,7 @@ ecoff_align_debug (abfd, debug, swap)
   if (add != aux_align)
     {
       if (debug->external_aux != (union aux_ext *) NULL)
-	memset ((PTR) (debug->external_aux + symhdr->iauxMax), 0,
+	memset ((debug->external_aux + symhdr->iauxMax), 0,
 		add * sizeof (union aux_ext));
       symhdr->iauxMax += add;
     }
@@ -1456,9 +1369,9 @@ ecoff_align_debug (abfd, debug, swap)
   add = rfd_align - (symhdr->crfd & (rfd_align - 1));
   if (add != rfd_align)
     {
-      if (debug->external_rfd != (PTR) NULL)
-	memset ((PTR) ((char *) debug->external_rfd
-		       + symhdr->crfd * swap->external_rfd_size),
+      if (debug->external_rfd != NULL)
+	memset (((char *) debug->external_rfd
+		 + symhdr->crfd * swap->external_rfd_size),
 		0, (size_t) (add * swap->external_rfd_size));
       symhdr->crfd += add;
     }
@@ -1467,10 +1380,9 @@ ecoff_align_debug (abfd, debug, swap)
 /* Return the size required by the ECOFF debugging information.  */
 
 bfd_size_type
-bfd_ecoff_debug_size (abfd, debug, swap)
-     bfd *abfd;
-     struct ecoff_debug_info *debug;
-     const struct ecoff_debug_swap *swap;
+bfd_ecoff_debug_size (bfd *abfd,
+		      struct ecoff_debug_info *debug,
+		      const struct ecoff_debug_swap *swap)
 {
   bfd_size_type tot;
 
@@ -1502,11 +1414,10 @@ bfd_ecoff_debug_size (abfd, debug, swap)
    correctly.  */
 
 static bfd_boolean
-ecoff_write_symhdr (abfd, debug, swap, where)
-     bfd *abfd;
-     struct ecoff_debug_info *debug;
-     const struct ecoff_debug_swap *swap;
-     file_ptr where;
+ecoff_write_symhdr (bfd *abfd,
+		    struct ecoff_debug_info *debug,
+		    const struct ecoff_debug_swap *swap,
+		    file_ptr where)
 {
   HDRR * const symhdr = &debug->symbolic_header;
   char *buff = NULL;
@@ -1544,7 +1455,7 @@ ecoff_write_symhdr (abfd, debug, swap, where)
   SET (cbExtOffset, iextMax, swap->external_ext_size);
 #undef SET
 
-  buff = (PTR) bfd_malloc (swap->external_hdr_size);
+  buff = (char *) bfd_malloc (swap->external_hdr_size);
   if (buff == NULL && swap->external_hdr_size != 0)
     goto error_return;
 
@@ -1569,11 +1480,10 @@ ecoff_write_symhdr (abfd, debug, swap, where)
    symbolic header.  */
 
 bfd_boolean
-bfd_ecoff_write_debug (abfd, debug, swap, where)
-     bfd *abfd;
-     struct ecoff_debug_info *debug;
-     const struct ecoff_debug_swap *swap;
-     file_ptr where;
+bfd_ecoff_write_debug (bfd *abfd,
+		       struct ecoff_debug_info *debug,
+		       const struct ecoff_debug_swap *swap,
+		       file_ptr where)
 {
   HDRR * const symhdr = &debug->symbolic_header;
 
@@ -1583,7 +1493,7 @@ bfd_ecoff_write_debug (abfd, debug, swap, where)
 #define WRITE(ptr, count, size, offset) \
   BFD_ASSERT (symhdr->offset == 0 \
 	      || (bfd_vma) bfd_tell (abfd) == symhdr->offset); \
-  if (bfd_bwrite ((PTR) debug->ptr, (bfd_size_type) size * symhdr->count, abfd)\
+  if (bfd_bwrite (debug->ptr, (bfd_size_type) size * symhdr->count, abfd)\
       != size * symhdr->count) \
     return FALSE;
 
@@ -1606,18 +1516,14 @@ bfd_ecoff_write_debug (abfd, debug, swap, where)
 
 /* Write out a shuffle list.  */
 
-static bfd_boolean ecoff_write_shuffle
-  PARAMS ((bfd *, const struct ecoff_debug_swap *, struct shuffle *,
-	   PTR space));
 
 static bfd_boolean
-ecoff_write_shuffle (abfd, swap, shuffle, space)
-     bfd *abfd;
-     const struct ecoff_debug_swap *swap;
-     struct shuffle *shuffle;
-     PTR space;
+ecoff_write_shuffle (bfd *abfd,
+		     const struct ecoff_debug_swap *swap,
+		     struct shuffle *shuffle,
+		     void * space)
 {
-  register struct shuffle *l;
+  struct shuffle *l;
   unsigned long total;
 
   total = 0;
@@ -1650,7 +1556,7 @@ ecoff_write_shuffle (abfd, swap, shuffle, space)
       if (s == NULL && i != 0)
 	return FALSE;
 
-      if (bfd_bwrite ((PTR) s, (bfd_size_type) i, abfd) != i)
+      if (bfd_bwrite (s, (bfd_size_type) i, abfd) != i)
 	{
 	  free (s);
 	  return FALSE;
@@ -1665,23 +1571,22 @@ ecoff_write_shuffle (abfd, swap, shuffle, space)
    information.  */
 
 bfd_boolean
-bfd_ecoff_write_accumulated_debug (handle, abfd, debug, swap, info, where)
-     PTR handle;
-     bfd *abfd;
-     struct ecoff_debug_info *debug;
-     const struct ecoff_debug_swap *swap;
-     struct bfd_link_info *info;
-     file_ptr where;
+bfd_ecoff_write_accumulated_debug (void * handle,
+				   bfd *abfd,
+				   struct ecoff_debug_info *debug,
+				   const struct ecoff_debug_swap *swap,
+				   struct bfd_link_info *info,
+				   file_ptr where)
 {
   struct accumulate *ainfo = (struct accumulate *) handle;
-  PTR space = NULL;
+  void * space = NULL;
   bfd_size_type amt;
 
   if (! ecoff_write_symhdr (abfd, debug, swap, where))
     goto error_return;
 
   amt = ainfo->largest_file_shuffle;
-  space = (PTR) bfd_malloc (amt);
+  space = bfd_malloc (amt);
   if (space == NULL && ainfo->largest_file_shuffle != 0)
     goto error_return;
 
@@ -1694,7 +1599,7 @@ bfd_ecoff_write_accumulated_debug (handle, abfd, debug, swap, info, where)
 
   /* The string table is written out from the hash table if this is a
      final link.  */
-  if (info->relocateable)
+  if (info->relocatable)
     {
       BFD_ASSERT (ainfo->ss_hash == (struct string_hash_entry *) NULL);
       if (! ecoff_write_shuffle (abfd, swap, ainfo->ss, space))
@@ -1708,7 +1613,7 @@ bfd_ecoff_write_accumulated_debug (handle, abfd, debug, swap, info, where)
 
       BFD_ASSERT (ainfo->ss == (struct shuffle *) NULL);
       null = 0;
-      if (bfd_bwrite ((PTR) &null, (bfd_size_type) 1, abfd) != 1)
+      if (bfd_bwrite (&null, (bfd_size_type) 1, abfd) != 1)
 	goto error_return;
       total = 1;
       BFD_ASSERT (ainfo->ss_hash == NULL || ainfo->ss_hash->val == 1);
@@ -1720,7 +1625,7 @@ bfd_ecoff_write_accumulated_debug (handle, abfd, debug, swap, info, where)
 
 	  len = strlen (sh->root.string);
 	  amt = len + 1;
-	  if (bfd_bwrite ((PTR) sh->root.string, amt, abfd) != amt)
+	  if (bfd_bwrite (sh->root.string, amt, abfd) != amt)
 	    goto error_return;
 	  total += len + 1;
 	}
@@ -1735,7 +1640,7 @@ bfd_ecoff_write_accumulated_debug (handle, abfd, debug, swap, info, where)
 	  if (s == NULL && i != 0)
 	    goto error_return;
 
-	  if (bfd_bwrite ((PTR) s, (bfd_size_type) i, abfd) != i)
+	  if (bfd_bwrite (s, (bfd_size_type) i, abfd) != i)
 	    {
 	      free (s);
 	      goto error_return;
@@ -1760,7 +1665,7 @@ bfd_ecoff_write_accumulated_debug (handle, abfd, debug, swap, info, where)
       if (s == NULL && i != 0)
 	goto error_return;
 
-      if (bfd_bwrite ((PTR) s, (bfd_size_type) i, abfd) != i)
+      if (bfd_bwrite (s, (bfd_size_type) i, abfd) != i)
 	{
 	  free (s);
 	  goto error_return;
@@ -1796,9 +1701,7 @@ bfd_ecoff_write_accumulated_debug (handle, abfd, debug, swap, info, where)
 /* Compare FDR entries.  This is called via qsort.  */
 
 static int
-cmp_fdrtab_entry (leftp, rightp)
-     const PTR leftp;
-     const PTR rightp;
+cmp_fdrtab_entry (const void * leftp, const void * rightp)
 {
   const struct ecoff_fdrtab_entry *lp =
     (const struct ecoff_fdrtab_entry *) leftp;
@@ -1819,11 +1722,10 @@ cmp_fdrtab_entry (leftp, rightp)
    search.  */
 
 static bfd_boolean
-mk_fdrtab (abfd, debug_info, debug_swap, line_info)
-     bfd *abfd;
-     struct ecoff_debug_info * const debug_info;
-     const struct ecoff_debug_swap * const debug_swap;
-     struct ecoff_find_line *line_info;
+mk_fdrtab (bfd *abfd,
+	   struct ecoff_debug_info * const debug_info,
+	   const struct ecoff_debug_swap * const debug_swap,
+	   struct ecoff_find_line *line_info)
 {
   struct ecoff_fdrtab_entry *tab;
   FDR *fdr_ptr;
@@ -1884,24 +1786,9 @@ mk_fdrtab (abfd, debug_info, debug_swap, line_info)
 	     addresses do not equal the FDR vma, but they (the PDR address)
 	     are still vma's and not offsets.  Cf. comments in
 	     'lookup_line'.  */
-#if 0
-	    bfd_size_type external_pdr_size;
-	    char *pdr_ptr;
-	    PDR pdr;
-	    
-	    external_pdr_size = debug_swap->external_pdr_size;
-	    
-	    pdr_ptr = ((char *) debug_info->external_pdr
-	              + fdr_ptr->ipdFirst * external_pdr_size);
-	    (*debug_swap->swap_pdr_in) (abfd, (PTR) pdr_ptr, &pdr);
 	  /* The address of the first PDR is the offset of that
 	     procedure relative to the beginning of file FDR.  */
-	    tab->base_addr = fdr_ptr->adr - pdr.adr;
-#else
-	  /* The address of the first PDR is the offset of that
-	     procedure relative to the beginning of file FDR.  */
-	  tab->base_addr = fdr_ptr->adr; 
-#endif
+	  tab->base_addr = fdr_ptr->adr;
 	}
       else
 	{
@@ -1917,7 +1804,7 @@ mk_fdrtab (abfd, debug_info, debug_swap, line_info)
      The table is mostly sorted already, but there are cases (e.g.,
      static functions in include files), where this does not hold.
      Use "odump -PFv" to verify...  */
-  qsort ((PTR) line_info->fdrtab, (size_t) len,
+  qsort (line_info->fdrtab, (size_t) len,
 	 sizeof (struct ecoff_fdrtab_entry), cmp_fdrtab_entry);
 
   return TRUE;
@@ -1926,9 +1813,7 @@ mk_fdrtab (abfd, debug_info, debug_swap, line_info)
 /* Return index of first FDR that covers to OFFSET.  */
 
 static long
-fdrtab_lookup (line_info, offset)
-     struct ecoff_find_line *line_info;
-     bfd_vma offset;
+fdrtab_lookup (struct ecoff_find_line *line_info, bfd_vma offset)
 {
   long low, high, len;
   long mid = -1;
@@ -1976,11 +1861,10 @@ fdrtab_lookup (line_info, offset)
    LINE_INFO->cache.  */
 
 static bfd_boolean
-lookup_line (abfd, debug_info, debug_swap, line_info)
-     bfd *abfd;
-     struct ecoff_debug_info * const debug_info;
-     const struct ecoff_debug_swap * const debug_swap;
-     struct ecoff_find_line *line_info;
+lookup_line (bfd *abfd,
+	     struct ecoff_debug_info * const debug_info,
+	     const struct ecoff_debug_swap * const debug_swap,
+	     struct ecoff_find_line *line_info)
 {
   struct ecoff_fdrtab_entry *tab;
   bfd_vma offset;
@@ -2003,11 +1887,11 @@ lookup_line (abfd, debug_info, debug_swap, line_info)
   i = fdrtab_lookup (line_info, offset);
   if (i < 0)
     return FALSE;		/* no FDR, no fun...  */
-  
+
   /* eraxxon: 'fdrtab_lookup' doesn't give what we want, at least for Compaq's
      C++ compiler 6.2.  Consider three FDRs with starting addresses of x, y,
      and z, respectively, such that x < y < z.  Assume further that
-     y < 'offset' < z.  It is possble at times that the PDR for 'offset' is
+     y < 'offset' < z.  It is possible at times that the PDR for 'offset' is
      associated with FDR x and *not* with FDR y.  Erg!!
 
      From a binary dump of my C++ test case 'moo' using Compaq's coffobjanl
@@ -2030,7 +1914,7 @@ lookup_line (abfd, debug_info, debug_swap, line_info)
 
      Since the FDRs that are causing so much havok (in this case) 1) do not
      describe actual files (fdr.rss == -1), and 2) contain only compiler
-     genarated routines, I thought a simple fix would be to exclude them from
+     generated routines, I thought a simple fix would be to exclude them from
      the FDR table in 'mk_fdrtab'.  But, besides not knowing for certain
      whether this would be correct, it creates an additional problem.  If we
      happen to ask for source file info on a compiler generated (procedure)
@@ -2160,11 +2044,6 @@ lookup_line (abfd, debug_info, debug_swap, line_info)
          considerably, which is undesirable.  */
       external_pdr_size = debug_swap->external_pdr_size;
 
-#if 0 /* eraxxon: PDR addresses (pdr.adr) are not relative to FDRs!
-	 Leave 'offset' alone.  */
-      /* Make offset relative to object file's start-address.  */
-      offset -= tab[i].base_addr;
-#endif
       /* eraxxon: The Horrible Hack: Because of the problems above, set 'i'
 	 to 0 so we look through all FDRs.
 
@@ -2173,7 +2052,7 @@ lookup_line (abfd, debug_info, debug_swap, line_info)
 	 read stabs FDRs as ECOFF ones.  However, I don't think this will
 	 harm anything.  */
       i = 0;
-      
+
       /* Search FDR list starting at tab[i] for the PDR that best matches
          OFFSET.  Normally, the FDR list is only one entry long.  */
       best_fdr = NULL;
@@ -2191,7 +2070,7 @@ lookup_line (abfd, debug_info, debug_swap, line_info)
 	  pdr_ptr = ((char *) debug_info->external_pdr
 		     + fdr_ptr->ipdFirst * external_pdr_size);
 	  pdr_end = pdr_ptr + fdr_ptr->cpd * external_pdr_size;
-	  (*debug_swap->swap_pdr_in) (abfd, (PTR) pdr_ptr, &pdr);
+	  (*debug_swap->swap_pdr_in) (abfd, pdr_ptr, &pdr);
 	  /* Find PDR that is closest to OFFSET.  If pdr.prof is set,
 	     the procedure entry-point *may* be 0x10 below pdr.adr.  We
 	     simply pretend that pdr.prof *implies* a lower entry-point.
@@ -2200,7 +2079,7 @@ lookup_line (abfd, debug_info, debug_swap, line_info)
 	  for (pdr_hold = NULL;
 	       pdr_ptr < pdr_end;
 	       (pdr_ptr += external_pdr_size,
-		(*debug_swap->swap_pdr_in) (abfd, (PTR) pdr_ptr, &pdr)))
+		(*debug_swap->swap_pdr_in) (abfd, pdr_ptr, &pdr)))
 	    {
 	      if (offset >= (pdr.adr - 0x10 * pdr.prof))
 		{
@@ -2218,7 +2097,7 @@ lookup_line (abfd, debug_info, debug_swap, line_info)
 
 	  if (!best_pdr || (min_dist >= 0 && min_dist < best_dist))
 	    {
-	      best_dist = (bfd_vma) min_dist;  
+	      best_dist = (bfd_vma) min_dist;
 	      best_fdr = fdr_ptr;
 	      best_pdr = pdr_hold;
 	    }
@@ -2234,7 +2113,7 @@ lookup_line (abfd, debug_info, debug_swap, line_info)
       /* Phew, finally we got something that we can hold onto.  */
       fdr_ptr = best_fdr;
       pdr_ptr = best_pdr;
-      (*debug_swap->swap_pdr_in) (abfd, (PTR) pdr_ptr, &pdr);
+      (*debug_swap->swap_pdr_in) (abfd, pdr_ptr, &pdr);
       /* Now we can look for the actual line number.  The line numbers
          are stored in a very funky format, which I won't try to
          describe.  The search is bounded by the end of the FDRs line
@@ -2479,17 +2358,15 @@ lookup_line (abfd, debug_info, debug_swap, line_info)
 /* Do the work of find_nearest_line.  */
 
 bfd_boolean
-_bfd_ecoff_locate_line (abfd, section, offset, debug_info, debug_swap,
-			line_info, filename_ptr, functionname_ptr, retline_ptr)
-     bfd *abfd;
-     asection *section;
-     bfd_vma offset;
-     struct ecoff_debug_info * const debug_info;
-     const struct ecoff_debug_swap * const debug_swap;
-     struct ecoff_find_line *line_info;
-     const char **filename_ptr;
-     const char **functionname_ptr;
-     unsigned int *retline_ptr;
+_bfd_ecoff_locate_line (bfd *abfd,
+			asection *section,
+			bfd_vma offset,
+			struct ecoff_debug_info * const debug_info,
+			const struct ecoff_debug_swap * const debug_swap,
+			struct ecoff_find_line *line_info,
+			const char **filename_ptr,
+			const char **functionname_ptr,
+			unsigned int *retline_ptr)
 {
   offset += section->vma;
 
@@ -2525,13 +2402,8 @@ _bfd_ecoff_locate_line (abfd, section, offset, debug_info, debug_swap,
 
 /* Collect a shuffle into a memory buffer.  */
 
-static bfd_boolean ecoff_collect_shuffle
-  PARAMS ((struct shuffle *, bfd_byte *));
-
 static bfd_boolean
-ecoff_collect_shuffle (l, buff)
-     struct shuffle *l;
-     bfd_byte *buff;
+ecoff_collect_shuffle (struct shuffle *l, bfd_byte *buff)
 {
   unsigned long total;
 
@@ -2557,9 +2429,8 @@ ecoff_collect_shuffle (l, buff)
 /* Copy PDR information into a memory buffer.  */
 
 bfd_boolean
-_bfd_ecoff_get_accumulated_pdr (handle, buff)
-     PTR handle;
-     bfd_byte *buff;
+_bfd_ecoff_get_accumulated_pdr (void * handle,
+				bfd_byte *buff)
 {
   struct accumulate *ainfo = (struct accumulate *) handle;
 
@@ -2569,9 +2440,7 @@ _bfd_ecoff_get_accumulated_pdr (handle, buff)
 /* Copy symbol information into a memory buffer.  */
 
 bfd_boolean
-_bfd_ecoff_get_accumulated_sym (handle, buff)
-     PTR handle;
-     bfd_byte *buff;
+_bfd_ecoff_get_accumulated_sym (void * handle, bfd_byte *buff)
 {
   struct accumulate *ainfo = (struct accumulate *) handle;
 
@@ -2581,9 +2450,7 @@ _bfd_ecoff_get_accumulated_sym (handle, buff)
 /* Copy the string table into a memory buffer.  */
 
 bfd_boolean
-_bfd_ecoff_get_accumulated_ss (handle, buff)
-     PTR handle;
-     bfd_byte *buff;
+_bfd_ecoff_get_accumulated_ss (void * handle, bfd_byte *buff)
 {
   struct accumulate *ainfo = (struct accumulate *) handle;
   struct string_hash_entry *sh;
@@ -2602,7 +2469,7 @@ _bfd_ecoff_get_accumulated_ss (handle, buff)
       size_t len;
 
       len = strlen (sh->root.string);
-      memcpy (buff, (PTR) sh->root.string, len + 1);
+      memcpy (buff, sh->root.string, len + 1);
       total += len + 1;
       buff += len + 1;
     }

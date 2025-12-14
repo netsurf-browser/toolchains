@@ -1,11 +1,11 @@
 /* SH ELF support for BFD.
-   Copyright 2003 Free Software Foundation, Inc.
+   Copyright 2003, 2005, 2007 Free Software Foundation, Inc.
 
    This file is part of BFD, the Binary File Descriptor library.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License as published by
-   the Free Software Foundation; either version 2 of the License, or
+   the Free Software Foundation; either version 3 of the License, or
    (at your option) any later version.
 
    This program is distributed in the hope that it will be useful,
@@ -15,7 +15,7 @@
 
    You should have received a copy of the GNU General Public License
    along with this program; if not, write to the Free Software Foundation,
-   Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.  */
+   Inc., 51 Franklin Street - Fifth Floor, Boston, MA 02110-1301, USA.  */
 
 #ifndef ELF32_SH64_H
 #define ELF32_SH64_H
@@ -51,16 +51,21 @@ typedef struct {
 
 /* Get the contents type of an arbitrary address, or return CRT_NONE.  */
 extern enum sh64_elf_cr_type sh64_get_contents_type
-  PARAMS ((asection *, bfd_vma, sh64_elf_crange *));
+  (asection *, bfd_vma, sh64_elf_crange *);
 
 /* Simpler interface.
    FIXME: This seems redundant now that we export the interface above.  */
-extern bfd_boolean sh64_address_is_shmedia PARAMS ((asection *, bfd_vma));
+extern bfd_boolean sh64_address_is_shmedia
+  (asection *, bfd_vma);
 
-extern int _bfd_sh64_crange_qsort_cmpb PARAMS ((const void *, const void *));
-extern int _bfd_sh64_crange_qsort_cmpl PARAMS ((const void *, const void *));
-extern int _bfd_sh64_crange_bsearch_cmpb PARAMS ((const void *, const void *));
-extern int _bfd_sh64_crange_bsearch_cmpl PARAMS ((const void *, const void *));
+extern int _bfd_sh64_crange_qsort_cmpb
+  (const void *, const void *);
+extern int _bfd_sh64_crange_qsort_cmpl
+  (const void *, const void *);
+extern int _bfd_sh64_crange_bsearch_cmpb
+  (const void *, const void *);
+extern int _bfd_sh64_crange_bsearch_cmpl
+  (const void *, const void *);
 
 struct sh64_section_data
 {

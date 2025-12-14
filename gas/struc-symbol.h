@@ -1,12 +1,12 @@
 /* struct_symbol.h - Internal symbol structure
-   Copyright 1987, 1992, 1993, 1994, 1995, 1998, 1999, 2000, 2001
-   Free Software Foundation, Inc.
+   Copyright 1987, 1992, 1993, 1994, 1995, 1998, 1999, 2000, 2001, 2005,
+   2007, 2008, 2009 Free Software Foundation, Inc.
 
    This file is part of GAS, the GNU Assembler.
 
    GAS is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License as published by
-   the Free Software Foundation; either version 2, or (at your option)
+   the Free Software Foundation; either version 3, or (at your option)
    any later version.
 
    GAS is distributed in the hope that it will be useful,
@@ -16,61 +16,28 @@
 
    You should have received a copy of the GNU General Public License
    along with GAS; see the file COPYING.  If not, write to the Free
-   Software Foundation, 59 Temple Place - Suite 330, Boston, MA
-   02111-1307, USA.  */
+   Software Foundation, 51 Franklin Street - Fifth Floor, Boston, MA
+   02110-1301, USA.  */
 
 #ifndef __struc_symbol_h__
 #define __struc_symbol_h__
 
-#ifdef BFD_ASSEMBLER
-/* The BFD code wants to walk the list in both directions.  */
-#undef  SYMBOLS_NEED_BACKPOINTERS
-#define SYMBOLS_NEED_BACKPOINTERS
-#endif
-
-/* The information we keep for a symbol.  Note that the symbol table
-   holds pointers both to this and to local_symbol structures.  See
-   below.  */
-
-struct symbol
+struct symbol_flags
 {
-#ifdef BFD_ASSEMBLER
-  /* BFD symbol */
-  asymbol *bsym;
-#else
-  /* The (4-origin) position of sy_name in the symbol table of the object
-     file.  This will be 0 for (nameless) .stabd symbols.
+  /* Wether the symbol is a local_symbol.  */
+  unsigned int sy_local_symbol : 1;
 
-     Not used until write_object_file() time.  */
-  unsigned long sy_name_offset;
+  /* Wether symbol has been written.  */
+  unsigned int sy_written : 1;
 
-  /* What we write in .o file (if permitted).  */
-  obj_symbol_type sy_symbol;
-
-  /* The 24 bit symbol number.  Symbol numbers start at 0 and are unsigned.  */
-  long sy_number;
-#endif
-
-  /* The value of the symbol.  */
-  expressionS sy_value;
-
-  /* Forwards and (optionally) backwards chain pointers.  */
-  struct symbol *sy_next;
-#ifdef SYMBOLS_NEED_BACKPOINTERS
-  struct symbol *sy_previous;
-#endif /* SYMBOLS_NEED_BACKPOINTERS */
-
-  /* Pointer to the frag this symbol is attached to, if any.
-     Otherwise, NULL.  */
-  struct frag *sy_frag;
-
-  unsigned int written : 1;
   /* Whether symbol value has been completely resolved (used during
      final pass over symbol table).  */
   unsigned int sy_resolved : 1;
+
   /* Whether the symbol value is currently being resolved (used to
      detect loops in symbol dependencies).  */
   unsigned int sy_resolving : 1;
+
   /* Whether the symbol value is used in a reloc.  This is used to
      ensure that symbols used in relocs are written out, even if they
      are local and would otherwise not be.  */
@@ -82,11 +49,50 @@ struct symbol
      a symbol is used in backend routines.  */
   unsigned int sy_used : 1;
 
+  /* Whether the symbol can be re-defined.  */
+  unsigned int sy_volatile : 1;
+
+  /* Whether the symbol is a forward reference.  */
+  unsigned int sy_forward_ref : 1;
+
   /* This is set if the symbol is defined in an MRI common section.
      We handle such sections as single common symbols, so symbols
      defined within them must be treated specially by the relocation
      routines.  */
   unsigned int sy_mri_common : 1;
+
+  /* This is set if the symbol is set with a .weakref directive.  */
+  unsigned int sy_weakrefr : 1;
+
+  /* This is set when the symbol is referenced as part of a .weakref
+     directive, but only if the symbol was not in the symbol table
+     before.  It is cleared as soon as any direct reference to the
+     symbol is present.  */
+  unsigned int sy_weakrefd : 1;
+};
+
+/* The information we keep for a symbol.  Note that the symbol table
+   holds pointers both to this and to local_symbol structures.  See
+   below.  */
+
+struct symbol
+{
+  /* Symbol flags.  */
+  struct symbol_flags sy_flags;
+
+  /* BFD symbol */
+  asymbol *bsym;
+
+  /* The value of the symbol.  */
+  expressionS sy_value;
+
+  /* Forwards and (optionally) backwards chain pointers.  */
+  struct symbol *sy_next;
+  struct symbol *sy_previous;
+
+  /* Pointer to the frag this symbol is attached to, if any.
+     Otherwise, NULL.  */
+  struct frag *sy_frag;
 
 #ifdef OBJ_SYMFIELD_TYPE
   OBJ_SYMFIELD_TYPE sy_obj;
@@ -101,8 +107,6 @@ struct symbol
 #endif
 };
 
-#ifdef BFD_ASSEMBLER
-
 /* A pointer in the symbol may point to either a complete symbol
    (struct symbol above) or to a local symbol (struct local_symbol
    defined here).  The symbol code can detect the case by examining
@@ -116,9 +120,8 @@ struct symbol
 
 struct local_symbol
 {
-  /* This pointer is always NULL to indicate that this is a local
-     symbol.  */
-  asymbol *lsy_marker;
+  /* Symbol flags.  Only sy_local_symbol and sy_resolved are relevant.  */
+  struct symbol_flags lsy_flags;
 
   /* The symbol section.  This also serves as a flag.  If this is
      reg_section, then this symbol has been converted into a regular
@@ -129,8 +132,7 @@ struct local_symbol
   const char *lsy_name;
 
   /* The symbol frag or the real symbol, depending upon the value in
-     lsy_section.  If the symbol has been fully resolved, lsy_frag is
-     set to NULL.  */
+     lsy_section.  */
   union
   {
     fragS *lsy_frag;
@@ -147,13 +149,11 @@ struct local_symbol
 
 #define local_symbol_converted_p(l) ((l)->lsy_section == reg_section)
 #define local_symbol_mark_converted(l) ((l)->lsy_section = reg_section)
-#define local_symbol_resolved_p(l) ((l)->u.lsy_frag == NULL)
-#define local_symbol_mark_resolved(l) ((l)->u.lsy_frag = NULL)
+#define local_symbol_resolved_p(l) ((l)->lsy_flags.sy_resolved)
+#define local_symbol_mark_resolved(l) ((l)->lsy_flags.sy_resolved = 1)
 #define local_symbol_get_frag(l) ((l)->u.lsy_frag)
 #define local_symbol_set_frag(l, f) ((l)->u.lsy_frag = (f))
 #define local_symbol_get_real_symbol(l) ((l)->u.lsy_sym)
 #define local_symbol_set_real_symbol(l, s) ((l)->u.lsy_sym = (s))
-
-#endif /* BFD_ASSEMBLER */
 
 #endif /* __struc_symbol_h__ */
