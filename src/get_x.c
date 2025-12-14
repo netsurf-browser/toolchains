@@ -1,44 +1,64 @@
-/* mpc_get_str -- Convert a complex number into a string.
+/* mpc_get_dc, mpc_get_ldc -- Transform mpc number into C complex number
+   mpc_get_str -- Convert a complex number into a string.
 
-Copyright (C) 2009 Philippe Th\'eveny, Andreas Enge, Paul Zimmermann
+Copyright (C) 2009, 2010, 2011 INRIA
 
-This file is part of the MPC Library.
+This file is part of GNU MPC.
 
-The MPC Library is free software; you can redistribute it and/or modify
-it under the terms of the GNU Lesser General Public License as published by
-the Free Software Foundation; either version 2.1 of the License, or (at your
+GNU MPC is free software; you can redistribute it and/or modify it under
+the terms of the GNU Lesser General Public License as published by the
+Free Software Foundation; either version 3 of the License, or (at your
 option) any later version.
 
-The MPC Library is distributed in the hope that it will be useful, but
-WITHOUT ANY WARRANTY; without even the implied warranty of MERCHANTABILITY
-or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU Lesser General Public
-License for more details.
+GNU MPC is distributed in the hope that it will be useful, but WITHOUT ANY
+WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS
+FOR A PARTICULAR PURPOSE. See the GNU Lesser General Public License for
+more details.
 
 You should have received a copy of the GNU Lesser General Public License
-along with the MPC Library; see the file COPYING.LIB.  If not, write to
-the Free Software Foundation, Inc., 59 Temple Place - Suite 330, Boston,
-MA 02111-1307, USA. */
+along with this program. If not, see http://www.gnu.org/licenses/ .
+*/
+
+#include "config.h"
+
+#ifdef HAVE_COMPLEX_H
+#include <complex.h>
+#endif
+
+#ifdef HAVE_LOCALE_H
+#include <locale.h>
+#endif
 
 #include <stdio.h> /* for sprintf, fprintf */
 #include <ctype.h>
 #include <string.h>
 #include "mpc-impl.h"
 
-/* Needs <locale.h> */
-#ifdef HAVE_LOCALE_H
-#include <locale.h>
+#ifdef HAVE_COMPLEX_H
+double _Complex
+mpc_get_dc (mpc_srcptr op, mpc_rnd_t rnd) {
+   return I * mpfr_get_d (mpc_imagref (op), MPC_RND_IM (rnd))
+          + mpfr_get_d (mpc_realref (op), MPC_RND_RE (rnd));
+}
+
+long double _Complex
+mpc_get_ldc (mpc_srcptr op, mpc_rnd_t rnd) {
+   return I * mpfr_get_ld (mpc_imagref (op), MPC_RND_IM (rnd))
+          + mpfr_get_ld (mpc_realref (op), MPC_RND_RE (rnd));
+}
 #endif
 
-/* The output format is "(real imag)", the decimal point of the locale is
-   used. */
 
-/* mp_prec_t can be either int or long int */
+/* Code for mpc_get_str. The output format is "(real imag)", the decimal point
+   of the locale is used. */
+
+/* mpfr_prec_t can be either int or long int */
 #if (__GMP_MP_SIZE_T_INT == 1)
 #define MPC_EXP_FORMAT_SPEC "i"
 #elif (__GMP_MP_SIZE_T_INT == 0)
 #define MPC_EXP_FORMAT_SPEC "li"
 #else
-#error "mp_exp_t size not supported"
+#error "mpfr_exp_t size not supported"
 #endif
 
 static char *
@@ -195,8 +215,8 @@ mpc_get_str (int base, size_t n, mpc_srcptr op, mpc_rnd_t rnd)
   if (base < 2 || base > 36)
     return NULL;
 
-  real_str = get_pretty_str (base, n, MPC_RE (op), MPC_RND_RE (rnd));
-  imag_str = get_pretty_str (base, n, MPC_IM (op), MPC_RND_IM (rnd));
+  real_str = get_pretty_str (base, n, mpc_realref (op), MPC_RND_RE (rnd));
+  imag_str = get_pretty_str (base, n, mpc_imagref (op), MPC_RND_IM (rnd));
 
   needed_size = strlen (real_str) + strlen (imag_str) + 4;
 

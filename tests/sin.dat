@@ -1,23 +1,21 @@
 # Data file for mpc_sin.
 #
-# Copyright (C) 2008 Philippe Th\'eveny
+# Copyright (C) 2008, 2010 INRIA
 #
-# This file is part of the MPC Library.
+# This file is part of GNU MPC.
 #
-# The MPC Library is free software; you can redistribute it and/or modify
-# it under the terms of the GNU Lesser General Public License as published by
-# the Free Software Foundation; either version 2.1 of the License, or (at your
-# option) any later version.
+# GNU MPC is free software; you can redistribute it and/or modify it under
+# the terms of the GNU Lesser General Public License as published by the
+# Free Software Foundation; either version 3 of the License, or (at your
+#o ption) any later version.
 #
-# The MPC Library is distributed in the hope that it will be useful, but
-# WITHOUT ANY WARRANTY; without even the implied warranty of MERCHANTABILITY
-# or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU Lesser General Public
-# License for more details.
+# GNU MPC is distributed in the hope that it will be useful, but WITHOUT ANY
+# WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS
+# FOR A PARTICULAR PURPOSE. See the GNU Lesser General Public License for
+# more details.
 #
 # You should have received a copy of the GNU Lesser General Public License
-# along with the MPC Library; see the file COPYING.LIB.  If not, write to
-# the Free Software Foundation, Inc., 59 Temple Place - Suite 330, Boston,
-# MA 02111-1307, USA.
+# along with this program. If not, see http://www.gnu.org/licenses/ .
 #
 # The line format respects the parameter order in function prototype as
 # follow:
@@ -160,3 +158,6 @@
 - + 53 0x100FFFFFFFFFFFp-43 53 -0x11B7CA26B51951p-97    53 0x3243F6A8885A3p-49 53 -0x1BBDD1808C59A3p-50 D U
 - - 53 0x100FFFFFFFFFFFp-43 53 -0x8DBE5135A8CA9p-96     53 0x3243F6A8885A3p-49 53 -0x1BBDD1808C59A3p-50 D D
 
+# huge values
++ + 53 +inf 53 +inf 53 0x4580CBF242683p-3 53 -0x1B3E8A3660D279p-3 N N
+- + 53 -inf 53 +inf 53 -0x1B3E8A3660D279p-3 53 0x4580CBF242683p-3 N N

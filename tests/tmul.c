@@ -1,23 +1,22 @@
 /* tmul -- test file for mpc_mul.
 
-Copyright (C) 2002, 2005, 2008, 2009 Andreas Enge, Paul Zimmermann, Philippe Th\'eveny
+Copyright (C) 2002, 2005, 2008, 2009, 2010, 2011, 2012 INRIA
 
-This file is part of the MPC Library.
+This file is part of GNU MPC.
 
-The MPC Library is free software; you can redistribute it and/or modify
-it under the terms of the GNU Lesser General Public License as published by
-the Free Software Foundation; either version 2.1 of the License, or (at your
+GNU MPC is free software; you can redistribute it and/or modify it under
+the terms of the GNU Lesser General Public License as published by the
+Free Software Foundation; either version 3 of the License, or (at your
 option) any later version.
 
-The MPC Library is distributed in the hope that it will be useful, but
-WITHOUT ANY WARRANTY; without even the implied warranty of MERCHANTABILITY
-or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU Lesser General Public
-License for more details.
+GNU MPC is distributed in the hope that it will be useful, but WITHOUT ANY
+WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS
+FOR A PARTICULAR PURPOSE. See the GNU Lesser General Public License for
+more details.
 
 You should have received a copy of the GNU Lesser General Public License
-along with the MPC Library; see the file COPYING.LIB.  If not, write to
-the Free Software Foundation, Inc., 59 Temple Place - Suite 330, Boston,
-MA 02111-1307, USA. */
+along with this program. If not, see http://www.gnu.org/licenses/ .
+*/
 
 #include <stdlib.h>
 #ifdef TIMING
@@ -34,53 +33,37 @@ cmpmul (mpc_srcptr x, mpc_srcptr y, mpc_rnd_t rnd)
    /* all have the same precision, and we use this precision also for the  */
    /* result.                                                              */
 {
-  mpc_t z, t;
-  int   inexact_z, inexact_t;
+   mpc_t z, t;
+   int   inex_z, inex_t;
 
-  mpc_init2 (z, MPC_MAX_PREC (x));
-  mpc_init2 (t, MPC_MAX_PREC (x));
+   mpc_init2 (z, MPC_MAX_PREC (x));
+   mpc_init2 (t, MPC_MAX_PREC (x));
 
-  inexact_z = mpc_mul_naive (z, x, y, rnd);
-  inexact_t = mpc_mul_karatsuba (t, x, y, rnd);
+   inex_z = mpc_mul_naive (z, x, y, rnd);
+   inex_t = mpc_mul_karatsuba (t, x, y, rnd);
 
-  if (mpc_cmp (z, t))
-    {
-      fprintf (stderr, "mul and mul2 differ for rnd=(%s,%s) \nx=",
+   if (mpc_cmp (z, t) != 0 || inex_z != inex_t) {
+      fprintf (stderr, "mul_naive and mul_karatsuba differ for rnd=(%s,%s)\n",
                mpfr_print_rnd_mode(MPC_RND_RE(rnd)),
                mpfr_print_rnd_mode(MPC_RND_IM(rnd)));
-      mpc_out_str (stderr, 2, 0, x, MPC_RNDNN);
-      fprintf (stderr, "\nand y=");
-      mpc_out_str (stderr, 2, 0, y, MPC_RNDNN);
-      fprintf (stderr, "\nmpc_mul_naive     gives ");
-      mpc_out_str (stderr, 2, 0, z, MPC_RNDNN);
-      fprintf (stderr, "\nmpc_mul_karatsuba gives ");
-      mpc_out_str (stderr, 2, 0, t, MPC_RNDNN);
-      fprintf (stderr, "\n");
+      MPC_OUT (x);
+      MPC_OUT (y);
+      MPC_OUT (z);
+      MPC_OUT (t);
+      if (inex_z != inex_t) {
+         fprintf (stderr, "inex_re (z): %s\n", MPC_INEX_STR (inex_z));
+         fprintf (stderr, "inex_re (t): %s\n", MPC_INEX_STR (inex_t));
+      }
       exit (1);
-    }
-  if (inexact_z != inexact_t)
-    {
-      fprintf (stderr, "The return values of mul and mul2 differ for rnd=(%s,%s) \nx=",
-               mpfr_print_rnd_mode(MPC_RND_RE(rnd)),
-               mpfr_print_rnd_mode(MPC_RND_IM(rnd)));
-      mpc_out_str (stderr, 2, 0, x, MPC_RNDNN);
-      fprintf (stderr, "\nand y=");
-      mpc_out_str (stderr, 2, 0, y, MPC_RNDNN);
-      fprintf (stderr, "\nand x*y=");
-      mpc_out_str (stderr, 2, 0, z, MPC_RNDNN);
-      fprintf (stderr, "\nmpc_mul_naive     gives %i", inexact_z);
-      fprintf (stderr, "\nmpc_mul_karatsuba gives %i", inexact_t);
-      fprintf (stderr, "\n");
-      exit (1);
-    }
+   }
 
-  mpc_clear (z);
-  mpc_clear (t);
+   mpc_clear (z);
+   mpc_clear (t);
 }
 
 
 static void
-testmul (long a, long b, long c, long d, mp_prec_t prec, mpc_rnd_t rnd)
+testmul (long a, long b, long c, long d, mpfr_prec_t prec, mpc_rnd_t rnd)
 {
   mpc_t x, y;
 
@@ -101,8 +84,8 @@ static void
 check_regular (void)
 {
   mpc_t x, y;
-  mpc_rnd_t rnd_re, rnd_im;
-  mp_prec_t prec;
+  int rnd_re, rnd_im;
+  mpfr_prec_t prec;
 
   testmul (247, -65, -223, 416, 8, 24);
   testmul (5, -896, 5, -32, 3, 2);
@@ -111,10 +94,6 @@ check_regular (void)
   testmul (170, 9, 450, 251, 8, 0);
   testmul (768, 85, 169, 440, 8, 16);
   testmul (145, 1816, 848, 169, 8, 24);
-  testmul (0, 1816, 848, 169, 8, 24);
-  testmul (145, 0, 848, 169, 8, 24);
-  testmul (145, 1816, 0, 169, 8, 24);
-  testmul (145, 1816, 848, 0, 8, 24);
 
   mpc_init2 (x, 1000);
   mpc_init2 (y, 1000);
@@ -123,66 +102,34 @@ check_regular (void)
      imaginary part */
   mpc_set_prec (x, 7);
   mpc_set_prec (y, 7);
-  mpfr_set_str (MPC_RE (x), "0xB4p+733", 16, GMP_RNDN);
-  mpfr_set_str (MPC_IM (x), "0x90p+244", 16, GMP_RNDN);
-  mpfr_set_str (MPC_RE (y), "0xECp-146", 16, GMP_RNDN);
-  mpfr_set_str (MPC_IM (y), "0xACp-471", 16, GMP_RNDN);
+  mpfr_set_str (mpc_realref (x), "0xB4p+733", 16, GMP_RNDN);
+  mpfr_set_str (mpc_imagref (x), "0x90p+244", 16, GMP_RNDN);
+  mpfr_set_str (mpc_realref (y), "0xECp-146", 16, GMP_RNDN);
+  mpfr_set_str (mpc_imagref (y), "0xACp-471", 16, GMP_RNDN);
   cmpmul (x, y, MPC_RNDNN);
-  mpfr_set_str (MPC_RE (x), "0xB4p+733", 16, GMP_RNDN);
-  mpfr_set_str (MPC_IM (x), "0x90p+244", 16, GMP_RNDN);
-  mpfr_set_str (MPC_RE (y), "0xACp-471", 16, GMP_RNDN);
-  mpfr_set_str (MPC_IM (y), "-0xECp-146", 16, GMP_RNDN);
+  mpfr_set_str (mpc_realref (x), "0xB4p+733", 16, GMP_RNDN);
+  mpfr_set_str (mpc_imagref (x), "0x90p+244", 16, GMP_RNDN);
+  mpfr_set_str (mpc_realref (y), "0xACp-471", 16, GMP_RNDN);
+  mpfr_set_str (mpc_imagref (y), "-0xECp-146", 16, GMP_RNDN);
   cmpmul (x, y, MPC_RNDNN);
 
-  for (prec = 2; prec < 1000; prec = prec * 1.1 + 1)
+  for (prec = 2; prec < 1000; prec = (mpfr_prec_t) (prec * 1.1 + 1))
     {
       mpc_set_prec (x, prec);
       mpc_set_prec (y, prec);
 
-      test_default_random (x, -1024, 1024, 128, 25);
-      test_default_random (y, -1024, 1024, 128, 25);
+      test_default_random (x, -1024, 1024, 128, 0);
+      test_default_random (y, -1024, 1024, 128, 0);
 
       for (rnd_re = 0; rnd_re < 4; rnd_re ++)
         for (rnd_im = 0; rnd_im < 4; rnd_im ++)
-          cmpmul (x, y, RNDC(rnd_re, rnd_im));
+          cmpmul (x, y, MPC_RND (rnd_re, rnd_im));
     }
 
   mpc_clear (x);
   mpc_clear (y);
 }
 
-
-static void
-check_special (void)
-{
-  mpc_t x, y, z;
-  int inexact;
-
-  mpc_init2 (x, 8);
-  mpc_init2 (y, 8);
-  mpc_init2 (z, 8);
-
-  mpc_set_si_si (x, 4, 3, MPC_RNDNN);
-  mpc_set_si_si (y, 1, -2, MPC_RNDNN);
-  inexact = mpc_mul (z, x, y, MPC_RNDNN);
-  if (MPC_INEX_RE(inexact) || MPC_INEX_IM(inexact))
-    {
-      fprintf (stderr, "Error: (4+3*I)*(1-2*I) should be exact with prec=8\n");
-      exit (1);
-    }
-
-  mpc_set_prec (x, 27);
-  mpc_set_prec (y, 27);
-  mpfr_set_str (MPC_RE(x), "1.11111011011000010101000000e-2", 2, GMP_RNDN);
-  mpfr_set_str (MPC_IM(x), "1.11010001010110111001110001e-3", 2, GMP_RNDN);
-  mpfr_set_str (MPC_RE(y), "1.10100101110110011011100100e-1", 2, GMP_RNDN);
-  mpfr_set_str (MPC_IM(y), "1.10111100011000001100110011e-1", 2, GMP_RNDN);
-  cmpmul (x, y, 0);
-
-  mpc_clear (x);
-  mpc_clear (y);
-  mpc_clear (z);
-}
 
 #ifdef TIMING
 static void
@@ -231,10 +178,11 @@ timemul (void)
 }
 #endif
 
+
 int
 main (void)
 {
-  DECL_FUNC (CCC, f, mpc_mul);
+  DECL_FUNC (C_CC, f, mpc_mul);
   f.properties = FUNC_PROP_SYMETRIC;
 
   test_start ();
@@ -243,7 +191,6 @@ main (void)
   timemul ();
 #endif
 
-  check_special ();
   check_regular ();
 
   data_check (f, "mul.dat");
