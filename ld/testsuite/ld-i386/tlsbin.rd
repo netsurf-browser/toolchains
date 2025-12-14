@@ -76,31 +76,15 @@ Symbol table '\.dynsym' contains [0-9]+ entries:
  +[0-9]+: 0+ +0 +TLS +GLOBAL +DEFAULT +UND sG7
  +[0-9]+: 0+ +0 +TLS +GLOBAL +DEFAULT +UND sG2
  +[0-9]+: 0+ +0 +TLS +GLOBAL +DEFAULT +UND sG4
- +[0-9]+: [0-9a-f]+ +0 +NOTYPE +GLOBAL +DEFAULT +13 __bss_start
  +[0-9]+: 0+ +0 +TLS +GLOBAL +DEFAULT +UND sG6
  +[0-9]+: 0+ +0 +TLS +GLOBAL +DEFAULT +UND sG1
- +[0-9]+: [0-9a-f]+ +0 +NOTYPE +GLOBAL +DEFAULT +13 _edata
- +[0-9]+: [0-9a-f]+ +0 +NOTYPE +GLOBAL +DEFAULT +13 _end
  +[0-9]+: 0+ +0 +TLS +GLOBAL +DEFAULT +UND sG8
  +[0-9]+: [0-9a-f]+ +0 +FUNC +GLOBAL +DEFAULT +UND ___tls_get_addr
 
 Symbol table '\.symtab' contains [0-9]+ entries:
  +Num: +Value +Size +Type +Bind +Vis +Ndx +Name
  +[0-9]+: 0+ +0 +NOTYPE +LOCAL +DEFAULT +UND *
- +[0-9]+: [0-9a-f]+ +0 +SECTION +LOCAL +DEFAULT +1 *
- +[0-9]+: [0-9a-f]+ +0 +SECTION +LOCAL +DEFAULT +2 *
- +[0-9]+: [0-9a-f]+ +0 +SECTION +LOCAL +DEFAULT +3 *
- +[0-9]+: [0-9a-f]+ +0 +SECTION +LOCAL +DEFAULT +4 *
- +[0-9]+: [0-9a-f]+ +0 +SECTION +LOCAL +DEFAULT +5 *
- +[0-9]+: [0-9a-f]+ +0 +SECTION +LOCAL +DEFAULT +6 *
- +[0-9]+: [0-9a-f]+ +0 +SECTION +LOCAL +DEFAULT +7 *
- +[0-9]+: [0-9a-f]+ +0 +SECTION +LOCAL +DEFAULT +8 *
- +[0-9]+: [0-9a-f]+ +0 +SECTION +LOCAL +DEFAULT +9 *
- +[0-9]+: [0-9a-f]+ +0 +SECTION +LOCAL +DEFAULT +10 *
- +[0-9]+: [0-9a-f]+ +0 +SECTION +LOCAL +DEFAULT +11 *
- +[0-9]+: [0-9a-f]+ +0 +SECTION +LOCAL +DEFAULT +12 *
- +[0-9]+: [0-9a-f]+ +0 +SECTION +LOCAL +DEFAULT +13 *
-.* FILE +LOCAL +DEFAULT +ABS tmpdir/tlsbinpic.o
+.* FILE +LOCAL +DEFAULT +ABS .*tlsbinpic.o
  +[0-9]+: 00000020 +0 +TLS +LOCAL +DEFAULT +9 sl1
  +[0-9]+: 00000024 +0 +TLS +LOCAL +DEFAULT +9 sl2
  +[0-9]+: 00000028 +0 +TLS +LOCAL +DEFAULT +9 sl3
@@ -109,7 +93,7 @@ Symbol table '\.symtab' contains [0-9]+ entries:
  +[0-9]+: 00000034 +0 +TLS +LOCAL +DEFAULT +9 sl6
  +[0-9]+: 00000038 +0 +TLS +LOCAL +DEFAULT +9 sl7
  +[0-9]+: 0000003c +0 +TLS +LOCAL +DEFAULT +9 sl8
-.* FILE +LOCAL +DEFAULT +ABS tmpdir/tlsbin.o
+.* FILE +LOCAL +DEFAULT +ABS .*tlsbin.o
  +[0-9]+: 00000080 +0 +TLS +LOCAL +DEFAULT +10 bl1
  +[0-9]+: 00000084 +0 +TLS +LOCAL +DEFAULT +10 bl2
  +[0-9]+: 00000088 +0 +TLS +LOCAL +DEFAULT +10 bl3

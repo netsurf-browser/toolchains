@@ -1,6 +1,6 @@
 // symtab.cc -- the gold symbol table
 
-// Copyright (C) 2006-2018 Free Software Foundation, Inc.
+// Copyright (C) 2006-2022 Free Software Foundation, Inc.
 // Written by Ian Lance Taylor <iant@google.com>.
 
 // This file is part of gold.
@@ -565,8 +565,8 @@ Symbol::set_undefined()
 
 Symbol_table::Symbol_table(unsigned int count,
                            const Version_script_info& version_script)
-  : saw_undefined_(0), offset_(0), table_(count), namepool_(),
-    forwarders_(), commons_(), tls_commons_(), small_commons_(),
+  : saw_undefined_(0), offset_(0), has_gnu_output_(false), table_(count),
+    namepool_(), forwarders_(), commons_(), tls_commons_(), small_commons_(),
     large_commons_(), forced_locals_(), warnings_(),
     version_script_(version_script), gc_(NULL), icf_(NULL),
     target_symbols_()
@@ -989,7 +989,7 @@ Symbol_table::add_from_object(Object* object,
   // ins.first->second: the value (Symbol*).
   // ins.second: true if new entry was inserted, false if not.
 
-  Sized_symbol<size>* ret;
+  Sized_symbol<size>* ret = NULL;
   bool was_undefined_in_reg;
   bool was_common;
   if (!ins.second)
@@ -1049,17 +1049,42 @@ Symbol_table::add_from_object(Object* object,
 	  // it, then change it to NAME/VERSION.
 	  ret = this->get_sized_symbol<size>(insdefault.first->second);
 
-	  was_undefined_in_reg = ret->is_undefined() && ret->in_reg();
-	  // Commons from plugins are just placeholders.
-	  was_common = ret->is_common() && ret->object()->pluginobj() == NULL;
+	  // If the existing symbol already has a version,
+	  // don't override it with the new symbol.
+	  // This should only happen when the new symbol
+	  // is from a shared library.
+	  if (ret->version() != NULL)
+	    {
+	      if (!object->is_dynamic())
+	        {
+		  gold_warning(_("%s: conflicting default version definition"
+				 " for %s@@%s"),
+			       object->name().c_str(), name, version);
+		  if (ret->source() == Symbol::FROM_OBJECT)
+		    gold_info(_("%s: %s: previous definition of %s@@%s here"),
+			      program_name,
+			      ret->object()->name().c_str(),
+			      name, ret->version());
+	        }
+	      ret = NULL;
+	      is_default_version = false;
+	    }
+	  else
+	    {
+	      was_undefined_in_reg = ret->is_undefined() && ret->in_reg();
+	      // Commons from plugins are just placeholders.
+	      was_common = (ret->is_common()
+			    && ret->object()->pluginobj() == NULL);
 
-	  this->resolve(ret, sym, st_shndx, is_ordinary, orig_st_shndx, object,
-			version, is_default_version);
-          if (parameters->options().gc_sections())
-            this->gc_mark_dyn_syms(ret);
-	  ins.first->second = ret;
+	      this->resolve(ret, sym, st_shndx, is_ordinary, orig_st_shndx,
+			    object, version, is_default_version);
+	      if (parameters->options().gc_sections())
+		this->gc_mark_dyn_syms(ret);
+	      ins.first->second = ret;
+	    }
 	}
-      else
+
+      if (ret == NULL)
 	{
 	  was_undefined_in_reg = false;
 	  was_common = false;
@@ -1873,10 +1898,13 @@ Symbol_table::define_special_symbol(const char** pname, const char** pversion,
 	  add_to_table = true;
 	  add_loc = ins.first;
 
-	  if (is_default_version && !insdefault.second)
+	  if (is_default_version
+	      && !insdefault.second
+	      && insdefault.first->second->version() == NULL)
 	    {
 	      // We are adding NAME/VERSION, and it is the default
-	      // version.  We already have an entry for NAME/NULL.
+	      // version.  We already have an entry for NAME/NULL
+	      // that does not already have a version.
 	      oldsym = insdefault.first->second;
 	      *resolve_oldsym = true;
 	    }
@@ -2447,12 +2475,6 @@ Symbol_table::do_add_undefined_symbols_from_command_line(Layout* layout)
        ++p)
     this->add_undefined_symbol_from_command_line<size>(p->c_str());
 
-  for (options::String_set::const_iterator p =
-	 parameters->options().export_dynamic_symbol_begin();
-       p != parameters->options().export_dynamic_symbol_end();
-       ++p)
-    this->add_undefined_symbol_from_command_line<size>(p->c_str());
-
   for (Script_options::referenced_const_iterator p =
 	 layout->script_options()->referenced_begin();
        p != layout->script_options()->referenced_end();
@@ -2518,8 +2540,6 @@ Symbol_table::set_dynsym_indexes(unsigned int index,
 				 Stringpool* dynpool,
 				 Versions* versions)
 {
-  std::vector<Symbol*> as_needed_sym;
-
   // First process all the symbols which have been forced to be local,
   // as they must appear before all global symbols.
   unsigned int forced_local_count = 0;
@@ -2539,6 +2559,8 @@ Symbol_table::set_dynsym_indexes(unsigned int index,
           ++index;
           ++forced_local_count;
 	  dynpool->add(sym->name(), false, NULL);
+	  if (sym->type() == elfcpp::STT_GNU_IFUNC)
+	    this->set_has_gnu_output();
         }
     }
   *pforced_local_count = forced_local_count;
@@ -2557,7 +2579,13 @@ Symbol_table::set_dynsym_indexes(unsigned int index,
           if (!sym->should_add_dynsym_entry(this))
             sym->set_dynsym_index(-1U);
           else
-            dyn_symbols.push_back(sym);
+	    {
+	      dyn_symbols.push_back(sym);
+	      if (sym->type() == elfcpp::STT_GNU_IFUNC
+		  || (sym->binding() == elfcpp::STB_GNU_UNIQUE
+		      && parameters->options().gnu_unique()))
+		this->set_has_gnu_output();
+	    }
         }
 
       return parameters->target().set_dynsym_indexes(&dyn_symbols, index, syms,
@@ -2585,15 +2613,10 @@ Symbol_table::set_dynsym_indexes(unsigned int index,
 	  ++index;
 	  syms->push_back(sym);
 	  dynpool->add(sym->name(), false, NULL);
-
-	  // If the symbol is defined in a dynamic object and is
-	  // referenced strongly in a regular object, then mark the
-	  // dynamic object as needed.  This is used to implement
-	  // --as-needed.
-	  if (sym->is_from_dynobj()
-	      && sym->in_reg()
-	      && !sym->is_undef_binding_weak())
-	    sym->object()->set_is_needed();
+	  if (sym->type() == elfcpp::STT_GNU_IFUNC
+	      || (sym->binding() == elfcpp::STB_GNU_UNIQUE
+		  && parameters->options().gnu_unique()))
+	    this->set_has_gnu_output();
 
 	  // Record any version information, except those from
 	  // as-needed libraries not seen to be needed.  Note that the
@@ -2605,22 +2628,17 @@ Symbol_table::set_dynsym_indexes(unsigned int index,
 		  || sym->object()->is_needed())
 		versions->record_version(this, dynpool, sym);
 	      else
-		as_needed_sym.push_back(sym);
+		{
+		  if (parameters->options().warn_drop_version())
+		    gold_warning(_("discarding version information for "
+				   "%s@%s, defined in unused shared library %s "
+				   "(linked with --as-needed)"),
+				 sym->name(), sym->version(),
+				 sym->object()->name().c_str());
+		  sym->clear_version();
+		}
 	    }
 	}
-    }
-
-  // Process version information for symbols from as-needed libraries.
-  for (std::vector<Symbol*>::iterator p = as_needed_sym.begin();
-       p != as_needed_sym.end();
-       ++p)
-    {
-      Symbol* sym = *p;
-
-      if (sym->object()->is_needed())
-	versions->record_version(this, dynpool, sym);
-      else
-	sym->clear_version();
     }
 
   // Finish up the versions.  In some cases this may add new dynamic
@@ -2684,6 +2702,13 @@ Symbol_table::finalize(off_t off, off_t dynoff, size_t dyn_global_index,
   else
     gold_unreachable();
 
+  if (this->has_gnu_output_)
+    {
+      Target* target = const_cast<Target*>(&parameters->target());
+      if (target->osabi() == elfcpp::ELFOSABI_NONE)
+	target->set_osabi(elfcpp::ELFOSABI_GNU);
+    }
+
   // Now that we have the final symbol table, we can reliably note
   // which symbols should get warnings.
   this->warnings_.note_warnings(this);
@@ -2735,6 +2760,8 @@ Symbol_table::sized_finalize(off_t off, Stringpool* pool,
 	{
 	  this->add_to_final_symtab<size>(sym, pool, &index, &off);
 	  ++*plocal_symcount;
+	  if (sym->type() == elfcpp::STT_GNU_IFUNC)
+	    this->set_has_gnu_output();
 	}
     }
 
@@ -2745,7 +2772,13 @@ Symbol_table::sized_finalize(off_t off, Stringpool* pool,
     {
       Symbol* sym = p->second;
       if (this->sized_finalize_symbol<size>(sym))
-	this->add_to_final_symtab<size>(sym, pool, &index, &off);
+	{
+	  this->add_to_final_symtab<size>(sym, pool, &index, &off);
+	  if (sym->type() == elfcpp::STT_GNU_IFUNC
+	      || (sym->binding() == elfcpp::STB_GNU_UNIQUE
+		  && parameters->options().gnu_unique()))
+	    this->set_has_gnu_output();
+	}
     }
 
   // Now do target-specific symbols.

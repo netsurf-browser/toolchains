@@ -1,5 +1,5 @@
 /* tc-sparc.c -- Assemble for the SPARC
-   Copyright (C) 1989-2018 Free Software Foundation, Inc.
+   Copyright (C) 1989-2022 Free Software Foundation, Inc.
    This file is part of GAS, the GNU Assembler.
 
    GAS is free software; you can redistribute it and/or modify
@@ -24,10 +24,8 @@
 #include "opcode/sparc.h"
 #include "dw2gencfi.h"
 
-#ifdef OBJ_ELF
 #include "elf/sparc.h"
 #include "dwarf2dbg.h"
-#endif
 
 /* Some ancient Sun C compilers would not take such hex constants as
    unsigned, and would end up sign-extending them to form an offsetT,
@@ -70,7 +68,6 @@ static int sparc_arch_size;
    changes the value before md_show_usage is called.  */
 static int default_arch_size;
 
-#ifdef OBJ_ELF
 /* The currently selected v9 memory model.  Currently only used for
    ELF.  */
 static enum { MM_TSO, MM_PSO, MM_RMO } sparc_memory_model = MM_RMO;
@@ -78,11 +75,10 @@ static enum { MM_TSO, MM_PSO, MM_RMO } sparc_memory_model = MM_RMO;
 #ifndef TE_SOLARIS
 /* Bitmask of instruction types seen so far, used to populate the
    GNU attributes section with hwcap information.  */
-static bfd_uint64_t hwcap_seen;
-#endif
+static uint64_t hwcap_seen;
 #endif
 
-static bfd_uint64_t hwcap_allowed;
+static uint64_t hwcap_allowed;
 
 static int architecture_requested;
 static int warn_on_bump;
@@ -130,7 +126,7 @@ int sparc_cie_data_alignment;
 #endif
 
 /* Handle of the OPCODE hash table.  */
-static struct hash_control *op_hash;
+static htab_t op_hash;
 
 static void s_data1 (void);
 static void s_seg (int);
@@ -140,9 +136,7 @@ static void s_common (int);
 static void s_empty (int);
 static void s_uacons (int);
 static void s_ncons (int);
-#ifdef OBJ_ELF
 static void s_register (int);
-#endif
 
 const pseudo_typeS md_pseudo_table[] =
 {
@@ -162,13 +156,11 @@ const pseudo_typeS md_pseudo_table[] =
   {"uahalf", s_uacons, 2},
   {"uaword", s_uacons, 4},
   {"uaxword", s_uacons, 8},
-#ifdef OBJ_ELF
   /* These are specific to sparc/svr4.  */
   {"2byte", s_uacons, 2},
   {"4byte", s_uacons, 4},
   {"8byte", s_uacons, 8},
   {"register", s_register, 0},
-#endif
   {NULL, 0, 0},
 };
 
@@ -325,6 +317,19 @@ init_default_arch (void)
   default_arch_type = sa->arch_type;
 }
 
+/* Called by TARGET_MACH.  */
+
+unsigned long
+sparc_mach (void)
+{
+  /* We don't get a chance to initialize anything before we're called,
+     so handle that now.  */
+  if (! default_init_p)
+    init_default_arch ();
+
+  return sparc_arch_size == 64 ? bfd_mach_sparc_v9 : bfd_mach_sparc;
+}
+
 /* Called by TARGET_FORMAT.  */
 
 const char *
@@ -335,44 +340,11 @@ sparc_target_format (void)
   if (! default_init_p)
     init_default_arch ();
 
-#ifdef OBJ_AOUT
-#ifdef TE_NetBSD
-  return "a.out-sparc-netbsd";
-#else
-#ifdef TE_SPARCAOUT
-  if (target_big_endian)
-    return "a.out-sunos-big";
-  else if (default_arch_type == sparc86x && target_little_endian_data)
-    return "a.out-sunos-big";
-  else
-    return "a.out-sparc-little";
-#else
-  return "a.out-sunos-big";
-#endif
-#endif
-#endif
-
-#ifdef OBJ_BOUT
-  return "b.out.big";
-#endif
-
-#ifdef OBJ_COFF
-#ifdef TE_LYNX
-  return "coff-sparc-lynx";
-#else
-  return "coff-sparc";
-#endif
-#endif
-
 #ifdef TE_VXWORKS
   return "elf32-sparc-vxworks";
 #endif
 
-#ifdef OBJ_ELF
   return sparc_arch_size == 64 ? ELF64_TARGET_FORMAT : ELF_TARGET_FORMAT;
-#endif
-
-  abort ();
 }
 
 /* md_parse_option
@@ -429,15 +401,7 @@ sparc_target_format (void)
  *		error.  For example, from sparclite to v9.
  */
 
-#ifdef OBJ_ELF
 const char *md_shortopts = "A:K:VQ:sq";
-#else
-#ifdef OBJ_AOUT
-const char *md_shortopts = "A:k";
-#else
-const char *md_shortopts = "A:";
-#endif
-#endif
 struct option md_longopts[] = {
 #define OPTION_BUMP (OPTION_MD_BASE)
   {"bump", no_argument, NULL, OPTION_BUMP},
@@ -445,7 +409,6 @@ struct option md_longopts[] = {
   {"sparc", no_argument, NULL, OPTION_SPARC},
 #define OPTION_XARCH (OPTION_MD_BASE + 2)
   {"xarch", required_argument, NULL, OPTION_XARCH},
-#ifdef OBJ_ELF
 #define OPTION_32 (OPTION_MD_BASE + 3)
   {"32", no_argument, NULL, OPTION_32},
 #define OPTION_64 (OPTION_MD_BASE + 4)
@@ -456,7 +419,6 @@ struct option md_longopts[] = {
   {"PSO", no_argument, NULL, OPTION_PSO},
 #define OPTION_RMO (OPTION_MD_BASE + 7)
   {"RMO", no_argument, NULL, OPTION_RMO},
-#endif
 #ifdef SPARC_BIENDIAN
 #define OPTION_LITTLE_ENDIAN (OPTION_MD_BASE + 8)
   {"EL", no_argument, NULL, OPTION_LITTLE_ENDIAN},
@@ -467,12 +429,10 @@ struct option md_longopts[] = {
   {"enforce-aligned-data", no_argument, NULL, OPTION_ENFORCE_ALIGNED_DATA},
 #define OPTION_LITTLE_ENDIAN_DATA (OPTION_MD_BASE + 11)
   {"little-endian-data", no_argument, NULL, OPTION_LITTLE_ENDIAN_DATA},
-#ifdef OBJ_ELF
 #define OPTION_NO_UNDECLARED_REGS (OPTION_MD_BASE + 12)
   {"no-undeclared-regs", no_argument, NULL, OPTION_NO_UNDECLARED_REGS},
 #define OPTION_UNDECLARED_REGS (OPTION_MD_BASE + 13)
   {"undeclared-regs", no_argument, NULL, OPTION_UNDECLARED_REGS},
-#endif
 #define OPTION_RELAX (OPTION_MD_BASE + 14)
   {"relax", no_argument, NULL, OPTION_RELAX},
 #define OPTION_NO_RELAX (OPTION_MD_BASE + 15)
@@ -500,20 +460,18 @@ md_parse_option (int c, const char *arg)
       break;
 
     case OPTION_XARCH:
-#ifdef OBJ_ELF
-      if (!strncmp (arg, "v9", 2))
+      if (startswith (arg, "v9"))
 	md_parse_option (OPTION_64, NULL);
       else
 	{
-	  if (!strncmp (arg, "v8", 2)
-	      || !strncmp (arg, "v7", 2)
-	      || !strncmp (arg, "v6", 2)
+	  if (startswith (arg, "v8")
+	      || startswith (arg, "v7")
+	      || startswith (arg, "v6")
 	      || !strcmp (arg, "sparclet")
 	      || !strcmp (arg, "sparclite")
 	      || !strcmp (arg, "sparc86x"))
 	    md_parse_option (OPTION_32, NULL);
 	}
-#endif
       /* Fall through.  */
 
     case 'A':
@@ -540,15 +498,15 @@ md_parse_option (int c, const char *arg)
 	    || opcode_arch > max_architecture)
 	  max_architecture = opcode_arch;
 
-        /* The allowed hardware capabilities are the implied by the
-           opcodes arch plus any extra capabilities defined in the GAS
-           arch.  */
-        hwcap_allowed
-          = (hwcap_allowed
-             | (((bfd_uint64_t) sparc_opcode_archs[opcode_arch].hwcaps2) << 32)
-             | (((bfd_uint64_t) sa->hwcap2_allowed) << 32)
-             | sparc_opcode_archs[opcode_arch].hwcaps
-             | sa->hwcap_allowed);
+	/* The allowed hardware capabilities are the implied by the
+	   opcodes arch plus any extra capabilities defined in the GAS
+	   arch.  */
+	hwcap_allowed
+	  = (hwcap_allowed
+	     | ((uint64_t) sparc_opcode_archs[opcode_arch].hwcaps2 << 32)
+	     | ((uint64_t) sa->hwcap2_allowed << 32)
+	     | sparc_opcode_archs[opcode_arch].hwcaps
+	     | sa->hwcap_allowed);
 	architecture_requested = 1;
       }
       break;
@@ -579,13 +537,6 @@ md_parse_option (int c, const char *arg)
       break;
 #endif
 
-#ifdef OBJ_AOUT
-    case 'k':
-      sparc_pic_code = 1;
-      break;
-#endif
-
-#ifdef OBJ_ELF
     case OPTION_32:
     case OPTION_64:
       {
@@ -597,12 +548,12 @@ md_parse_option (int c, const char *arg)
 	  {
 	    if (sparc_arch_size == 32)
 	      {
-		if (CONST_STRNEQ (*l, "elf32-sparc"))
+		if (startswith (*l, "elf32-sparc"))
 		  break;
 	      }
 	    else
 	      {
-		if (CONST_STRNEQ (*l, "elf64-sparc"))
+		if (startswith (*l, "elf64-sparc"))
 		  break;
 	      }
 	  }
@@ -660,7 +611,6 @@ md_parse_option (int c, const char *arg)
     case OPTION_UNDECLARED_REGS:
       no_undeclared_regs = 0;
       break;
-#endif
 
     case OPTION_RELAX:
       sparc_relax = 1;
@@ -728,11 +678,6 @@ md_show_usage (FILE *stream)
 --enforce-aligned-data	force .long, etc., to be aligned correctly\n\
 -relax			relax jumps and branches (default)\n\
 -no-relax		avoid changing any jumps and branches\n"));
-#ifdef OBJ_AOUT
-  fprintf (stream, _("\
--k			generate PIC\n"));
-#endif
-#ifdef OBJ_ELF
   fprintf (stream, _("\
 -32			create 32 bit object file\n\
 -64			create 64 bit object file\n"));
@@ -755,7 +700,6 @@ md_show_usage (FILE *stream)
 -q			ignored\n\
 -Qy, -Qn		ignored\n\
 -s			ignored\n"));
-#endif
 #ifdef SPARC_BIENDIAN
   fprintf (stream, _("\
 -EL			generate code for a little endian machine\n\
@@ -997,7 +941,6 @@ cmp_perc_entry (const void *parg, const void *qarg)
 void
 md_begin (void)
 {
-  const char *retval = NULL;
   int lose = 0;
   unsigned int i = 0;
 
@@ -1008,16 +951,14 @@ md_begin (void)
     init_default_arch ();
 
   sparc_cie_data_alignment = sparc_arch_size == 64 ? -8 : -4;
-  op_hash = hash_new ();
+  op_hash = str_htab_create ();
 
   while (i < (unsigned int) sparc_num_opcodes)
     {
       const char *name = sparc_opcodes[i].name;
-      retval = hash_insert (op_hash, name, (void *) &sparc_opcodes[i]);
-      if (retval != NULL)
+      if (str_hash_insert (op_hash, name, &sparc_opcodes[i], 0) != NULL)
 	{
-	  as_bad (_("Internal error: can't hash `%s': %s\n"),
-		  sparc_opcodes[i].name, retval);
+	  as_bad (_("duplicate %s"), name);
 	  lose = 1;
 	}
       do
@@ -1040,23 +981,17 @@ md_begin (void)
       const char *name = ((sparc_arch_size == 32)
 		    ? native_op_table[i].name32
 		    : native_op_table[i].name64);
-      insn = (struct sparc_opcode *) hash_find (op_hash, name);
+      insn = (struct sparc_opcode *) str_hash_find (op_hash, name);
       if (insn == NULL)
 	{
 	  as_bad (_("Internal error: can't find opcode `%s' for `%s'\n"),
 		  name, native_op_table[i].name);
 	  lose = 1;
 	}
-      else
+      else if (str_hash_insert (op_hash, native_op_table[i].name, insn, 0))
 	{
-	  retval = hash_insert (op_hash, native_op_table[i].name,
-				(void *) insn);
-	  if (retval != NULL)
-	    {
-	      as_bad (_("Internal error: can't hash `%s': %s\n"),
-		      sparc_opcodes[i].name, retval);
-	      lose = 1;
-	    }
+	  as_bad (_("duplicate %s"), native_op_table[i].name);
+	  lose = 1;
 	}
     }
 
@@ -1148,8 +1083,8 @@ md_begin (void)
 void
 sparc_md_end (void)
 {
-  unsigned long mach = bfd_mach_sparc;
-#if defined(OBJ_ELF) && !defined(TE_SOLARIS)
+  unsigned long mach;
+#ifndef TE_SOLARIS
   int hwcaps, hwcaps2;
 #endif
 
@@ -1182,11 +1117,11 @@ sparc_md_end (void)
       /* The sparclite is treated like a normal sparc.  Perhaps it shouldn't
 	 be but for now it is (since that's the way it's always been
 	 treated).  */
-      default: break;
+      default: mach = bfd_mach_sparc; break;
       }
   bfd_set_arch_mach (stdoutput, bfd_arch_sparc, mach);
 
-#if defined(OBJ_ELF) && !defined(TE_SOLARIS)
+#ifndef TE_SOLARIS
   hwcaps = hwcap_seen & U0xffffffff;
   hwcaps2 = hwcap_seen >> 32;
 
@@ -1208,7 +1143,7 @@ in_signed_range (bfd_signed_vma val, bfd_signed_vma max)
      0xffffffff is always considered -1 on sparc32.  */
   if (sparc_arch_size == 32)
     {
-      bfd_signed_vma sign = (bfd_signed_vma) 1 << 31;
+      bfd_vma sign = (bfd_vma) 1 << 31;
       val = ((val & U0xffffffff) ^ sign) - sign;
     }
   if (val > max)
@@ -1613,20 +1548,21 @@ md_assemble (char *str)
         as_warn (_("FP branch in delay slot"));
     }
 
-  /* SPARC before v9 requires a nop instruction between a floating
-     point instruction and a floating point branch.  We insert one
-     automatically, with a warning.  */
+  /* SPARC before v9 does not allow a floating point compare
+     directly before a floating point branch.  Insert a nop
+     instruction if needed, with a warning.  */
   if (max_architecture < SPARC_OPCODE_ARCH_V9
       && last_insn != NULL
       && (insn->flags & F_FBR) != 0
-      && (last_insn->flags & F_FLOAT) != 0)
+      && (last_insn->flags & F_FLOAT) != 0
+      && (last_insn->match & OP3 (0x35)) == OP3 (0x35))
     {
       struct sparc_it nop_insn;
 
       nop_insn.opcode = NOP_INSN;
       nop_insn.reloc = BFD_RELOC_NONE;
       output_insn (insn, &nop_insn);
-      as_warn (_("FP branch preceded by FP instruction; NOP inserted"));
+      as_warn (_("FP branch preceded by FP compare; NOP inserted"));
     }
 
   switch (special_case)
@@ -1671,7 +1607,7 @@ md_assemble (char *str)
 }
 
 static const char *
-get_hwcap_name (bfd_uint64_t mask)
+get_hwcap_name (uint64_t mask)
 {
   if (mask & HWCAP_MUL32)
     return "mul32";
@@ -1814,7 +1750,7 @@ sparc_ip (char *str, const struct sparc_opcode **pinsn)
       *pinsn = NULL;
       return special_case;
     }
-  insn = (struct sparc_opcode *) hash_find (op_hash, str);
+  insn = (struct sparc_opcode *) str_hash_find (op_hash, str);
   *pinsn = insn;
   if (insn == NULL)
     {
@@ -2048,7 +1984,7 @@ sparc_ip (char *str, const struct sparc_opcode **pinsn)
 
 	    case 'M':
 	    case 'm':
-	      if (strncmp (s, "%asr", 4) == 0)
+	      if (startswith (s, "%asr"))
 		{
 		  s += 4;
 
@@ -2195,8 +2131,8 @@ sparc_ip (char *str, const struct sparc_opcode **pinsn)
 		{
 		  ++s;
 		}
-	      if ((strncmp (s, "%icc", 4) == 0)
-                  || (sparc_arch_size == 32 && strncmp (s, "%ncc", 4) == 0))
+	      if ((startswith (s, "%icc"))
+                  || (sparc_arch_size == 32 && startswith (s, "%ncc")))
 		{
 		  s += 4;
 		  continue;
@@ -2208,8 +2144,8 @@ sparc_ip (char *str, const struct sparc_opcode **pinsn)
 		{
 		  ++s;
 		}
-              if ((strncmp (s, "%xcc", 4) == 0)
-                  || (sparc_arch_size == 64 && strncmp (s, "%ncc", 4) == 0))
+              if ((startswith (s, "%xcc"))
+                  || (sparc_arch_size == 64 && startswith (s, "%ncc")))
 		{
 		  s += 4;
 		  continue;
@@ -2221,7 +2157,7 @@ sparc_ip (char *str, const struct sparc_opcode **pinsn)
 		{
 		  ++s;
 		}
-	      if (strncmp (s, "%fcc0", 5) == 0)
+	      if (startswith (s, "%fcc0"))
 		{
 		  s += 5;
 		  continue;
@@ -2233,7 +2169,7 @@ sparc_ip (char *str, const struct sparc_opcode **pinsn)
 		{
 		  ++s;
 		}
-	      if (strncmp (s, "%fcc1", 5) == 0)
+	      if (startswith (s, "%fcc1"))
 		{
 		  s += 5;
 		  continue;
@@ -2245,7 +2181,7 @@ sparc_ip (char *str, const struct sparc_opcode **pinsn)
 		{
 		  ++s;
 		}
-	      if (strncmp (s, "%fcc2", 5) == 0)
+	      if (startswith (s, "%fcc2"))
 		{
 		  s += 5;
 		  continue;
@@ -2257,7 +2193,7 @@ sparc_ip (char *str, const struct sparc_opcode **pinsn)
 		{
 		  ++s;
 		}
-	      if (strncmp (s, "%fcc3", 5) == 0)
+	      if (startswith (s, "%fcc3"))
 		{
 		  s += 5;
 		  continue;
@@ -2265,7 +2201,7 @@ sparc_ip (char *str, const struct sparc_opcode **pinsn)
 	      break;
 
 	    case 'P':
-	      if (strncmp (s, "%pc", 3) == 0)
+	      if (startswith (s, "%pc"))
 		{
 		  s += 3;
 		  continue;
@@ -2273,7 +2209,7 @@ sparc_ip (char *str, const struct sparc_opcode **pinsn)
 	      break;
 
 	    case 'W':
-	      if (strncmp (s, "%tick", 5) == 0)
+	      if (startswith (s, "%tick"))
 		{
 		  s += 5;
 		  continue;
@@ -2380,7 +2316,7 @@ sparc_ip (char *str, const struct sparc_opcode **pinsn)
 	      break;
 
 	    case 'C':		/* Coprocessor state register.  */
-	      if (strncmp (s, "%csr", 4) == 0)
+	      if (startswith (s, "%csr"))
 		{
 		  s += 4;
 		  continue;
@@ -2699,7 +2635,7 @@ sparc_ip (char *str, const struct sparc_opcode **pinsn)
 	      }			/* float arg  */
 
 	    case 'F':
-	      if (strncmp (s, "%fsr", 4) == 0)
+	      if (startswith (s, "%fsr"))
 		{
 		  s += 4;
 		  continue;
@@ -2707,7 +2643,7 @@ sparc_ip (char *str, const struct sparc_opcode **pinsn)
 	      break;
 
 	    case '(':
-	      if (strncmp (s, "%efsr", 5) == 0)
+	      if (startswith (s, "%efsr"))
 		{
 		  s += 5;
 		  continue;
@@ -3044,7 +2980,7 @@ sparc_ip (char *str, const struct sparc_opcode **pinsn)
 	      }			/* Alternate space.  */
 
 	    case 'p':
-	      if (strncmp (s, "%psr", 4) == 0)
+	      if (startswith (s, "%psr"))
 		{
 		  s += 4;
 		  continue;
@@ -3052,7 +2988,7 @@ sparc_ip (char *str, const struct sparc_opcode **pinsn)
 	      break;
 
 	    case 'q':		/* Floating point queue.  */
-	      if (strncmp (s, "%fq", 3) == 0)
+	      if (startswith (s, "%fq"))
 		{
 		  s += 3;
 		  continue;
@@ -3060,7 +2996,7 @@ sparc_ip (char *str, const struct sparc_opcode **pinsn)
 	      break;
 
 	    case 'Q':		/* Coprocessor queue.  */
-	      if (strncmp (s, "%cq", 3) == 0)
+	      if (startswith (s, "%cq"))
 		{
 		  s += 3;
 		  continue;
@@ -3084,7 +3020,7 @@ sparc_ip (char *str, const struct sparc_opcode **pinsn)
 		  special_case = SPECIAL_CASE_SETX;
 		  continue;
 		}
-	      else if (strncmp (str, "fdiv", 4) == 0)
+	      else if (startswith (str, "fdiv"))
 		{
 		  special_case = SPECIAL_CASE_FDIV;
 		  continue;
@@ -3092,43 +3028,43 @@ sparc_ip (char *str, const struct sparc_opcode **pinsn)
 	      break;
 
 	    case 'o':
-	      if (strncmp (s, "%asi", 4) != 0)
+	      if (!startswith (s, "%asi"))
 		break;
 	      s += 4;
 	      continue;
 
 	    case 's':
-	      if (strncmp (s, "%fprs", 5) != 0)
+	      if (!startswith (s, "%fprs"))
 		break;
 	      s += 5;
 	      continue;
 
 	    case '{':
-	      if (strncmp (s, "%mcdper",7) != 0)
+	      if (!startswith (s, "%mcdper"))
 		break;
 	      s += 7;
 	      continue;
 
             case '&':
-              if (strncmp (s, "%entropy", 8) != 0)
+              if (!startswith (s, "%entropy"))
                 break;
               s += 8;
               continue;
 
 	    case 'E':
-	      if (strncmp (s, "%ccr", 4) != 0)
+	      if (!startswith (s, "%ccr"))
 		break;
 	      s += 4;
 	      continue;
 
 	    case 't':
-	      if (strncmp (s, "%tbr", 4) != 0)
+	      if (!startswith (s, "%tbr"))
 		break;
 	      s += 4;
 	      continue;
 
 	    case 'w':
-	      if (strncmp (s, "%wim", 4) != 0)
+	      if (!startswith (s, "%wim"))
 		break;
 	      s += 4;
 	      continue;
@@ -3176,7 +3112,7 @@ sparc_ip (char *str, const struct sparc_opcode **pinsn)
 	      }
 
 	    case 'y':
-	      if (strncmp (s, "%y", 2) != 0)
+	      if (!startswith (s, "%y"))
 		break;
 	      s += 2;
 	      continue;
@@ -3235,10 +3171,9 @@ sparc_ip (char *str, const struct sparc_opcode **pinsn)
               msg_str = sasi->name;
             }
 
-          bfd_uint64_t hwcaps
-	    = (((bfd_uint64_t) insn->hwcaps2) << 32) | insn->hwcaps;
+	  uint64_t hwcaps = ((uint64_t) insn->hwcaps2 << 32) | insn->hwcaps;
 
-#if defined(OBJ_ELF) && !defined(TE_SOLARIS)
+#ifndef TE_SOLARIS
 	  if (hwcaps)
 		  hwcap_seen |= hwcaps;
 #endif
@@ -3275,10 +3210,10 @@ sparc_ip (char *str, const struct sparc_opcode **pinsn)
 		}
 	      current_architecture = needed_architecture;
 	      hwcap_allowed
-                = (hwcap_allowed
-                   | hwcaps
-                   | (((bfd_uint64_t) sparc_opcode_archs[current_architecture].hwcaps2) << 32)
-                   | sparc_opcode_archs[current_architecture].hwcaps);
+		= (hwcap_allowed
+		   | hwcaps
+		   | ((uint64_t) sparc_opcode_archs[current_architecture].hwcaps2 << 32)
+		   | sparc_opcode_archs[current_architecture].hwcaps);
 	    }
 	  /* Conflict.  */
 	  /* ??? This seems to be a bit fragile.  What if the next entry in
@@ -3481,9 +3416,7 @@ output_insn (const struct sparc_opcode *insn, struct sparc_it *theinsn)
   last_insn = insn;
   last_opcode = theinsn->opcode;
 
-#ifdef OBJ_ELF
   dwarf2_emit_insn (4);
-#endif
 }
 
 const char *
@@ -3523,7 +3456,6 @@ md_apply_fix (fixS *fixP, valueT *valP, segT segment ATTRIBUTE_UNUSED)
 
   fixP->fx_addnumber = val;	/* Remember value for emit_reloc.  */
 
-#ifdef OBJ_ELF
   /* SPARC ELF relocations don't use an addend in the data field.  */
   if (fixP->fx_addsy != NULL)
     {
@@ -3561,52 +3493,12 @@ md_apply_fix (fixS *fixP, valueT *valP, segT segment ATTRIBUTE_UNUSED)
 
       return;
     }
-#endif
 
   /* This is a hack.  There should be a better way to
      handle this.  Probably in terms of howto fields, once
      we can look at these fixups in terms of howtos.  */
   if (fixP->fx_r_type == BFD_RELOC_32_PCREL_S2 && fixP->fx_addsy)
     val += fixP->fx_where + fixP->fx_frag->fr_address;
-
-#ifdef OBJ_AOUT
-  /* FIXME: More ridiculous gas reloc hacking.  If we are going to
-     generate a reloc, then we just want to let the reloc addend set
-     the value.  We do not want to also stuff the addend into the
-     object file.  Including the addend in the object file works when
-     doing a static link, because the linker will ignore the object
-     file contents.  However, the dynamic linker does not ignore the
-     object file contents.  */
-  if (fixP->fx_addsy != NULL
-      && fixP->fx_r_type != BFD_RELOC_32_PCREL_S2)
-    val = 0;
-
-  /* When generating PIC code, we do not want an addend for a reloc
-     against a local symbol.  We adjust fx_addnumber to cancel out the
-     value already included in val, and to also cancel out the
-     adjustment which bfd_install_relocation will create.  */
-  if (sparc_pic_code
-      && fixP->fx_r_type != BFD_RELOC_32_PCREL_S2
-      && fixP->fx_addsy != NULL
-      && ! S_IS_COMMON (fixP->fx_addsy)
-      && symbol_section_p (fixP->fx_addsy))
-    fixP->fx_addnumber -= 2 * S_GET_VALUE (fixP->fx_addsy);
-
-  /* When generating PIC code, we need to fiddle to get
-     bfd_install_relocation to do the right thing for a PC relative
-     reloc against a local symbol which we are going to keep.  */
-  if (sparc_pic_code
-      && fixP->fx_r_type == BFD_RELOC_32_PCREL_S2
-      && fixP->fx_addsy != NULL
-      && (S_IS_EXTERNAL (fixP->fx_addsy)
-	  || S_IS_WEAK (fixP->fx_addsy))
-      && S_IS_DEFINED (fixP->fx_addsy)
-      && ! S_IS_COMMON (fixP->fx_addsy))
-    {
-      val = 0;
-      fixP->fx_addnumber -= 2 * S_GET_VALUE (fixP->fx_addsy);
-    }
-#endif
 
   /* If this is a data relocation, just output VAL.  */
 
@@ -4045,21 +3937,16 @@ tc_gen_reloc (asection *section, fixS *fixp)
       return NULL;
     }
 
-#if defined (OBJ_ELF) || defined (OBJ_AOUT)
   /* If we are generating PIC code, we need to generate a different
      set of relocs.  */
 
-#ifdef OBJ_ELF
 #define GOT_NAME "_GLOBAL_OFFSET_TABLE_"
-#else
-#define GOT_NAME "__GLOBAL_OFFSET_TABLE_"
-#endif
 #ifdef TE_VXWORKS
 #define GOTT_BASE "__GOTT_BASE__"
 #define GOTT_INDEX "__GOTT_INDEX__"
 #endif
 
-  /* This code must be parallel to the OBJ_ELF tc_fix_adjustable.  */
+  /* This code must be parallel to tc_fix_adjustable.  */
 
   if (sparc_pic_code)
     {
@@ -4102,10 +3989,9 @@ tc_gen_reloc (asection *section, fixS *fixp)
 	  break;
 	}
     }
-#endif /* defined (OBJ_ELF) || defined (OBJ_AOUT)  */
 
   /* Nothing is aligned in DWARF debugging sections.  */
-  if (bfd_get_section_flags (stdoutput, section) & SEC_DEBUGGING)
+  if (bfd_section_flags (section) & SEC_DEBUGGING)
     switch (code)
       {
       case BFD_RELOC_16: code = BFD_RELOC_SPARC_UA16; break;
@@ -4129,25 +4015,6 @@ tc_gen_reloc (asection *section, fixS *fixp)
     }
 
   /* @@ Why fx_addnumber sometimes and fx_offset other times?  */
-#ifdef OBJ_AOUT
-
-  if (reloc->howto->pc_relative == 0
-      || code == BFD_RELOC_SPARC_PC10
-      || code == BFD_RELOC_SPARC_PC22)
-    reloc->addend = fixp->fx_addnumber;
-  else if (sparc_pic_code
-	   && fixp->fx_r_type == BFD_RELOC_32_PCREL_S2
-	   && fixp->fx_addsy != NULL
-	   && (S_IS_EXTERNAL (fixp->fx_addsy)
-	       || S_IS_WEAK (fixp->fx_addsy))
-	   && S_IS_DEFINED (fixp->fx_addsy)
-	   && ! S_IS_COMMON (fixp->fx_addsy))
-    reloc->addend = fixp->fx_addnumber;
-  else
-    reloc->addend = fixp->fx_offset - reloc->address;
-
-#else /* elf or coff  */
-
   if (code != BFD_RELOC_32_PCREL_S2
       && code != BFD_RELOC_SPARC_WDISP22
       && code != BFD_RELOC_SPARC_WDISP16
@@ -4163,7 +4030,6 @@ tc_gen_reloc (asection *section, fixS *fixp)
 		     + md_pcrel_from (fixp));
   else
     reloc->addend = fixp->fx_offset;
-#endif
 
   /* We expand R_SPARC_OLO10 to R_SPARC_LO10 and R_SPARC_13
      on the same location.  */
@@ -4196,20 +4062,7 @@ md_undefined_symbol (char *name ATTRIBUTE_UNUSED)
 valueT
 md_section_align (segT segment ATTRIBUTE_UNUSED, valueT size)
 {
-#ifndef OBJ_ELF
-  /* This is not right for ELF; a.out wants it, and COFF will force
-     the alignment anyways.  */
-  valueT align = ((valueT) 1
-		  << (valueT) bfd_get_section_alignment (stdoutput, segment));
-  valueT newsize;
-
-  /* Turn alignment value into a mask.  */
-  align--;
-  newsize = (size + align) & ~align;
-  return newsize;
-#else
   return size;
-#endif
 }
 
 /* Exactly what point is a PC-relative offset relative TO?
@@ -4248,10 +4101,6 @@ mylog2 (int value)
 
 /* Sort of like s_lcomm.  */
 
-#ifndef OBJ_ELF
-static int max_alignment = 15;
-#endif
-
 static void
 s_reserve (int ignore ATTRIBUTE_UNUSED)
 {
@@ -4288,8 +4137,8 @@ s_reserve (int ignore ATTRIBUTE_UNUSED)
   symbolP = symbol_find_or_make (name);
   *p = c;
 
-  if (strncmp (input_line_pointer, ",\"bss\"", 6) != 0
-      && strncmp (input_line_pointer, ",\".bss\"", 7) != 0)
+  if (!startswith (input_line_pointer, ",\"bss\"")
+      && !startswith (input_line_pointer, ",\".bss\""))
     {
       as_bad (_("bad .reserve segment -- expected BSS segment"));
       return;
@@ -4314,14 +4163,6 @@ s_reserve (int ignore ATTRIBUTE_UNUSED)
 	}
 
       align = (int) get_absolute_expression ();
-
-#ifndef OBJ_ELF
-      if (align > max_alignment)
-	{
-	  align = max_alignment;
-	  as_warn (_("alignment too large; assuming %d"), align);
-	}
-#endif
 
       if (align < 0)
 	{
@@ -4348,12 +4189,7 @@ s_reserve (int ignore ATTRIBUTE_UNUSED)
   else
     align = 0;
 
-  if (!S_IS_DEFINED (symbolP)
-#ifdef OBJ_AOUT
-      && S_GET_OTHER (symbolP) == 0
-      && S_GET_DESC (symbolP) == 0
-#endif
-      )
+  if (!S_IS_DEFINED (symbolP))
     {
       if (! need_pass_2)
 	{
@@ -4381,9 +4217,7 @@ s_reserve (int ignore ATTRIBUTE_UNUSED)
 
 	  subseg_set (current_seg, current_subseg);
 
-#ifdef OBJ_ELF
 	  S_SET_SIZE (symbolP, size);
-#endif
 	}
     }
   else
@@ -4444,13 +4278,6 @@ s_common (int ignore ATTRIBUTE_UNUSED)
 		   S_GET_NAME (symbolP), (long) S_GET_VALUE (symbolP), (long) size);
 	}
     }
-  else
-    {
-#ifndef OBJ_ELF
-      S_SET_VALUE (symbolP, (valueT) size);
-      S_SET_EXTERNAL (symbolP);
-#endif
-    }
   know (symbol_get_frag (symbolP) == &zero_address_frag);
   if (*input_line_pointer != ',')
     {
@@ -4464,14 +4291,6 @@ s_common (int ignore ATTRIBUTE_UNUSED)
     {
       temp = get_absolute_expression ();
 
-#ifndef OBJ_ELF
-      if (temp > max_alignment)
-	{
-	  temp = max_alignment;
-	  as_warn (_("alignment too large; assuming %ld"), (long) temp);
-	}
-#endif
-
       if (temp < 0)
 	{
 	  as_bad (_("negative alignment"));
@@ -4479,7 +4298,6 @@ s_common (int ignore ATTRIBUTE_UNUSED)
 	  return;
 	}
 
-#ifdef OBJ_ELF
       if (symbol_get_obj (symbolP)->local)
 	{
 	  segT old_sec;
@@ -4517,14 +4335,11 @@ s_common (int ignore ATTRIBUTE_UNUSED)
 	  subseg_set (old_sec, old_subsec);
 	}
       else
-#endif /* OBJ_ELF  */
 	{
 	allocate_common:
 	  S_SET_VALUE (symbolP, (valueT) size);
-#ifdef OBJ_ELF
 	  S_SET_ALIGN (symbolP, temp);
 	  S_SET_SIZE (symbolP, size);
-#endif
 	  S_SET_EXTERNAL (symbolP);
 	  S_SET_SEGMENT (symbolP, bfd_com_section_ptr);
 	}
@@ -4536,8 +4351,8 @@ s_common (int ignore ATTRIBUTE_UNUSED)
       if (*input_line_pointer == '.')
 	input_line_pointer++;
       /* @@ Some say data, some say bss.  */
-      if (strncmp (input_line_pointer, "bss\"", 4)
-	  && strncmp (input_line_pointer, "data\"", 5))
+      if (!startswith (input_line_pointer, "bss\"")
+	  && !startswith (input_line_pointer, "data\""))
 	{
 	  while (*--input_line_pointer != '"')
 	    ;
@@ -4584,25 +4399,25 @@ static void
 s_seg (int ignore ATTRIBUTE_UNUSED)
 {
 
-  if (strncmp (input_line_pointer, "\"text\"", 6) == 0)
+  if (startswith (input_line_pointer, "\"text\""))
     {
       input_line_pointer += 6;
       s_text (0);
       return;
     }
-  if (strncmp (input_line_pointer, "\"data\"", 6) == 0)
+  if (startswith (input_line_pointer, "\"data\""))
     {
       input_line_pointer += 6;
       s_data (0);
       return;
     }
-  if (strncmp (input_line_pointer, "\"data1\"", 7) == 0)
+  if (startswith (input_line_pointer, "\"data1\""))
     {
       input_line_pointer += 7;
       s_data1 ();
       return;
     }
-  if (strncmp (input_line_pointer, "\"bss\"", 5) == 0)
+  if (startswith (input_line_pointer, "\"bss\""))
     {
       input_line_pointer += 5;
       /* We only support 2 segments -- text and data -- for now, so
@@ -4660,7 +4475,6 @@ s_ncons (int bytes ATTRIBUTE_UNUSED)
   cons (sparc_arch_size == 32 ? 4 : 8);
 }
 
-#ifdef OBJ_ELF
 /* Handle the SPARC ELF .register pseudo-op.  This sets the binding of a
    global register.
    The syntax is:
@@ -4773,7 +4587,6 @@ sparc_adjust_symtab (void)
       S_SET_SEGMENT (sym, undefined_section);
     }
 }
-#endif
 
 /* If the --enforce-aligned-data option is used, we require .word,
    et. al., to be aligned correctly.  We do it by setting up an
@@ -4873,7 +4686,6 @@ sparc_handle_align (fragS *fragp)
     }
 }
 
-#ifdef OBJ_ELF
 /* Some special processing for a Sparc ELF file.  */
 
 void
@@ -4915,12 +4727,12 @@ sparc_cons (expressionS *exp, int size)
       && input_line_pointer[1] == 'r'
       && input_line_pointer[2] == '_')
     {
-      if (strncmp (input_line_pointer + 3, "disp", 4) == 0)
+      if (startswith (input_line_pointer + 3, "disp"))
 	{
 	  input_line_pointer += 7;
 	  sparc_cons_special_reloc = "disp";
 	}
-      else if (strncmp (input_line_pointer + 3, "plt", 3) == 0)
+      else if (startswith (input_line_pointer + 3, "plt"))
 	{
 	  if (size != 4 && size != 8)
 	    as_bad (_("Illegal operands: %%r_plt in %d-byte data field"), size);
@@ -4930,7 +4742,7 @@ sparc_cons (expressionS *exp, int size)
 	      sparc_cons_special_reloc = "plt";
 	    }
 	}
-      else if (strncmp (input_line_pointer + 3, "tls_dtpoff", 10) == 0)
+      else if (startswith (input_line_pointer + 3, "tls_dtpoff"))
 	{
 	  if (size != 4 && size != 8)
 	    as_bad (_("Illegal operands: %%r_tls_dtpoff in %d-byte data field"), size);
@@ -5038,8 +4850,6 @@ sparc_cons (expressionS *exp, int size)
     expression (exp);
   return sparc_cons_special_reloc;
 }
-
-#endif
 
 /* This is called by emit_expr via TC_CONS_FIX_NEW when creating a
    reloc for a cons.  We could use the definition there, except that

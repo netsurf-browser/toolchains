@@ -1,5 +1,5 @@
 /* Random host-dependent support code.
-   Copyright (C) 1995-2018 Free Software Foundation, Inc.
+   Copyright (C) 1995-2022 Free Software Foundation, Inc.
    Written by Ken Raeburn.
 
    This file is part of the GNU opcodes library.
@@ -32,29 +32,15 @@
 #endif
 
 #include "config.h"
-
-#include "ansidecl.h"
-
-#ifdef HAVE_STDLIB_H
 #include <stdlib.h>
-#endif
-
-#ifdef STRING_WITH_STRINGS
 #include <string.h>
-#include <strings.h>
-#else
-#ifdef HAVE_STRING_H
-#include <string.h>
-#else
-#ifdef HAVE_STRINGS_H
-#include <strings.h>
-#endif
-#endif
-#endif
+#include "ansidecl.h"
 
 #if !HAVE_DECL_STPCPY
 extern char *stpcpy (char *__dest, const char *__src);
 #endif
+
+#define opcodes_error_handler _bfd_error_handler
 
 /* Use sigsetjmp/siglongjmp without saving the signal mask if possible.
    It is faster than setjmp/longjmp on systems where the signal mask is
@@ -69,3 +55,5 @@ extern char *stpcpy (char *__dest, const char *__src);
 #define OPCODES_SIGSETJMP(buf)		setjmp(buf)
 #define OPCODES_SIGLONGJMP(buf,val)	longjmp((buf), (val))
 #endif
+
+#define POISON_BFD_BOOLEAN 1

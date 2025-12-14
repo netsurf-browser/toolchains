@@ -14,14 +14,14 @@ Program Header:
          filesz 0x00000080 memsz 0x00000080 flags r--
 #...
 DYNAMIC RELOCATION RECORDS
-OFFSET   TYPE              VALUE 
-00002288 R_CRIS_DTP        \*ABS\*\+0x0000002a
+OFFSET +TYPE +VALUE
+00002218 R_CRIS_DTP        \*ABS\*\+0x0000002a
 
 Contents of section .hash:
 #...
 Contents of section \.text:
- 0184 6fae0c00 00000000                    .*
+ 0114 6fae0c00 00000000                    .*
 #...
 Contents of section \.got:
- 227c 0c220000 0+ 0+ 0+  .*
- 228c 0+                             .*
+ 220c 9c210000 0+ 0+ 0+  .*
+ 221c 0+                             .*

@@ -252,9 +252,9 @@ foo:
  wbinvd
  ud2a
  mov    eax, cr2
- mov    eax, db2
+ mov    eax, dr2
  mov    cr2, eax
- mov    db2, eax
+ mov    dr2, eax
  mov    eax, tr2
  mov    tr2, eax
  wrmsr
@@ -650,7 +650,7 @@ fdiv   QWORD PTR [ebx]
 fdivp
 fdivp  st(3)
 fdivp  st(3),st
-fdivp  st,st(3)
+fdiv  st,st(3)
 fdivr
 fdivr  st(3)
 fdivr  st,st(3)
@@ -660,7 +660,7 @@ fdivr  QWORD PTR [ebx]
 fdivrp
 fdivrp st(3)
 fdivrp st(3),st
-fdivrp st,st(3)
+fdivr st,st(3)
 fmul
 fmul	st(3)
 fmul	st,st(3)
@@ -679,7 +679,7 @@ fsub   DWORD PTR [ebx]
 fsub   QWORD PTR [ebx]
 fsubp
 fsubp  st(3)
-fsubp  st,st(3)
+fsub  st,st(3)
 fsubp  st(3),st
 fsubr  st(3)
 fsubr  st,st(3)
@@ -689,7 +689,7 @@ fsubr  QWORD PTR [ebx]
 fsubrp
 fsubrp st(3)
 fsubrp st(3),st
-fsubrp st,st(3)
+fsubr st,st(3)
 
 fidivr  word ptr [ebx]
 fidivr  dword ptr [ebx]

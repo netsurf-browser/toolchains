@@ -15,7 +15,7 @@ Section Headers:
  +\[[ 0-9]+\] .dynstr +.*
  +\[[ 0-9]+\] .rela.dyn +.*
  +\[[ 0-9]+\] .rela.plt +.*
- +\[[ 0-9]+\] .plt +PROGBITS +0+420 0+420 0+20 10 +AX +0 +0 +(4|16)
+ +\[[ 0-9]+\] .plt +PROGBITS +0+3b0 0+3b0 0+20 10 +AX +0 +0 +(4|16)
  +\[[ 0-9]+\] .text +PROGBITS +0+1000 0+1000 0+153 00 +AX +0 +0 4096
  +\[[ 0-9]+\] .tdata +PROGBITS +0+201153 0+1153 0+60 00 WAT +0 +0 +1
  +\[[ 0-9]+\] .tbss +NOBITS +0+2011b3 0+11b3 0+20 00 WAT +0 +0 +1
@@ -29,7 +29,7 @@ Key to Flags:
 #...
 
 Elf file type is DYN \(Shared object file\)
-Entry point 0x1000
+Entry point 0x[0-9a-f]+
 There are [0-9]+ program headers, starting at offset [0-9]+
 
 Program Headers:
@@ -57,7 +57,7 @@ Dynamic section at offset 0x[0-9a-f]+ contains 16 entries:
  0x[0-9a-f]+ +\(PLTRELSZ\).*
  0x[0-9a-f]+ +\(PLTREL\).*
  0x[0-9a-f]+ +\(JMPREL\).*
- 0x[0-9a-f]+ +\(TLSDESC_PLT\) +0x430
+ 0x[0-9a-f]+ +\(TLSDESC_PLT\) +0x3c0
  0x[0-9a-f]+ +\(TLSDESC_GOT\) +0x201348
  0x[0-9a-f]+ +\(RELA\).*
  0x[0-9a-f]+ +\(RELASZ\).*
@@ -93,29 +93,14 @@ Symbol table '\.dynsym' contains [0-9]+ entries:
  +[0-9]+: 0+10 +0 +TLS +GLOBAL +DEFAULT +8 sg5
  +[0-9]+: 0+ +0 +TLS +GLOBAL +DEFAULT +8 sg1
  +[0-9]+: 0+1000 +0 +FUNC +GLOBAL +DEFAULT +7 fn1
- +[0-9]+: [0-9a-f]+ +0 +NOTYPE +GLOBAL +DEFAULT +12 __bss_start
  +[0-9]+: 0+4 +0 +TLS +GLOBAL +DEFAULT +8 sg2
  +[0-9]+: 0+14 +0 +TLS +GLOBAL +DEFAULT +8 sg6
  +[0-9]+: 0+18 +0 +TLS +GLOBAL +DEFAULT +8 sg7
- +[0-9]+: [0-9a-f]+ +0 +NOTYPE +GLOBAL +DEFAULT +12 _edata
- +[0-9]+: [0-9a-f]+ +0 +NOTYPE +GLOBAL +DEFAULT +12 _end
 
 Symbol table '\.symtab' contains [0-9]+ entries:
  +Num: +Value +Size +Type +Bind +Vis +Ndx +Name
  +[0-9]+: 0+ +0 +NOTYPE +LOCAL +DEFAULT +UND *
- +[0-9]+: [0-9a-f]+ +0 +SECTION +LOCAL +DEFAULT +1 *
- +[0-9]+: [0-9a-f]+ +0 +SECTION +LOCAL +DEFAULT +2 *
- +[0-9]+: [0-9a-f]+ +0 +SECTION +LOCAL +DEFAULT +3 *
- +[0-9]+: [0-9a-f]+ +0 +SECTION +LOCAL +DEFAULT +4 *
- +[0-9]+: [0-9a-f]+ +0 +SECTION +LOCAL +DEFAULT +5 *
- +[0-9]+: [0-9a-f]+ +0 +SECTION +LOCAL +DEFAULT +6 *
- +[0-9]+: [0-9a-f]+ +0 +SECTION +LOCAL +DEFAULT +7 *
- +[0-9]+: [0-9a-f]+ +0 +SECTION +LOCAL +DEFAULT +8 *
- +[0-9]+: [0-9a-f]+ +0 +SECTION +LOCAL +DEFAULT +9 *
- +[0-9]+: [0-9a-f]+ +0 +SECTION +LOCAL +DEFAULT +10 *
- +[0-9]+: [0-9a-f]+ +0 +SECTION +LOCAL +DEFAULT +11 *
- +[0-9]+: [0-9a-f]+ +0 +SECTION +LOCAL +DEFAULT +12 *
-.* FILE +LOCAL +DEFAULT +ABS tmpdir/tlsdesc.o
+.* FILE +LOCAL +DEFAULT +ABS .*tlsdesc.o
  +[0-9]+: 0+20 +0 +TLS +LOCAL +DEFAULT +8 sl1
  +[0-9]+: 0+24 +0 +TLS +LOCAL +DEFAULT +8 sl2
  +[0-9]+: 0+28 +0 +TLS +LOCAL +DEFAULT +8 sl3
@@ -150,9 +135,6 @@ Symbol table '\.symtab' contains [0-9]+ entries:
  +[0-9]+: 0+10 +0 +TLS +GLOBAL +DEFAULT +8 sg5
  +[0-9]+: 0+ +0 +TLS +GLOBAL +DEFAULT +8 sg1
  +[0-9]+: 0+1000 +0 +FUNC +GLOBAL +DEFAULT +7 fn1
- +[0-9]+: [0-9a-f]+ +0 +NOTYPE +GLOBAL +DEFAULT +12 __bss_start
  +[0-9]+: 0+4 +0 +TLS +GLOBAL +DEFAULT +8 sg2
  +[0-9]+: 0+14 +0 +TLS +GLOBAL +DEFAULT +8 sg6
  +[0-9]+: 0+18 +0 +TLS +GLOBAL +DEFAULT +8 sg7
- +[0-9]+: [0-9a-f]+ +0 +NOTYPE +GLOBAL +DEFAULT +12 _edata
- +[0-9]+: [0-9a-f]+ +0 +NOTYPE +GLOBAL +DEFAULT +12 _end

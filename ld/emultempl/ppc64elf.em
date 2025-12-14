@@ -1,5 +1,5 @@
 # This shell script emits a C file. -*- C -*-
-# Copyright (C) 2002-2018 Free Software Foundation, Inc.
+# Copyright (C) 2002-2022 Free Software Foundation, Inc.
 #
 # This file is part of the GNU Binutils.
 #
@@ -19,7 +19,7 @@
 # MA 02110-1301, USA.
 #
 
-# This file is sourced from elf32.em, and defines extra powerpc64-elf
+# This file is sourced from elf.em, and defines extra powerpc64-elf
 # specific routines.
 #
 fragment <<EOF
@@ -32,13 +32,15 @@ fragment <<EOF
 
 static asection *ppc_add_stub_section (const char *, asection *);
 static void ppc_layout_sections_again (void);
+static void ppc_edit (void);
 
 static struct ppc64_elf_params params = { NULL,
 					  &ppc_add_stub_section,
 					  &ppc_layout_sections_again,
-					  1, -1, 0,
+					  &ppc_edit,
+					  1, -1, -1, 0,
 					  ${DEFAULT_PLT_STATIC_CHAIN-0}, -1, 5,
-					  -1, 1, 0, -1, -1, 0};
+					  -1, -1, 0, 0, -1, -1, 0};
 
 /* Fake input file for stubs.  */
 static lang_input_statement_type *stub_file;
@@ -54,6 +56,9 @@ static int no_tls_opt = 0;
 
 /* Whether to run opd optimization.  */
 static int no_opd_opt = 0;
+
+/* Whether to convert inline PLT calls to direct.  */
+static int no_inline_opt = 0;
 
 /* Whether to run toc optimization.  */
 static int no_toc_opt = 0;
@@ -267,7 +272,7 @@ prelim_size_sections (void)
     {
       expld.phase = lang_mark_phase_enum;
       expld.dataseg.phase = exp_seg_none;
-      one_lang_size_sections_pass (NULL, FALSE);
+      one_lang_size_sections_pass (NULL, false);
       /* We must not cache anything from the preliminary sizing.  */
       lang_reset_memory_regions ();
     }
@@ -282,7 +287,28 @@ ppc_before_allocation (void)
 	  && !ppc64_elf_edit_opd (&link_info))
 	einfo (_("%X%P: can not edit %s: %E\n"), "opd");
 
-      if (ppc64_elf_tls_setup (&link_info)
+      if (!no_inline_opt
+	  && !bfd_link_relocatable (&link_info))
+	{
+	  prelim_size_sections ();
+
+	  if (!ppc64_elf_inline_plt (&link_info))
+	    einfo (_("%X%P: inline PLT: %E\n"));
+	}
+
+      if (!ppc64_elf_tls_setup (&link_info))
+	einfo (_("%X%P: TLS problem %E\n"));
+    }
+
+  gld${EMULATION_NAME}_before_allocation ();
+}
+
+static void
+ppc_edit (void)
+{
+  if (stub_file != NULL)
+    {
+      if (elf_hash_table (&link_info)->tls_sec != NULL
 	  && !no_tls_opt)
 	{
 	  /* Size the sections.  This is premature, but we want to know the
@@ -311,8 +337,6 @@ ppc_before_allocation (void)
 	    sort_toc_sections (&toc_os->children, NULL, NULL);
 	}
     }
-
-  gld${EMULATION_NAME}_before_allocation ();
 }
 
 struct hook_stub_info
@@ -323,11 +347,11 @@ struct hook_stub_info
 
 /* Traverse the linker tree to find the spot where the stub goes.  */
 
-static bfd_boolean
+static bool
 hook_in_stub (struct hook_stub_info *info, lang_statement_union_type **lp)
 {
   lang_statement_union_type *l;
-  bfd_boolean ret;
+  bool ret;
 
   for (; (l = *lp) != NULL; lp = &l->header.next)
     {
@@ -365,7 +389,7 @@ hook_in_stub (struct hook_stub_info *info, lang_statement_union_type **lp)
 		 before its associated input section.  */
 	      *lp = info->add.head;
 	      *(info->add.tail) = l;
-	      return TRUE;
+	      return true;
 	    }
 	  break;
 
@@ -386,7 +410,7 @@ hook_in_stub (struct hook_stub_info *info, lang_statement_union_type **lp)
 	  break;
 	}
     }
-  return FALSE;
+  return false;
 }
 
 
@@ -409,12 +433,11 @@ ppc_add_stub_section (const char *stub_sec_name, asection *input_section)
   stub_sec = bfd_make_section_anyway_with_flags (stub_file->the_bfd,
 						 stub_sec_name, flags);
   if (stub_sec == NULL
-      || !bfd_set_section_alignment (stub_file->the_bfd, stub_sec,
-				     (params.plt_stub_align > 5
-				      ? params.plt_stub_align
-				      : params.plt_stub_align < -5
-				      ? -params.plt_stub_align
-				      : 5)))
+      || !bfd_set_section_alignment (stub_sec, (params.plt_stub_align > 5
+						? params.plt_stub_align
+						: params.plt_stub_align < -5
+						? -params.plt_stub_align
+						: 5)))
     goto err_ret;
 
   output_section = input_section->output_section;
@@ -422,7 +445,7 @@ ppc_add_stub_section (const char *stub_sec_name, asection *input_section)
 
   info.input_section = input_section;
   lang_list_init (&info.add);
-  lang_add_section (&info.add, stub_sec, NULL, os);
+  lang_add_section (&info.add, stub_sec, NULL, NULL, os);
 
   if (info.add.head == NULL)
     goto err_ret;
@@ -444,7 +467,7 @@ ppc_layout_sections_again (void)
   /* If we have changed sizes of the stub sections, then we need
      to recalculate all the section offsets.  This may mean we need to
      add even more stubs.  */
-  gld${EMULATION_NAME}_map_segments (TRUE);
+  ldelf_map_segments (true);
 
   if (!bfd_link_relocatable (&link_info))
     ppc64_elf_set_toc (&link_info, link_info.output_bfd);
@@ -478,7 +501,7 @@ build_section_lists (lang_statement_union_type *statement)
     {
       asection *i = statement->input_section.section;
 
-      if (!((lang_input_statement_type *) i->owner->usrdata)->flags.just_syms
+      if (!bfd_input_just_syms (i->owner)
 	  && (i->flags & SEC_EXCLUDE) == 0
 	  && i->output_section != NULL
 	  && i->output_section->owner == link_info.output_bfd)
@@ -553,7 +576,7 @@ gld${EMULATION_NAME}_after_allocation (void)
      unneeded, after ppc_layout_sections_again.  Another call removes
      these sections from the segment map.  Their presence is
      innocuous except for confusing ELF_SECTION_IN_SEGMENT.  */
-  gld${EMULATION_NAME}_map_segments (need_laying_out > 0);
+  ldelf_map_segments (need_laying_out > 0);
 
   if (need_laying_out != -1 && !bfd_link_relocatable (&link_info))
     ppc64_elf_set_toc (&link_info, link_info.output_bfd);
@@ -591,8 +614,7 @@ gld${EMULATION_NAME}_finish (void)
       fprintf (stderr, "%s: %s\n", program_name, line);
     }
   fflush (stderr);
-  if (msg != NULL)
-    free (msg);
+  free (msg);
 
   finish_default ();
 }
@@ -640,42 +662,20 @@ gld${EMULATION_NAME}_new_vers_pattern (struct bfd_elf_version_expr *entry)
   return dot_entry;
 }
 
-
-/* Avoid processing the fake stub_file in vercheck, stat_needed and
-   check_needed routines.  */
-
-static void (*real_func) (lang_input_statement_type *);
-
-static void ppc_for_each_input_file_wrapper (lang_input_statement_type *l)
-{
-  if (l != stub_file)
-    (*real_func) (l);
-}
-
-static void
-ppc_lang_for_each_input_file (void (*func) (lang_input_statement_type *))
-{
-  real_func = func;
-  lang_for_each_input_file (&ppc_for_each_input_file_wrapper);
-}
-
-#define lang_for_each_input_file ppc_lang_for_each_input_file
-
 EOF
 
 if grep -q 'ld_elf32_spu_emulation' ldemul-list.h; then
   fragment <<EOF
 /* Special handling for embedded SPU executables.  */
-extern bfd_boolean embedded_spu_file (lang_input_statement_type *, const char *);
-static bfd_boolean gld${EMULATION_NAME}_load_symbols (lang_input_statement_type *);
+extern bool embedded_spu_file (lang_input_statement_type *, const char *);
 
-static bfd_boolean
+static bool
 ppc64_recognized_file (lang_input_statement_type *entry)
 {
   if (embedded_spu_file (entry, "-m64"))
-    return TRUE;
+    return true;
 
-  return gld${EMULATION_NAME}_load_symbols (entry);
+  return ldelf_load_symbols (entry);
 }
 EOF
 LDEMUL_RECOGNIZED_FILE=ppc64_recognized_file
@@ -692,12 +692,13 @@ enum ppc64_opt
   OPTION_NO_PLT_STATIC_CHAIN,
   OPTION_PLT_THREAD_SAFE,
   OPTION_NO_PLT_THREAD_SAFE,
-  OPTION_SPECULATE_INDIRECT_JUMPS,
-  OPTION_NO_SPECULATE_INDIRECT_JUMPS,
   OPTION_PLT_ALIGN,
   OPTION_NO_PLT_ALIGN,
   OPTION_PLT_LOCALENTRY,
   OPTION_NO_PLT_LOCALENTRY,
+  OPTION_POWER10_STUBS,
+  OPTION_NO_POWER10_STUBS,
+  OPTION_NO_PCREL_OPT,
   OPTION_STUBSYMS,
   OPTION_NO_STUBSYMS,
   OPTION_SAVRES,
@@ -707,7 +708,10 @@ enum ppc64_opt
   OPTION_NO_TLS_OPT,
   OPTION_TLS_GET_ADDR_OPT,
   OPTION_NO_TLS_GET_ADDR_OPT,
+  OPTION_TLS_GET_ADDR_REGSAVE,
+  OPTION_NO_TLS_GET_ADDR_REGSAVE,
   OPTION_NO_OPD_OPT,
+  OPTION_NO_INLINE_OPT,
   OPTION_NO_TOC_OPT,
   OPTION_NO_MULTI_TOC,
   OPTION_NO_TOC_SORT,
@@ -721,12 +725,13 @@ PARSE_AND_LIST_LONGOPTS=${PARSE_AND_LIST_LONGOPTS}'
   { "no-plt-static-chain", no_argument, NULL, OPTION_NO_PLT_STATIC_CHAIN },
   { "plt-thread-safe", no_argument, NULL, OPTION_PLT_THREAD_SAFE },
   { "no-plt-thread-safe", no_argument, NULL, OPTION_NO_PLT_THREAD_SAFE },
-  { "speculate-indirect-jumps", no_argument, NULL, OPTION_SPECULATE_INDIRECT_JUMPS },
-  { "no-speculate-indirect-jumps", no_argument, NULL, OPTION_NO_SPECULATE_INDIRECT_JUMPS },
   { "plt-align", optional_argument, NULL, OPTION_PLT_ALIGN },
   { "no-plt-align", no_argument, NULL, OPTION_NO_PLT_ALIGN },
   { "plt-localentry", optional_argument, NULL, OPTION_PLT_LOCALENTRY },
   { "no-plt-localentry", no_argument, NULL, OPTION_NO_PLT_LOCALENTRY },
+  { "power10-stubs", optional_argument, NULL, OPTION_POWER10_STUBS },
+  { "no-pcrel-optimize", no_argument, NULL, OPTION_NO_PCREL_OPT },
+  { "no-power10-stubs", no_argument, NULL, OPTION_NO_POWER10_STUBS },
   { "emit-stub-syms", no_argument, NULL, OPTION_STUBSYMS },
   { "no-emit-stub-syms", no_argument, NULL, OPTION_NO_STUBSYMS },
   { "dotsyms", no_argument, NULL, OPTION_DOTSYMS },
@@ -736,7 +741,10 @@ PARSE_AND_LIST_LONGOPTS=${PARSE_AND_LIST_LONGOPTS}'
   { "no-tls-optimize", no_argument, NULL, OPTION_NO_TLS_OPT },
   { "tls-get-addr-optimize", no_argument, NULL, OPTION_TLS_GET_ADDR_OPT },
   { "no-tls-get-addr-optimize", no_argument, NULL, OPTION_NO_TLS_GET_ADDR_OPT },
+  { "tls-get-addr-regsave", no_argument, NULL, OPTION_TLS_GET_ADDR_REGSAVE },
+  { "no-tls-get-addr-regsave", no_argument, NULL, OPTION_NO_TLS_GET_ADDR_REGSAVE},
   { "no-opd-optimize", no_argument, NULL, OPTION_NO_OPD_OPT },
+  { "no-inline-optimize", no_argument, NULL, OPTION_NO_INLINE_OPT },
   { "no-toc-optimize", no_argument, NULL, OPTION_NO_TOC_OPT },
   { "no-multi-toc", no_argument, NULL, OPTION_NO_MULTI_TOC },
   { "no-toc-sort", no_argument, NULL, OPTION_NO_TOC_SORT },
@@ -755,40 +763,43 @@ PARSE_AND_LIST_OPTIONS=${PARSE_AND_LIST_OPTIONS}'
                                 choose suitable defaults.\n"
 		   ));
   fprintf (file, _("\
-  --plt-static-chain          PLT call stubs should load r11.'${DEFAULT_PLT_STATIC_CHAIN- (default)}'\n"
+  --plt-static-chain          PLT call stubs should load r11'${DEFAULT_PLT_STATIC_CHAIN- (default)}'\n"
 		   ));
   fprintf (file, _("\
-  --no-plt-static-chain       PLT call stubs should not load r11.'${DEFAULT_PLT_STATIC_CHAIN+ (default)}'\n"
+  --no-plt-static-chain       PLT call stubs should not load r11'${DEFAULT_PLT_STATIC_CHAIN+ (default)}'\n"
 		   ));
   fprintf (file, _("\
-  --plt-thread-safe           PLT call stubs with load-load barrier.\n"
+  --plt-thread-safe           PLT call stubs with load-load barrier\n"
 		   ));
   fprintf (file, _("\
-  --no-plt-thread-safe        PLT call stubs without load-load barrier.\n"
+  --no-plt-thread-safe        PLT call stubs without barrier\n"
 		   ));
   fprintf (file, _("\
-  --speculate-indirect-jumps  PLT call stubs without speculation barrier.\n"
+  --plt-align [=<align>]      Align PLT call stubs to fit cache lines\n"
 		   ));
   fprintf (file, _("\
-  --no-speculate-indirect-jumps PLT call stubs with speculation barrier.\n"
+  --no-plt-align              Dont'\''t align individual PLT call stubs\n"
 		   ));
   fprintf (file, _("\
-  --plt-align [=<align>]      Align PLT call stubs to fit cache lines.\n"
+  --plt-localentry            Optimize calls to ELFv2 localentry:0 functions\n"
 		   ));
   fprintf (file, _("\
-  --no-plt-align              Dont'\''t align individual PLT call stubs.\n"
+  --no-plt-localentry         Don'\''t optimize ELFv2 calls\n"
 		   ));
   fprintf (file, _("\
-  --plt-localentry            Optimize calls to ELFv2 localentry:0 functions.\n"
+  --power10-stubs [=auto]     Use Power10 PLT call stubs (default auto)\n"
 		   ));
   fprintf (file, _("\
-  --no-plt-localentry         Don'\''t optimize ELFv2 calls.\n"
+  --no-pcrel-optimize         Don'\''t perform R_PPC64_PCREL_OPT optimization\n"
 		   ));
   fprintf (file, _("\
-  --emit-stub-syms            Label linker stubs with a symbol.\n"
+  --no-power10-stubs          Don'\''t use Power10 PLT call stubs\n"
 		   ));
   fprintf (file, _("\
-  --no-emit-stub-syms         Don'\''t label linker stubs with a symbol.\n"
+  --emit-stub-syms            Label linker stubs with a symbol\n"
+		   ));
+  fprintf (file, _("\
+  --no-emit-stub-syms         Don'\''t label linker stubs with a symbol\n"
 		   ));
   fprintf (file, _("\
   --dotsyms                   For every version pattern \"foo\" in a version\n\
@@ -797,7 +808,7 @@ PARSE_AND_LIST_OPTIONS=${PARSE_AND_LIST_OPTIONS}'
                                 descriptor symbols.  Defaults to on.\n"
 		   ));
   fprintf (file, _("\
-  --no-dotsyms                Don'\''t do anything special in version scripts.\n"
+  --no-dotsyms                Don'\''t do anything special in version scripts\n"
 		   ));
   fprintf (file, _("\
   --save-restore-funcs        Provide register save and restore routines used\n\
@@ -805,32 +816,41 @@ PARSE_AND_LIST_OPTIONS=${PARSE_AND_LIST_OPTIONS}'
                                 final link, off for ld -r.\n"
 		   ));
   fprintf (file, _("\
-  --no-save-restore-funcs     Don'\''t provide these routines.\n"
+  --no-save-restore-funcs     Don'\''t provide these routines\n"
 		   ));
   fprintf (file, _("\
-  --no-tls-optimize           Don'\''t try to optimize TLS accesses.\n"
+  --no-tls-optimize           Don'\''t try to optimize TLS accesses\n"
 		   ));
   fprintf (file, _("\
-  --tls-get-addr-optimize     Force use of special __tls_get_addr call.\n"
+  --tls-get-addr-optimize     Force use of special __tls_get_addr call\n"
 		   ));
   fprintf (file, _("\
-  --no-tls-get-addr-optimize  Don'\''t use a special __tls_get_addr call.\n"
+  --no-tls-get-addr-optimize  Don'\''t use a special __tls_get_addr call\n"
 		   ));
   fprintf (file, _("\
-  --no-opd-optimize           Don'\''t optimize the OPD section.\n"
+  --tls-get-addr-regsave      Force register save __tls_get_addr stub\n"
 		   ));
   fprintf (file, _("\
-  --no-toc-optimize           Don'\''t optimize the TOC section.\n"
+  --no-tls-get-addr-regsave   Don'\''t use register save __tls_get_addr stub\n"
 		   ));
   fprintf (file, _("\
-  --no-multi-toc              Disallow automatic multiple toc sections.\n"
+  --no-opd-optimize           Don'\''t optimize the OPD section\n"
 		   ));
   fprintf (file, _("\
-  --no-toc-sort               Don'\''t sort TOC and GOT sections.\n"
+  --no-inline-optimize        Don'\''t convert inline PLT to direct calls\n"
+		   ));
+  fprintf (file, _("\
+  --no-toc-optimize           Don'\''t optimize the TOC section\n"
+		   ));
+  fprintf (file, _("\
+  --no-multi-toc              Disallow automatic multiple toc sections\n"
+		   ));
+  fprintf (file, _("\
+  --no-toc-sort               Don'\''t sort TOC and GOT sections\n"
 		   ));
   fprintf (file, _("\
   --non-overlapping-opd       Canonicalize .opd, so that there are no\n\
-                                overlapping .opd entries.\n"
+                                overlapping .opd entries\n"
 		   ));
 '
 
@@ -840,7 +860,7 @@ PARSE_AND_LIST_ARGS_CASES=${PARSE_AND_LIST_ARGS_CASES}'
 	const char *end;
 	params.group_size = bfd_scan_vma (optarg, &end, 0);
 	if (*end)
-	  einfo (_("%P%F: invalid number `%s'\''\n"), optarg);
+	  einfo (_("%F%P: invalid number `%s'\''\n"), optarg);
       }
       break;
 
@@ -860,21 +880,13 @@ PARSE_AND_LIST_ARGS_CASES=${PARSE_AND_LIST_ARGS_CASES}'
       params.plt_thread_safe = 0;
       break;
 
-    case OPTION_SPECULATE_INDIRECT_JUMPS:
-      params.speculate_indirect_jumps = 1;
-      break;
-
-    case OPTION_NO_SPECULATE_INDIRECT_JUMPS:
-      params.speculate_indirect_jumps = 0;
-      break;
-
     case OPTION_PLT_ALIGN:
       if (optarg != NULL)
 	{
 	  char *end;
 	  long val = strtol (optarg, &end, 0);
 	  if (*end || (unsigned long) val + 8 > 16)
-	    einfo (_("%P%F: invalid --plt-align `%s'\''\n"), optarg);
+	    einfo (_("%F%P: invalid --plt-align `%s'\''\n"), optarg);
 	  params.plt_stub_align = val;
 	}
       else
@@ -891,6 +903,31 @@ PARSE_AND_LIST_ARGS_CASES=${PARSE_AND_LIST_ARGS_CASES}'
 
     case OPTION_NO_PLT_LOCALENTRY:
       params.plt_localentry0 = 0;
+      break;
+
+    case OPTION_POWER10_STUBS:
+      if (optarg != NULL)
+	{
+	  if (strcasecmp (optarg, "auto") == 0)
+	    params.power10_stubs = -1;
+	  else if (strcasecmp (optarg, "yes") == 0)
+	    params.power10_stubs = 1;
+	  else if (strcasecmp (optarg, "no") == 0)
+	    params.power10_stubs = 0;
+	  else
+	    einfo (_("%F%P: invalid --power10-stubs argument `%s'\''\n"),
+		   optarg);
+	}
+      else
+	params.power10_stubs = 1;
+      break;
+
+    case OPTION_NO_POWER10_STUBS:
+      params.power10_stubs = 0;
+      break;
+
+    case OPTION_NO_PCREL_OPT:
+      params.no_pcrel_opt = 1;
       break;
 
     case OPTION_STUBSYMS:
@@ -929,8 +966,20 @@ PARSE_AND_LIST_ARGS_CASES=${PARSE_AND_LIST_ARGS_CASES}'
       params.tls_get_addr_opt = 0;
       break;
 
+    case OPTION_TLS_GET_ADDR_REGSAVE:
+      params.no_tls_get_addr_regsave = 0;
+      break;
+
+    case OPTION_NO_TLS_GET_ADDR_REGSAVE:
+      params.no_tls_get_addr_regsave = 1;
+      break;
+
     case OPTION_NO_OPD_OPT:
       no_opd_opt = 1;
+      break;
+
+    case OPTION_NO_INLINE_OPT:
+      no_inline_opt = 1;
       break;
 
     case OPTION_NO_TOC_OPT:
@@ -957,7 +1006,8 @@ PARSE_AND_LIST_ARGS_CASES=${PARSE_AND_LIST_ARGS_CASES}'
       params.no_multi_toc = 1;
       no_toc_sort = 1;
       params.plt_static_chain = 1;
-      return FALSE;
+      params.no_pcrel_opt = 1;
+      return false;
 '
 
 # Put these extra ppc64elf routines in ld_${EMULATION_NAME}_emulation

@@ -1,6 +1,6 @@
 // tilegx.cc -- tilegx target support for gold.
 
-// Copyright (C) 2012-2018 Free Software Foundation, Inc.
+// Copyright (C) 2012-2022 Free Software Foundation, Inc.
 // Written by Jiong Wang (jiwang@tilera.com)
 
 // This file is part of gold.
@@ -688,6 +688,7 @@ const Target::Target_info Target_tilegx<64, false>::tilegx_info =
   NULL,                 // attributes_vendor
   "_start",		// entry_symbol_name
   32,			// hash_entry_size
+  elfcpp::SHT_PROGBITS,	// unwind_section_type
 };
 
 template<>
@@ -716,6 +717,7 @@ const Target::Target_info Target_tilegx<32, false>::tilegx_info =
   NULL,                 // attributes_vendor
   "_start",		// entry_symbol_name
   32,			// hash_entry_size
+  elfcpp::SHT_PROGBITS,	// unwind_section_type
 };
 
 template<>
@@ -744,6 +746,7 @@ const Target::Target_info Target_tilegx<64, true>::tilegx_info =
   NULL,                 // attributes_vendor
   "_start",		// entry_symbol_name
   32,			// hash_entry_size
+  elfcpp::SHT_PROGBITS,	// unwind_section_type
 };
 
 template<>
@@ -772,6 +775,7 @@ const Target::Target_info Target_tilegx<32, true>::tilegx_info =
   NULL,                  // attributes_vendor
   "_start",		// entry_symbol_name
   32,			// hash_entry_size
+  elfcpp::SHT_PROGBITS,	// unwind_section_type
 };
 
 // tilegx relocation handlers
@@ -4009,7 +4013,7 @@ Target_tilegx<size, big_endian>::Scan::global(Symbol_table* symtab,
               // only expand to plt against __tls_get_addr in GD model
               case elfcpp::R_TILEGX_TLS_GD_CALL:
                 if (opt_t == tls::TLSOPT_NONE) {
-                  // FIXME:  it's better '__tls_get_addr' referenced explictly
+                  // FIXME:  it's better '__tls_get_addr' referenced explicitly
                   if (!target->tls_get_addr_sym_defined_) {
                     Symbol* sym = NULL;
                     options::parse_set(NULL, "__tls_get_addr",

@@ -1,5 +1,5 @@
 /* This file is tc-m68k.h
-   Copyright (C) 1987-2018 Free Software Foundation, Inc.
+   Copyright (C) 1987-2022 Free Software Foundation, Inc.
 
    This file is part of GAS, the GNU Assembler.
 
@@ -18,47 +18,16 @@
    Software Foundation, 51 Franklin Street - Fifth Floor, Boston, MA
    02110-1301, USA.  */
 
+#ifndef TC_M68K_H
+#define TC_M68K_H
+
 #define TC_M68K 1
 
 struct fix;
 
 #define TARGET_BYTES_BIG_ENDIAN 1
 
-#ifdef OBJ_AOUT
-#ifdef TE_SUN3
-#define TARGET_FORMAT "a.out-sunos-big"
-#endif
-#ifdef TE_NetBSD
-#define TARGET_FORMAT "a.out-m68k-netbsd"
-#endif
-#ifdef TE_LINUX
-#define TARGET_FORMAT "a.out-m68k-linux"
-#endif
-#ifndef TARGET_FORMAT
-#define TARGET_FORMAT "a.out-zero-big"
-#endif
-#endif
-
-#ifdef OBJ_ELF
 #define TARGET_FORMAT "elf32-m68k"
-#endif
-
-#ifdef TE_APOLLO
-#define COFF_MAGIC		APOLLOM68KMAGIC
-#define COFF_AOUTHDR_MAGIC	APOLLO_COFF_VERSION_NUMBER
-#undef OBJ_COFF_OMIT_OPTIONAL_HEADER
-#endif
-
-#ifdef TE_AUX
-#define TARGET_FORMAT		"coff-m68k-aux"
-#endif
-#ifdef TE_DELTA
-#define TARGET_FORMAT		"coff-m68k-sysv"
-#endif
-
-#ifndef COFF_MAGIC
-#define COFF_MAGIC MC68MAGIC
-#endif
 #define TARGET_ARCH bfd_arch_m68k
 
 #define tc_comment_chars m68k_comment_chars
@@ -74,29 +43,14 @@ extern const char *m68k_comment_chars;
 #define REGISTER_PREFIX '%'
 #endif
 
-#if !defined (REGISTER_PREFIX_OPTIONAL)
-#if defined (M68KCOFF) || defined (OBJ_ELF)
+#ifndef REGISTER_PREFIX_OPTIONAL
 #define REGISTER_PREFIX_OPTIONAL 0
-#else /* ! (COFF || ELF) */
-#define REGISTER_PREFIX_OPTIONAL 1
-#endif /* ! (COFF || ELF) */
-#endif /* not def REGISTER_PREFIX and not def OPTIONAL_REGISTER_PREFIX */
-
-#ifdef TE_DELTA
-/* On the Delta, `%' can occur within a label name, but not as the
-   initial character.  */
-#define LEX_PCT LEX_NAME
-/* On the Delta, `~' can start a label name, but is converted to '.'.  */
-#define LEX_TILDE LEX_BEGIN_NAME
-#define tc_canonicalize_symbol_name(s) ((*(s) == '~' ? *(s) = '.' : '.'), s)
-/* On the Delta, dots are not required before pseudo-ops.  */
-#define NO_PSEUDO_DOT 1
 #endif
 
 extern void m68k_mri_mode_change (int);
 #define MRI_MODE_CHANGE(i) m68k_mri_mode_change (i)
 
-extern int m68k_conditional_pseudoop (pseudo_typeS *);
+extern int m68k_conditional_pseudoop (const pseudo_typeS *);
 #define tc_conditional_pseudoop(pop) m68k_conditional_pseudoop (pop)
 
 extern void m68k_frob_label (symbolS *);
@@ -124,7 +78,6 @@ while (0)
 #define RELAX_RELOC_PC16  BFD_RELOC_16_PCREL
 #define RELAX_RELOC_PC32  BFD_RELOC_32_PCREL
 
-#ifdef OBJ_ELF
 #define tc_fix_adjustable(X) tc_m68k_fix_adjustable(X)
 extern int tc_m68k_fix_adjustable (struct fix *);
 
@@ -139,7 +92,6 @@ extern int tc_m68k_fix_adjustable (struct fix *);
 
 #define elf_tc_final_processing m68k_elf_final_processing
 extern void m68k_elf_final_processing (void);
-#endif
 
 #define DIFF_EXPR_OK
 
@@ -147,8 +99,6 @@ extern int m68k_parse_long_option (char *);
 #define md_parse_long_option m68k_parse_long_option
 
 #define md_operand(x)
-
-#define TARGET_ARCH bfd_arch_m68k
 
 extern struct relax_type md_relax_table[];
 #define TC_GENERIC_RELAX_TABLE md_relax_table
@@ -192,3 +142,17 @@ struct broken_word;
   tc_m68k_check_adjusted_broken_word ((offsetT) (new_offset), (brokw))
 extern void tc_m68k_check_adjusted_broken_word (offsetT,
 						struct broken_word *);
+
+/* We want to warn if any text labels are misaligned.  In order to get
+   the right line number, we need to record the line number for each
+   label.  */
+struct m68k_tc_sy
+{
+  const char *file;
+  unsigned int line;
+  int text;
+};
+
+#define TC_SYMFIELD_TYPE struct m68k_tc_sy
+
+#endif /* TC_M68K_H */

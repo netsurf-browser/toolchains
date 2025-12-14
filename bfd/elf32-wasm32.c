@@ -1,5 +1,5 @@
 /* 32-bit ELF for the WebAssembly target
-   Copyright (C) 2017-2018 Free Software Foundation, Inc.
+   Copyright (C) 2017-2022 Free Software Foundation, Inc.
 
    This file is part of BFD, the Binary File Descriptor library.
 
@@ -22,7 +22,6 @@
 #include "bfd.h"
 #include "libbfd.h"
 #include "elf-bfd.h"
-#include "bfd_stdint.h"
 #include "libiberty.h"
 #include "elf/wasm32.h"
 
@@ -30,32 +29,32 @@ static reloc_howto_type elf32_wasm32_howto_table[] =
 {
   HOWTO (R_WASM32_NONE,		/* type */
 	 0,			/* rightshift */
-	 3,			/* size (0 = byte, 1 = short, 2 = long) */
+	 0,			/* size */
 	 0,			/* bitsize */
-	 FALSE,			/* pc_relative */
+	 false,			/* pc_relative */
 	 0,			/* bitpos */
 	 complain_overflow_dont,/* complain_on_overflow */
 	 bfd_elf_generic_reloc,	/* special_function */
 	 "R_WASM32_NONE",	/* name */
-	 FALSE,			/* partial_inplace */
+	 false,			/* partial_inplace */
 	 0,			/* src_mask */
 	 0,			/* dst_mask */
-	 FALSE),		/* pcrel_offset */
+	 false),		/* pcrel_offset */
 
   /* 32 bit absolute */
   HOWTO (R_WASM32_32,		/* type */
 	 0,			/* rightshift */
-	 2,			/* size (0 = byte, 1 = short, 2 = long) */
+	 4,			/* size */
 	 32,			/* bitsize */
-	 FALSE,			/* pc_relative */
+	 false,			/* pc_relative */
 	 0,			/* bitpos */
 	 complain_overflow_bitfield,/* complain_on_overflow */
 	 bfd_elf_generic_reloc,	/* special_function */
 	 "R_WASM32_32",	/* name */
-	 FALSE,			/* partial_inplace */
+	 false,			/* partial_inplace */
 	 0xffffffff,		/* src_mask */
 	 0xffffffff,		/* dst_mask */
-	 FALSE),		/* pcrel_offset */
+	 false),		/* pcrel_offset */
 };
 
 /* Look up the relocation CODE.  */
@@ -103,26 +102,29 @@ elf32_wasm32_rtype_to_howto (bfd *abfd, unsigned r_type)
   if (i >= ARRAY_SIZE (elf32_wasm32_howto_table))
     {
       /* xgettext:c-format */
-      _bfd_error_handler (_("%B: invalid relocation type %d"),
-			  abfd, (int) r_type);
-      i = R_WASM32_NONE;
+      _bfd_error_handler (_("%pB: unsupported relocation type %#x"),
+			  abfd, r_type);
+      bfd_set_error (bfd_error_bad_value);
+      return NULL;
     }
 
   if (elf32_wasm32_howto_table[i].type != r_type)
     return NULL;
 
-  return &elf32_wasm32_howto_table[i];
+  return elf32_wasm32_howto_table + i;
 }
 
 /* Translate the ELF-internal relocation RELA into CACHE_PTR.  */
 
-static void
-elf32_wasm32_info_to_howto_rela (bfd *abfd ATTRIBUTE_UNUSED,
+static bool
+elf32_wasm32_info_to_howto_rela (bfd *abfd,
 				arelent *cache_ptr,
 				Elf_Internal_Rela *dst)
 {
   unsigned int r_type = ELF32_R_TYPE (dst->r_info);
+
   cache_ptr->howto = elf32_wasm32_rtype_to_howto (abfd, r_type);
+  return cache_ptr->howto != NULL;
 }
 
 #define ELF_ARCH		bfd_arch_wasm32

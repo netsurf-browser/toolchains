@@ -1,5 +1,5 @@
 # This shell script emits a C file. -*- C -*-
-#   Copyright (C) 1991-2018 Free Software Foundation, Inc.
+#   Copyright (C) 1991-2022 Free Software Foundation, Inc.
 #
 # This file is part of the GNU Binutils.
 #
@@ -19,7 +19,7 @@
 # MA 02110-1301, USA.
 #
 
-# This file is sourced from elf32.em, and defines extra m68hc12-elf
+# This file is sourced from elf.em, and defines extra m68hc12-elf
 # and m68hc11-elf specific routines.  It is used to generate the
 # HC11/HC12 trampolines to call a far function by using a normal 'jsr/bsr'.
 #
@@ -104,8 +104,8 @@ m68hc11_elf_${EMULATION_NAME}_before_allocation (void)
      window (rx) : ORIGIN = 0x8000, LENGTH = 16K
 
      But for 68HC11 this is board specific.  The definition of such
-     memory region allows to control how this paged memory is accessed.  */
-  region = lang_memory_region_lookup (bank_window_name, FALSE);
+     memory region allows one to control how this paged memory is accessed.  */
+  region = lang_memory_region_lookup (bank_window_name, false);
 
   /* Check the length to see if it was defined in the script.  */
   if (region->length != 0)
@@ -130,9 +130,8 @@ m68hc11_elf_${EMULATION_NAME}_before_allocation (void)
 
       if (pinfo->bank_size != region->length)
 	{
-	  einfo (_("warning: the size of the 'window' memory region "
-		   "is not a power of 2\n"));
-	  einfo (_("warning: its size %d is truncated to %d\n"),
+	  einfo (_("%P: warning: the size of the 'window' memory region "
+		   "is not a power of 2; its size %d is truncated to %d\n"),
 		 region->length, pinfo->bank_size);
 	}
     }
@@ -160,7 +159,7 @@ m68hc11elf_create_output_section_statements (void)
 			     bfd_get_arch (link_info.output_bfd),
 			     bfd_get_mach (link_info.output_bfd)))
     {
-      einfo (_("%X%P: can not create BFD %E\n"));
+      einfo (_("%F%P: can not create BFD: %E\n"));
       return;
     }
 
@@ -176,11 +175,11 @@ struct hook_stub_info
 
 /* Traverse the linker tree to find the spot where the stub goes.  */
 
-static bfd_boolean
+static bool
 hook_in_stub (struct hook_stub_info *info, lang_statement_union_type **lp)
 {
   lang_statement_union_type *l;
-  bfd_boolean ret;
+  bool ret;
 
   for (; (l = *lp) != NULL; lp = &l->header.next)
     {
@@ -213,16 +212,14 @@ hook_in_stub (struct hook_stub_info *info, lang_statement_union_type **lp)
 
 	case lang_input_section_enum:
 	  if (l->input_section.section == info->input_section
-	      || strcmp (bfd_get_section_name (l->input_section.section->owner,
-					       l->input_section.section),
-			 bfd_get_section_name (info->input_section->owner,
-					       info->input_section)) == 0)
+	      || strcmp (bfd_section_name (l->input_section.section),
+			 bfd_section_name (info->input_section)) == 0)
 	    {
 	      /* We've found our section.  Insert the stub immediately
 		 before its associated input section.  */
 	      *lp = info->add.head;
 	      *(info->add.tail) = l;
-	      return TRUE;
+	      return true;
 	    }
 	  break;
 
@@ -243,7 +240,7 @@ hook_in_stub (struct hook_stub_info *info, lang_statement_union_type **lp)
 	  break;
 	}
     }
-  return FALSE;
+  return false;
 }
 
 
@@ -278,7 +275,7 @@ m68hc11elf_add_stub_section (const char *stub_sec_name,
      at the correct place.  */
   info.input_section = tramp_section;
   lang_list_init (&info.add);
-  lang_add_section (&info.add, stub_sec, NULL, os);
+  lang_add_section (&info.add, stub_sec, NULL, NULL, os);
 
   if (info.add.head == NULL)
     goto err_ret;
@@ -320,27 +317,6 @@ m68hc11elf_after_allocation (void)
   gld${EMULATION_NAME}_after_allocation ();
 }
 
-
-/* Avoid processing the fake stub_file in vercheck, stat_needed and
-   check_needed routines.  */
-
-static void (*real_func) (lang_input_statement_type *);
-
-static void m68hc11_for_each_input_file_wrapper (lang_input_statement_type *l)
-{
-  if (l != stub_file)
-    (*real_func) (l);
-}
-
-static void
-m68hc11_lang_for_each_input_file (void (*func) (lang_input_statement_type *))
-{
-  real_func = func;
-  lang_for_each_input_file (&m68hc11_for_each_input_file_wrapper);
-}
-
-#define lang_for_each_input_file m68hc11_lang_for_each_input_file
-
 EOF
 
 # Define some shell vars to insert bits of code into the standard elf
@@ -361,10 +337,10 @@ PARSE_AND_LIST_LONGOPTS='
 PARSE_AND_LIST_OPTIONS='
   fprintf (file, _(
 "  --no-trampoline             Do not generate the far trampolines used to call\n"
-"                                a far function using 'jsr' or 'bsr'.\n"
+"                                a far function using 'jsr' or 'bsr'\n"));
+  fprintf (file, _(
 "  --bank-window NAME          Specify the name of the memory region describing\n"
-"                                the layout of the memory bank window.\n"
-		   ));
+"                                the layout of the memory bank window\n"));
 '
 
 PARSE_AND_LIST_ARGS_CASES='

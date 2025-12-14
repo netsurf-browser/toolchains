@@ -1,5 +1,5 @@
 /* ELF attributes support (based on ARM EABI attributes).
-   Copyright (C) 2005-2018 Free Software Foundation, Inc.
+   Copyright (C) 2005-2022 Free Software Foundation, Inc.
 
    This file is part of BFD, the Binary File Descriptor library.
 
@@ -39,17 +39,19 @@ uleb128_size (unsigned int i)
 }
 
 /* Return TRUE if the attribute has the default value (0/"").  */
-static bfd_boolean
+static bool
 is_default_attr (obj_attribute *attr)
 {
+  if (ATTR_TYPE_HAS_ERROR (attr->type))
+    return true;
   if (ATTR_TYPE_HAS_INT_VAL (attr->type) && attr->i != 0)
-    return FALSE;
+    return false;
   if (ATTR_TYPE_HAS_STR_VAL (attr->type) && attr->s && *attr->s)
-    return FALSE;
+    return false;
   if (ATTR_TYPE_HAS_NO_DEFAULT (attr->type))
-    return FALSE;
+    return false;
 
-  return TRUE;
+  return true;
 }
 
 /* Return the size of a single attribute.  */
@@ -104,7 +106,7 @@ vendor_obj_attr_size (bfd *abfd, int vendor)
     size += obj_attr_size (list->tag, &list->attr);
 
   /* <size> <vendor_name> NUL 0x1 <size> */
-  return ((size || vendor == OBJ_ATTR_PROC)
+  return (size
 	  ? size + 10 + strlen (vendor_name)
 	  : 0);
 }
@@ -301,40 +303,69 @@ bfd_elf_add_obj_attr_int (bfd *abfd, int vendor, unsigned int tag, unsigned int 
 }
 
 /* Duplicate an object attribute string value.  */
-char *
-_bfd_elf_attr_strdup (bfd *abfd, const char * s)
+static char *
+elf_attr_strdup (bfd *abfd, const char *s, const char *end)
 {
-  char * p;
-  int len;
+  char *p;
+  size_t len;
 
-  len = strlen (s) + 1;
-  p = (char *) bfd_alloc (abfd, len);
-  return (char *) memcpy (p, s, len);
+  if (end)
+    len = strnlen (s, end - s);
+  else
+    len = strlen (s);
+
+  p = (char *) bfd_alloc (abfd, len + 1);
+  if (p != NULL)
+    {
+      memcpy (p, s, len);
+      p[len] = 0;
+    }
+  return p;
+}
+
+char *
+_bfd_elf_attr_strdup (bfd *abfd, const char *s)
+{
+  return elf_attr_strdup (abfd, s, NULL);
 }
 
 /* Add a string object attribute.  */
-void
-bfd_elf_add_obj_attr_string (bfd *abfd, int vendor, unsigned int tag, const char *s)
+static void
+elf_add_obj_attr_string (bfd *abfd, int vendor, unsigned int tag,
+			 const char *s, const char *end)
 {
   obj_attribute *attr;
 
   attr = elf_new_obj_attr (abfd, vendor, tag);
   attr->type = _bfd_elf_obj_attrs_arg_type (abfd, vendor, tag);
-  attr->s = _bfd_elf_attr_strdup (abfd, s);
+  attr->s = elf_attr_strdup (abfd, s, end);
+}
+
+void
+bfd_elf_add_obj_attr_string (bfd *abfd, int vendor, unsigned int tag,
+			     const char *s)
+{
+  elf_add_obj_attr_string (abfd, vendor, tag, s, NULL);
 }
 
 /* Add a int+string object attribute.  */
-void
-bfd_elf_add_obj_attr_int_string (bfd *abfd, int vendor,
-				 unsigned int tag,
-				 unsigned int i, const char *s)
+static void
+elf_add_obj_attr_int_string (bfd *abfd, int vendor, unsigned int tag,
+			     unsigned int i, const char *s, const char *end)
 {
   obj_attribute *attr;
 
   attr = elf_new_obj_attr (abfd, vendor, tag);
   attr->type = _bfd_elf_obj_attrs_arg_type (abfd, vendor, tag);
   attr->i = i;
-  attr->s = _bfd_elf_attr_strdup (abfd, s);
+  attr->s = elf_attr_strdup (abfd, s, end);
+}
+
+void
+bfd_elf_add_obj_attr_int_string (bfd *abfd, int vendor, unsigned int tag,
+				 unsigned int i, const char *s)
+{
+  elf_add_obj_attr_int_string (abfd, vendor, tag, i, s, NULL);
 }
 
 /* Copy the object attributes from IBFD to OBFD.  */
@@ -432,13 +463,24 @@ _bfd_elf_parse_attributes (bfd *abfd, Elf_Internal_Shdr * hdr)
   bfd_byte *contents;
   bfd_byte *p;
   bfd_byte *p_end;
-  bfd_vma len;
   const char *std_sec;
+  ufile_ptr filesize;
 
   /* PR 17512: file: 2844a11d.  */
   if (hdr->sh_size == 0)
     return;
-  contents = (bfd_byte *) bfd_malloc (hdr->sh_size + 1);
+
+  filesize = bfd_get_file_size (abfd);
+  if (filesize != 0 && hdr->sh_size > filesize)
+    {
+      /* xgettext:c-format */
+      _bfd_error_handler (_("%pB: error: attribute section '%pA' too big: %#llx"),
+			  abfd, hdr->bfd_section, (long long) hdr->sh_size);
+      bfd_set_error (bfd_error_invalid_operation);
+      return;
+    }
+
+  contents = (bfd_byte *) bfd_malloc (hdr->sh_size);
   if (!contents)
     return;
   if (!bfd_get_section_contents (abfd, hdr->bfd_section, contents, 0,
@@ -447,20 +489,17 @@ _bfd_elf_parse_attributes (bfd *abfd, Elf_Internal_Shdr * hdr)
       free (contents);
       return;
     }
-  /* Ensure that the buffer is NUL terminated.  */
-  contents[hdr->sh_size] = 0;
   p = contents;
   p_end = p + hdr->sh_size;
   std_sec = get_elf_backend_data (abfd)->obj_attrs_vendor;
 
-  if (*(p++) == 'A')
+  if (*p++ == 'A')
     {
-      len = hdr->sh_size - 1;
-
-      while (len > 0 && p < p_end - 4)
+      while (p_end - p >= 4)
 	{
-	  unsigned namelen;
-	  bfd_vma section_len;
+	  size_t len = p_end - p;
+	  size_t namelen;
+	  size_t section_len;
 	  int vendor;
 
 	  section_len = bfd_get_32 (abfd, p);
@@ -469,18 +508,17 @@ _bfd_elf_parse_attributes (bfd *abfd, Elf_Internal_Shdr * hdr)
 	    break;
 	  if (section_len > len)
 	    section_len = len;
-	  len -= section_len;
 	  if (section_len <= 4)
 	    {
-	      _bfd_error_handler (_("%B: error: attribute section length too small: %ld"),
-				  abfd, section_len);
+	      _bfd_error_handler
+		(_("%pB: error: attribute section length too small: %ld"),
+		 abfd, (long) section_len);
 	      break;
 	    }
 	  section_len -= 4;
 	  namelen = strnlen ((char *) p, section_len) + 1;
-	  if (namelen == 0 || namelen >= section_len)
+	  if (namelen >= section_len)
 	    break;
-	  section_len -= namelen;
 	  if (std_sec && strcmp ((char *) p, std_sec) == 0)
 	    vendor = OBJ_ATTR_PROC;
 	  else if (strcmp ((char *) p, "gnu") == 0)
@@ -488,36 +526,37 @@ _bfd_elf_parse_attributes (bfd *abfd, Elf_Internal_Shdr * hdr)
 	  else
 	    {
 	      /* Other vendor section.  Ignore it.  */
-	      p += namelen + section_len;
+	      p += section_len;
 	      continue;
 	    }
 
 	  p += namelen;
-	  while (section_len > 0 && p < p_end)
+	  section_len -= namelen;
+	  while (section_len > 0)
 	    {
 	      unsigned int tag;
-	      unsigned int n;
 	      unsigned int val;
-	      bfd_vma subsection_len;
-	      bfd_byte *end;
+	      size_t subsection_len;
+	      bfd_byte *end, *orig_p;
 
-	      tag = _bfd_safe_read_leb128 (abfd, p, &n, FALSE, p_end);
-	      p += n;
-	      if (p < p_end - 4)
-		subsection_len = bfd_get_32 (abfd, p);
+	      orig_p = p;
+	      tag = _bfd_safe_read_leb128 (abfd, &p, false, p_end);
+	      if (p_end - p >= 4)
+		{
+		  subsection_len = bfd_get_32 (abfd, p);
+		  p += 4;
+		}
 	      else
-		subsection_len = 0;
-	      p += 4;
-	      if (subsection_len == 0)
-		break;
+		{
+		  p = p_end;
+		  break;
+		}
 	      if (subsection_len > section_len)
 		subsection_len = section_len;
 	      section_len -= subsection_len;
-	      subsection_len -= n + 4;
-	      end = p + subsection_len;
-	      /* PR 17512: file: 0e8c0c90.  */
-	      if (end > p_end)
-		end = p_end;
+	      end = orig_p + subsection_len;
+	      if (end < p)
+		break;
 	      switch (tag)
 		{
 		case Tag_File:
@@ -525,26 +564,29 @@ _bfd_elf_parse_attributes (bfd *abfd, Elf_Internal_Shdr * hdr)
 		    {
 		      int type;
 
-		      tag = _bfd_safe_read_leb128 (abfd, p, &n, FALSE, end);
-		      p += n;
+		      tag = _bfd_safe_read_leb128 (abfd, &p, false, end);
 		      type = _bfd_elf_obj_attrs_arg_type (abfd, vendor, tag);
 		      switch (type & (ATTR_TYPE_FLAG_INT_VAL | ATTR_TYPE_FLAG_STR_VAL))
 			{
 			case ATTR_TYPE_FLAG_INT_VAL | ATTR_TYPE_FLAG_STR_VAL:
-			  val = _bfd_safe_read_leb128 (abfd, p, &n, FALSE, end);
-			  p += n;
-			  bfd_elf_add_obj_attr_int_string (abfd, vendor, tag,
-							   val, (char *) p);
-			  p += strlen ((char *)p) + 1;
+			  val = _bfd_safe_read_leb128 (abfd, &p, false, end);
+			  elf_add_obj_attr_int_string (abfd, vendor, tag, val,
+						       (char *) p,
+						       (char *) end);
+			  p += strnlen ((char *) p, end - p);
+			  if (p < end)
+			    p++;
 			  break;
 			case ATTR_TYPE_FLAG_STR_VAL:
-			  bfd_elf_add_obj_attr_string (abfd, vendor, tag,
-						       (char *) p);
-			  p += strlen ((char *)p) + 1;
+			  elf_add_obj_attr_string (abfd, vendor, tag,
+						   (char *) p,
+						   (char *) end);
+			  p += strnlen ((char *) p, end - p);
+			  if (p < end)
+			    p++;
 			  break;
 			case ATTR_TYPE_FLAG_INT_VAL:
-			  val = _bfd_safe_read_leb128 (abfd, p, &n, FALSE, end);
-			  p += n;
+			  val = _bfd_safe_read_leb128 (abfd, &p, false, end);
 			  bfd_elf_add_obj_attr_int (abfd, vendor, tag, val);
 			  break;
 			default:
@@ -557,9 +599,8 @@ _bfd_elf_parse_attributes (bfd *abfd, Elf_Internal_Shdr * hdr)
 		  /* Don't have anywhere convenient to attach these.
 		     Fall through for now.  */
 		default:
-		  /* Ignore things we don't kow about.  */
-		  p += subsection_len;
-		  subsection_len = 0;
+		  /* Ignore things we don't know about.  */
+		  p = end;
 		  break;
 		}
 	    }
@@ -578,7 +619,7 @@ _bfd_elf_parse_attributes (bfd *abfd, Elf_Internal_Shdr * hdr)
    is not presently called for targets without their own
    attributes.  */
 
-bfd_boolean
+bool
 _bfd_elf_merge_object_attributes (bfd *ibfd, struct bfd_link_info *info)
 {
   bfd *obfd = info->output_bfd;
@@ -600,39 +641,39 @@ _bfd_elf_merge_object_attributes (bfd *ibfd, struct bfd_link_info *info)
 	{
 	  _bfd_error_handler
 	    /* xgettext:c-format */
-		(_("error: %B: Object has vendor-specific contents that "
+		(_("error: %pB: object has vendor-specific contents that "
 		   "must be processed by the '%s' toolchain"),
 		 ibfd, in_attr->s);
-	  return FALSE;
+	  return false;
 	}
 
       if (in_attr->i != out_attr->i
 	  || (in_attr->i != 0 && strcmp (in_attr->s, out_attr->s) != 0))
 	{
 	  /* xgettext:c-format */
-	  _bfd_error_handler (_("error: %B: Object tag '%d, %s' is "
+	  _bfd_error_handler (_("error: %pB: object tag '%d, %s' is "
 				"incompatible with tag '%d, %s'"),
 			      ibfd,
 			      in_attr->i, in_attr->s ? in_attr->s : "",
 			      out_attr->i, out_attr->s ? out_attr->s : "");
-	  return FALSE;
+	  return false;
 	}
     }
 
-  return TRUE;
+  return true;
 }
 
 /* Merge an unknown processor-specific attribute TAG, within the range
    of known attributes, from IBFD into OBFD; return TRUE if the link
    is OK, FALSE if it must fail.  */
 
-bfd_boolean
+bool
 _bfd_elf_merge_unknown_attribute_low (bfd *ibfd, bfd *obfd, int tag)
 {
   obj_attribute *in_attr;
   obj_attribute *out_attr;
   bfd *err_bfd = NULL;
-  bfd_boolean result = TRUE;
+  bool result = true;
 
   in_attr = elf_known_obj_attributes_proc (ibfd);
   out_attr = elf_known_obj_attributes_proc (obfd);
@@ -663,13 +704,13 @@ _bfd_elf_merge_unknown_attribute_low (bfd *ibfd, bfd *obfd, int tag)
    the known range, from IBFD into OBFD; return TRUE if the link is
    OK, FALSE if it must fail.  */
 
-bfd_boolean
+bool
 _bfd_elf_merge_unknown_attribute_list (bfd *ibfd, bfd *obfd)
 {
   obj_attribute_list *in_list;
   obj_attribute_list *out_list;
   obj_attribute_list **out_listp;
-  bfd_boolean result = TRUE;
+  bool result = true;
 
   in_list = elf_other_obj_attributes_proc (ibfd);
   out_listp = &elf_other_obj_attributes_proc (obfd);

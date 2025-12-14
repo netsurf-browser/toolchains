@@ -2,19 +2,29 @@ cat <<EOF
 OUTPUT_FORMAT("${OUTPUT_FORMAT}","${OUTPUT_FORMAT}","${OUTPUT_FORMAT}")
 OUTPUT_ARCH(${ARCH})
 
+EOF
+
+test -n "${RELOCATING}" && cat <<EOF
+/* Allow memory sizes to be overridden from command line.  */
+__IMEM_SIZE = DEFINED(__IMEM_SIZE) ? __IMEM_SIZE : $TEXT_LENGTH;
+__DMEM_SIZE = DEFINED(__DMEM_SIZE) ? __DMEM_SIZE : $DATA_LENGTH;
+
 MEMORY
 {
-  imem   (x)   : ORIGIN = $TEXT_ORIGIN, LENGTH = $TEXT_LENGTH
-  dmem   (rw!x) : ORIGIN = $DATA_ORIGIN, LENGTH = $DATA_LENGTH
+  imem   (x)   : ORIGIN = $TEXT_ORIGIN, LENGTH = __IMEM_SIZE
+  dmem   (rw!x) : ORIGIN = $DATA_ORIGIN, LENGTH = __DMEM_SIZE
 }
 
 __HEAP_SIZE = DEFINED(__HEAP_SIZE) ? __HEAP_SIZE : 32;
 __STACK_SIZE = DEFINED(__STACK_SIZE) ? __STACK_SIZE : 512;
 
-${RELOCATING+ PROVIDE (_stack_top = ORIGIN(dmem) + LENGTH(dmem)) ; }
+PROVIDE (_stack_top = ORIGIN(dmem) + LENGTH(dmem));
 
-${RELOCATING+ENTRY (_start)}
+ENTRY (_start)
 
+EOF
+
+cat <<EOF
 SECTIONS
 {
   /* Read-only sections, merged into text segment: */
@@ -32,12 +42,14 @@ SECTIONS
     {
       *(.rel.text)
       ${RELOCATING+*(.rel.text.*)}
+      ${RELOCATING+*(.rel.text:*)}
       ${RELOCATING+*(.rel.gnu.linkonce.t*)}
     }
   .rela.text   ${RELOCATING-0} :
     {
       *(.rela.text)
       ${RELOCATING+*(.rela.text.*)}
+      ${RELOCATING+*(.rela.text:*)}
       ${RELOCATING+*(.rela.gnu.linkonce.t*)}
     }
   .rel.fini    ${RELOCATING-0} : { *(.rel.fini)		}
@@ -46,36 +58,40 @@ SECTIONS
     {
       *(.rel.rodata)
       ${RELOCATING+*(.rel.rodata.*)}
+      ${RELOCATING+*(.rel.rodata:*)}
       ${RELOCATING+*(.rel.gnu.linkonce.r*)}
     }
   .rela.rodata ${RELOCATING-0} :
     {
       *(.rela.rodata)
       ${RELOCATING+*(.rela.rodata.*)}
+      ${RELOCATING+*(.rela.rodata:*)}
       ${RELOCATING+*(.rela.gnu.linkonce.r*)}
     }
   .rel.data    ${RELOCATING-0} :
     {
       *(.rel.data)
       ${RELOCATING+*(.rel.data.*)}
+      ${RELOCATING+*(.rel.data:*)}
       ${RELOCATING+*(.rel.gnu.linkonce.d*)}
     }
   .rela.data   ${RELOCATING-0} :
     {
       *(.rela.data)
       ${RELOCATING+*(.rela.data.*)}
+      ${RELOCATING+*(.rela.data:*)}
       ${RELOCATING+*(.rela.gnu.linkonce.d*)}
     }
-  .rel.ctors   ${RELOCATING-0} : { *(.rel.ctors)	}
-  .rela.ctors  ${RELOCATING-0} : { *(.rela.ctors)	}
-  .rel.dtors   ${RELOCATING-0} : { *(.rel.dtors)	}
-  .rela.dtors  ${RELOCATING-0} : { *(.rela.dtors)	}
-  .rel.got     ${RELOCATING-0} : { *(.rel.got)		}
-  .rela.got    ${RELOCATING-0} : { *(.rela.got)		}
-  .rel.bss     ${RELOCATING-0} : { *(.rel.bss)		}
-  .rela.bss    ${RELOCATING-0} : { *(.rela.bss)		}
-  .rel.plt     ${RELOCATING-0} : { *(.rel.plt)		}
-  .rela.plt    ${RELOCATING-0} : { *(.rela.plt)		}
+  .rel.init_array   	${RELOCATING-0} : { *(.rel.init_array)	}
+  .rela.init_array  	${RELOCATING-0} : { *(.rela.init_array)	}
+  .rel.fini_array   	${RELOCATING-0} : { *(.rel.fini_array)	}
+  .rela.fini_array  	${RELOCATING-0} : { *(.rela.fini_array)	}
+  .rel.got     		${RELOCATING-0} : { *(.rel.got)		}
+  .rela.got    		${RELOCATING-0} : { *(.rela.got)	}
+  .rel.bss     		${RELOCATING-0} : { *(.rel.bss)		}
+  .rela.bss    		${RELOCATING-0} : { *(.rela.bss)	}
+  .rel.plt     		${RELOCATING-0} : { *(.rel.plt)		}
+  .rela.plt    		${RELOCATING-0} : { *(.rela.plt)	}
 
   /* Internal text space.  */
   .text ${RELOCATING-0} :
@@ -92,6 +108,8 @@ SECTIONS
     ${RELOCATING+. = ALIGN(4);}
     ${RELOCATING+*(.text.*)}
     ${RELOCATING+. = ALIGN(4);}
+    ${RELOCATING+*(.text:*)}
+    ${RELOCATING+. = ALIGN(4);}
     ${RELOCATING+*(.gnu.linkonce.t*)}
     ${RELOCATING+. = ALIGN(4);}
 
@@ -105,61 +123,71 @@ SECTIONS
 
     /* CRT is prepared for constructor/destructor table to have
        a "valid" NULL address.  */
-    ${CONSTRUCTING+ _ctors_start = . ; }
-    ${CONSTRUCTING+ KEEP (*(SORT_BY_INIT_PRIORITY(.ctors.*)))}
-    ${CONSTRUCTING+ KEEP (*(.ctors))}
-    ${CONSTRUCTING+ _ctors_end = . ; }
-    ${CONSTRUCTING+ _dtors_start = . ; }
-    ${CONSTRUCTING+ KEEP (*(SORT_BY_INIT_PRIORITY(.dtors.*)))}
-    ${CONSTRUCTING+ KEEP (*(.dtors))}
-    ${CONSTRUCTING+ _dtors_end = . ; }
+    ${CONSTRUCTING+ __init_array_start = . ; }
+    ${CONSTRUCTING+ KEEP (*(SORT_BY_INIT_PRIORITY(.init_array.*)))}
+    ${CONSTRUCTING+ KEEP (*(.init_array))}
+    ${CONSTRUCTING+ __init_array_end = . ; }
+    ${CONSTRUCTING+ __fini_array_start = . ; }
+    ${CONSTRUCTING+ KEEP (*(SORT_BY_INIT_PRIORITY(.fini_array.*)))}
+    ${CONSTRUCTING+ KEEP (*(.fini_array))}
+    ${CONSTRUCTING+ __fini_array_end = . ; }
 
-    /* DATA memory starts at address 0.  So to avoid placing a valid static
+    ${RELOCATING+/* DATA memory starts at address 0.  So to avoid placing a valid static
        variable at the invalid NULL address, we introduce the .data.atzero
        section.  If CRT can make some use of it - great.  Otherwise skip a
        word.  In all cases .data/.bss sections must start at non-zero.  */
-    . += (. == 0 ? 4 : 0);
+    . += (. == 0 ? 4 : 0);}
 
     ${RELOCATING+ PROVIDE (_data_start = .) ; }
     *(.data)
     ${RELOCATING+ *(.data*)}
+    ${RELOCATING+ *(.data:*)}
     ${RELOCATING+ *(.rodata)  /* We need to include .rodata here if gcc is used.  */}
     ${RELOCATING+ *(.rodata.*) /* with -fdata-sections.  */}
+    ${RELOCATING+ *(.rodata:*)}
     ${RELOCATING+*(.gnu.linkonce.d*)}
     ${RELOCATING+*(.gnu.linkonce.r*)}
     ${RELOCATING+. = ALIGN(4);}
     ${RELOCATING+ PROVIDE (_data_end = .) ; }
   } ${RELOCATING+ > dmem }
 
-  .resource_table ${RELOCATING-0} :
+  /* Linux remoteproc loader requires the resource_table section
+     start address to be aligned to 8 bytes.  */
+  .resource_table ${RELOCATING-0} ${RELOCATING+ ALIGN(8)} :
   {
-    *(.resource_table)
     KEEP (*(.resource_table))
-  }  > dmem
+  } ${RELOCATING+ > dmem}
 
   .bss ${RELOCATING-0} :
   {
     ${RELOCATING+ PROVIDE (_bss_start = .) ; }
     *(.bss)
     ${RELOCATING+ *(.bss.*)}
+    ${RELOCATING+ *(.bss:*)}
     ${RELOCATING+*(.gnu.linkonce.b*)}
-    *(COMMON)
+    ${RELOCATING+*(COMMON)}
     ${RELOCATING+ PROVIDE (_bss_end = .) ; }
   } ${RELOCATING+ > dmem}
 
   /* Global data not cleared after reset.  */
-  .noinit ${RELOCATING-0}:
+  .noinit ${RELOCATING-0} :
   {
     ${RELOCATING+ PROVIDE (_noinit_start = .) ; }
-    *(.noinit)
+    *(.noinit${RELOCATING+ .noinit.* .gnu.linkonce.n.*})
     ${RELOCATING+ PROVIDE (_noinit_end = .) ; }
     ${RELOCATING+ PROVIDE (_heap_start = .) ; }
     ${RELOCATING+ . += __HEAP_SIZE ; }
-    /* Stack is not here really.  It will be put at the end of DMEM.
+    ${RELOCATING+/* Stack is not here really.  It will be put at the end of DMEM.
        But we take into account its size here, in order to allow
-       for MEMORY overflow checking during link time.  */
+       for MEMORY overflow checking during link time.  */}
     ${RELOCATING+ . += __STACK_SIZE ; }
   } ${RELOCATING+ > dmem}
+
+  /* Remoteproc loader in Linux kernel 5.10 and later reads this section
+     to setup the PRUSS interrupt controller.  The interrupt map section
+     is never referenced from PRU firmware, so there is no need to
+     place it in the target dmem memory.  */
+  .pru_irq_map 0 : { *(.pru_irq_map) }
 
   /* Stabs debugging sections.  */
   .stab 0 : { *(.stab) }
@@ -169,7 +197,7 @@ SECTIONS
   .stab.index 0 : { *(.stab.index) }
   .stab.indexstr 0 : { *(.stab.indexstr) }
   .comment 0 : { *(.comment) }
-  .note.gnu.build-id : { *(.note.gnu.build-id) }
+  .note.gnu.build-id ${RELOCATING-0} : { *(.note.gnu.build-id) }
 EOF
 
 . $srcdir/scripttempl/DWARF.sc

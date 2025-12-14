@@ -26,7 +26,7 @@ Key to Flags:
 #...
 
 Elf file type is DYN \(Shared object file\)
-Entry point 0x1000
+Entry point 0x[0-9a-f]+
 There are [0-9]+ program headers, starting at offset [0-9]+
 
 Program Headers:
@@ -75,24 +75,12 @@ Symbol table '\.dynsym' contains [0-9]+ entries:
  +[0-9]+: 0+1000 +0 +FUNC +GLOBAL +DEFAULT +5 fn3
  +[0-9]+: 0+ +0 +TLS +GLOBAL +DEFAULT +UND sg5
  +[0-9]+: 0+ +0 +TLS +GLOBAL +DEFAULT +UND sg1
- +[0-9]+: [0-9a-f]+ +0 +NOTYPE +GLOBAL +DEFAULT +9 __bss_start
  +[0-9]+: 0+ +0 +TLS +GLOBAL +DEFAULT +UND sg2
- +[0-9]+: [0-9a-f]+ +0 +NOTYPE +GLOBAL +DEFAULT +9 _edata
- +[0-9]+: [0-9a-f]+ +0 +NOTYPE +GLOBAL +DEFAULT +9 _end
 
 Symbol table '\.symtab' contains [0-9]+ entries:
  +Num: +Value +Size +Type +Bind +Vis +Ndx +Name
  +[0-9]+: 0+ +0 +NOTYPE +LOCAL +DEFAULT +UND *
- +[0-9]+: [0-9a-f]+ +0 +SECTION +LOCAL +DEFAULT +1 *
- +[0-9]+: [0-9a-f]+ +0 +SECTION +LOCAL +DEFAULT +2 *
- +[0-9]+: [0-9a-f]+ +0 +SECTION +LOCAL +DEFAULT +3 *
- +[0-9]+: [0-9a-f]+ +0 +SECTION +LOCAL +DEFAULT +4 *
- +[0-9]+: [0-9a-f]+ +0 +SECTION +LOCAL +DEFAULT +5 *
- +[0-9]+: [0-9a-f]+ +0 +SECTION +LOCAL +DEFAULT +6 *
- +[0-9]+: [0-9a-f]+ +0 +SECTION +LOCAL +DEFAULT +7 *
- +[0-9]+: [0-9a-f]+ +0 +SECTION +LOCAL +DEFAULT +8 *
- +[0-9]+: [0-9a-f]+ +0 +SECTION +LOCAL +DEFAULT +9 *
-.* FILE +LOCAL +DEFAULT +ABS tmpdir/tlsnopic1.o
+.* FILE +LOCAL +DEFAULT +ABS .*tlsnopic1.o
  +[0-9]+: 0+00 +0 +TLS +LOCAL +DEFAULT +6 bl1
  +[0-9]+: 0+04 +0 +TLS +LOCAL +DEFAULT +6 bl2
  +[0-9]+: 0+08 +0 +TLS +LOCAL +DEFAULT +6 bl3
@@ -110,7 +98,4 @@ Symbol table '\.symtab' contains [0-9]+ entries:
  +[0-9]+: 0+1000 +0 +FUNC +GLOBAL +DEFAULT +5 fn3
  +[0-9]+: 0+ +0 +TLS +GLOBAL +DEFAULT +UND sg5
  +[0-9]+: 0+ +0 +TLS +GLOBAL +DEFAULT +UND sg1
- +[0-9]+: [0-9a-f]+ +0 +NOTYPE +GLOBAL +DEFAULT +9 __bss_start
  +[0-9]+: 0+ +0 +TLS +GLOBAL +DEFAULT +UND sg2
- +[0-9]+: [0-9a-f]+ +0 +NOTYPE +GLOBAL +DEFAULT +9 _edata
- +[0-9]+: [0-9a-f]+ +0 +NOTYPE +GLOBAL +DEFAULT +9 _end

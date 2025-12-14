@@ -1,6 +1,6 @@
 // layout.cc -- lay out output file sections for gold
 
-// Copyright (C) 2006-2018 Free Software Foundation, Inc.
+// Copyright (C) 2006-2022 Free Software Foundation, Inc.
 // Written by Ian Lance Taylor <iant@google.com>.
 
 // This file is part of gold.
@@ -466,6 +466,7 @@ Layout::Layout(int number_of_input_files, Script_options* script_options)
     unique_segment_for_sections_specified_(false),
     incremental_inputs_(NULL),
     record_output_section_data_from_script_(false),
+    lto_slim_object_(false),
     script_output_section_data_list_(),
     segment_states_(NULL),
     relaxation_debug_check_(NULL),
@@ -474,7 +475,8 @@ Layout::Layout(int number_of_input_files, Script_options* script_options)
     input_section_position_(),
     input_section_glob_(),
     incremental_base_(NULL),
-    free_list_()
+    free_list_(),
+    gnu_properties_()
 {
   // Make space for more than enough segments for a typical file.
   // This is just for efficiency--it's OK if we wind up needing more.
@@ -1097,7 +1099,8 @@ Layout::init_fixed_output_section(const char* name,
   typename elfcpp::Elf_types<size>::Elf_Addr sh_addr = shdr.get_sh_addr();
   typename elfcpp::Elf_types<size>::Elf_Off sh_offset = shdr.get_sh_offset();
   typename elfcpp::Elf_types<size>::Elf_WXword sh_size = shdr.get_sh_size();
-  typename elfcpp::Elf_types<size>::Elf_WXword sh_flags = shdr.get_sh_flags();
+  typename elfcpp::Elf_types<size>::Elf_WXword sh_flags =
+      this->get_output_section_flags(shdr.get_sh_flags());
   typename elfcpp::Elf_types<size>::Elf_WXword sh_addralign =
       shdr.get_sh_addralign();
 
@@ -1127,7 +1130,8 @@ Layout::special_ordering_of_input_section(const char* name)
     ".text.unlikely",
     ".text.exit",
     ".text.startup",
-    ".text.hot"
+    ".text.hot",
+    ".text.sorted"
   };
 
   for (size_t i = 0;
@@ -1153,14 +1157,13 @@ template<int size, bool big_endian>
 Output_section*
 Layout::layout(Sized_relobj_file<size, big_endian>* object, unsigned int shndx,
 	       const char* name, const elfcpp::Shdr<size, big_endian>& shdr,
-	       unsigned int reloc_shndx, unsigned int, off_t* off)
+	       unsigned int sh_type, unsigned int reloc_shndx,
+	       unsigned int, off_t* off)
 {
   *off = 0;
 
   if (!this->include_section(object, name, shdr))
     return NULL;
-
-  elfcpp::Elf_Word sh_type = shdr.get_sh_type();
 
   // In a relocatable link a grouped section must not be combined with
   // any other sections.
@@ -1170,35 +1173,38 @@ Layout::layout(Sized_relobj_file<size, big_endian>* object, unsigned int shndx,
     {
       // Some flags in the input section should not be automatically
       // copied to the output section.
-      elfcpp::Elf_Xword flags = (shdr.get_sh_flags()
-				 & ~ elfcpp::SHF_COMPRESSED);
+      elfcpp::Elf_Xword sh_flags = (shdr.get_sh_flags()
+				    & ~ elfcpp::SHF_COMPRESSED);
       name = this->namepool_.add(name, true, NULL);
-      os = this->make_output_section(name, sh_type, flags,
-				     ORDER_INVALID, false);
+      os = this->make_output_section(name, sh_type, sh_flags, ORDER_INVALID,
+				     false);
     }
   else
     {
+      // Get the section flags and mask out any flags that do not
+      // take part in section matching.
+      elfcpp::Elf_Xword sh_flags
+	  = (this->get_output_section_flags(shdr.get_sh_flags())
+	     & ~object->osabi().ignored_sh_flags());
+
       // All ".text.unlikely.*" sections can be moved to a unique
       // segment with --text-unlikely-segment option.
       bool text_unlikely_segment
-          = (parameters->options().text_unlikely_segment()
-             && is_prefix_of(".text.unlikely",
-                             object->section_name(shndx).c_str()));
+	  = (parameters->options().text_unlikely_segment()
+	     && is_prefix_of(".text.unlikely",
+			     object->section_name(shndx).c_str()));
       if (text_unlikely_segment)
-        {
-	  elfcpp::Elf_Xword flags
-	    = this->get_output_section_flags(shdr.get_sh_flags());
-
+	{
 	  Stringpool::Key name_key;
 	  const char* os_name = this->namepool_.add(".text.unlikely", true,
 						    &name_key);
-	  os = this->get_output_section(os_name, name_key, sh_type, flags,
+	  os = this->get_output_section(os_name, name_key, sh_type, sh_flags,
 					ORDER_INVALID, false);
-          // Map this output section to a unique segment.  This is done to
-          // separate "text" that is not likely to be executed from "text"
-          // that is likely executed.
+	  // Map this output section to a unique segment.  This is done to
+	  // separate "text" that is not likely to be executed from "text"
+	  // that is likely executed.
 	  os->set_is_unique_segment();
-        }
+	}
       else
 	{
 	  // Plugins can choose to place one or more subsets of sections in
@@ -1210,28 +1216,24 @@ Layout::layout(Sized_relobj_file<size, big_endian>* object, unsigned int shndx,
 	  if (it == this->section_segment_map_.end())
 	    {
 	      os = this->choose_output_section(object, name, sh_type,
-					       shdr.get_sh_flags(), true,
-					       ORDER_INVALID, false, false,
-					       true);
+					       sh_flags, true, ORDER_INVALID,
+					       false, false, true);
 	    }
 	  else
 	    {
 	      // We know the name of the output section, directly call
 	      // get_output_section here by-passing choose_output_section.
-	      elfcpp::Elf_Xword flags
-	        = this->get_output_section_flags(shdr.get_sh_flags());
-
 	      const char* os_name = it->second->name;
 	      Stringpool::Key name_key;
 	      os_name = this->namepool_.add(os_name, true, &name_key);
-	      os = this->get_output_section(os_name, name_key, sh_type, flags,
-					ORDER_INVALID, false);
+	      os = this->get_output_section(os_name, name_key, sh_type,
+					    sh_flags, ORDER_INVALID, false);
 	      if (!os->is_unique_segment())
-	        {
-	          os->set_is_unique_segment();
-	          os->set_extra_segment_flags(it->second->flags);
-	          os->set_segment_alignment(it->second->align);
-	        }
+		{
+		  os->set_is_unique_segment();
+		  os->set_extra_segment_flags(it->second->flags);
+		  os->set_segment_alignment(it->second->align);
+		}
 	    }
 	  }
       if (os == NULL)
@@ -1315,7 +1317,7 @@ Layout::insert_section_segment_map(Const_section_id secn,
 
 template<int size, bool big_endian>
 Output_section*
-Layout::layout_reloc(Sized_relobj_file<size, big_endian>* object,
+Layout::layout_reloc(Sized_relobj_file<size, big_endian>*,
 		     unsigned int,
 		     const elfcpp::Shdr<size, big_endian>& shdr,
 		     Output_section* data_section,
@@ -1335,23 +1337,18 @@ Layout::layout_reloc(Sized_relobj_file<size, big_endian>* object,
     gold_unreachable();
   name += data_section->name();
 
-  // In a relocatable link relocs for a grouped section must not be
-  // combined with other reloc sections.
-  Output_section* os;
-  if (!parameters->options().relocatable()
-      || (data_section->flags() & elfcpp::SHF_GROUP) == 0)
-    os = this->choose_output_section(object, name.c_str(), sh_type,
-				     shdr.get_sh_flags(), false,
-				     ORDER_INVALID, false, true, false);
-  else
+  // If the output data section already has a reloc section, use that;
+  // otherwise, make a new one.
+  Output_section* os = data_section->reloc_section();
+  if (os == NULL)
     {
       const char* n = this->namepool_.add(name.c_str(), true, NULL);
       os = this->make_output_section(n, sh_type, shdr.get_sh_flags(),
 				     ORDER_INVALID, false);
+      os->set_should_link_to_symtab();
+      os->set_info_section(data_section);
+      data_section->set_reloc_section(os);
     }
-
-  os->set_should_link_to_symtab();
-  os->set_info_section(data_section);
 
   Output_section_data* posd;
   if (sh_type == elfcpp::SHT_REL)
@@ -1442,8 +1439,11 @@ Layout::layout_eh_frame(Sized_relobj_file<size, big_endian>* object,
 			unsigned int reloc_shndx, unsigned int reloc_type,
 			off_t* off)
 {
+  const unsigned int unwind_section_type =
+      parameters->target().unwind_section_type();
+
   gold_assert(shdr.get_sh_type() == elfcpp::SHT_PROGBITS
-	      || shdr.get_sh_type() == elfcpp::SHT_X86_64_UNWIND);
+	      || shdr.get_sh_type() == unwind_section_type);
   gold_assert((shdr.get_sh_flags() & elfcpp::SHF_ALLOC) != 0);
 
   Output_section* os = this->make_eh_frame_section(object);
@@ -1530,10 +1530,11 @@ Layout::finalize_eh_frame_section()
 Output_section*
 Layout::make_eh_frame_section(const Relobj* object)
 {
-  // FIXME: On x86_64, this could use SHT_X86_64_UNWIND rather than
-  // SHT_PROGBITS.
+  const unsigned int unwind_section_type =
+      parameters->target().unwind_section_type();
+
   Output_section* os = this->choose_output_section(object, ".eh_frame",
-						   elfcpp::SHT_PROGBITS,
+						   unwind_section_type,
 						   elfcpp::SHF_ALLOC, false,
 						   ORDER_EHFRAME, false, false,
 						   false);
@@ -1551,7 +1552,7 @@ Layout::make_eh_frame_section(const Relobj* object)
 	{
 	  Output_section* hdr_os =
 	    this->choose_output_section(NULL, ".eh_frame_hdr",
-					elfcpp::SHT_PROGBITS,
+					unwind_section_type,
 					elfcpp::SHF_ALLOC, false,
 					ORDER_EHFRAME, false, false,
 					false);
@@ -1605,21 +1606,18 @@ Layout::add_eh_frame_for_plt(Output_data* plt, const unsigned char* cie_data,
     }
 }
 
-// Remove .eh_frame information for a PLT.  FDEs using the CIE must
-// be removed in reverse order to the order they were added.
+// Remove all post-map .eh_frame information for a PLT.
 
 void
 Layout::remove_eh_frame_for_plt(Output_data* plt, const unsigned char* cie_data,
-				size_t cie_length, const unsigned char* fde_data,
-				size_t fde_length)
+				size_t cie_length)
 {
   if (parameters->incremental())
     {
       // FIXME: Maybe this could work some day....
       return;
     }
-  this->eh_frame_data_->remove_ehframe_for_plt(plt, cie_data, cie_length,
-					       fde_data, fde_length);
+  this->eh_frame_data_->remove_ehframe_for_plt(plt, cie_data, cie_length);
 }
 
 // Scan a .debug_info or .debug_types section, and add summary
@@ -1905,6 +1903,19 @@ Layout::default_section_order(Output_section* os, bool is_relro_local)
 	    return ORDER_INIT;
 	  else if (strcmp(os->name(), ".fini") == 0)
 	    return ORDER_FINI;
+	  else if (parameters->options().keep_text_section_prefix())
+	    {
+	      // -z,keep-text-section-prefix introduces additional
+	      // output sections.
+	      if (strcmp(os->name(), ".text.hot") == 0)
+		return ORDER_TEXT_HOT;
+	      else if (strcmp(os->name(), ".text.startup") == 0)
+		return ORDER_TEXT_STARTUP;
+	      else if (strcmp(os->name(), ".text.exit") == 0)
+		return ORDER_TEXT_EXIT;
+	      else if (strcmp(os->name(), ".text.unlikely") == 0)
+		return ORDER_TEXT_UNLIKELY;
+	    }
 	}
       return is_execinstr ? ORDER_TEXT : ORDER_READONLY;
     }
@@ -2051,12 +2062,15 @@ Layout::attach_allocated_section_to_segment(const Target* target,
   // segment.
   if (os->type() == elfcpp::SHT_NOTE)
     {
+      uint64_t os_align = os->addralign();
+
       // See if we already have an equivalent PT_NOTE segment.
       for (p = this->segment_list_.begin();
 	   p != segment_list_.end();
 	   ++p)
 	{
 	  if ((*p)->type() == elfcpp::PT_NOTE
+	      && (*p)->align() == os_align
 	      && (((*p)->flags() & elfcpp::PF_W)
 		  == (seg_flags & elfcpp::PF_W)))
 	    {
@@ -2070,6 +2084,7 @@ Layout::attach_allocated_section_to_segment(const Target* target,
 	  Output_segment* oseg = this->make_output_segment(elfcpp::PT_NOTE,
 							   seg_flags);
 	  oseg->add_output_section_to_nonload(os, seg_flags);
+	  oseg->set_align(os_align);
 	}
     }
 
@@ -2182,11 +2197,243 @@ Layout::layout_gnu_stack(bool seen_gnu_stack, uint64_t gnu_stack_flags,
     }
 }
 
+// Read a value with given size and endianness.
+
+static inline uint64_t
+read_sized_value(size_t size, const unsigned char* buf, bool is_big_endian,
+		 const Object* object)
+{
+  uint64_t val = 0;
+  if (size == 4)
+    {
+      if (is_big_endian)
+	val = elfcpp::Swap<32, true>::readval(buf);
+      else
+	val = elfcpp::Swap<32, false>::readval(buf);
+    }
+  else if (size == 8)
+    {
+      if (is_big_endian)
+	val = elfcpp::Swap<64, true>::readval(buf);
+      else
+	val = elfcpp::Swap<64, false>::readval(buf);
+    }
+  else
+    {
+      gold_warning(_("%s: in .note.gnu.property section, "
+		     "pr_datasz must be 4 or 8"),
+		   object->name().c_str());
+    }
+  return val;
+}
+
+// Write a value with given size and endianness.
+
+static inline void
+write_sized_value(uint64_t value, size_t size, unsigned char* buf,
+		  bool is_big_endian)
+{
+  if (size == 4)
+    {
+      if (is_big_endian)
+	elfcpp::Swap<32, true>::writeval(buf, static_cast<uint32_t>(value));
+      else
+	elfcpp::Swap<32, false>::writeval(buf, static_cast<uint32_t>(value));
+    }
+  else if (size == 8)
+    {
+      if (is_big_endian)
+	elfcpp::Swap<64, true>::writeval(buf, value);
+      else
+	elfcpp::Swap<64, false>::writeval(buf, value);
+    }
+  else
+    {
+      // We will have already complained about this.
+    }
+}
+
+// Handle the .note.gnu.property section at layout time.
+
+void
+Layout::layout_gnu_property(unsigned int note_type,
+			    unsigned int pr_type,
+			    size_t pr_datasz,
+			    const unsigned char* pr_data,
+			    const Object* object)
+{
+  // We currently support only the one note type.
+  gold_assert(note_type == elfcpp::NT_GNU_PROPERTY_TYPE_0);
+
+  if (pr_type >= elfcpp::GNU_PROPERTY_LOPROC
+      && pr_type < elfcpp::GNU_PROPERTY_HIPROC)
+    {
+      // Target-dependent property value; call the target to record.
+      const int size = parameters->target().get_size();
+      const bool is_big_endian = parameters->target().is_big_endian();
+      if (size == 32)
+	{
+	  if (is_big_endian)
+	    {
+#ifdef HAVE_TARGET_32_BIG
+	      parameters->sized_target<32, true>()->
+		  record_gnu_property(note_type, pr_type, pr_datasz, pr_data,
+				      object);
+#else
+	      gold_unreachable();
+#endif
+	    }
+	  else
+	    {
+#ifdef HAVE_TARGET_32_LITTLE
+	      parameters->sized_target<32, false>()->
+		  record_gnu_property(note_type, pr_type, pr_datasz, pr_data,
+				      object);
+#else
+	      gold_unreachable();
+#endif
+	    }
+	}
+      else if (size == 64)
+	{
+	  if (is_big_endian)
+	    {
+#ifdef HAVE_TARGET_64_BIG
+	      parameters->sized_target<64, true>()->
+		  record_gnu_property(note_type, pr_type, pr_datasz, pr_data,
+				      object);
+#else
+	      gold_unreachable();
+#endif
+	    }
+	  else
+	    {
+#ifdef HAVE_TARGET_64_LITTLE
+	      parameters->sized_target<64, false>()->
+		  record_gnu_property(note_type, pr_type, pr_datasz, pr_data,
+				      object);
+#else
+	      gold_unreachable();
+#endif
+	    }
+	}
+      else
+	gold_unreachable();
+      return;
+    }
+
+  Gnu_properties::iterator pprop = this->gnu_properties_.find(pr_type);
+  if (pprop == this->gnu_properties_.end())
+    {
+      Gnu_property prop;
+      prop.pr_datasz = pr_datasz;
+      prop.pr_data = new unsigned char[pr_datasz];
+      memcpy(prop.pr_data, pr_data, pr_datasz);
+      this->gnu_properties_[pr_type] = prop;
+    }
+  else
+    {
+      const bool is_big_endian = parameters->target().is_big_endian();
+      switch (pr_type)
+	{
+	case elfcpp::GNU_PROPERTY_STACK_SIZE:
+	  // Record the maximum value seen.
+	  {
+	    uint64_t val1 = read_sized_value(pprop->second.pr_datasz,
+					     pprop->second.pr_data,
+					     is_big_endian, object);
+	    uint64_t val2 = read_sized_value(pr_datasz, pr_data,
+					     is_big_endian, object);
+	    if (val2 > val1)
+	      write_sized_value(val2, pprop->second.pr_datasz,
+				pprop->second.pr_data, is_big_endian);
+	  }
+	  break;
+	case elfcpp::GNU_PROPERTY_NO_COPY_ON_PROTECTED:
+	  // No data to merge.
+	  break;
+	default:
+	  gold_warning(_("%s: unknown program property type %d "
+			 "in .note.gnu.property section"),
+		       object->name().c_str(), pr_type);
+	}
+    }
+}
+
+// Merge per-object properties with program properties.
+// This lets the target identify objects that are missing certain
+// properties, in cases where properties must be ANDed together.
+
+void
+Layout::merge_gnu_properties(const Object* object)
+{
+  const int size = parameters->target().get_size();
+  const bool is_big_endian = parameters->target().is_big_endian();
+  if (size == 32)
+    {
+      if (is_big_endian)
+	{
+#ifdef HAVE_TARGET_32_BIG
+	  parameters->sized_target<32, true>()->merge_gnu_properties(object);
+#else
+	  gold_unreachable();
+#endif
+	}
+      else
+	{
+#ifdef HAVE_TARGET_32_LITTLE
+	  parameters->sized_target<32, false>()->merge_gnu_properties(object);
+#else
+	  gold_unreachable();
+#endif
+	}
+    }
+  else if (size == 64)
+    {
+      if (is_big_endian)
+	{
+#ifdef HAVE_TARGET_64_BIG
+	  parameters->sized_target<64, true>()->merge_gnu_properties(object);
+#else
+	  gold_unreachable();
+#endif
+	}
+      else
+	{
+#ifdef HAVE_TARGET_64_LITTLE
+	  parameters->sized_target<64, false>()->merge_gnu_properties(object);
+#else
+	  gold_unreachable();
+#endif
+	}
+    }
+  else
+    gold_unreachable();
+}
+
+// Add a target-specific property for the output .note.gnu.property section.
+
+void
+Layout::add_gnu_property(unsigned int note_type,
+			 unsigned int pr_type,
+			 size_t pr_datasz,
+			 const unsigned char* pr_data)
+{
+  gold_assert(note_type == elfcpp::NT_GNU_PROPERTY_TYPE_0);
+
+  Gnu_property prop;
+  prop.pr_datasz = pr_datasz;
+  prop.pr_data = new unsigned char[pr_datasz];
+  memcpy(prop.pr_data, pr_data, pr_datasz);
+  this->gnu_properties_[pr_type] = prop;
+}
+
 // Create automatic note sections.
 
 void
 Layout::create_notes()
 {
+  this->create_gnu_properties_note();
   this->create_gold_note();
   this->create_stack_segment();
   this->create_build_id();
@@ -2231,6 +2478,7 @@ Layout::create_initial_dynamic_sections(Symbol_table* symtab)
 void
 Layout::define_section_symbols(Symbol_table* symtab)
 {
+  const elfcpp::STV visibility = parameters->options().start_stop_visibility_enum();
   for (Section_list::const_iterator p = this->section_list_.begin();
        p != this->section_list_.end();
        ++p)
@@ -2252,7 +2500,7 @@ Layout::define_section_symbols(Symbol_table* symtab)
 					0, // symsize
 					elfcpp::STT_NOTYPE,
 					elfcpp::STB_GLOBAL,
-					elfcpp::STV_PROTECTED,
+					visibility,
 					0, // nonvis
 					false, // offset_is_from_end
 					true); // only_if_ref
@@ -2265,7 +2513,7 @@ Layout::define_section_symbols(Symbol_table* symtab)
 					0, // symsize
 					elfcpp::STT_NOTYPE,
 					elfcpp::STB_GLOBAL,
-					elfcpp::STV_PROTECTED,
+					visibility,
 					0, // nonvis
 					true, // offset_is_from_end
 					true); // only_if_ref
@@ -2678,6 +2926,8 @@ Layout::read_layout_from_file()
     gold_fatal(_("unable to open --section-ordering-file file %s: %s"),
 	       filename, strerror(errno));
 
+  File_read::record_file_read(filename);
+
   std::getline(in, line);   // this chops off the trailing \n, if any
   unsigned int position = 1;
   this->set_section_ordering_specified();
@@ -2938,6 +3188,10 @@ Layout::create_note(const char* name, int note_type,
 #else
   const int size = 32;
 #endif
+  // The NT_GNU_PROPERTY_TYPE_0 note is aligned to the pointer size.
+  const int addralign = ((note_type == elfcpp::NT_GNU_PROPERTY_TYPE_0
+			 ? parameters->target().get_size()
+			 : size) / 8);
 
   // The contents of the .note section.
   size_t namesz = strlen(name) + 1;
@@ -2991,7 +3245,8 @@ Layout::create_note(const char* name, int note_type,
   if (allocate)
     {
       flags = elfcpp::SHF_ALLOC;
-      order = ORDER_RO_NOTE;
+      order = (note_type == elfcpp::NT_GNU_PROPERTY_TYPE_0
+	       ?  ORDER_PROPERTY_NOTE : ORDER_RO_NOTE);
     }
   Output_section* os = this->choose_output_section(NULL, section_name,
 						   elfcpp::SHT_NOTE,
@@ -3001,13 +3256,65 @@ Layout::create_note(const char* name, int note_type,
     return NULL;
 
   Output_section_data* posd = new Output_data_const_buffer(buffer, notehdrsz,
-							   size / 8,
+							   addralign,
 							   "** note header");
   os->add_output_section_data(posd);
 
   *trailing_padding = aligned_descsz - descsz;
 
   return os;
+}
+
+// Create a .note.gnu.property section to record program properties
+// accumulated from the input files.
+
+void
+Layout::create_gnu_properties_note()
+{
+  parameters->target().finalize_gnu_properties(this);
+
+  if (this->gnu_properties_.empty())
+    return;
+
+  const unsigned int size = parameters->target().get_size();
+  const bool is_big_endian = parameters->target().is_big_endian();
+
+  // Compute the total size of the properties array.
+  size_t descsz = 0;
+  for (Gnu_properties::const_iterator prop = this->gnu_properties_.begin();
+       prop != this->gnu_properties_.end();
+       ++prop)
+    {
+      descsz = align_address(descsz + 8 + prop->second.pr_datasz, size / 8);
+    }
+
+  // Create the note section.
+  size_t trailing_padding;
+  Output_section* os = this->create_note("GNU", elfcpp::NT_GNU_PROPERTY_TYPE_0,
+					 ".note.gnu.property", descsz,
+					 true, &trailing_padding);
+  if (os == NULL)
+    return;
+  gold_assert(trailing_padding == 0);
+
+  // Allocate and fill the properties array.
+  unsigned char* desc = new unsigned char[descsz];
+  unsigned char* p = desc;
+  for (Gnu_properties::const_iterator prop = this->gnu_properties_.begin();
+       prop != this->gnu_properties_.end();
+       ++prop)
+    {
+      size_t datasz = prop->second.pr_datasz;
+      size_t aligned_datasz = align_address(prop->second.pr_datasz, size / 8);
+      write_sized_value(prop->first, 4, p, is_big_endian);
+      write_sized_value(datasz, 4, p + 4, is_big_endian);
+      memcpy(p + 8, prop->second.pr_data, datasz);
+      if (aligned_datasz > datasz)
+	memset(p + 8 + datasz, 0, aligned_datasz - datasz);
+      p += 8 + aligned_datasz;
+    }
+  Output_section_data* posd = new Output_data_const(desc, descsz, 4);
+  os->add_output_section_data(posd);
 }
 
 // For an executable or shared library, create a note to record the
@@ -3407,6 +3714,11 @@ Layout::segment_precedes(const Output_segment* seg1,
     {
       if (type1 != type2)
 	return type1 < type2;
+      uint64_t align1 = seg1->align();
+      uint64_t align2 = seg2->align();
+      // Place segments with larger alignments first.
+      if (align1 != align2)
+	return align1 > align2;
       gold_assert(flags1 != flags2
 		  || this->script_options_->saw_phdrs_clause());
       return flags1 < flags2;
@@ -5056,8 +5368,16 @@ Layout::finish_dynamic_section(const Input_objects* input_objects,
     flags |= elfcpp::DF_1_NOW;
   if (parameters->options().Bgroup())
     flags |= elfcpp::DF_1_GROUP;
+  if (parameters->options().pie())
+    flags |= elfcpp::DF_1_PIE;
   if (flags != 0)
     odyn->add_constant(elfcpp::DT_FLAGS_1, flags);
+
+  flags = 0;
+  if (parameters->options().unique())
+    flags |= elfcpp::DF_GNU_1_UNIQUE;
+  if (flags != 0)
+    odyn->add_constant(elfcpp::DT_GNU_FLAGS_1, flags);
 }
 
 // Set the size of the _DYNAMIC symbol table to be the size of the
@@ -5133,6 +5453,21 @@ const Layout::Section_name_mapping Layout::section_name_mapping[] =
   MAPPING_INIT(".gnu.linkonce.armextab.", ".ARM.extab"),
   MAPPING_INIT(".ARM.exidx", ".ARM.exidx"),
   MAPPING_INIT(".gnu.linkonce.armexidx.", ".ARM.exidx"),
+  MAPPING_INIT(".gnu.build.attributes.", ".gnu.build.attributes"),
+};
+
+// Mapping for ".text" section prefixes with -z,keep-text-section-prefix.
+const Layout::Section_name_mapping Layout::text_section_name_mapping[] =
+{
+  MAPPING_INIT(".text.hot.", ".text.hot"),
+  MAPPING_INIT_EXACT(".text.hot", ".text.hot"),
+  MAPPING_INIT(".text.unlikely.", ".text.unlikely"),
+  MAPPING_INIT_EXACT(".text.unlikely", ".text.unlikely"),
+  MAPPING_INIT(".text.startup.", ".text.startup"),
+  MAPPING_INIT_EXACT(".text.startup", ".text.startup"),
+  MAPPING_INIT(".text.exit.", ".text.exit"),
+  MAPPING_INIT_EXACT(".text.exit", ".text.exit"),
+  MAPPING_INIT(".text.", ".text"),
 };
 #undef MAPPING_INIT
 #undef MAPPING_INIT_EXACT
@@ -5140,6 +5475,39 @@ const Layout::Section_name_mapping Layout::section_name_mapping[] =
 const int Layout::section_name_mapping_count =
   (sizeof(Layout::section_name_mapping)
    / sizeof(Layout::section_name_mapping[0]));
+
+const int Layout::text_section_name_mapping_count =
+  (sizeof(Layout::text_section_name_mapping)
+   / sizeof(Layout::text_section_name_mapping[0]));
+
+// Find section name NAME in PSNM and return the mapped name if found
+// with the length set in PLEN.
+const char *
+Layout::match_section_name(const Layout::Section_name_mapping* psnm,
+			   const int count,
+			   const char* name, size_t* plen)
+{
+  for (int i = 0; i < count; ++i, ++psnm)
+    {
+      if (psnm->fromlen > 0)
+	{
+	  if (strncmp(name, psnm->from, psnm->fromlen) == 0)
+	    {
+	      *plen = psnm->tolen;
+	      return psnm->to;
+	    }
+	}
+      else
+	{
+	  if (strcmp(name, psnm->from) == 0)
+	    {
+	      *plen = psnm->tolen;
+	      return psnm->to;
+	    }
+	}
+    }
+  return NULL;
+}
 
 // Choose the output section name to use given an input section name.
 // Set *PLEN to the length of the name.  *PLEN is initialized to the
@@ -5184,26 +5552,20 @@ Layout::output_section_name(const Relobj* relobj, const char* name,
   // not found in the table, we simply use it as the output section
   // name.
 
-  const Section_name_mapping* psnm = section_name_mapping;
-  for (int i = 0; i < section_name_mapping_count; ++i, ++psnm)
+  if (parameters->options().keep_text_section_prefix()
+      && is_prefix_of(".text", name))
     {
-      if (psnm->fromlen > 0)
-	{
-	  if (strncmp(name, psnm->from, psnm->fromlen) == 0)
-	    {
-	      *plen = psnm->tolen;
-	      return psnm->to;
-	    }
-	}
-      else
-	{
-	  if (strcmp(name, psnm->from) == 0)
-	    {
-	      *plen = psnm->tolen;
-	      return psnm->to;
-	    }
-	}
+      const char* match = match_section_name(text_section_name_mapping,
+					     text_section_name_mapping_count,
+					     name, plen);
+      if (match != NULL)
+	return match;
     }
+
+  const char* match = match_section_name(section_name_mapping,
+					 section_name_mapping_count, name, plen);
+  if (match != NULL)
+    return match;
 
   // As an additional complication, .ctors sections are output in
   // either .ctors or .init_array sections, and .dtors sections are
@@ -5816,6 +6178,10 @@ Close_task_runner::run(Workqueue*, const Task*)
   if (this->options_->oformat_enum() != General_options::OBJECT_FORMAT_ELF)
     this->layout_->write_binary(this->of_);
 
+  if (this->options_->dependency_file())
+    File_read::write_dependency_file(this->options_->dependency_file(),
+				     this->options_->output_file_name());
+
   this->of_->close();
 }
 
@@ -5861,7 +6227,7 @@ Layout::layout<32, false>(Sized_relobj_file<32, false>* object,
 			  unsigned int shndx,
 			  const char* name,
 			  const elfcpp::Shdr<32, false>& shdr,
-			  unsigned int, unsigned int, off_t*);
+			  unsigned int, unsigned int, unsigned int, off_t*);
 #endif
 
 #ifdef HAVE_TARGET_32_BIG
@@ -5871,7 +6237,7 @@ Layout::layout<32, true>(Sized_relobj_file<32, true>* object,
 			 unsigned int shndx,
 			 const char* name,
 			 const elfcpp::Shdr<32, true>& shdr,
-			 unsigned int, unsigned int, off_t*);
+			 unsigned int, unsigned int, unsigned int, off_t*);
 #endif
 
 #ifdef HAVE_TARGET_64_LITTLE
@@ -5881,7 +6247,7 @@ Layout::layout<64, false>(Sized_relobj_file<64, false>* object,
 			  unsigned int shndx,
 			  const char* name,
 			  const elfcpp::Shdr<64, false>& shdr,
-			  unsigned int, unsigned int, off_t*);
+			  unsigned int, unsigned int, unsigned int, off_t*);
 #endif
 
 #ifdef HAVE_TARGET_64_BIG
@@ -5891,7 +6257,7 @@ Layout::layout<64, true>(Sized_relobj_file<64, true>* object,
 			 unsigned int shndx,
 			 const char* name,
 			 const elfcpp::Shdr<64, true>& shdr,
-			 unsigned int, unsigned int, off_t*);
+			 unsigned int, unsigned int, unsigned int, off_t*);
 #endif
 
 #ifdef HAVE_TARGET_32_LITTLE

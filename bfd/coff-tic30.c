@@ -1,5 +1,5 @@
 /* BFD back-end for TMS320C30 coff binaries.
-   Copyright (C) 1998-2018 Free Software Foundation, Inc.
+   Copyright (C) 1998-2022 Free Software Foundation, Inc.
    Contributed by Steven Haworth (steve@pm.cse.rmit.edu.au)
 
    This file is part of BFD, the Binary File Descriptor library.
@@ -31,16 +31,16 @@
 
 reloc_howto_type tic30_coff_howto_table[] =
   {
-    HOWTO (R_TIC30_ABS16, 2, 1, 16, FALSE, 0, 0, NULL,
-	   "16", FALSE, 0x0000FFFF, 0x0000FFFF, FALSE),
-    HOWTO (R_TIC30_ABS24, 2, 2, 24, FALSE, 8, complain_overflow_bitfield, NULL,
-	   "24", FALSE, 0xFFFFFF00, 0xFFFFFF00, FALSE),
-    HOWTO (R_TIC30_LDP, 18, 0, 24, FALSE, 0, complain_overflow_bitfield, NULL,
-	   "LDP", FALSE, 0x00FF0000, 0x000000FF, FALSE),
-    HOWTO (R_TIC30_ABS32, 2, 2, 32, FALSE, 0, complain_overflow_bitfield, NULL,
-	   "32", FALSE, 0xFFFFFFFF, 0xFFFFFFFF, FALSE),
-    HOWTO (R_TIC30_PC16, 2, 1, 16, TRUE, 0, complain_overflow_signed, NULL,
-	   "PCREL", FALSE, 0x0000FFFF, 0x0000FFFF, FALSE),
+    HOWTO (R_TIC30_ABS16, 2, 2, 16, false, 0, 0, NULL,
+	   "16", false, 0x0000FFFF, 0x0000FFFF, false),
+    HOWTO (R_TIC30_ABS24, 2, 4, 24, false, 8, complain_overflow_bitfield, NULL,
+	   "24", false, 0xFFFFFF00, 0xFFFFFF00, false),
+    HOWTO (R_TIC30_LDP, 18, 1, 24, false, 0, complain_overflow_bitfield, NULL,
+	   "LDP", false, 0x00FF0000, 0x000000FF, false),
+    HOWTO (R_TIC30_ABS32, 2, 4, 32, false, 0, complain_overflow_bitfield, NULL,
+	   "32", false, 0xFFFFFFFF, 0xFFFFFFFF, false),
+    HOWTO (R_TIC30_PC16, 2, 2, 16, true, 0, complain_overflow_signed, NULL,
+	   "PCREL", false, 0x0000FFFF, 0x0000FFFF, false),
     EMPTY_HOWTO (-1)
   };
 
@@ -161,11 +161,18 @@ reloc_processing (arelent *relent,
   relent->address = reloc->r_vaddr;
   rtype2howto (relent, reloc);
 
-  if (reloc->r_symndx > 0)
+  if (reloc->r_symndx == -1)
+    relent->sym_ptr_ptr = bfd_abs_section_ptr->symbol_ptr_ptr;
+  else if (reloc->r_symndx >= 0 && reloc->r_symndx < obj_conv_table_size (abfd))
     relent->sym_ptr_ptr = symbols + obj_convert (abfd)[reloc->r_symndx];
   else
-    relent->sym_ptr_ptr = bfd_abs_section_ptr->symbol_ptr_ptr;
-
+    {
+      _bfd_error_handler
+	/* xgettext:c-format */
+	(_("%pB: warning: illegal symbol index %ld in relocs"),
+	 abfd, reloc->r_symndx);
+      relent->sym_ptr_ptr = bfd_abs_section_ptr->symbol_ptr_ptr;
+    }
   relent->addend = reloc->r_offset;
   relent->address -= section->vma;
 }
@@ -183,15 +190,16 @@ const bfd_target tic30_coff_vec =
   BFD_ENDIAN_BIG,		/* data byte order is big */
   BFD_ENDIAN_LITTLE,		/* header byte order is little */
 
-  (HAS_RELOC | EXEC_P |		/* object flags */
-   HAS_LINENO | HAS_DEBUG |
-   HAS_SYMS | HAS_LOCALS | WP_TEXT),
+  (HAS_RELOC | EXEC_P		/* object flags */
+   | HAS_LINENO | HAS_DEBUG
+   | HAS_SYMS | HAS_LOCALS | WP_TEXT),
 
   (SEC_HAS_CONTENTS | SEC_ALLOC | SEC_LOAD | SEC_RELOC), /* section flags */
   '_',				/* leading symbol underscore */
   '/',				/* ar_pad_char */
   15,				/* ar_max_namelen */
   0,				/* match priority.  */
+  TARGET_KEEP_UNUSED_SECTION_SYMBOLS, /* keep unused section symbols.  */
   bfd_getb64, bfd_getb_signed_64, bfd_putb64,
   bfd_getb32, bfd_getb_signed_32, bfd_putb32,
   bfd_getb16, bfd_getb_signed_16, bfd_putb16,	/* data */
@@ -199,12 +207,24 @@ const bfd_target tic30_coff_vec =
   bfd_getl32, bfd_getl_signed_32, bfd_putl32,
   bfd_getl16, bfd_getl_signed_16, bfd_putl16,	/* hdrs */
 
-  {_bfd_dummy_target, coff_object_p,	/* bfd_check_format */
-   bfd_generic_archive_p, _bfd_dummy_target},
-  {bfd_false, coff_mkobject, _bfd_generic_mkarchive,	/* bfd_set_format */
-   bfd_false},
-  {bfd_false, coff_write_object_contents,	/* bfd_write_contents */
-   _bfd_write_archive_contents, bfd_false},
+  {				/* bfd_check_format */
+    _bfd_dummy_target,
+    coff_object_p,
+    bfd_generic_archive_p,
+    _bfd_dummy_target
+  },
+  {				/* bfd_set_format */
+    _bfd_bool_bfd_false_error,
+    coff_mkobject,
+    _bfd_generic_mkarchive,
+    _bfd_bool_bfd_false_error
+  },
+  {				/* bfd_write_contents */
+    _bfd_bool_bfd_false_error,
+    coff_write_object_contents,
+    _bfd_write_archive_contents,
+    _bfd_bool_bfd_false_error
+  },
 
   BFD_JUMP_TABLE_GENERIC (coff),
   BFD_JUMP_TABLE_COPY (coff),

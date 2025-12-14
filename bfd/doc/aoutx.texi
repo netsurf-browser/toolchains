@@ -10,14 +10,13 @@ information.
 The support is split into a basic support file @file{aoutx.h}
 and other files which derive functions from the base. One
 derivation file is @file{aoutf1.h} (for a.out flavour 1), and
-adds to the basic a.out functions support for sun3, sun4, 386
-and 29k a.out files, to create a target jump vector for a
-specific target.
+adds to the basic a.out functions support for sun3, sun4, and
+386 a.out files, to create a target jump vector for a specific
+target.
 
 This information is further split out into more specific files
 for each machine, including @file{sunos.c} for sun3 and sun4,
-@file{newsos3.c} for the Sony NEWS, and @file{demo64.c} for a
-demonstration of a 64 bit a.out format.
+and @file{demo64.c} for a demonstration of a 64 bit a.out format.
 
 The base file @file{aoutx.h} defines general mechanisms for
 reading and writing records to and from disk and various
@@ -102,10 +101,9 @@ configuration is selected.
 The file @file{aoutx.h} provides for both the @emph{standard}
 and @emph{extended} forms of a.out relocation records.
 
-The standard records contain only an
-address, a symbol index, and a type field. The extended records
-(used on 29ks and sparcs) also have a full integer for an
-addend.
+The standard records contain only an address, a symbol index,
+and a type field.  The extended records also have a full
+integer for an addend.
 
 @subsection Internal entry points
 
@@ -162,7 +160,7 @@ handle any last-minute setup.
 @subsubsection @code{aout_@var{size}_mkobject}
 @strong{Synopsis}
 @example
-bfd_boolean aout_@var{size}_mkobject, (bfd *abfd);
+bool aout_@var{size}_mkobject, (bfd *abfd);
 @end example
 @strong{Description}@*
 Initialize BFD @var{abfd} for use with a.out files.
@@ -174,7 +172,7 @@ Initialize BFD @var{abfd} for use with a.out files.
 enum machine_type  aout_@var{size}_machine_type
    (enum bfd_architecture arch,
     unsigned long machine,
-    bfd_boolean *unknown);
+    bool *unknown);
 @end example
 @strong{Description}@*
 Keep track of machine architecture and machine type for
@@ -189,7 +187,7 @@ is always understood.
 @subsubsection @code{aout_@var{size}_set_arch_mach}
 @strong{Synopsis}
 @example
-bfd_boolean aout_@var{size}_set_arch_mach,
+bool aout_@var{size}_set_arch_mach,
    (bfd *,
     enum bfd_architecture arch,
     unsigned long machine);
@@ -203,7 +201,7 @@ can support the architecture required.
 @subsubsection @code{aout_@var{size}_new_section_hook}
 @strong{Synopsis}
 @example
-bfd_boolean aout_@var{size}_new_section_hook,
+bool aout_@var{size}_new_section_hook,
    (bfd *abfd,
     asection *newsect);
 @end example

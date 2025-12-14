@@ -31,7 +31,7 @@ Key to Flags:
 #...
 
 Elf file type is DYN \(Shared object file\)
-Entry point 0x1000
+Entry point 0x[0-9a-f]+
 There are [0-9]+ program headers, starting at offset [0-9]+
 
 Program Headers:
@@ -66,30 +66,27 @@ Symbol table '\.dynsym' contains [0-9]+ entries:
 .* NOTYPE +GLOBAL +DEFAULT +UND __tls_get_addr
 .* TLS +GLOBAL +DEFAULT +10 sg1
 .* FUNC +GLOBAL +DEFAULT +7 fn1
-.* NOTYPE +GLOBAL +DEFAULT +14 __bss_start
 .* TLS +GLOBAL +DEFAULT +10 sg2
 .* TLS +GLOBAL +DEFAULT +10 sg6
 .* TLS +GLOBAL +DEFAULT +10 sg7
-.* NOTYPE +GLOBAL +DEFAULT +14 _edata
-.* NOTYPE +GLOBAL +DEFAULT +14 _end
 
 Symbol table '\.symtab' contains [0-9]+ entries:
  +Num: +Value +Size Type +Bind +Vis +Ndx Name
 .* NOTYPE +LOCAL +DEFAULT +UND *
-.* SECTION +LOCAL +DEFAULT +1 *
-.* SECTION +LOCAL +DEFAULT +2 *
-.* SECTION +LOCAL +DEFAULT +3 *
-.* SECTION +LOCAL +DEFAULT +4 *
-.* SECTION +LOCAL +DEFAULT +5 *
-.* SECTION +LOCAL +DEFAULT +6 *
-.* SECTION +LOCAL +DEFAULT +7 *
-.* SECTION +LOCAL +DEFAULT +8 *
-.* SECTION +LOCAL +DEFAULT +9 *
-.* SECTION +LOCAL +DEFAULT +10 *
-.* SECTION +LOCAL +DEFAULT +11 *
-.* SECTION +LOCAL +DEFAULT +12 *
-.* SECTION +LOCAL +DEFAULT +13 *
-.* SECTION +LOCAL +DEFAULT +14 *
+.* SECTION +LOCAL +DEFAULT +1.*
+.* SECTION +LOCAL +DEFAULT +2.*
+.* SECTION +LOCAL +DEFAULT +3.*
+.* SECTION +LOCAL +DEFAULT +4.*
+.* SECTION +LOCAL +DEFAULT +5.*
+.* SECTION +LOCAL +DEFAULT +6.*
+.* SECTION +LOCAL +DEFAULT +7.*
+.* SECTION +LOCAL +DEFAULT +8.*
+.* SECTION +LOCAL +DEFAULT +9.*
+.* SECTION +LOCAL +DEFAULT +10.*
+.* SECTION +LOCAL +DEFAULT +11.*
+.* SECTION +LOCAL +DEFAULT +12.*
+.* SECTION +LOCAL +DEFAULT +13.*
+.* SECTION +LOCAL +DEFAULT +14.*
 .* FILE +LOCAL +DEFAULT +ABS .*
 .* TLS +LOCAL +DEFAULT +10 sl1
 .* TLS +LOCAL +DEFAULT +10 sl2
@@ -125,9 +122,6 @@ Symbol table '\.symtab' contains [0-9]+ entries:
 .* NOTYPE +GLOBAL +DEFAULT +UND __tls_get_addr
 .* TLS +GLOBAL +DEFAULT +10 sg1
 .* FUNC +GLOBAL +DEFAULT +7 fn1
-.* NOTYPE +GLOBAL +DEFAULT +14 __bss_start
 .* TLS +GLOBAL +DEFAULT +10 sg2
 .* TLS +GLOBAL +DEFAULT +10 sg6
 .* TLS +GLOBAL +DEFAULT +10 sg7
-.* NOTYPE +GLOBAL +DEFAULT +14 _edata
-.* NOTYPE +GLOBAL +DEFAULT +14 _end

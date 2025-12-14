@@ -1,6 +1,6 @@
 // s390.cc -- s390 target support for gold.
 
-// Copyright (C) 2015-2018 Free Software Foundation, Inc.
+// Copyright (C) 2015-2022 Free Software Foundation, Inc.
 // Written by Marcin Kościelnicki <koriakin@0x04.net>.
 
 // This file is part of gold.
@@ -401,12 +401,17 @@ class Target_s390 : public Sized_target<size, true>
   int64_t
   do_tls_offset_for_local(const Relobj* object,
 			  unsigned int symndx,
-			  unsigned int got_indx) const;
+			  Output_data_got_base* got,
+			  unsigned int got_indx,
+			  uint64_t addend) const;
 
   // Return the offset to use for the GOT_INDX'th got entry which is
   // for global tls symbol GSYM.
   int64_t
-  do_tls_offset_for_global(Symbol* gsym, unsigned int got_indx) const;
+  do_tls_offset_for_global(Symbol* gsym,
+			   Output_data_got_base* got,
+			   unsigned int got_indx,
+			   uint64_t addend) const;
 
   // This function should be defined in targets that can use relocation
   // types to determine (implemented in local_reloc_may_be_function_pointer
@@ -827,6 +832,7 @@ Target::Target_info Target_s390<32>::s390_info =
   NULL,			// attributes_vendor
   "_start",		// entry_symbol_name
   32,			// hash_entry_size
+  elfcpp::SHT_PROGBITS,	// unwind_section_type
 };
 
 template<>
@@ -855,6 +861,7 @@ Target::Target_info Target_s390<64>::s390_info =
   NULL,			// attributes_vendor
   "_start",		// entry_symbol_name
   64,			// hash_entry_size
+  elfcpp::SHT_PROGBITS,	// unwind_section_type
 };
 
 template<int size>
@@ -4216,7 +4223,9 @@ int64_t
 Target_s390<size>::do_tls_offset_for_local(
     const Relobj*,
     unsigned int,
-    unsigned int) const
+    Output_data_got_base*,
+    unsigned int,
+    uint64_t) const
 {
   // The only way we can get called is when IEENT/GOTIE12/GOTIE20
   // couldn't be optimised to LE.
@@ -4230,7 +4239,9 @@ template<int size>
 int64_t
 Target_s390<size>::do_tls_offset_for_global(
     Symbol*,
-    unsigned int) const
+    Output_data_got_base*,
+    unsigned int,
+    uint64_t) const
 {
   Output_segment* tls_segment = layout_->tls_segment();
   return -tls_segment->memsz();

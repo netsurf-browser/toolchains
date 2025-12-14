@@ -1,6 +1,6 @@
 %{ /* deffilep.y - parser for .def files */
 
-/*   Copyright (C) 1995-2018 Free Software Foundation, Inc.
+/*   Copyright (C) 1995-2022 Free Software Foundation, Inc.
 
      This file is part of GNU Binutils.
 
@@ -23,6 +23,7 @@
 #include "libiberty.h"
 #include "safe-ctype.h"
 #include "bfd.h"
+#include "bfdlink.h"
 #include "ld.h"
 #include "ldmisc.h"
 #include "deffile.h"
@@ -101,7 +102,7 @@ static void def_version (int, int);
 static void def_directive (char *);
 static void def_aligncomm (char *str, int align);
 static int def_parse (void);
-static int def_error (const char *);
+static void def_error (const char *);
 static int def_lex (void);
 
 static int lex_forced_token = 0;
@@ -121,7 +122,7 @@ static const char *lex_parse_string_end = 0;
 %token NAME LIBRARY DESCRIPTION STACKSIZE_K HEAPSIZE CODE DATAU DATAL
 %token SECTIONS EXPORTS IMPORTS VERSIONK BASE CONSTANTU CONSTANTL
 %token PRIVATEU PRIVATEL ALIGNCOMM
-%token READ WRITE EXECUTE SHARED NONAMEU NONAMEL DIRECTIVE EQUAL
+%token READ WRITE EXECUTE SHARED_K NONAMEU NONAMEL DIRECTIVE EQUAL
 %token <id> ID
 %token <digits> DIGITS
 %type  <number> NUMBER
@@ -234,7 +235,7 @@ attr:
 		READ	{ $$ = 1;}
 	|	WRITE	{ $$ = 2;}
 	|	EXECUTE	{ $$=4;}
-	|	SHARED	{ $$=8;}
+	|	SHARED_K { $$=8;}
 	;
 
 
@@ -262,7 +263,7 @@ keyword_as_name: BASE { $$ = "BASE"; }
 	 | PRIVATEU { $$ = "PRIVATE"; }
 	 | PRIVATEL { $$ = "private"; }
 	 | READ { $$ = "READ"; }
-	 | SHARED  { $$ = "SHARED"; }
+	 | SHARED_K  { $$ = "SHARED"; }
 	 | STACKSIZE_K { $$ = "STACKSIZE"; }
 	 | VERSIONK { $$ = "VERSION"; }
 	 | WRITE { $$ = "WRITE"; }
@@ -433,19 +434,15 @@ def_file_free (def_file *fdef)
 
   if (!fdef)
     return;
-  if (fdef->name)
-    free (fdef->name);
-  if (fdef->description)
-    free (fdef->description);
+  free (fdef->name);
+  free (fdef->description);
 
   if (fdef->section_defs)
     {
       for (i = 0; i < fdef->num_section_defs; i++)
 	{
-	  if (fdef->section_defs[i].name)
-	    free (fdef->section_defs[i].name);
-	  if (fdef->section_defs[i].class)
-	    free (fdef->section_defs[i].class);
+	  free (fdef->section_defs[i].name);
+	  free (fdef->section_defs[i].class);
 	}
       free (fdef->section_defs);
     }
@@ -454,13 +451,10 @@ def_file_free (def_file *fdef)
     {
       for (i = 0; i < fdef->num_exports; i++)
 	{
-	  if (fdef->exports[i].internal_name
-	      && fdef->exports[i].internal_name != fdef->exports[i].name)
+	  if (fdef->exports[i].internal_name != fdef->exports[i].name)
 	    free (fdef->exports[i].internal_name);
-	  if (fdef->exports[i].name)
-	    free (fdef->exports[i].name);
-	  if (fdef->exports[i].its_name)
-	    free (fdef->exports[i].its_name);
+	  free (fdef->exports[i].name);
+	  free (fdef->exports[i].its_name);
 	}
       free (fdef->exports);
     }
@@ -469,13 +463,10 @@ def_file_free (def_file *fdef)
     {
       for (i = 0; i < fdef->num_imports; i++)
 	{
-	  if (fdef->imports[i].internal_name
-	      && fdef->imports[i].internal_name != fdef->imports[i].name)
+	  if (fdef->imports[i].internal_name != fdef->imports[i].name)
 	    free (fdef->imports[i].internal_name);
-	  if (fdef->imports[i].name)
-	    free (fdef->imports[i].name);
-	  if (fdef->imports[i].its_name)
-	    free (fdef->imports[i].its_name);
+	  free (fdef->imports[i].name);
+	  free (fdef->imports[i].its_name);
 	}
       free (fdef->imports);
     }
@@ -816,6 +807,26 @@ find_import_in_list (def_file_import *b, int max,
   return l;
 }
 
+static void
+fill_in_import (def_file_import *i,
+		const char *name,
+		def_file_module *module,
+		int ordinal,
+		const char *internal_name,
+		const char *its_name)
+{
+  memset (i, 0, sizeof (def_file_import));
+  if (name)
+    i->name = xstrdup (name);
+  i->module = module;
+  i->ordinal = ordinal;
+  if (internal_name)
+    i->internal_name = xstrdup (internal_name);
+  else
+    i->internal_name = i->name;
+  i->its_name = (its_name ? xstrdup (its_name) : NULL);
+}
+
 def_file_import *
 def_file_add_import (def_file *fdef,
 		     const char *name,
@@ -850,18 +861,74 @@ def_file_add_import (def_file *fdef,
     }
   i = fdef->imports + pos;
   if (pos != fdef->num_imports)
-    memmove (&i[1], i, (sizeof (def_file_import) * (fdef->num_imports - pos)));
-  memset (i, 0, sizeof (def_file_import));
-  if (name)
-    i->name = xstrdup (name);
-  if (module)
-    i->module = def_stash_module (fdef, module);
-  i->ordinal = ordinal;
-  if (internal_name)
-    i->internal_name = xstrdup (internal_name);
-  else
-    i->internal_name = i->name;
-  i->its_name = (its_name ? xstrdup (its_name) : NULL);
+    memmove (i + 1, i, sizeof (def_file_import) * (fdef->num_imports - pos));
+
+  fill_in_import (i, name, def_stash_module (fdef, module), ordinal,
+		  internal_name, its_name);
+  fdef->num_imports++;
+
+  return i;
+}
+
+int
+def_file_add_import_from (def_file *fdef,
+			  int num_imports,
+			  const char *name,
+			  const char *module,
+			  int ordinal,
+			  const char *internal_name,
+			  const char *its_name ATTRIBUTE_UNUSED)
+{
+  def_file_import *i;
+  int is_dup;
+  int pos;
+  int max_imports = ROUND_UP (fdef->num_imports, 16);
+
+  /* We need to avoid here duplicates.  */
+  is_dup = 0;
+  pos = find_import_in_list (fdef->imports, fdef->num_imports,
+			     name, internal_name ? internal_name : name,
+			     module, ordinal, &is_dup);
+  if (is_dup != 0)
+    return -1;
+  if (fdef->imports && pos != fdef->num_imports)
+    {
+      i = fdef->imports + pos;
+      if (i->module && strcmp (i->module->name, module) == 0)
+	return -1;
+    }
+
+  if (fdef->num_imports + num_imports - 1 >= max_imports)
+    {
+      max_imports = ROUND_UP (fdef->num_imports + num_imports, 16);
+
+      if (fdef->imports)
+	fdef->imports = xrealloc (fdef->imports,
+				 max_imports * sizeof (def_file_import));
+      else
+	fdef->imports = xmalloc (max_imports * sizeof (def_file_import));
+    }
+  i = fdef->imports + pos;
+  if (pos != fdef->num_imports)
+    memmove (i + num_imports, i,
+	     sizeof (def_file_import) * (fdef->num_imports - pos));
+
+  return pos;
+}
+
+def_file_import *
+def_file_add_import_at (def_file *fdef,
+			int pos,
+			const char *name,
+			const char *module,
+			int ordinal,
+			const char *internal_name,
+			const char *its_name)
+{
+  def_file_import *i = fdef->imports + pos;
+
+  fill_in_import (i, name, def_stash_module (fdef, module), ordinal,
+		  internal_name, its_name);
   fdef->num_imports++;
 
   return i;
@@ -972,8 +1039,7 @@ def_image_name (const char *name, bfd_vma base, int is_dll)
 	einfo ("%s:%d: Warning: path components stripped from %s, '%s'\n",
 	       def_filename, linenumber, is_dll ? "LIBRARY" : "NAME",
 	       name);
-      if (def->name)
-	free (def->name);
+      free (def->name);
       /* Append the default suffix, if none specified.  */
       if (strchr (image_name, '.') == 0)
 	{
@@ -1195,12 +1261,11 @@ def_aligncomm (char *str, int align)
     }
 }
 
-static int
+static void
 def_error (const char *err)
 {
   einfo ("%P: %s:%d: %s\n",
 	 def_filename ? def_filename : "<unknown-file>", linenumber, err);
-  return 0;
 }
 
 
@@ -1257,7 +1322,7 @@ tokens[] =
   { "READ", READ },
   { "SECTIONS", SECTIONS },
   { "SEGMENTS", SECTIONS },
-  { "SHARED", SHARED },
+  { "SHARED", SHARED_K },
   { "STACKSIZE", STACKSIZE_K },
   { "VERSION", VERSIONK },
   { "WRITE", WRITE },

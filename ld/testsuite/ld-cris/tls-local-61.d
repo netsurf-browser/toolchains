@@ -17,16 +17,16 @@ Program Header:
   FLAGS                0x00000010
 #...
 DYNAMIC RELOCATION RECORDS
-OFFSET   TYPE              VALUE 
-00002304 R_CRIS_32_TPREL   \*ABS\*
-00002308 R_CRIS_DTP        \*ABS\*
+OFFSET +TYPE +VALUE
+0000229c R_CRIS_32_TPREL   \*ABS\*
+000022a0 R_CRIS_DTP        \*ABS\*
 
 Contents of section \.hash:
 #...
 Contents of section \.text:
- 01ec 6fae1000 00006fae 0c000000 5fae1000  .*
- 01fc 5fae0c00                             .*
+ 0184 6fae1000 00006fae 0c000000 5fae1000  .*
+ 0194 5fae0c00                             .*
 #...
 Contents of section \.got:
- 22f8 80220+ 0+ 0+ 0+  .*
- 2308 0+ 0+                    .*
+ 2290 18220+ 0+ 0+ 0+  .*
+ 22a0 0+ 0+                    .*
