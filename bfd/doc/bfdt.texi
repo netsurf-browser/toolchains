@@ -151,11 +151,15 @@ struct bfd
   /* Put pathnames into archives (non-POSIX).  */
 #define BFD_ARCHIVE_FULL_PATH  0x100000
 
+#define BFD_CLOSED_BY_CACHE    0x200000
+  /* Compress sections in this BFD with SHF_COMPRESSED zstd.  */
+#define BFD_COMPRESS_ZSTD      0x400000
+
   /* Flags bits to be saved in bfd_preserve_save.  */
 #define BFD_FLAGS_SAVED \
   (BFD_IN_MEMORY | BFD_COMPRESS | BFD_DECOMPRESS | BFD_LINKER_CREATED \
    | BFD_PLUGIN | BFD_COMPRESS_GABI | BFD_CONVERT_ELF_COMMON \
-   | BFD_USE_ELF_STT_COMMON)
+   | BFD_USE_ELF_STT_COMMON | BFD_COMPRESS_ZSTD)
 
   /* Flags bits which are for BFD use only.  */
 #define BFD_FLAGS_FOR_BFD_USE_MASK \
@@ -472,6 +476,8 @@ bfd_set_asymbol_name (asymbol *sy, const char *name)
   sy->name = name;
 @}
 
+/* For input sections return the original size on disk of the
+   section.  For output sections return the current size.  */
 static inline bfd_size_type
 bfd_get_section_limit_octets (const bfd *abfd, const asection *sec)
 @{
@@ -486,6 +492,17 @@ bfd_get_section_limit (const bfd *abfd, const asection *sec)
 @{
   return (bfd_get_section_limit_octets (abfd, sec)
           / bfd_octets_per_byte (abfd, sec));
+@}
+
+/* For input sections return the larger of the current size and the
+   original size on disk of the section.  For output sections return
+   the current size.  */
+static inline bfd_size_type
+bfd_get_section_alloc_size (const bfd *abfd, const asection *sec)
+@{
+  if (abfd->direction != write_direction && sec->rawsize > sec->size)
+    return sec->rawsize;
+  return sec->size;
 @}
 
 /* Functions to handle insertion and deletion of a bfd's sections.  These
@@ -717,6 +734,16 @@ bfd_error_handler_type bfd_set_error_handler (bfd_error_handler_type);
 Set the BFD error handler function.  Returns the previous
 function.
 
+@findex _bfd_set_error_handler_caching
+@subsubsection @code{_bfd_set_error_handler_caching}
+@strong{Synopsis}
+@example
+bfd_error_handler_type _bfd_set_error_handler_caching (bfd *);
+@end example
+@strong{Description}@*
+Set the BFD error handler function to one that stores messages
+to the per_xvec_warn array.  Returns the previous function.
+
 @findex bfd_set_error_program_name
 @subsubsection @code{bfd_set_error_program_name}
 @strong{Synopsis}
@@ -728,6 +755,15 @@ Set the program name to use when printing a BFD error.  This
 is printed before the error message followed by a colon and
 space.  The string must not be changed after it is passed to
 this function.
+
+@findex _bfd_get_error_program_name
+@subsubsection @code{_bfd_get_error_program_name}
+@strong{Synopsis}
+@example
+const char *_bfd_get_error_program_name (void);
+@end example
+@strong{Description}@*
+Get the program name used when printing a BFD error.
 
 @subsection BFD assert handler
 If BFD finds an internal inconsistency, the bfd assert
@@ -1013,6 +1049,11 @@ The following functions exist but have not yet been documented.
        BFD_SEND (abfd, _bfd_find_nearest_line, \
                  (abfd, syms, sec, off, file, func, line, NULL))
 
+#define bfd_find_nearest_line_with_alt(abfd, alt_filename, sec, syms, off, \
+                                       file, func, line, disc) \
+       BFD_SEND (abfd, _bfd_find_nearest_line_with_alt, \
+                 (abfd, alt_filename, syms, sec, off, file, func, line, disc))
+
 #define bfd_find_nearest_line_discriminator(abfd, sec, syms, off, file, func, \
                                            line, disc) \
        BFD_SEND (abfd, _bfd_find_nearest_line, \
@@ -1157,71 +1198,4 @@ other such chars that would otherwise confuse the demangler.
 If passed a g++ v3 ABI mangled name, returns a buffer allocated
 with malloc holding the demangled name.  Returns NULL otherwise
 and on memory alloc failure.
-
-@findex bfd_update_compression_header
-@subsubsection @code{bfd_update_compression_header}
-@strong{Synopsis}
-@example
-void bfd_update_compression_header
-   (bfd *abfd, bfd_byte *contents, asection *sec);
-@end example
-@strong{Description}@*
-Set the compression header at CONTENTS of SEC in ABFD and update
-elf_section_flags for compression.
-
-@findex bfd_check_compression_header
-@subsubsection @code{bfd_check_compression_header}
-@strong{Synopsis}
-@example
-bool bfd_check_compression_header
-   (bfd *abfd, bfd_byte *contents, asection *sec,
-    bfd_size_type *uncompressed_size,
-    unsigned int *uncompressed_alignment_power);
-@end example
-@strong{Description}@*
-Check the compression header at CONTENTS of SEC in ABFD and
-store the uncompressed size in UNCOMPRESSED_SIZE and the
-uncompressed data alignment in UNCOMPRESSED_ALIGNMENT_POWER
-if the compression header is valid.
-
-@strong{Returns}@*
-Return TRUE if the compression header is valid.
-
-@findex bfd_get_compression_header_size
-@subsubsection @code{bfd_get_compression_header_size}
-@strong{Synopsis}
-@example
-int bfd_get_compression_header_size (bfd *abfd, asection *sec);
-@end example
-@strong{Description}@*
-Return the size of the compression header of SEC in ABFD.
-
-@strong{Returns}@*
-Return the size of the compression header in bytes.
-
-@findex bfd_convert_section_size
-@subsubsection @code{bfd_convert_section_size}
-@strong{Synopsis}
-@example
-bfd_size_type bfd_convert_section_size
-   (bfd *ibfd, asection *isec, bfd *obfd, bfd_size_type size);
-@end example
-@strong{Description}@*
-Convert the size @var{size} of the section @var{isec} in input
-BFD @var{ibfd} to the section size in output BFD @var{obfd}.
-
-@findex bfd_convert_section_contents
-@subsubsection @code{bfd_convert_section_contents}
-@strong{Synopsis}
-@example
-bool bfd_convert_section_contents
-   (bfd *ibfd, asection *isec, bfd *obfd,
-    bfd_byte **ptr, bfd_size_type *ptr_size);
-@end example
-@strong{Description}@*
-Convert the contents, stored in @var{*ptr}, of the section
-@var{isec} in input BFD @var{ibfd} to output BFD @var{obfd}
-if needed.  The original buffer pointed to by @var{*ptr} may
-be freed and @var{*ptr} is returned with memory malloc'd by this
-function, and the new size written to @var{ptr_size}.
 

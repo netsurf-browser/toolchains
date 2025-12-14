@@ -295,9 +295,8 @@ typedef struct bfd_section
      executables or shared objects. This is for COFF only.  */
 #define SEC_COFF_SHARED             0x8000000
 
-  /* This section should be compressed.  This is for ELF linker
-     internal use only.  */
-#define SEC_ELF_COMPRESS            0x8000000
+  /* Indicate that section has the purecode flag set.  */
+#define SEC_ELF_PURECODE            0x8000000
 
   /* When a section with this flag is being linked, then if the size of
      the input section is less than a page, it should not cross a page
@@ -305,10 +304,6 @@ typedef struct bfd_section
      it should be aligned on a page boundary.  This is for TI
      TMS320C54X only.  */
 #define SEC_TIC54X_BLOCK           0x10000000
-
-  /* This section should be renamed.  This is for ELF linker
-     internal use only.  */
-#define SEC_ELF_RENAME             0x10000000
 
   /* Conditionally link this section; do not link if there are no
      references found to any symbol in the section.  This is for TI
@@ -326,9 +321,6 @@ typedef struct bfd_section
   /* Indicate that section has the no read flag set. This happens
      when memory read flag isn't set. */
 #define SEC_COFF_NOREAD            0x40000000
-
-  /* Indicate that section has the purecode flag set.  */
-#define SEC_ELF_PURECODE           0x80000000
 
   /*  End of section flags.  */
 
@@ -351,7 +343,8 @@ typedef struct bfd_section
   unsigned int compress_status : 2;
 #define COMPRESS_SECTION_NONE    0
 #define COMPRESS_SECTION_DONE    1
-#define DECOMPRESS_SECTION_SIZED 2
+#define DECOMPRESS_SECTION_ZLIB  2
+#define DECOMPRESS_SECTION_ZSTD  3
 
   /* The following flags are used by the ELF linker. */
 
@@ -367,6 +360,7 @@ typedef struct bfd_section
 #define SEC_INFO_TYPE_JUST_SYMS 4
 #define SEC_INFO_TYPE_TARGET    5
 #define SEC_INFO_TYPE_EH_FRAME_ENTRY 6
+#define SEC_INFO_TYPE_SFRAME  7
 
   /* Nonzero if this section uses RELA relocations, rather than REL.  */
   unsigned int use_rela_p:1;
@@ -590,6 +584,8 @@ bfd_set_section_lma (asection *sec, bfd_vma val)
 static inline bool
 bfd_set_section_alignment (asection *sec, unsigned int val)
 @{
+  if (val >= sizeof (bfd_vma) * 8 - 1)
+    return false;
   sec->alignment_power = val;
   return true;
 @}
@@ -1092,4 +1088,15 @@ bool bfd_generic_discard_group (bfd *abfd, asection *group);
 @end example
 @strong{Description}@*
 Remove all members of @var{group} from the output.
+
+@findex _bfd_section_size_insane
+@subsubsection @code{_bfd_section_size_insane}
+@strong{Synopsis}
+@example
+bool _bfd_section_size_insane (bfd *abfd, asection *sec);
+@end example
+@strong{Description}@*
+Returns true if the given section has a size that indicates
+it cannot be read from file.  Return false if the size is OK
+or* this function can't say one way or the other.
 

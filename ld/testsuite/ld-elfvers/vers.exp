@@ -1,5 +1,5 @@
 # Expect script for ld-version tests
-#   Copyright (C) 1997-2022 Free Software Foundation, Inc.
+#   Copyright (C) 1997-2023 Free Software Foundation, Inc.
 #
 # This file is part of the GNU Binutils.
 #
@@ -24,6 +24,11 @@
 
 # Check to see if the C compiler works
 if { ![check_compiler_available] } {
+    return
+}
+
+# Skip targets where -shared is not supported
+if { ![check_shared_lib_support] } {
     return
 }
 
@@ -109,7 +114,7 @@ proc test_ar { test lib object expect } {
 	return
     }
 
-    set cmd "$nm --print-armap $tmpdir/$lib | grep \\\ in\\\  | egrep VERS\\\|bar\\\|foo | grep -v ^\\\\. | sort > $tmpdir/nm.out"
+    set cmd "$nm --print-armap $tmpdir/$lib | sed -n -e /^\\\\./d -e \"/^VERS.* in /p\" -e \"/bar.* in /p\" -e \"/foo.* in /p\" | sort > $tmpdir/nm.out"
     verbose -log $cmd
     catch "exec $cmd" exec_output
     if [string match "" $exec_output] then {

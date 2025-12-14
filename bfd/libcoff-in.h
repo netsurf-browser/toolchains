@@ -1,5 +1,5 @@
 /* BFD COFF object file private structure.
-   Copyright (C) 1990-2022 Free Software Foundation, Inc.
+   Copyright (C) 1990-2023 Free Software Foundation, Inc.
    Written by Cygnus Support.
 
    This file is part of BFD, the Binary File Descriptor library.
@@ -358,6 +358,8 @@ extern asymbol *coff_bfd_make_debug_symbol
 extern bool coff_find_nearest_line
   (bfd *, asymbol **, asection *, bfd_vma,
    const char **, const char **, unsigned int *, unsigned int *);
+#define coff_find_nearest_line_with_alt \
+  _bfd_nosymbols_find_nearest_line_with_alt
 #define coff_find_line _bfd_nosymbols_find_line
 struct dwarf_debug_section;
 extern bool coff_find_nearest_line_with_names

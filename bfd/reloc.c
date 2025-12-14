@@ -1,5 +1,5 @@
 /* BFD support for handling relocation entries.
-   Copyright (C) 1990-2022 Free Software Foundation, Inc.
+   Copyright (C) 1990-2023 Free Software Foundation, Inc.
    Written by Cygnus Support.
 
    This file is part of BFD, the Binary File Descriptor library.
@@ -82,7 +82,7 @@ CODE_FRAGMENT
 .  {* Unsupported relocation size requested.  *}
 .  bfd_reloc_notsupported,
 .
-.  {* Unused.  *}
+.  {* Target specific meaning.  *}
 .  bfd_reloc_other,
 .
 .  {* The symbol to relocate against was undefined.  *}
@@ -8228,6 +8228,88 @@ ENUMX
   BFD_RELOC_LARCH_SUB32
 ENUMX
   BFD_RELOC_LARCH_SUB64
+
+ENUMX
+  BFD_RELOC_LARCH_B16
+ENUMX
+  BFD_RELOC_LARCH_B21
+ENUMX
+  BFD_RELOC_LARCH_B26
+
+ENUMX
+  BFD_RELOC_LARCH_ABS_HI20
+ENUMX
+  BFD_RELOC_LARCH_ABS_LO12
+ENUMX
+  BFD_RELOC_LARCH_ABS64_LO20
+ENUMX
+  BFD_RELOC_LARCH_ABS64_HI12
+
+ENUMX
+  BFD_RELOC_LARCH_PCALA_HI20
+ENUMX
+  BFD_RELOC_LARCH_PCALA_LO12
+ENUMX
+  BFD_RELOC_LARCH_PCALA64_LO20
+ENUMX
+  BFD_RELOC_LARCH_PCALA64_HI12
+
+ENUMX
+  BFD_RELOC_LARCH_GOT_PC_HI20
+ENUMX
+  BFD_RELOC_LARCH_GOT_PC_LO12
+ENUMX
+  BFD_RELOC_LARCH_GOT64_PC_LO20
+ENUMX
+  BFD_RELOC_LARCH_GOT64_PC_HI12
+ENUMX
+  BFD_RELOC_LARCH_GOT_HI20
+ENUMX
+  BFD_RELOC_LARCH_GOT_LO12
+ENUMX
+  BFD_RELOC_LARCH_GOT64_LO20
+ENUMX
+  BFD_RELOC_LARCH_GOT64_HI12
+
+ENUMX
+  BFD_RELOC_LARCH_TLS_LE_HI20
+ENUMX
+  BFD_RELOC_LARCH_TLS_LE_LO12
+ENUMX
+  BFD_RELOC_LARCH_TLS_LE64_LO20
+ENUMX
+  BFD_RELOC_LARCH_TLS_LE64_HI12
+ENUMX
+  BFD_RELOC_LARCH_TLS_IE_PC_HI20
+ENUMX
+  BFD_RELOC_LARCH_TLS_IE_PC_LO12
+ENUMX
+  BFD_RELOC_LARCH_TLS_IE64_PC_LO20
+ENUMX
+  BFD_RELOC_LARCH_TLS_IE64_PC_HI12
+ENUMX
+  BFD_RELOC_LARCH_TLS_IE_HI20
+ENUMX
+  BFD_RELOC_LARCH_TLS_IE_LO12
+ENUMX
+  BFD_RELOC_LARCH_TLS_IE64_LO20
+ENUMX
+  BFD_RELOC_LARCH_TLS_IE64_HI12
+ENUMX
+  BFD_RELOC_LARCH_TLS_LD_PC_HI20
+ENUMX
+  BFD_RELOC_LARCH_TLS_LD_HI20
+ENUMX
+  BFD_RELOC_LARCH_TLS_GD_PC_HI20
+ENUMX
+  BFD_RELOC_LARCH_TLS_GD_HI20
+
+ENUMX
+  BFD_RELOC_LARCH_32_PCREL
+
+ENUMX
+  BFD_RELOC_LARCH_RELAX
+
 ENUMDOC
   LARCH relocations.
 
@@ -8450,6 +8532,7 @@ bfd_generic_get_relocated_section_contents (bfd *abfd,
     return NULL;
 
   /* Read in the section.  */
+  bfd_byte *orig_data = data;
   if (!bfd_get_full_section_contents (input_bfd, input_section, &data))
     return NULL;
 
@@ -8461,7 +8544,7 @@ bfd_generic_get_relocated_section_contents (bfd *abfd,
 
   reloc_vector = (arelent **) bfd_malloc (reloc_size);
   if (reloc_vector == NULL)
-    return NULL;
+    goto error_return;
 
   reloc_count = bfd_canonicalize_reloc (input_bfd,
 					input_section,
@@ -8598,6 +8681,8 @@ bfd_generic_get_relocated_section_contents (bfd *abfd,
 
  error_return:
   free (reloc_vector);
+  if (orig_data == NULL)
+    free (data);
   return NULL;
 }
 
@@ -8624,6 +8709,10 @@ _bfd_generic_set_reloc (bfd *abfd ATTRIBUTE_UNUSED,
 {
   section->orelocation = relptr;
   section->reloc_count = count;
+  if (count != 0)
+    section->flags |= SEC_RELOC;
+  else
+    section->flags &= ~SEC_RELOC;
 }
 
 /*

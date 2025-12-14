@@ -1,5 +1,5 @@
 /* resrc.c -- read and write Windows rc files.
-   Copyright (C) 1997-2022 Free Software Foundation, Inc.
+   Copyright (C) 1997-2023 Free Software Foundation, Inc.
    Written by Ian Lance Taylor, Cygnus Support.
    Rewritten by Kai Tietz, Onevision.
 
@@ -202,7 +202,7 @@ run_cmd (char *cmd, const char *redir)
   int i;
   const char **argv;
   char *errmsg_fmt = NULL, *errmsg_arg = NULL;
-  char *temp_base = choose_temp_base ();
+  char *temp_base = make_temp_file (NULL);
   int in_quote;
   char sep;
   int redir_handle = -1;
@@ -316,7 +316,7 @@ open_input_stream (char *cmd)
     {
       char *fileprefix;
 
-      fileprefix = choose_temp_base ();
+      fileprefix = make_temp_file (NULL);
       cpp_temp_file = (char *) xmalloc (strlen (fileprefix) + 5);
       sprintf (cpp_temp_file, "%s.irc", fileprefix);
       free (fileprefix);

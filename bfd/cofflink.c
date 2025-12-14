@@ -1,5 +1,5 @@
 /* COFF specific linker code.
-   Copyright (C) 1994-2022 Free Software Foundation, Inc.
+   Copyright (C) 1994-2023 Free Software Foundation, Inc.
    Written by Ian Lance Taylor, Cygnus Support.
 
    This file is part of BFD, the Binary File Descriptor library.
@@ -2562,14 +2562,10 @@ _bfd_coff_write_global_sym (struct bfd_hash_entry *bh, void *data)
 	if (isym.n_value > (bfd_vma) 0xffffffff)
 	  {
 	    if (! h->root.linker_def)
-	      {
-		char value_buf[128];
-
-		sprintf_vma (value_buf, isym.n_value);
-		_bfd_error_handler
-		  (_("%pB: stripping non-representable symbol '%s' (value 0x%s)"),
-		   output_bfd, h->root.root.string, value_buf);
-	      }
+	      _bfd_error_handler
+		(_("%pB: stripping non-representable symbol '%s' "
+		   "(value 0x%" PRIx64 ")"),
+		 output_bfd, h->root.root.string, isym.n_value);
 	    return true;
 	  }
 #endif
@@ -2965,8 +2961,10 @@ _bfd_coff_generic_relocate_section (bfd *output_bfd,
 	      sec = sections[symndx];
 
 	      /* PR 19623: Relocations against symbols in
-		 the absolute sections should ignored.  */
-	      if (bfd_is_abs_section (sec))
+		 the absolute sections should ignored.
+		 PR 29807: Also ignore relocs against file symbols or
+		 other such nonsense in fuzzed objects.  */
+	      if (sec == NULL || bfd_is_abs_section (sec))
 		continue;
 
 	      val = (sec->output_section->vma

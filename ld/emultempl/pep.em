@@ -20,7 +20,7 @@ esac
 rm -f e${EMULATION_NAME}.c
 (echo;echo;echo;echo;echo)>e${EMULATION_NAME}.c # there, now line numbers match ;-)
 fragment <<EOF
-/* Copyright (C) 2006-2022 Free Software Foundation, Inc.
+/* Copyright (C) 2006-2023 Free Software Foundation, Inc.
    Written by Kai Tietz, OneVision Software GmbH&CoKg.
 
    This file is part of the GNU Binutils.
@@ -48,7 +48,11 @@ fragment <<EOF
 
 #define COFF_IMAGE_WITH_PE
 #define COFF_WITH_PE
+#ifdef TARGET_IS_aarch64pe
+#define COFF_WITH_peAArch64
+#elif defined (TARGET_IS_i386pep)
 #define COFF_WITH_pex64
+#endif
 
 #include "sysdep.h"
 #include "bfd.h"
@@ -69,10 +73,26 @@ fragment <<EOF
 #include "ldctor.h"
 #include "ldbuildid.h"
 #include "coff/internal.h"
+EOF
+
+case ${target} in
+  x86_64-*-mingw* | x86_64-*-pe | x86_64-*-pep | x86_64-*-cygwin | \
+  i[3-7]86-*-mingw32* | i[3-7]86-*-cygwin* | i[3-7]86-*-winnt | i[3-7]86-*-pe)
+fragment <<EOF
+#include "pdb.h"
+EOF
+    ;;
+esac
+
+fragment <<EOF
 
 /* FIXME: See bfd/peXXigen.c for why we include an architecture specific
    header in generic PE code.  */
-#include "coff/x86_64.h"
+#ifdef TARGET_IS_i386pep
+# include "coff/x86_64.h"
+#elif defined TARGET_IS_aarch64pe
+# include "coff/aarch64.h"
+#endif
 #include "coff/pe.h"
 
 /* FIXME: These are BFD internal header files, and we should not be
@@ -157,6 +177,10 @@ static lang_assignment_statement_type *image_base_statement = 0;
 static unsigned short pe_dll_characteristics = DEFAULT_DLL_CHARACTERISTICS;
 static bool insert_timestamp = true;
 static const char *emit_build_id;
+#ifdef PDB_H
+static int pdb;
+static char *pdb_name;
+#endif
 
 #ifdef DLL_SUPPORT
 static int    pep_enable_stdcall_fixup = 1; /* 0=disable 1=enable (default).  */
@@ -167,7 +191,8 @@ static char * pep_dll_search_prefix = NULL;
 
 extern const char *output_filename;
 
-static int is_underscoring (void)
+static int
+is_underscoring (void)
 {
   int u = 0;
   if (pep_leading_underscore != -1)
@@ -181,6 +206,23 @@ static int is_underscoring (void)
   return pep_leading_underscore;
 }
 
+/* A case insensitive comparison, regardless of the host platform, used for
+   comparing file extensions.  */
+static int
+fileext_cmp (const char *s1, const char *s2)
+{
+  for (;;)
+    {
+      int c1 = TOLOWER (*s1++);
+      int c2 = *s2++; /* Assumed to be lower case from the caller.  */
+
+      if (c1 != c2)
+        return (c1 - c2);
+
+      if (c1 == '\0')
+        return 0;
+    }
+}
 
 static void
 gld${EMULATION_NAME}_before_parse (void)
@@ -255,6 +297,9 @@ enum options
   OPTION_NO_INSERT_TIMESTAMP,
   OPTION_TERMINAL_SERVER_AWARE,
   OPTION_BUILD_ID,
+#ifdef PDB_H
+  OPTION_PDB,
+#endif
   OPTION_ENABLE_RELOC_SECTION,
   OPTION_DISABLE_RELOC_SECTION,
   OPTION_DISABLE_HIGH_ENTROPY_VA,
@@ -343,6 +388,9 @@ gld${EMULATION_NAME}_add_options
     {"insert-timestamp", no_argument, NULL, OPTION_INSERT_TIMESTAMP},
     {"no-insert-timestamp", no_argument, NULL, OPTION_NO_INSERT_TIMESTAMP},
     {"build-id", optional_argument, NULL, OPTION_BUILD_ID},
+#ifdef PDB_H
+    {"pdb", required_argument, NULL, OPTION_PDB},
+#endif
     {"enable-reloc-section", no_argument, NULL, OPTION_ENABLE_RELOC_SECTION},
     {"disable-reloc-section", no_argument, NULL, OPTION_DISABLE_RELOC_SECTION},
     {"disable-high-entropy-va", no_argument, NULL, OPTION_DISABLE_HIGH_ENTROPY_VA},
@@ -490,6 +538,9 @@ gld${EMULATION_NAME}_list_options (FILE *file)
   fprintf (file, _("  --[disable-]wdmdriver              Driver uses the WDM model\n"));
   fprintf (file, _("  --[disable-]tsaware                Image is Terminal Server aware\n"));
   fprintf (file, _("  --build-id[=STYLE]                 Generate build ID\n"));
+#ifdef PDB_H
+  fprintf (file, _("  --pdb=[FILENAME]                   Generate PDB file\n"));
+#endif
 #endif
 }
 
@@ -898,6 +949,13 @@ gld${EMULATION_NAME}_handle_option (int optc)
       if (strcmp (optarg, "none"))
 	emit_build_id = xstrdup (optarg);
       break;
+#ifdef PDB_H
+    case OPTION_PDB:
+      pdb = 1;
+      if (optarg && optarg[0])
+	pdb_name = xstrdup (optarg);
+      break;
+#endif
     }
 
   /*  Set DLLCharacteristics bits  */
@@ -1019,6 +1077,11 @@ gld${EMULATION_NAME}_after_parse (void)
   if (link_info.export_dynamic)
     einfo (_("%P: warning: --export-dynamic is not supported for PE+ "
       "targets, did you mean --export-all-symbols?\n"));
+
+#ifdef PDB_H
+  if (pdb && emit_build_id == NULL)
+    emit_build_id = xstrdup (DEFAULT_BUILD_ID_STYLE);
+#endif
 
   set_entry_point ();
 
@@ -1237,9 +1300,9 @@ write_build_id (bfd *abfd)
   asection *asec;
   struct bfd_link_order *link_order = NULL;
   unsigned char *contents;
-  bfd_size_type size;
   bfd_size_type build_id_size;
   unsigned char *build_id;
+  const char *pdb_base_name = NULL;
 
   /* Find the section the .buildid output section has been merged info.  */
   for (asec = abfd->sections; asec != NULL; asec = asec->next)
@@ -1271,13 +1334,17 @@ write_build_id (bfd *abfd)
   if (t->build_id.sec->contents == NULL)
     t->build_id.sec->contents = (unsigned char *) xmalloc (t->build_id.sec->size);
   contents = t->build_id.sec->contents;
-  size = t->build_id.sec->size;
 
   build_id_size = compute_build_id_size (t->build_id.style);
   build_id = xmalloc (build_id_size);
   generate_build_id (abfd, t->build_id.style, pecoff_checksum_contents, build_id, build_id_size);
 
   bfd_vma ib = pe_data (link_info.output_bfd)->pe_opthdr.ImageBase;
+
+#ifdef PDB_H
+  if (pdb_name)
+    pdb_base_name = lbasename (pdb_name);
+#endif
 
   /* Construct a debug directory entry which points to an immediately following CodeView record.  */
   struct internal_IMAGE_DEBUG_DIRECTORY idd;
@@ -1286,7 +1353,11 @@ write_build_id (bfd *abfd)
   idd.MajorVersion = 0;
   idd.MinorVersion = 0;
   idd.Type = PE_IMAGE_DEBUG_TYPE_CODEVIEW;
-  idd.SizeOfData = sizeof (CV_INFO_PDB70) + 1;
+  idd.SizeOfData = (sizeof (CV_INFO_PDB70)
+#ifdef PDB_H
+		    + (pdb_base_name ? strlen (pdb_base_name) : 0)
+#endif
+		    + 1);
   idd.AddressOfRawData = asec->vma - ib + link_order->offset
     + sizeof (struct external_IMAGE_DEBUG_DIRECTORY);
   idd.PointerToRawData = asec->filepos + link_order->offset
@@ -1299,8 +1370,16 @@ write_build_id (bfd *abfd)
   if (bfd_seek (abfd, asec->filepos + link_order->offset, SEEK_SET) != 0)
     return 0;
 
-  if (bfd_bwrite (contents, size, abfd) != size)
+  if (bfd_bwrite (contents, sizeof (*ext), abfd) != sizeof (*ext))
     return 0;
+
+#ifdef PDB_H
+  if (pdb)
+    {
+      if (!create_pdb_file (abfd, pdb_name, build_id))
+	return 0;
+    }
+#endif
 
   /* Construct the CodeView record.  */
   CODEVIEW_INFO cvinfo;
@@ -1315,7 +1394,8 @@ write_build_id (bfd *abfd)
   free (build_id);
 
   /* Write the codeview record.  */
-  if (_bfd_XXi_write_codeview_record (abfd, idd.PointerToRawData, &cvinfo) == 0)
+  if (_bfd_XXi_write_codeview_record (abfd, idd.PointerToRawData, &cvinfo,
+				      pdb_base_name) == 0)
     return 0;
 
   /* Record the location of the debug directory in the data directory.  */
@@ -1352,11 +1432,15 @@ setup_build_id (bfd *ibfd)
 
       /* Section is a fixed size:
 	 One IMAGE_DEBUG_DIRECTORY entry, of type IMAGE_DEBUG_TYPE_CODEVIEW,
-	 pointing at a CV_INFO_PDB70 record containing the build-id, with a
-	 null byte for PdbFileName.  */
-      s->size = sizeof (struct external_IMAGE_DEBUG_DIRECTORY)
-	+ sizeof (CV_INFO_PDB70) + 1;
+	 pointing at a CV_INFO_PDB70 record containing the build-id, followed by
+	 PdbFileName if relevant.  */
+      s->size = (sizeof (struct external_IMAGE_DEBUG_DIRECTORY)
+		 + sizeof (CV_INFO_PDB70) + 1);
 
+#ifdef PDB_H
+      if (pdb_name)
+	s->size += strlen (lbasename (pdb_name));
+#endif
       return true;
     }
 
@@ -1385,6 +1469,27 @@ gld${EMULATION_NAME}_after_open (void)
 
       for (a = link_info.input_bfds; a; a = a->link.next)
 	printf ("*%s\n", bfd_get_filename (a));
+    }
+#endif
+
+#ifdef PDB_H
+  if (pdb && !pdb_name)
+    {
+      const char *base = lbasename (bfd_get_filename (link_info.output_bfd));
+      size_t len = strlen (base);
+      static const char suffix[] = ".pdb";
+
+      while (len > 0 && base[len] != '.')
+	{
+	  len--;
+	}
+
+      if (len == 0)
+	len = strlen (base);
+
+      pdb_name = xmalloc (len + sizeof (suffix));
+      memcpy (pdb_name, base, len);
+      memcpy (pdb_name + len, suffix, sizeof (suffix));
     }
 #endif
 
@@ -1547,6 +1652,7 @@ gld${EMULATION_NAME}_after_open (void)
 		      {
 			struct bfd_symbol *s;
 			struct bfd_link_hash_entry * blhe;
+			bfd *other_bfd;
 			const char *other_bfd_filename;
 
 			s = (relocs[i]->sym_ptr_ptr)[0];
@@ -1563,20 +1669,25 @@ gld${EMULATION_NAME}_after_open (void)
 			    || blhe->type != bfd_link_hash_defined)
 			  continue;
 
+			other_bfd = blhe->u.def.section->owner;
+			if (other_bfd->my_archive == is->the_bfd->my_archive)
+			  continue;
+
 			other_bfd_filename
-			  = blhe->u.def.section->owner->my_archive
-			    ? bfd_get_filename (blhe->u.def.section->owner->my_archive)
-			    : bfd_get_filename (blhe->u.def.section->owner);
+			  = (other_bfd->my_archive
+			     ? bfd_get_filename (other_bfd->my_archive)
+			     : bfd_get_filename (other_bfd));
 
 			if (filename_cmp (bfd_get_filename
 					    (is->the_bfd->my_archive),
 					  other_bfd_filename) == 0)
 			  continue;
 
-			/* Rename this implib to match the other one.  */
-			if (!bfd_set_filename (is->the_bfd->my_archive,
-					       other_bfd_filename))
-			  einfo ("%F%P: %pB: %E\n", is->the_bfd);
+			/* Sort this implib to match the other one.  */
+			lang_input_statement_type *arch_is
+			  = bfd_usrdata (is->the_bfd->my_archive);
+			arch_is->sort_key = other_bfd_filename;
+			break;
 		      }
 
 		    free (relocs);
@@ -1589,10 +1700,6 @@ gld${EMULATION_NAME}_after_open (void)
   }
 
   {
-    int is_ms_arch = 0;
-    bfd *cur_arch = 0;
-    lang_input_statement_type *is2;
-    lang_input_statement_type *is3;
 
     /* Careful - this is a shell script.  Watch those dollar signs! */
     /* Microsoft import libraries have every member named the same,
@@ -1608,60 +1715,18 @@ gld${EMULATION_NAME}_after_open (void)
 	if (is->the_bfd->my_archive)
 	  {
 	    char *pnt;
-	    bfd *arch = is->the_bfd->my_archive;
 
-	    if (cur_arch != arch)
-	      {
-		cur_arch = arch;
-		is_ms_arch = 1;
-
-		for (is3 = is;
-		     is3 && is3->the_bfd->my_archive == arch;
-		     is3 = (lang_input_statement_type *) is3->next)
-		  {
-		    /* A MS dynamic import library can also contain static
-		       members, so look for the first element with a .dll
-		       extension, and use that for the remainder of the
-		       comparisons.  */
-		    pnt = strrchr (bfd_get_filename (is3->the_bfd), '.');
-		    if (pnt != NULL && filename_cmp (pnt, ".dll") == 0)
-		      break;
-		  }
-
-		if (is3 == NULL)
-		  is_ms_arch = 0;
-		else
-		  {
-		    /* OK, found one.  Now look to see if the remaining
-		       (dynamic import) members use the same name.  */
-		    for (is2 = is;
-			 is2 && is2->the_bfd->my_archive == arch;
-			 is2 = (lang_input_statement_type *) is2->next)
-		      {
-			/* Skip static members, ie anything with a .obj
-			   extension.  */
-			pnt = strrchr (bfd_get_filename (is2->the_bfd), '.');
-			if (pnt != NULL && filename_cmp (pnt, ".obj") == 0)
-			  continue;
-
-			if (filename_cmp (bfd_get_filename (is3->the_bfd),
-					  bfd_get_filename (is2->the_bfd)))
-			  {
-			    is_ms_arch = 0;
-			    break;
-			  }
-		      }
-		  }
-	      }
-
-	    /* This fragment might have come from an .obj file in a Microsoft
-	       import, and not an actual import record. If this is the case,
-	       then leave the filename alone.  */
+	    /* Microsoft import libraries may contain archive members for
+	       one or more DLLs, together with static object files.
+	       Inspect all members that are named *.dll - check whether
+	       they contain .idata sections. Do the renaming of all
+	       archive members that seem to be Microsoft style import
+	       objects.  */
 	    pnt = strrchr (bfd_get_filename (is->the_bfd), '.');
 
-	    if (is_ms_arch && (filename_cmp (pnt, ".dll") == 0))
+	    if (pnt != NULL && (fileext_cmp (pnt + 1, "dll") == 0))
 	      {
-		int idata2 = 0, reloc_count=0;
+		int idata2 = 0, reloc_count = 0, idata = 0;
 		asection *sec;
 		char *new_name, seq;
 
@@ -1669,8 +1734,16 @@ gld${EMULATION_NAME}_after_open (void)
 		  {
 		    if (strcmp (sec->name, ".idata\$2") == 0)
 		      idata2 = 1;
+		    if (strncmp (sec->name, ".idata\$", 6) == 0)
+		      idata = 1;
 		    reloc_count += sec->reloc_count;
 		  }
+
+		/* An archive member named .dll, but not having any .idata
+		   sections - apparently not a Microsoft import object
+		   after all: Skip renaming it.  */
+		if (!idata)
+		  continue;
 
 		if (idata2) /* .idata2 is the TOC */
 		  seq = 'a';
@@ -1683,10 +1756,7 @@ gld${EMULATION_NAME}_after_open (void)
 		  = xmalloc (strlen (bfd_get_filename (is->the_bfd)) + 3);
 		sprintf (new_name, "%s.%c",
 			 bfd_get_filename (is->the_bfd), seq);
-		is->filename = bfd_set_filename (is->the_bfd, new_name);
-		free (new_name);
-		if (!is->filename)
-		  einfo ("%F%P: %pB: %E\n", is->the_bfd);
+		is->sort_key = new_name;
 	      }
 	  }
       }
@@ -1722,9 +1792,9 @@ static bool
 gld${EMULATION_NAME}_unrecognized_file (lang_input_statement_type *entry ATTRIBUTE_UNUSED)
 {
 #ifdef DLL_SUPPORT
-  const char *ext = entry->filename + strlen (entry->filename) - 4;
+  const char *ext = strrchr (entry->filename, '.');
 
-  if (filename_cmp (ext, ".def") == 0 || filename_cmp (ext, ".DEF") == 0)
+  if (ext != NULL && fileext_cmp (ext + 1, "def") == 0)
     {
       pep_def_file = def_file_parse (entry->filename, pep_def_file);
 

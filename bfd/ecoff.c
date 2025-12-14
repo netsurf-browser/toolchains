@@ -1,5 +1,5 @@
 /* Generic ECOFF (Extended-COFF) routines.
-   Copyright (C) 1990-2022 Free Software Foundation, Inc.
+   Copyright (C) 1990-2023 Free Software Foundation, Inc.
    Original version by Per Bothner.
    Full support added by Ian Lance Taylor, ian@cygnus.com.
 
@@ -1389,7 +1389,7 @@ _bfd_ecoff_print_symbol (bfd *abfd,
 	  (*debug_swap->swap_sym_in) (abfd, ecoffsymbol (symbol)->native,
 				      &ecoff_sym);
 	  fprintf (file, "ecoff local ");
-	  fprintf_vma (file, (bfd_vma) ecoff_sym.value);
+	  bfd_fprintf_vma (abfd, file, ecoff_sym.value);
 	  fprintf (file, " %x %x", (unsigned) ecoff_sym.st,
 		   (unsigned) ecoff_sym.sc);
 	}
@@ -1400,7 +1400,7 @@ _bfd_ecoff_print_symbol (bfd *abfd,
 	  (*debug_swap->swap_ext_in) (abfd, ecoffsymbol (symbol)->native,
 				      &ecoff_ext);
 	  fprintf (file, "ecoff extern ");
-	  fprintf_vma (file, (bfd_vma) ecoff_ext.asym.value);
+	  bfd_fprintf_vma (abfd, file, ecoff_ext.asym.value);
 	  fprintf (file, " %x %x", (unsigned) ecoff_ext.asym.st,
 		   (unsigned) ecoff_ext.asym.sc);
 	}
@@ -1443,7 +1443,7 @@ _bfd_ecoff_print_symbol (bfd *abfd,
 
 	fprintf (file, "[%3d] %c ",
 		 pos, type);
-	fprintf_vma (file, (bfd_vma) ecoff_ext.asym.value);
+	bfd_fprintf_vma (abfd, file, ecoff_ext.asym.value);
 	fprintf (file, " st %x sc %x indx %x %c%c%c %s",
 		 (unsigned) ecoff_ext.asym.st,
 		 (unsigned) ecoff_ext.asym.sc,
@@ -1612,7 +1612,8 @@ ecoff_slurp_reloc_table (bfd *abfd,
       if (intern.r_extern)
 	{
 	  /* r_symndx is an index into the external symbols.  */
-	  if (intern.r_symndx >= 0
+	  if (symbols != NULL
+	      && intern.r_symndx >= 0
 	      && (intern.r_symndx
 		  < (ecoff_data (abfd)->debug_info.symbolic_header.iextMax)))
 	    rptr->sym_ptr_ptr = symbols + intern.r_symndx;

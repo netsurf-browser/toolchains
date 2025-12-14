@@ -1,5 +1,5 @@
 /* PowerPC64-specific support for 64-bit ELF.
-   Copyright (C) 1999-2022 Free Software Foundation, Inc.
+   Copyright (C) 1999-2023 Free Software Foundation, Inc.
    Written by Linus Nordberg, Swox AB <info@swox.com>,
    based on elf32-ppc.c by Ian Lance Taylor.
    Largely rewritten by Alan Modra.
@@ -2513,9 +2513,9 @@ ppc64_elf_get_synthetic_symtab (bfd *abfd,
 	  extdynsize = get_elf_backend_data (abfd)->s->sizeof_dyn;
 	  swap_dyn_in = get_elf_backend_data (abfd)->s->swap_dyn_in;
 
-	  extdyn = dynbuf;
-	  extdynend = extdyn + dynamic->size;
-	  for (; extdyn < extdynend; extdyn += extdynsize)
+	  for (extdyn = dynbuf, extdynend = dynbuf + dynamic->size;
+	       (size_t) (extdynend - extdyn) >= extdynsize;
+	       extdyn += extdynsize)
 	    {
 	      Elf_Internal_Dyn dyn;
 	      (*swap_dyn_in) (abfd, extdyn, &dyn);
@@ -10000,20 +10000,21 @@ allocate_dynrelocs (struct elf_link_hash_entry *h, void *inf)
 
       /* Finally, allocate space.  */
       for (p = (struct ppc_dyn_relocs *) h->dyn_relocs; p != NULL; p = p->next)
-	{
-	  unsigned int count;
-	  asection *sreloc = elf_section_data (p->sec)->sreloc;
-	  if (eh->elf.type == STT_GNU_IFUNC)
-	    sreloc = htab->elf.irelplt;
-	  count = p->count;
-	  if (info->enable_dt_relr
-	      && ((!NO_OPD_RELOCS
-		   && ppc64_elf_section_data (p->sec)->sec_type == sec_opd)
-		  || (eh->elf.type != STT_GNU_IFUNC
-		      && SYMBOL_REFERENCES_LOCAL (info, h))))
-	    count -= p->rel_count;
-	  sreloc->size += count * sizeof (Elf64_External_Rela);
-	}
+	if (!discarded_section (p->sec))
+	  {
+	    unsigned int count;
+	    asection *sreloc = elf_section_data (p->sec)->sreloc;
+	    if (eh->elf.type == STT_GNU_IFUNC)
+	      sreloc = htab->elf.irelplt;
+	    count = p->count;
+	    if (info->enable_dt_relr
+		&& ((!NO_OPD_RELOCS
+		     && ppc64_elf_section_data (p->sec)->sec_type == sec_opd)
+		    || (eh->elf.type != STT_GNU_IFUNC
+			&& SYMBOL_REFERENCES_LOCAL (info, h))))
+	      count -= p->rel_count;
+	    sreloc->size += count * sizeof (Elf64_External_Rela);
+	  }
     }
 
   /* We might need a PLT entry when the symbol
@@ -10248,8 +10249,7 @@ ppc64_elf_size_dynamic_sections (bfd *output_bfd,
 
 	  for (p = elf_section_data (s)->local_dynrel; p != NULL; p = p->next)
 	    {
-	      if (!bfd_is_abs_section (p->sec)
-		  && bfd_is_abs_section (p->sec->output_section))
+	      if (discarded_section (p->sec))
 		{
 		  /* Input section has been discarded, either because
 		     it is a copy of a linkonce section or due to
@@ -11670,7 +11670,7 @@ dump_stub (const char *header,
   fprintf (stderr, "%s id = %u type = %s:%s:%s\n",
 	   header, stub_entry->id, t1, t2, t3);
   fprintf (stderr, "name = %s\n", stub_entry->root.string);
-  fprintf (stderr, "offset = 0x%" BFD_VMA_FMT "x:", stub_entry->stub_offset);
+  fprintf (stderr, "offset = 0x%" PRIx64 ":", stub_entry->stub_offset);
   for (size_t i = stub_entry->stub_offset; i < end_offset; i += 4)
     {
       asection *stub_sec = stub_entry->group->stub_sec;
@@ -11701,25 +11701,6 @@ ppc_build_one_stub (struct bfd_hash_entry *gen_entry, void *in_arg)
   stub_entry = (struct ppc_stub_hash_entry *) gen_entry;
   info = in_arg;
 
-  /* Fail if the target section could not be assigned to an output
-     section.  The user should fix his linker script.  */
-  if (stub_entry->target_section != NULL
-      && stub_entry->target_section->output_section == NULL
-      && info->non_contiguous_regions)
-    info->callbacks->einfo (_("%F%P: Could not assign '%pA' to an output section. "
-			      "Retry without --enable-non-contiguous-regions.\n"),
-			    stub_entry->target_section);
-
-  /* Same for the group.  */
-  if (stub_entry->group->stub_sec != NULL
-      && stub_entry->group->stub_sec->output_section == NULL
-      && info->non_contiguous_regions)
-    info->callbacks->einfo (_("%F%P: Could not assign group %pA target %pA to an "
-			      "output section. Retry without "
-			      "--enable-non-contiguous-regions.\n"),
-			    stub_entry->group->stub_sec,
-			    stub_entry->target_section);
-
   htab = ppc_hash_table (info);
   if (htab == NULL)
     return false;
@@ -11736,8 +11717,8 @@ ppc_build_one_stub (struct bfd_hash_entry *gen_entry, void *in_arg)
 	fprintf (stderr, "Expected id %u, got %u\n",
 		 htab->stub_id, stub_entry->id);
       if (stub_entry->stub_offset < stub_entry->group->stub_sec->size)
-	fprintf (stderr, "Expected offset >= %" BFD_VMA_FMT "x, got %"
-		 BFD_VMA_FMT "x\n", stub_entry->group->stub_sec->size,
+	fprintf (stderr, "Expected offset >= %" PRIx64 ", got %"
+		 PRIx64 "\n", stub_entry->group->stub_sec->size,
 		 stub_entry->stub_offset);
       if (esd->sec_type == sec_stub)
 	dump_stub ("Previous:", esd->u.last_ent, stub_entry->stub_offset);
@@ -12254,7 +12235,7 @@ ppc_size_one_stub (struct bfd_hash_entry *gen_entry, void *in_arg)
   if (stub_entry->target_section != NULL
       && stub_entry->target_section->output_section == NULL
       && info->non_contiguous_regions)
-    info->callbacks->einfo (_("%F%P: Could not assign %pA to an output section. "
+    info->callbacks->einfo (_("%F%P: Could not assign `%pA' to an output section. "
 			      "Retry without --enable-non-contiguous-regions.\n"),
 			    stub_entry->target_section);
 
@@ -12262,11 +12243,9 @@ ppc_size_one_stub (struct bfd_hash_entry *gen_entry, void *in_arg)
   if (stub_entry->group->stub_sec != NULL
       && stub_entry->group->stub_sec->output_section == NULL
       && info->non_contiguous_regions)
-    info->callbacks->einfo (_("%F%P: Could not assign group %pA target %pA to an "
-			      "output section. Retry without "
-			      "--enable-non-contiguous-regions.\n"),
-			    stub_entry->group->stub_sec,
-			    stub_entry->target_section);
+    info->callbacks->einfo (_("%F%P: Could not assign `%pA' to an output section. "
+			      "Retry without --enable-non-contiguous-regions.\n"),
+			    stub_entry->group->stub_sec);
 
   /* Make a note of the offset within the stubs for this entry.  */
   stub_offset = stub_entry->group->stub_sec->size;

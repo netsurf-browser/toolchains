@@ -1,5 +1,5 @@
 /* ELF object file format
-   Copyright (C) 1992-2022 Free Software Foundation, Inc.
+   Copyright (C) 1992-2023 Free Software Foundation, Inc.
 
    This file is part of GAS, the GNU Assembler.
 
@@ -3006,7 +3006,7 @@ elf_frob_file_after_relocs (void)
     }
 
   /* Cleanup hash.  */
-  htab_traverse (groups.indexes, free_section_idx, NULL);
+  htab_traverse_noresize (groups.indexes, free_section_idx, NULL);
   htab_delete (groups.indexes);
 
 #ifdef NEED_ECOFF_DEBUG

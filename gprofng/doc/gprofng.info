@@ -1,9 +1,9 @@
 This is gprofng.info, produced by makeinfo version 6.8 from
 gprofng.texi.
 
-This document is the manual for gprofng, last updated 22 February 2022.
+This document is the manual for gprofng, last updated 5 January 2023.
 
-   Copyright (C) 2022 Free Software Foundation, Inc.
+   Copyright (C) 2022-2023 Free Software Foundation, Inc.
 
    Permission is granted to copy, distribute and/or modify this document
 under the terms of the GNU Free Documentation License, Version 1.3 or
@@ -23,9 +23,9 @@ File: gprofng.info,  Node: Top,  Next: Introduction,  Up: (dir)
 GNU Gprofng
 ***********
 
-This document is the manual for gprofng, last updated 22 February 2022.
+This document is the manual for gprofng, last updated 5 January 2023.
 
-   Copyright (C) 2022 Free Software Foundation, Inc.
+   Copyright (C) 2022-2023 Free Software Foundation, Inc.
 
    Permission is granted to copy, distribute and/or modify this document
 under the terms of the GNU Free Documentation License, Version 1.3 or
@@ -3006,51 +3006,51 @@ Index
 
 
 Tag Table:
-Node: Top750
-Node: Introduction3075
-Node: Overview4352
-Node: Main Features4993
-Node: Sampling versus Tracing6733
-Node: Steps Needed to Create a Profile9124
-Node: A Mini Tutorial11311
-Node: Getting Started12030
-Node: The Example Program13680
-Node: A First Profile14800
-Node: The Source Code View19305
-Node: The Disassembly View23801
-Node: Display and Define the Metrics28490
-Node: A First Customization of the Output30326
-Node: Name the Experiment Directory32175
-Node: Control the Number of Lines in the Output33272
-Node: Sorting the Performance Data34031
-Node: Scripting34973
-Node: A More Elaborate Example35892
-Node: The Call Tree38682
-Node: More Information on the Experiment41423
-Node: Control the Sampling Frequency44722
-Node: Information on Load Objects47143
-Node: Support for Multithreading50782
-Node: Creating a Multithreading Experiment51422
-Node: Commands Specific to Multithreading52935
-Node: Viewing Multiple Experiments62341
-Node: Aggregation of Experiments62918
-Node: Comparison of Experiments65232
-Node: Profile Hardware Event Counters69848
-Node: Getting Information on the Counters Supported70556
-Node: Examples Using Hardware Event Counters78156
-Node: Java Profiling95853
-Node: Terminology98222
-Node: The Program Counter99234
-Node: Inclusive and Exclusive Metrics99726
-Node: Metric Definitions101179
-Node: The Viewmode102364
-Node: The Selection List103503
-Node: Load Objects and Functions104905
-Node: The Concept of a CPU in gprofng106919
-Node: Hardware Event Counters Explained107680
-Node: apath111472
-Node: Other Document Formats112007
-Node: Index114531
+Node: Top753
+Node: Introduction3081
+Node: Overview4358
+Node: Main Features4999
+Node: Sampling versus Tracing6739
+Node: Steps Needed to Create a Profile9130
+Node: A Mini Tutorial11317
+Node: Getting Started12036
+Node: The Example Program13686
+Node: A First Profile14806
+Node: The Source Code View19311
+Node: The Disassembly View23807
+Node: Display and Define the Metrics28496
+Node: A First Customization of the Output30332
+Node: Name the Experiment Directory32181
+Node: Control the Number of Lines in the Output33278
+Node: Sorting the Performance Data34037
+Node: Scripting34979
+Node: A More Elaborate Example35898
+Node: The Call Tree38688
+Node: More Information on the Experiment41429
+Node: Control the Sampling Frequency44728
+Node: Information on Load Objects47149
+Node: Support for Multithreading50788
+Node: Creating a Multithreading Experiment51428
+Node: Commands Specific to Multithreading52941
+Node: Viewing Multiple Experiments62347
+Node: Aggregation of Experiments62924
+Node: Comparison of Experiments65238
+Node: Profile Hardware Event Counters69854
+Node: Getting Information on the Counters Supported70562
+Node: Examples Using Hardware Event Counters78162
+Node: Java Profiling95859
+Node: Terminology98228
+Node: The Program Counter99240
+Node: Inclusive and Exclusive Metrics99732
+Node: Metric Definitions101185
+Node: The Viewmode102370
+Node: The Selection List103509
+Node: Load Objects and Functions104911
+Node: The Concept of a CPU in gprofng106925
+Node: Hardware Event Counters Explained107686
+Node: apath111478
+Node: Other Document Formats112013
+Node: Index114537
 
 End Tag Table
 

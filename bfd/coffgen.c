@@ -1,5 +1,5 @@
 /* Support for the generic parts of COFF, for BFD.
-   Copyright (C) 1990-2022 Free Software Foundation, Inc.
+   Copyright (C) 1990-2023 Free Software Foundation, Inc.
    Written by Cygnus Support.
 
    This file is part of BFD, the Binary File Descriptor library.
@@ -51,7 +51,7 @@ make_a_section_from_file (bfd *abfd,
 			  struct internal_scnhdr *hdr,
 			  unsigned int target_index)
 {
-  asection *return_section;
+  asection *newsect;
   char *name;
   bool result = true;
   flagword flags;
@@ -107,117 +107,95 @@ make_a_section_from_file (bfd *abfd,
       name[sizeof (hdr->s_name)] = 0;
     }
 
-  return_section = bfd_make_section_anyway (abfd, name);
-  if (return_section == NULL)
+  newsect = bfd_make_section_anyway (abfd, name);
+  if (newsect == NULL)
     return false;
 
-  return_section->vma = hdr->s_vaddr;
-  return_section->lma = hdr->s_paddr;
-  return_section->size = hdr->s_size;
-  return_section->filepos = hdr->s_scnptr;
-  return_section->rel_filepos = hdr->s_relptr;
-  return_section->reloc_count = hdr->s_nreloc;
+  newsect->vma = hdr->s_vaddr;
+  newsect->lma = hdr->s_paddr;
+  newsect->size = hdr->s_size;
+  newsect->filepos = hdr->s_scnptr;
+  newsect->rel_filepos = hdr->s_relptr;
+  newsect->reloc_count = hdr->s_nreloc;
 
-  bfd_coff_set_alignment_hook (abfd, return_section, hdr);
+  bfd_coff_set_alignment_hook (abfd, newsect, hdr);
 
-  return_section->line_filepos = hdr->s_lnnoptr;
+  newsect->line_filepos = hdr->s_lnnoptr;
 
-  return_section->lineno_count = hdr->s_nlnno;
-  return_section->userdata = NULL;
-  return_section->next = NULL;
-  return_section->target_index = target_index;
+  newsect->lineno_count = hdr->s_nlnno;
+  newsect->userdata = NULL;
+  newsect->next = NULL;
+  newsect->target_index = target_index;
 
-  if (! bfd_coff_styp_to_sec_flags_hook (abfd, hdr, name, return_section,
-					 & flags))
+  if (!bfd_coff_styp_to_sec_flags_hook (abfd, hdr, name, newsect, &flags))
     result = false;
-
-  return_section->flags = flags;
 
   /* At least on i386-coff, the line number count for a shared library
      section must be ignored.  */
-  if ((return_section->flags & SEC_COFF_SHARED_LIBRARY) != 0)
-    return_section->lineno_count = 0;
+  if ((flags & SEC_COFF_SHARED_LIBRARY) != 0)
+    newsect->lineno_count = 0;
 
   if (hdr->s_nreloc != 0)
-    return_section->flags |= SEC_RELOC;
+    flags |= SEC_RELOC;
   /* FIXME: should this check 'hdr->s_size > 0'.  */
   if (hdr->s_scnptr != 0)
-    return_section->flags |= SEC_HAS_CONTENTS;
+    flags |= SEC_HAS_CONTENTS;
 
-  /* Compress/decompress DWARF debug sections with names: .debug_* and
-     .zdebug_*, after the section flags is set.  */
-  if ((flags & SEC_DEBUGGING)
-      && strlen (name) > 7
-      && ((name[1] == 'd' && name[6] == '_')
-	  || (strlen (name) > 8 && name[1] == 'z' && name[7] == '_')))
+  newsect->flags = flags;
+
+  /* Compress/decompress DWARF debug sections.  */
+  if ((flags & SEC_DEBUGGING) != 0
+      && (flags & SEC_HAS_CONTENTS) != 0
+      && (startswith (name, ".debug_")
+	  || startswith (name, ".zdebug_")
+	  || startswith (name, ".gnu.debuglto_.debug_")
+	  || startswith (name, ".gnu.linkonce.wi.")))
     {
       enum { nothing, compress, decompress } action = nothing;
-      char *new_name = NULL;
 
-      if (bfd_is_section_compressed (abfd, return_section))
+      if (bfd_is_section_compressed (abfd, newsect))
 	{
 	  /* Compressed section.  Check if we should decompress.  */
 	  if ((abfd->flags & BFD_DECOMPRESS))
 	    action = decompress;
 	}
-      else if (!bfd_is_section_compressed (abfd, return_section))
+      else
 	{
 	  /* Normal section.  Check if we should compress.  */
-	  if ((abfd->flags & BFD_COMPRESS) && return_section->size != 0)
+	  if ((abfd->flags & BFD_COMPRESS) && newsect->size != 0)
 	    action = compress;
 	}
 
-      switch (action)
+      if (action == compress)
 	{
-	case nothing:
-	  break;
-	case compress:
-	  if (!bfd_init_section_compress_status (abfd, return_section))
+	  if (!bfd_init_section_compress_status (abfd, newsect))
 	    {
 	      _bfd_error_handler
-		/* xgettext: c-format */
-		(_("%pB: unable to initialize compress status for section %s"),
-		 abfd, name);
+		/* xgettext:c-format */
+		(_("%pB: unable to compress section %s"), abfd, name);
 	      return false;
 	    }
-	  if (return_section->compress_status == COMPRESS_SECTION_DONE)
-	    {
-	      if (name[1] != 'z')
-		{
-		  unsigned int len = strlen (name);
-
-		  new_name = bfd_alloc (abfd, len + 2);
-		  if (new_name == NULL)
-		    return false;
-		  new_name[0] = '.';
-		  new_name[1] = 'z';
-		  memcpy (new_name + 2, name + 1, len);
-		}
-	    }
-	 break;
-	case decompress:
-	  if (!bfd_init_section_decompress_status (abfd, return_section))
+	}
+      else if (action == decompress)
+	{
+	  if (!bfd_init_section_decompress_status (abfd, newsect))
 	    {
 	      _bfd_error_handler
-		/* xgettext: c-format */
-		(_("%pB: unable to initialize decompress status for section %s"),
-		 abfd, name);
+		/* xgettext:c-format */
+		(_("%pB: unable to decompress section %s"), abfd, name);
 	      return false;
 	    }
-	  if (name[1] == 'z')
+	  if (abfd->is_linker_input
+	      && name[1] == 'z')
 	    {
-	      unsigned int len = strlen (name);
-
-	      new_name = bfd_alloc (abfd, len);
+	      /* Rename section from .zdebug_* to .debug_* so that ld
+		 scripts will see this section as a debug section.  */
+	      char *new_name = bfd_zdebug_name_to_debug (abfd, name);
 	      if (new_name == NULL)
 		return false;
-	      new_name[0] = '.';
-	      memcpy (new_name + 1, name + 2, len - 1);
+	      bfd_rename_section (newsect, new_name);
 	    }
-	  break;
 	}
-      if (new_name != NULL)
-	bfd_rename_section (return_section, new_name);
     }
 
   return result;
@@ -1058,7 +1036,8 @@ coff_write_symbol (bfd *abfd,
 	  /* Adjust auxent only if this isn't the filename
 	     auxiliary entry.  */
 	  if (native->u.syment.n_sclass == C_FILE
-	      && (native + j + 1)->u.auxent.x_file.x_ftype)
+	      && (native + j + 1)->u.auxent.x_file.x_ftype
+	      && (native + j + 1)->extrap)
 	    coff_write_auxent_fname (abfd, (char *) (native + j + 1)->extrap,
 				     &(native + j + 1)->u.auxent, strtab, hash);
 
@@ -1538,9 +1517,10 @@ build_debug_section (bfd *abfd, asection ** sect_return)
     return NULL;
 
   sec_size = sect->size;
-  debug_section = (char *) _bfd_alloc_and_read (abfd, sec_size, sec_size);
+  debug_section = (char *) _bfd_alloc_and_read (abfd, sec_size + 1, sec_size);
   if (debug_section == NULL)
     return NULL;
+  debug_section[sec_size] = 0;
 
   if (bfd_seek (abfd, position, SEEK_SET) != 0)
     return NULL;
@@ -1973,19 +1953,25 @@ coff_get_normalized_symtab (bfd *abfd)
 long
 coff_get_reloc_upper_bound (bfd *abfd, sec_ptr asect)
 {
-  if (bfd_get_format (abfd) != bfd_object)
-    {
-      bfd_set_error (bfd_error_invalid_operation);
-      return -1;
-    }
-#if SIZEOF_LONG == SIZEOF_INT
-  if (asect->reloc_count >= LONG_MAX / sizeof (arelent *))
+  size_t count, raw;
+
+  count = asect->reloc_count;
+  if (count >= LONG_MAX / sizeof (arelent *)
+      || _bfd_mul_overflow (count, bfd_coff_relsz (abfd), &raw))
     {
       bfd_set_error (bfd_error_file_too_big);
       return -1;
     }
-#endif
-  return (asect->reloc_count + 1L) * sizeof (arelent *);
+  if (!bfd_write_p (abfd))
+    {
+      ufile_ptr filesize = bfd_get_file_size (abfd);
+      if (filesize != 0 && raw > filesize)
+	{
+	  bfd_set_error (bfd_error_file_truncated);
+	  return -1;
+	}
+    }
+  return (count + 1) * sizeof (arelent *);
 }
 
 asymbol *
@@ -3172,7 +3158,10 @@ _bfd_coff_close_and_cleanup (bfd *abfd)
 
       if (bfd_get_format (abfd) == bfd_object
 	  || bfd_get_format (abfd) == bfd_core)
-	_bfd_dwarf2_cleanup_debug_info (abfd, &tdata->dwarf2_find_line_info);
+	{
+	  _bfd_dwarf2_cleanup_debug_info (abfd, &tdata->dwarf2_find_line_info);
+	  _bfd_stab_cleanup (abfd, &tdata->line_info);
+	}
     }
   return _bfd_generic_close_and_cleanup (abfd);
 }
