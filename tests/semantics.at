@@ -2,13 +2,13 @@
 
 AT_BANNER([Semantics.])
 
-# Copyright (C) 2000, 2001, 2002, 2004, 2005, 2006, 2007 Free Software
+# Copyright (C) 2000-2002, 2004-2007, 2009-2012 Free Software
 # Foundation, Inc.
 #
 # This program is free software: you can redistribute it and/or modify
 # it under the terms of the GNU General Public License as published by
-# the Free Software Foundation; either version 2, or (at your option)
-# any later version.
+# the Free Software Foundation, either version 3 of the License, or
+# (at your option) any later version.
 #
 # This program is distributed in the hope that it will be useful,
 # but WITHOUT ANY WARRANTY; without even the implied warranty of
@@ -16,9 +16,7 @@ AT_BANNER([Semantics.])
 # GNU General Public License for more details.
 #
 # You should have received a copy of the GNU General Public License
-# along with this program; if not, write to the Free Software
-# Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA
-# 02110-1301, USA.
+# along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 
 ## -------------------------------- ##
@@ -111,9 +109,40 @@ AT_CHECK_MACRO([AC_CHECK_DECLS],
 		   struct { int x[20]; } mystruct;
 		   extern int myfunc();
 		   #define mymacro1(arg) arg
-		   #define mymacro2]])]],
+		   #define mymacro2]])
+  # The difference in space-before-open-paren is intentional.
+  AC_CHECK_DECLS([basenam (char *), dirnam(char *),
+		  [moreargs (char, short, int, long, void *, char [], float, double)]],,,
+		 [[#ifdef __cplusplus
+		   extern "C++" char *basenam (char *);
+		   extern "C++" const char *basenam (const char *);
+		   #else
+		   extern char *basenam (const char *);
+		   #endif
+		   #ifdef __cplusplus
+		   extern "C" {
+		   #endif
+		   extern int moreargs (char, short, int, long, void *,
+					char [], float, double);
+		   #ifdef __cplusplus
+		   }
+		   #endif
+		   ]])
+  AC_CHECK_DECL([declared (char *)],, [AS_EXIT([1])],
+		[[#ifdef __cplusplus
+		  extern "C++" char *declared (char *);
+		  extern "C++" const char *declared (const char *);
+		  #else
+		  extern char *declared (const char *);
+		  #endif
+		]])
+  AC_CHECK_DECL([undeclared (char *)], [AS_EXIT([1])],, [[]])
+]],
 [AT_CHECK_DEFINES(
-[#define HAVE_DECL_MYENUM 1
+[#define HAVE_DECL_BASENAM 1
+#define HAVE_DECL_DIRNAM 0
+#define HAVE_DECL_MOREARGS 1
+#define HAVE_DECL_MYENUM 1
 #define HAVE_DECL_MYFUNC 1
 #define HAVE_DECL_MYMACRO1 1
 #define HAVE_DECL_MYMACRO2 1
@@ -147,8 +176,16 @@ AT_DATA([config.in],
 ])
 
 AT_CONFIGURE_AC(
-[AC_CONFIG_FILES(config.libobjs:config.in)
-AC_REPLACE_FUNCS(printf autoconf_ftnirp)])
+[AC_CONFIG_FILES([config.libobjs:config.in])
+AC_REPLACE_FUNCS([printf \
+autoconf_ftnirp])
+funcs='fprintf fopen autoconf_ftnirpf'
+AH_TEMPLATE([HAVE_FOPEN], [])
+AH_TEMPLATE([HAVE_FPRINTF], [])
+AH_TEMPLATE([HAVE_AUTOCONF_FTNIRPF], [])
+AC_REPLACE_FUNCS([\
+$funcs])
+AS_UNSET([funcs])])
 
 AT_CHECK_AUTOCONF([-W obsolete])
 AT_CHECK_AUTOHEADER
@@ -156,11 +193,14 @@ AT_CHECK_CONFIGURE
 AT_CHECK_ENV
 AT_CHECK_DEFINES(
 [/* #undef HAVE_AUTOCONF_FTNIRP */
+/* #undef HAVE_AUTOCONF_FTNIRPF */
+#define HAVE_FOPEN 1
+#define HAVE_FPRINTF 1
 #define HAVE_PRINTF 1
 ])
 
 AT_CHECK([sed 's/  */ /g;s/^ //;s/ $//' config.libobjs], [],
-	 [${LIBOBJDIR}autoconf_ftnirp$U.o
+	 [${LIBOBJDIR}autoconf_ftnirp$U.o ${LIBOBJDIR}autoconf_ftnirpf$U.o
 ])
 
 AT_CLEANUP
@@ -255,6 +295,32 @@ AT_CHECK_DEFINES(
 AT_CLEANUP
 
 
+# AC_CHECK_MEMBER
+# ---------------
+# Check that it performs the correct actions.
+# Must define HAVE_STRUCT_YES_S_YES, but not HAVE_STRUCT_YES_S_NO.
+AT_CHECK_MACRO([AC_CHECK_MEMBER],
+[[AC_CHECK_MEMBER([struct yes_s.yes],
+		  [AC_DEFINE([HAVE_STRUCT_YES_S_YES], [1],
+			     [Define to 1 if `yes' is a member of `struct yes_s'.])],,
+		   [struct sub { int x; };
+		    struct yes_s { int yes; struct sub substruct; };])
+  AC_CHECK_MEMBER([struct yes_s.no],
+		  [AC_DEFINE([HAVE_STRUCT_YES_S_NO], [1],
+			     [Define to 1 if `no' is a member of `struct yes_s'.])],,
+		   [struct sub { int x; };
+		    struct yes_s { int yes; struct sub substruct; };])
+  AC_CHECK_MEMBER([struct yes_s.substruct],
+		  [AC_DEFINE([HAVE_STRUCT_YES_S_SUBSTRUCT], [1],
+			     [Define to 1 if `substruct' is a member of `struct yes_s'.])],,
+		   [struct sub { int x; };
+		    struct yes_s { int yes; struct sub substruct; };])]],
+[AT_CHECK_DEFINES(
+[/* #undef HAVE_STRUCT_YES_S_NO */
+#define HAVE_STRUCT_YES_S_SUBSTRUCT 1
+#define HAVE_STRUCT_YES_S_YES 1
+])])
+
 # AC_CHECK_MEMBERS
 # ----------------
 # Check that it performs the correct actions.
@@ -267,7 +333,9 @@ AT_CHECK_MACRO([AC_CHECK_MEMBERS],
 [/* #undef HAVE_STRUCT_YES_S_NO */
 #define HAVE_STRUCT_YES_S_SUBSTRUCT 1
 #define HAVE_STRUCT_YES_S_YES 1
-])])
+])
+AT_CHECK([grep 'yes.*member of.*yes_s' config.h], [], [ignore])
+])
 
 
 # AC_CHECK_ALIGNOF
@@ -293,7 +361,7 @@ AT_CHECK_MACRO_CROSS([AC_CHECK_ALIGNOF struct],
 [[AC_CHECK_ALIGNOF([struct { char c; }])
 AC_CHECK_ALIGNOF([struct nosuchstruct])
 ]],
-[AT_CHECK([[grep "#define ALIGNOF_STRUCT___CHAR_C___ [^0]" config.h]],
+[AT_CHECK([[grep "#define ALIGNOF_STRUCT___CHAR_C___ [1-9]" config.h]],
 	 0, ignore)
 AT_CHECK([[grep "#define ALIGNOF_STRUCT_NOSUCHSTRUCT 0" config.h]],
 	 0, ignore)
@@ -322,12 +390,16 @@ AT_CHECK_MACRO_CROSS([AC_CHECK_SIZEOF struct],
 AC_CHECK_SIZEOF([struct x], [], [struct x { char c; int x; };])
 AC_CHECK_SIZEOF([const struct x], [], [struct x { const char *p; int x; };])
 AC_CHECK_SIZEOF([struct nosuchstruct])
+# Taken from autoconf.texi:Generic Compiler Characteristics.
+AC_CHECK_SIZEOF([int *])
 ]],
-[AT_CHECK([[grep "#define SIZEOF_STRUCT_X [^0]" config.h]],
+[AT_CHECK([[grep "#define SIZEOF_STRUCT_X [1-9]" config.h]],
 	 0, ignore)
-AT_CHECK([[grep "#define SIZEOF_CONST_STRUCT_X [^0]" config.h]],
+AT_CHECK([[grep "#define SIZEOF_CONST_STRUCT_X [1-9]" config.h]],
 	 0, ignore)
 AT_CHECK([[grep "#define SIZEOF_STRUCT_NOSUCHSTRUCT 0" config.h]],
+	 0, ignore)
+AT_CHECK([[grep "#define SIZEOF_INT_P [1-9]" config.h]],
 	 0, ignore)
 ])
 

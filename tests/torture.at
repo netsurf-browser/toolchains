@@ -1,12 +1,11 @@
 #							-*- Autotest -*-
 
-# Copyright (C) 2000, 2001, 2002, 2003, 2004, 2005, 2006, 2007, 2008,
-# 2009 Free Software Foundation, Inc.
+# Copyright (C) 2000-2012 Free Software Foundation, Inc.
 
 # This program is free software: you can redistribute it and/or modify
 # it under the terms of the GNU General Public License as published by
-# the Free Software Foundation; either version 2, or (at your option)
-# any later version.
+# the Free Software Foundation, either version 3 of the License, or
+# (at your option) any later version.
 #
 # This program is distributed in the hope that it will be useful,
 # but WITHOUT ANY WARRANTY; without even the implied warranty of
@@ -14,9 +13,7 @@
 # GNU General Public License for more details.
 #
 # You should have received a copy of the GNU General Public License
-# along with this program; if not, write to the Free Software
-# Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA
-# 02110-1301, USA.
+# along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 
 AT_BANNER([[Testing config.status.]])
@@ -29,6 +26,34 @@ AT_BANNER([[Testing config.status.]])
 AT_CHECK_MACRO([AC_CONFIG_COMMANDS with empty commands],
 [[AC_CONFIG_COMMANDS([foo], [], [:])
 ]])
+
+
+## --------------------------------------------- ##
+## AC_CONFIG_COMMANDS with temporary directory.  ##
+## --------------------------------------------- ##
+
+AT_CHECK_MACRO([AC_CONFIG_COMMANDS with temporary directory],
+[[AC_CONFIG_COMMANDS([foo], [
+case $ACTION in
+  use)
+    echo "$tmp" > tmpdir
+    test -d "$tmp" || AC_MSG_ERROR([No $tmp directory])
+    echo garbage-in > "$tmp/garbage-out"
+    ;;
+  corrupt)
+    echo "$tmp" > tmpdir
+    tmp=./nosuch
+    ;;
+  *) ;;
+esac
+])
+]], [
+AT_CHECK([test ! -f tmpdir])
+AT_CHECK([ACTION=use ./config.status], [], [ignore])
+AT_CHECK([test -s tmpdir && test ! -d "`cat tmpdir`"])
+AT_CHECK([ACTION=corrupt ./config.status], [], [ignore])
+AT_CHECK([test -s tmpdir && test ! -d "`cat tmpdir`"])
+])
 
 
 ## -------------------------- ##
@@ -223,7 +248,7 @@ AT_CHECK([grep OK var-$1], [], [OK
 
 
 # AT_CHECK_CONFIG_CREATION_NOWRITE(THING = (header | link | file | command))
-# ------------------------------------------------------------------
+# --------------------------------------------------------------------------
 # Check that THING and var-THING (which uses variables in AC_CONFIG_THING)
 # are properly created, with the right content.
 # Use `grep OK' instead of a simple `cat' to avoid banners such as in
@@ -274,9 +299,15 @@ AT_CHECK([grep from-stdin file], [], [from-stdin
 ])
 # Force write error creating a file on stdout
 if test -w /dev/full && test -c /dev/full; then
-  AT_CHECK([./config.status --file=-:input </dev/null >/dev/full],
+  AT_CHECK([./config.status --file=-:input </dev/null >/dev/full || exit 1],
 	   [1], [ignore], [ignore])
 fi
+
+# Validate that --file requires an argument
+AT_CHECK([./config.status --file], [1], [ignore], [stderr])
+AT_CHECK([grep 'missing file argument' stderr], [0], [ignore])
+AT_CHECK([./config.status --file=], [1], [ignore], [stderr])
+AT_CHECK([grep 'missing file argument' stderr], [0], [ignore])
 
 # Create a header
 AT_CHECK_CONFIG_CREATION_NOWRITE(header)
@@ -287,7 +318,7 @@ AT_CHECK([grep OK stdout], [], [OK
 ])
 # Force write error creating a header on stdout
 if test -w /dev/full && test -c /dev/full; then
-  AT_CHECK([./config.status --header=-:input </dev/null >/dev/full],
+  AT_CHECK([./config.status --header=-:input </dev/null >/dev/full || exit 1],
 	   [1], [ignore], [ignore])
 fi
 
@@ -372,6 +403,15 @@ AC_OUTPUT
 ]])
 
 AT_CHECK_AUTOCONF
+mkdir build
+AT_CAPTURE_FILE([build/config.log])[]dnl
+cd build
+AT_CHECK([../configure], [1], [ignore],
+[[config.status: error: cannot find input file: `nonexistent.in'
+]])
+# Make sure that the output file doesn't exist
+AT_CHECK([test -f nonexistent], 1)
+cd ..
 AT_CHECK_CONFIGURE([], [1], [],
 [[config.status: error: cannot find input file: `nonexistent.in'
 ]])
@@ -392,8 +432,9 @@ AT_CLEANUP
 # We run `./configure one=val1 --enable-two=val2 --with-three=val3'
 # and verify that (i) `configure' correctly receives the arguments,
 # (ii) correctly passes them to `config.status', which we check by
-# running `config.status --recheck', and (iii) correctly passes them
-# to sub-configure scripts.
+# running `config.status --recheck', (iii) correctly passes them
+# to sub-configure scripts, and (iv) correctly reproduces them with
+# `config.status --config'.
 
 AT_SETUP([configure invocation])
 
@@ -427,6 +468,11 @@ AT_CHECK_CONFIGURE([one=one --enable-two=two --with-three=three |
 AT_CHECK([./config.status --recheck | sed -n 's/^result=//p'], 0,
 	 [onetwothree
 ])
+AT_CHECK([args=`./config.status --config` && eval ./configure \$configure_options "$args" |
+	    sed -n -e 's/^result=//p'], 0,
+	 [m4_do([onetwothree
+],		[onetwothree
+])])
 
 AT_CHECK_CONFIGURE([one="\"'$ " --enable-two="\" '  $" --with-three="	\"'$"|
 		      sed -n -e 's/^result=//p'], 0,
@@ -437,6 +483,11 @@ AT_CHECK([./config.status --recheck | sed -n 's/^result=//p'], 0,
 	 ["'$ " '  $	"'$
 ])
 dnl restore font-lock: "
+AT_CHECK([args=`./config.status --config` && eval ./configure \$configure_options "$args" |
+	    sed -n -e 's/^result=//p'], 0,
+	 [m4_do(["'$ " '  $	"'$
+],		["'$ " '  $	"'$
+])])
 
 AT_CLEANUP
 
@@ -578,7 +629,7 @@ AT_CLEANUP
 ## Require 100 AC_DEFINE and AC_SUBST and AC_SUBST_FILE with a significantly
 ## big value.  This is mostly to check that Autoconf produces portable sed
 ## scripts in config.status.  sed is used to skip the first two lines
-## `Generated by...'.
+## `Generated by ...'.
 
 # We use m4_for many times.
 m4_pattern_allow([^m4_for$])
@@ -666,8 +717,9 @@ AC_OUTPUT
 
 AT_CHECK_AUTOCONF
 AT_CHECK_AUTOHEADER
-# Check both awk and the result of AC_PROG_AWK
-for awk_arg in FOO= AWK=awk; do
+# Check both awk and the result of AC_PROG_AWK.
+# Quote the first word in the for list for Solaris sh.
+for awk_arg in "FOO=" AWK=awk; do
   AT_CHECK_CONFIGURE([$awk_arg])
 
   # Checking that AC_DEFINE worked properly.
@@ -720,6 +772,9 @@ AT_CLEANUP
 # So we'll just test a 2000-byte value, and for awk, we test a line with
 # almost 1000 words, and one variable with 5 lines of 2000 bytes each:
 # multi-line values should allow to get around the limitations.
+# We also test runs of around 148 backslashes: they need to be escaped,
+# and 148 is the portable limit for awk string literals.  config.status
+# uses concatenation to generate longer strings.
 
 AT_SETUP([Substitute a 2000-byte string])
 
@@ -728,6 +783,13 @@ AT_DATA([Foo.in], [@foo@
 AT_DATA([Bar.in], [@bar@
 ])
 AT_DATA([Baz.in], [@baz@
+])
+AT_DATA([Boo.in], [@b147@
+@b148@
+@b149@
+@b295@
+@b296@
+@b297@
 ])
 
 AT_DATA([configure.ac],
@@ -738,16 +800,42 @@ baz="]m4_for([m], 1, 100,, ... ... ... ... ....)[
 "
 baz=$baz$baz$baz$baz$baz
 AC_SUBST([baz])
+b29='\\\\\\\\\\\\\\\\\\\\\\\\\\\\\'
+b147=$b29$b29$b29$b29$b29'\\'
+b148=$b147'\'
+b149=$b148'\'
+b295=$b147$b147'\'
+b296=$b295'\'
+b297=$b296'\'
+AC_SUBST([b147])
+AC_SUBST([b148])
+AC_SUBST([b149])
+AC_SUBST([b295])
+AC_SUBST([b296])
+AC_SUBST([b297])
 AC_PROG_AWK
-AC_CONFIG_FILES([Foo Bar Baz])
+AC_CONFIG_FILES([Foo Bar Baz Boo])
 AC_OUTPUT
 ]])
 
 cp "$abs_top_srcdir/build-aux/install-sh" .
 
+b29='\\\\\\\\\\\\\\\\\\\\\\\\\\\\\'
+b147=$b29$b29$b29$b29$b29'\\'
+b295=$b147$b147'\'
+cat >Boo-exp <<EOF
+$b147
+$b147\\
+$b147\\\\
+$b295
+$b295\\
+$b295\\\\
+EOF
+
 AT_CHECK_AUTOCONF
 # Check both awk and the result of AC_PROG_AWK
-for awk_arg in Foo= AWK=awk; do
+# Quote the first word in the for list for Solaris sh.
+for awk_arg in "Foo=" AWK=awk; do
   AT_CHECK_CONFIGURE([$awk_arg])
   AT_CHECK([cat Foo], 0, m4_for([n], 1, 100,, ....................)
 )
@@ -757,6 +845,7 @@ for awk_arg in Foo= AWK=awk; do
   [m4_for([n], 1, 5,, m4_for([m], 1, 100,, ... ... ... ... ....)
 )])
   AT_CHECK([cat Baz], 0, [stdout])
+  AT_CHECK([diff Boo-exp Boo])
 done
 AT_CLEANUP
 
@@ -791,6 +880,9 @@ AT_CLEANUP
 
 AT_SETUP([Substitute and define special characters])
 AT_KEYWORDS([AC@&t@_DEFINE AC@&t@_DEFINE_UNQUOTED])
+
+AT_XFAIL_IF([byte=\\200s; dnl
+test `{ printf $byte; echo; } | sed -n '/^./p' | wc -l` = 0])
 
 AT_DATA([Foo.in], [@foo@
 @bar@@notsubsted@@baz@ stray @ and more@@@baz@
@@ -847,16 +939,17 @@ AC_DEFINE_UNQUOTED([unq1], [$baz], [unquoted, test 1])
 AC_DEFINE_UNQUOTED([unq2], [\$baz], [unquoted, test 2])
 AC_DEFINE_UNQUOTED([unq3], ["$baz"], [unquoted, test 3])
 AC_DEFINE_UNQUOTED([unq4], [${baz+set}], [unquoted, test 4])
-AC_DEFINE_UNQUOTED([unq5], ["${baz+`echo "a b"`}"], [unquoted, test 5])
+AC_DEFINE_UNQUOTED([unq5], ["${baz+`echo "a "' b'`}"], [unquoted, test 5])
 AC_DEFINE_UNQUOTED([unq6], [`echo hi`], [unquoted, test 6])
-AC_DEFINE_UNQUOTED([unq7], ['\"'], [unquoted, test 7])
+AC_DEFINE_UNQUOTED([unq7], ['\\"'], [unquoted, test 7])
 AC_PROG_AWK
 AC_CONFIG_FILES([Foo Zardoz])]])
 
 AT_CHECK_AUTOCONF
 AT_CHECK_AUTOHEADER
 # Check both awk and the result of AC_PROG_AWK
-for awk_arg in FOO= AWK=awk; do
+# Quote the first word in the for list for Solaris sh.
+for awk_arg in "FOO=" AWK=awk; do
   AT_CHECK_CONFIGURE([$awk_arg])
   AT_CHECK([cat Foo], 0, [[X*'[]+ ", & &`\($foo \& \\& \\\& \\\\& \ \\ \\\ !
 @foo@ @baz@@notsubsted@bla stray @ and more@@bla
@@ -880,7 +973,7 @@ X@file@
 #define unq2 $baz
 #define unq3 "bla"
 #define unq4 set
-#define unq5 "a b"
+#define unq5 "a  b"
 #define unq6 hi
 #define unq7 '\"'
 ]])
@@ -921,7 +1014,8 @@ x' >expout
 
 AT_CHECK_AUTOCONF
 # Check both awk and the result of AC_PROG_AWK
-for awk_arg in FOO= AWK=awk; do
+# Quote the first word in the for list for Solaris sh.
+for awk_arg in "FOO=" AWK=awk; do
   AT_CHECK_CONFIGURE([$awk_arg])
   AT_CHECK([cat Foo], 0, [expout])
 done
@@ -1040,7 +1134,7 @@ AT_CHECK_AUTOCONF
 AT_CHECK_CONFIGURE([], [], [],
   [config.status: WARNING:  'Foo.in' seems to ignore the --datarootdir setting
 config.status: WARNING: Bar contains a reference to the variable `datarootdir'
-which seems to be undefined.  Please make sure it is defined.
+which seems to be undefined.  Please make sure it is defined
 ])
 AT_CHECK([grep datarootdir Foo], 1, [])
 
@@ -1085,14 +1179,100 @@ rm -f -r foo at-dir/bar
 AT_CHECK_AUTOCONF
 
 # In place.
-AT_CHECK([./configure], [], [ignore])
+AT_CHECK([./configure $configure_options], [], [ignore])
 
 # Relative name.
-AT_CHECK([cd at-dir && ../configure], [], [ignore])
+AT_CHECK([cd at-dir && ../configure $configure_options], [], [ignore])
 
 # Absolute name.
 at_here=`pwd`
-AT_CHECK([cd at-dir && "$at_here/configure"], [], [ignore])
+AT_CHECK([cd at-dir && "$at_here/configure" $configure_options], [], [ignore])
+
+AT_CLEANUP
+
+
+## ------- ##
+## VPATH.  ##
+## ------- ##
+
+AT_SETUP([VPATH])
+
+dirs='at paren brace space'
+for dir in $dirs; do
+  mkdir $dir $dir/s1 $dir/s2
+  touch $dir/f $dir/s1/f1 $dir/s2/f2
+done
+
+AT_DATA([configure.ac],
+[[AC_INIT
+AC_CONFIG_FILES([at/Makefile paren/Makefile brace/Makefile space/Makefile])
+AC_OUTPUT
+]])
+
+AT_DATA([at/Makefile.in],
+[[# This is what you should use in order to be portable to old makes.
+srcdir = @srcdir@
+VPATH = @srcdir@/s1:@srcdir@:@srcdir@/s2
+all: f f1 f2
+	@echo ok
+]])
+
+AT_DATA([paren/Makefile.in],
+[[# This works with some makes but not with old ones.
+srcdir = @srcdir@
+VPATH = $(srcdir)/s1:$(srcdir):$(srcdir)/s2
+all: f f1 f2
+	@echo ok
+]])
+
+AT_DATA([brace/Makefile.in],
+[[# This works with some makes but not with old ones.
+srcdir = @srcdir@
+VPATH = ${srcdir}/s1:${srcdir}:${srcdir}/s2
+all: f f1 f2
+	@echo ok
+]])
+
+AT_DATA([space/Makefile.in],
+[[# This fails with FreeBSD make, for example.
+srcdir = @srcdir@
+VPATH = @srcdir@/s1 @srcdir@ @srcdir@/s2
+all: f f1 f2
+	@echo ok
+]])
+
+AT_CHECK_AUTOCONF
+
+: "${MAKE=make}"
+
+# In place.
+AT_CHECK([./configure $configure_options], [], [ignore])
+# Treat BSD make separately, afterwards, for maximal coverage.
+dirs='at paren brace'
+for dir in $dirs; do
+  AT_CHECK([cd $dir && $MAKE], [], [ignore], [ignore])
+done
+
+rm -f config.status
+mkdir build absbuild
+
+# Relative name.
+AT_CHECK([cd build && ../configure $configure_options], [], [ignore])
+for dir in $dirs; do
+  AT_CHECK([cd build/$dir && $MAKE], [], [ignore], [ignore])
+done
+
+# Absolute name.
+at_here=`pwd`
+AT_CHECK([cd absbuild && "$at_here/configure" $configure_options], [], [ignore])
+for dir in $dirs; do
+  AT_CHECK([cd absbuild/$dir && $MAKE], [], [ignore], [ignore])
+done
+
+# These will not pass with BSD make.
+AT_CHECK([cd space && { $MAKE || exit 77; }], [], [ignore], [ignore])
+AT_CHECK([cd build/space && $MAKE], [], [ignore], [ignore])
+AT_CHECK([cd absbuild/space && $MAKE], [], [ignore], [ignore])
 
 AT_CLEANUP
 
@@ -1115,6 +1295,61 @@ AT_CHECK_CONFIGURE([], 1, ignore, ignore)
 AT_CLEANUP
 
 
+## ----------------- ##
+## AC_CONFIG_LINKS.  ##
+## ----------------- ##
+
+AT_SETUP([AC_CONFIG_LINKS])
+
+AT_DATA([configure.ac],
+[[AC_INIT([config links to config files test], [1.0])
+AC_CONFIG_SRCDIR([sub1/file1.in])
+AC_CONFIG_FILES([sub1/file1 file2])
+AC_CONFIG_LINKS([file1:sub1/file1 sub2/file2:file2])
+AC_OUTPUT
+]])
+
+mkdir sub1
+
+AT_DATA([sub1/file1.in],
+[[/* @configure_input@ */
+#define PACKAGE_STRING "@PACKAGE_STRING@"
+]])
+
+AT_DATA([file2.in],
+[[/* @configure_input@ */
+#define PACKAGE_STRING "@PACKAGE_STRING@"
+]])
+
+mkdir build
+AT_CHECK_AUTOCONF
+cd build
+AT_CHECK([../configure && ../configure], 0, [ignore])
+AT_CHECK([cat sub1/file1 sub2/file2 | grep -c "config links"], 0, [2
+])
+AT_CHECK([../configure && ../configure], 0, [ignore])
+AT_CHECK([cat sub1/file1 sub2/file2 | grep -c "config links"], 0, [2
+])
+cd ..
+rm -rf build
+mkdir build
+cd build
+cwd=`pwd`
+AT_CHECK(["$cwd"/../configure && "$cwd"/../configure], 0, [ignore])
+AT_CHECK([cat sub1/file1 sub2/file2 | grep -c "config links"], 0, [2
+])
+cd ..
+AT_CHECK([./configure && ./configure], 0, [ignore], [stderr])
+AT_CHECK([cat sub1/file1 sub2/file2 | grep -c "config links"], 0, [2
+])
+cwd=`pwd`
+AT_CHECK(["$cwd"/configure && "$cwd"/configure], 0, [ignore], [ignore])
+AT_CHECK([cat sub1/file1 sub2/file2 | grep -c "config links"], 0, [2
+])
+
+AT_CLEANUP
+
+
 ## ------------------------------------- ##
 ## AC_CONFIG_LINKS and identical files.  ##
 ## ------------------------------------- ##
@@ -1132,17 +1367,34 @@ echo file1 > src/s
 echo file2 > src/t
 AT_CHECK_AUTOCONF
 cd build
-AT_CHECK([../configure && ../configure], 0, [ignore])
+AT_CHECK([../configure $configure_options && ../configure $configure_options],
+	 0, [ignore])
+AT_CHECK([cat src/s src/t], 0, [file1
+file2
+])
+
+cd ..
+rm -rf build
+mkdir build
+cd build
+cwd=`pwd`
+AT_CHECK(["$cwd"/../configure], 0, [ignore])
+AT_CHECK([cat src/s src/t], 0, [file1
+file2
+])
+AT_CHECK(["$cwd"/../configure], 0, [ignore])
 AT_CHECK([cat src/s src/t], 0, [file1
 file2
 ])
 cd ..
-AT_CHECK([./configure && ./configure], 0, [ignore], [stderr])
+AT_CHECK([./configure $configure_options && ./configure $configure_options],
+	 0, [ignore], [stderr])
 AT_CHECK([grep src/t stderr], 1)
 AT_CHECK([cat src/s src/t], 0, [file1
 file2
 ])
-AT_CHECK(["`pwd`"/configure && "`pwd`"/configure], 0, [ignore], [ignore])
+cwd=`pwd`
+AT_CHECK(["$cwd"/configure && "$cwd"/configure], 0, [ignore], [ignore])
 AT_CHECK([cat src/s src/t], 0, [file1
 file2
 ])
@@ -1179,8 +1431,10 @@ AT_KEYWORDS(autoreconf)
 
 # We use aclocal (via autoreconf).
 AT_CHECK([aclocal --version || exit 77], [], [stdout], [ignore])
+AT_CHECK([[grep '[1-9]\.[0-9]' stdout || exit 77]], [], [ignore])
+
 # It should understand configure.ac.
-AT_CHECK([[grep '[^0-9]1.[01234][^0-9]' stdout && exit 77]], [1], [ignore])
+AT_CHECK([[grep '[^0-9]1\.[01234][^0-9]' stdout && exit 77]], [1], [ignore])
 
 # Set CONFIG_SITE to a nonexistent file, so that there are
 # no worries about nonstandard values for 'prefix'.
@@ -1234,7 +1488,7 @@ AT_CHECK([test -f inner/configure])
 # Running the outer configure recursively should provide the innermost
 # help strings.
 chmod a-w inner/innermost inner .
-AT_CHECK([{ ./configure --help=recursive; chmod u+w .; } | grep INNER], 0,
+AT_CHECK([{ ./configure $configure_options --help=recursive; chmod u+w .; } | grep INNER], 0,
 	 [ignore], [stderr],
 	 [AT_CHECK([grep 'rerun with a POSIX shell' stderr], [], [ignore])])
 chmod u+w . inner inner/innermost
@@ -1250,7 +1504,7 @@ prefix=/usr/local
 
 # The same, but from a builddir.
 AS_MKDIR_P([builddir])
-AT_CHECK([cd builddir && ../configure], 0, [ignore])
+AT_CHECK([cd builddir && ../configure $configure_options], 0, [ignore])
 AT_CHECK([cat builddir/inner/innermost/config], 0,
 [INNER=inner
 srcdir=../../../inner/innermost
@@ -1260,7 +1514,8 @@ prefix=/usr/local
 
 # Make sure precious variables and command line options are properly
 # passed, even when there are duplicates.
-AT_CHECK([cd builddir && ../configure --prefix /bad --prefix /good INNER=bad INNER=good], 0, [ignore])
+AT_CHECK([cd builddir && ../configure $configure_options --prefix /bad --prefix /good INNER=bad INNER=good],
+	 0, [ignore])
 AT_CHECK([cat builddir/inner/innermost/config], 0,
 [INNER=good
 srcdir=../../../inner/innermost
@@ -1278,10 +1533,15 @@ prefix=/a  b c$ 'd
 ])
 
 # Make sure --silent is properly passed...
-AT_CHECK([cd builddir && ../configure --silent], 0, [])
+AT_CHECK([cd builddir && ../configure $configure_options --silent], 0, [])
 # ...but not stored in config.status.
 AT_CHECK([cd builddir && ./config.status --recheck], 0, [stdout])
 AT_CHECK([grep 'creating \./config.status' stdout], 0, [ignore])
+
+# --cache-file is adjusted for subdirectories, so the cache is shared.
+AT_CHECK([cd builddir && ../configure $configure_options --config-cache],
+	 [], [stdout])
+AT_CHECK([grep 'loading .*\.\./config.cache' stdout], [], [ignore])
 
 # Make sure we can run autoreconf on a subdirectory
 rm -f configure configure.in
@@ -1310,7 +1570,10 @@ AT_DATA([install-sh], [])
 AT_DATA([configure.in],
 [[AC_INIT(GNU Outer, 1.0)
 AC_ARG_VAR([OUTER], [an outer variable])
-AC_CONFIG_SUBDIRS([inner inner2])
+AC_CONFIG_SUBDIRS([
+  inner
+  inner2
+])
 AC_OUTPUT
 ]])
 
@@ -1342,7 +1605,9 @@ AC_ARG_VAR([INNER2], [an inner2 variable])
 AC_OUTPUT
 ]])
 
-AT_CHECK([autoreconf -Wall -v], [0], [ignore], [ignore])
+AT_CHECK([autoreconf -Wall -v], [0], [ignore], [stderr])
+# We should not warn about nonliteral argument to AC_CONFIG_SUBDIRS here.
+AT_CHECK([grep 'AC_CONFIG_SUBDIRS:.*literals' stderr], [1])
 AT_CHECK([test -f inner/configure])
 AT_CHECK([test -f inner/innermost/configure])
 AT_CHECK([test -f inner/innermost/config.hin])
@@ -1351,27 +1616,27 @@ AT_CHECK([test -f inner2/configure])
 # Running the outer configure recursively should provide the innermost
 # help strings.
 chmod a-w inner/innermost inner
-AT_CHECK([{ ./configure --help=recursive; chmod u+w .; } | grep " INNER "],
+AT_CHECK([{ ./configure $configure_options --help=recursive; chmod u+w .; } | grep " INNER "],
 	 0, [ignore], [stderr],
 	 [AT_CHECK([grep 'rerun with a POSIX shell' stderr], [], [ignore])])
 chmod a-w .
-AT_CHECK([{ ./configure --help=recursive; chmod u+w .; } | grep " INNER2 "],
+AT_CHECK([{ ./configure $configure_options --help=recursive; chmod u+w .; } | grep " INNER2 "],
 	 0, [ignore], [stderr],
 	 [AT_CHECK([grep 'rerun with a POSIX shell' stderr], [], [ignore])])
 chmod a-w .
-AT_CHECK([{ ./configure --help=recursive; chmod u+w .; } | grep " INNERMOST "],
+AT_CHECK([{ ./configure $configure_options --help=recursive; chmod u+w .; } | grep " INNERMOST "],
 	 0, [ignore], [stderr],
 	 [AT_CHECK([grep 'rerun with a POSIX shell' stderr], [], [ignore])])
 chmod a-w .
-AT_CHECK([{ /bin/sh ./configure --help=recursive; chmod u+w .; } | grep " INNERMOST "],
+AT_CHECK([{ /bin/sh ./configure $configure_options --help=recursive; chmod u+w .; } | grep " INNERMOST "],
 	 0, [ignore], [stderr],
 	 [AT_CHECK([grep 'rerun with a POSIX shell' stderr], [], [ignore])])
 chmod a-w .
-AT_CHECK([PATH=.$PATH_SEPARATOR$PATH; export PATH; { /bin/sh configure --help=recursive; chmod +w .; } | grep " INNERMOST "],
+AT_CHECK([PATH=.$PATH_SEPARATOR$PATH; export PATH; { /bin/sh configure $configure_options --help=recursive; chmod +w .; } | grep " INNERMOST "],
 	 0, [ignore], [stderr],
 	 [AT_CHECK([grep 'rerun with a POSIX shell' stderr], [], [ignore])])
 chmod a-w .
-AT_CHECK([PATH=.$PATH_SEPARATOR$PATH; export PATH; { configure --help=recursive; chmod u+w .; } | grep " INNERMOST "],
+AT_CHECK([PATH=.$PATH_SEPARATOR$PATH; export PATH; { configure $configure_options --help=recursive; chmod u+w .; } | grep " INNERMOST "],
 	 0, [ignore], [stderr],
 	 [AT_CHECK([grep 'rerun with a POSIX shell' stderr], [], [ignore])])
 chmod u+w inner inner/innermost
@@ -1393,31 +1658,31 @@ cd ..
 # The same, but from a builddir.
 AS_MKDIR_P([builddir])
 chmod a-w builddir inner/innermost inner
-AT_CHECK([cd builddir && { ../configure --help=recursive; chmod u+w .; } | grep " INNER "],
+AT_CHECK([cd builddir && { ../configure $configure_options --help=recursive; chmod u+w .; } | grep " INNER "],
 	 0, [ignore], [stderr],
 	 [AT_CHECK([grep 'rerun with a POSIX shell' stderr], [], [ignore])])
 chmod a-w builddir
-AT_CHECK([cd builddir && { ../configure --help=recursive; chmod u+w .; } | grep " INNER2 "],
+AT_CHECK([cd builddir && { ../configure $configure_options --help=recursive; chmod u+w .; } | grep " INNER2 "],
 	 0, [ignore], [stderr],
 	 [AT_CHECK([grep 'rerun with a POSIX shell' stderr], [], [ignore])])
 chmod a-w builddir
-AT_CHECK([cd builddir && { ../configure --help=recursive; chmod u+w .; } | grep " INNERMOST "],
+AT_CHECK([cd builddir && { ../configure $configure_options --help=recursive; chmod u+w .; } | grep " INNERMOST "],
 	 0, [ignore], [stderr],
 	 [AT_CHECK([grep 'rerun with a POSIX shell' stderr], [], [ignore])])
 chmod a-w builddir
-AT_CHECK([cd builddir && { /bin/sh ../configure --help=recursive; chmod u+w .; } | grep " INNERMOST "],
+AT_CHECK([cd builddir && { /bin/sh ../configure $configure_options --help=recursive; chmod u+w .; } | grep " INNERMOST "],
 	 0, [ignore], [stderr],
 	 [AT_CHECK([grep 'rerun with a POSIX shell' stderr], [], [ignore])])
 chmod a-w builddir
 # Not all shells search $PATH for scripts.
-if (cd builddir && PATH=`pwd`/..$PATH_SEPARATOR$PATH /bin/sh configure --help) >/dev/null 2>&1; then
-  AT_CHECK([cd builddir && PATH=`pwd`/..$PATH_SEPARATOR$PATH /bin/sh configure --help=recursive | grep " INNERMOST "], 0, [ignore])
+if (cd builddir && PATH=`pwd`/..$PATH_SEPARATOR$PATH /bin/sh configure $configure_options --help) >/dev/null 2>&1; then
+  AT_CHECK([cd builddir && PATH=`pwd`/..$PATH_SEPARATOR$PATH /bin/sh configure $configure_options --help=recursive | grep " INNERMOST "], 0, [ignore])
 fi
-AT_CHECK([PATH=`pwd`$PATH_SEPARATOR$PATH; export PATH; cd builddir && { configure --help=recursive; chmod u+w .; } | grep " INNERMOST "],
+AT_CHECK([PATH=`pwd`$PATH_SEPARATOR$PATH; export PATH; cd builddir && { configure $configure_options --help=recursive; chmod u+w .; } | grep " INNERMOST "],
 	 0, [ignore], [stderr],
 	 [AT_CHECK([grep 'rerun with a POSIX shell' stderr], [], [ignore])])
 chmod u+w builddir inner inner/innermost
-AT_CHECK([cd builddir && ../configure INNERMOST=build/tsomrenni], 0, [ignore])
+AT_CHECK([cd builddir && ../configure $configure_options INNERMOST=build/tsomrenni], 0, [ignore])
 AT_CHECK([grep INNERMOST builddir/inner/innermost/config.h], 0,
 [[#define INNERMOST build/tsomrenni
 ]])
@@ -1459,14 +1724,64 @@ AT_CHECK([autoreconf -Wall -v], 0, [ignore], [ignore])
 
 # Running the outer configure recursively should provide the innermost
 # help strings.
-AT_CHECK([./configure --help=recursive | grep "folks"], 0, [ignore])
+AT_CHECK([./configure $configure_options --help=recursive | grep "folks"], 0, [ignore])
 
 # Running the outer configure should trigger the inner.
-AT_CHECK([./configure], 0, [ignore])
+AT_CHECK([./configure $configure_options], 0, [ignore])
 AT_CHECK([test -f inner/myfile], 0)
 
 AT_CLEANUP
 
+
+## ------------------------------- ##
+## Non-literal AC_CONFIG_SUBDIRS.  ##
+## ------------------------------- ##
+
+AT_SETUP([Non-literal AC_CONFIG_SUBDIRS])
+AT_KEYWORDS([autoreconf])
+
+AT_DATA([install-sh], [])
+AT_DATA([configure.in],
+[[AC_INIT(GNU Outer, 1.0)
+
+my_subdirs=
+# Taken from autoconf.texi:Subdirectories.
+if test "x$package_foo_enabled" = xyes; then
+  my_subdirs="$my_subdirs foo"
+fi
+AC_CONFIG_SUBDIRS([$my_subdirs])
+AC_OUTPUT
+]])
+
+# Hand-written aclocal.m4, so we don't invoke `aclocal -Werror' which
+# could barf over warnings in third-party macro files, or fail over
+# warnings with older aclocal which didn't yet understand -W*.
+AT_DATA([aclocal.m4])
+
+AS_MKDIR_P([foo])
+
+AT_DATA([foo/configure],
+[[#! /bin/sh
+touch innerfile
+exit 0
+]])
+chmod +x foo/configure
+
+# autoreconf should warn without -Wno-syntax, but should not fail without -Werror.
+AT_CHECK([autoreconf -Werror -v], [1], [ignore], [stderr])
+AT_CHECK([grep 'AC_CONFIG_SUBDIRS:.*literals' stderr], [0], [ignore])
+AT_CHECK([autoreconf -v], [0], [ignore], [stderr])
+AT_CHECK([grep 'AC_CONFIG_SUBDIRS:.*literals' stderr], [0], [ignore])
+AT_CHECK([autoreconf -v --force -Wno-syntax], 0, [ignore], [stderr])
+AT_CHECK([grep 'AC_CONFIG_SUBDIRS:.*literals' stderr], [1])
+
+AT_CHECK([./configure $configure_options], [0], [ignore])
+AT_CHECK([test ! -f foo/innerfile])
+# Running the outer configure should trigger the inner.
+AT_CHECK([./configure $configure_options package_foo_enabled=yes], [0], [ignore])
+AT_CHECK([test -f foo/innerfile])
+
+AT_CLEANUP
 
 
 ## ----------------- ##
@@ -1498,7 +1813,8 @@ AT_SETUP([Unusual Automake input files])
 AT_KEYWORDS([autoreconf])
 
 # We use aclocal and automake via autoreconf.
-AT_CHECK([automake --version || exit 77], [], [ignore], [ignore])
+AT_CHECK([automake --version || exit 77], [], [stdout], [ignore])
+AT_CHECK([[grep '[1-9]\.[0-9]' stdout || exit 77]], [], [ignore])
 
 AT_DATA([configure.in],
 [[AC_INIT(GNU foo, 1.0)

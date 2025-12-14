@@ -2,13 +2,12 @@
 
 # Build some of the Autoconf test files.
 
-# Copyright (C) 2000, 2001, 2002, 2003, 2004, 2005, 2006, 2007, 2008
-# Free Software Foundation, Inc.
+# Copyright (C) 2000-2012 Free Software Foundation, Inc.
 
 # This program is free software: you can redistribute it and/or modify
 # it under the terms of the GNU General Public License as published by
-# the Free Software Foundation; either version 2, or (at your option)
-# any later version.
+# the Free Software Foundation, either version 3 of the License, or
+# (at your option) any later version.
 
 # This program is distributed in the hope that it will be useful,
 # but WITHOUT ANY WARRANTY; without even the implied warranty of
@@ -16,9 +15,7 @@
 # GNU General Public License for more details.
 
 # You should have received a copy of the GNU General Public License
-# along with this program; if not, write to the Free Software
-# Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA
-# 02110-1301, USA.
+# along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 # If we fail, clean up, but touch the output files.  We probably failed
 # because we used some non-portable tool.
@@ -103,11 +100,8 @@ ac_exclude_list='
 	# Produce "= val" because $1, the variable used to store the result,
 	# is empty.
 	/^AC_(F77|FC)_FUNC$/ {next}
-	/^AC_FC_SRCEXT$/ {next}
+	/^AC_FC_(PP_)?SRCEXT$/ {next}
 	/^AC_PATH_((TARGET_)?TOOL|PROG)S?$/ {next}
-
-	# Requires the current language to be Fortran, not C.
-	/^AC_FC_FREEFORM$/ {next}
 
 	# Is a number.
 	/^AC_FD_CC$/ {next}
@@ -140,6 +134,9 @@ ac_exclude_list='
 
 	# Already tested by AT_CHECK_MACRO.
 	/^AC_OUTPUT$/ {next}
+
+	# Tested alongside m4_divert_text.
+	/^AC_PRESERVE_HELP_ORDER$/ {next}
 '
 
 
@@ -204,8 +201,8 @@ do
     ## Do not edit by hand.  ##
     ## --------------------- ##
 
-    # Copyright (C) 2000, 2001, 2003, 2004, 2005, 2006, 2007 Free Software
-    # Foundation, Inc.
+    # Copyright (C) 2000, 2001, 2003, 2004, 2005, 2006, 2007, 2008, 2009
+    # 2010 Free Software Foundation, Inc.
 
     AT_BANNER([Testing autoconf/$base macros.])
 
