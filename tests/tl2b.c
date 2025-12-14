@@ -1,6 +1,6 @@
 /* Test file for l2b constants.
 
-Copyright 2007-2016 Free Software Foundation, Inc.
+Copyright 2007-2017 Free Software Foundation, Inc.
 Contributed by the AriC and Caramba projects, INRIA.
 
 This file is part of the GNU MPFR Library.
@@ -83,7 +83,7 @@ compute_l2b (int output)
   mpfr_srcptr t;
   int beta, i;
   int error = 0;
-  char buffer[30];
+  char buffer[256];  /* larger than needed, for maintainability */
 
   for (beta = 2; beta <= BASE_MAX; beta++)
     {

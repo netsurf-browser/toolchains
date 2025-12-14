@@ -1,6 +1,6 @@
 /* tprintf.c -- test file for mpfr_printf and mpfr_vprintf
 
-Copyright 2008-2016 Free Software Foundation, Inc.
+Copyright 2008-2017 Free Software Foundation, Inc.
 Contributed by the AriC and Caramba projects, INRIA.
 
 This file is part of the GNU MPFR Library.
@@ -26,6 +26,7 @@ http://www.gnu.org/licenses/ or write to the Free Software Foundation, Inc.,
 #include <stdio.h>
 #include <stdlib.h>
 #include <stddef.h>
+#include <errno.h>
 
 #include "mpfr-intmax.h"
 #include "mpfr-test.h"
@@ -109,6 +110,33 @@ check_vprintf_failure (const char *fmt, ...)
 }
 
 static void
+check_vprintf_overflow (const char *fmt, ...)
+{
+  va_list ap;
+  int r, e;
+
+  va_start (ap, fmt);
+  errno = 0;
+  r = mpfr_vprintf (fmt, ap);
+  e = errno;
+  va_end (ap);
+
+  if (r != -1
+#ifdef EOVERFLOW
+      || e != EOVERFLOW
+#endif
+      )
+    {
+      putchar ('\n');
+      fprintf (stderr, "Error in mpfr_vprintf(\"%s\", ...)\n"
+               "Got r = %d, errno = %d\n", fmt, r, e);
+      exit (1);
+    }
+
+  putchar ('\n');
+}
+
+static void
 check_invalid_format (void)
 {
   int i = 0;
@@ -167,8 +195,8 @@ check_long_string (void)
   mpfr_set_ui (x, 1, MPFR_RNDN);
   mpfr_nextabove (x);
 
-  check_vprintf_failure ("%Rb", x);
-  check_vprintf_failure ("%RA %RA %Ra %Ra", x, x, x, x);
+  check_vprintf_overflow ("%Rb", x);
+  check_vprintf_overflow ("%RA %RA %Ra %Ra", x, x, x, x);
 
   mpfr_clear (x);
 }
@@ -447,7 +475,7 @@ main (int argc, char *argv[])
       if (freopen ("/dev/null", "w", stdout) == NULL)
         {
           /* We failed to open this device, try with a dummy file */
-          if (freopen ("mpfrtest.txt", "w", stdout) == NULL)
+          if (freopen ("tprintf_out.txt", "w", stdout) == NULL)
             {
               /* Output the error message to stderr since it is not
                  a message about a wrong result in MPFR. Anyway the

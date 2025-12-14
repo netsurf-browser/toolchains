@@ -1,6 +1,6 @@
 /* Test file for mpfr_abs.
 
-Copyright 2000-2016 Free Software Foundation, Inc.
+Copyright 2000-2017 Free Software Foundation, Inc.
 Contributed by the AriC and Caramba projects, INRIA.
 
 This file is part of the GNU MPFR Library.
@@ -163,7 +163,6 @@ check_cmp (int argc, char *argv[])
 int
 main (int argc, char *argv[])
 {
-  mpfr_test_init ();
   tests_start_mpfr ();
 
   check_inexact ();

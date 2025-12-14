@@ -1,7 +1,7 @@
 /* tsprintf.c -- test file for mpfr_sprintf, mpfr_vsprintf, mpfr_snprintf,
    and mpfr_vsnprintf
 
-Copyright 2007-2016 Free Software Foundation, Inc.
+Copyright 2007-2017 Free Software Foundation, Inc.
 Contributed by the AriC and Caramba projects, INRIA.
 
 This file is part of the GNU MPFR Library.
@@ -900,8 +900,8 @@ random_double (void)
       '+',
       ' ',
       '#',
-      '0', /* no ambiguity: first zeros are flag zero*/
-      '\''
+      '0', /* no ambiguity: first zeros are flag zero */
+      '\'' /* SUS extension */
     };
   /* no 'a': mpfr and glibc do not have the same semantic */
   char specifier[] =
@@ -965,8 +965,12 @@ random_double (void)
       *ptr_mpfr++ = *ptr++ = '%';
       /* random specifier 'e', 'f', 'g', 'E', 'F', or 'G' */
       spec = (int) (randlimb() % 6);
-      /* random flags, but no ' flag with %e */
+      /* random flags, but no ' flag with %e or with non-glibc */
+#if __MPFR_GLIBC(1,0)
       jmax = (spec == 0 || spec == 3) ? 5 : 6;
+#else
+      jmax = 5;
+#endif
       for (j = 0; j < jmax; j++)
         {
           if (randlimb() % 3 == 0)
@@ -1251,16 +1255,34 @@ check_emin (void)
   check_emin_aux (MPFR_EMIN_MIN);
 }
 
+static void
+test20161214 (void)
+{
+  mpfr_t x;
+  char buf[32];
+  const char s[] = "0x0.fffffffffffff8p+1024";
+  int r;
+
+  mpfr_init2 (x, 64);
+  mpfr_set_str (x, s, 16, MPFR_RNDN);
+  r = mpfr_snprintf (buf, 32, "%.*RDf", -2, x);
+  MPFR_ASSERTN(r == 316);
+  r = mpfr_snprintf (buf, 32, "%.*RDf", INT_MIN + 1, x);
+  MPFR_ASSERTN(r == 316);
+  r = mpfr_snprintf (buf, 32, "%.*RDf", INT_MIN, x);
+  MPFR_ASSERTN(r == 316);
+  mpfr_clear (x);
+}
+
 int
 main (int argc, char **argv)
 {
-  char *locale;
 
   tests_start_mpfr ();
 
 #if defined(HAVE_LOCALE_H) && defined(HAVE_SETLOCALE)
   /* currently, we just check with 'C' locale */
-  locale = setlocale (LC_ALL, "C");
+  setlocale (LC_ALL, "C");
 #endif
 
   bug20111102 ();
@@ -1271,13 +1293,14 @@ main (int argc, char **argv)
   mixed ();
   check_emax ();
   check_emin ();
+  test20161214 ();
 
 #if defined(HAVE_LOCALE_H) && defined(HAVE_SETLOCALE)
 #if MPFR_LCONV_DPTS
   locale_da_DK ();
   /* Avoid a warning by doing the setlocale outside of this #if */
 #endif
-  setlocale (LC_ALL, locale);
+  setlocale (LC_ALL, "C");
 #endif
 
   if (getenv ("MPFR_CHECK_LIBC_PRINTF"))

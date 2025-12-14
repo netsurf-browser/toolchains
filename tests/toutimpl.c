@@ -1,7 +1,7 @@
 /* Test file for internal debugging-out functions:
    mpfr_dump, mpfr_print_binary, mpfr_print_rnd_mode.
 
-Copyright 2004-2016 Free Software Foundation, Inc.
+Copyright 2004-2017 Free Software Foundation, Inc.
 Contributed by the AriC and Caramba projects, INRIA.
 
 This file is part of the GNU MPFR Library.
@@ -24,10 +24,7 @@ http://www.gnu.org/licenses/ or write to the Free Software Foundation, Inc.,
 #include <stdlib.h>
 #include "mpfr-test.h"
 
-/* We output stdout to a file to check if it is correct
-   Is it a good idea?
-   We can't use tmpname since it is insecure */
-#define FILE_NAME "dummy.tmp"
+#define FILE_NAME "toutimpl_out.txt"
 
 static const char Buffer[] =
 "@NaN@\n"
@@ -72,8 +69,7 @@ main (void)
       exit (1);
     }
 
-  /* Reopen stdout to a file. All errors will be put to stderr
-     Can't use tmpname since it is unsecure */
+  /* Reopen stdout to a file. All errors will be put to stderr. */
   if (freopen (FILE_NAME, "w", stdout) == NULL)
     {
       printf ("Error can't redirect stdout\n");

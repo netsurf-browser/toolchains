@@ -2,8 +2,8 @@
 @c %**start of header
 @setfilename mpfr.info
 @documentencoding UTF-8
-@set VERSION 3.1.4
-@set UPDATED-MONTH March 2016
+@set VERSION 3.1.6
+@set UPDATED-MONTH September 2017
 @settitle GNU MPFR @value{VERSION}
 @synindex tp fn
 @iftex
@@ -19,7 +19,7 @@
 This manual documents how to install and use the Multiple Precision
 Floating-Point Reliable Library, version @value{VERSION}.
 
-Copyright 1991, 1993-2016 Free Software Foundation, Inc.
+Copyright 1991, 1993-2017 Free Software Foundation, Inc.
 
 Permission is granted to copy, distribute and/or modify this document under
 the terms of the GNU Free Documentation License, Version 1.2 or any later
@@ -480,7 +480,7 @@ specific to MPFR)@. Problems are also mentioned in the FAQ
 Please report problems to the MPFR mailing-list @samp{mpfr@@inria.fr}.
 @xref{Reporting Bugs}.
 Some bug fixes are available on the
-MPFR 3.1.4 web page @url{http://www.mpfr.org/mpfr-3.1.4/}.
+MPFR 3.1.6 web page @url{http://www.mpfr.org/mpfr-3.1.6/}.
 
 @section Getting the Latest Version of MPFR
 
@@ -495,7 +495,7 @@ The latest version of MPFR is available from
 @comment Warning! Do not split "MPFR ... @url{...}" across several lines
 @comment as this needs to be updated with update-version.
 If you think you have found a bug in the MPFR library, first have a look
-on the MPFR 3.1.4 web page @url{http://www.mpfr.org/mpfr-3.1.4/} and the
+on the MPFR 3.1.6 web page @url{http://www.mpfr.org/mpfr-3.1.6/} and the
 FAQ @url{http://www.mpfr.org/faq.html}:
 perhaps this bug is already known, in which case you may find there
 a workaround for it.
@@ -942,6 +942,23 @@ with an implementation-defined TLS specifier).
 @c the thread interface only; TLS variables (with the __thread specifier)
 @c is just a GCC extension. There is currently no clear documentation
 @c about TLS variable initialization.
+
+By default, MPFR uses the GMP memory allocators
+@ifinfo
+(@pxref{Custom Allocation,,, gmp.info,GNU MP})
+@end ifinfo
+@ifnotinfo
+(see Section ``Custom Allocation'' in @cite{GNU MP})
+@end ifnotinfo
+instead of @code{malloc} for all its allocations. But since caches have
+been introduced in MPFR and nothing had been documented about necessary
+clean-up if the GMP allocators had to be changed (by the application or
+another library), the current GMP allocators are memorized the first
+time they are used by MPFR, and MPFR will always use these allocators.
+This means that the allocators need to remain valid as long as MPFR is
+used. To avoid this requirement, future versions may handle memory
+allocation differently, and applications that change the allocators
+may have to be slightly modified.
 
 @node MPFR Interface, API Compatibility, MPFR Basics, Top
 @comment  node-name,  next,  previous,  up
@@ -1528,8 +1545,8 @@ but in some very rare cases, it might be @math{m+1}
 for bases 7 and 49).
 
 If @var{str} is a null pointer, space for the significand is allocated using
-the current allocation function and a pointer to the string is returned
-(unless the base is invalid).
+the allocation function (@pxref{Memory Handling}) and a pointer to the string
+is returned (unless the base is invalid).
 To free the returned string, you must use @code{mpfr_free_str}.
 
 If @var{str} is not a null pointer, it should point to a block of storage
@@ -1545,16 +1562,9 @@ whether the flags are set by this function is unspecified.
 @end deftypefun
 
 @deftypefun void mpfr_free_str (char *@var{str})
-Free a string allocated by @code{mpfr_get_str} using the current unallocation
-function.
+Free a string allocated by @code{mpfr_get_str} using the unallocation
+function (@pxref{Memory Handling}).
 The block is assumed to be @code{strlen(@var{str})+1} bytes.
-For more information about how it is done:
-@ifinfo
-@pxref{Custom Allocation,,, gmp.info,GNU MP}.
-@end ifinfo
-@ifnotinfo
-see Section ``Custom Allocation'' in @cite{GNU MP}.
-@end ifnotinfo
 @end deftypefun
 
 @deftypefun int mpfr_fits_ulong_p (mpfr_t @var{op}, mpfr_rnd_t @var{rnd})
@@ -1667,10 +1677,11 @@ is @minus{}Inf instead of +Inf.
 @deftypefunx int mpfr_root (mpfr_t @var{rop}, mpfr_t @var{op}, unsigned long int @var{k}, mpfr_rnd_t @var{rnd})
 Set @var{rop} to the cubic root (resp.@: the @var{k}th root)
 of @var{op} rounded in the direction @var{rnd}.
+For @var{k} = 0, set @var{rop} to NaN@.
 For @var{k} odd (resp.@: even) and @var{op} negative (including @minus{}Inf),
 set @var{rop} to a negative number (resp.@: NaN)@.
 The @var{k}th root of @minus{}0 is defined to be @minus{}0,
-whatever the parity of @var{k}.
+whatever the parity of @var{k} (different from zero).
 @end deftypefun
 
 @deftypefun int mpfr_pow (mpfr_t @var{rop}, mpfr_t @var{op1}, mpfr_t @var{op2}, mpfr_rnd_t @var{rnd})
@@ -2403,11 +2414,14 @@ specifiers @samp{f}, @samp{F}, @samp{g}, and @samp{G} is 6.
 
 @subsection Functions
 
-For all the following functions, if the number of characters which ought to be
-written appears to exceed the maximum limit for an @code{int}, nothing is
+For all the following functions, if the number of characters that ought to be
+written exceeds the maximum limit @code{INT_MAX} for an @code{int}, nothing is
 written in the stream (resp.@: to @code{stdout}, to @var{buf}, to @var{str}),
-the function returns @minus{}1, sets the @emph{erange} flag, and (in
-POSIX system only) @code{errno} is set to @code{EOVERFLOW}.
+the function returns @minus{}1, sets the @emph{erange} flag, and @code{errno}
+is set to @code{EOVERFLOW} if the @code{EOVERFLOW} macro is defined (such as
+on POSIX systems). Note, however, that @code{errno} might be changed to
+another value by some internal library call if another error occurs there
+(currently, this would come from the unallocation function).
 
 @deftypefun int mpfr_fprintf (FILE *@var{stream}, const char *@var{template}, @dots{})
 @deftypefunx int mpfr_vfprintf (FILE *@var{stream}, const char *@var{template}, va_list @var{ap})
@@ -2415,10 +2429,6 @@ Print to the stream @var{stream} the optional arguments under the control of
 the template string @var{template}.
 Return the number of characters written or a negative value if an error
 occurred.
-@c If the number of characters which ought to be written appears
-@c to exceed the maximum limit for an @code{int}, nothing is written in the
-@c stream, the function returns @minus{}1, sets the @emph{erange} flag, and (in
-@c POSIX system only) @code{errno} is set to @code{EOVERFLOW}.
 @end deftypefun
 
 @deftypefun  int mpfr_printf (const char *@var{template}, @dots{})
@@ -2427,10 +2437,6 @@ Print to @code{stdout} the optional arguments under the control of the
 template string @var{template}.
 Return the number of characters written or a negative value if an error
 occurred.
-@c If the number of characters which ought to be written appears
-@c to exceed the maximum limit for an @code{int}, nothing is written in
-@c @code{stdout}, the function returns @minus{}1, sets the @emph{erange} flag,
-@c and (in POSIX system only) @code{errno} is set to @code{EOVERFLOW}.
 @end deftypefun
 
 @deftypefun int mpfr_sprintf (char *@var{buf}, const char *@var{template}, @dots{})
@@ -2442,10 +2448,6 @@ the control of the template string @var{template}, and print it in
 Return the number of characters written in the array @var{buf}
 @emph{not counting}
 the terminating null character or a negative value if an error occurred.
-@c If the number of characters which ought to be written appears to exceed the
-@c maximum limit for an @code{int}, nothing is written in @var{buf}, the function
-@c returns @minus{}1, sets the @emph{erange} flag, and (in POSIX system only)
-@c code{errno} is set to @code{EOVERFLOW}.
 @end deftypefun
 
 @deftypefun int mpfr_snprintf (char *@var{buf}, size_t @var{n}, const char *@var{template}, @dots{})
@@ -2455,29 +2457,20 @@ the control of the template string @var{template}, and print it in
 @var{buf}. If @var{n} is zero, nothing is
 written and @var{buf} may be a null pointer, otherwise, the @var{n}@minus{}1
 first characters are written in @var{buf} and the @var{n}-th is a null character.
-Return the number of characters that would have been written had @var{n} be
+Return the number of characters that would have been written had @var{n} been
 sufficiently large, @emph{not counting}
 the terminating null character, or a negative value if an error occurred.
-@c If the number of characters produced by the
-@c optional arguments under the control of the template string @var{template}
-@c appears to exceed the maximum limit for an @code{int}, nothing is written in
-@c @var{buf}, the function returns @minus{}1, sets the @emph{erange} flag, and
-@c (in POSIX system only) @code{errno} is set to @code{EOVERFLOW}.
 @end deftypefun
 
 @deftypefun int mpfr_asprintf (char **@var{str}, const char *@var{template}, @dots{})
 @deftypefunx int mpfr_vasprintf (char **@var{str}, const char *@var{template}, va_list @var{ap})
 Write their output as a null terminated string in a block of memory allocated
-using the current allocation function. A pointer to the block is stored in
+using the allocation function (@pxref{Memory Handling}). A pointer to the
+block is stored in
 @var{str}. The block of memory must be freed using @code{mpfr_free_str}.
 The return value is the number of characters written in the string, excluding
-the null-terminator, or a negative value if an error occurred.
-@c If the number of
-@c characters produced by the optional arguments under the control of the
-@c template string @var{template} appears to exceed the maximum limit for an
-@c @code{int}, @var{str} is a null pointer, the function returns @minus{}1, sets
-@c the @emph{erange} flag, and (in POSIX system only) @code{errno} is set to
-@c @code{EOVERFLOW}.
+the null-terminator, or a negative value if an error occurred, in which case
+the contents of @var{str} are undefined.
 @end deftypefun
 
 @node Integer Related Functions, Rounding Related Functions, Formatted Output Functions, MPFR Interface
@@ -2747,6 +2740,15 @@ created using the GMP @code{gmp_randinit} function (see the GMP manual).
 
 Note: the note for @code{mpfr_urandomb} holds too. In addition, the exponent
 range and the rounding mode might have a side effect on the next random state.
+
+The rule for the underflow flag is here ``underflow before rounding''
+instead of the usual ``underflow after rounding''. The reason is that
+the exponent is drawn first, and if it is smaller than the minimum
+exponent, the significand is not drawn. To fix the behavior on the
+underflow flag, one would have to draw the significand in some cases,
+meaning that the behavior of the random generator would change, thus
+it would break the ABI for the MPFR 3.1 branch. However, the observed
+behavior always corresponds to an existing number.
 @end deftypefun
 
 @deftypefun int mpfr_grandom (mpfr_t @var{rop1}, mpfr_t @var{rop2}, gmp_randstate_t @var{state}, mpfr_rnd_t @var{rnd})
