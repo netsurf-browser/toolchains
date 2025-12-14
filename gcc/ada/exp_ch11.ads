@@ -6,7 +6,7 @@
 --                                                                          --
 --                                 S p e c                                  --
 --                                                                          --
---          Copyright (C) 1992-2010, Free Software Foundation, Inc.         --
+--          Copyright (C) 1992-2019, Free Software Foundation, Inc.         --
 --                                                                          --
 -- GNAT is free software;  you can  redistribute it  and/or modify it under --
 -- terms of the  GNU General Public License as published  by the Free Soft- --
@@ -31,21 +31,20 @@ package Exp_Ch11 is
    procedure Expand_N_Exception_Declaration          (N : Node_Id);
    procedure Expand_N_Handled_Sequence_Of_Statements (N : Node_Id);
    procedure Expand_N_Raise_Constraint_Error         (N : Node_Id);
+   procedure Expand_N_Raise_Expression               (N : Node_Id);
    procedure Expand_N_Raise_Program_Error            (N : Node_Id);
    procedure Expand_N_Raise_Statement                (N : Node_Id);
    procedure Expand_N_Raise_Storage_Error            (N : Node_Id);
-   procedure Expand_N_Subprogram_Info                (N : Node_Id);
 
    --  Data structures for gathering information to build exception tables
    --  See runtime routine Ada.Exceptions for full details on the format and
    --  content of these tables.
 
-   procedure Expand_At_End_Handler (HSS : Node_Id; Block : Node_Id);
-   --  Given a handled statement sequence, HSS, for which the At_End_Proc
-   --  field is set, and which currently has no exception handlers, this
-   --  procedure expands the special exception handler required.
-   --  This procedure also create a new scope for the given Block, if
-   --  Block is not Empty.
+   procedure Expand_At_End_Handler (HSS : Node_Id; Blk_Id : Entity_Id);
+   --  Given handled statement sequence HSS for which the At_End_Proc field
+   --  is set, and which currently has no exception handlers, this procedure
+   --  expands the special exception handler required. This procedure also
+   --  create a new scope for the given block, if Blk_Id is not Empty.
 
    procedure Expand_Exception_Handlers (HSS : Node_Id);
    --  This procedure expands exception handlers, and is called as part
@@ -71,6 +70,8 @@ package Exp_Ch11 is
    --  a goto statement. If Local_Raise is defined, its entity is returned,
    --  if not, Empty is returned (in which case the call is silently skipped).
 
+   --  WARNING: There is a matching C declaration of this subprogram in fe.h
+
    function Get_RT_Exception_Entity (R : RT_Exception_Code) return Entity_Id;
    --  This function is provided for use by the back end in conjunction with
    --  generation of Local_Raise calls when an exception raise is converted to
@@ -78,10 +79,14 @@ package Exp_Ch11 is
    --  to determine which Rcheck_nn procedure to call. The returned result is
    --  the exception entity to be passed to Local_Raise.
 
-   function Is_Non_Ada_Error (E : Entity_Id) return Boolean;
-   --  This function is provided for Gigi use. It returns True if operating on
-   --  VMS, and the argument E is the entity for System.Aux_Dec.Non_Ada_Error.
-   --  This is used to generate the special matching code for this exception.
+   --  WARNING: There is a matching C declaration of this subprogram in fe.h
+
+   procedure Get_RT_Exception_Name (Code : RT_Exception_Code);
+   --  This procedure is provided for use by the back end to obtain the name of
+   --  the Rcheck procedure for Code. The name is appended to Namet.Name_Buffer
+   --  without the __gnat_rcheck_ prefix.
+
+   --  WARNING: There is a matching C declaration of this subprogram in fe.h
 
    procedure Possible_Local_Raise (N : Node_Id; E : Entity_Id);
    --  This procedure is called whenever node N might cause the back end
@@ -90,5 +95,12 @@ package Exp_Ch11 is
    --  handler (and restriction No_Exception_Propagation is set), or if there
    --  is a local handler marking that it has a local raise. E is the entity
    --  of the corresponding exception.
+
+   procedure Warn_If_No_Local_Raise (N : Node_Id);
+   --  Called for an exception handler that is not the target of a local raise.
+   --  Issues warning if No_Exception_Propagation restriction is set. N is the
+   --  node for the handler.
+
+   --  WARNING: There is a matching C declaration of this subprogram in fe.h
 
 end Exp_Ch11;

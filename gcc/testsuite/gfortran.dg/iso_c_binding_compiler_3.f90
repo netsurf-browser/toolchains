@@ -1,5 +1,8 @@
 ! { dg-do compile }
 ! { dg-options "-Wall" }
+! The compiler_options() function is dependent on the
+! command line options and thus incompatible with -fcompare-debug.
+! { dg-skip-if "-fcompare-debug incompatible test" { *-*-* } { "-fcompare-debug" } { "" } } */
 !
 ! PR fortran/45823
 !
@@ -23,5 +26,3 @@ end module test_mod
 subroutine test
 use test_mod
 end subroutine test
-
-! { dg-final { cleanup-modules "test_mod" } }

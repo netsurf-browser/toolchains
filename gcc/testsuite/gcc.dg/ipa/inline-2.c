@@ -3,6 +3,7 @@
 /* { dg-options "-O3 -c -fdump-ipa-inline -fno-early-inlining"  } */
 
 struct bah {int a,b,d;};
+void test3 (int, int, int, int, int);
 
 __attribute__ ((noinline))
 void test(int a,int b,int c,int d,int e)
@@ -27,7 +28,6 @@ void foo (int invariant)
     }
 }
 /* After inlining bar into foo, op2 is invariant within inner loop.  */
-/* { dg-final { scan-ipa-dump "op2 change 10.000000. of time"  "inline"  } } */
+/* { dg-final { scan-ipa-dump "op2 change 9.990000. of time"  "inline"  } } */
 /* After inlining bar into foo, op3 is invariant within both loops.  */
 /* { dg-final { scan-ipa-dump "op3 change 1.000000. of time"  "inline"  } } */
-/* { dg-final { cleanup-ipa-dump "inline" } } */

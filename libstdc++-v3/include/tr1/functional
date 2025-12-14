@@ -1,7 +1,6 @@
 // TR1 functional header -*- C++ -*-
 
-// Copyright (C) 2004, 2005, 2006, 2007, 2009, 2010, 2011, 2012
-// Free Software Foundation, Inc.
+// Copyright (C) 2004-2020 Free Software Foundation, Inc.
 //
 // This file is part of the GNU ISO C++ Library.  This library is free
 // software; you can redistribute it and/or modify it under the
@@ -43,24 +42,21 @@
 #include <tr1/functional_hash.h>
 #include <ext/type_traits.h>
 #include <bits/move.h> // for std::__addressof
-#ifdef __GXX_EXPERIMENTAL_CXX0X__
+#if __cplusplus >= 201103L
 #  include <type_traits> // for integral_constant, true_type, false_type
 #endif
 
 namespace std _GLIBCXX_VISIBILITY(default)
 {
-#ifdef __GXX_EXPERIMENTAL_CXX0X__
 _GLIBCXX_BEGIN_NAMESPACE_VERSION
+#if __cplusplus >= 201103L
   template<int> struct _Placeholder;
   template<typename> class _Bind;
   template<typename, typename> class _Bind_result;
-_GLIBCXX_END_NAMESPACE_VERSION
 #endif
 
 namespace tr1
 {
-_GLIBCXX_BEGIN_NAMESPACE_VERSION
-
   template<typename _MemberPointer>
     class _Mem_fn;
   template<typename _Tp, typename _Class>
@@ -856,14 +852,11 @@ _GLIBCXX_BEGIN_NAMESPACE_VERSION
   /// The type of placeholder objects defined by libstdc++.
   template<int _Num> struct _Placeholder { };
 
-_GLIBCXX_END_NAMESPACE_VERSION
-
   /** @namespace std::tr1::placeholders
    *  @brief Sub-namespace for tr1/functional.
    */
   namespace placeholders 
   { 
-  _GLIBCXX_BEGIN_NAMESPACE_VERSION
     /*  Define a large number of placeholders. There is no way to
      *  simplify this with variadic templates, because we're introducing
      *  unique names for each.
@@ -900,10 +893,8 @@ _GLIBCXX_END_NAMESPACE_VERSION
       _Placeholder<28> _28;
       _Placeholder<29> _29;
     } 
-  _GLIBCXX_END_NAMESPACE_VERSION
   }
 
-_GLIBCXX_BEGIN_NAMESPACE_VERSION
   /**
    *  Partial specialization of is_placeholder that provides the placeholder
    *  number for the placeholder objects defined by libstdc++.
@@ -915,7 +906,7 @@ _GLIBCXX_BEGIN_NAMESPACE_VERSION
   template<int _Num>
     const int is_placeholder<_Placeholder<_Num> >::value;
 
-#ifdef __GXX_EXPERIMENTAL_CXX0X__
+#if __cplusplus >= 201103L
   template<int _Num>
     struct is_placeholder<std::_Placeholder<_Num>>
     : std::integral_constant<int, _Num>
@@ -1431,7 +1422,7 @@ _GLIBCXX_BEGIN_NAMESPACE_VERSION
     is_bind_expression<const volatile _Bind_result<_Result,
                                                    _Signature> >::value;
 
-#ifdef __GXX_EXPERIMENTAL_CXX0X__
+#if __cplusplus >= 201103L
   template<typename _Signature>
     struct is_bind_expression<std::_Bind<_Signature>>
     : true_type { };
@@ -1660,7 +1651,7 @@ _GLIBCXX_BEGIN_NAMESPACE_VERSION
 	{
 	  switch (__op)
 	    {
-#ifdef __GXX_RTTI
+#if __cpp_rtti
 	    case __get_type_info:
 	      __dest._M_access<const type_info*>() = &typeid(_Functor);
 	      break;
@@ -1726,7 +1717,7 @@ _GLIBCXX_BEGIN_NAMESPACE_VERSION
 	{
 	  switch (__op)
 	    {
-#ifdef __GXX_RTTI
+#if __cpp_rtti
 	    case __get_type_info:
 	      __dest._M_access<const type_info*>() = &typeid(_Functor);
 	      break;
@@ -1860,7 +1851,7 @@ _GLIBCXX_BEGIN_NAMESPACE_VERSION
       {
         switch (__op)
 	  {
-#ifdef __GXX_RTTI
+#if __cpp_rtti
 	  case __get_type_info:
 	    __dest._M_access<const type_info*>() = &typeid(_Functor);
 	    break;
@@ -1889,7 +1880,7 @@ _GLIBCXX_BEGIN_NAMESPACE_VERSION
     : public _Maybe_unary_or_binary_function<_Res, _ArgTypes...>,
       private _Function_base
     {
-#ifndef __GXX_EXPERIMENTAL_CXX0X__
+#if __cplusplus < 201103L
       /// This class is used to implement the safe_bool idiom.
       struct _Hidden_type
       {
@@ -2042,7 +2033,7 @@ _GLIBCXX_BEGIN_NAMESPACE_VERSION
        *
        *  This function will not throw an %exception.
        */
-#ifdef __GXX_EXPERIMENTAL_CXX0X__
+#if __cplusplus >= 201103L
       explicit operator bool() const
       { return !_M_empty(); }
 #else
@@ -2067,7 +2058,7 @@ _GLIBCXX_BEGIN_NAMESPACE_VERSION
        */
       _Res operator()(_ArgTypes... __args) const;
 
-#ifdef __GXX_RTTI
+#if __cpp_rtti
       // [3.7.2.5] function target access
       /**
        *  @brief Determine the type of the target of this function object
@@ -2113,9 +2104,9 @@ _GLIBCXX_BEGIN_NAMESPACE_VERSION
     {
       if (static_cast<bool>(__x))
 	{
+	  __x._M_manager(_M_functor, __x._M_functor, __clone_functor);
 	  _M_invoker = __x._M_invoker;
 	  _M_manager = __x._M_manager;
-	  __x._M_manager(_M_functor, __x._M_functor, __clone_functor);
 	}
     }
 
@@ -2131,9 +2122,9 @@ _GLIBCXX_BEGIN_NAMESPACE_VERSION
 
 	if (_My_handler::_M_not_empty_function(__f))
 	  {
+	    _My_handler::_M_init_functor(_M_functor, __f);
 	    _M_invoker = &_My_handler::_M_invoke;
 	    _M_manager = &_My_handler::_M_manager;
-	    _My_handler::_M_init_functor(_M_functor, __f);
 	  }
       }
 
@@ -2143,17 +2134,11 @@ _GLIBCXX_BEGIN_NAMESPACE_VERSION
     operator()(_ArgTypes... __args) const
     {
       if (_M_empty())
-        {
-#if __EXCEPTIONS
-          throw bad_function_call();
-#else
-          __builtin_abort();
-#endif
-        }
+	_GLIBCXX_THROW_OR_ABORT(bad_function_call());
       return _M_invoker(_M_functor, __args...);
     }
 
-#ifdef __GXX_RTTI
+#if __cpp_rtti
   template<typename _Res, typename... _ArgTypes>
     const type_info&
     function<_Res(_ArgTypes...)>::
@@ -2254,12 +2239,9 @@ _GLIBCXX_BEGIN_NAMESPACE_VERSION
     inline void
     swap(function<_Signature>& __x, function<_Signature>& __y)
     { __x.swap(__y); }
-
-_GLIBCXX_END_NAMESPACE_VERSION
 }
 
-#ifdef __GXX_EXPERIMENTAL_CXX0X__
-_GLIBCXX_BEGIN_NAMESPACE_VERSION
+#if __cplusplus >= 201103L
 
   template<typename> struct is_placeholder;
 
@@ -2308,8 +2290,8 @@ _GLIBCXX_BEGIN_NAMESPACE_VERSION
                                                                _Signature>>
     : true_type { };
 
+#endif // C++11
 _GLIBCXX_END_NAMESPACE_VERSION
-#endif
 }
 
 #endif // _GLIBCXX_TR1_FUNCTIONAL

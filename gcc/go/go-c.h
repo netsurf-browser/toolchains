@@ -1,5 +1,5 @@
 /* go-c.h -- Header file for go frontend gcc C interface.
-   Copyright (C) 2009, 2010, 2011, 2012 Free Software Foundation, Inc.
+   Copyright (C) 2009-2020 Free Software Foundation, Inc.
 
 This file is part of GCC.
 
@@ -20,49 +20,55 @@ along with GCC; see the file COPYING3.  If not see
 #ifndef GO_GO_C_H
 #define GO_GO_C_H
 
-#ifdef ENABLE_BUILD_WITH_CXX
 #define GO_EXTERN_C
-#else
-#define GO_EXTERN_C extern "C"
-#endif
 
-#if defined(__cplusplus) && !defined(ENABLE_BUILD_WITH_CXX)
-extern "C"
-{
-#endif
-
-#include "machmode.h"
+class Linemap;
+class Backend;
 
 /* Functions defined in the Go frontend proper called by the GCC
    interface.  */
 
 extern int go_enable_dump (const char*);
-extern int go_enable_optimize (const char*);
+extern int go_enable_optimize (const char*, int);
 
 extern void go_add_search_path (const char*);
 
-extern void go_create_gogo (int int_type_size, int pointer_size,
-			    const char* pkgpath, const char *prefix,
-			    const char *relative_import_path);
+struct go_create_gogo_args
+{
+  int int_type_size;
+  int pointer_size;
+  const char* pkgpath;
+  const char* prefix;
+  const char* relative_import_path;
+  const char* c_header;
+  Backend* backend;
+  Linemap* linemap;
+  bool check_divide_by_zero;
+  bool check_divide_overflow;
+  bool compiling_runtime;
+  int debug_escape_level;
+  const char* debug_escape_hash;
+  int64_t nil_check_size_threshold;
+  bool debug_optimization;
+};
+
+extern void go_create_gogo (const struct go_create_gogo_args*);
 
 extern void go_parse_input_files (const char**, unsigned int,
 				  bool only_check_syntax,
 				  bool require_return_statement);
 extern void go_write_globals (void);
 
-extern tree go_type_for_size (unsigned int bits, int unsignedp);
-extern tree go_type_for_mode (enum machine_mode, int unsignedp);
-
 /* Functions defined in the GCC interface called by the Go frontend
    proper.  */
 
 extern void go_preserve_from_gc (tree);
 
+extern bool saw_errors (void);
+
 extern const char *go_localize_identifier (const char*);
 
 extern unsigned int go_field_alignment (tree);
-
-extern void go_trampoline_info (unsigned int *size, unsigned int *alignment);
 
 extern void go_imported_unsafe (void);
 
@@ -71,9 +77,5 @@ extern void go_write_export_data (const char *, unsigned int);
 extern const char *go_read_export_data (int, off_t, char **, size_t *, int *);
 
 extern GTY(()) tree go_non_zero_struct;
-
-#if defined(__cplusplus) && !defined(ENABLE_BUILD_WITH_CXX)
-} /* End extern "C".  */
-#endif
 
 #endif /* !defined(GO_GO_C_H) */

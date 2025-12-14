@@ -6,7 +6,7 @@
 --                                                                          --
 --                                 B o d y                                  --
 --                                                                          --
---          Copyright (C) 1992-2011, Free Software Foundation, Inc.         --
+--          Copyright (C) 1992-2019, Free Software Foundation, Inc.         --
 --                                                                          --
 -- GNAT is free software;  you can  redistribute it  and/or modify it under --
 -- terms of the  GNU General Public License as published  by the Free Soft- --
@@ -38,7 +38,7 @@ package body Urealp is
 
    Ureal_First_Entry : constant Ureal := Ureal'Succ (No_Ureal);
    --  First subscript allocated in Ureal table (note that we can't just
-   --  add 1 to No_Ureal, since "+" means something different for Ureals!
+   --  add 1 to No_Ureal, since "+" means something different for Ureals).
 
    type Ureal_Entry is record
       Num  : Uint;
@@ -1354,13 +1354,13 @@ package body Urealp is
         and then Val.Den >= -16
       then
          if Val.Den = 1 then
-            T := Val.Num * (10/2);
+            T := Val.Num * (10 / 2);
             UI_Write (T / 10, Decimal);
             Write_Char ('.');
             UI_Write (T mod 10, Decimal);
 
          elsif Val.Den = 2 then
-            T := Val.Num * (100/4);
+            T := Val.Num * (100 / 4);
             UI_Write (T / 100, Decimal);
             Write_Char ('.');
             UI_Write (T mod 100 / 10, Decimal);
@@ -1468,14 +1468,17 @@ package body Urealp is
          Write_Str ("#1.0#E");
          UI_Write (-Val.Den);
 
-      --  Other constants with a base other than 10 are written using one
-      --  of the following forms, depending on the sign of the number
-      --  and the sign of the exponent (= minus denominator value)
+      --  Other constants with a base other than 10 are written using one of
+      --  the following forms, depending on the sign of the number and the
+      --  sign of the exponent (= minus denominator value). See that we are
+      --  replacing the division by a multiplication (updating accordingly the
+      --  sign of the exponent) to generate an expression whose computation
+      --  does not cause a division by 0 when base**exponent is very small.
 
       --    numerator.0*base**exponent
       --    numerator.0*base**-exponent
 
-      --  And of course an exponent of 0 can be omitted
+      --  And of course an exponent of 0 can be omitted.
 
       elsif Val.Rbase /= 0 then
          if Brackets then

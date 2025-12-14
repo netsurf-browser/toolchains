@@ -15,7 +15,6 @@ main1 ()
   unsigned short *pin = &in[0];
   unsigned short *pout = &out[0];
  
-  /* A group of 9 shorts - unsupported for now.  */
   *pout++ = *pin++;
   *pout++ = *pin++;
   *pout++ = *pin++;
@@ -53,6 +52,5 @@ int main (void)
   return 0;
 }
 
-/* { dg-final { scan-tree-dump-times "basic block vectorized using SLP" 1 "slp"  { xfail *-*-* }  } } */
-/* { dg-final { cleanup-tree-dump "slp" } } */
+/* { dg-final { scan-tree-dump-times "basic block vectorized" 1 "slp2" } } */
   

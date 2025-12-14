@@ -3,12 +3,7 @@
 /* { dg-do compile } */
 /* { dg-options "-O -fdump-tree-optimized" } */
 
-#ifdef __SPU__
-/* SPU returns aggregates up to 1172 bytes in registers.  */
-typedef struct { int x[300]; void *y; } S;
-#else
 typedef struct { int x[20]; void *y; } S;
-#endif
 typedef struct { int a; S b; } T;
 S nrv_candidate (void);
 void use_result (S, int);
@@ -32,4 +27,3 @@ void foo (void)
 }
 
 /* { dg-final { scan-tree-dump-times "return slot optimization" 2 "optimized" } } */
-/* { dg-final { cleanup-tree-dump "optimized" } } */

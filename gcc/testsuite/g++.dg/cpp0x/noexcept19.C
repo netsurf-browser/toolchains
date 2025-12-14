@@ -1,6 +1,5 @@
 // PR c++/55652
-// { dg-do compile }
-// { dg-options "-std=c++11" }
+// { dg-do compile { target c++11 } }
 
 template <typename T>
 struct A
@@ -23,7 +22,11 @@ struct C
 
 struct D
 {
-  D () throw (int);
+  D ()
+#if __cplusplus <= 201402L
+  throw (int)			// { dg-warning "deprecated" "" { target { ! c++17 } } }
+#endif
+  ;
 };
 
 C <D, B <D>> c;

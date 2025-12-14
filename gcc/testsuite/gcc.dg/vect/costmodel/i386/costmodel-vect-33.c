@@ -1,5 +1,6 @@
 /* { dg-do compile } */
 /* { dg-require-effective-target vect_int } */
+/* { dg-additional-options "-fno-tree-loop-distribute-patterns" } */
 
 #include <stdarg.h>
 #include "../../tree-vect.h"
@@ -33,8 +34,9 @@ int main1 ()
 
 int main (void)
 { 
+  check_vect ();
+
   return main1 ();
 } 
 
-/* { dg-final { scan-tree-dump-times "vectorization not profitable" 1 "vect" } } */
-/* { dg-final { cleanup-tree-dump "vect" } } */
+/* { dg-final { scan-tree-dump-times "vectorized 1 loops" 1 "vect" } } */

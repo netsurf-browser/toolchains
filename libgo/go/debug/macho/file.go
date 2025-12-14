@@ -1,4 +1,4 @@
-// Copyright 2009 The Go Authors.  All rights reserved.
+// Copyright 2009 The Go Authors. All rights reserved.
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
 
@@ -9,12 +9,13 @@ package macho
 
 import (
 	"bytes"
+	"compress/zlib"
 	"debug/dwarf"
 	"encoding/binary"
-	"errors"
 	"fmt"
 	"io"
 	"os"
+	"strings"
 )
 
 // A File represents an open Mach-O file.
@@ -74,6 +75,9 @@ type Segment struct {
 func (s *Segment) Data() ([]byte, error) {
 	dat := make([]byte, s.sr.Size())
 	n, err := s.sr.ReadAt(dat, 0)
+	if n == len(dat) {
+		err = nil
+	}
 	return dat[0:n], err
 }
 
@@ -92,8 +96,23 @@ type SectionHeader struct {
 	Flags  uint32
 }
 
+// A Reloc represents a Mach-O relocation.
+type Reloc struct {
+	Addr  uint32
+	Value uint32
+	// when Scattered == false && Extern == true, Value is the symbol number.
+	// when Scattered == false && Extern == false, Value is the section number.
+	// when Scattered == true, Value is the value that this reloc refers to.
+	Type      uint8
+	Len       uint8 // 0=byte, 1=word, 2=long, 3=quad
+	Pcrel     bool
+	Extern    bool // valid if Scattered == false
+	Scattered bool
+}
+
 type Section struct {
 	SectionHeader
+	Relocs []Reloc
 
 	// Embed ReaderAt for ReadAt method.
 	// Do not embed SectionReader directly
@@ -109,6 +128,9 @@ type Section struct {
 func (s *Section) Data() ([]byte, error) {
 	dat := make([]byte, s.sr.Size())
 	n, err := s.sr.ReadAt(dat, 0)
+	if n == len(dat) {
+		err = nil
+	}
 	return dat[0:n], err
 }
 
@@ -138,10 +160,27 @@ type Dysymtab struct {
 	IndirectSyms []uint32 // indices into Symtab.Syms
 }
 
+// A Rpath represents a Mach-O rpath command.
+type Rpath struct {
+	LoadBytes
+	Path string
+}
+
+// A Symbol is a Mach-O 32-bit or 64-bit symbol table entry.
+type Symbol struct {
+	Name  string
+	Type  uint8
+	Sect  uint8
+	Desc  uint16
+	Value uint64
+}
+
 /*
  * Mach-O reader
  */
 
+// FormatError is returned by some operations if the data does
+// not have the correct format for an object file.
 type FormatError struct {
 	off int64
 	msg string
@@ -242,9 +281,23 @@ func NewFile(r io.ReaderAt) (*File, error) {
 		default:
 			f.Loads[i] = LoadBytes(cmddat)
 
+		case LoadCmdRpath:
+			var hdr RpathCmd
+			b := bytes.NewReader(cmddat)
+			if err := binary.Read(b, bo, &hdr); err != nil {
+				return nil, err
+			}
+			l := new(Rpath)
+			if hdr.Path >= uint32(len(cmddat)) {
+				return nil, &FormatError{offset, "invalid path in rpath command", hdr.Path}
+			}
+			l.Path = cstring(cmddat[hdr.Path:])
+			l.LoadBytes = LoadBytes(cmddat)
+			f.Loads[i] = l
+
 		case LoadCmdDylib:
 			var hdr DylibCmd
-			b := bytes.NewBuffer(cmddat)
+			b := bytes.NewReader(cmddat)
 			if err := binary.Read(b, bo, &hdr); err != nil {
 				return nil, err
 			}
@@ -261,7 +314,7 @@ func NewFile(r io.ReaderAt) (*File, error) {
 
 		case LoadCmdSymtab:
 			var hdr SymtabCmd
-			b := bytes.NewBuffer(cmddat)
+			b := bytes.NewReader(cmddat)
 			if err := binary.Read(b, bo, &hdr); err != nil {
 				return nil, err
 			}
@@ -288,7 +341,7 @@ func NewFile(r io.ReaderAt) (*File, error) {
 
 		case LoadCmdDysymtab:
 			var hdr DysymtabCmd
-			b := bytes.NewBuffer(cmddat)
+			b := bytes.NewReader(cmddat)
 			if err := binary.Read(b, bo, &hdr); err != nil {
 				return nil, err
 			}
@@ -297,7 +350,7 @@ func NewFile(r io.ReaderAt) (*File, error) {
 				return nil, err
 			}
 			x := make([]uint32, hdr.Nindirectsyms)
-			if err := binary.Read(bytes.NewBuffer(dat), bo, x); err != nil {
+			if err := binary.Read(bytes.NewReader(dat), bo, x); err != nil {
 				return nil, err
 			}
 			st := new(Dysymtab)
@@ -309,7 +362,7 @@ func NewFile(r io.ReaderAt) (*File, error) {
 
 		case LoadCmdSegment:
 			var seg32 Segment32
-			b := bytes.NewBuffer(cmddat)
+			b := bytes.NewReader(cmddat)
 			if err := binary.Read(b, bo, &seg32); err != nil {
 				return nil, err
 			}
@@ -342,12 +395,14 @@ func NewFile(r io.ReaderAt) (*File, error) {
 				sh.Reloff = sh32.Reloff
 				sh.Nreloc = sh32.Nreloc
 				sh.Flags = sh32.Flags
-				f.pushSection(sh, r)
+				if err := f.pushSection(sh, r); err != nil {
+					return nil, err
+				}
 			}
 
 		case LoadCmdSegment64:
 			var seg64 Segment64
-			b := bytes.NewBuffer(cmddat)
+			b := bytes.NewReader(cmddat)
 			if err := binary.Read(b, bo, &seg64); err != nil {
 				return nil, err
 			}
@@ -380,7 +435,9 @@ func NewFile(r io.ReaderAt) (*File, error) {
 				sh.Reloff = sh64.Reloff
 				sh.Nreloc = sh64.Nreloc
 				sh.Flags = sh64.Flags
-				f.pushSection(sh, r)
+				if err := f.pushSection(sh, r); err != nil {
+					return nil, err
+				}
 			}
 		}
 		if s != nil {
@@ -394,7 +451,7 @@ func NewFile(r io.ReaderAt) (*File, error) {
 func (f *File) parseSymtab(symdat, strtab, cmddat []byte, hdr *SymtabCmd, offset int64) (*Symtab, error) {
 	bo := f.ByteOrder
 	symtab := make([]Symbol, hdr.Nsyms)
-	b := bytes.NewBuffer(symdat)
+	b := bytes.NewReader(symdat)
 	for i := range symtab {
 		var n Nlist64
 		if f.Magic == Magic64 {
@@ -416,7 +473,12 @@ func (f *File) parseSymtab(symdat, strtab, cmddat []byte, hdr *SymtabCmd, offset
 		if n.Name >= uint32(len(strtab)) {
 			return nil, &FormatError{offset, "invalid name in symbol table", n.Name}
 		}
-		sym.Name = cstring(strtab[n.Name:])
+		// We add "_" to Go symbols. Strip it here. See issue 33808.
+		name := cstring(strtab[n.Name:])
+		if strings.Contains(name, ".") && name[0] == '_' {
+			name = name[1:]
+		}
+		sym.Name = name
 		sym.Type = n.Type
 		sym.Sect = n.Sect
 		sym.Desc = n.Desc
@@ -428,15 +490,71 @@ func (f *File) parseSymtab(symdat, strtab, cmddat []byte, hdr *SymtabCmd, offset
 	return st, nil
 }
 
-func (f *File) pushSection(sh *Section, r io.ReaderAt) {
+type relocInfo struct {
+	Addr   uint32
+	Symnum uint32
+}
+
+func (f *File) pushSection(sh *Section, r io.ReaderAt) error {
 	f.Sections = append(f.Sections, sh)
 	sh.sr = io.NewSectionReader(r, int64(sh.Offset), int64(sh.Size))
 	sh.ReaderAt = sh.sr
+
+	if sh.Nreloc > 0 {
+		reldat := make([]byte, int(sh.Nreloc)*8)
+		if _, err := r.ReadAt(reldat, int64(sh.Reloff)); err != nil {
+			return err
+		}
+		b := bytes.NewReader(reldat)
+
+		bo := f.ByteOrder
+
+		sh.Relocs = make([]Reloc, sh.Nreloc)
+		for i := range sh.Relocs {
+			rel := &sh.Relocs[i]
+
+			var ri relocInfo
+			if err := binary.Read(b, bo, &ri); err != nil {
+				return err
+			}
+
+			if ri.Addr&(1<<31) != 0 { // scattered
+				rel.Addr = ri.Addr & (1<<24 - 1)
+				rel.Type = uint8((ri.Addr >> 24) & (1<<4 - 1))
+				rel.Len = uint8((ri.Addr >> 28) & (1<<2 - 1))
+				rel.Pcrel = ri.Addr&(1<<30) != 0
+				rel.Value = ri.Symnum
+				rel.Scattered = true
+			} else {
+				switch bo {
+				case binary.LittleEndian:
+					rel.Addr = ri.Addr
+					rel.Value = ri.Symnum & (1<<24 - 1)
+					rel.Pcrel = ri.Symnum&(1<<24) != 0
+					rel.Len = uint8((ri.Symnum >> 25) & (1<<2 - 1))
+					rel.Extern = ri.Symnum&(1<<27) != 0
+					rel.Type = uint8((ri.Symnum >> 28) & (1<<4 - 1))
+				case binary.BigEndian:
+					rel.Addr = ri.Addr
+					rel.Value = ri.Symnum >> 8
+					rel.Pcrel = ri.Symnum&(1<<7) != 0
+					rel.Len = uint8((ri.Symnum >> 5) & (1<<2 - 1))
+					rel.Extern = ri.Symnum&(1<<4) != 0
+					rel.Type = uint8(ri.Symnum & (1<<4 - 1))
+				default:
+					panic("unreachable")
+				}
+			}
+		}
+	}
+
+	return nil
 }
 
 func cstring(b []byte) string {
-	var i int
-	for i = 0; i < len(b) && b[i] != 0; i++ {
+	i := bytes.IndexByte(b, 0)
+	if i == -1 {
+		i = len(b)
 	}
 	return string(b[0:i])
 }
@@ -464,26 +582,84 @@ func (f *File) Section(name string) *Section {
 
 // DWARF returns the DWARF debug information for the Mach-O file.
 func (f *File) DWARF() (*dwarf.Data, error) {
-	// There are many other DWARF sections, but these
-	// are the required ones, and the debug/dwarf package
-	// does not use the others, so don't bother loading them.
-	var names = [...]string{"abbrev", "info", "line", "str"}
-	var dat [len(names)][]byte
-	for i, name := range names {
-		name = "__debug_" + name
-		s := f.Section(name)
-		if s == nil {
-			return nil, errors.New("missing Mach-O section " + name)
+	dwarfSuffix := func(s *Section) string {
+		switch {
+		case strings.HasPrefix(s.Name, "__debug_"):
+			return s.Name[8:]
+		case strings.HasPrefix(s.Name, "__zdebug_"):
+			return s.Name[9:]
+		default:
+			return ""
 		}
+
+	}
+	sectionData := func(s *Section) ([]byte, error) {
 		b, err := s.Data()
 		if err != nil && uint64(len(b)) < s.Size {
 			return nil, err
 		}
-		dat[i] = b
+
+		if len(b) >= 12 && string(b[:4]) == "ZLIB" {
+			dlen := binary.BigEndian.Uint64(b[4:12])
+			dbuf := make([]byte, dlen)
+			r, err := zlib.NewReader(bytes.NewBuffer(b[12:]))
+			if err != nil {
+				return nil, err
+			}
+			if _, err := io.ReadFull(r, dbuf); err != nil {
+				return nil, err
+			}
+			if err := r.Close(); err != nil {
+				return nil, err
+			}
+			b = dbuf
+		}
+		return b, nil
 	}
 
-	abbrev, info, line, str := dat[0], dat[1], dat[2], dat[3]
-	return dwarf.New(abbrev, nil, nil, info, line, nil, nil, str)
+	// There are many other DWARF sections, but these
+	// are the ones the debug/dwarf package uses.
+	// Don't bother loading others.
+	var dat = map[string][]byte{"abbrev": nil, "info": nil, "str": nil, "line": nil, "ranges": nil}
+	for _, s := range f.Sections {
+		suffix := dwarfSuffix(s)
+		if suffix == "" {
+			continue
+		}
+		if _, ok := dat[suffix]; !ok {
+			continue
+		}
+		b, err := sectionData(s)
+		if err != nil {
+			return nil, err
+		}
+		dat[suffix] = b
+	}
+
+	d, err := dwarf.New(dat["abbrev"], nil, nil, dat["info"], dat["line"], nil, dat["ranges"], dat["str"])
+	if err != nil {
+		return nil, err
+	}
+
+	// Look for DWARF4 .debug_types sections.
+	for i, s := range f.Sections {
+		suffix := dwarfSuffix(s)
+		if suffix != "types" {
+			continue
+		}
+
+		b, err := sectionData(s)
+		if err != nil {
+			return nil, err
+		}
+
+		err = d.AddTypes(fmt.Sprintf("types-%d", i), b)
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	return d, nil
 }
 
 // ImportedSymbols returns the names of all symbols

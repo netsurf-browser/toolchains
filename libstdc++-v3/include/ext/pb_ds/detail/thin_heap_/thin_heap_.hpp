@@ -1,6 +1,6 @@
 // -*- C++ -*-
 
-// Copyright (C) 2005, 2006, 2009, 2011 Free Software Foundation, Inc.
+// Copyright (C) 2005-2020 Free Software Foundation, Inc.
 //
 // This file is part of the GNU ISO C++ Library.  This library is free
 // software; you can redistribute it and/or modify it under the terms
@@ -78,7 +78,7 @@ namespace __gnu_pbds
     : public left_child_next_sibling_heap PB_DS_BASE_T_P
     {
     private:
-      typedef typename _Alloc::template rebind<Value_Type>::other __rebind_a;
+      typedef rebind_traits<_Alloc, Value_Type>		  __rebind_a;
       typedef left_child_next_sibling_heap PB_DS_BASE_T_P base_type;
 
     protected:
@@ -270,18 +270,24 @@ namespace __gnu_pbds
 	/* 21    */ 15126ul,
 	/* 22    */ 24476ul,
 	/* 23    */ 39602ul,
-	/* 24    */ 64079ul,
+	/* 24    */ 64079ul
+#if __SIZE_MAX__ > 0xfffful
+	,
 	/* 25    */ 103681ul,
 	/* 26    */ 167761ul,
 	/* 27    */ 271442ul,
 	/* 28    */ 439204ul,
-	/* 29    */ 710646ul,
+	/* 29    */ 710646ul
+#if __SIZE_MAX__ > 0xffffful
+	,
 	/* 30    */ 1149851ul,
 	/* 31    */ 1860497ul,
 	/* 32    */ 3010349ul,
 	/* 33    */ 4870846ul,
 	/* 34    */ 7881196ul,
-	/* 35    */ 12752042ul,
+	/* 35    */ 12752042ul
+#if __SIZE_MAX__ > 0xfffffful
+	,
 	/* 36    */ 20633239ul,
 	/* 37    */ 33385282ul,
 	/* 38    */ 54018521ul,
@@ -294,6 +300,9 @@ namespace __gnu_pbds
 	/* 45    */ 1568397607ul,
 	/* 46    */ 2537720636ul,
 	/* 47    */ 4106118243ul
+#endif
+#endif
+#endif
 	/* Pot's good, let's play */
       };
 

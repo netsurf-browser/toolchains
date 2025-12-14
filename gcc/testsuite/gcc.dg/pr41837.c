@@ -1,6 +1,6 @@
 /* PR middle-end/41837 */
 /* { dg-do compile } */
-/* { dg-options "-fipa-struct-reorg -O -fwhole-program -fprofile-generate" } */
+/* { dg-options "-O -fwhole-program -fprofile-generate" } */
 
 typedef struct { int a, b; } T1;
 typedef struct S1 *T2;
@@ -12,6 +12,10 @@ struct S2 { int e; T2 f; int g; };
 typedef struct { T3 h; } T6;
 typedef struct { int i; } *T7;
 struct S3 { T6 j; T7 k; };
+
+void f5 (T4);
+void f6 (void (*)(T4));
+void f7 (void (*)(T5, T1 *));
 
 void
 f1 (T4 x)

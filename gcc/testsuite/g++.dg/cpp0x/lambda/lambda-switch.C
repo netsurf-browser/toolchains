@@ -1,5 +1,5 @@
 // PR c++/49867
-// { dg-options -std=c++0x }
+// { dg-do compile { target c++11 } }
 
 int
 main ()
@@ -20,7 +20,9 @@ main ()
 	    {
 	    case 3:		// { dg-error "case" }
 	      break;		// { dg-error "break" }
-	    };
+	    };		// { dg-warning "statement will never be executed" }
 	}
     }
 }
+
+// { dg-prune-output "\\\[-Wswitch-unreachable]" }

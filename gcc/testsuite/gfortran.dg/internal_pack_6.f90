@@ -1,5 +1,5 @@
-! { dg-do run }
-! { dg-options "-fdump-tree-original" }
+! { dg-do compile }
+! { dg-options "-O0 -fdump-tree-original" }
 !
 ! Test the fix for PR41113 and PR41117, in which unnecessary calls
 ! to internal_pack and internal_unpack were being generated.
@@ -19,7 +19,7 @@ CONTAINS
    do j = 1, i
      subsum = subsum + data(j)
    end do
-   if (abs(subsum - chksum) > 1e-6) call abort
+   if (abs(subsum - chksum) > 1e-6) STOP 1
  END SUBROUTINE S1
 END MODULE
 
@@ -54,6 +54,4 @@ END SUBROUTINE S2
 
  call s2
 end
-! { dg-final { cleanup-modules "m1" } }
 ! { dg-final { scan-tree-dump-times "_gfortran_internal_pack" 0 "original" } }
-! { dg-final { cleanup-tree-dump "original" } }

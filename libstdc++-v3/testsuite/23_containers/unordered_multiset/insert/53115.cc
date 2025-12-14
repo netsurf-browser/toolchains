@@ -1,6 +1,6 @@
-// { dg-options "-std=gnu++11" }
+// { dg-do run { target c++11 } }
 //
-// Copyright (C) 2012 Free Software Foundation, Inc.
+// Copyright (C) 2012-2020 Free Software Foundation, Inc.
 //
 // This file is part of the GNU ISO C++ Library.  This library is free
 // software; you can redistribute it and/or modify it under the
@@ -35,62 +35,61 @@ namespace
 void test01()
 {
   using namespace std;
-  bool test __attribute__((unused)) = true;
 
   std::unordered_multiset<int> mms;
   mms.insert(10);
   VERIFY( mms.size() == 1 );
-  VERIFY( std::distance(mms.begin(), mms.end()) == mms.size() );
+  VERIFY( distance(mms.begin(), mms.end()) - mms.size() == 0 );
   VERIFY( get_nb_bucket_elems(mms) == mms.size() );
 
   mms.insert(10); 
   VERIFY( mms.size() == 2 );
-  VERIFY( std::distance(mms.begin(), mms.end()) == mms.size() );
+  VERIFY( distance(mms.begin(), mms.end()) - mms.size() == 0 );
   VERIFY( get_nb_bucket_elems(mms) == mms.size() );
 
   mms.insert(10);
   VERIFY( mms.size() == 3 );
-  VERIFY( std::distance(mms.begin(), mms.end()) == mms.size() );
+  VERIFY( distance(mms.begin(), mms.end()) - mms.size() == 0 );
   VERIFY( get_nb_bucket_elems(mms) == mms.size() );
 
   mms.insert(10);
   VERIFY( mms.size() == 4 );
-  VERIFY( std::distance(mms.begin(), mms.end()) == mms.size() );
+  VERIFY( distance(mms.begin(), mms.end()) - mms.size() == 0 );
   VERIFY( get_nb_bucket_elems(mms) == mms.size() );
 
   mms.insert(10);
   VERIFY( mms.size() == 5 );
-  VERIFY( std::distance(mms.begin(), mms.end()) == mms.size() );
+  VERIFY( distance(mms.begin(), mms.end()) - mms.size() == 0 );
   VERIFY( get_nb_bucket_elems(mms) == mms.size() );
 
   mms.insert(24);
   VERIFY( mms.size() == 6 );
-  VERIFY( std::distance(mms.begin(), mms.end()) == mms.size() );
+  VERIFY( distance(mms.begin(), mms.end()) - mms.size() == 0 );
   VERIFY( get_nb_bucket_elems(mms) == mms.size() );
 
   mms.insert(25);
   VERIFY( mms.size() == 7 );
-  VERIFY( std::distance(mms.begin(), mms.end()) == mms.size() );
+  VERIFY( distance(mms.begin(), mms.end()) - mms.size() == 0 );
   VERIFY( get_nb_bucket_elems(mms) == mms.size() );
 
   mms.insert(2);
   VERIFY( mms.size() == 8 );
-  VERIFY( std::distance(mms.begin(), mms.end()) == mms.size() );
+  VERIFY( distance(mms.begin(), mms.end()) - mms.size() == 0 );
   VERIFY( get_nb_bucket_elems(mms) == mms.size() );
 
   mms.insert(2);
   VERIFY( mms.size() == 9 );
-  VERIFY( std::distance(mms.begin(), mms.end()) == mms.size() );
+  VERIFY( distance(mms.begin(), mms.end()) - mms.size() == 0 );
   VERIFY( get_nb_bucket_elems(mms) == mms.size() );
 
   mms.insert(1);
   VERIFY( mms.size() == 10 );
-  VERIFY( std::distance(mms.begin(), mms.end()) == mms.size() );
+  VERIFY( distance(mms.begin(), mms.end()) - mms.size() == 0 );
   VERIFY( get_nb_bucket_elems(mms) == mms.size() );
 
   mms.insert(10);
   VERIFY( mms.size() == 11 );
-  VERIFY( std::distance(mms.begin(), mms.end()) == mms.size() );
+  VERIFY( distance(mms.begin(), mms.end()) - mms.size() == 0 );
   VERIFY( get_nb_bucket_elems(mms) == mms.size() );
 }
 

@@ -1,5 +1,4 @@
 ! { dg-do compile }
-! { dg-options "-fwhole-file" }
 !
 ! Tests the fix for PR25087, in which the following invalid code
 ! was not detected.
@@ -14,8 +13,8 @@ FUNCTION a()
 END FUNCTION a
 
 SUBROUTINE s(n)
-  CHARACTER(LEN=n), EXTERNAL :: a ! { dg-error "must have an explicit interface" }
-  CHARACTER(LEN=n), EXTERNAL :: d ! { dg-error "must have an explicit interface" }
+  CHARACTER(LEN=n), EXTERNAL :: a  ! { dg-error "Character length mismatch" }
+  CHARACTER(LEN=n), EXTERNAL :: d  ! { dg-error "Character length mismatch" }
   interface
     function b (m)                ! This is OK
       CHARACTER(LEN=m) :: b

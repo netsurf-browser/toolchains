@@ -3,10 +3,18 @@
 #include <sys/types.h>
 #endif
 
+/* If some target has a Max alignment less than 16, please create
+   a #ifdef around the alignment and add your alignment.  */
+#ifdef __pdp11__
+#define ALIGNMENT 2
+#else
+#define ALIGNMENT 16
+#endif
+
 extern void abort (void);
 
 extern int inside_main;
-void *chk_fail_buf[256] __attribute__((aligned (16)));
+void *chk_fail_buf[256] __attribute__((aligned (ALIGNMENT)));
 volatile int chk_fail_allowed, chk_calls;
 volatile int memcpy_disallowed, mempcpy_disallowed, memmove_disallowed;
 volatile int memset_disallowed, strcpy_disallowed, stpcpy_disallowed;
@@ -124,15 +132,16 @@ __memmove_chk (void *dst, const void *src, __SIZE_TYPE__ n, __SIZE_TYPE__ size)
 void *
 memset (void *dst, int c, __SIZE_TYPE__ n)
 {
+  while (n-- != 0)
+    n[(char *) dst] = c;
+
   /* Single-byte memsets should be done inline when optimisation
-     is enabled.  */
+     is enabled.  Do this after the copy in case we're being called to
+     initialize bss.  */
 #ifdef __OPTIMIZE__
   if (memset_disallowed && inside_main && n < 2)
     abort ();
 #endif
-
-  while (n-- != 0)
-    n[(char *) dst] = c;
 
   return dst;
 }

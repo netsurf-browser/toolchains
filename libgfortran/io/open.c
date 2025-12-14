@@ -1,4 +1,4 @@
-/* Copyright (C) 2002-2013 Free Software Foundation, Inc.
+/* Copyright (C) 2002-2020 Free Software Foundation, Inc.
    Contributed by Andy Vaught
    F2003 I/O support contributed by Jerry DeLisle
 
@@ -26,10 +26,14 @@ see the files COPYING3 and COPYING.RUNTIME respectively.  If not, see
 #include "io.h"
 #include "fbuf.h"
 #include "unix.h"
+#include "async.h"
+
+#ifdef HAVE_UNISTD_H
 #include <unistd.h>
+#endif
+
 #include <string.h>
 #include <errno.h>
-#include <stdlib.h>
 
 
 static const st_option access_opt[] = {
@@ -45,6 +49,21 @@ static const st_option action_opt[] =
   { "read", ACTION_READ},
   { "write", ACTION_WRITE},
   { "readwrite", ACTION_READWRITE},
+  { NULL, 0}
+};
+
+static const st_option share_opt[] =
+{
+  { "denyrw", SHARE_DENYRW },
+  { "denynone", SHARE_DENYNONE },
+  { NULL, 0}
+};
+
+static const st_option cc_opt[] =
+{
+  { "list", CC_LIST },
+  { "fortran", CC_FORTRAN },
+  { "none", CC_NONE },
   { NULL, 0}
 };
 
@@ -150,7 +169,7 @@ static const st_option async_opt[] =
    AT_ENDFILE.  */
 
 static void
-test_endfile (gfc_unit * u)
+test_endfile (gfc_unit *u)
 {
   if (u->endfile == NO_ENDFILE)
     { 
@@ -165,7 +184,7 @@ test_endfile (gfc_unit * u)
    changed.  */
 
 static void
-edit_modes (st_parameter_open *opp, gfc_unit * u, unit_flags * flags)
+edit_modes (st_parameter_open *opp, gfc_unit *u, unit_flags *flags)
 {
   /* Complain about attempts to change the unchangeable.  */
 
@@ -190,6 +209,14 @@ edit_modes (st_parameter_open *opp, gfc_unit * u, unit_flags * flags)
   if (flags->action != ACTION_UNSPECIFIED && u->flags.action != flags->action)
     generate_error (&opp->common, LIBERROR_BAD_OPTION,
 		    "Cannot change ACTION parameter in OPEN statement");
+
+  if (flags->share != SHARE_UNSPECIFIED && u->flags.share != flags->share)
+    generate_error (&opp->common, LIBERROR_BAD_OPTION,
+		    "Cannot change SHARE parameter in OPEN statement");
+
+  if (flags->cc != CC_UNSPECIFIED && u->flags.cc != flags->cc)
+    generate_error (&opp->common, LIBERROR_BAD_OPTION,
+		  "Cannot change CARRIAGECONTROL parameter in OPEN statement");
 
   /* Status must be OLD if present.  */
 
@@ -261,39 +288,39 @@ edit_modes (st_parameter_open *opp, gfc_unit * u, unit_flags * flags)
 	u->flags.round = flags->round;
       if (flags->sign != SIGN_UNSPECIFIED)
 	u->flags.sign = flags->sign;
-    }
 
-  /* Reposition the file if necessary.  */
-
-  switch (flags->position)
-    {
-    case POSITION_UNSPECIFIED:
-    case POSITION_ASIS:
-      break;
-
-    case POSITION_REWIND:
-      if (sseek (u->s, 0, SEEK_SET) != 0)
-	goto seek_error;
-
-      u->current_record = 0;
-      u->last_record = 0;
-
-      test_endfile (u);
-      break;
-
-    case POSITION_APPEND:
-      if (sseek (u->s, 0, SEEK_END) < 0)
-	goto seek_error;
-
-      if (flags->access != ACCESS_STREAM)
-	u->current_record = 0;
-
-      u->endfile = AT_ENDFILE;	/* We are at the end.  */
-      break;
-
-    seek_error:
-      generate_error (&opp->common, LIBERROR_OS, NULL);
-      break;
+      /* Reposition the file if necessary.  */
+    
+      switch (flags->position)
+	{
+	case POSITION_UNSPECIFIED:
+	case POSITION_ASIS:
+	  break;
+    
+	case POSITION_REWIND:
+	  if (sseek (u->s, 0, SEEK_SET) != 0)
+	    goto seek_error;
+    
+	  u->current_record = 0;
+	  u->last_record = 0;
+    
+	  test_endfile (u);
+	  break;
+    
+	case POSITION_APPEND:
+	  if (sseek (u->s, 0, SEEK_END) < 0)
+	    goto seek_error;
+    
+	  if (flags->access != ACCESS_STREAM)
+	    u->current_record = 0;
+    
+	  u->endfile = AT_ENDFILE;	/* We are at the end.  */
+	  break;
+    
+	seek_error:
+	  generate_error (&opp->common, LIBERROR_OS, NULL);
+	  break;
+	}
     }
 
   unlock_unit (u);
@@ -303,7 +330,7 @@ edit_modes (st_parameter_open *opp, gfc_unit * u, unit_flags * flags)
 /* Open an unused unit.  */
 
 gfc_unit *
-new_unit (st_parameter_open *opp, gfc_unit *u, unit_flags * flags)
+new_unit (st_parameter_open *opp, gfc_unit *u, unit_flags *flags)
 {
   gfc_unit *u2;
   stream *s;
@@ -326,19 +353,25 @@ new_unit (st_parameter_open *opp, gfc_unit *u, unit_flags * flags)
   if (flags->status == STATUS_UNSPECIFIED)
     flags->status = STATUS_UNKNOWN;
 
+  if (flags->cc == CC_UNSPECIFIED)
+    flags->cc = flags->form == FORM_UNFORMATTED ? CC_NONE : CC_LIST;
+  else if (flags->form == FORM_UNFORMATTED && flags->cc != CC_NONE)
+    {
+      generate_error (&opp->common, LIBERROR_OPTION_CONFLICT,
+	  "CARRIAGECONTROL parameter conflicts with UNFORMATTED form in "
+	  "OPEN statement");
+      goto fail;
+    }
+
   /* Checks.  */
 
-  if (flags->delim == DELIM_UNSPECIFIED)
-    flags->delim = DELIM_NONE;
-  else
+  if (flags->delim != DELIM_UNSPECIFIED
+      && flags->form == FORM_UNFORMATTED)
     {
-      if (flags->form == FORM_UNFORMATTED)
-	{
-	  generate_error (&opp->common, LIBERROR_OPTION_CONFLICT,
-			  "DELIM parameter conflicts with UNFORMATTED form in "
-			  "OPEN statement");
-	  goto fail;
-	}
+      generate_error (&opp->common, LIBERROR_OPTION_CONFLICT,
+		      "DELIM parameter conflicts with UNFORMATTED form in "
+		      "OPEN statement");
+      goto fail;
     }
 
   if (flags->blank == BLANK_UNSPECIFIED)
@@ -482,7 +515,8 @@ new_unit (st_parameter_open *opp, gfc_unit *u, unit_flags * flags)
      Do not error if opening file preconnected to stdin, stdout, stderr.  */
 
   u2 = NULL;
-  if ((opp->common.flags & IOPARM_OPEN_HAS_FILE) != 0)
+  if ((opp->common.flags & IOPARM_OPEN_HAS_FILE) != 0
+      && !(compile_options.allow_std & GFC_STD_F2018))
     u2 = find_file (opp->file, opp->file_len);
   if (u2 != NULL
       && (options.stdin_unit < 0 || u2->unit_number != options.stdin_unit)
@@ -497,42 +531,28 @@ new_unit (st_parameter_open *opp, gfc_unit *u, unit_flags * flags)
   if (u2 != NULL)
     unlock_unit (u2);
 
+  /* If the unit specified is preconnected with a file specified to be open,
+     then clear the format buffer.  */
+  if ((opp->common.unit == options.stdin_unit ||
+       opp->common.unit == options.stdout_unit ||
+       opp->common.unit == options.stderr_unit)
+      && (opp->common.flags & IOPARM_OPEN_HAS_FILE) != 0)
+    fbuf_destroy (u);
+
   /* Open file.  */
 
   s = open_external (opp, flags);
   if (s == NULL)
     {
-      char *path, *msg;
-      size_t msglen;
-      path = (char *) gfc_alloca (opp->file_len + 1);
-      msglen = opp->file_len + 51;
-      msg = (char *) gfc_alloca (msglen);
-      unpack_filename (path, opp->file, opp->file_len);
-
-      switch (errno)
-	{
-	case ENOENT: 
-	  snprintf (msg, msglen, "File '%s' does not exist", path);
-	  break;
-
-	case EEXIST:
-	  snprintf (msg, msglen, "File '%s' already exists", path);
-	  break;
-
-	case EACCES:
-	  snprintf (msg, msglen, 
-		    "Permission denied trying to open file '%s'", path);
-	  break;
-
-	case EISDIR:
-	  snprintf (msg, msglen, "'%s' is a directory", path);
-	  break;
-
-	default:
-	  msg = NULL;
-	}
-
+      char errbuf[256];
+      char *path = fc_strdup (opp->file, opp->file_len);
+      size_t msglen = opp->file_len + 22 + sizeof (errbuf);
+      char *msg = xmalloc (msglen);
+      snprintf (msg, msglen, "Cannot open file '%s': %s", path,
+		gf_strerror (errno, errbuf, sizeof (errbuf)));
       generate_error (&opp->common, LIBERROR_OS, msg);
+      free (msg);
+      free (path);
       goto cleanup;
     }
 
@@ -541,7 +561,6 @@ new_unit (st_parameter_open *opp, gfc_unit *u, unit_flags * flags)
 
   /* Create the unit structure.  */
 
-  u->file = get_mem (opp->file_len);
   if (u->unit_number != opp->common.unit)
     internal_error (&opp->common, "Unit number changed");
   u->s = s;
@@ -558,7 +577,10 @@ new_unit (st_parameter_open *opp, gfc_unit *u, unit_flags * flags)
   if (flags->position == POSITION_APPEND)
     {
       if (sseek (u->s, 0, SEEK_END) < 0)
-	generate_error (&opp->common, LIBERROR_OS, NULL);
+	{
+	  generate_error (&opp->common, LIBERROR_OS, NULL);
+	  goto cleanup;
+	}
       u->endfile = AT_ENDFILE;
     }
 
@@ -574,7 +596,7 @@ new_unit (st_parameter_open *opp, gfc_unit *u, unit_flags * flags)
   else
     {
       u->flags.has_recl = 0;
-      u->recl = max_offset;
+      u->recl = default_recl;
       if (compile_options.max_subrecord_length)
 	{
 	  u->recl_subrecord = compile_options.max_subrecord_length;
@@ -610,13 +632,14 @@ new_unit (st_parameter_open *opp, gfc_unit *u, unit_flags * flags)
   if (flags->access == ACCESS_STREAM)
     {
       u->maxrec = max_offset;
-      u->recl = 1;
+      /* F2018 (N2137) 12.10.2.26: If the connection is for stream
+	 access recl is assigned the value -2.  */
+      u->recl = -2;
       u->bytes_left = 1;
       u->strm_pos = stell (u->s) + 1;
     }
 
-  memmove (u->file, opp->file, opp->file_len);
-  u->file_len = opp->file_len;
+  u->filename = fc_strdup (opp->file, opp->file_len);
 
   /* Curiously, the standard requires that the
      position specifier be ignored for new files so a newly connected
@@ -638,8 +661,12 @@ new_unit (st_parameter_open *opp, gfc_unit *u, unit_flags * flags)
   else
     u->fbuf = NULL;
 
-    
-    
+  /* Check if asynchrounous.  */
+  if (flags->async == ASYNC_YES)
+    init_async_unit (u);
+  else
+    u->au = NULL;
+
   return u;
 
  cleanup:
@@ -660,7 +687,7 @@ new_unit (st_parameter_open *opp, gfc_unit *u, unit_flags * flags)
    modes or closing what is there now and opening the new file.  */
 
 static void
-already_open (st_parameter_open *opp, gfc_unit * u, unit_flags * flags)
+already_open (st_parameter_open *opp, gfc_unit *u, unit_flags *flags)
 {
   if ((opp->common.flags & IOPARM_OPEN_HAS_FILE) == 0)
     {
@@ -673,15 +700,6 @@ already_open (st_parameter_open *opp, gfc_unit * u, unit_flags * flags)
 
   if (!compare_file_filename (u, opp->file, opp->file_len))
     {
-#if !HAVE_UNLINK_OPEN_FILE
-      char *path = NULL;
-      if (u->file && u->flags.status == STATUS_SCRATCH)
-	{
-	  path = (char *) gfc_alloca (u->file_len + 1);
-	  unpack_filename (path, u->file, u->file_len);
-	}
-#endif
-
       if (sclose (u->s) == -1)
 	{
 	  unlock_unit (u);
@@ -691,18 +709,17 @@ already_open (st_parameter_open *opp, gfc_unit * u, unit_flags * flags)
 	}
 
       u->s = NULL;
-      free (u->file);
-      u->file = NULL;
-      u->file_len = 0;
-
+ 
 #if !HAVE_UNLINK_OPEN_FILE
-      if (path != NULL)
-	unlink (path);
+      if (u->filename && u->flags.status == STATUS_SCRATCH)
+	remove (u->filename);
 #endif
-
+      free (u->filename);
+      u->filename = NULL;
+      
       u = new_unit (opp, u, flags);
       if (u != NULL)
-	unlock_unit (u);
+      unlock_unit (u);
       return;
     }
 
@@ -726,6 +743,7 @@ st_open (st_parameter_open *opp)
   library_start (&opp->common);
 
   /* Decode options.  */
+  flags.readonly = !(cf & IOPARM_OPEN_HAS_READONLY) ? 0 : opp->readonly;
 
   flags.access = !(cf & IOPARM_OPEN_HAS_ACCESS) ? ACCESS_UNSPECIFIED :
     find_option (&opp->common, opp->access, opp->access_len,
@@ -734,6 +752,14 @@ st_open (st_parameter_open *opp)
   flags.action = !(cf & IOPARM_OPEN_HAS_ACTION) ? ACTION_UNSPECIFIED :
     find_option (&opp->common, opp->action, opp->action_len,
 		 action_opt, "Bad ACTION parameter in OPEN statement");
+
+  flags.cc = !(cf & IOPARM_OPEN_HAS_CC) ? CC_UNSPECIFIED :
+    find_option (&opp->common, opp->cc, opp->cc_len,
+		 cc_opt, "Bad CARRIAGECONTROL parameter in OPEN statement");
+
+  flags.share = !(cf & IOPARM_OPEN_HAS_SHARE) ? SHARE_UNSPECIFIED :
+    find_option (&opp->common, opp->share, opp->share_len,
+		 share_opt, "Bad SHARE parameter in OPEN statement");
 
   flags.blank = !(cf & IOPARM_OPEN_HAS_BLANK) ? BLANK_UNSPECIFIED :
     find_option (&opp->common, opp->blank, opp->blank_len,
@@ -795,8 +821,6 @@ st_open (st_parameter_open *opp)
 	conv = compile_options.convert;
     }
   
-  /* We use big_endian, which is 0 on little-endian machines
-     and 1 on big-endian machines.  */
   switch (conv)
     {
     case GFC_CONVERT_NATIVE:
@@ -804,11 +828,11 @@ st_open (st_parameter_open *opp)
       break;
       
     case GFC_CONVERT_BIG:
-      conv = big_endian ? GFC_CONVERT_NATIVE : GFC_CONVERT_SWAP;
+      conv = __BYTE_ORDER__ == __ORDER_BIG_ENDIAN__ ? GFC_CONVERT_NATIVE : GFC_CONVERT_SWAP;
       break;
       
     case GFC_CONVERT_LITTLE:
-      conv = big_endian ? GFC_CONVERT_SWAP : GFC_CONVERT_NATIVE;
+      conv = __BYTE_ORDER__ == __ORDER_BIG_ENDIAN__ ? GFC_CONVERT_SWAP : GFC_CONVERT_NATIVE;
       break;
       
     default:
@@ -818,14 +842,15 @@ st_open (st_parameter_open *opp)
 
   flags.convert = conv;
 
-  if (!(opp->common.flags & IOPARM_OPEN_HAS_NEWUNIT) && opp->common.unit < 0)
-    generate_error (&opp->common, LIBERROR_BAD_OPTION,
-		    "Bad unit number in OPEN statement");
-
   if (flags.position != POSITION_UNSPECIFIED
       && flags.access == ACCESS_DIRECT)
     generate_error (&opp->common, LIBERROR_BAD_OPTION,
 		    "Cannot use POSITION with direct access files");
+
+  if (flags.readonly
+      && flags.action != ACTION_UNSPECIFIED && flags.action != ACTION_READ)
+    generate_error (&opp->common, LIBERROR_BAD_OPTION,
+		    "ACTION conflicts with READONLY in OPEN statement");
 
   if (flags.access == ACCESS_APPEND)
     {
@@ -847,12 +872,21 @@ st_open (st_parameter_open *opp)
   if ((opp->common.flags & IOPARM_LIBRETURN_MASK) == IOPARM_LIBRETURN_OK)
     {
       if ((opp->common.flags & IOPARM_OPEN_HAS_NEWUNIT))
+	opp->common.unit = newunit_alloc ();
+      else if (opp->common.unit < 0)
 	{
-	  *opp->newunit = get_unique_unit_number(opp);
-	  opp->common.unit = *opp->newunit;
+	  u = find_unit (opp->common.unit);
+	  if (u == NULL) /* Negative unit and no NEWUNIT-created unit found.  */
+	    {
+	      generate_error (&opp->common, LIBERROR_BAD_OPTION,
+			      "Bad unit number in OPEN statement");
+	      library_end ();
+	      return;
+	    }
 	}
 
-      u = find_or_create_unit (opp->common.unit);
+      if (u == NULL)
+	u = find_or_create_unit (opp->common.unit);
       if (u->s == NULL)
 	{
 	  u = new_unit (opp, u, &flags);
@@ -862,6 +896,10 @@ st_open (st_parameter_open *opp)
       else
 	already_open (opp, u, &flags);
     }
-
+    
+  if ((opp->common.flags & IOPARM_OPEN_HAS_NEWUNIT)
+      && (opp->common.flags & IOPARM_LIBRETURN_MASK) == IOPARM_LIBRETURN_OK)
+    *opp->newunit = opp->common.unit;
+  
   library_end ();
 }

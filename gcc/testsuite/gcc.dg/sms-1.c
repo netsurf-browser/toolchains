@@ -11,7 +11,7 @@ void * a[255];
 
 __attribute__ ((noinline))
 void
-f (m)
+f (int m)
 {
   int i;
   int sh = 0x100;
@@ -40,6 +40,5 @@ main ()
   return 0;
 }
 
-/* { dg-final { scan-rtl-dump-times "SMS succeeded" 1 "sms"  { target powerpc*-*-* spu-*-* } } } */
-/* { dg-final { cleanup-rtl-dump "sms" } } */
+/* { dg-final { scan-rtl-dump-times "SMS succeeded" 1 "sms"  { target powerpc*-*-* } } } */
 

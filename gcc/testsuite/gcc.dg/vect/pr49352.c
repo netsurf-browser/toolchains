@@ -1,6 +1,6 @@
 /* PR tree-optimization/49352 */
 /* { dg-do compile } */
-/* { dg-options "-O2 -ftree-vectorize -fcompare-debug" } */
+/* { dg-additional-options "-O2 -fcompare-debug" } */
 
 int
 foo (int *x, int *y, int n)

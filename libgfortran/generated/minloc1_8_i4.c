@@ -1,5 +1,5 @@
 /* Implementation of the MINLOC intrinsic
-   Copyright 2002, 2007, 2009, 2010 Free Software Foundation, Inc.
+   Copyright (C) 2002-2020 Free Software Foundation, Inc.
    Contributed by Paul Brook <paul@nowt.org>
 
 This file is part of the GNU Fortran runtime library (libgfortran).
@@ -24,22 +24,22 @@ see the files COPYING3 and COPYING.RUNTIME respectively.  If not, see
 <http://www.gnu.org/licenses/>.  */
 
 #include "libgfortran.h"
-#include <stdlib.h>
 #include <assert.h>
-#include <limits.h>
 
 
 #if defined (HAVE_GFC_INTEGER_4) && defined (HAVE_GFC_INTEGER_8)
 
+#define HAVE_BACK_ARG 1
+
 
 extern void minloc1_8_i4 (gfc_array_i8 * const restrict, 
-	gfc_array_i4 * const restrict, const index_type * const restrict);
+	gfc_array_i4 * const restrict, const index_type * const restrict, GFC_LOGICAL_4 back);
 export_proto(minloc1_8_i4);
 
 void
 minloc1_8_i4 (gfc_array_i8 * const restrict retarray, 
 	gfc_array_i4 * const restrict array, 
-	const index_type * const restrict pdim)
+	const index_type * const restrict pdim, GFC_LOGICAL_4 back)
 {
   index_type count[GFC_MAX_DIMENSIONS];
   index_type extent[GFC_MAX_DIMENSIONS];
@@ -55,8 +55,15 @@ minloc1_8_i4 (gfc_array_i8 * const restrict retarray,
   int continue_loop;
 
   /* Make dim zero based to avoid confusion.  */
-  dim = (*pdim) - 1;
   rank = GFC_DESCRIPTOR_RANK (array) - 1;
+  dim = (*pdim) - 1;
+
+  if (unlikely (dim < 0 || dim > rank))
+    {
+      runtime_error ("Dim argument incorrect in MINLOC intrinsic: "
+ 		     "is %ld, should be between 1 and %ld",
+		     (long int) dim + 1, (long int) rank + 1);
+    }
 
   len = GFC_DESCRIPTOR_EXTENT(array,dim);
   if (len < 0)
@@ -80,7 +87,7 @@ minloc1_8_i4 (gfc_array_i8 * const restrict retarray,
 	extent[n] = 0;
     }
 
-  if (retarray->data == NULL)
+  if (retarray->base_addr == NULL)
     {
       size_t alloc_size, str;
 
@@ -96,12 +103,11 @@ minloc1_8_i4 (gfc_array_i8 * const restrict retarray,
 	}
 
       retarray->offset = 0;
-      retarray->dtype = (array->dtype & ~GFC_DTYPE_RANK_MASK) | rank;
+      retarray->dtype.rank = rank;
 
-      alloc_size = sizeof (GFC_INTEGER_8) * GFC_DESCRIPTOR_STRIDE(retarray,rank-1)
-    		   * extent[rank-1];
+      alloc_size = GFC_DESCRIPTOR_STRIDE(retarray,rank-1) * extent[rank-1];
 
-      retarray->data = internal_malloc_size (alloc_size);
+      retarray->base_addr = xmallocarray (alloc_size, sizeof (GFC_INTEGER_8));
       if (alloc_size == 0)
 	{
 	  /* Make sure we have a zero-sized array.  */
@@ -131,8 +137,8 @@ minloc1_8_i4 (gfc_array_i8 * const restrict retarray,
 	return;
     }
 
-  base = array->data;
-  dest = retarray->data;
+  base = array->base_addr;
+  dest = retarray->base_addr;
 
   continue_loop = 1;
   while (continue_loop)
@@ -153,10 +159,14 @@ minloc1_8_i4 (gfc_array_i8 * const restrict retarray,
 	  *dest = 0;
 	else
 	  {
+#if ! defined HAVE_BACK_ARG
 	    for (n = 0; n < len; n++, src += delta)
 	      {
+#endif
 
 #if defined (GFC_INTEGER_4_QUIET_NAN)
+     	   for (n = 0; n < len; n++, src += delta)
+	     {
 		if (*src <= minval)
 		  {
 		    minval = *src;
@@ -164,14 +174,26 @@ minloc1_8_i4 (gfc_array_i8 * const restrict retarray,
 		    break;
 		  }
 	      }
-	    for (; n < len; n++, src += delta)
-	      {
+#else
+	    n = 0;
 #endif
-		if (*src < minval)
-		  {
-		    minval = *src;
-		    result = (GFC_INTEGER_8)n + 1;
-		  }
+	    if (back)
+	      for (; n < len; n++, src += delta)
+	        {
+		  if (unlikely (*src <= minval))
+		    {
+		      minval = *src;
+		      result = (GFC_INTEGER_8)n + 1;
+		    }
+		}
+	    else
+	      for (; n < len; n++, src += delta)
+	        {
+		  if (unlikely (*src < minval))
+		    {
+		      minval = *src;
+		      result = (GFC_INTEGER_8) n + 1;
+		    }
 	      }
 	    
 	    *dest = result;
@@ -192,9 +214,9 @@ minloc1_8_i4 (gfc_array_i8 * const restrict retarray,
 	  base -= sstride[n] * extent[n];
 	  dest -= dstride[n] * extent[n];
 	  n++;
-	  if (n == rank)
+	  if (n >= rank)
 	    {
-	      /* Break out of the look.  */
+	      /* Break out of the loop.  */
 	      continue_loop = 0;
 	      break;
 	    }
@@ -211,14 +233,14 @@ minloc1_8_i4 (gfc_array_i8 * const restrict retarray,
 
 extern void mminloc1_8_i4 (gfc_array_i8 * const restrict, 
 	gfc_array_i4 * const restrict, const index_type * const restrict,
-	gfc_array_l1 * const restrict);
+	gfc_array_l1 * const restrict, GFC_LOGICAL_4 back);
 export_proto(mminloc1_8_i4);
 
 void
 mminloc1_8_i4 (gfc_array_i8 * const restrict retarray, 
 	gfc_array_i4 * const restrict array, 
 	const index_type * const restrict pdim, 
-	gfc_array_l1 * const restrict mask)
+	gfc_array_l1 * const restrict mask, GFC_LOGICAL_4 back)
 {
   index_type count[GFC_MAX_DIMENSIONS];
   index_type extent[GFC_MAX_DIMENSIONS];
@@ -228,22 +250,40 @@ mminloc1_8_i4 (gfc_array_i8 * const restrict retarray,
   GFC_INTEGER_8 * restrict dest;
   const GFC_INTEGER_4 * restrict base;
   const GFC_LOGICAL_1 * restrict mbase;
-  int rank;
-  int dim;
+  index_type rank;
+  index_type dim;
   index_type n;
   index_type len;
   index_type delta;
   index_type mdelta;
   int mask_kind;
 
+  if (mask == NULL)
+    {
+#ifdef HAVE_BACK_ARG
+      minloc1_8_i4 (retarray, array, pdim, back);
+#else
+      minloc1_8_i4 (retarray, array, pdim);
+#endif
+      return;
+    }
+
   dim = (*pdim) - 1;
   rank = GFC_DESCRIPTOR_RANK (array) - 1;
+
+
+  if (unlikely (dim < 0 || dim > rank))
+    {
+      runtime_error ("Dim argument incorrect in MINLOC intrinsic: "
+ 		     "is %ld, should be between 1 and %ld",
+		     (long int) dim + 1, (long int) rank + 1);
+    }
 
   len = GFC_DESCRIPTOR_EXTENT(array,dim);
   if (len <= 0)
     return;
 
-  mbase = mask->data;
+  mbase = mask->base_addr;
 
   mask_kind = GFC_DESCRIPTOR_SIZE (mask);
 
@@ -279,7 +319,7 @@ mminloc1_8_i4 (gfc_array_i8 * const restrict retarray,
 	extent[n] = 0;
     }
 
-  if (retarray->data == NULL)
+  if (retarray->base_addr == NULL)
     {
       size_t alloc_size, str;
 
@@ -294,11 +334,10 @@ mminloc1_8_i4 (gfc_array_i8 * const restrict retarray,
 
 	}
 
-      alloc_size = sizeof (GFC_INTEGER_8) * GFC_DESCRIPTOR_STRIDE(retarray,rank-1)
-    		   * extent[rank-1];
+      alloc_size = GFC_DESCRIPTOR_STRIDE(retarray,rank-1) * extent[rank-1];
 
       retarray->offset = 0;
-      retarray->dtype = (array->dtype & ~GFC_DTYPE_RANK_MASK) | rank;
+      retarray->dtype.rank = rank;
 
       if (alloc_size == 0)
 	{
@@ -307,7 +346,7 @@ mminloc1_8_i4 (gfc_array_i8 * const restrict retarray,
 	  return;
 	}
       else
-	retarray->data = internal_malloc_size (alloc_size);
+	retarray->base_addr = xmallocarray (alloc_size, sizeof (GFC_INTEGER_8));
 
     }
   else
@@ -332,8 +371,8 @@ mminloc1_8_i4 (gfc_array_i8 * const restrict retarray,
 	return;
     }
 
-  dest = retarray->data;
-  base = array->data;
+  dest = retarray->base_addr;
+  base = array->base_addr;
 
   while (base)
     {
@@ -354,12 +393,8 @@ mminloc1_8_i4 (gfc_array_i8 * const restrict retarray,
 	GFC_INTEGER_8 result2 = 0;
 #endif
 	result = 0;
-	if (len <= 0)
-	  *dest = 0;
-	else
+	for (n = 0; n < len; n++, src += delta, msrc += mdelta)
 	  {
-	    for (n = 0; n < len; n++, src += delta, msrc += mdelta)
-	      {
 
 		if (*msrc)
 		  {
@@ -380,16 +415,25 @@ mminloc1_8_i4 (gfc_array_i8 * const restrict retarray,
 	      result = result2;
 	    else
 #endif
-	    for (; n < len; n++, src += delta, msrc += mdelta)
-	      {
-		if (*msrc && *src < minval)
+	    if (back)
+	      for (; n < len; n++, src += delta, msrc += mdelta)
+	      	{
+		  if (*msrc && unlikely (*src <= minval))
+		    {
+		      minval = *src;
+		      result = (GFC_INTEGER_8)n + 1;
+		    }
+		}
+	      else
+	        for (; n < len; n++, src += delta, msrc += mdelta)
 		  {
-		    minval = *src;
-		    result = (GFC_INTEGER_8)n + 1;
-		  }
-	      }
-	    *dest = result;
+		    if (*msrc && unlikely (*src < minval))
+		      {
+		        minval = *src;
+			result = (GFC_INTEGER_8) n + 1;
+		      }
 	  }
+	*dest = result;
       }
       /* Advance to the next element.  */
       count[0]++;
@@ -408,9 +452,9 @@ mminloc1_8_i4 (gfc_array_i8 * const restrict retarray,
 	  mbase -= mstride[n] * extent[n];
 	  dest -= dstride[n] * extent[n];
 	  n++;
-	  if (n == rank)
+	  if (n >= rank)
 	    {
-	      /* Break out of the look.  */
+	      /* Break out of the loop.  */
 	      base = NULL;
 	      break;
 	    }
@@ -428,14 +472,14 @@ mminloc1_8_i4 (gfc_array_i8 * const restrict retarray,
 
 extern void sminloc1_8_i4 (gfc_array_i8 * const restrict, 
 	gfc_array_i4 * const restrict, const index_type * const restrict,
-	GFC_LOGICAL_4 *);
+	GFC_LOGICAL_4 *, GFC_LOGICAL_4 back);
 export_proto(sminloc1_8_i4);
 
 void
 sminloc1_8_i4 (gfc_array_i8 * const restrict retarray, 
 	gfc_array_i4 * const restrict array, 
 	const index_type * const restrict pdim, 
-	GFC_LOGICAL_4 * mask)
+	GFC_LOGICAL_4 * mask, GFC_LOGICAL_4 back)
 {
   index_type count[GFC_MAX_DIMENSIONS];
   index_type extent[GFC_MAX_DIMENSIONS];
@@ -446,14 +490,25 @@ sminloc1_8_i4 (gfc_array_i8 * const restrict retarray,
   index_type dim;
 
 
-  if (*mask)
+  if (mask == NULL || *mask)
     {
+#ifdef HAVE_BACK_ARG
+      minloc1_8_i4 (retarray, array, pdim, back);
+#else
       minloc1_8_i4 (retarray, array, pdim);
+#endif
       return;
     }
   /* Make dim zero based to avoid confusion.  */
   dim = (*pdim) - 1;
   rank = GFC_DESCRIPTOR_RANK (array) - 1;
+
+  if (unlikely (dim < 0 || dim > rank))
+    {
+      runtime_error ("Dim argument incorrect in MINLOC intrinsic: "
+ 		     "is %ld, should be between 1 and %ld",
+		     (long int) dim + 1, (long int) rank + 1);
+    }
 
   for (n = 0; n < dim; n++)
     {
@@ -472,7 +527,7 @@ sminloc1_8_i4 (gfc_array_i8 * const restrict retarray,
 	extent[n] = 0;
     }
 
-  if (retarray->data == NULL)
+  if (retarray->base_addr == NULL)
     {
       size_t alloc_size, str;
 
@@ -488,10 +543,9 @@ sminloc1_8_i4 (gfc_array_i8 * const restrict retarray,
 	}
 
       retarray->offset = 0;
-      retarray->dtype = (array->dtype & ~GFC_DTYPE_RANK_MASK) | rank;
+      retarray->dtype.rank = rank;
 
-      alloc_size = sizeof (GFC_INTEGER_8) * GFC_DESCRIPTOR_STRIDE(retarray,rank-1)
-    		   * extent[rank-1];
+      alloc_size = GFC_DESCRIPTOR_STRIDE(retarray,rank-1) * extent[rank-1];
 
       if (alloc_size == 0)
 	{
@@ -500,7 +554,7 @@ sminloc1_8_i4 (gfc_array_i8 * const restrict retarray,
 	  return;
 	}
       else
-	retarray->data = internal_malloc_size (alloc_size);
+	retarray->base_addr = xmallocarray (alloc_size, sizeof (GFC_INTEGER_8));
     }
   else
     {
@@ -532,7 +586,7 @@ sminloc1_8_i4 (gfc_array_i8 * const restrict retarray,
       dstride[n] = GFC_DESCRIPTOR_STRIDE(retarray,n);
     }
 
-  dest = retarray->data;
+  dest = retarray->base_addr;
 
   while(1)
     {
@@ -549,7 +603,7 @@ sminloc1_8_i4 (gfc_array_i8 * const restrict retarray,
 	     frequently used path so probably not worth it.  */
 	  dest -= dstride[n] * extent[n];
 	  n++;
-	  if (n == rank)
+	  if (n >= rank)
 	    return;
 	  else
 	    {

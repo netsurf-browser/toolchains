@@ -14,7 +14,8 @@ f (void)
     int strcmp ();
     /* Should get format warnings even though the built-in declaration
        isn't "visible".  */
-    printf ("%s", 1); /* { dg-warning "format" } */
+    printf (
+	    "%s", 1); /* { dg-warning "8:format" } */
     /* The type of strcmp here should have no prototype.  */
     if (0)
       strcmp (1);
@@ -26,3 +27,6 @@ f (void)
 
 /* Should still diagnose incompatible prototype for strcmp.  */
 int strcmp (void); /* { dg-error "conflict" } */
+
+/* { dg-prune-output "\\\[-Wbuiltin-declaration-mismatch]" }
+   { dg-prune-output "\\\[-Wint-conversion]" } */

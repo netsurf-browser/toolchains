@@ -1,9 +1,10 @@
 /* { dg-do compile } */
-/* { dg-options "-O2 -fdump-tree-cddce2" } */
+/* { dg-options "-O2 -fdump-tree-cddce2 -fno-finite-loops" } */
 
 struct rtx_def;
 typedef struct rtx_def *rtx;
 extern const char rtx_class[];
+void foo (void);
 union rtunion_def
 {
   rtx rtx;
@@ -35,4 +36,3 @@ com (rtx insn, int blah)
 /* Cddce cannot remove possibly infinite loops and there is no way how to
    determine whether the loop in can_move_up ends.  */
 /* { dg-final { scan-tree-dump "if " "cddce2"} } */
-/* { dg-final { cleanup-tree-dump "cddce2" } } */

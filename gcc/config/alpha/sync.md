@@ -1,5 +1,5 @@
 ;; GCC machine description for Alpha synchronization instructions.
-;; Copyright (C) 2005, 2007, 2008, 2009, 2011 Free Software Foundation, Inc.
+;; Copyright (C) 2005-2020 Free Software Foundation, Inc.
 ;;
 ;; This file is part of GCC.
 ;;
@@ -24,7 +24,7 @@
   [(plus "add_operand") (minus "reg_or_8bit_operand")
    (ior "or_operand") (xor "or_operand") (and "and_operand")])
 (define_code_attr fetchop_constr
-  [(plus "rKL") (minus "rI") (ior "rIN") (xor "rIN") (and "riNHM")])
+  [(plus "rKL") (minus "rI") (ior "rIN") (xor "rIN") (and "rINM")])
 
 
 (define_expand "memory_barrier"
@@ -37,13 +37,13 @@
 })
 
 (define_insn "*memory_barrier"
-  [(set (match_operand:BLK 0 "" "")
+  [(set (match_operand:BLK 0)
 	(unspec:BLK [(match_dup 0)] UNSPEC_MB))]
   ""
   "mb"
   [(set_attr "type" "mb")])
 
-(define_insn "load_locked_<mode>"
+(define_insn "@load_locked_<mode>"
   [(set (match_operand:I48MODE 0 "register_operand" "=r")
 	(unspec_volatile:I48MODE
 	  [(match_operand:I48MODE 1 "memory_operand" "m")]
@@ -52,7 +52,7 @@
   "ld<modesuffix>_l %0,%1"
   [(set_attr "type" "ld_l")])
 
-(define_insn "store_conditional_<mode>"
+(define_insn "@store_conditional_<mode>"
   [(set (match_operand:DI 0 "register_operand" "=r")
         (unspec_volatile:DI [(const_int 0)] UNSPECV_SC))
    (set (match_operand:I48MODE 1 "memory_operand" "=m")
@@ -65,24 +65,24 @@
 ;; the lock is cleared by a normal load or store.  This means we cannot
 ;; expand a ll/sc sequence before reload, lest a register spill is
 ;; inserted inside the sequence.  It is also UNPREDICTABLE whether the
-;; lock is cleared by a TAKEN branch.  This means that we can not expand
+;; lock is cleared by a TAKEN branch.  This means that we cannot expand
 ;; a ll/sc sequence containing a branch (i.e. compare-and-swap) until after
 ;; the final basic-block reordering pass.
 
 (define_expand "atomic_compare_and_swap<mode>"
   [(parallel
-     [(set (match_operand:DI 0 "register_operand" "")		  ;; bool out
+     [(set (match_operand:DI 0 "register_operand")	  ;; bool out
 	   (unspec_volatile:DI [(const_int 0)] UNSPECV_CMPXCHG))
-      (set (match_operand:I48MODE 1 "register_operand" "")	  ;; val out
+      (set (match_operand:I48MODE 1 "register_operand")	  ;; val out
 	   (unspec_volatile:I48MODE [(const_int 0)] UNSPECV_CMPXCHG))
-      (set (match_operand:I48MODE 2 "memory_operand" "")	  ;; memory
+      (set (match_operand:I48MODE 2 "memory_operand")	  ;; memory
 	   (unspec_volatile:I48MODE
 	     [(match_dup 2)
-	      (match_operand:I48MODE 3 "reg_or_8bit_operand" "")  ;; expected
-	      (match_operand:I48MODE 4 "add_operand" "")	  ;; desired
-	      (match_operand:SI 5 "const_int_operand" "")	  ;; is_weak
-	      (match_operand:SI 6 "const_int_operand" "")	  ;; succ model
-	      (match_operand:SI 7 "const_int_operand" "")]	  ;; fail model
+	      (match_operand:I48MODE 3 "reg_or_8bit_operand")  ;; expected
+	      (match_operand:I48MODE 4 "add_operand")	  ;; desired
+	      (match_operand:SI 5 "const_int_operand")	  ;; is_weak
+	      (match_operand:SI 6 "const_int_operand")	  ;; succ model
+	      (match_operand:SI 7 "const_int_operand")]	  ;; fail model
 	     UNSPECV_CMPXCHG))])]
   ""
 {
@@ -103,9 +103,9 @@
 	  [(match_dup 2)
 	   (match_operand:DI 3 "reg_or_8bit_operand" "rI")	;; expected
 	   (match_operand:DI 4 "add_operand" "rKL")		;; desired
-	   (match_operand:SI 5 "const_int_operand" "")		;; is_weak
-	   (match_operand:SI 6 "const_int_operand" "")		;; succ model
-	   (match_operand:SI 7 "const_int_operand" "")]		;; fail model
+	   (match_operand:SI 5 "const_int_operand")		;; is_weak
+	   (match_operand:SI 6 "const_int_operand")		;; succ model
+	   (match_operand:SI 7 "const_int_operand")]		;; fail model
 	  UNSPECV_CMPXCHG))]
   ""
   "#"
@@ -118,21 +118,21 @@
   [(set_attr "type" "multi")])
 
 (define_expand "atomic_compare_and_swap<mode>"
-  [(match_operand:DI 0 "register_operand" "")			;; bool out
-   (match_operand:I12MODE 1 "register_operand" "")		;; val out
-   (match_operand:I12MODE 2 "mem_noofs_operand" "")		;; memory
-   (match_operand:I12MODE 3 "register_operand" "")		;; expected
-   (match_operand:I12MODE 4 "add_operand" "")			;; desired
-   (match_operand:SI 5 "const_int_operand" "")			;; is_weak
-   (match_operand:SI 6 "const_int_operand" "")			;; succ model
-   (match_operand:SI 7 "const_int_operand" "")]			;; fail model
+  [(match_operand:DI 0 "register_operand")		;; bool out
+   (match_operand:I12MODE 1 "register_operand")		;; val out
+   (match_operand:I12MODE 2 "mem_noofs_operand")	;; memory
+   (match_operand:I12MODE 3 "register_operand")		;; expected
+   (match_operand:I12MODE 4 "add_operand")		;; desired
+   (match_operand:SI 5 "const_int_operand")		;; is_weak
+   (match_operand:SI 6 "const_int_operand")		;; succ model
+   (match_operand:SI 7 "const_int_operand")]		;; fail model
   ""
 {
   alpha_expand_compare_and_swap_12 (operands);
   DONE;
 })
 
-(define_insn_and_split "atomic_compare_and_swap<mode>_1"
+(define_insn_and_split "@atomic_compare_and_swap<mode>_1"
   [(set (match_operand:DI 0 "register_operand" "=&r")		;; bool out
 	(unspec_volatile:DI [(const_int 0)] UNSPECV_CMPXCHG))
    (set (match_operand:DI 1 "register_operand" "=&r")		;; val out
@@ -144,9 +144,9 @@
 	   (match_operand:DI 3 "reg_or_8bit_operand" "rI")	;; expected
 	   (match_operand:DI 4 "reg_or_0_operand" "rJ")		;; desired
 	   (match_operand:DI 5 "register_operand" "r")		;; align
-	   (match_operand:SI 6 "const_int_operand" "")		;; is_weak
-	   (match_operand:SI 7 "const_int_operand" "")		;; succ model
-	   (match_operand:SI 8 "const_int_operand" "")]		;; fail model
+	   (match_operand:SI 6 "const_int_operand")		;; is_weak
+	   (match_operand:SI 7 "const_int_operand")		;; succ model
+	   (match_operand:SI 8 "const_int_operand")]		;; fail model
 	  UNSPECV_CMPXCHG))
    (clobber (match_scratch:DI 9 "=&r"))]
   ""
@@ -165,7 +165,7 @@
    (set (match_dup 1)
 	(unspec:I48MODE
 	  [(match_operand:I48MODE 2 "add_operand" "rKL")	;; input
-	   (match_operand:SI 3 "const_int_operand" "")]		;; model
+	   (match_operand:SI 3 "const_int_operand")]		;; model
 	  UNSPEC_XCHG))
    (clobber (match_scratch:I48MODE 4 "=&r"))]
   ""
@@ -179,17 +179,17 @@
   [(set_attr "type" "multi")])
 
 (define_expand "atomic_exchange<mode>"
-  [(match_operand:I12MODE 0 "register_operand" "")		;; output
-   (match_operand:I12MODE 1 "mem_noofs_operand" "")		;; memory
-   (match_operand:I12MODE 2 "reg_or_0_operand" "")		;; input
-   (match_operand:SI 3 "const_int_operand" "")]			;; model
+  [(match_operand:I12MODE 0 "register_operand")		;; output
+   (match_operand:I12MODE 1 "mem_noofs_operand")	;; memory
+   (match_operand:I12MODE 2 "reg_or_0_operand")		;; input
+   (match_operand:SI 3 "const_int_operand")]		;; model
   ""
 {
   alpha_expand_atomic_exchange_12 (operands);
   DONE;
 })
 
-(define_insn_and_split "atomic_exchange<mode>_1"
+(define_insn_and_split "@atomic_exchange<mode>_1"
   [(set (match_operand:DI 0 "register_operand" "=&r")		;; output
 	(zero_extend:DI
 	  (match_operand:I12MODE 1 "mem_noofs_operand" "+w")))	;; memory
@@ -197,7 +197,7 @@
 	(unspec:I12MODE
 	  [(match_operand:DI 2 "reg_or_8bit_operand" "rI")	;; input
 	   (match_operand:DI 3 "register_operand" "r")		;; align
-	   (match_operand:SI 4 "const_int_operand" "")]		;; model
+	   (match_operand:SI 4 "const_int_operand")]		;; model
 	  UNSPEC_XCHG))
    (clobber (match_scratch:DI 5 "=&r"))]
   ""
@@ -215,7 +215,7 @@
 	(unspec:I48MODE
 	  [(FETCHOP:I48MODE (match_dup 0)
 	     (match_operand:I48MODE 1 "<fetchop_pred>" "<fetchop_constr>"))
-	   (match_operand:SI 2 "const_int_operand" "")]
+	   (match_operand:SI 2 "const_int_operand")]
 	  UNSPEC_ATOMIC))
    (clobber (match_scratch:I48MODE 3 "=&r"))]
   ""
@@ -236,7 +236,7 @@
 	  [(not:I48MODE
 	     (and:I48MODE (match_dup 0)
 	       (match_operand:I48MODE 1 "register_operand" "r")))
-	   (match_operand:SI 2 "const_int_operand" "")]
+	   (match_operand:SI 2 "const_int_operand")]
 	  UNSPEC_ATOMIC))
    (clobber (match_scratch:I48MODE 3 "=&r"))]
   ""
@@ -258,7 +258,7 @@
 	(unspec:I48MODE
 	  [(FETCHOP:I48MODE (match_dup 1)
 	     (match_operand:I48MODE 2 "<fetchop_pred>" "<fetchop_constr>"))
-	   (match_operand:SI 3 "const_int_operand" "")]
+	   (match_operand:SI 3 "const_int_operand")]
 	  UNSPEC_ATOMIC))
    (clobber (match_scratch:I48MODE 4 "=&r"))]
   ""
@@ -281,7 +281,7 @@
 	  [(not:I48MODE
 	     (and:I48MODE (match_dup 1)
 	       (match_operand:I48MODE 2 "register_operand" "r")))
-	   (match_operand:SI 3 "const_int_operand" "")]
+	   (match_operand:SI 3 "const_int_operand")]
 	  UNSPEC_ATOMIC))
    (clobber (match_scratch:I48MODE 4 "=&r"))]
   ""
@@ -304,7 +304,7 @@
    (set (match_dup 1)
 	(unspec:I48MODE
 	  [(FETCHOP:I48MODE (match_dup 1) (match_dup 2))
-	   (match_operand:SI 3 "const_int_operand" "")]
+	   (match_operand:SI 3 "const_int_operand")]
 	  UNSPEC_ATOMIC))
    (clobber (match_scratch:I48MODE 4 "=&r"))]
   ""
@@ -327,7 +327,7 @@
    (set (match_dup 1)
 	(unspec:I48MODE
 	  [(not:I48MODE (and:I48MODE (match_dup 1) (match_dup 2)))
-	   (match_operand:SI 3 "const_int_operand" "")]
+	   (match_operand:SI 3 "const_int_operand")]
 	  UNSPEC_ATOMIC))
    (clobber (match_scratch:I48MODE 4 "=&r"))]
   ""

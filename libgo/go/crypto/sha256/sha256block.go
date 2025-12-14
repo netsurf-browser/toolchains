@@ -8,6 +8,8 @@
 
 package sha256
 
+import "math/bits"
+
 var _K = []uint32{
 	0x428a2f98,
 	0x71374491,
@@ -75,11 +77,10 @@ var _K = []uint32{
 	0xc67178f2,
 }
 
-func _Block(dig *digest, p []byte) int {
+func blockGeneric(dig *digest, p []byte) {
 	var w [64]uint32
-	n := 0
 	h0, h1, h2, h3, h4, h5, h6, h7 := dig.h[0], dig.h[1], dig.h[2], dig.h[3], dig.h[4], dig.h[5], dig.h[6], dig.h[7]
-	for len(p) >= _Chunk {
+	for len(p) >= chunk {
 		// Can interlace the computation of w with the
 		// rounds below if needed for speed.
 		for i := 0; i < 16; i++ {
@@ -87,19 +88,19 @@ func _Block(dig *digest, p []byte) int {
 			w[i] = uint32(p[j])<<24 | uint32(p[j+1])<<16 | uint32(p[j+2])<<8 | uint32(p[j+3])
 		}
 		for i := 16; i < 64; i++ {
-			t1 := (w[i-2]>>17 | w[i-2]<<(32-17)) ^ (w[i-2]>>19 | w[i-2]<<(32-19)) ^ (w[i-2] >> 10)
-
-			t2 := (w[i-15]>>7 | w[i-15]<<(32-7)) ^ (w[i-15]>>18 | w[i-15]<<(32-18)) ^ (w[i-15] >> 3)
-
+			v1 := w[i-2]
+			t1 := (bits.RotateLeft32(v1, -17)) ^ (bits.RotateLeft32(v1, -19)) ^ (v1 >> 10)
+			v2 := w[i-15]
+			t2 := (bits.RotateLeft32(v2, -7)) ^ (bits.RotateLeft32(v2, -18)) ^ (v2 >> 3)
 			w[i] = t1 + w[i-7] + t2 + w[i-16]
 		}
 
 		a, b, c, d, e, f, g, h := h0, h1, h2, h3, h4, h5, h6, h7
 
 		for i := 0; i < 64; i++ {
-			t1 := h + ((e>>6 | e<<(32-6)) ^ (e>>11 | e<<(32-11)) ^ (e>>25 | e<<(32-25))) + ((e & f) ^ (^e & g)) + _K[i] + w[i]
+			t1 := h + ((bits.RotateLeft32(e, -6)) ^ (bits.RotateLeft32(e, -11)) ^ (bits.RotateLeft32(e, -25))) + ((e & f) ^ (^e & g)) + _K[i] + w[i]
 
-			t2 := ((a>>2 | a<<(32-2)) ^ (a>>13 | a<<(32-13)) ^ (a>>22 | a<<(32-22))) + ((a & b) ^ (a & c) ^ (b & c))
+			t2 := ((bits.RotateLeft32(a, -2)) ^ (bits.RotateLeft32(a, -13)) ^ (bits.RotateLeft32(a, -22))) + ((a & b) ^ (a & c) ^ (b & c))
 
 			h = g
 			g = f
@@ -120,10 +121,8 @@ func _Block(dig *digest, p []byte) int {
 		h6 += g
 		h7 += h
 
-		p = p[_Chunk:]
-		n += _Chunk
+		p = p[chunk:]
 	}
 
 	dig.h[0], dig.h[1], dig.h[2], dig.h[3], dig.h[4], dig.h[5], dig.h[6], dig.h[7] = h0, h1, h2, h3, h4, h5, h6, h7
-	return n
 }

@@ -1,6 +1,6 @@
 ## Makefile for the doc subdirectory of the GNU C++ Standard library.
 ##
-## Copyright (C) 2008, 2009, 2010, 2011 Free Software Foundation, Inc.
+## Copyright (C) 2008-2020 Free Software Foundation, Inc.
 ##
 ## This file is part of the libstdc++ version 3 distribution.
 ## Process this file with automake to produce Makefile.in.
@@ -206,7 +206,7 @@ doc-install-epub: doc-epub
 # Assumes doxygen, graphviz (with dot), pdflatex installed
 doxygen_script=${top_srcdir}/scripts/run_doxygen
 doxygen_outdir = ${glibcxx_builddir}/doc/doxygen
-api_xml = ${doxygen_outdir}/xml/libstdc++-api-single.xml
+api_xml = ${doxygen_outdir}/xml/libstdc++-api.xml
 doxygen_pdf = ${doxygen_outdir}/latex/refman.pdf
 api_pdf = ${doxygen_outdir}/pdf/libstdc++-api.pdf
 
@@ -257,6 +257,7 @@ stamp-latex-doxygen: ${doxygen_outdir}/latex
 # include asking a wizard to enlarge capacity. If this is the case,
 # find texmf.cnf and add a zero for pool_size, string_vacancies,
 # max_strings, and pool_free values.
+# Errors like "File `foo.sty' not found" mean a TeX package is missing.
 stamp-pdf-doxygen: stamp-latex-doxygen ${doxygen_outdir}/pdf
 	-(cd ${doxygen_outdir}/latex && $(MAKE) -i pdf;)
 	echo "Generating doxygen pdf file...";
@@ -265,6 +266,7 @@ stamp-pdf-doxygen: stamp-latex-doxygen ${doxygen_outdir}/pdf
 	  echo ":: PDF file is ${api_pdf}"; \
 	else \
 	  echo "... error"; \
+	  grep -F 'LaTeX Error' ${doxygen_outdir}/latex/refman.log; \
 	  exit 12; \
 	fi
 	$(STAMP) stamp-pdf-doxygen
@@ -334,11 +336,13 @@ xml_sources_manual = \
 	${xml_dir}/manual/policy_data_structures.xml \
 	${xml_dir}/manual/policy_data_structures_biblio.xml \
 	${xml_dir}/manual/prerequisites.xml \
-	${xml_dir}/manual/profile_mode.xml \
 	${xml_dir}/manual/shared_ptr.xml \
 	${xml_dir}/manual/spine.xml \
 	${xml_dir}/manual/status_cxx1998.xml \
 	${xml_dir}/manual/status_cxx2011.xml \
+	${xml_dir}/manual/status_cxx2014.xml \
+	${xml_dir}/manual/status_cxx2017.xml \
+	${xml_dir}/manual/status_cxx2020.xml \
 	${xml_dir}/manual/status_cxxtr1.xml \
 	${xml_dir}/manual/status_cxxtr24733.xml \
 	${xml_dir}/manual/strings.xml \
@@ -447,12 +451,6 @@ xml_image_generated = \
 
 xml_images = ${xml_image_basic} ${xml_image_generated}
 
-xml_extradir = ${glibcxx_srcdir}/doc/html/ext
-xml_extra = \
-	${xml_extradir}/lwg-active.html \
-	${xml_extradir}/lwg-closed.html \
-	${xml_extradir}/lwg-defects.html
-
 xml_noinst = \
 	${xml_dir}/book.txml \
 	${xml_dir}/chapter.txml \
@@ -462,7 +460,7 @@ xml_noinst = \
 
 XSLTPROC       = xsltproc
 XSLT_FLAGS = --nonet --xinclude
-XSLT_PARAM = --param toc.section.depth 4
+XSLT_PARAM = --param toc.section.depth 4 --param generate.consistent.ids 1
 #XSL_STYLE_DIR = /usr/share/xml/docbook/stylesheet/docbook-xsl-ns
 #XSL_STYLE_DIR = /usr/share/sgml/docbook/xsl-ns-stylesheets
 XSL_FO_STYLE = $(XSL_STYLE_DIR)/fo/docbook.xsl
@@ -480,7 +478,6 @@ ${docbook_outdir}/fo:
 
 ${docbook_outdir}/html:
 	mkdir -p ${docbook_outdir}/html
-	mkdir -p ${docbook_outdir}/html/ext
 	mkdir -p ${docbook_outdir}/html/images
 	mkdir -p ${docbook_outdir}/html/manual
 
@@ -500,8 +497,8 @@ ${docbook_outdir}/xml:
 # XML, all one page
 # Some info on canonicalization
 # http://www.mail-archive.com/help-texinfo@gnu.org/msg00864.html
-manual_xml = ${docbook_outdir}/xml/libstdc++-manual-single.xml
-set_xml = ${docbook_outdir}/xml/libstdc++-set-single.xml
+manual_xml = ${docbook_outdir}/xml/libstdc++-manual.xml
+set_xml = ${docbook_outdir}/xml/libstdc++-set.xml
 stamp-xml-single-docbook: $(xml_sources) ${docbook_outdir}/xml
 	@echo "Generating XML single..."
 	$(XMLLINT) $(XMLLINT_FLAGS) \
@@ -535,11 +532,7 @@ stamp-html-docbook-images: stamp-html-docbook $(xml_images)
 	$(INSTALL_DATA)	$(xml_images) ${docbook_outdir}/html/images
 	$(STAMP) stamp-html-docbook-images
 
-stamp-html-docbook-lwg: stamp-html-docbook $(xml_extra)
-	$(INSTALL_DATA)	$(xml_extra) ${docbook_outdir}/html/ext
-	$(STAMP) stamp-html-docbook-lwg
-
-stamp-html-docbook-data: stamp-html-docbook-images stamp-html-docbook-lwg
+stamp-html-docbook-data: stamp-html-docbook-images
 	$(STAMP) stamp-html-docbook-data
 
 # HTML, "chunked" into index plus chapters as separate pages
@@ -552,6 +545,12 @@ stamp-html-docbook: $(xml_sources) ${docbook_outdir}/html
 	$(STAMP) stamp-html-docbook
 
 doc-html-docbook: stamp-html-docbook-data
+
+# Generate the HTML pages and copy them back to the source tree.
+doc-html-docbook-regenerate: doc-html-docbook
+	$(INSTALL_DATA) ${docbook_outdir}/html/*.html ${top_srcdir}/doc/html
+	$(INSTALL_DATA) ${docbook_outdir}/html/images/* ${top_srcdir}/doc/html/images
+	$(INSTALL_DATA) ${docbook_outdir}/html/manual/*.html ${top_srcdir}/doc/html/manual
 
 # HTML, all one page
 # NB: Have to generate customization XSL for UTF-8 output.

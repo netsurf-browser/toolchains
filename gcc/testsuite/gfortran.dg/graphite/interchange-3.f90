@@ -23,6 +23,3 @@ Program FOO
 366  format(/, ' PC = ',E12.4,/,' UC = ',E12.4,/,' VC = ',E12.4,/)
 
 end Program FOO
-
-! { dg-final { scan-tree-dump-times "will be interchanged" 1 "graphite" } }
-! { dg-final { cleanup-tree-dump "graphite" } }

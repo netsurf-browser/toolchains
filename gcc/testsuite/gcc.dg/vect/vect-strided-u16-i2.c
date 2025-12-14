@@ -46,8 +46,7 @@ int main (void)
     { 
       arr[i].a = i;
       arr[i].b = i * 2;
-      if (arr[i].a == 178)
-         abort(); 
+      asm volatile ("" ::: "memory");
     } 
 
   main1 (arr);
@@ -56,5 +55,4 @@ int main (void)
 }
 
 /* { dg-final { scan-tree-dump-times "vectorized 1 loops" 1 "vect"  { target vect_strided2 } } } */
-/* { dg-final { cleanup-tree-dump "vect" } } */
   

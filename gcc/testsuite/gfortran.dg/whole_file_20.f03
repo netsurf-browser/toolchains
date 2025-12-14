@@ -1,5 +1,5 @@
 ! { dg-do compile }
-! { dg-options "-fwhole-file -fcoarray=single" }
+! { dg-options "-fcoarray=single" }
 !
 ! Procedures with dummy arguments that are coarrays or polymorphic
 ! must have an explicit interface in the calling routine.
@@ -17,8 +17,8 @@ PROGRAM main
 
   INTEGER :: coarr[*]
 
-  CALL coarray(coarr)         ! { dg-error " must have an explicit interface" }
-  CALL polymorph(tt)          ! { dg-error " must have an explicit interface" }
+  CALL coarray(coarr)         ! { dg-error "Explicit interface required" }
+  CALL polymorph(tt)          ! { dg-error "Explicit interface required" }
 END PROGRAM
 
 SUBROUTINE coarray(a)
@@ -29,5 +29,3 @@ SUBROUTINE polymorph(b)
   USE classtype
   CLASS(t) :: b
 END SUBROUTINE
-
-! { dg-final { cleanup-modules "classtype" } }

@@ -1,7 +1,6 @@
 // -*- C++ -*-
 
-// Copyright (C) 2004, 2005, 2006, 2007, 2008, 2009, 2010
-// Free Software Foundation, Inc.
+// Copyright (C) 2004-2020 Free Software Foundation, Inc.
 
 // This library is free software; you can redistribute it and/or
 // modify it under the terms of the GNU General Public License as
@@ -23,7 +22,13 @@
 #include <stdexcept>
 #include <vector>
 #include <locale>
-#include <tr1/unordered_map>
+#if __cplusplus >= 201103L
+# include <unordered_map>
+namespace unord = std;
+#else
+# include <tr1/unordered_map>
+namespace unord = std::tr1;
+#endif
 #include <cxxabi.h>
 
 // Encapsulates symbol characteristics.
@@ -32,12 +37,12 @@ struct symbol
   enum category { function, object, tls, uncategorized };
   enum designation { existing, added, subtracted, undesignated };
   enum version { none, compatible, incompatible, unversioned };
-  enum compatibility 
-    { 
-      compat_type = 1, 
-      compat_name = 2, 
-      compat_size = 4, 
-      compat_version = 8 
+  enum compatibility
+    {
+      compat_type = 1,
+      compat_name = 2,
+      compat_size = 4,
+      compat_version = 8
     };
 
   category 	type;
@@ -49,13 +54,13 @@ struct symbol
   version	version_status;
   designation	status;
 
-  symbol() 
-  : type(uncategorized), size(0), version_status(unversioned), 
+  symbol()
+  : type(uncategorized), size(0), version_status(unversioned),
     status(undesignated) { }
 
-  symbol(const symbol& other) 
-  : type(other.type), name(other.name), demangled_name(other.demangled_name), 
-    size(other.size), version_name(other.version_name), 
+  symbol(const symbol& other)
+  : type(other.type), name(other.name), demangled_name(other.demangled_name),
+    size(other.size), version_name(other.version_name),
     version_status(other.version_status), status(other.status) { }
 
   void
@@ -66,14 +71,14 @@ struct symbol
 };
 
 // Map type between symbol names and full symbol info.
-typedef std::tr1::unordered_map<std::string, symbol> 	symbols;
+typedef unord::unordered_map<std::string, symbol> 	symbols;
 
 
 // Check.
 bool
 check_version(symbol& test, bool added = false);
 
-bool 
+bool
 check_compatible(symbol& lhs, symbol& rhs, bool verbose = false);
 
 
@@ -95,5 +100,5 @@ compare_symbols(const char* baseline_file, const char* test_file, bool verb);
 symbols
 create_symbols(const char* file);
 
-const char*
+std::string
 demangle(const std::string& mangled);

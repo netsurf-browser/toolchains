@@ -35,7 +35,7 @@ import (
 const testdata = "testdata"
 
 // getFile assumes that each filename occurs at most once
-func getFile(filename string) (file *token.File) {
+func getFile(fset *token.FileSet, filename string) (file *token.File) {
 	fset.Iterate(func(f *token.File) bool {
 		if f.Name() == filename {
 			if file != nil {
@@ -48,8 +48,8 @@ func getFile(filename string) (file *token.File) {
 	return file
 }
 
-func getPos(filename string, offset int) token.Pos {
-	if f := getFile(filename); f != nil {
+func getPos(fset *token.FileSet, filename string, offset int) token.Pos {
+	if f := getFile(fset, filename); f != nil {
 		return f.Pos(offset)
 	}
 	return token.NoPos
@@ -57,21 +57,25 @@ func getPos(filename string, offset int) token.Pos {
 
 // ERROR comments must be of the form /* ERROR "rx" */ and rx is
 // a regular expression that matches the expected error message.
+// The special form /* ERROR HERE "rx" */ must be used for error
+// messages that appear immediately after a token, rather than at
+// a token's position.
 //
-var errRx = regexp.MustCompile(`^/\* *ERROR *"([^"]*)" *\*/$`)
+var errRx = regexp.MustCompile(`^/\* *ERROR *(HERE)? *"([^"]*)" *\*/$`)
 
 // expectedErrors collects the regular expressions of ERROR comments found
 // in files and returns them as a map of error positions to error messages.
 //
-func expectedErrors(t *testing.T, filename string, src []byte) map[token.Pos]string {
+func expectedErrors(fset *token.FileSet, filename string, src []byte) map[token.Pos]string {
 	errors := make(map[token.Pos]string)
 
 	var s scanner.Scanner
 	// file was parsed already - do not add it again to the file
 	// set otherwise the position information returned here will
 	// not match the position information collected by the parser
-	s.Init(getFile(filename), src, nil, scanner.ScanComments)
+	s.Init(getFile(fset, filename), src, nil, scanner.ScanComments)
 	var prev token.Pos // position of last non-comment, non-semicolon token
+	var here token.Pos // position immediately after the token at position prev
 
 	for {
 		pos, tok, lit := s.Scan()
@@ -80,25 +84,40 @@ func expectedErrors(t *testing.T, filename string, src []byte) map[token.Pos]str
 			return errors
 		case token.COMMENT:
 			s := errRx.FindStringSubmatch(lit)
-			if len(s) == 2 {
-				errors[prev] = string(s[1])
+			if len(s) == 3 {
+				pos := prev
+				if s[1] == "HERE" {
+					pos = here
+				}
+				errors[pos] = string(s[2])
 			}
+		case token.SEMICOLON:
+			// don't use the position of auto-inserted (invisible) semicolons
+			if lit != ";" {
+				break
+			}
+			fallthrough
 		default:
 			prev = pos
+			var l int // token length
+			if tok.IsLiteral() {
+				l = len(lit)
+			} else {
+				l = len(tok.String())
+			}
+			here = prev + token.Pos(l)
 		}
 	}
-
-	panic("unreachable")
 }
 
 // compareErrors compares the map of expected error messages with the list
 // of found errors and reports discrepancies.
 //
-func compareErrors(t *testing.T, expected map[token.Pos]string, found scanner.ErrorList) {
+func compareErrors(t *testing.T, fset *token.FileSet, expected map[token.Pos]string, found scanner.ErrorList) {
 	for _, error := range found {
 		// error.Pos is a token.Position, but we want
 		// a token.Pos so we can do a map lookup
-		pos := getPos(error.Pos.Filename, error.Pos.Offset)
+		pos := getPos(fset, error.Pos.Filename, error.Pos.Offset)
 		if msg, found := expected[pos]; found {
 			// we expect a message at pos; check if it matches
 			rx, err := regexp.Compile(msg)
@@ -137,19 +156,21 @@ func checkErrors(t *testing.T, filename string, input interface{}) {
 		return
 	}
 
-	_, err = ParseFile(fset, filename, src, DeclarationErrors)
+	fset := token.NewFileSet()
+	_, err = ParseFile(fset, filename, src, DeclarationErrors|AllErrors)
 	found, ok := err.(scanner.ErrorList)
 	if err != nil && !ok {
 		t.Error(err)
 		return
 	}
+	found.RemoveMultiples()
 
 	// we are expecting the following errors
 	// (collect these after parsing a file so that it is found in the file set)
-	expected := expectedErrors(t, filename, src)
+	expected := expectedErrors(fset, filename, src)
 
 	// verify errors returned by the parser
-	compareErrors(t, expected, found)
+	compareErrors(t, fset, expected, found)
 }
 
 func TestErrors(t *testing.T) {

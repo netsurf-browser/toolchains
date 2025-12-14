@@ -6,7 +6,7 @@
 --                                                                          --
 --                                 B o d y                                  --
 --                                                                          --
---          Copyright (C) 1992-2011, Free Software Foundation, Inc.         --
+--          Copyright (C) 1992-2019, Free Software Foundation, Inc.         --
 --                                                                          --
 -- GNAT is free software;  you can  redistribute it  and/or modify it under --
 -- terms of the  GNU General Public License as published  by the Free Soft- --
@@ -38,28 +38,33 @@ package body Ch7 is
    --  renaming declaration or generic instantiation starting with PACKAGE
 
    --  PACKAGE_DECLARATION ::=
-   --    PACKAGE_SPECIFICATION
-   --      [ASPECT_SPECIFICATIONS];
+   --    PACKAGE_SPECIFICATION;
 
    --  PACKAGE_SPECIFICATION ::=
-   --    package DEFINING_PROGRAM_UNIT_NAME is
+   --    package DEFINING_PROGRAM_UNIT_NAME
+   --      [ASPECT_SPECIFICATIONS]
+   --    is
    --      {BASIC_DECLARATIVE_ITEM}
    --    [private
    --      {BASIC_DECLARATIVE_ITEM}]
    --    end [[PARENT_UNIT_NAME .] IDENTIFIER]
 
    --  PACKAGE_BODY ::=
-   --    package body DEFINING_PROGRAM_UNIT_NAME is
+   --    package body DEFINING_PROGRAM_UNIT_NAME
+   --      [ASPECT_SPECIFICATIONS]
+   --    is
    --      DECLARATIVE_PART
    --    [begin
    --      HANDLED_SEQUENCE_OF_STATEMENTS]
    --    end [[PARENT_UNIT_NAME .] IDENTIFIER]
 
    --  PACKAGE_RENAMING_DECLARATION ::=
-   --    package DEFINING_IDENTIFIER renames package_NAME;
+   --    package DEFINING_IDENTIFIER renames package_NAME
+   --      [ASPECT_SPECIFICATIONS];
 
    --  PACKAGE_BODY_STUB ::=
-   --    package body DEFINING_IDENTIFIER is separate;
+   --    package body DEFINING_IDENTIFIER is separate
+   --      [ASPECT_SPECIFICATIONS];
 
    --  PACKAGE_INSTANTIATION ::=
    --    package DEFINING_PROGRAM_UNIT_NAME is
@@ -116,9 +121,9 @@ package body Ch7 is
 
    begin
       Push_Scope_Stack;
-      Scope.Table (Scope.Last).Etyp := E_Name;
-      Scope.Table (Scope.Last).Ecol := Start_Column;
-      Scope.Table (Scope.Last).Lreq := False;
+      Scopes (Scope.Last).Etyp := E_Name;
+      Scopes (Scope.Last).Ecol := Start_Column;
+      Scopes (Scope.Last).Lreq := False;
 
       Package_Sloc := Token_Ptr;
       Scan; -- past PACKAGE
@@ -138,8 +143,16 @@ package body Ch7 is
          end if;
 
          T_Body;
+         Scopes (Scope.Last).Sloc := Token_Ptr;
          Name_Node := P_Defining_Program_Unit_Name;
-         Scope.Table (Scope.Last).Labl := Name_Node;
+         Scopes (Scope.Last).Labl := Name_Node;
+         Current_Node := Name_Node;
+
+         if Aspect_Specifications_Present then
+            Aspect_Sloc := Token_Ptr;
+            P_Aspect_Specifications (Dummy_Node, Semicolon => False);
+         end if;
+
          TF_Is;
 
          if Separate_Present then
@@ -148,15 +161,29 @@ package body Ch7 is
             end if;
 
             Scan; -- past SEPARATE
-            TF_Semicolon;
-            Pop_Scope_Stack;
 
             Package_Node := New_Node (N_Package_Body_Stub, Package_Sloc);
             Set_Defining_Identifier (Package_Node, Name_Node);
 
+            if Has_Aspects (Dummy_Node) then
+               Error_Msg
+                 ("aspect specifications must come after SEPARATE",
+                  Aspect_Sloc);
+            end if;
+
+            P_Aspect_Specifications (Package_Node, Semicolon => False);
+            TF_Semicolon;
+            Pop_Scope_Stack;
+
          else
             Package_Node := New_Node (N_Package_Body, Package_Sloc);
             Set_Defining_Unit_Name (Package_Node, Name_Node);
+
+            --  Move the aspect specifications to the body node
+
+            if Has_Aspects (Dummy_Node) then
+               Move_Aspects (From => Dummy_Node, To => Package_Node);
+            end if;
 
             --  In SPARK, a HIDE directive can be placed at the beginning of a
             --  package implementation, thus hiding the package body from SPARK
@@ -182,8 +209,10 @@ package body Ch7 is
       --  Cases other than Package_Body
 
       else
+         Scopes (Scope.Last).Sloc := Token_Ptr;
          Name_Node := P_Defining_Program_Unit_Name;
-         Scope.Table (Scope.Last).Labl := Name_Node;
+         Scopes (Scope.Last).Labl := Name_Node;
+         Current_Node := Name_Node;
 
          --  Case of renaming declaration
 
@@ -202,6 +231,7 @@ package body Ch7 is
             Set_Name (Package_Node, P_Qualified_Simple_Name);
 
             No_Constraint;
+            P_Aspect_Specifications (Package_Node, Semicolon => False);
             TF_Semicolon;
             Pop_Scope_Stack;
 
@@ -242,7 +272,7 @@ package body Ch7 is
                if Aspect_Sloc /= No_Location
                  and then not Aspect_Specifications_Present
                then
-                  Error_Msg_SC ("\info: aspect specifications belong here");
+                  Error_Msg_SC ("info: aspect specifications belong here??");
                   Move_Aspects (From => Dummy_Node, To => Package_Node);
                end if;
 
@@ -260,7 +290,7 @@ package body Ch7 is
                  (Specification_Node, P_Basic_Declarative_Items);
 
                if Token = Tok_Private then
-                  Error_Msg_Col := Scope.Table (Scope.Last).Ecol;
+                  Error_Msg_Col := Scopes (Scope.Last).Ecol;
 
                   if RM_Column_Check then
                      if Token_Is_At_Start_Of_Line

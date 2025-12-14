@@ -1,6 +1,5 @@
 /* Definitions for AT&T assembler syntax for the Intel 80386.
-   Copyright (C) 1988, 1996, 2000, 2001, 2002, 2007, 2009, 2010
-   Free Software Foundation, Inc.
+   Copyright (C) 1988-2020 Free Software Foundation, Inc.
 
 This file is part of GCC.
 
@@ -58,7 +57,7 @@ do								\
    to a multiple of 2**LOG bytes.  */
 
 #define ASM_OUTPUT_ALIGN(FILE,LOG)	\
-    if ((LOG)!=0) fprintf ((FILE), "\t.align %d\n", 1<<(LOG))
+    if ((LOG) != 0) fprintf ((FILE), "\t.align %d\n", 1 << (LOG))
 
 /* This is how to output an assembler line
    that says to advance the location counter by SIZE bytes.  */

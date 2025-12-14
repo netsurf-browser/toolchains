@@ -1,4 +1,4 @@
-/* Copyright (C) 2007, 2008, 2009, 2010 Free Software Foundation, Inc.
+/* Copyright (C) 2007-2020 Free Software Foundation, Inc.
 
    This file is part of GCC.
 
@@ -28,13 +28,15 @@
 #ifndef _XOPMMINTRIN_H_INCLUDED
 #define _XOPMMINTRIN_H_INCLUDED
 
-#ifndef __XOP__
-# error "XOP instruction set not enabled"
-#else
-
 #include <fma4intrin.h>
 
-/* Integer multiply/add intructions. */
+#ifndef __XOP__
+#pragma GCC push_options
+#pragma GCC target("xop")
+#define __DISABLE_XOP__
+#endif /* __XOP__ */
+
+/* Integer multiply/add instructions. */
 extern __inline __m128i __attribute__((__gnu_inline__, __always_inline__, __artificial__))
 _mm_maccs_epi16(__m128i __A, __m128i __B, __m128i __C)
 {
@@ -328,7 +330,7 @@ _mm_sha_epi64(__m128i __A,  __m128i __B)
 }
 
 /* Compare and Predicate Generation
-   pcom (integer, unsinged bytes) */
+   pcom (integer, unsigned bytes) */
 
 extern __inline __m128i __attribute__((__gnu_inline__, __always_inline__, __artificial__))
 _mm_comlt_epu8(__m128i __A, __m128i __B)
@@ -378,7 +380,7 @@ _mm_comtrue_epu8(__m128i __A, __m128i __B)
   return (__m128i) __builtin_ia32_vpcomtrueub ((__v16qi)__A, (__v16qi)__B);
 }
 
-/*pcom (integer, unsinged words) */
+/*pcom (integer, unsigned words) */
 
 extern __inline __m128i __attribute__((__gnu_inline__, __always_inline__, __artificial__))
 _mm_comlt_epu16(__m128i __A, __m128i __B)
@@ -428,7 +430,7 @@ _mm_comtrue_epu16(__m128i __A, __m128i __B)
   return (__m128i) __builtin_ia32_vpcomtrueuw ((__v8hi)__A, (__v8hi)__B);
 }
 
-/*pcom (integer, unsinged double words) */
+/*pcom (integer, unsigned double words) */
 
 extern __inline __m128i __attribute__((__gnu_inline__, __always_inline__, __artificial__))
 _mm_comlt_epu32(__m128i __A, __m128i __B)
@@ -478,7 +480,7 @@ _mm_comtrue_epu32(__m128i __A, __m128i __B)
   return (__m128i) __builtin_ia32_vpcomtrueud ((__v4si)__A, (__v4si)__B);
 }
 
-/*pcom (integer, unsinged quad words) */
+/*pcom (integer, unsigned quad words) */
 
 extern __inline __m128i __attribute__((__gnu_inline__, __always_inline__, __artificial__))
 _mm_comlt_epu64(__m128i __A, __m128i __B)
@@ -812,28 +814,31 @@ _mm256_permute2_ps (__m256 __X, __m256 __Y, __m256i __C, const int __I)
 #define _mm_permute2_pd(X, Y, C, I)					\
   ((__m128d) __builtin_ia32_vpermil2pd ((__v2df)(__m128d)(X),		\
 					(__v2df)(__m128d)(Y),		\
-					(__v2di)(__m128d)(C),		\
+					(__v2di)(__m128i)(C),		\
 					(int)(I)))
 
 #define _mm256_permute2_pd(X, Y, C, I)					\
   ((__m256d) __builtin_ia32_vpermil2pd256 ((__v4df)(__m256d)(X),	\
 					   (__v4df)(__m256d)(Y),	\
-					   (__v4di)(__m256d)(C),	\
+					   (__v4di)(__m256i)(C),	\
 					   (int)(I)))
 
 #define _mm_permute2_ps(X, Y, C, I)					\
   ((__m128) __builtin_ia32_vpermil2ps ((__v4sf)(__m128)(X),		\
 				       (__v4sf)(__m128)(Y),		\
-				       (__v4si)(__m128)(C),		\
+				       (__v4si)(__m128i)(C),		\
 				       (int)(I)))
 
 #define _mm256_permute2_ps(X, Y, C, I)					\
   ((__m256) __builtin_ia32_vpermil2ps256 ((__v8sf)(__m256)(X),		\
 					  (__v8sf)(__m256)(Y),  	\
-					  (__v8si)(__m256)(C),		\
+					  (__v8si)(__m256i)(C),		\
  					  (int)(I)))
 #endif /* __OPTIMIZE__ */
 
-#endif /* __XOP__ */
+#ifdef __DISABLE_XOP__
+#undef __DISABLE_XOP__
+#pragma GCC pop_options
+#endif /* __DISABLE_XOP__ */
 
 #endif /* _XOPMMINTRIN_H_INCLUDED */

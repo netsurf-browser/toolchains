@@ -6,16 +6,18 @@
 
 #include <stddef.h>
 
-#include "go-string.h"
-#include "go-type.h"
+#include "runtime.h"
 
 /* This file provides the type descriptor for the unsafe.Pointer type.
    The unsafe package is defined by the compiler itself, which means
    that there is no package to compile to define the type
    descriptor.  */
 
-extern const struct __go_type_descriptor unsafe_Pointer
-  asm ("__go_tdn_unsafe.Pointer");
+extern const struct _type unsafe_Pointer
+  __asm__ (GOSYM_PREFIX "unsafe.Pointer..d");
+
+extern const byte unsafe_Pointer_gc[]
+  __asm__ (GOSYM_PREFIX "unsafe.Pointer..g");
 
 /* Used to determine the field alignment.  */
 struct field_align
@@ -26,33 +28,42 @@ struct field_align
 
 /* The reflection string.  */
 #define REFLECTION "unsafe.Pointer"
-static const struct __go_string reflection_string =
+static const String reflection_string =
 {
-  (const unsigned char *) REFLECTION,
+  (const byte *) REFLECTION,
   sizeof REFLECTION - 1
 };
 
-const struct __go_type_descriptor unsafe_Pointer =
+const byte unsafe_Pointer_gc[] = { 1 };
+
+extern const FuncVal runtime_pointerequal_descriptor
+  __asm__ (GOSYM_PREFIX "runtime.pointerequal..f");
+
+const struct _type unsafe_Pointer =
 {
-  /* __code */
-  GO_UNSAFE_POINTER,
-  /* __align */
-  __alignof (void *),
-  /* __field_align */
-  offsetof (struct field_align, p) - 1,
-  /* __size */
+  /* size */
   sizeof (void *),
-  /* __hash */
+  /* ptrdata */
+  sizeof (void *),
+  /* hash */
   78501163U,
-  /* __hashfn */
-  __go_type_hash_identity,
-  /* __equalfn */
-  __go_type_equal_identity,
-  /* __reflection */
+  /* tflag */
+  tflagRegularMemory,
+  /* align */
+  __alignof (void *),
+  /* fieldAlign */
+  offsetof (struct field_align, p) - 1,
+  /* kind */
+  kindUnsafePointer | kindDirectIface,
+  /* equal */
+  &runtime_pointerequal_descriptor,
+  /* gcdata */
+  unsafe_Pointer_gc,
+  /* _string */
   &reflection_string,
-  /* __uncommon */
+  /* uncommontype */
   NULL,
-  /* __pointer_to_this */
+  /* ptrToThis */
   NULL
 };
 
@@ -60,42 +71,51 @@ const struct __go_type_descriptor unsafe_Pointer =
    since any package which refers to that type descriptor will expect
    it to be defined elsewhere.  */
 
-extern const struct __go_ptr_type pointer_unsafe_Pointer
-  asm ("__go_td_pN14_unsafe.Pointer");
+extern const struct ptrtype pointer_unsafe_Pointer
+  __asm__ (GOSYM_PREFIX "type...1unsafe.Pointer");
 
 /* The reflection string.  */
 #define PREFLECTION "*unsafe.Pointer"
-static const struct __go_string preflection_string =
+static const String preflection_string =
 {
-  (const unsigned char *) PREFLECTION,
+  (const byte *) PREFLECTION,
   sizeof PREFLECTION - 1,
 };
 
-const struct __go_ptr_type pointer_unsafe_Pointer =
+extern const byte pointer_unsafe_Pointer_gc[]
+  __asm__ (GOSYM_PREFIX "type...1unsafe.Pointer..g");
+
+const byte pointer_unsafe_Pointer_gc[] = { 1 };
+
+const struct ptrtype pointer_unsafe_Pointer =
 {
-  /* __common */
+  /* type */
   {
-    /* __code */
-    GO_PTR,
-    /* __align */
-    __alignof (void *),
-    /* __field_align */
-    offsetof (struct field_align, p) - 1,
-    /* __size */
+    /* size */
     sizeof (void *),
-    /* __hash */
+    /* ptrdata */
+    sizeof (void *),
+    /* hash */
     1256018616U,
-    /* __hashfn */
-    __go_type_hash_identity,
-    /* __equalfn */
-    __go_type_equal_identity,
-    /* __reflection */
+    /* tflag */
+    tflagRegularMemory,
+    /* align */
+    __alignof (void *),
+    /* fieldAlign */
+    offsetof (struct field_align, p) - 1,
+    /* kind */
+    kindPtr | kindDirectIface,
+    /* equalfn */
+    &runtime_pointerequal_descriptor,
+    /* gcdata */
+    pointer_unsafe_Pointer_gc,
+    /* _string */
     &preflection_string,
-    /* __uncommon */
+    /* uncommontype */
     NULL,
-    /* __pointer_to_this */
+    /* ptrToThis */
     NULL
   },
-  /* __element_type */
+  /* elem */
   &unsafe_Pointer
 };

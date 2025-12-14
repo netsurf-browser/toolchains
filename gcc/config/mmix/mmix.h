@@ -1,6 +1,5 @@
 /* Definitions of target machine for GNU compiler, for MMIX.
-   Copyright (C) 2000, 2001, 2002, 2004, 2005, 2007, 2008, 2009, 2010, 2011
-   Free Software Foundation, Inc.
+   Copyright (C) 2000-2020 Free Software Foundation, Inc.
    Contributed by Hans-Peter Nilsson (hp@bitrange.com)
 
 This file is part of GCC.
@@ -71,12 +70,6 @@ along with GCC; see the file COPYING3.  If not see
 /* This chosen as "a call-clobbered hard register that is otherwise
    untouched by the epilogue".  */
 #define MMIX_EH_RETURN_STACKADJ_REGNUM MMIX_STATIC_CHAIN_REGNUM
-
-#ifdef REG_OK_STRICT
-# define MMIX_REG_OK_STRICT 1
-#else
-# define MMIX_REG_OK_STRICT 0
-#endif
 
 #define MMIX_FUNCTION_ARG_SIZE(MODE, TYPE) \
  ((MODE) != BLKmode ? GET_MODE_SIZE (MODE) : int_size_in_bytes (TYPE))
@@ -171,11 +164,8 @@ struct GTY(()) machine_function
 /* Copied from elfos.h.  */
 #define MAX_OFILE_ALIGNMENT (32768 * 8)
 
-#define DATA_ALIGNMENT(TYPE, BASIC_ALIGN) \
+#define DATA_ABI_ALIGNMENT(TYPE, BASIC_ALIGN) \
  mmix_data_alignment (TYPE, BASIC_ALIGN)
-
-#define CONSTANT_ALIGNMENT(CONSTANT, BASIC_ALIGN) \
- mmix_constant_alignment (CONSTANT, BASIC_ALIGN)
 
 #define LOCAL_ALIGNMENT(TYPE, BASIC_ALIGN) \
  mmix_local_alignment (TYPE, BASIC_ALIGN)
@@ -387,20 +377,6 @@ struct GTY(()) machine_function
 /* The default one.  */
 #define REG_ALLOC_ORDER MMIX_MMIXWARE_ABI_REG_ALLOC_ORDER
 
-/* Node: Values in Registers */
-
-#define HARD_REGNO_NREGS(REGNO, MODE)            	\
-   ((GET_MODE_SIZE (MODE) + UNITS_PER_WORD - 1)  	\
-    / UNITS_PER_WORD)
-
-#define HARD_REGNO_MODE_OK(REGNO, MODE) 1
-
-/* Note that no register can really be accessed in single-float mode, so
-   we *can* say 1 here.  FIXME:  Will TRT happen for single-float, or do
-   we have to punt to libgcc1.asm?  */
-#define MODES_TIEABLE_P(MODE1, MODE2) 1
-
-
 /* Node: Leaf Functions */
 /* (empty) */
 
@@ -439,11 +415,6 @@ enum reg_class
 
 #define INDEX_REG_CLASS GENERAL_REGS
 
-#define REG_CLASS_FROM_LETTER(CHAR)		\
- ((CHAR) == 'x' ? SYSTEM_REGS			\
-  : (CHAR) == 'y' ? REMAINDER_REG		\
-  : (CHAR) == 'z' ? HIMULT_REG : NO_REGS)
-
 #define REGNO_OK_FOR_BASE_P(REGNO)				\
  ((REGNO) <= MMIX_LAST_GENERAL_REGISTER				\
   || (REGNO) == MMIX_ARG_POINTER_REGNUM				\
@@ -458,26 +429,13 @@ enum reg_class
 #define SECONDARY_OUTPUT_RELOAD_CLASS(CLASS, MODE, X) \
  mmix_secondary_reload_class (CLASS, MODE, X, 0)
 
-#define CLASS_MAX_NREGS(CLASS, MODE) HARD_REGNO_NREGS (CLASS, MODE)
-
-#define CONST_OK_FOR_LETTER_P(VALUE, C)	\
- mmix_const_ok_for_letter_p (VALUE, C)
-
-#define EXTRA_CONSTRAINT(VALUE, C)	\
- mmix_extra_constraint (VALUE, C, MMIX_REG_OK_STRICT)
-
-/* Do we need anything serious here?  Yes, any FLOT constant.  */
-#define CONST_DOUBLE_OK_FOR_LETTER_P(VALUE, C)			\
- mmix_const_double_ok_for_letter_p (VALUE, C)
+#define CLASS_MAX_NREGS(CLASS, MODE) targetm.hard_regno_nregs (CLASS, MODE)
 
 
 /* Node: Frame Layout */
 
-#define STACK_GROWS_DOWNWARD
+#define STACK_GROWS_DOWNWARD 1
 #define FRAME_GROWS_DOWNWARD 1
-
-#define STARTING_FRAME_OFFSET \
-  mmix_starting_frame_offset ()
 
 #define FIRST_PARM_OFFSET(FUNDECL) 0
 
@@ -803,7 +761,7 @@ typedef struct { int regs; int lib; } CUMULATIVE_ARGS;
 /* (empty) */
 
 
-/* Node: SDB and DWARF */
+/* Node: DWARF */
 #define DWARF2_DEBUGGING_INFO 1
 #define DWARF2_ASM_LINE_DEBUG_INFO 1
 
@@ -815,7 +773,7 @@ typedef struct { int regs; int lib; } CUMULATIVE_ARGS;
 #define CASE_VECTOR_MODE DImode
 #define CASE_VECTOR_PC_RELATIVE 0
 
-#define WORD_REGISTER_OPERATIONS
+#define WORD_REGISTER_OPERATIONS 1
 
 /* We have a choice, which makes this yet another parameter to tweak.  The
    gut feeling is currently that SIGN_EXTEND wins; "int" is more frequent
@@ -824,8 +782,6 @@ typedef struct { int regs; int lib; } CUMULATIVE_ARGS;
 
 #define MOVE_MAX 8
 
-#define TRULY_NOOP_TRUNCATION(OUTPREC, INPREC) 1
-
 /* ??? MMIX allows a choice of STORE_FLAG_VALUE.  Revisit later,
    we don't have scc expanders yet.  */
 
@@ -833,7 +789,9 @@ typedef struct { int regs; int lib; } CUMULATIVE_ARGS;
 
 #define FUNCTION_MODE QImode
 
-#define NO_IMPLICIT_EXTERN_C
+/* mmix-knuth-mmixware target has no support of C99 runtime */
+#undef TARGET_LIBC_HAS_FUNCTION
+#define TARGET_LIBC_HAS_FUNCTION no_c99_libc_has_function
 
 /* These are checked.  */
 #define DOLLARS_IN_IDENTIFIERS 0

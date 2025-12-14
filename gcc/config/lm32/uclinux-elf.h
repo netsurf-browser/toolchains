@@ -1,6 +1,5 @@
 /* Definitions for LM32 running Linux-based GNU systems using ELF
-   Copyright (C) 1993, 1994, 1997, 1998, 1999, 2000, 2001, 2002, 2003, 2004,
-   2009, 2010, 2011 Free Software Foundation, Inc.
+   Copyright (C) 1993-2020 Free Software Foundation, Inc.
    Contributed by Philip Blundell <philb@gnu.org>
 
    This file is part of GCC.
@@ -21,10 +20,6 @@
 
 /* elfos.h should have already been included.  Now just override
    any conflicting definitions and add any extras.  */
-
-/* Do not assume anything about header files.  */
-#undef NO_IMPLICIT_EXTERN_C
-#define NO_IMPLICIT_EXTERN_C
 
 /* The GNU C++ standard library requires that these macros be defined.  */
 #undef CPLUSPLUS_CPP_SPEC
@@ -73,8 +68,8 @@
 #define TARGET_OS_CPP_BUILTINS() GNU_USER_TARGET_OS_CPP_BUILTINS()
 
 #define LINK_GCC_C_SEQUENCE_SPEC \
-  "%{static:--start-group} %G %L %{static:--end-group}%{!static:%G}"
+  "%{static|static-pie:--start-group} %G %{!nolibc:%L} \
+   %{static|static-pie:--end-group}%{!static:%{!static-pie:%G}}"
 
 #undef  CC1_SPEC
 #define CC1_SPEC "%{G*} %{!fno-PIC:-fPIC}"
-

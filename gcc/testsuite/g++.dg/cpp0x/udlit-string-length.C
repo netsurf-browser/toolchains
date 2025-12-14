@@ -1,4 +1,4 @@
-// { dg-options "-std=c++0x" }
+// { dg-do compile { target c++11 } }
 // PR c++/50941
 
 typedef decltype(sizeof(0)) size_type;
@@ -8,6 +8,14 @@ operator"" _len(const char*, size_type len)
 {
   return len;
 }
+
+#if __cpp_char8_t
+constexpr size_type
+operator"" _len(const char8_t*, size_type len)
+{
+  return len;
+}
+#endif
 
 constexpr size_type
 operator"" _len(const wchar_t*, size_type len)

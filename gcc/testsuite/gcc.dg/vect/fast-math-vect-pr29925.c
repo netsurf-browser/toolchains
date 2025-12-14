@@ -13,6 +13,7 @@ void interp_pitch(float *exc, float *interp, int pitch, int len)
    for (i=0;i<len;i++)
    {
       float tmp = 0;
+#pragma GCC unroll 0
       for (k=0;k<7;k++)
       {
          tmp += exc[i-pitch+k+maxj-6];
@@ -36,5 +37,4 @@ int main()
 }
 
 /* { dg-final { scan-tree-dump-times "vectorized 1 loops" 1 "vect" } } */
-/* { dg-final { cleanup-tree-dump "vect" } } */
 

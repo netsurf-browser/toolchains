@@ -9,69 +9,50 @@ import (
 	"sort"
 )
 
-type Grams int
-
-func (g Grams) String() string { return fmt.Sprintf("%dg", int(g)) }
-
-type Organ struct {
-	Name   string
-	Weight Grams
+type Person struct {
+	Name string
+	Age  int
 }
 
-type Organs []*Organ
+func (p Person) String() string {
+	return fmt.Sprintf("%s: %d", p.Name, p.Age)
+}
 
-func (s Organs) Len() int      { return len(s) }
-func (s Organs) Swap(i, j int) { s[i], s[j] = s[j], s[i] }
+// ByAge implements sort.Interface for []Person based on
+// the Age field.
+type ByAge []Person
 
-// ByName implements sort.Interface by providing Less and using the Len and
-// Swap methods of the embedded Organs value.
-type ByName struct{ Organs }
+func (a ByAge) Len() int           { return len(a) }
+func (a ByAge) Swap(i, j int)      { a[i], a[j] = a[j], a[i] }
+func (a ByAge) Less(i, j int) bool { return a[i].Age < a[j].Age }
 
-func (s ByName) Less(i, j int) bool { return s.Organs[i].Name < s.Organs[j].Name }
-
-// ByWeight implements sort.Interface by providing Less and using the Len and
-// Swap methods of the embedded Organs value.
-type ByWeight struct{ Organs }
-
-func (s ByWeight) Less(i, j int) bool { return s.Organs[i].Weight < s.Organs[j].Weight }
-
-func ExampleInterface() {
-	s := []*Organ{
-		{"brain", 1340},
-		{"heart", 290},
-		{"liver", 1494},
-		{"pancreas", 131},
-		{"prostate", 62},
-		{"spleen", 162},
+func Example() {
+	people := []Person{
+		{"Bob", 31},
+		{"John", 42},
+		{"Michael", 17},
+		{"Jenny", 26},
 	}
 
-	sort.Sort(ByWeight{s})
-	fmt.Println("Organs by weight:")
-	printOrgans(s)
+	fmt.Println(people)
+	// There are two ways to sort a slice. First, one can define
+	// a set of methods for the slice type, as with ByAge, and
+	// call sort.Sort. In this first example we use that technique.
+	sort.Sort(ByAge(people))
+	fmt.Println(people)
 
-	sort.Sort(ByName{s})
-	fmt.Println("Organs by name:")
-	printOrgans(s)
+	// The other way is to use sort.Slice with a custom Less
+	// function, which can be provided as a closure. In this
+	// case no methods are needed. (And if they exist, they
+	// are ignored.) Here we re-sort in reverse order: compare
+	// the closure with ByAge.Less.
+	sort.Slice(people, func(i, j int) bool {
+		return people[i].Age > people[j].Age
+	})
+	fmt.Println(people)
 
 	// Output:
-	// Organs by weight:
-	// prostate (62g)
-	// pancreas (131g)
-	// spleen   (162g)
-	// heart    (290g)
-	// brain    (1340g)
-	// liver    (1494g)
-	// Organs by name:
-	// brain    (1340g)
-	// heart    (290g)
-	// liver    (1494g)
-	// pancreas (131g)
-	// prostate (62g)
-	// spleen   (162g)
-}
-
-func printOrgans(s []*Organ) {
-	for _, o := range s {
-		fmt.Printf("%-8s (%v)\n", o.Name, o.Weight)
-	}
+	// [Bob: 31 John: 42 Michael: 17 Jenny: 26]
+	// [Michael: 17 Jenny: 26 Bob: 31 John: 42]
+	// [John: 42 Bob: 31 Jenny: 26 Michael: 17]
 }

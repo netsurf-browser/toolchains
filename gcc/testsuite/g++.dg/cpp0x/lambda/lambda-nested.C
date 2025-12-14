@@ -1,5 +1,4 @@
-// { dg-do run }
-// { dg-options "-std=c++0x" }
+// { dg-do run { target c++11 } }
 
 #include <cassert>
 
@@ -8,7 +7,7 @@ struct A {
   A(): i(42) { }
   int f() {
     return [this]{
-      return [=]{ return i; }();
+      return [=]{ return i; }(); // { dg-warning "implicit capture" "" { target c++2a } }
     }();
   }
 };

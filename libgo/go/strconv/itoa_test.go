@@ -5,7 +5,6 @@
 package strconv_test
 
 import (
-	"runtime"
 	. "strconv"
 	"testing"
 )
@@ -52,6 +51,7 @@ var itob64tests = []itob64Test{
 	{-0x123456789abcdef, 16, "-123456789abcdef"},
 	{1<<63 - 1, 16, "7fffffffffffffff"},
 	{1<<63 - 1, 2, "111111111111111111111111111111111111111111111111111111111111111"},
+	{-1 << 63, 2, "-1000000000000000000000000000000000000000000000000000000000000000"},
 
 	{16, 17, "g"},
 	{25, 25, "10"},
@@ -126,43 +126,46 @@ func TestUitoa(t *testing.T) {
 	}
 }
 
-func numAllocations(f func()) int {
-	runtime.GC()
-	memstats := new(runtime.MemStats)
-	runtime.ReadMemStats(memstats)
-	n0 := memstats.Mallocs
-	f()
-	runtime.ReadMemStats(memstats)
-	return int(memstats.Mallocs - n0)
+var varlenUints = []struct {
+	in  uint64
+	out string
+}{
+	{1, "1"},
+	{12, "12"},
+	{123, "123"},
+	{1234, "1234"},
+	{12345, "12345"},
+	{123456, "123456"},
+	{1234567, "1234567"},
+	{12345678, "12345678"},
+	{123456789, "123456789"},
+	{1234567890, "1234567890"},
+	{12345678901, "12345678901"},
+	{123456789012, "123456789012"},
+	{1234567890123, "1234567890123"},
+	{12345678901234, "12345678901234"},
+	{123456789012345, "123456789012345"},
+	{1234567890123456, "1234567890123456"},
+	{12345678901234567, "12345678901234567"},
+	{123456789012345678, "123456789012345678"},
+	{1234567890123456789, "1234567890123456789"},
+	{12345678901234567890, "12345678901234567890"},
 }
 
-/* This test relies on escape analysis which gccgo does not yet do.
-
-var globalBuf [64]byte
-
-func TestAppendUintDoesntAllocate(t *testing.T) {
-	n := numAllocations(func() {
-		var buf [64]byte
-		AppendInt(buf[:0], 123, 10)
-	})
-	want := 1 // TODO(bradfitz): this might be 0, once escape analysis is better
-	if n != want {
-		t.Errorf("with local buffer, did %d allocations, want %d", n, want)
-	}
-	n = numAllocations(func() {
-		AppendInt(globalBuf[:0], 123, 10)
-	})
-	if n != 0 {
-		t.Errorf("with reused buffer, did %d allocations, want 0", n)
+func TestFormatUintVarlen(t *testing.T) {
+	for _, test := range varlenUints {
+		s := FormatUint(test.in, 10)
+		if s != test.out {
+			t.Errorf("FormatUint(%v, 10) = %v want %v", test.in, s, test.out)
+		}
 	}
 }
-
-*/
 
 func BenchmarkFormatInt(b *testing.B) {
 	for i := 0; i < b.N; i++ {
 		for _, test := range itob64tests {
-			FormatInt(test.in, test.base)
+			s := FormatInt(test.in, test.base)
+			BenchSink += len(s)
 		}
 	}
 }
@@ -171,7 +174,8 @@ func BenchmarkAppendInt(b *testing.B) {
 	dst := make([]byte, 0, 30)
 	for i := 0; i < b.N; i++ {
 		for _, test := range itob64tests {
-			AppendInt(dst, test.in, test.base)
+			dst = AppendInt(dst[:0], test.in, test.base)
+			BenchSink += len(dst)
 		}
 	}
 }
@@ -179,7 +183,8 @@ func BenchmarkAppendInt(b *testing.B) {
 func BenchmarkFormatUint(b *testing.B) {
 	for i := 0; i < b.N; i++ {
 		for _, test := range uitob64tests {
-			FormatUint(test.in, test.base)
+			s := FormatUint(test.in, test.base)
+			BenchSink += len(s)
 		}
 	}
 }
@@ -188,7 +193,43 @@ func BenchmarkAppendUint(b *testing.B) {
 	dst := make([]byte, 0, 30)
 	for i := 0; i < b.N; i++ {
 		for _, test := range uitob64tests {
-			AppendUint(dst, test.in, test.base)
+			dst = AppendUint(dst[:0], test.in, test.base)
+			BenchSink += len(dst)
 		}
 	}
 }
+
+func BenchmarkFormatIntSmall(b *testing.B) {
+	smallInts := []int64{7, 42}
+	for _, smallInt := range smallInts {
+		b.Run(Itoa(int(smallInt)), func(b *testing.B) {
+			for i := 0; i < b.N; i++ {
+				s := FormatInt(smallInt, 10)
+				BenchSink += len(s)
+			}
+		})
+	}
+}
+
+func BenchmarkAppendIntSmall(b *testing.B) {
+	dst := make([]byte, 0, 30)
+	const smallInt = 42
+	for i := 0; i < b.N; i++ {
+		dst = AppendInt(dst[:0], smallInt, 10)
+		BenchSink += len(dst)
+	}
+}
+
+func BenchmarkAppendUintVarlen(b *testing.B) {
+	for _, test := range varlenUints {
+		b.Run(test.out, func(b *testing.B) {
+			dst := make([]byte, 0, 30)
+			for j := 0; j < b.N; j++ {
+				dst = AppendUint(dst[:0], test.in, 10)
+				BenchSink += len(dst)
+			}
+		})
+	}
+}
+
+var BenchSink int // make sure compiler cannot optimize away benchmarks

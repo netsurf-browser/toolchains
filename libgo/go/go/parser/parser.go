@@ -7,6 +7,13 @@
 // output is an abstract syntax tree (AST) representing the Go source. The
 // parser is invoked through one of the Parse* functions.
 //
+// The parser accepts a larger language than is syntactically permitted by
+// the Go spec, for simplicity, and for improved robustness in the presence
+// of syntax errors. For instance, in method declarations, the receiver is
+// treated like an ordinary parameter list and thus may contain multiple
+// entries where the spec permits exactly one. Consequently, the corresponding
+// field in the AST (ast.FuncDecl.Recv) field is not restricted to one entry.
+//
 package parser
 
 import (
@@ -28,7 +35,7 @@ type parser struct {
 	// Tracing/debugging
 	mode   Mode // parsing mode
 	trace  bool // == (mode & Trace != 0)
-	indent uint // indentation used for tracing output
+	indent int  // indentation used for tracing output
 
 	// Comments
 	comments    []*ast.CommentGroup
@@ -41,14 +48,15 @@ type parser struct {
 	lit string      // token literal
 
 	// Error recovery
-	// (used to limit the number of calls to syncXXX functions
+	// (used to limit the number of calls to parser.advance
 	// w/o making scanning progress - avoids potential endless
 	// loops across multiple parser functions during error recovery)
 	syncPos token.Pos // last synchronization position
-	syncCnt int       // number of calls to syncXXX without progress
+	syncCnt int       // number of parser.advance calls without progress
 
 	// Non-syntactic parser control
-	exprLev int // < 0: in control clause, >= 0: in expression
+	exprLev int  // < 0: in control clause, >= 0: in expression
+	inRhs   bool // if set, the parser is parsing a rhs expression
 
 	// Ordinary identifier scopes
 	pkgScope   *ast.Scope        // pkgScope.Outer == nil
@@ -56,14 +64,14 @@ type parser struct {
 	unresolved []*ast.Ident      // unresolved identifiers
 	imports    []*ast.ImportSpec // list of imports
 
-	// Label scope
+	// Label scopes
 	// (maintained by open/close LabelScope)
 	labelScope  *ast.Scope     // label scope for current function
 	targetStack [][]*ast.Ident // stack of unresolved labels
 }
 
 func (p *parser) init(fset *token.FileSet, filename string, src []byte, mode Mode) {
-	p.file = fset.AddFile(filename, fset.Base(), len(src))
+	p.file = fset.AddFile(filename, -1, len(src))
 	var m scanner.Mode
 	if mode&ParseComments != 0 {
 		m = scanner.ScanComments
@@ -75,14 +83,6 @@ func (p *parser) init(fset *token.FileSet, filename string, src []byte, mode Mod
 	p.trace = mode&Trace != 0 // for convenience (p.trace is used frequently)
 
 	p.next()
-
-	// set up the pkgScope here (as opposed to in parseFile) because
-	// there are other parser entry points (ParseExpr, etc.)
-	p.openScope()
-	p.pkgScope = p.topScope
-
-	// for the same reason, set up a label scope
-	p.openLabelScope()
 }
 
 // ----------------------------------------------------------------------------
@@ -157,7 +157,7 @@ func (p *parser) shortVarDecl(decl *ast.AssignStmt, list []ast.Expr) {
 				}
 			}
 		} else {
-			p.errorExpected(x.Pos(), "identifier")
+			p.errorExpected(x.Pos(), "identifier on left side of :=")
 		}
 	}
 	if n == 0 && p.mode&DeclarationErrors != 0 {
@@ -170,7 +170,12 @@ func (p *parser) shortVarDecl(decl *ast.AssignStmt, list []ast.Expr) {
 // internal consistency.
 var unresolved = new(ast.Object)
 
-func (p *parser) resolve(x ast.Expr) {
+// If x is an identifier, tryResolve attempts to resolve x by looking up
+// the object it denotes. If no object is found and collectUnresolved is
+// set, x is marked as unresolved and collected in the list of unresolved
+// identifiers.
+//
+func (p *parser) tryResolve(x ast.Expr, collectUnresolved bool) {
 	// nothing to do if x is not an identifier or the blank identifier
 	ident, _ := x.(*ast.Ident)
 	if ident == nil {
@@ -191,23 +196,30 @@ func (p *parser) resolve(x ast.Expr) {
 	// must be found either in the file scope, package scope
 	// (perhaps in another file), or universe scope --- collect
 	// them so that they can be resolved later
-	ident.Obj = unresolved
-	p.unresolved = append(p.unresolved, ident)
+	if collectUnresolved {
+		ident.Obj = unresolved
+		p.unresolved = append(p.unresolved, ident)
+	}
+}
+
+func (p *parser) resolve(x ast.Expr) {
+	p.tryResolve(x, true)
 }
 
 // ----------------------------------------------------------------------------
 // Parsing support
 
 func (p *parser) printTrace(a ...interface{}) {
-	const dots = ". . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . " +
-		". . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . "
-	const n = uint(len(dots))
+	const dots = ". . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . "
+	const n = len(dots)
 	pos := p.file.Position(p.pos)
 	fmt.Printf("%5d:%3d: ", pos.Line, pos.Column)
 	i := 2 * p.indent
-	for ; i > n; i -= n {
+	for i > n {
 		fmt.Print(dots)
+		i -= n
 	}
+	// i <= n
 	fmt.Print(dots[0:i])
 	fmt.Println(a...)
 }
@@ -218,7 +230,7 @@ func trace(p *parser, msg string) *parser {
 	return p
 }
 
-// Usage pattern: defer un(trace(p, "..."));
+// Usage pattern: defer un(trace(p, "..."))
 func un(p *parser) {
 	p.indent--
 	p.printTrace(")")
@@ -288,7 +300,7 @@ func (p *parser) consumeCommentGroup(n int) (comments *ast.CommentGroup, endline
 
 // Advance to the next non-comment token. In the process, collect
 // any comment groups encountered, and remember the last lead and
-// and line comments.
+// line comments.
 //
 // A lead comment is a comment group that starts and ends in a
 // line without any other tokens and that is followed by a non-comment
@@ -304,18 +316,18 @@ func (p *parser) consumeCommentGroup(n int) (comments *ast.CommentGroup, endline
 func (p *parser) next() {
 	p.leadComment = nil
 	p.lineComment = nil
-	line := p.file.Line(p.pos) // current line
+	prev := p.pos
 	p.next0()
 
 	if p.tok == token.COMMENT {
 		var comment *ast.CommentGroup
 		var endline int
 
-		if p.file.Line(p.pos) == line {
+		if p.file.Line(p.pos) == p.file.Line(prev) {
 			// The comment is on same line as the previous token; it
 			// cannot be a lead comment but may be a line comment.
 			comment, endline = p.consumeCommentGroup(0)
-			if p.file.Line(p.pos) != endline {
+			if p.file.Line(p.pos) != endline || p.tok == token.EOF {
 				// The next token is on a different line, thus
 				// the last comment group is a line comment.
 				p.lineComment = comment
@@ -336,8 +348,26 @@ func (p *parser) next() {
 	}
 }
 
+// A bailout panic is raised to indicate early termination.
+type bailout struct{}
+
 func (p *parser) error(pos token.Pos, msg string) {
-	p.errors.Add(p.file.Position(pos), msg)
+	epos := p.file.Position(pos)
+
+	// If AllErrors is not set, discard errors reported on the same line
+	// as the last recorded error and stop parsing if there are more than
+	// 10 errors.
+	if p.mode&AllErrors == 0 {
+		n := len(p.errors)
+		if n > 0 && p.errors[n-1].Pos.Line == epos.Line {
+			return // discard - likely a spurious error
+		}
+		if n > 10 {
+			panic(bailout{})
+		}
+	}
+
+	p.errors.Add(epos, msg)
 }
 
 func (p *parser) errorExpected(pos token.Pos, msg string) {
@@ -345,13 +375,14 @@ func (p *parser) errorExpected(pos token.Pos, msg string) {
 	if pos == p.pos {
 		// the error happened at the current position;
 		// make the error message more specific
-		if p.tok == token.SEMICOLON && p.lit == "\n" {
+		switch {
+		case p.tok == token.SEMICOLON && p.lit == "\n":
 			msg += ", found newline"
-		} else {
+		case p.tok.IsLiteral():
+			// print 123 rather than 'INT', etc.
+			msg += ", found " + p.lit
+		default:
 			msg += ", found '" + p.tok.String() + "'"
-			if p.tok.IsLiteral() {
-				msg += " " + p.lit
-			}
 		}
 	}
 	p.error(pos, msg)
@@ -364,6 +395,18 @@ func (p *parser) expect(tok token.Token) token.Pos {
 	}
 	p.next() // make progress
 	return pos
+}
+
+// expect2 is like expect, but it returns an invalid position
+// if the expected token is not found.
+func (p *parser) expect2(tok token.Token) (pos token.Pos) {
+	if p.tok == tok {
+		pos = p.pos
+	} else {
+		p.errorExpected(p.pos, "'"+tok.String()+"'")
+	}
+	p.next() // make progress
+	return
 }
 
 // expectClosing is like expect but provides a better error message
@@ -380,23 +423,31 @@ func (p *parser) expectClosing(tok token.Token, context string) token.Pos {
 func (p *parser) expectSemi() {
 	// semicolon is optional before a closing ')' or '}'
 	if p.tok != token.RPAREN && p.tok != token.RBRACE {
-		if p.tok == token.SEMICOLON {
-			p.next()
-		} else {
+		switch p.tok {
+		case token.COMMA:
+			// permit a ',' instead of a ';' but complain
 			p.errorExpected(p.pos, "';'")
-			syncStmt(p)
+			fallthrough
+		case token.SEMICOLON:
+			p.next()
+		default:
+			p.errorExpected(p.pos, "';'")
+			p.advance(stmtStart)
 		}
 	}
 }
 
-func (p *parser) atComma(context string) bool {
+func (p *parser) atComma(context string, follow token.Token) bool {
 	if p.tok == token.COMMA {
 		return true
 	}
-	if p.tok == token.SEMICOLON && p.lit == "\n" {
-		p.error(p.pos, "missing ',' before newline in "+context)
-		return true // "insert" the comma and continue
-
+	if p.tok != follow {
+		msg := "missing ','"
+		if p.tok == token.SEMICOLON && p.lit == "\n" {
+			msg += " before newline"
+		}
+		p.error(p.pos, msg+" in "+context)
+		return true // "insert" comma and continue
 	}
 	return false
 }
@@ -407,21 +458,16 @@ func assert(cond bool, msg string) {
 	}
 }
 
-// syncStmt advances to the next statement.
-// Used for synchronization after an error.
-//
-func syncStmt(p *parser) {
-	for {
-		switch p.tok {
-		case token.BREAK, token.CONST, token.CONTINUE, token.DEFER,
-			token.FALLTHROUGH, token.FOR, token.GO, token.GOTO,
-			token.IF, token.RETURN, token.SELECT, token.SWITCH,
-			token.TYPE, token.VAR:
+// advance consumes tokens until the current token p.tok
+// is in the 'to' set, or token.EOF. For error recovery.
+func (p *parser) advance(to map[token.Token]bool) {
+	for ; p.tok != token.EOF; p.next() {
+		if to[p.tok] {
 			// Return only if parser made some progress since last
-			// sync or if it has not reached 10 sync calls without
+			// sync or if it has not reached 10 advance calls without
 			// progress. Otherwise consume at least one token to
 			// avoid an endless parser loop (it is possible that
-			// both parseOperand and parseStmt call syncStmt and
+			// both parseOperand and parseStmt call advance and
 			// correctly do not advance, thus the need for the
 			// invocation limit p.syncCnt).
 			if p.pos == p.syncPos && p.syncCnt < 10 {
@@ -438,35 +484,60 @@ func syncStmt(p *parser) {
 			// leads to skipping of possibly correct code if a
 			// previous error is present, and thus is preferred
 			// over a non-terminating parse.
-		case token.EOF:
-			return
 		}
-		p.next()
 	}
 }
 
-// syncDecl advances to the next declaration.
-// Used for synchronization after an error.
+var stmtStart = map[token.Token]bool{
+	token.BREAK:       true,
+	token.CONST:       true,
+	token.CONTINUE:    true,
+	token.DEFER:       true,
+	token.FALLTHROUGH: true,
+	token.FOR:         true,
+	token.GO:          true,
+	token.GOTO:        true,
+	token.IF:          true,
+	token.RETURN:      true,
+	token.SELECT:      true,
+	token.SWITCH:      true,
+	token.TYPE:        true,
+	token.VAR:         true,
+}
+
+var declStart = map[token.Token]bool{
+	token.CONST: true,
+	token.TYPE:  true,
+	token.VAR:   true,
+}
+
+var exprEnd = map[token.Token]bool{
+	token.COMMA:     true,
+	token.COLON:     true,
+	token.SEMICOLON: true,
+	token.RPAREN:    true,
+	token.RBRACK:    true,
+	token.RBRACE:    true,
+}
+
+// safePos returns a valid file position for a given position: If pos
+// is valid to begin with, safePos returns pos. If pos is out-of-range,
+// safePos returns the EOF position.
 //
-func syncDecl(p *parser) {
-	for {
-		switch p.tok {
-		case token.CONST, token.TYPE, token.VAR:
-			// see comments in syncStmt
-			if p.pos == p.syncPos && p.syncCnt < 10 {
-				p.syncCnt++
-				return
-			}
-			if p.pos > p.syncPos {
-				p.syncPos = p.pos
-				p.syncCnt = 0
-				return
-			}
-		case token.EOF:
-			return
+// This is hack to work around "artificial" end positions in the AST which
+// are computed by adding 1 to (presumably valid) token positions. If the
+// token positions are invalid due to parse errors, the resulting end position
+// may be past the file's EOF position, which would lead to panics if used
+// later on.
+//
+func (p *parser) safePos(pos token.Pos) (res token.Pos) {
+	defer func() {
+		if recover() != nil {
+			res = token.Pos(p.file.Base() + p.file.Size()) // EOF position
 		}
-		p.next()
-	}
+	}()
+	_ = p.file.Offset(pos) // trigger a panic if position is out-of-range
+	return pos
 }
 
 // ----------------------------------------------------------------------------
@@ -517,6 +588,8 @@ func (p *parser) parseExprList(lhs bool) (list []ast.Expr) {
 }
 
 func (p *parser) parseLhsList() []ast.Expr {
+	old := p.inRhs
+	p.inRhs = false
 	list := p.parseExprList(true)
 	switch p.tok {
 	case token.DEFINE:
@@ -538,11 +611,16 @@ func (p *parser) parseLhsList() []ast.Expr {
 			p.resolve(x)
 		}
 	}
+	p.inRhs = old
 	return list
 }
 
 func (p *parser) parseRhsList() []ast.Expr {
-	return p.parseExprList(false)
+	old := p.inRhs
+	p.inRhs = true
+	list := p.parseExprList(false)
+	p.inRhs = old
+	return list
 }
 
 // ----------------------------------------------------------------------------
@@ -558,7 +636,7 @@ func (p *parser) parseType() ast.Expr {
 	if typ == nil {
 		pos := p.pos
 		p.errorExpected(pos, "type")
-		p.next() // make progress
+		p.advance(exprEnd)
 		return &ast.BadExpr{From: pos, To: p.pos}
 	}
 
@@ -585,19 +663,22 @@ func (p *parser) parseTypeName() ast.Expr {
 	return ident
 }
 
-func (p *parser) parseArrayType(ellipsisOk bool) ast.Expr {
+func (p *parser) parseArrayType() ast.Expr {
 	if p.trace {
 		defer un(trace(p, "ArrayType"))
 	}
 
 	lbrack := p.expect(token.LBRACK)
+	p.exprLev++
 	var len ast.Expr
-	if ellipsisOk && p.tok == token.ELLIPSIS {
+	// always permit ellipsis for more fault-tolerant parsing
+	if p.tok == token.ELLIPSIS {
 		len = &ast.Ellipsis{Ellipsis: p.pos}
 		p.next()
 	} else if p.tok != token.RBRACK {
 		len = p.parseRhs()
 	}
+	p.exprLev--
 	p.expect(token.RBRACK)
 	elt := p.parseType()
 
@@ -627,15 +708,18 @@ func (p *parser) parseFieldDecl(scope *ast.Scope) *ast.Field {
 
 	doc := p.leadComment
 
-	// FieldDecl
-	list, typ := p.parseVarList(false)
-
-	// Tag
-	var tag *ast.BasicLit
-	if p.tok == token.STRING {
-		tag = &ast.BasicLit{ValuePos: p.pos, Kind: p.tok, Value: p.lit}
+	// 1st FieldDecl
+	// A type name used as an anonymous field looks like a field identifier.
+	var list []ast.Expr
+	for {
+		list = append(list, p.parseVarType(false))
+		if p.tok != token.COMMA {
+			break
+		}
 		p.next()
 	}
+
+	typ := p.tryVarType(false)
 
 	// analyze case
 	var idents []*ast.Ident
@@ -645,11 +729,20 @@ func (p *parser) parseFieldDecl(scope *ast.Scope) *ast.Field {
 	} else {
 		// ["*"] TypeName (AnonymousField)
 		typ = list[0] // we always have at least one element
-		if n := len(list); n > 1 || !isTypeName(deref(typ)) {
-			pos := typ.Pos()
-			p.errorExpected(pos, "anonymous field")
-			typ = &ast.BadExpr{From: pos, To: list[n-1].End()}
+		if n := len(list); n > 1 {
+			p.errorExpected(p.pos, "type")
+			typ = &ast.BadExpr{From: p.pos, To: p.pos}
+		} else if !isTypeName(deref(typ)) {
+			p.errorExpected(typ.Pos(), "anonymous field")
+			typ = &ast.BadExpr{From: typ.Pos(), To: p.safePos(typ.End())}
 		}
+	}
+
+	// Tag
+	var tag *ast.BasicLit
+	if p.tok == token.STRING {
+		tag = &ast.BasicLit{ValuePos: p.pos, Kind: p.tok, Value: p.lit}
+		p.next()
 	}
 
 	p.expectSemi() // call before accessing p.linecomment
@@ -704,7 +797,7 @@ func (p *parser) tryVarType(isParam bool) ast.Expr {
 	if isParam && p.tok == token.ELLIPSIS {
 		pos := p.pos
 		p.next()
-		typ := p.tryIdentOrType(isParam) // don't use parseType so we can provide better error message
+		typ := p.tryIdentOrType() // don't use parseType so we can provide better error message
 		if typ != nil {
 			p.resolve(typ)
 		} else {
@@ -713,7 +806,7 @@ func (p *parser) tryVarType(isParam bool) ast.Expr {
 		}
 		return &ast.Ellipsis{Ellipsis: pos, Elt: typ}
 	}
-	return p.tryIdentOrType(false)
+	return p.tryIdentOrType()
 }
 
 // If the result is an identifier, it is not resolved.
@@ -728,42 +821,27 @@ func (p *parser) parseVarType(isParam bool) ast.Expr {
 	return typ
 }
 
-// If any of the results are identifiers, they are not resolved.
-func (p *parser) parseVarList(isParam bool) (list []ast.Expr, typ ast.Expr) {
-	if p.trace {
-		defer un(trace(p, "VarList"))
-	}
-
-	// a list of identifiers looks like a list of type names
-	//
-	// parse/tryVarType accepts any type (including parenthesized
-	// ones) even though the syntax does not permit them here: we
-	// accept them all for more robust parsing and complain later
-	for typ := p.parseVarType(isParam); typ != nil; {
-		list = append(list, typ)
-		if p.tok != token.COMMA {
-			break
-		}
-		p.next()
-		typ = p.tryVarType(isParam) // maybe nil as in: func f(int,) {}
-	}
-
-	// if we had a list of identifiers, it must be followed by a type
-	typ = p.tryVarType(isParam)
-
-	return
-}
-
 func (p *parser) parseParameterList(scope *ast.Scope, ellipsisOk bool) (params []*ast.Field) {
 	if p.trace {
 		defer un(trace(p, "ParameterList"))
 	}
 
-	// ParameterDecl
-	list, typ := p.parseVarList(ellipsisOk)
+	// 1st ParameterDecl
+	// A list of identifiers looks like a list of type names.
+	var list []ast.Expr
+	for {
+		list = append(list, p.parseVarType(ellipsisOk))
+		if p.tok != token.COMMA {
+			break
+		}
+		p.next()
+		if p.tok == token.RPAREN {
+			break
+		}
+	}
 
 	// analyze case
-	if typ != nil {
+	if typ := p.tryVarType(ellipsisOk); typ != nil {
 		// IdentifierList Type
 		idents := p.makeIdentList(list)
 		field := &ast.Field{Names: idents, Type: typ}
@@ -772,9 +850,10 @@ func (p *parser) parseParameterList(scope *ast.Scope, ellipsisOk bool) (params [
 		// parameter or result variable is the function body.
 		p.declare(field, nil, scope, ast.Var, idents...)
 		p.resolve(typ)
-		if p.tok == token.COMMA {
-			p.next()
+		if !p.atComma("parameter list", token.RPAREN) {
+			return
 		}
+		p.next()
 		for p.tok != token.RPAREN && p.tok != token.EOF {
 			idents := p.parseIdentList()
 			typ := p.parseVarType(ellipsisOk)
@@ -784,20 +863,20 @@ func (p *parser) parseParameterList(scope *ast.Scope, ellipsisOk bool) (params [
 			// parameter or result variable is the function body.
 			p.declare(field, nil, scope, ast.Var, idents...)
 			p.resolve(typ)
-			if !p.atComma("parameter list") {
+			if !p.atComma("parameter list", token.RPAREN) {
 				break
 			}
 			p.next()
 		}
-	} else {
-		// Type { "," Type } (anonymous parameters)
-		params = make([]*ast.Field, len(list))
-		for i, typ := range list {
-			p.resolve(typ)
-			params[i] = &ast.Field{Type: typ}
-		}
+		return
 	}
 
+	// Type { "," Type } (anonymous parameters)
+	params = make([]*ast.Field, len(list))
+	for i, typ := range list {
+		p.resolve(typ)
+		params[i] = &ast.Field{Type: typ}
+	}
 	return
 }
 
@@ -931,29 +1010,31 @@ func (p *parser) parseChanType() *ast.ChanType {
 
 	pos := p.pos
 	dir := ast.SEND | ast.RECV
+	var arrow token.Pos
 	if p.tok == token.CHAN {
 		p.next()
 		if p.tok == token.ARROW {
+			arrow = p.pos
 			p.next()
 			dir = ast.SEND
 		}
 	} else {
-		p.expect(token.ARROW)
+		arrow = p.expect(token.ARROW)
 		p.expect(token.CHAN)
 		dir = ast.RECV
 	}
 	value := p.parseType()
 
-	return &ast.ChanType{Begin: pos, Dir: dir, Value: value}
+	return &ast.ChanType{Begin: pos, Arrow: arrow, Dir: dir, Value: value}
 }
 
 // If the result is an identifier, it is not resolved.
-func (p *parser) tryIdentOrType(ellipsisOk bool) ast.Expr {
+func (p *parser) tryIdentOrType() ast.Expr {
 	switch p.tok {
 	case token.IDENT:
 		return p.parseTypeName()
 	case token.LBRACK:
-		return p.parseArrayType(ellipsisOk)
+		return p.parseArrayType()
 	case token.STRUCT:
 		return p.parseStructType()
 	case token.MUL:
@@ -980,7 +1061,7 @@ func (p *parser) tryIdentOrType(ellipsisOk bool) ast.Expr {
 }
 
 func (p *parser) tryType() ast.Expr {
-	typ := p.tryIdentOrType(false)
+	typ := p.tryIdentOrType()
 	if typ != nil {
 		p.resolve(typ)
 	}
@@ -1013,7 +1094,7 @@ func (p *parser) parseBody(scope *ast.Scope) *ast.BlockStmt {
 	list := p.parseStmtList()
 	p.closeLabelScope()
 	p.closeScope()
-	rbrace := p.expect(token.RBRACE)
+	rbrace := p.expect2(token.RBRACE)
 
 	return &ast.BlockStmt{Lbrace: lbrace, List: list, Rbrace: rbrace}
 }
@@ -1027,7 +1108,7 @@ func (p *parser) parseBlockStmt() *ast.BlockStmt {
 	p.openScope()
 	list := p.parseStmtList()
 	p.closeScope()
-	rbrace := p.expect(token.RBRACE)
+	rbrace := p.expect2(token.RBRACE)
 
 	return &ast.BlockStmt{Lbrace: lbrace, List: list, Rbrace: rbrace}
 }
@@ -1088,7 +1169,7 @@ func (p *parser) parseOperand(lhs bool) ast.Expr {
 		return p.parseFuncTypeOrLit()
 	}
 
-	if typ := p.tryIdentOrType(true); typ != nil {
+	if typ := p.tryIdentOrType(); typ != nil {
 		// could be type for composite literal or conversion
 		_, isIdent := typ.(*ast.Ident)
 		assert(!isIdent, "type cannot be identifier")
@@ -1098,7 +1179,7 @@ func (p *parser) parseOperand(lhs bool) ast.Expr {
 	// we have an error
 	pos := p.pos
 	p.errorExpected(pos, "operand")
-	syncStmt(p)
+	p.advance(stmtStart)
 	return &ast.BadExpr{From: pos, To: p.pos}
 }
 
@@ -1117,7 +1198,7 @@ func (p *parser) parseTypeAssertion(x ast.Expr) ast.Expr {
 		defer un(trace(p, "TypeAssertion"))
 	}
 
-	p.expect(token.LPAREN)
+	lparen := p.expect(token.LPAREN)
 	var typ ast.Expr
 	if p.tok == token.TYPE {
 		// type switch: typ == nil
@@ -1125,9 +1206,9 @@ func (p *parser) parseTypeAssertion(x ast.Expr) ast.Expr {
 	} else {
 		typ = p.parseType()
 	}
-	p.expect(token.RPAREN)
+	rparen := p.expect(token.RPAREN)
 
-	return &ast.TypeAssertExpr{X: x, Type: typ}
+	return &ast.TypeAssertExpr{X: x, Type: typ, Lparen: lparen, Rparen: rparen}
 }
 
 func (p *parser) parseIndexOrSlice(x ast.Expr) ast.Expr {
@@ -1135,27 +1216,46 @@ func (p *parser) parseIndexOrSlice(x ast.Expr) ast.Expr {
 		defer un(trace(p, "IndexOrSlice"))
 	}
 
+	const N = 3 // change the 3 to 2 to disable 3-index slices
 	lbrack := p.expect(token.LBRACK)
 	p.exprLev++
-	var low, high ast.Expr
-	isSlice := false
+	var index [N]ast.Expr
+	var colons [N - 1]token.Pos
 	if p.tok != token.COLON {
-		low = p.parseRhs()
+		index[0] = p.parseRhs()
 	}
-	if p.tok == token.COLON {
-		isSlice = true
+	ncolons := 0
+	for p.tok == token.COLON && ncolons < len(colons) {
+		colons[ncolons] = p.pos
+		ncolons++
 		p.next()
-		if p.tok != token.RBRACK {
-			high = p.parseRhs()
+		if p.tok != token.COLON && p.tok != token.RBRACK && p.tok != token.EOF {
+			index[ncolons] = p.parseRhs()
 		}
 	}
 	p.exprLev--
 	rbrack := p.expect(token.RBRACK)
 
-	if isSlice {
-		return &ast.SliceExpr{X: x, Lbrack: lbrack, Low: low, High: high, Rbrack: rbrack}
+	if ncolons > 0 {
+		// slice expression
+		slice3 := false
+		if ncolons == 2 {
+			slice3 = true
+			// Check presence of 2nd and 3rd index here rather than during type-checking
+			// to prevent erroneous programs from passing through gofmt (was issue 7305).
+			if index[1] == nil {
+				p.error(colons[0], "2nd index required in 3-index slice")
+				index[1] = &ast.BadExpr{From: colons[0] + 1, To: colons[1]}
+			}
+			if index[2] == nil {
+				p.error(colons[1], "3rd index required in 3-index slice")
+				index[2] = &ast.BadExpr{From: colons[1] + 1, To: rbrack}
+			}
+		}
+		return &ast.SliceExpr{X: x, Lbrack: lbrack, Low: index[0], High: index[1], Max: index[2], Slice3: slice3, Rbrack: rbrack}
 	}
-	return &ast.IndexExpr{X: x, Lbrack: lbrack, Index: low, Rbrack: rbrack}
+
+	return &ast.IndexExpr{X: x, Lbrack: lbrack, Index: index[0], Rbrack: rbrack}
 }
 
 func (p *parser) parseCallOrConversion(fun ast.Expr) *ast.CallExpr {
@@ -1173,7 +1273,7 @@ func (p *parser) parseCallOrConversion(fun ast.Expr) *ast.CallExpr {
 			ellipsis = p.pos
 			p.next()
 		}
-		if !p.atComma("argument list") {
+		if !p.atComma("argument list", token.RPAREN) {
 			break
 		}
 		p.next()
@@ -1184,7 +1284,7 @@ func (p *parser) parseCallOrConversion(fun ast.Expr) *ast.CallExpr {
 	return &ast.CallExpr{Fun: fun, Lparen: lparen, Args: list, Ellipsis: ellipsis, Rparen: rparen}
 }
 
-func (p *parser) parseElement(keyOk bool) ast.Expr {
+func (p *parser) parseValue(keyOk bool) ast.Expr {
 	if p.trace {
 		defer un(trace(p, "Element"))
 	}
@@ -1193,14 +1293,49 @@ func (p *parser) parseElement(keyOk bool) ast.Expr {
 		return p.parseLiteralValue(nil)
 	}
 
-	x := p.checkExpr(p.parseExpr(keyOk)) // don't resolve if map key
+	// Because the parser doesn't know the composite literal type, it cannot
+	// know if a key that's an identifier is a struct field name or a name
+	// denoting a value. The former is not resolved by the parser or the
+	// resolver.
+	//
+	// Instead, _try_ to resolve such a key if possible. If it resolves,
+	// it a) has correctly resolved, or b) incorrectly resolved because
+	// the key is a struct field with a name matching another identifier.
+	// In the former case we are done, and in the latter case we don't
+	// care because the type checker will do a separate field lookup.
+	//
+	// If the key does not resolve, it a) must be defined at the top
+	// level in another file of the same package, the universe scope, or be
+	// undeclared; or b) it is a struct field. In the former case, the type
+	// checker can do a top-level lookup, and in the latter case it will do
+	// a separate field lookup.
+	x := p.checkExpr(p.parseExpr(keyOk))
 	if keyOk {
 		if p.tok == token.COLON {
-			colon := p.pos
-			p.next()
-			return &ast.KeyValueExpr{Key: x, Colon: colon, Value: p.parseElement(false)}
+			// Try to resolve the key but don't collect it
+			// as unresolved identifier if it fails so that
+			// we don't get (possibly false) errors about
+			// undeclared names.
+			p.tryResolve(x, false)
+		} else {
+			// not a key
+			p.resolve(x)
 		}
-		p.resolve(x) // not a map key
+	}
+
+	return x
+}
+
+func (p *parser) parseElement() ast.Expr {
+	if p.trace {
+		defer un(trace(p, "Element"))
+	}
+
+	x := p.parseValue(true)
+	if p.tok == token.COLON {
+		colon := p.pos
+		p.next()
+		x = &ast.KeyValueExpr{Key: x, Colon: colon, Value: p.parseValue(false)}
 	}
 
 	return x
@@ -1212,8 +1347,8 @@ func (p *parser) parseElementList() (list []ast.Expr) {
 	}
 
 	for p.tok != token.RBRACE && p.tok != token.EOF {
-		list = append(list, p.parseElement(true))
-		if !p.atComma("composite literal") {
+		list = append(list, p.parseElement())
+		if !p.atComma("composite literal", token.RBRACE) {
 			break
 		}
 		p.next()
@@ -1264,12 +1399,12 @@ func (p *parser) checkExpr(x ast.Expr) ast.Expr {
 	default:
 		// all other nodes are not proper expressions
 		p.errorExpected(x.Pos(), "expression")
-		x = &ast.BadExpr{From: x.Pos(), To: x.End()}
+		x = &ast.BadExpr{From: x.Pos(), To: p.safePos(x.End())}
 	}
 	return x
 }
 
-// isTypeName returns true iff x is a (qualified) TypeName.
+// isTypeName reports whether x is a (qualified) TypeName.
 func isTypeName(x ast.Expr) bool {
 	switch t := x.(type) {
 	case *ast.BadExpr:
@@ -1283,7 +1418,7 @@ func isTypeName(x ast.Expr) bool {
 	return true
 }
 
-// isLiteralType returns true iff x is a legal composite literal type.
+// isLiteralType reports whether x is a legal composite literal type.
 func isLiteralType(x ast.Expr) bool {
 	switch t := x.(type) {
 	case *ast.BadExpr:
@@ -1323,11 +1458,10 @@ func (p *parser) checkExprOrType(x ast.Expr) ast.Expr {
 	switch t := unparen(x).(type) {
 	case *ast.ParenExpr:
 		panic("unreachable")
-	case *ast.UnaryExpr:
 	case *ast.ArrayType:
 		if len, isEllipsis := t.Len.(*ast.Ellipsis); isEllipsis {
 			p.error(len.Pos(), "expected array length, found '...'")
-			x = &ast.BadExpr{From: x.Pos(), To: x.End()}
+			x = &ast.BadExpr{From: x.Pos(), To: p.safePos(x.End())}
 		}
 	}
 
@@ -1352,14 +1486,15 @@ L:
 			}
 			switch p.tok {
 			case token.IDENT:
-				x = p.parseSelector(p.checkExpr(x))
+				x = p.parseSelector(p.checkExprOrType(x))
 			case token.LPAREN:
 				x = p.parseTypeAssertion(p.checkExpr(x))
 			default:
 				pos := p.pos
 				p.errorExpected(pos, "selector or type assertion")
 				p.next() // make progress
-				x = &ast.BadExpr{From: pos, To: p.pos}
+				sel := &ast.Ident{NamePos: pos, Name: "_"}
+				x = &ast.SelectorExpr{X: x, Sel: sel}
 			}
 		case token.LBRACK:
 			if lhs {
@@ -1404,16 +1539,49 @@ func (p *parser) parseUnaryExpr(lhs bool) ast.Expr {
 
 	case token.ARROW:
 		// channel type or receive expression
-		pos := p.pos
+		arrow := p.pos
 		p.next()
-		if p.tok == token.CHAN {
-			p.next()
-			value := p.parseType()
-			return &ast.ChanType{Begin: pos, Dir: ast.RECV, Value: value}
-		}
+
+		// If the next token is token.CHAN we still don't know if it
+		// is a channel type or a receive operation - we only know
+		// once we have found the end of the unary expression. There
+		// are two cases:
+		//
+		//   <- type  => (<-type) must be channel type
+		//   <- expr  => <-(expr) is a receive from an expression
+		//
+		// In the first case, the arrow must be re-associated with
+		// the channel type parsed already:
+		//
+		//   <- (chan type)    =>  (<-chan type)
+		//   <- (chan<- type)  =>  (<-chan (<-type))
 
 		x := p.parseUnaryExpr(false)
-		return &ast.UnaryExpr{OpPos: pos, Op: token.ARROW, X: p.checkExpr(x)}
+
+		// determine which case we have
+		if typ, ok := x.(*ast.ChanType); ok {
+			// (<-type)
+
+			// re-associate position info and <-
+			dir := ast.SEND
+			for ok && dir == ast.SEND {
+				if typ.Dir == ast.RECV {
+					// error: (<-type) is (<-(<-chan T))
+					p.errorExpected(typ.Arrow, "'chan'")
+				}
+				arrow, typ.Begin, typ.Arrow = typ.Arrow, arrow, arrow
+				dir, typ.Dir = typ.Dir, ast.RECV
+				typ, ok = typ.Value.(*ast.ChanType)
+			}
+			if dir == ast.SEND {
+				p.errorExpected(arrow, "channel type")
+			}
+
+			return x
+		}
+
+		// <-(expr)
+		return &ast.UnaryExpr{OpPos: arrow, Op: token.ARROW, X: p.checkExpr(x)}
 
 	case token.MUL:
 		// pointer type or unary "*" expression
@@ -1426,6 +1594,14 @@ func (p *parser) parseUnaryExpr(lhs bool) ast.Expr {
 	return p.parsePrimaryExpr(lhs)
 }
 
+func (p *parser) tokPrec() (token.Token, int) {
+	tok := p.tok
+	if p.inRhs && tok == token.ASSIGN {
+		tok = token.EQL
+	}
+	return tok, tok.Precedence()
+}
+
 // If lhs is set and the result is an identifier, it is not resolved.
 func (p *parser) parseBinaryExpr(lhs bool, prec1 int) ast.Expr {
 	if p.trace {
@@ -1433,20 +1609,19 @@ func (p *parser) parseBinaryExpr(lhs bool, prec1 int) ast.Expr {
 	}
 
 	x := p.parseUnaryExpr(lhs)
-	for prec := p.tok.Precedence(); prec >= prec1; prec-- {
-		for p.tok.Precedence() == prec {
-			pos, op := p.pos, p.tok
-			p.next()
-			if lhs {
-				p.resolve(x)
-				lhs = false
-			}
-			y := p.parseBinaryExpr(false, prec+1)
-			x = &ast.BinaryExpr{X: p.checkExpr(x), OpPos: pos, Op: op, Y: p.checkExpr(y)}
+	for {
+		op, oprec := p.tokPrec()
+		if oprec < prec1 {
+			return x
 		}
+		pos := p.expect(op)
+		if lhs {
+			p.resolve(x)
+			lhs = false
+		}
+		y := p.parseBinaryExpr(false, oprec+1)
+		x = &ast.BinaryExpr{X: p.checkExpr(x), OpPos: pos, Op: op, Y: p.checkExpr(y)}
 	}
-
-	return x
 }
 
 // If lhs is set and the result is an identifier, it is not resolved.
@@ -1462,11 +1637,19 @@ func (p *parser) parseExpr(lhs bool) ast.Expr {
 }
 
 func (p *parser) parseRhs() ast.Expr {
-	return p.checkExpr(p.parseExpr(false))
+	old := p.inRhs
+	p.inRhs = true
+	x := p.checkExpr(p.parseExpr(false))
+	p.inRhs = old
+	return x
 }
 
 func (p *parser) parseRhsOrType() ast.Expr {
-	return p.checkExprOrType(p.parseExpr(false))
+	old := p.inRhs
+	p.inRhs = true
+	x := p.checkExprOrType(p.parseExpr(false))
+	p.inRhs = old
+	return x
 }
 
 // ----------------------------------------------------------------------------
@@ -1536,8 +1719,8 @@ func (p *parser) parseSimpleStmt(mode int) (ast.Stmt, bool) {
 		}
 		// The label declaration typically starts at x[0].Pos(), but the label
 		// declaration may be erroneous due to a token after that position (and
-		// before the ':'). If SpuriousErrors is not set, the (only) error re-
-		// ported for the line is the illegal label error instead of the token
+		// before the ':'). If SpuriousErrors is not set, the (only) error
+		// reported for the line is the illegal label error instead of the token
 		// before the ':' that caused the problem. Thus, use the (latest) colon
 		// position for error reporting.
 		p.error(colon, "illegal label declaration")
@@ -1561,14 +1744,14 @@ func (p *parser) parseSimpleStmt(mode int) (ast.Stmt, bool) {
 	return &ast.ExprStmt{X: x[0]}, false
 }
 
-func (p *parser) parseCallExpr() *ast.CallExpr {
+func (p *parser) parseCallExpr(callType string) *ast.CallExpr {
 	x := p.parseRhsOrType() // could be a conversion: (some type)(x)
 	if call, isCall := x.(*ast.CallExpr); isCall {
 		return call
 	}
 	if _, isBad := x.(*ast.BadExpr); !isBad {
 		// only report error if it's a new one
-		p.errorExpected(x.Pos(), "function/method call")
+		p.error(p.safePos(x.End()), fmt.Sprintf("function must be invoked in %s statement", callType))
 	}
 	return nil
 }
@@ -1579,7 +1762,7 @@ func (p *parser) parseGoStmt() ast.Stmt {
 	}
 
 	pos := p.expect(token.GO)
-	call := p.parseCallExpr()
+	call := p.parseCallExpr("go")
 	p.expectSemi()
 	if call == nil {
 		return &ast.BadStmt{From: pos, To: pos + 2} // len("go")
@@ -1594,7 +1777,7 @@ func (p *parser) parseDeferStmt() ast.Stmt {
 	}
 
 	pos := p.expect(token.DEFER)
-	call := p.parseCallExpr()
+	call := p.parseCallExpr("defer")
 	p.expectSemi()
 	if call == nil {
 		return &ast.BadStmt{From: pos, To: pos + 5} // len("defer")
@@ -1637,15 +1820,82 @@ func (p *parser) parseBranchStmt(tok token.Token) *ast.BranchStmt {
 	return &ast.BranchStmt{TokPos: pos, Tok: tok, Label: label}
 }
 
-func (p *parser) makeExpr(s ast.Stmt) ast.Expr {
+func (p *parser) makeExpr(s ast.Stmt, want string) ast.Expr {
 	if s == nil {
 		return nil
 	}
 	if es, isExpr := s.(*ast.ExprStmt); isExpr {
 		return p.checkExpr(es.X)
 	}
-	p.error(s.Pos(), "expected condition, found simple statement")
-	return &ast.BadExpr{From: s.Pos(), To: s.End()}
+	found := "simple statement"
+	if _, isAss := s.(*ast.AssignStmt); isAss {
+		found = "assignment"
+	}
+	p.error(s.Pos(), fmt.Sprintf("expected %s, found %s (missing parentheses around composite literal?)", want, found))
+	return &ast.BadExpr{From: s.Pos(), To: p.safePos(s.End())}
+}
+
+// parseIfHeader is an adjusted version of parser.header
+// in cmd/compile/internal/syntax/parser.go, which has
+// been tuned for better error handling.
+func (p *parser) parseIfHeader() (init ast.Stmt, cond ast.Expr) {
+	if p.tok == token.LBRACE {
+		p.error(p.pos, "missing condition in if statement")
+		cond = &ast.BadExpr{From: p.pos, To: p.pos}
+		return
+	}
+	// p.tok != token.LBRACE
+
+	outer := p.exprLev
+	p.exprLev = -1
+
+	if p.tok != token.SEMICOLON {
+		// accept potential variable declaration but complain
+		if p.tok == token.VAR {
+			p.next()
+			p.error(p.pos, fmt.Sprintf("var declaration not allowed in 'IF' initializer"))
+		}
+		init, _ = p.parseSimpleStmt(basic)
+	}
+
+	var condStmt ast.Stmt
+	var semi struct {
+		pos token.Pos
+		lit string // ";" or "\n"; valid if pos.IsValid()
+	}
+	if p.tok != token.LBRACE {
+		if p.tok == token.SEMICOLON {
+			semi.pos = p.pos
+			semi.lit = p.lit
+			p.next()
+		} else {
+			p.expect(token.SEMICOLON)
+		}
+		if p.tok != token.LBRACE {
+			condStmt, _ = p.parseSimpleStmt(basic)
+		}
+	} else {
+		condStmt = init
+		init = nil
+	}
+
+	if condStmt != nil {
+		cond = p.makeExpr(condStmt, "boolean expression")
+	} else if semi.pos.IsValid() {
+		if semi.lit == "\n" {
+			p.error(semi.pos, "unexpected newline, expecting { after if clause")
+		} else {
+			p.error(semi.pos, "missing condition in if statement")
+		}
+	}
+
+	// make sure we have a valid AST
+	if cond == nil {
+		cond = &ast.BadExpr{From: p.pos, To: p.pos}
+	}
+
+	p.exprLev = outer
+	return
 }
 
 func (p *parser) parseIfStmt() *ast.IfStmt {
@@ -1657,37 +1907,27 @@ func (p *parser) parseIfStmt() *ast.IfStmt {
 	p.openScope()
 	defer p.closeScope()
 
-	var s ast.Stmt
-	var x ast.Expr
-	{
-		prevLev := p.exprLev
-		p.exprLev = -1
-		if p.tok == token.SEMICOLON {
-			p.next()
-			x = p.parseRhs()
-		} else {
-			s, _ = p.parseSimpleStmt(basic)
-			if p.tok == token.SEMICOLON {
-				p.next()
-				x = p.parseRhs()
-			} else {
-				x = p.makeExpr(s)
-				s = nil
-			}
-		}
-		p.exprLev = prevLev
-	}
-
+	init, cond := p.parseIfHeader()
 	body := p.parseBlockStmt()
+
 	var else_ ast.Stmt
 	if p.tok == token.ELSE {
 		p.next()
-		else_ = p.parseStmt()
+		switch p.tok {
+		case token.IF:
+			else_ = p.parseIfStmt()
+		case token.LBRACE:
+			else_ = p.parseBlockStmt()
+			p.expectSemi()
+		default:
+			p.errorExpected(p.pos, "if statement or block")
+			else_ = &ast.BadStmt{From: p.pos, To: p.pos}
+		}
 	} else {
 		p.expectSemi()
 	}
 
-	return &ast.IfStmt{If: pos, Init: s, Cond: x, Body: body, Else: else_}
+	return &ast.IfStmt{If: pos, Init: init, Cond: cond, Body: body, Else: else_}
 }
 
 func (p *parser) parseTypeList() (list []ast.Expr) {
@@ -1735,14 +1975,23 @@ func isTypeSwitchAssert(x ast.Expr) bool {
 	return ok && a.Type == nil
 }
 
-func isTypeSwitchGuard(s ast.Stmt) bool {
+func (p *parser) isTypeSwitchGuard(s ast.Stmt) bool {
 	switch t := s.(type) {
 	case *ast.ExprStmt:
-		// x.(nil)
+		// x.(type)
 		return isTypeSwitchAssert(t.X)
 	case *ast.AssignStmt:
-		// v := x.(nil)
-		return len(t.Lhs) == 1 && t.Tok == token.DEFINE && len(t.Rhs) == 1 && isTypeSwitchAssert(t.Rhs[0])
+		// v := x.(type)
+		if len(t.Lhs) == 1 && len(t.Rhs) == 1 && isTypeSwitchAssert(t.Rhs[0]) {
+			switch t.Tok {
+			case token.ASSIGN:
+				// permit v = x.(type) but complain
+				p.error(t.TokPos, "expected ':=', found '='")
+				fallthrough
+			case token.DEFINE:
+				return true
+			}
+		}
 	}
 	return false
 }
@@ -1774,7 +2023,7 @@ func (p *parser) parseSwitchStmt() ast.Stmt {
 				//
 				//	switch t := 0; t := x.(T) { ... }
 				//
-				// (this code is not valid Go because the first t will
+				// (this code is not valid Go because the first t
 				// cannot be accessed and thus is never used, the extra
 				// scope is needed for the correct error message).
 				//
@@ -1788,7 +2037,7 @@ func (p *parser) parseSwitchStmt() ast.Stmt {
 		p.exprLev = prevLev
 	}
 
-	typeSwitch := isTypeSwitchGuard(s2)
+	typeSwitch := p.isTypeSwitchGuard(s2)
 	lbrace := p.expect(token.LBRACE)
 	var list []ast.Stmt
 	for p.tok == token.CASE || p.tok == token.DEFAULT {
@@ -1802,7 +2051,7 @@ func (p *parser) parseSwitchStmt() ast.Stmt {
 		return &ast.TypeSwitchStmt{Switch: pos, Init: s1, Assign: s2, Body: body}
 	}
 
-	return &ast.SwitchStmt{Switch: pos, Init: s1, Tag: p.makeExpr(s2), Body: body}
+	return &ast.SwitchStmt{Switch: pos, Init: s1, Tag: p.makeExpr(s2, "switch expression"), Body: body}
 }
 
 func (p *parser) parseCommClause() *ast.CommClause {
@@ -1896,7 +2145,16 @@ func (p *parser) parseForStmt() ast.Stmt {
 		prevLev := p.exprLev
 		p.exprLev = -1
 		if p.tok != token.SEMICOLON {
-			s2, isRange = p.parseSimpleStmt(rangeOk)
+			if p.tok == token.RANGE {
+				// "for range x" (nil lhs in assignment)
+				pos := p.pos
+				p.next()
+				y := []ast.Expr{&ast.UnaryExpr{OpPos: pos, Op: token.RANGE, X: p.parseRhs()}}
+				s2 = &ast.AssignStmt{Rhs: y}
+				isRange = true
+			} else {
+				s2, isRange = p.parseSimpleStmt(rangeOk)
+			}
 		}
 		if !isRange && p.tok == token.SEMICOLON {
 			p.next()
@@ -1921,13 +2179,15 @@ func (p *parser) parseForStmt() ast.Stmt {
 		// check lhs
 		var key, value ast.Expr
 		switch len(as.Lhs) {
-		case 2:
-			key, value = as.Lhs[0], as.Lhs[1]
+		case 0:
+			// nothing to do
 		case 1:
 			key = as.Lhs[0]
+		case 2:
+			key, value = as.Lhs[0], as.Lhs[1]
 		default:
-			p.errorExpected(as.Lhs[0].Pos(), "1 or 2 expressions")
-			return &ast.BadStmt{From: pos, To: body.End()}
+			p.errorExpected(as.Lhs[len(as.Lhs)-1].Pos(), "at most 2 expressions")
+			return &ast.BadStmt{From: pos, To: p.safePos(body.End())}
 		}
 		// parseSimpleStmt returned a right-hand side that
 		// is a single unary expression of the form "range x"
@@ -1947,7 +2207,7 @@ func (p *parser) parseForStmt() ast.Stmt {
 	return &ast.ForStmt{
 		For:  pos,
 		Init: s1,
-		Cond: p.makeExpr(s2),
+		Cond: p.makeExpr(s2, "boolean or range expression"),
 		Post: s3,
 		Body: body,
 	}
@@ -1960,11 +2220,11 @@ func (p *parser) parseStmt() (s ast.Stmt) {
 
 	switch p.tok {
 	case token.CONST, token.TYPE, token.VAR:
-		s = &ast.DeclStmt{Decl: p.parseDecl(syncStmt)}
+		s = &ast.DeclStmt{Decl: p.parseDecl(stmtStart)}
 	case
 		// tokens that may start an expression
 		token.IDENT, token.INT, token.FLOAT, token.IMAG, token.CHAR, token.STRING, token.FUNC, token.LPAREN, // operands
-		token.LBRACK, token.STRUCT, // composite types
+		token.LBRACK, token.STRUCT, token.MAP, token.CHAN, token.INTERFACE, // composite types
 		token.ADD, token.SUB, token.MUL, token.AND, token.XOR, token.ARROW, token.NOT: // unary operators
 		s, _ = p.parseSimpleStmt(labelOk)
 		// because of the required look-ahead, labeled statements are
@@ -1993,16 +2253,19 @@ func (p *parser) parseStmt() (s ast.Stmt) {
 	case token.FOR:
 		s = p.parseForStmt()
 	case token.SEMICOLON:
-		s = &ast.EmptyStmt{Semicolon: p.pos}
+		// Is it ever possible to have an implicit semicolon
+		// producing an empty statement in a valid program?
+		// (handle correctly anyway)
+		s = &ast.EmptyStmt{Semicolon: p.pos, Implicit: p.lit == "\n"}
 		p.next()
 	case token.RBRACE:
 		// a semicolon may be omitted before a closing "}"
-		s = &ast.EmptyStmt{Semicolon: p.pos}
+		s = &ast.EmptyStmt{Semicolon: p.pos, Implicit: true}
 	default:
 		// no statement found
 		pos := p.pos
 		p.errorExpected(pos, "statement")
-		syncStmt(p)
+		p.advance(stmtStart)
 		s = &ast.BadStmt{From: pos, To: p.pos}
 	}
 
@@ -2012,7 +2275,7 @@ func (p *parser) parseStmt() (s ast.Stmt) {
 // ----------------------------------------------------------------------------
 // Declarations
 
-type parseSpecFunction func(p *parser, doc *ast.CommentGroup, iota int) ast.Spec
+type parseSpecFunction func(doc *ast.CommentGroup, keyword token.Token, iota int) ast.Spec
 
 func isValidImport(lit string) bool {
 	const illegalChars = `!"#$%&'()*,:;<=>?[\]^{|}` + "`\uFFFD"
@@ -2025,7 +2288,7 @@ func isValidImport(lit string) bool {
 	return s != ""
 }
 
-func parseImportSpec(p *parser, doc *ast.CommentGroup, _ int) ast.Spec {
+func (p *parser) parseImportSpec(doc *ast.CommentGroup, _ token.Token, _ int) ast.Spec {
 	if p.trace {
 		defer un(trace(p, "ImportSpec"))
 	}
@@ -2039,12 +2302,13 @@ func parseImportSpec(p *parser, doc *ast.CommentGroup, _ int) ast.Spec {
 		ident = p.parseIdent()
 	}
 
-	var path *ast.BasicLit
+	pos := p.pos
+	var path string
 	if p.tok == token.STRING {
-		if !isValidImport(p.lit) {
-			p.error(p.pos, "invalid import path: "+p.lit)
+		path = p.lit
+		if !isValidImport(path) {
+			p.error(pos, "invalid import path: "+path)
 		}
-		path = &ast.BasicLit{ValuePos: p.pos, Kind: p.tok, Value: p.lit}
 		p.next()
 	} else {
 		p.expect(token.STRING) // use expect() error handling
@@ -2055,7 +2319,7 @@ func parseImportSpec(p *parser, doc *ast.CommentGroup, _ int) ast.Spec {
 	spec := &ast.ImportSpec{
 		Doc:     doc,
 		Name:    ident,
-		Path:    path,
+		Path:    &ast.BasicLit{ValuePos: pos, Kind: token.STRING, Value: path},
 		Comment: p.lineComment,
 	}
 	p.imports = append(p.imports, spec)
@@ -2063,19 +2327,32 @@ func parseImportSpec(p *parser, doc *ast.CommentGroup, _ int) ast.Spec {
 	return spec
 }
 
-func parseConstSpec(p *parser, doc *ast.CommentGroup, iota int) ast.Spec {
+func (p *parser) parseValueSpec(doc *ast.CommentGroup, keyword token.Token, iota int) ast.Spec {
 	if p.trace {
-		defer un(trace(p, "ConstSpec"))
+		defer un(trace(p, keyword.String()+"Spec"))
 	}
 
+	pos := p.pos
 	idents := p.parseIdentList()
 	typ := p.tryType()
 	var values []ast.Expr
-	if typ != nil || p.tok == token.ASSIGN || iota == 0 {
-		p.expect(token.ASSIGN)
+	// always permit optional initialization for more tolerant parsing
+	if p.tok == token.ASSIGN {
+		p.next()
 		values = p.parseRhsList()
 	}
 	p.expectSemi() // call before accessing p.linecomment
+
+	switch keyword {
+	case token.VAR:
+		if typ == nil && values == nil {
+			p.error(pos, "missing variable type or initialization")
+		}
+	case token.CONST:
+		if values == nil && (iota == 0 || typ != nil) {
+			p.error(pos, "missing constant value")
+		}
+	}
 
 	// Go spec: The scope of a constant or variable identifier declared inside
 	// a function begins at the end of the ConstSpec or VarSpec and ends at
@@ -2088,12 +2365,16 @@ func parseConstSpec(p *parser, doc *ast.CommentGroup, iota int) ast.Spec {
 		Values:  values,
 		Comment: p.lineComment,
 	}
-	p.declare(spec, iota, p.topScope, ast.Con, idents...)
+	kind := ast.Con
+	if keyword == token.VAR {
+		kind = ast.Var
+	}
+	p.declare(spec, iota, p.topScope, kind, idents...)
 
 	return spec
 }
 
-func parseTypeSpec(p *parser, doc *ast.CommentGroup, _ int) ast.Spec {
+func (p *parser) parseTypeSpec(doc *ast.CommentGroup, _ token.Token, _ int) ast.Spec {
 	if p.trace {
 		defer un(trace(p, "TypeSpec"))
 	}
@@ -2106,40 +2387,13 @@ func parseTypeSpec(p *parser, doc *ast.CommentGroup, _ int) ast.Spec {
 	// (Global identifiers are resolved in a separate phase after parsing.)
 	spec := &ast.TypeSpec{Doc: doc, Name: ident}
 	p.declare(spec, nil, p.topScope, ast.Typ, ident)
-
+	if p.tok == token.ASSIGN {
+		spec.Assign = p.pos
+		p.next()
+	}
 	spec.Type = p.parseType()
 	p.expectSemi() // call before accessing p.linecomment
 	spec.Comment = p.lineComment
-
-	return spec
-}
-
-func parseVarSpec(p *parser, doc *ast.CommentGroup, _ int) ast.Spec {
-	if p.trace {
-		defer un(trace(p, "VarSpec"))
-	}
-
-	idents := p.parseIdentList()
-	typ := p.tryType()
-	var values []ast.Expr
-	if typ == nil || p.tok == token.ASSIGN {
-		p.expect(token.ASSIGN)
-		values = p.parseRhsList()
-	}
-	p.expectSemi() // call before accessing p.linecomment
-
-	// Go spec: The scope of a constant or variable identifier declared inside
-	// a function begins at the end of the ConstSpec or VarSpec and ends at
-	// the end of the innermost containing block.
-	// (Global identifiers are resolved in a separate phase after parsing.)
-	spec := &ast.ValueSpec{
-		Doc:     doc,
-		Names:   idents,
-		Type:    typ,
-		Values:  values,
-		Comment: p.lineComment,
-	}
-	p.declare(spec, nil, p.topScope, ast.Var, idents...)
 
 	return spec
 }
@@ -2157,12 +2411,12 @@ func (p *parser) parseGenDecl(keyword token.Token, f parseSpecFunction) *ast.Gen
 		lparen = p.pos
 		p.next()
 		for iota := 0; p.tok != token.RPAREN && p.tok != token.EOF; iota++ {
-			list = append(list, f(p, p.leadComment, iota))
+			list = append(list, f(p.leadComment, keyword, iota))
 		}
 		rparen = p.expect(token.RPAREN)
 		p.expectSemi()
 	} else {
-		list = append(list, f(p, nil, 0))
+		list = append(list, f(nil, keyword, 0))
 	}
 
 	return &ast.GenDecl{
@@ -2173,36 +2427,6 @@ func (p *parser) parseGenDecl(keyword token.Token, f parseSpecFunction) *ast.Gen
 		Specs:  list,
 		Rparen: rparen,
 	}
-}
-
-func (p *parser) parseReceiver(scope *ast.Scope) *ast.FieldList {
-	if p.trace {
-		defer un(trace(p, "Receiver"))
-	}
-
-	par := p.parseParameters(scope, false)
-
-	// must have exactly one receiver
-	if par.NumFields() != 1 {
-		p.errorExpected(par.Opening, "exactly one receiver")
-		par.List = []*ast.Field{{Type: &ast.BadExpr{From: par.Opening, To: par.Closing + 1}}}
-		return par
-	}
-
-	// recv type must be of the form ["*"] identifier
-	recv := par.List[0]
-	base := deref(recv.Type)
-	if _, isIdent := base.(*ast.Ident); !isIdent {
-		if _, isBad := base.(*ast.BadExpr); !isBad {
-			// only report error if it's a new one
-			p.errorExpected(base.Pos(), "(unqualified) identifier")
-		}
-		par.List = []*ast.Field{
-			{Type: &ast.BadExpr{From: recv.Pos(), To: recv.End()}},
-		}
-	}
-
-	return par
 }
 
 func (p *parser) parseFuncDecl() *ast.FuncDecl {
@@ -2216,7 +2440,7 @@ func (p *parser) parseFuncDecl() *ast.FuncDecl {
 
 	var recv *ast.FieldList
 	if p.tok == token.LPAREN {
-		recv = p.parseReceiver(scope)
+		recv = p.parseParameters(scope, false)
 	}
 
 	ident := p.parseIdent()
@@ -2226,8 +2450,18 @@ func (p *parser) parseFuncDecl() *ast.FuncDecl {
 	var body *ast.BlockStmt
 	if p.tok == token.LBRACE {
 		body = p.parseBody(scope)
+		p.expectSemi()
+	} else if p.tok == token.SEMICOLON {
+		p.next()
+		if p.tok == token.LBRACE {
+			// opening { of function declaration on next line
+			p.error(p.pos, "unexpected semicolon or newline before {")
+			body = p.parseBody(scope)
+			p.expectSemi()
+		}
+	} else {
+		p.expectSemi()
 	}
-	p.expectSemi()
 
 	decl := &ast.FuncDecl{
 		Doc:  doc,
@@ -2255,21 +2489,18 @@ func (p *parser) parseFuncDecl() *ast.FuncDecl {
 	return decl
 }
 
-func (p *parser) parseDecl(sync func(*parser)) ast.Decl {
+func (p *parser) parseDecl(sync map[token.Token]bool) ast.Decl {
 	if p.trace {
 		defer un(trace(p, "Declaration"))
 	}
 
 	var f parseSpecFunction
 	switch p.tok {
-	case token.CONST:
-		f = parseConstSpec
+	case token.CONST, token.VAR:
+		f = p.parseValueSpec
 
 	case token.TYPE:
-		f = parseTypeSpec
-
-	case token.VAR:
-		f = parseVarSpec
+		f = p.parseTypeSpec
 
 	case token.FUNC:
 		return p.parseFuncDecl()
@@ -2277,7 +2508,7 @@ func (p *parser) parseDecl(sync func(*parser)) ast.Decl {
 	default:
 		pos := p.pos
 		p.errorExpected(pos, "declaration")
-		sync(p)
+		p.advance(sync)
 		return &ast.BadDecl{From: pos, To: p.pos}
 	}
 
@@ -2292,37 +2523,48 @@ func (p *parser) parseFile() *ast.File {
 		defer un(trace(p, "File"))
 	}
 
+	// Don't bother parsing the rest if we had errors scanning the first token.
+	// Likely not a Go source file at all.
+	if p.errors.Len() != 0 {
+		return nil
+	}
+
 	// package clause
 	doc := p.leadComment
 	pos := p.expect(token.PACKAGE)
 	// Go spec: The package clause is not a declaration;
 	// the package name does not appear in any scope.
 	ident := p.parseIdent()
-	if ident.Name == "_" {
+	if ident.Name == "_" && p.mode&DeclarationErrors != 0 {
 		p.error(p.pos, "invalid package name _")
 	}
 	p.expectSemi()
 
-	var decls []ast.Decl
-
-	// Don't bother parsing the rest if we had errors already.
+	// Don't bother parsing the rest if we had errors parsing the package clause.
 	// Likely not a Go source file at all.
+	if p.errors.Len() != 0 {
+		return nil
+	}
 
-	if p.errors.Len() == 0 && p.mode&PackageClauseOnly == 0 {
+	p.openScope()
+	p.pkgScope = p.topScope
+	var decls []ast.Decl
+	if p.mode&PackageClauseOnly == 0 {
 		// import decls
 		for p.tok == token.IMPORT {
-			decls = append(decls, p.parseGenDecl(token.IMPORT, parseImportSpec))
+			decls = append(decls, p.parseGenDecl(token.IMPORT, p.parseImportSpec))
 		}
 
 		if p.mode&ImportsOnly == 0 {
 			// rest of package body
 			for p.tok != token.EOF {
-				decls = append(decls, p.parseDecl(syncDecl))
+				decls = append(decls, p.parseDecl(declStart))
 			}
 		}
 	}
-
-	assert(p.topScope == p.pkgScope, "imbalanced scopes")
+	p.closeScope()
+	assert(p.topScope == nil, "unbalanced scopes")
+	assert(p.labelScope == nil, "unbalanced label scopes")
 
 	// resolve global identifiers within the same file
 	i := 0

@@ -1,6 +1,5 @@
 /* Definitions of target machine for GNU compiler for TILE-Gx.
-   Copyright (C) 2011, 2012
-   Free Software Foundation, Inc.
+   Copyright (C) 2011-2020 Free Software Foundation, Inc.
    Contributed by Walter Lee (walt@tilera.com)
 
    This file is part of GCC.
@@ -19,6 +18,23 @@
    along with GCC; see the file COPYING3.  If not see
    <http://www.gnu.org/licenses/>.  */
 
+/* Default target_flags if no switches are specified  */
+#ifndef TARGET_DEFAULT
+#define TARGET_DEFAULT 0
+#endif
+
+#ifndef TARGET_BIG_ENDIAN_DEFAULT
+#define TARGET_BIG_ENDIAN_DEFAULT 0
+#endif
+
+#ifndef TARGET_ENDIAN_DEFAULT
+#if TARGET_BIG_ENDIAN_DEFAULT
+#define TARGET_ENDIAN_DEFAULT MASK_BIG_ENDIAN
+#else
+#define TARGET_ENDIAN_DEFAULT 0
+#endif
+#endif
+
 /* This is used by tilegx_cpu_cpp_builtins to indicate the byte order
    we're compiling for.  */
 #define TILEGX_CPU_CPP_ENDIAN_BUILTINS()	\
@@ -30,6 +46,8 @@
 	builtin_define ("__LITTLE_ENDIAN__");	\
     }						\
   while (0)
+
+#include "config/tilegx/tilegx-opts.h"
 
 
 /* Target CPU builtins.  */
@@ -51,16 +69,16 @@
 
 /* Target machine storage layout */
 
-#define TARGET_BIG_ENDIAN 0
 #define BITS_BIG_ENDIAN 0
-#define BYTES_BIG_ENDIAN TARGET_BIG_ENDIAN
-#define WORDS_BIG_ENDIAN TARGET_BIG_ENDIAN
+#define BYTES_BIG_ENDIAN (TARGET_BIG_ENDIAN != 0)
+#define WORDS_BIG_ENDIAN (TARGET_BIG_ENDIAN != 0)
+#define FLOAT_WORDS_BIG_ENDIAN (TARGET_BIG_ENDIAN != 0)
 
 #define UNITS_PER_WORD 8
 #define PARM_BOUNDARY BITS_PER_WORD
-#define STACK_BOUNDARY 64
+#define STACK_BOUNDARY 128
 #define FUNCTION_BOUNDARY 64
-#define BIGGEST_ALIGNMENT 64
+#define BIGGEST_ALIGNMENT 128
 #define STRICT_ALIGNMENT 1
 
 #define INT_TYPE_SIZE         32
@@ -73,18 +91,8 @@
 
 #define PCC_BITFIELD_TYPE_MATTERS 1
 #define FASTEST_ALIGNMENT 64
-#define BIGGEST_FIELD_ALIGNMENT 64
+#define BIGGEST_FIELD_ALIGNMENT 128
 #define WIDEST_HARDWARE_FP_SIZE 64
-
-/* Unaligned moves trap and are very slow.  */
-#define SLOW_UNALIGNED_ACCESS(MODE, ALIGN) 1
-
-/* Make strings word-aligned so strcpy from constants will be
-   faster.  */
-#define CONSTANT_ALIGNMENT(EXP, ALIGN)  \
-  ((TREE_CODE (EXP) == STRING_CST	\
-    && (ALIGN) < FASTEST_ALIGNMENT)	\
-   ? FASTEST_ALIGNMENT : (ALIGN))
 
 /* Make arrays of chars word-aligned for the same reasons.  */
 #define DATA_ALIGNMENT(TYPE, ALIGN)		\
@@ -106,15 +114,12 @@
   0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, \
   0, 0, 0, 0, 0, 1, 1, 0, 1, 1, 1, 1, 1, 1, 1, 1, \
   1, 1, 1, 1}
-#define CALL_USED_REGISTERS \
+#define CALL_REALLY_USED_REGISTERS \
  {1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, \
   1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0, 0, \
   0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, \
   0, 0, 0, 0, 0, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, \
   1, 1, 1, 1}
-
-#define CALL_REALLY_USED_REGISTERS \
- CALL_USED_REGISTERS
 
 #define REG_ALLOC_ORDER {				\
       10, 11, 12, 13, 14, /* call used */		\
@@ -140,13 +145,6 @@
       61, 62, 63, 64, 65, /* or fake registers */	\
       66, 67						\
 }
-
-#define HARD_REGNO_NREGS(REGNO, MODE)	\
-  ((GET_MODE_SIZE (MODE) + UNITS_PER_WORD - 1) / UNITS_PER_WORD)
-
-#define HARD_REGNO_MODE_OK(REGNO, MODE) 1
-
-#define MODES_TIEABLE_P(MODE1, MODE2)  1
 
 /* Register that holds an address into the text segment that can be
    used by pic code.  */
@@ -239,11 +237,11 @@ enum reg_class
 
 /* Stack layout; function entry, exit and calling.  */
 
-#define STACK_GROWS_DOWNWARD
+#define STACK_GROWS_DOWNWARD 1
 #define FRAME_GROWS_DOWNWARD 1
-#define STARTING_FRAME_OFFSET 0
 
-#define DYNAMIC_CHAIN_ADDRESS(FRAME) plus_constant ((FRAME), UNITS_PER_WORD)
+#define DYNAMIC_CHAIN_ADDRESS(FRAME) \
+  plus_constant (Pmode, (FRAME), UNITS_PER_WORD)
 
 #define FIRST_PARM_OFFSET(FNDECL) 0
 
@@ -348,7 +346,7 @@ enum reg_class
 #define CLEAR_RATIO(speed) ((speed) ? 15 : TILEGX_CALL_RATIO)
 #define SET_RATIO(speed) ((speed) ? 15 : TILEGX_CALL_RATIO)
 
-#define WORD_REGISTER_OPERATIONS
+#define WORD_REGISTER_OPERATIONS 1
 
 #define LOAD_EXTEND_OP(MODE) ((MODE) == SImode ? SIGN_EXTEND : ZERO_EXTEND)
 
@@ -367,12 +365,7 @@ enum reg_class
 
 #define SHIFT_COUNT_TRUNCATED 0
 
-#define SHORT_IMMEDIATES_SIGN_EXTEND
-
-/* We represent all SI values as sign-extended DI values in
-   registers.  */
-#define TRULY_NOOP_TRUNCATION(OUTPREC, INPREC) \
-  ((INPREC) <= 32 || (OUTPREC) > 32)
+#define SHORT_IMMEDIATES_SIGN_EXTEND 1
 
 #define CLZ_DEFINED_VALUE_AT_ZERO(MODE, VALUE) ((VALUE) = 64, 1)
 #define CTZ_DEFINED_VALUE_AT_ZERO(MODE, VALUE) ((VALUE) = 64, 1)
@@ -481,6 +474,19 @@ enum reg_class
     assemble_name ((FILE), (NAME)),			\
     fprintf ((FILE), ",%u\n", (unsigned int)(ROUNDED)))
 
+#define CRT_CALL_STATIC_FUNCTION(SECTION_OP, FUNC)		\
+static void __attribute__((__used__))				\
+call_ ## FUNC (void)						\
+{								\
+  asm (SECTION_OP);						\
+  asm ("{ moveli r0, hw2_last(" #FUNC " - . - 8); lnk r1 }\n");	\
+  asm ("shl16insli r0, r0, hw1(" #FUNC " - .)\n");		\
+  asm ("shl16insli r0, r0, hw0(" #FUNC " - . + 8)\n");		\
+  asm ("add r0, r1, r0\n");					\
+  asm ("jalr r0\n");						\
+  asm (TEXT_SECTION_ASM_OP);					\
+}
+
 
 
 #define INIT_EXPANDERS tilegx_init_expanders ()
@@ -505,3 +511,20 @@ typedef struct GTY(()) machine_function
 #ifndef HAVE_AS_TLS
 #define HAVE_AS_TLS 0
 #endif
+
+#ifndef ENDIAN_SPEC
+#if TARGET_BIG_ENDIAN_DEFAULT
+#define ENDIAN_SPEC \
+  "%{!mlittle-endian:-EB} \
+   %{mlittle-endian:%{mbig-endian: \
+     %e-mbig-endian and -mlittle-endian may not be used together}-EL}"
+#else
+#define ENDIAN_SPEC \
+  "%{!mbig-endian:-EL} \
+   %{mbig-endian:%{mlittle-endian: \
+    %e-mbig-endian and -mlittle-endian may not be used together}-EB}"
+#endif
+#endif
+
+#define EXTRA_SPECS		\
+  { "endian_spec", ENDIAN_SPEC }

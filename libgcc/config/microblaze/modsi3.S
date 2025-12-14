@@ -1,6 +1,6 @@
 ###################################
 # 
-#  Copyright 2009, 2010, 2011 Free Software Foundation, Inc.
+#  Copyright (C) 2009-2020 Free Software Foundation, Inc.
 #
 #  Contributed by Michael Eager <eager@eagercon.com>.
 #
@@ -32,6 +32,12 @@
 # 
 #######################################
 
+/* An executable stack is *not* required for these functions.  */
+#ifdef __linux__
+.section .note.GNU-stack,"",%progbits
+.previous
+#endif
+
 	.globl	__modsi3
 	.ent	__modsi3
 	.type	__modsi3,@function
@@ -55,6 +61,8 @@ $LaR5_Pos:
 $LaR6_Pos:
 	ADDIK	r3,r0,0      # Clear mod
 	ADDIK	r30,r0,0     # clear div
+	BLTId	r5,$LaDIV2   # If r5 is still negative (0x80000000), skip
+			     # the first bit search.
 	ADDIK	r29,r0,32    # Initialize the loop count
    # First part try to find the first '1' in the r5
 $LaDIV1:

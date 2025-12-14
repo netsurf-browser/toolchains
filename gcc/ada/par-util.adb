@@ -6,7 +6,7 @@
 --                                                                          --
 --                                 B o d y                                  --
 --                                                                          --
---          Copyright (C) 1992-2011, Free Software Foundation, Inc.         --
+--          Copyright (C) 1992-2019, Free Software Foundation, Inc.         --
 --                                                                          --
 -- GNAT is free software;  you can  redistribute it  and/or modify it under --
 -- terms of the  GNU General Public License as published  by the Free Soft- --
@@ -27,6 +27,7 @@ with Csets;    use Csets;
 with Namet.Sp; use Namet.Sp;
 with Stylesw;  use Stylesw;
 with Uintp;    use Uintp;
+with Warnsw;   use Warnsw;
 
 with GNAT.Spelling_Checker; use GNAT.Spelling_Checker;
 
@@ -96,7 +97,7 @@ package body Util is
 
       --  Never consider something a misspelling if either the actual or
       --  expected string is less than 3 characters (before this check we
-      --  used to consider i to be a misspelled if in some cases!)
+      --  used to consider i to be a misspelled if in some cases).
 
       if SL < 3 or else Name_Len < 3 then
          return False;
@@ -161,7 +162,7 @@ package body Util is
    procedure Check_Bad_Layout is
    begin
       if RM_Column_Check and then Token_Is_At_Start_Of_Line
-        and then Start_Column <= Scope.Table (Scope.Last).Ecol
+        and then Start_Column <= Scopes (Scope.Last).Ecol
       then
          Error_Msg_BC -- CODEFIX
            ("(style) incorrect layout");
@@ -180,12 +181,11 @@ package body Util is
       if Ada_Version = Ada_95
         and then Warn_On_Ada_2005_Compatibility
       then
-         if Token_Name = Name_Overriding
-           or else Token_Name = Name_Synchronized
+         if Nam_In (Token_Name, Name_Overriding, Name_Synchronized)
            or else (Token_Name = Name_Interface
                      and then Prev_Token /= Tok_Pragma)
          then
-            Error_Msg_N ("& is a reserved word in Ada 2005?", Token_Node);
+            Error_Msg_N ("& is a reserved word in Ada 2005?y?", Token_Node);
          end if;
       end if;
 
@@ -195,7 +195,7 @@ package body Util is
         and then Warn_On_Ada_2012_Compatibility
       then
          if Token_Name = Name_Some then
-            Error_Msg_N ("& is a reserved word in Ada 2012?", Token_Node);
+            Error_Msg_N ("& is a reserved word in Ada 2012?y?", Token_Node);
          end if;
       end if;
 
@@ -268,7 +268,7 @@ package body Util is
       Paren_Count : Nat;
 
    begin
-      --  First check, if a comma is present, then a comma is present!
+      --  First check, if a comma is present, then a comma is present
 
       if Token = Tok_Comma then
          T_Comma;
@@ -276,8 +276,11 @@ package body Util is
 
       --  If we have a right paren, then that is taken as ending the list
       --  i.e. no comma is present.
+      --  Ditto for a right bracket in Ada2020.
 
-      elsif Token = Tok_Right_Paren then
+      elsif Token = Tok_Right_Paren
+        or else (Token = Tok_Right_Bracket and then Ada_Version >= Ada_2020)
+      then
          return False;
 
       --  If pragmas, then get rid of them and make a recursive call
@@ -318,7 +321,7 @@ package body Util is
 
          --  If that test didn't work, loop ahead looking for a comma or
          --  semicolon at the same parenthesis level. Always remember that
-         --  we can't go badly wrong in an error situation like this!
+         --  we can't go badly wrong in an error situation like this.
 
          Paren_Count := 0;
 
@@ -429,9 +432,23 @@ package body Util is
             Error_Msg_SC -- CODEFIX
               ("|extra ""("" ignored");
 
+         --  Note: the following error used to be labeled as a non-serious
+         --  error like the other similar messages here (with a | at the start
+         --  of the message). But this caused some annoying cascaded errors
+         --  that were confusing, as shown by this example:
+
+         --          A : array (1 .. 9) of Integer :=
+         --            ((1 .. 2) => 0,
+         --             1  2   3
+         --       >>> positional aggregate cannot have one component
+         --       >>> named association cannot follow positional association
+         --       >>> extra ")" ignored
+
+         --  So we decided to label it as serious after all
+
          elsif T = Tok_Right_Paren then
             Error_Msg_SC -- CODEFIX
-              ("|extra "")"" ignored");
+              ("extra "")"" ignored");
 
          elsif T = Tok_Semicolon then
             Error_Msg_SC -- CODEFIX
@@ -634,6 +651,10 @@ package body Util is
 
    procedure No_Constraint is
    begin
+      --  If we have a token that could start a constraint on the same line
+      --  then cnsider this an illegal constraint. It seems unlikely it could
+      --  be anything else if it is on the same line.
+
       if Token in Token_Class_Consk then
          Error_Msg_SC ("constraint not allowed here");
          Discard_Junk_Node (P_Constraint_Opt);
@@ -648,6 +669,12 @@ package body Util is
    begin
       pragma Assert (Scope.Last > 0);
       Scope.Decrement_Last;
+
+      if Include_Subprogram_In_Messages
+        and then Scopes (Scope.Last).Labl /= Error
+      then
+         Current_Node := Scopes (Scope.Last).Labl;
+      end if;
 
       if Debug_Flag_P then
          Error_Msg_Uint_1 := UI_From_Int (Scope.Last);
@@ -671,8 +698,8 @@ package body Util is
             First_Non_Blank_Location);
       end if;
 
-      Scope.Table (Scope.Last).Junk := False;
-      Scope.Table (Scope.Last).Node := Empty;
+      Scopes (Scope.Last).Junk := False;
+      Scopes (Scope.Last).Node := Empty;
 
       if Debug_Flag_P then
          Error_Msg_Uint_1 := UI_From_Int (Scope.Last);
@@ -715,20 +742,7 @@ package body Util is
 
    procedure Signal_Bad_Attribute is
    begin
-      Error_Msg_N ("unrecognized attribute&", Token_Node);
-
-      --  Check for possible misspelling
-
-      Error_Msg_Name_1 := First_Attribute_Name;
-      while Error_Msg_Name_1 <= Last_Attribute_Name loop
-         if Is_Bad_Spelling_Of (Token_Name, Error_Msg_Name_1) then
-            Error_Msg_N -- CODEFIX
-              ("\possible misspelling of %", Token_Node);
-            exit;
-         end if;
-
-         Error_Msg_Name_1 := Error_Msg_Name_1 + 1;
-      end loop;
+      Bad_Attribute (Token_Node, Token_Name, Warn => False);
    end Signal_Bad_Attribute;
 
    -----------------------------
@@ -761,5 +775,22 @@ package body Util is
    begin
       return (Token_Ptr = First_Non_Blank_Location or else Token = Tok_EOF);
    end Token_Is_At_Start_Of_Line;
+
+   -----------------------------------
+   -- Warn_If_Standard_Redefinition --
+   -----------------------------------
+
+   procedure Warn_If_Standard_Redefinition (N : Node_Id) is
+   begin
+      if Warn_On_Standard_Redefinition then
+         declare
+            C : constant Entity_Id := Current_Entity (N);
+         begin
+            if Present (C) and then Sloc (C) = Standard_Location then
+               Error_Msg_N ("redefinition of entity& in Standard?K?", N);
+            end if;
+         end;
+      end if;
+   end Warn_If_Standard_Redefinition;
 
 end Util;

@@ -1,8 +1,9 @@
 // Test that -Wnoexcept works with templates
-// { dg-options "-std=c++0x -Wnoexcept" }
+// { dg-do compile { target c++11 } }
+// { dg-options "-Wnoexcept" }
 
 template <class T>
-T f (T t) { return t; }		// { dg-warning "does not throw" }
+T f (T t) { return t; }		// { dg-message "does not throw" }
 
 #define SA(X) static_assert(X, #X)
 

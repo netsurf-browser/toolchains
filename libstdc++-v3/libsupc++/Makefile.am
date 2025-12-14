@@ -1,8 +1,6 @@
 ## Makefile for the GNU C++ Support library.
 ##
-## Copyright (C) 2000, 2001, 2002, 2003, 2004, 2005, 2006, 2007, 2008,
-## 2009, 2010, 2011, 2012
-## Free Software Foundation, Inc.
+## Copyright (C) 2000-2020 Free Software Foundation, Inc.
 ##
 ## Process this file with automake to produce Makefile.in.
 ##
@@ -28,15 +26,16 @@ include $(top_srcdir)/fragment.am
 # separately too.
 # 1) separate libsupc++.la
 toolexeclib_LTLIBRARIES = libsupc++.la
+
 # 2) integrated libsupc++convenience.la that is to be a part of libstdc++.a
 noinst_LTLIBRARIES = libsupc++convenience.la
 
 std_HEADERS = \
-	cxxabi.h exception initializer_list new typeinfo
+	compare cxxabi.h exception initializer_list new typeinfo
 
 bits_HEADERS = \
 	atomic_lockfree_defines.h cxxabi_forced.h \
-	exception_defines.h exception_ptr.h hash_bytes.h nested_exception.h
+	exception_defines.h exception_ptr.h hash_bytes.h nested_exception.h exception.h cxxabi_init_exception.h
 
 headers = $(std_HEADERS) $(bits_HEADERS)
 
@@ -48,13 +47,18 @@ endif
 sources = \
 	array_type_info.cc \
 	atexit_arm.cc \
+	atexit_thread.cc \
 	bad_alloc.cc \
+	bad_array_length.cc \
+	bad_array_new.cc \
 	bad_cast.cc \
 	bad_typeid.cc \
 	class_type_info.cc \
 	del_op.cc \
+	del_ops.cc \
 	del_opnt.cc \
 	del_opv.cc \
+	del_opvs.cc \
 	del_opvnt.cc \
 	dyncast.cc \
 	eh_alloc.cc \
@@ -84,6 +88,16 @@ sources = \
 	new_opnt.cc \
 	new_opv.cc \
 	new_opvnt.cc \
+	new_opa.cc \
+	new_opant.cc \
+	new_opva.cc \
+	new_opvant.cc \
+	del_opa.cc \
+	del_opant.cc \
+	del_opsa.cc \
+	del_opva.cc \
+	del_opvant.cc \
+	del_opvsa.cc \
 	pbase_type_info.cc \
 	pmem_type_info.cc \
 	pointer_type_info.cc \
@@ -95,8 +109,15 @@ sources = \
 	vmi_class_type_info.cc \
 	vterminate.cc
 
-libsupc___la_SOURCES = $(sources) $(c_sources)
-libsupc__convenience_la_SOURCES = $(sources) $(c_sources)
+if ENABLE_VTABLE_VERIFY
+if !VTV_CYGMIN
+  vtv_sources = \
+	vtv_stubs.cc
+endif
+endif
+
+libsupc___la_SOURCES = $(sources) $(c_sources) $(vtv_sources)
+libsupc__convenience_la_SOURCES = $(sources) $(c_sources) $(vtv_sources)
 
 cp-demangle.c:
 	rm -f $@
@@ -107,26 +128,27 @@ cp-demangle.o: cp-demangle.c
 	$(C_COMPILE) -DIN_GLIBCPP_V3 -Wno-error -c $<
 
 
-# Use special rules for the C++0x sources so that the proper flags are passed.
-eh_ptr.lo: eh_ptr.cc
-	$(LTCXXCOMPILE) -std=gnu++0x -c $<
-eh_ptr.o: eh_ptr.cc
-	$(CXXCOMPILE) -std=gnu++0x -c $<
-
-eh_throw.lo: eh_throw.cc
-	$(LTCXXCOMPILE) -std=gnu++0x -c $<
-eh_throw.o: eh_throw.cc
-	$(CXXCOMPILE) -std=gnu++0x -c $<
-
-guard.lo: guard.cc
-	$(LTCXXCOMPILE) -std=gnu++0x -c $<
-guard.o: guard.cc
-	$(CXXCOMPILE) -std=gnu++0x -c $<
-
-nested_exception.lo: nested_exception.cc
-	$(LTCXXCOMPILE) -std=gnu++0x -c $<
-nested_exception.o: nested_exception.cc
-	$(CXXCOMPILE) -std=gnu++0x -c $<
+# Use special rules for the C++17 sources so that the proper flags are passed.
+new_opa.lo: new_opa.cc
+	$(LTCXXCOMPILE) -std=gnu++1z -c $<
+new_opant.lo: new_opant.cc
+	$(LTCXXCOMPILE) -std=gnu++1z -c $<
+new_opva.lo: new_opva.cc
+	$(LTCXXCOMPILE) -std=gnu++1z -c $<
+new_opvant.lo: new_opvant.cc
+	$(LTCXXCOMPILE) -std=gnu++1z -c $<
+del_opa.lo: del_opa.cc
+	$(LTCXXCOMPILE) -std=gnu++1z -c $<
+del_opant.lo: del_opant.cc
+	$(LTCXXCOMPILE) -std=gnu++1z -c $<
+del_opsa.lo: del_opsa.cc
+	$(LTCXXCOMPILE) -std=gnu++1z -c $<
+del_opva.lo: del_opva.cc
+	$(LTCXXCOMPILE) -std=gnu++1z -c $<
+del_opvant.lo: del_opvant.cc
+	$(LTCXXCOMPILE) -std=gnu++1z -c $<
+del_opvsa.lo: del_opvsa.cc
+	$(LTCXXCOMPILE) -std=gnu++1z -c $<
 
 # AM_CXXFLAGS needs to be in each subdirectory so that it can be
 # modified in a per-library or per-sub-library way.  Need to manually
@@ -148,13 +170,13 @@ AM_MAKEFLAGS = \
 C_INCLUDES = -I.. -I$(toplevel_srcdir)/libiberty -I$(toplevel_srcdir)/include
 C_COMPILE = \
 	$(CC) $(DEFS) $(C_INCLUDES) \
-	$(AM_CPPFLAGS) $(CPPFLAGS) $(AM_CFLAGS) $(CFLAGS)
+	$(AM_CPPFLAGS) $(CPPFLAGS) $(AM_CFLAGS) $(CFLAGS) $(EXTRA_CFLAGS)
 
 # LTCOMPILE is copied from LTCXXCOMPILE below.
 LTCOMPILE = $(LIBTOOL) --tag CC --tag disable-shared $(LIBTOOLFLAGS) --mode=compile \
 	    $(CC) $(DEFS) $(C_INCLUDES) \
 	    $(glibcxx_lt_pic_flag) $(glibcxx_compiler_shared_flag) \
-	    $(AM_CPPFLAGS) $(CPPFLAGS) $(AM_CFLAGS) $(CFLAGS)
+	    $(AM_CPPFLAGS) $(CPPFLAGS) $(AM_CFLAGS) $(CFLAGS) $(EXTRA_CFLAGS)
 
 # Libtool notes
 
@@ -179,14 +201,14 @@ LTCOMPILE = $(LIBTOOL) --tag CC --tag disable-shared $(LIBTOOLFLAGS) --mode=comp
 # placed after --tag CXX lest things CXX undo the affect of
 # disable-shared.
 
-# 2) Need to explicitly set LTCXXCOMPILE so that AM_CXXFLAGS is
+# 2) Need to explicitly set LTCXXCOMPILE so that EXTRA_CXX_FLAGS is
 # last. (That way, things like -O2 passed down from the toplevel can
 # be overridden by --enable-debug.)
 LTCXXCOMPILE = \
 	$(LIBTOOL) --tag CXX --tag disable-shared \
 	$(AM_LIBTOOLFLAGS) $(LIBTOOLFLAGS) \
 	--mode=compile $(CXX) $(TOPLEVEL_INCLUDES) \
-	$(AM_CPPFLAGS) $(CPPFLAGS) $(AM_CXXFLAGS) $(CXXFLAGS)
+	$(AM_CPPFLAGS) $(CPPFLAGS) $(AM_CXXFLAGS) $(CXXFLAGS) $(EXTRA_CXX_FLAGS)
 
 LTLDFLAGS = $(shell $(SHELL) $(top_srcdir)/../libtool-ldflags $(LDFLAGS))
 
@@ -241,3 +263,8 @@ uninstall-bitsHEADERS:
 	  q=`echo $$p | sed -e 's,.*/,,'`; \
 	  rm -f $(DESTDIR)$(bitsdir)/$$q; \
 	done
+
+
+# By adding these files here, automake will remove them for 'make clean'
+CLEANFILES = stamp-*
+

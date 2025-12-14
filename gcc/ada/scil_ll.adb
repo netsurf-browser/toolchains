@@ -6,7 +6,7 @@
 --                                                                          --
 --                                 B o d y                                  --
 --                                                                          --
---             Copyright (C) 2010, Free Software Foundation, Inc.           --
+--          Copyright (C) 2010-2019, Free Software Foundation, Inc.         --
 --                                                                          --
 -- GNAT is free software;  you can  redistribute it  and/or modify it under --
 -- terms of the  GNU General Public License as published  by the Free Soft- --
@@ -29,11 +29,10 @@
 --                                                                          --
 ------------------------------------------------------------------------------
 
-with Alloc; use Alloc;
-with Atree; use Atree;
-with Opt;   use Opt;
-with Sinfo; use Sinfo;
-with Table;
+with Atree;         use Atree;
+with Opt;           use Opt;
+with Sinfo;         use Sinfo;
+with System.HTable; use System.HTable;
 
 package body SCIL_LL is
 
@@ -41,32 +40,23 @@ package body SCIL_LL is
    --  Copy the SCIL field from Source to Target (it is used as the argument
    --  for a call to Set_Reporting_Proc in package atree).
 
-   function SCIL_Nodes_Table_Size return Pos;
-   --  Used to initialize the table of SCIL nodes because we do not want
-   --  to consume memory for this table if it is not required.
+   type Header_Num is range 1 .. 4096;
 
-   ----------------------------
-   --  SCIL_Nodes_Table_Size --
-   ----------------------------
+   function Hash (N : Node_Id) return Header_Num;
+   --  Hash function for Node_Ids
 
-   function SCIL_Nodes_Table_Size return Pos is
-   begin
-      if Generate_SCIL then
-         return Alloc.Orig_Nodes_Initial;
-      else
-         return 1;
-      end if;
-   end SCIL_Nodes_Table_Size;
+   --------------------------
+   -- Internal Hash Tables --
+   --------------------------
 
-   package SCIL_Nodes is new Table.Table (
-      Table_Component_Type => Node_Id,
-      Table_Index_Type     => Node_Id'Base,
-      Table_Low_Bound      => First_Node_Id,
-      Table_Initial        => SCIL_Nodes_Table_Size,
-      Table_Increment      => Alloc.Orig_Nodes_Increment,
-      Table_Name           => "SCIL_Nodes");
-   --  This table records the value of attribute SCIL_Node of all the
-   --  tree nodes.
+   package SCIL_Nodes is new Simple_HTable
+     (Header_Num => Header_Num,
+      Element    => Node_Id,
+      No_Element => Empty,
+      Key        => Node_Id,
+      Hash       => Hash,
+      Equal      => "=");
+   --  This table records the value of attribute SCIL_Node of tree nodes
 
    --------------------
    -- Copy_SCIL_Node --
@@ -77,16 +67,6 @@ package body SCIL_LL is
       Set_SCIL_Node (Target, Get_SCIL_Node (Source));
    end Copy_SCIL_Node;
 
-   ----------------
-   -- Initialize --
-   ----------------
-
-   procedure Initialize is
-   begin
-      SCIL_Nodes.Init;
-      Set_Reporting_Proc (Copy_SCIL_Node'Access);
-   end Initialize;
-
    -------------------
    -- Get_SCIL_Node --
    -------------------
@@ -96,11 +76,30 @@ package body SCIL_LL is
       if Generate_SCIL
         and then Present (N)
       then
-         return SCIL_Nodes.Table (N);
+         return SCIL_Nodes.Get (N);
       else
          return Empty;
       end if;
    end Get_SCIL_Node;
+
+   ----------
+   -- Hash --
+   ----------
+
+   function Hash (N : Node_Id) return Header_Num is
+   begin
+      return Header_Num (1 + N mod Node_Id (Header_Num'Last));
+   end Hash;
+
+   ----------------
+   -- Initialize --
+   ----------------
+
+   procedure Initialize is
+   begin
+      SCIL_Nodes.Reset;
+      Set_Reporting_Proc (Copy_SCIL_Node'Access);
+   end Initialize;
 
    -------------------
    -- Set_SCIL_Node --
@@ -117,8 +116,7 @@ package body SCIL_LL is
                null;
 
             when N_SCIL_Dispatching_Call =>
-               pragma Assert (Nkind_In (N, N_Function_Call,
-                                           N_Procedure_Call_Statement));
+               pragma Assert (Nkind (N) in N_Subprogram_Call);
                null;
 
             when N_SCIL_Membership_Test =>
@@ -134,11 +132,7 @@ package body SCIL_LL is
          end case;
       end if;
 
-      if Atree.Last_Node_Id > SCIL_Nodes.Last then
-         SCIL_Nodes.Set_Last (Atree.Last_Node_Id);
-      end if;
-
-      SCIL_Nodes.Set_Item (N, Value);
+      SCIL_Nodes.Set (N, Value);
    end Set_SCIL_Node;
 
 end SCIL_LL;

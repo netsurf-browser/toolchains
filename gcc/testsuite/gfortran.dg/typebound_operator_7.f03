@@ -96,8 +96,6 @@ program main
   u = i_multiply_real (u, 2.0) * 4.0
   
   select type (u)
-    type is (i_field); if (u%i .ne. 152064) call abort
+    type is (i_field); if (u%i .ne. 152064) STOP 1
   end select
 end program
-! { dg-final { cleanup-modules "field_module i_field_module" } }
-

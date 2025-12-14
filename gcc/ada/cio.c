@@ -6,7 +6,7 @@
  *                                                                          *
  *                          C Implementation File                           *
  *                                                                          *
- *          Copyright (C) 1992-2011, Free Software Foundation, Inc.         *
+ *          Copyright (C) 1992-2019, Free Software Foundation, Inc.         *
  *                                                                          *
  * GNAT is free software;  you can  redistribute it  and/or modify it under *
  * terms of the  GNU General Public License as published  by the Free Soft- *
@@ -29,13 +29,8 @@
  *                                                                          *
  ****************************************************************************/
 
-#ifdef __cplusplus
-extern "C" {
-#endif
-
 #ifdef IN_RTS
-#include "tconfig.h"
-#include "tsystem.h"
+#include "runtime.h"
 #include <sys/stat.h>
 #else
 #include "config.h"
@@ -44,9 +39,16 @@ extern "C" {
 
 #include "adaint.h"
 
+/* We need L_tmpnam definition */
+#include <stdio.h>
+
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 /* Don't use macros on GNU/Linux since they cause incompatible changes between
    glibc 2.0 and 2.1 */
-#ifdef linux
+#ifdef __linux__
 #undef putchar
 #undef getchar
 #undef fputc
@@ -135,7 +137,18 @@ put_char_stderr (int c)
 char *
 mktemp (char *template)
 {
+#if !(defined (__RTP__) || defined (VTHREADS))
+  static char buf[L_tmpnam]; /* Internal buffer for name */
+
+  /* If parameter is NULL use internal buffer */
+  if (template == NULL)
+    template = buf;
+
+  __gnat_tmp_name (template);
+  return template;
+#else
   return tmpnam (NULL);
+#endif
 }
 #endif
 

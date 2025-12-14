@@ -6,10 +6,10 @@
 /* So far, CFString is darwin-only.  */
 /* { dg-do compile { target *-*-darwin* } } */
 /* { dg-skip-if "NeXT only" { *-*-* } { "-fgnu-runtime" } { "" } } */
-/* { dg-options "-mconstant-cfstrings -Wnonportable-cfstrings" } */
+/* { dg-options "-ftrack-macro-expansion=0 -mconstant-cfstrings -Wnonportable-cfstrings" } */
 
-#import <Foundation/NSString.h>
-#import <CoreFoundation/CFString.h>
+#include "../../objc-obj-c++-shared/F-NSString.h"
+#include "../../objc-obj-c++-shared/CF-CFString.h"
 
 #ifndef __CONSTANT_CFSTRINGS__
 #error The -fconstant-cfstrings option is not functioning properly

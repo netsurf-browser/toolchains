@@ -1,9 +1,9 @@
-// { dg-options "-std=gnu++0x" }
-// { dg-do compile }
+// { dg-do compile { target c++11 } }
+// { dg-skip-if "result_type removed for C++20" { c++2a } }
 
 // 2010-10-06  Paolo Carlini  <paolo.carlini@oracle.com>
 
-// Copyright (C) 2010 Free Software Foundation, Inc.
+// Copyright (C) 2010-2020 Free Software Foundation, Inc.
 //
 // This file is part of the GNU ISO C++ Library.  This library is free
 // software; you can redistribute it and/or modify it under the
@@ -27,9 +27,9 @@ using namespace std;
 struct T;
 
 reference_wrapper<int(float, ...)>::result_type                       i01;
-reference_wrapper<int(float, ...) const>::result_type                 i02;
-reference_wrapper<int(float, ...) volatile>::result_type              i03;
-reference_wrapper<int(float, ...) const volatile>::result_type        i04;
+// reference_wrapper<int(float, ...) const>::result_type                 i02;
+// reference_wrapper<int(float, ...) volatile>::result_type              i03;
+// reference_wrapper<int(float, ...) const volatile>::result_type        i04;
 
 reference_wrapper<int(*)(float, ...)>::result_type                    i05;
 reference_wrapper<int(* const)(float, ...)>::result_type              i06;

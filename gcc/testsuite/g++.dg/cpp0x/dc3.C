@@ -1,5 +1,4 @@
-// { dg-do compile }
-// { dg-options --std=c++0x }
+// { dg-do compile { target c++11 } }
 
 struct X {};
 
@@ -44,7 +43,7 @@ struct D<X> : public C {
 	D (int _i) : C(), i(_i) { }
 	D () : D(-1) { }
 	virtual ~D() { }
-	virtual int f () { }
+	virtual int f () { return 0; }
 };
 
 void f_D () { D<X>* d = new D<X>(); }

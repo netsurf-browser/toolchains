@@ -8,7 +8,7 @@ struct A
   int i[100];
 };
 
-struct A a1, a3;
+struct A a1 __attribute__((used)), a3;
 
 __attribute__((noinline)) struct A
 f ()
@@ -17,7 +17,7 @@ f ()
   a2.i[0] = 42;
   if (a3.i[0] != 0)
     abort ();
-  a2.i[4] = 7;	/* { dg-final { gdb-test 20 "a2.i\[0\]" "42" } } */
+  a2.i[4] = 7;	/* { dg-final { gdb-test . "a2.i\[0\]" "42" } } */
   return a2;
 }
 

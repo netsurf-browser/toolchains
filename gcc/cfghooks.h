@@ -1,6 +1,5 @@
 /* Hooks for cfg representation specific functions.
-   Copyright (C) 2003, 2004, 2005, 2006, 2007, 2008
-   Free Software Foundation, Inc.
+   Copyright (C) 2003-2020 Free Software Foundation, Inc.
    Contributed by Sebastian Pop <s.pop@laposte.net>
 
 This file is part of GCC.
@@ -22,6 +21,54 @@ along with GCC; see the file COPYING3.  If not see
 #ifndef GCC_CFGHOOKS_H
 #define GCC_CFGHOOKS_H
 
+#include "predict.h"
+
+/* Structure to gather statistic about profile consistency, per pass.
+   An array of this structure, indexed by pass static number, is allocated
+   in passes.c.  The structure is defined here so that different CFG modes
+   can do their book-keeping via CFG hooks.
+
+   For every field[2], field[0] is the count before the pass runs, and
+   field[1] is the post-pass count.  This allows us to monitor the effect
+   of each individual pass on the profile consistency.
+   
+   This structure is not supposed to be used by anything other than passes.c
+   and one CFG hook per CFG mode.  */
+struct profile_record
+{
+  /* The number of basic blocks where sum(freq) of the block's predecessors
+     doesn't match reasonably well with the incoming frequency.  */
+  int num_mismatched_freq_in;
+  /* Likewise for a basic block's successors.  */
+  int num_mismatched_freq_out;
+  /* The number of basic blocks where sum(count) of the block's predecessors
+     doesn't match reasonably well with the incoming frequency.  */
+  int num_mismatched_count_in;
+  /* Likewise for a basic block's successors.  */
+  int num_mismatched_count_out;
+  /* A weighted cost of the run-time of the function body.  */
+  gcov_type_unsigned time;
+  /* A weighted cost of the size of the function body.  */
+  int size;
+  /* True iff this pass actually was run.  */
+  bool run;
+};
+
+typedef int_hash <unsigned short, 0> dependence_hash;
+
+/* Optional data for duplicate_block.   */
+
+class copy_bb_data
+{
+public:
+  copy_bb_data() : dependence_map (NULL) {}
+  ~copy_bb_data () { delete dependence_map; }
+
+  /* A map from the copied BBs dependence info cliques to
+     equivalents in the BBs duplicated to.  */
+  hash_map<dependence_hash, unsigned short> *dependence_map;
+};
+
 struct cfg_hooks
 {
   /* Name of the corresponding ir.  */
@@ -29,7 +76,8 @@ struct cfg_hooks
 
   /* Debugging.  */
   int (*verify_flow_info) (void);
-  void (*dump_bb) (basic_block, FILE *, int, int);
+  void (*dump_bb) (FILE *, basic_block, int, dump_flags_t);
+  void (*dump_bb_for_graph) (pretty_printer *, basic_block);
 
   /* Basic CFG manipulation.  */
 
@@ -78,7 +126,7 @@ struct cfg_hooks
   bool (*can_duplicate_block_p) (const_basic_block a);
 
   /* Duplicate block A.  */
-  basic_block (*duplicate_block) (basic_block a);
+  basic_block (*duplicate_block) (basic_block a, copy_bb_data *);
 
   /* Higher level functions representable by primitive operations above if
      we didn't have some oddities in RTL and Tree representations.  */
@@ -118,9 +166,9 @@ struct cfg_hooks
 
   /* A hook for duplicating loop in CFG, currently this is used
      in loop versioning.  */
-  bool (*cfg_hook_duplicate_loop_to_header_edge) (struct loop *, edge,
+  bool (*cfg_hook_duplicate_loop_to_header_edge) (class loop *, edge,
 						  unsigned, sbitmap,
-						  edge, VEC (edge, heap) **,
+						  edge, vec<edge> *,
 						  int);
 
   /* Add condition to new basic block and update CFG used in loop
@@ -139,21 +187,49 @@ struct cfg_hooks
   /* Add PHI arguments queued in PENDINT_STMT list on edge E to edge
      E->dest (only in tree-ssa loop versioning.  */
   void (*flush_pending_stmts) (edge);
+  
+  /* True if a block contains no executable instructions.  */
+  bool (*empty_block_p) (basic_block);
+
+  /* Split a basic block if it ends with a conditional branch and if
+     the other part of the block is not empty.  */
+  basic_block (*split_block_before_cond_jump) (basic_block);
+
+  /* Do book-keeping of a basic block for the profile consistency checker.  */
+  void (*account_profile_record) (basic_block, struct profile_record *);
 };
 
 extern void verify_flow_info (void);
-extern void dump_bb (basic_block, FILE *, int);
+
+/* Check control flow invariants, if internal consistency checks are
+   enabled.  */
+
+static inline void
+checking_verify_flow_info (void)
+{
+  /* TODO: Add a separate option for -fchecking=cfg.  */
+  if (flag_checking)
+    verify_flow_info ();
+}
+
+extern void dump_bb (FILE *, basic_block, int, dump_flags_t);
+extern void dump_bb_for_graph (pretty_printer *, basic_block);
+extern void dump_flow_info (FILE *, dump_flags_t);
+
 extern edge redirect_edge_and_branch (edge, basic_block);
 extern basic_block redirect_edge_and_branch_force (edge, basic_block);
+extern edge redirect_edge_succ_nodup (edge, basic_block);
 extern bool can_remove_branch_p (const_edge);
 extern void remove_branch (edge);
 extern void remove_edge (edge);
-extern edge split_block (basic_block, void *);
+extern edge split_block (basic_block, rtx);
+extern edge split_block (basic_block, gimple *);
 extern edge split_block_after_labels (basic_block);
 extern bool move_block_after (basic_block, basic_block);
 extern void delete_basic_block (basic_block);
 extern basic_block split_edge (edge);
-extern basic_block create_basic_block (void *, void *, basic_block);
+extern basic_block create_basic_block (rtx, rtx, basic_block);
+extern basic_block create_basic_block (gimple_seq, basic_block);
 extern basic_block create_empty_bb (basic_block);
 extern bool can_merge_blocks_p (basic_block, basic_block);
 extern void merge_blocks (basic_block, basic_block);
@@ -165,17 +241,20 @@ extern void tidy_fallthru_edges (void);
 extern void predict_edge (edge e, enum br_predictor predictor, int probability);
 extern bool predicted_by_p (const_basic_block bb, enum br_predictor predictor);
 extern bool can_duplicate_block_p (const_basic_block);
-extern basic_block duplicate_block (basic_block, edge, basic_block);
+extern basic_block duplicate_block (basic_block, edge, basic_block,
+				    copy_bb_data * = NULL);
 extern bool block_ends_with_call_p (basic_block bb);
+extern bool empty_block_p (basic_block);
+extern basic_block split_block_before_cond_jump (basic_block);
 extern bool block_ends_with_condjump_p (const_basic_block bb);
 extern int flow_call_edges_add (sbitmap);
 extern void execute_on_growing_pred (edge);
 extern void execute_on_shrinking_pred (edge);
-extern bool cfg_hook_duplicate_loop_to_header_edge (struct loop *loop, edge,
+extern bool cfg_hook_duplicate_loop_to_header_edge (class loop *loop, edge,
 						    unsigned int ndupl,
 						    sbitmap wont_exit,
 						    edge orig,
-						    VEC (edge, heap) **to_remove,
+						    vec<edge> *to_remove,
 						    int flags);
 
 extern void lv_flush_pending_stmts (edge);
@@ -184,6 +263,14 @@ extern void lv_adjust_loop_header_phi (basic_block, basic_block, basic_block,
 				       edge);
 extern void lv_add_condition_to_bb (basic_block, basic_block, basic_block,
 				    void *);
+
+extern bool can_copy_bbs_p (basic_block *, unsigned);
+extern void copy_bbs (basic_block *, unsigned, basic_block *,
+		      edge *, unsigned, edge *, class loop *,
+		      basic_block, bool);
+
+void profile_record_check_consistency (profile_record *);
+void profile_record_account_profile (profile_record *);
 
 /* Hooks containers.  */
 extern struct cfg_hooks gimple_cfg_hooks;
@@ -198,4 +285,4 @@ extern void gimple_register_cfg_hooks (void);
 extern struct cfg_hooks get_cfg_hooks (void);
 extern void set_cfg_hooks (struct cfg_hooks);
 
-#endif  /* GCC_CFGHOOKS_H */
+#endif /* GCC_CFGHOOKS_H */

@@ -1,6 +1,6 @@
-// { dg-options "-std=gnu++0x" }
+// { dg-do run { target c++11 } }
 
-// Copyright (C) 2008, 2009 Free Software Foundation
+// Copyright (C) 2008-2020 Free Software Foundation, Inc.
 //
 // This file is part of the GNU ISO C++ Library.  This library is free
 // software; you can redistribute it and/or modify it under the
@@ -41,14 +41,16 @@ namespace std
 int
 test01()
 {
-  bool test __attribute__((unused)) = true;
-
   std::less<std::shared_ptr<A>> less;
   // test empty shared_ptrs compare equivalent
   std::shared_ptr<A> p1;
   std::shared_ptr<A> p2;
   VERIFY( !less(p1, p2) && !less(p2, p1) );
+#ifndef __cpp_lib_three_way_comparison
+// In C++20 std::less<std::shared_ptr<A>> uses the operator< synthesized
+// from operator<=>, which uses std::compare_three_way not std::less<A*>.
   VERIFY( std::less<A*>::count == 2 );
+#endif
   return 0;
 }
 
@@ -57,8 +59,6 @@ test01()
 int
 test02()
 {
-  bool test __attribute__((unused)) = true;
-
   std::less<std::shared_ptr<A>> less;
 
   std::shared_ptr<A> empty;
@@ -81,8 +81,6 @@ test02()
 int
 test03()
 {
-  bool test __attribute__((unused)) = true;
-
   std::less<std::shared_ptr<A>> less;
 
   A a;
@@ -92,7 +90,7 @@ test03()
 
   return 0;
 }
-int 
+int
 main()
 {
   test01();

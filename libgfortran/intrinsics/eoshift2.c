@@ -1,8 +1,8 @@
 /* Generic implementation of the EOSHIFT intrinsic
-   Copyright 2002, 2005, 2007, 2009 Free Software Foundation, Inc.
+   Copyright (C) 2002-2020 Free Software Foundation, Inc.
    Contributed by Paul Brook <paul@nowt.org>
 
-This file is part of the GNU Fortran 95 runtime library (libgfortran).
+This file is part of the GNU Fortran runtime library (libgfortran).
 
 Libgfortran is free software; you can redistribute it and/or
 modify it under the terms of the GNU General Public
@@ -24,16 +24,12 @@ see the files COPYING3 and COPYING.RUNTIME respectively.  If not, see
 <http://www.gnu.org/licenses/>.  */
 
 #include "libgfortran.h"
-#include <stdlib.h>
-#include <assert.h>
 #include <string.h>
 
-/* TODO: make this work for large shifts when
-   sizeof(int) < sizeof (index_type).  */
 
 static void
 eoshift2 (gfc_array_char *ret, const gfc_array_char *array,
-	  int shift, const gfc_array_char *bound, int which,
+	  index_type shift, const gfc_array_char *bound, int which,
 	  const char *filler, index_type filler_len)
 {
   /* r.* indicates the return array.  */
@@ -71,15 +67,15 @@ eoshift2 (gfc_array_char *ret, const gfc_array_char *array,
 
   arraysize = size0 ((array_t *) array);
 
-  if (ret->data == NULL)
+  if (ret->base_addr == NULL)
     {
       int i;
 
       ret->offset = 0;
-      ret->dtype = array->dtype;
+      GFC_DTYPE_COPY(ret,array);
 
-      /* internal_malloc_size allocates a single byte for zero size.  */
-      ret->data = internal_malloc_size (size * arraysize);
+      /* xmallocarray allocates a single byte for zero size.  */
+      ret->base_addr = xmallocarray (arraysize, size);
 
       for (i = 0; i < GFC_DESCRIPTOR_RANK (array); i++)
         {
@@ -149,8 +145,8 @@ eoshift2 (gfc_array_char *ret, const gfc_array_char *array,
   rstride0 = rstride[0];
   sstride0 = sstride[0];
   bstride0 = bstride[0];
-  rptr = ret->data;
-  sptr = array->data;
+  rptr = ret->base_addr;
+  sptr = array->base_addr;
 
   if ((shift >= 0 ? shift : -shift ) > len)
     {
@@ -166,7 +162,7 @@ eoshift2 (gfc_array_char *ret, const gfc_array_char *array,
     }
   
   if (bound)
-    bptr = bound->data;
+    bptr = bound->base_addr;
   else
     bptr = NULL;
 
@@ -183,12 +179,23 @@ eoshift2 (gfc_array_char *ret, const gfc_array_char *array,
           src = sptr;
           dest = &rptr[-shift * roffset];
         }
-      for (n = 0; n < len; n++)
-        {
-          memcpy (dest, src, size);
-          dest += roffset;
-          src += soffset;
-        }
+
+      /* If the elements are contiguous, perform a single block move.  */
+      if (soffset == size && roffset == size)
+	{
+	  size_t chunk = size * len;
+	  memcpy (dest, src, chunk);
+	  dest += chunk;
+	}
+      else
+	{
+	  for (n = 0; n < len; n++)
+	    {
+	      memcpy (dest, src, size);
+	      dest += roffset;
+	      src += soffset;
+	    }
+	}
       if (shift >= 0)
         {
           n = shift;

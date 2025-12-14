@@ -8,18 +8,18 @@ enum X{ a, b, c };
 
 struct C
 {
-  static void func (X &ref = a); // { dg-error "default argument" "" }
+  static void func (X &ref = a); // { dg-error "" }
 };
 
 template <typename T>
 struct D
 {
-  static void func (X &ref = a); // not an error at this point
+  static void func (X &ref = a); // { dg-error "cannot bind non-const lvalue reference" }
 };
 
 void Foo (X & obj)
 {
   D<int>::func (obj);
 
-  D<int>::func (); // { dg-error "default argument" "" }
+  D<int>::func (); // { dg-message "when instantiating default argument for call" }
 }

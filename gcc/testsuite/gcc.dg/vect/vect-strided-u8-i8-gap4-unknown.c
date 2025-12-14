@@ -1,7 +1,6 @@
 /* { dg-require-effective-target vect_int } */
 
 #include <stdarg.h>
-#include <stdio.h>
 #include "tree-vect.h"
 
 #define N 160 
@@ -102,8 +101,7 @@ int main (void)
       arr[i].f = 16;
       arr[i].g = 3;
       arr[i].h = 56;
-      if (arr[i].a == 178)
-         abort(); 
+      asm volatile ("" ::: "memory");
     } 
 
   main1 (arr, N-2);
@@ -112,5 +110,4 @@ int main (void)
 }
 
 /* { dg-final { scan-tree-dump-times "vectorized 1 loops" 1 "vect" { target vect_strided8 } } } */
-/* { dg-final { cleanup-tree-dump "vect" } } */
   

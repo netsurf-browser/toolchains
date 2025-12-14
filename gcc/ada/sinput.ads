@@ -6,7 +6,7 @@
 --                                                                          --
 --                                 S p e c                                  --
 --                                                                          --
---          Copyright (C) 1992-2012, Free Software Foundation, Inc.         --
+--          Copyright (C) 1992-2019, Free Software Foundation, Inc.         --
 --                                                                          --
 -- GNAT is free software;  you can  redistribute it  and/or modify it under --
 -- terms of the  GNU General Public License as published  by the Free Soft- --
@@ -63,6 +63,7 @@
 with Alloc;
 with Casing; use Casing;
 with Namet;  use Namet;
+with System;
 with Table;
 with Types;  use Types;
 
@@ -82,6 +83,9 @@ package Sinput is
 
       Preproc);
       --  Source file with preprocessing commands to be preprocessed
+
+   type Instance_Id is new Nat;
+   No_Instance_Id : constant Instance_Id;
 
    ----------------------------
    -- Source License Control --
@@ -133,7 +137,7 @@ package Sinput is
 
    --  The licensing status is determined either by the presence of a
    --  specific pragma License, or by scanning the header for a predefined
-   --  file, or any file if compiling in -gnatg mode.
+   --  statement, or any file if compiling in -gnatg mode.
 
    -----------------------
    -- Source File Table --
@@ -154,7 +158,7 @@ package Sinput is
    --  separate main units.
 
    --  The entries in the table are accessed using a Source_File_Index that
-   --  ranges from 1 to Last_Source_File. Each entry has the following fields
+   --  ranges from 1 to Last_Source_File. Each entry has the following fields.
 
    --  Note: fields marked read-only are set by Sinput or one of its child
    --  packages when a source file table entry is created, and cannot be
@@ -198,6 +202,12 @@ package Sinput is
    --    Only processing in Sprint that generates this file is permitted to
    --    set this field.
 
+   --  Instance : Instance_Id (read-only)
+   --    For entries corresponding to a generic instantiation, unique
+   --    identifier denoting the full chain of nested instantiations. Set to
+   --    No_Instance_Id for the case of a normal, non-instantiation entry.
+   --    See below for details on the handling of generic instantiations.
+
    --  License : License_Type;
    --    License status of source file
 
@@ -210,19 +220,17 @@ package Sinput is
    --    pragmas are used, then the value is set to No_Line_Number.
 
    --  Source_Text : Source_Buffer_Ptr (read-only)
-   --    Text of source file. Note that every source file has a distinct set
-   --    of non-overlapping logical bounds, so it is possible to determine
-   --    which file is referenced from a given subscript (Source_Ptr) value.
+   --    Text of source file. Every source file has a distinct set of
+   --    nonoverlapping bounds, so it is possible to determine which
+   --    file is referenced from a given subscript (Source_Ptr) value.
 
    --  Source_First : Source_Ptr; (read-only)
-   --    Subscript of first character in Source_Text. Note that this cannot
-   --    be obtained as Source_Text'First, because we use virtual origin
-   --    addressing.
+   --    This is always equal to Source_Text'First, except during
+   --    construction of a debug output file (*.dg), when Source_Text = null,
+   --    and Source_First is the size so far. Likewise for Last.
 
    --  Source_Last : Source_Ptr; (read-only)
-   --    Subscript of last character in Source_Text. Note that this cannot
-   --    be obtained as Source_Text'Last, because we use virtual origin
-   --    addressing, so this value is always Source_Ptr'Last.
+   --    Same idea as Source_Last, but for Last
 
    --  Time_Stamp : Time_Stamp_Type; (read-only)
    --    Time stamp of the source file
@@ -249,16 +257,20 @@ package Sinput is
    --    This value is used for formatting of error messages, and also is used
    --    in the detection of keywords misused as identifiers.
 
-   --  Instantiation : Source_Ptr;
-   --    Source file location of the instantiation if this source file entry
-   --    represents a generic instantiation. Set to No_Location for the case
-   --    of a normal non-instantiation entry. See section below for details.
-   --    This field is read-only for clients.
+   --  Inlined_Call : Source_Ptr;
+   --    Source file location of the subprogram call if this source file entry
+   --    represents an inlined body or an inherited pragma. Set to No_Location
+   --    otherwise. This field is read-only for clients.
 
    --  Inlined_Body : Boolean;
    --    This can only be set True if Instantiation has a value other than
    --    No_Location. If true it indicates that the instantiation is actually
    --    an instance of an inlined body.
+
+   --  Inherited_Pragma : Boolean;
+   --    This can only be set True if Instantiation has a value other than
+   --    No_Location. If true it indicates that the instantiation is actually
+   --    an inherited class-wide pre- or postcondition.
 
    --  Template : Source_File_Index; (read-only)
    --    Source file index of the source file containing the template if this
@@ -281,6 +293,8 @@ package Sinput is
    --  will be 1 since system.ads is read first.
 
    function Debug_Source_Name (S : SFI) return File_Name_Type;
+   --  WARNING: There is a matching C declaration of this subprogram in fe.h
+
    function File_Name         (S : SFI) return File_Name_Type;
    function File_Type         (S : SFI) return Type_Of_File;
    function First_Mapped_Line (S : SFI) return Logical_Line_Number;
@@ -289,7 +303,9 @@ package Sinput is
    function Full_Ref_Name     (S : SFI) return File_Name_Type;
    function Identifier_Casing (S : SFI) return Casing_Type;
    function Inlined_Body      (S : SFI) return Boolean;
-   function Instantiation     (S : SFI) return Source_Ptr;
+   function Inherited_Pragma  (S : SFI) return Boolean;
+   function Inlined_Call      (S : SFI) return Source_Ptr;
+   function Instance          (S : SFI) return Instance_Id;
    function Keyword_Casing    (S : SFI) return Casing_Type;
    function Last_Source_Line  (S : SFI) return Physical_Line_Number;
    function License           (S : SFI) return License_Type;
@@ -326,48 +342,6 @@ package Sinput is
    Main_Source_File : Source_File_Index := No_Source_File;
    --  This is set to the source file index of the main unit
 
-   -----------------------------
-   -- Source_File_Index_Table --
-   -----------------------------
-
-   --  The Get_Source_File_Index function is called very frequently. Earlier
-   --  versions cached a single entry, but then reverted to a serial search,
-   --  and this proved to be a significant source of inefficiency. To get
-   --  around this, we use the following directly indexed array. The space
-   --  of possible input values is a value of type Source_Ptr which is simply
-   --  an Int value. The values in this space are allocated sequentially as
-   --  new units are loaded.
-
-   --  The following table has an entry for each 4K range of possible
-   --  Source_Ptr values. The value in the table is the lowest value
-   --  Source_File_Index whose Source_Ptr range contains value in the
-   --  range.
-
-   --  For example, the entry with index 4 in this table represents Source_Ptr
-   --  values in the range 4*4096 .. 5*4096-1. The Source_File_Index value
-   --  stored would be the lowest numbered source file with at least one byte
-   --  in this range.
-
-   --  The algorithm used in Get_Source_File_Index is simply to access this
-   --  table and then do a serial search starting at the given position. This
-   --  will almost always terminate with one or two checks.
-
-   --  Note that this array is pretty large, but in most operating systems
-   --  it will not be allocated in physical memory unless it is actually used.
-
-   Chunk_Power : constant := 12;
-   Chunk_Size  : constant := 2 ** Chunk_Power;
-   --  Change comments above if value changed. Note that Chunk_Size must
-   --  be a power of 2 (to allow for efficient access to the table).
-
-   Source_File_Index_Table :
-     array (Int range 0 .. Int'Last / Chunk_Size) of Source_File_Index;
-
-   procedure Set_Source_File_Index_Table (Xnew : Source_File_Index);
-   --  Sets entries in the Source_File_Index_Table for the newly created
-   --  Source_File table entry whose index is Xnew. The Source_First and
-   --  Source_Last fields of this entry must be set before the call.
-
    -----------------------
    -- Checksum Handling --
    -----------------------
@@ -396,28 +370,44 @@ package Sinput is
 
    --  As described in Sem_Ch12, a generic instantiation involves making a
    --  copy of the tree of the generic template. The source locations in
-   --  this tree directly reference the source of the template. However it
+   --  this tree directly reference the source of the template. However, it
    --  is also possible to find the location of the instantiation.
 
    --  This is achieved as follows. When an instantiation occurs, a new entry
-   --  is made in the source file table. This entry points to the same source
-   --  text, i.e. the file that contains the instantiation, but has a distinct
-   --  set of Source_Ptr index values. The separate range of Sloc values avoids
+   --  is made in the source file table. The Source_Text of the instantiation
+   --  points to the same Source_Buffer as the Source_Text of the template, but
+   --  with different bounds. The separate range of Sloc values avoids
    --  confusion, and means that the Sloc values can still be used to uniquely
-   --  identify the source file table entry. It is possible for both entries
-   --  to point to the same text, because of the virtual origin pointers used
-   --  in the source table.
+   --  identify the source file table entry. See Set_Dope below for the
+   --  low-level trickery that allows two different pointers to point at the
+   --  same array, but with different bounds.
 
-   --  The Instantiation field of this source file index entry, usually set
-   --  to No_Source_File, instead contains the Sloc of the instantiation. In
-   --  the case of nested instantiations, this Sloc may itself refer to an
-   --  instantiation, so the complete chain can be traced.
+   --  The Instantiation_Id field of this source file index entry, set
+   --  to No_Instance_Id for normal entries, instead contains a value that
+   --  uniquely identifies a particular instantiation, and the associated
+   --  entry in the Instances table. The source location of the instantiation
+   --  can be retrieved using function Instantiation below. In the case of
+   --  nested instantiations, the Instances table can be used to trace the
+   --  complete chain of nested instantiations.
 
-   --  Two routines are used to build these special entries in the source
-   --  file table. Create_Instantiation_Source is first called to build
+   --  Two routines are used to build the special instance entries in the
+   --  source file table. Create_Instantiation_Source is first called to build
    --  the virtual source table entry for the instantiation, and then the
    --  Sloc values in the copy are adjusted using Adjust_Instantiation_Sloc.
    --  See child unit Sinput.L for details on these two routines.
+
+   generic
+      with procedure Process (Id : Instance_Id; Inst_Sloc : Source_Ptr);
+   procedure Iterate_On_Instances;
+   --  Execute Process for each entry in the instance table
+
+   function Instantiation (S : SFI) return Source_Ptr;
+   --  For a source file entry that represents an inlined body, source location
+   --  of the inlined call. For a source file entry that represents an
+   --  inherited pragma, source location of the declaration to which the
+   --  overriding subprogram for the inherited pragma is attached. Otherwise,
+   --  for a source file entry that represents a generic instantiation, source
+   --  location of the instantiation. Returns No_Location in all other cases.
 
    -----------------
    -- Global Data --
@@ -426,7 +416,7 @@ package Sinput is
    Current_Source_File : Source_File_Index := No_Source_File;
    --  Source_File table index of source file currently being scanned.
    --  Initialized so that some tools (such as gprbuild) can be built with
-   --  -gnatVa and pragma Initialized_Scalars without problems.
+   --  -gnatVa and pragma Initialize_Scalars without problems.
 
    Current_Source_Unit : Unit_Number_Type;
    --  Unit number of source file currently being scanned. The special value
@@ -438,18 +428,6 @@ package Sinput is
 
    Source : Source_Buffer_Ptr;
    --  Current source (copy of Source_File.Table (Current_Source_Unit).Source)
-
-   Internal_Source : aliased Source_Buffer (1 .. 81);
-   --  This buffer is used internally in the compiler when the lexical analyzer
-   --  is used to scan a string from within the compiler. The procedure is to
-   --  establish Internal_Source_Ptr as the value of Source, set the string to
-   --  be scanned, appropriately terminated, in this buffer, and set Scan_Ptr
-   --  to point to the start of the buffer. It is a fatal error if the scanner
-   --  signals an error while scanning a token in this internal buffer.
-
-   Internal_Source_Ptr : constant Source_Buffer_Ptr :=
-                           Internal_Source'Unrestricted_Access;
-   --  Pointer to internal source buffer
 
    -----------------------------------------
    -- Handling of Source Line Terminators --
@@ -518,7 +496,7 @@ package Sinput is
    --  NEL code. Now such programs can of course be compiled in UTF-8 mode,
    --  but in practice they also compile fine in standard 8-bit mode without
    --  specifying a character encoding. Since this is common practice, it would
-   --  be a signficant upwards incompatibility to recognize NEL in 8-bit mode.
+   --  be a significant upwards incompatibility to recognize NEL in 8-bit mode.
 
    -----------------
    -- Subprograms --
@@ -531,31 +509,32 @@ package Sinput is
    --  The caller has checked that a Line_Terminator character precedes P so
    --  that there definitely is a previous line in the source buffer.
 
-   procedure Build_Location_String (Loc : Source_Ptr);
+   procedure Build_Location_String
+     (Buf : in out Bounded_String;
+      Loc : Source_Ptr);
    --  This function builds a string literal of the form "name:line", where
    --  name is the file name corresponding to Loc, and line is the line number.
-   --  In the event that instantiations are involved, additional suffixes of
-   --  the same form are appended after the separating string " instantiated at
-   --  ". The returned string is appended to the Name_Buffer, terminated by
-   --  ASCII.NUL, with Name_Length indicating the length not including the
-   --  terminating Nul.
+   --  If instantiations are involved, additional suffixes of the same form are
+   --  appended after the separating string " instantiated at ". The returned
+   --  string is appended to Buf.
 
    function Build_Location_String (Loc : Source_Ptr) return String;
-   --  Functional form returning a string, which does not include a terminating
-   --  null character. The contents of Name_Buffer is destroyed.
+   --  Functional form returning a String
 
    procedure Check_For_BOM;
    --  Check if the current source starts with a BOM. Scan_Ptr needs to be at
    --  the start of the current source. If the current source starts with a
    --  recognized BOM, then some flags such as Wide_Character_Encoding_Method
    --  are set accordingly, and the Scan_Ptr on return points past this BOM.
-   --  An error message is output and Unrecoverable_Error raised if a non-
-   --  recognized BOM is detected. The call has no effect if no BOM is found.
+   --  An error message is output and Unrecoverable_Error raised if an
+   --  unrecognized BOM is detected. The call has no effect if no BOM is found.
 
    function Get_Column_Number (P : Source_Ptr) return Column_Number;
    --  The ones-origin column number of the specified Source_Ptr value is
    --  determined and returned. Tab characters if present are assumed to
    --  represent the standard 1,9,17.. spacing pattern.
+
+   --  WARNING: There is a matching C declaration of this subprogram in fe.h
 
    function Get_Logical_Line_Number
      (P : Source_Ptr) return Logical_Line_Number;
@@ -567,6 +546,8 @@ package Sinput is
    --  reference pragma itself, then No_Line is returned. If no source
    --  reference pragmas have been encountered, the value returned is
    --  the same as the physical line number.
+
+   --  WARNING: There is a matching C declaration of this subprogram in fe.h
 
    function Get_Logical_Line_Number_Img
      (P : Source_Ptr) return String;
@@ -581,9 +562,12 @@ package Sinput is
    --  value is the physical line number in the source being compiled.
 
    function Get_Source_File_Index (S : Source_Ptr) return Source_File_Index;
+   pragma Inline (Get_Source_File_Index);
    --  Return file table index of file identified by given source pointer
    --  value. This call must always succeed, since any valid source pointer
    --  value belongs to some previously loaded source file.
+
+   --  WARNING: There is a matching C declaration of this subprogram in fe.h
 
    function Instantiation_Depth (S : Source_Ptr) return Nat;
    --  Determine instantiation depth for given Sloc value. A value of
@@ -602,7 +586,7 @@ package Sinput is
    function Num_Source_Lines (S : Source_File_Index) return Nat;
    --  Returns the number of source lines (this is equivalent to reading
    --  the value of Last_Source_Line, but returns Nat rather than a
-   --  physical line number.
+   --  physical line number).
 
    procedure Register_Source_Ref_Pragma
      (File_Name          : File_Name_Type;
@@ -631,6 +615,20 @@ package Sinput is
    --  Given a source pointer S, returns the corresponding source pointer
    --  value of the instantiation if this location is within an instance.
    --  If S is not within an instance, then this returns No_Location.
+
+   function Comes_From_Inlined_Body (S : Source_Ptr) return Boolean;
+   pragma Inline (Comes_From_Inlined_Body);
+   --  Given a source pointer S, returns whether it comes from an inlined body.
+   --  This allows distinguishing these source pointers from those that come
+   --  from instantiation of generics, since Instantiation_Location returns a
+   --  valid location in both cases.
+
+   function Comes_From_Inherited_Pragma (S : Source_Ptr) return Boolean;
+   pragma Inline (Comes_From_Inherited_Pragma);
+   --  Given a source pointer S, returns whether it comes from an inherited
+   --  pragma. This allows distinguishing these source pointers from those
+   --  that come from instantiation of generics, since Instantiation_Location
+   --  returns a valid location in both cases.
 
    function Top_Level_Location (S : Source_Ptr) return Source_Ptr;
    --  Given a source pointer S, returns the argument unchanged if it is
@@ -687,8 +685,13 @@ package Sinput is
    --  as the locations of the first and last token in the node construct
    --  because parentheses at the outer level do not have a recorded Sloc.
    --
+   --  Note: At each step of the tree traversal, we make sure to go back to
+   --  the Original_Node, since this function is concerned about original
+   --  (source) locations.
+   --
    --  Note: if the tree for the expression contains no "real" Sloc values,
-   --  i.e. values > No_Location, then both Min and Max are set to Sloc (Expr).
+   --  i.e. values > No_Location, then both Min and Max are set to
+   --  Sloc (Original_Node (N)).
 
    function Source_Offset (S : Source_Ptr) return Nat;
    --  Returns the zero-origin offset of the given source location from the
@@ -720,27 +723,49 @@ package Sinput is
    --  Writes out internal tables to current tree file using the relevant
    --  Table.Tree_Write routines.
 
+   procedure Clear_Source_File_Table;
+   --  This procedure frees memory allocated in the Source_File table (in the
+   --  private). It should only be used when it is guaranteed that all source
+   --  files that have been loaded so far will not be accessed before being
+   --  reloaded. It is intended for tools that parse several times sources,
+   --  to avoid memory leaks.
+
 private
    pragma Inline (File_Name);
-   pragma Inline (First_Mapped_Line);
    pragma Inline (Full_File_Name);
-   pragma Inline (Identifier_Casing);
-   pragma Inline (Instantiation);
-   pragma Inline (Keyword_Casing);
-   pragma Inline (Last_Source_Line);
-   pragma Inline (Last_Source_File);
+   pragma Inline (File_Type);
+   pragma Inline (Reference_Name);
+   pragma Inline (Full_Ref_Name);
+   pragma Inline (Debug_Source_Name);
+   pragma Inline (Full_Debug_Name);
+   pragma Inline (Instance);
    pragma Inline (License);
    pragma Inline (Num_SRef_Pragmas);
-   pragma Inline (Num_Source_Files);
-   pragma Inline (Num_Source_Lines);
-   pragma Inline (Reference_Name);
-   pragma Inline (Set_Keyword_Casing);
-   pragma Inline (Set_Identifier_Casing);
+   pragma Inline (First_Mapped_Line);
+   pragma Inline (Source_Text);
    pragma Inline (Source_First);
    pragma Inline (Source_Last);
-   pragma Inline (Source_Text);
-   pragma Inline (Template);
    pragma Inline (Time_Stamp);
+   pragma Inline (Source_Checksum);
+   pragma Inline (Last_Source_Line);
+   pragma Inline (Keyword_Casing);
+   pragma Inline (Identifier_Casing);
+   pragma Inline (Inlined_Call);
+   pragma Inline (Inlined_Body);
+   pragma Inline (Inherited_Pragma);
+   pragma Inline (Template);
+   pragma Inline (Unit);
+
+   pragma Inline (Set_Keyword_Casing);
+   pragma Inline (Set_Identifier_Casing);
+
+   pragma Inline (Last_Source_File);
+   pragma Inline (Num_Source_Files);
+   pragma Inline (Num_Source_Lines);
+
+   pragma Inline (Line_Start);
+
+   No_Instance_Id : constant Instance_Id := 0;
 
    -------------------------
    -- Source_Lines Tables --
@@ -781,6 +806,7 @@ private
       Full_Debug_Name   : File_Name_Type;
       Full_File_Name    : File_Name_Type;
       Full_Ref_Name     : File_Name_Type;
+      Instance          : Instance_Id;
       Num_SRef_Pragmas  : Nat;
       First_Mapped_Line : Logical_Line_Number;
       Source_Text       : Source_Buffer_Ptr;
@@ -788,12 +814,13 @@ private
       Source_Last       : Source_Ptr;
       Source_Checksum   : Word;
       Last_Source_Line  : Physical_Line_Number;
-      Instantiation     : Source_Ptr;
       Template          : Source_File_Index;
       Unit              : Unit_Number_Type;
       Time_Stamp        : Time_Stamp_Type;
       File_Type         : Type_Of_File;
+      Inlined_Call      : Source_Ptr;
       Inlined_Body      : Boolean;
+      Inherited_Pragma  : Boolean;
       License           : License_Type;
       Keyword_Casing    : Casing_Type;
       Identifier_Casing : Casing_Type;
@@ -824,6 +851,7 @@ private
       --  Max_Source_Line gives the maximum used value, this gives the
       --  maximum allocated value.
 
+      Index : Source_File_Index := 123456789; -- for debugging
    end record;
 
    --  The following representation clause ensures that the above record
@@ -839,42 +867,57 @@ private
       Full_Debug_Name     at 12 range 0 .. 31;
       Full_File_Name      at 16 range 0 .. 31;
       Full_Ref_Name       at 20 range 0 .. 31;
+      Instance            at 48 range 0 .. 31;
       Num_SRef_Pragmas    at 24 range 0 .. 31;
       First_Mapped_Line   at 28 range 0 .. 31;
       Source_First        at 32 range 0 .. 31;
       Source_Last         at 36 range 0 .. 31;
       Source_Checksum     at 40 range 0 .. 31;
       Last_Source_Line    at 44 range 0 .. 31;
-      Instantiation       at 48 range 0 .. 31;
       Template            at 52 range 0 .. 31;
       Unit                at 56 range 0 .. 31;
       Time_Stamp          at 60 range 0 .. 8 * Time_Stamp_Length - 1;
       File_Type           at 74 range 0 .. 7;
-      Inlined_Body        at 75 range 0 .. 7;
+      Inlined_Call        at 88 range 0 .. 31;
+      Inlined_Body        at 75 range 0 .. 0;
+      Inherited_Pragma    at 75 range 1 .. 1;
       License             at 76 range 0 .. 7;
       Keyword_Casing      at 77 range 0 .. 7;
       Identifier_Casing   at 78 range 0 .. 15;
       Sloc_Adjust         at 80 range 0 .. 31;
       Lines_Table_Max     at 84 range 0 .. 31;
+      Index               at 92 range 0 .. 31;
 
       --  The following fields are pointers, so we have to specialize their
       --  lengths using pointer size, obtained above as Standard'Address_Size.
+      --  Note that Source_Text is a fat pointer, so it has size = AS*2.
 
-      Source_Text         at 88 range 0      .. AS - 1;
-      Lines_Table         at 88 range AS     .. AS * 2 - 1;
-      Logical_Lines_Table at 88 range AS * 2 .. AS * 3 - 1;
-   end record;
+      Source_Text         at 96 range 0      .. AS * 2 - 1;
+      Lines_Table         at 96 range AS * 2 .. AS * 3 - 1;
+      Logical_Lines_Table at 96 range AS * 3 .. AS * 4 - 1;
+   end record; -- Source_File_Record
 
-   for Source_File_Record'Size use 88 * 8 + AS * 3;
+   for Source_File_Record'Size use 96 * 8 + AS * 4;
    --  This ensures that we did not leave out any fields
 
-   package Source_File is new Table.Table (
-     Table_Component_Type => Source_File_Record,
-     Table_Index_Type     => Source_File_Index,
-     Table_Low_Bound      => 1,
-     Table_Initial        => Alloc.Source_File_Initial,
-     Table_Increment      => Alloc.Source_File_Increment,
-     Table_Name           => "Source_File");
+   package Source_File is new Table.Table
+     (Table_Component_Type => Source_File_Record,
+      Table_Index_Type     => Source_File_Index,
+      Table_Low_Bound      => 1,
+      Table_Initial        => Alloc.Source_File_Initial,
+      Table_Increment      => Alloc.Source_File_Increment,
+      Table_Name           => "Source_File");
+
+   --  Auxiliary table containing source location of instantiations. Index 0
+   --  is used for code that does not come from an instance.
+
+   package Instances is new Table.Table
+     (Table_Component_Type => Source_Ptr,
+      Table_Index_Type     => Instance_Id,
+      Table_Low_Bound      => 0,
+      Table_Initial        => Alloc.Source_File_Initial,
+      Table_Increment      => Alloc.Source_File_Increment,
+      Table_Name           => "Instances");
 
    -----------------
    -- Subprograms --
@@ -900,5 +943,33 @@ private
    --  Set lines table size for entry S in the source file table to
    --  correspond to the current value of Num_Source_Lines, releasing
    --  any unused storage. This is used by Sinput.L and Sinput.D.
+
+   procedure Set_Source_File_Index_Table (Xnew : Source_File_Index);
+   --  Sets entries in the Source_File_Index_Table for the newly created
+   --  Source_File table entry whose index is Xnew. The Source_First and
+   --  Source_Last fields of this entry must be set before the call.
+   --  See package body for details.
+
+   type Dope_Rec is record
+      First, Last : Source_Ptr'Base;
+   end record;
+   Dope_Rec_Size : constant := 2 * Source_Ptr'Base'Size;
+   for Dope_Rec'Size use Dope_Rec_Size;
+   for Dope_Rec'Alignment use Dope_Rec_Size / 8;
+   type Dope_Ptr is access all Dope_Rec;
+
+   procedure Set_Dope
+     (Src : System.Address; New_Dope : Dope_Ptr);
+   --  Src is the address of a variable of type Source_Buffer_Ptr, which is a
+   --  fat pointer. This sets the dope part of the fat pointer to point to the
+   --  specified New_Dope. This low-level processing is used to make the
+   --  Source_Text of an instance point to the same text as the template, but
+   --  with different bounds.
+
+   procedure Free_Dope (Src : System.Address);
+   --  Calls Unchecked_Deallocation on the dope part of the fat pointer Src
+
+   procedure Free_Source_Buffer (Src : in out Source_Buffer_Ptr);
+   --  Deallocates the source buffer
 
 end Sinput;

@@ -1,6 +1,5 @@
 // Positive test for defaulted/deleted fns
-// { dg-do run }
-// { dg-options "-std=c++0x" }
+// { dg-do run { target c++11 } }
 
 struct A
 {
@@ -24,7 +23,9 @@ struct B
 int main()
 {
   A a1, a2;
+#if __cplusplus <= 201703L
   B b = {1};
+#endif
   a1 = a2;
 }
 

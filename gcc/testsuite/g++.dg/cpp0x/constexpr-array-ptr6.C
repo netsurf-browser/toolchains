@@ -1,4 +1,4 @@
-// { dg-options "-std=c++0x" }
+// { dg-do compile { target c++11 } }
 
 typedef decltype(sizeof(char)) size_type;
 
@@ -12,7 +12,7 @@ constexpr auto sz_d = size(array_double);
 static_assert(sz_d == 3, "Array size failure");
 
 void f(bool (&param)[2]) {
-  static_assert(size(param) == 2, "Array size failure"); // Line 13
+  static_assert(size(param) == 2, "Array size failure"); // { dg-error "" }
   short data[] = {-1, 2, -45, 6, 88, 99, -345};
   static_assert(size(data) == 7, "Array size failure");
 }

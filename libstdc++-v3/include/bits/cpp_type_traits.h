@@ -1,7 +1,6 @@
 // The  -*- C++ -*- type traits classes for internal use in libstdc++
 
-// Copyright (C) 2000, 2001, 2002, 2003, 2004, 2005, 2006, 2007, 2009, 2010
-// Free Software Foundation, Inc.
+// Copyright (C) 2000-2020 Free Software Foundation, Inc.
 //
 // This file is part of the GNU ISO C++ Library.  This library is free
 // software; you can redistribute it and/or modify it under the
@@ -49,7 +48,7 @@
 // so function return values won't work:  We need compile-time entities.
 // We're left with types and constant  integral expressions.
 // Secondly, from the point of view of ease of use, type-based compile-time
-// information is -not- *that* convenient.  On has to write lots of
+// information is -not- *that* convenient.  One has to write lots of
 // overloaded functions and to hope that the compiler will select the right
 // one. As a net effect, the overall structure isn't very clear at first
 // glance.
@@ -65,16 +64,7 @@
 // removed.
 //
 
-// Forward declaration hack, should really include this from somewhere.
-namespace __gnu_cxx _GLIBCXX_VISIBILITY(default)
-{
-_GLIBCXX_BEGIN_NAMESPACE_VERSION
-
-  template<typename _Iterator, typename _Container>
-    class __normal_iterator;
-
-_GLIBCXX_END_NAMESPACE_VERSION
-} // namespace
+extern "C++" {
 
 namespace std _GLIBCXX_VISIBILITY(default)
 {
@@ -142,7 +132,8 @@ _GLIBCXX_BEGIN_NAMESPACE_VERSION
 
   // Thirteen specializations (yes there are eleven standard integer
   // types; <em>long long</em> and <em>unsigned long long</em> are
-  // supported as extensions)
+  // supported as extensions).  Up to four target-specific __int<N>
+  // types are supported as well.
   template<>
     struct __is_integer<bool>
     {
@@ -180,7 +171,16 @@ _GLIBCXX_BEGIN_NAMESPACE_VERSION
     };
 # endif
 
-#ifdef __GXX_EXPERIMENTAL_CXX0X__
+#ifdef _GLIBCXX_USE_CHAR8_T
+  template<>
+    struct __is_integer<char8_t>
+    {
+      enum { __value = 1 };
+      typedef __true_type __type;
+    };
+#endif
+
+#if __cplusplus >= 201103L
   template<>
     struct __is_integer<char16_t>
     {
@@ -252,6 +252,35 @@ _GLIBCXX_BEGIN_NAMESPACE_VERSION
       typedef __true_type __type;
     };
 
+#define __INT_N(TYPE) 			\
+  template<>				\
+    struct __is_integer<TYPE>		\
+    {					\
+      enum { __value = 1 };		\
+      typedef __true_type __type;	\
+    };					\
+  template<>				\
+    struct __is_integer<unsigned TYPE>	\
+    {					\
+      enum { __value = 1 };		\
+      typedef __true_type __type;	\
+    };
+
+#ifdef __GLIBCXX_TYPE_INT_N_0
+__INT_N(__GLIBCXX_TYPE_INT_N_0)
+#endif
+#ifdef __GLIBCXX_TYPE_INT_N_1
+__INT_N(__GLIBCXX_TYPE_INT_N_1)
+#endif
+#ifdef __GLIBCXX_TYPE_INT_N_2
+__INT_N(__GLIBCXX_TYPE_INT_N_2)
+#endif
+#ifdef __GLIBCXX_TYPE_INT_N_3
+__INT_N(__GLIBCXX_TYPE_INT_N_3)
+#endif
+
+#undef __INT_N
+
   //
   // Floating point types
   //
@@ -302,37 +331,11 @@ _GLIBCXX_BEGIN_NAMESPACE_VERSION
     };
 
   //
-  // Normal iterator type
-  //
-  template<typename _Tp>
-    struct __is_normal_iterator
-    {
-      enum { __value = 0 };
-      typedef __false_type __type;
-    };
-
-  template<typename _Iterator, typename _Container>
-    struct __is_normal_iterator< __gnu_cxx::__normal_iterator<_Iterator,
-							      _Container> >
-    {
-      enum { __value = 1 };
-      typedef __true_type __type;
-    };
-
-  //
   // An arithmetic type is an integer type or a floating point type
   //
   template<typename _Tp>
     struct __is_arithmetic
     : public __traitor<__is_integer<_Tp>, __is_floating<_Tp> >
-    { };
-
-  //
-  // A fundamental type is `void' or and arithmetic type
-  //
-  template<typename _Tp>
-    struct __is_fundamental
-    : public __traitor<__is_void<_Tp>, __is_arithmetic<_Tp> >
     { };
 
   //
@@ -397,6 +400,88 @@ _GLIBCXX_BEGIN_NAMESPACE_VERSION
       typedef __true_type __type;
     };
 
+#if __cplusplus >= 201703L
+  enum class byte : unsigned char;
+
+  template<>
+    struct __is_byte<byte>
+    {
+      enum { __value = 1 };
+      typedef __true_type __type;
+    };
+#endif // C++17
+
+#ifdef _GLIBCXX_USE_CHAR8_T
+  template<>
+    struct __is_byte<char8_t>
+    {
+      enum { __value = 1 };
+      typedef __true_type __type;
+    };
+#endif
+
+  template<typename> struct iterator_traits;
+
+  // A type that is safe for use with memcpy, memmove, memcmp etc.
+  template<typename _Tp>
+    struct __is_nonvolatile_trivially_copyable
+    {
+      enum { __value = __is_trivially_copyable(_Tp) };
+    };
+
+  // Cannot use memcpy/memmove/memcmp on volatile types even if they are
+  // trivially copyable, so ensure __memcpyable<volatile int*, volatile int*>
+  // and similar will be false.
+  template<typename _Tp>
+    struct __is_nonvolatile_trivially_copyable<volatile _Tp>
+    {
+      enum { __value = 0 };
+    };
+
+  // Whether two iterator types can be used with memcpy/memmove.
+  template<typename _OutputIter, typename _InputIter>
+    struct __memcpyable
+    {
+      enum { __value = 0 };
+    };
+
+  template<typename _Tp>
+    struct __memcpyable<_Tp*, _Tp*>
+    : __is_nonvolatile_trivially_copyable<_Tp>
+    { };
+
+  template<typename _Tp>
+    struct __memcpyable<_Tp*, const _Tp*>
+    : __is_nonvolatile_trivially_copyable<_Tp>
+    { };
+
+  // Whether two iterator types can be used with memcmp.
+  // This trait only says it's well-formed to use memcmp, not that it
+  // gives the right answer for a given algorithm. So for example, std::equal
+  // needs to add additional checks that the types are integers or pointers,
+  // because other trivially copyable types can overload operator==.
+  template<typename _Iter1, typename _Iter2>
+    struct __memcmpable
+    {
+      enum { __value = 0 };
+    };
+
+  // OK to use memcmp with pointers to trivially copyable types.
+  template<typename _Tp>
+    struct __memcmpable<_Tp*, _Tp*>
+    : __is_nonvolatile_trivially_copyable<_Tp>
+    { };
+
+  template<typename _Tp>
+    struct __memcmpable<const _Tp*, _Tp*>
+    : __is_nonvolatile_trivially_copyable<_Tp>
+    { };
+
+  template<typename _Tp>
+    struct __memcmpable<_Tp*, const _Tp*>
+    : __is_nonvolatile_trivially_copyable<_Tp>
+    { };
+
   //
   // Move iterator type
   //
@@ -407,19 +492,16 @@ _GLIBCXX_BEGIN_NAMESPACE_VERSION
       typedef __false_type __type;
     };
 
-#ifdef __GXX_EXPERIMENTAL_CXX0X__
+  // Fallback implementation of the function in bits/stl_iterator.h used to
+  // remove the move_iterator wrapper.
   template<typename _Iterator>
-    class move_iterator;
-
-  template<typename _Iterator>
-    struct __is_move_iterator< move_iterator<_Iterator> >
-    {
-      enum { __value = 1 };
-      typedef __true_type __type;
-    };
-#endif
+    _GLIBCXX20_CONSTEXPR
+    inline _Iterator
+    __miter_base(_Iterator __it)
+    { return __it; }
 
 _GLIBCXX_END_NAMESPACE_VERSION
 } // namespace
+} // extern "C++"
 
 #endif //_CPP_TYPE_TRAITS_H

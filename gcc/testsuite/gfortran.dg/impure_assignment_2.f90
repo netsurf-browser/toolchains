@@ -40,7 +40,7 @@ CONTAINS
   PURE FUNCTION give_next3(node)
      TYPE(node_type), intent(in) :: node
      TYPE(node_type) :: give_next
-     give_next = node ! { dg-error "impure variable" }
+     give_next = node ! { dg-error "pure subprogram" }
   END FUNCTION
 END MODULE pr20863
 
@@ -66,5 +66,3 @@ CONTAINS
     RES = B
   END FUNCTION
 END MODULE pr20882
-! { dg-final { cleanup-modules "pr20863 pr20882" } }
-

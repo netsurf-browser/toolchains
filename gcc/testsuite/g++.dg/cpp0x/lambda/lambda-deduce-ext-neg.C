@@ -1,6 +1,6 @@
 // Testcase for DR 975.
 
-// { dg-options -std=c++0x }
+// { dg-do compile { target c++11 } }
 
 bool b;
 struct A { int fn1(); const int& fn2(); };
@@ -11,7 +11,7 @@ template <class T> int f (T t) {
     if (b)
       return t.fn1();
     else
-      return t.fn2();		// { dg-error "inconsistent types" }
+      return t.fn2();		// { dg-error "19:inconsistent types" }
   }(t);
 }
 

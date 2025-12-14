@@ -187,9 +187,9 @@ testForwardeDeclared1(void)
   [cls doItInstance7];      /* { dg-warning "no .\\+doItInstance7. method found" } */
 
   [clsP7 doItClass7];       /* { dg-warning "not found in protocol" } */
-  /* { dg-warning "no .\\+doItClass7. method found" "" { target *-*-* } 189 } */
+  /* { dg-warning "no .\\+doItClass7. method found" "" { target *-*-* } .-1 } */
   [clsP7 doItInstance7];    /* { dg-warning "not found in protocol" } */
-  /* { dg-warning "no .\\+doItInstance7. method found" "" { target *-*-* } 191 } */
+  /* { dg-warning "no .\\+doItInstance7. method found" "" { target *-*-* } .-1 } */
 
   [MyClass1 doItClass7];    /* { dg-warning "may not respond" } */
   [MyClass1 doItInstance7]; /* { dg-warning "may not respond" } */
@@ -436,6 +436,4 @@ int main ()
   return(0);
 }
 
-/* { dg-warning "Messages without a matching method signature" "" { target *-*-* } 0 } */
-/* { dg-warning "will be assumed to return .id. and accept" "" { target *-*-* } 0 } */
-/* { dg-warning ".\.\.\.. as arguments" "" { target *-*-* } 0 } */
+/* { dg-warning "messages without a matching method signature will be assumed to return .id. and accept .\.\.\.. as arguments" "" { target *-*-* } 0 } */

@@ -1,19 +1,53 @@
 // PR c++/50391
-// { dg-options -std=c++0x }
+// { dg-do compile { target c++11 } }
 
-#include <type_traits>
+namespace std
+{
+  template<typename T, T Val>
+    struct integral_constant
+    { static constexpr T value = Val; };
+
+  template<typename T>
+    struct is_abstract
+    : integral_constant<bool, __is_abstract(T)>
+    { };
+
+  template<typename T, bool = is_abstract<T>::value>
+    struct is_destructible
+    : integral_constant<bool, true>
+    { };
+
+  template<typename T>
+    struct is_destructible<T, true>
+    : integral_constant<bool, false>
+    { };
+
+  template<typename T>
+    struct is_nothrow_move_constructible
+    : is_destructible<T>
+    { };
+
+  template<typename T>
+    struct decay
+    { typedef T type; };
+
+  template<typename T>
+    struct decay<T&>
+    { typedef T type; };
+
+} // std
 
 template<class Tp>
   struct single
   {
-    Tp elem;  // { dg-error "incomplete type" }
+    Tp elem;
 
     constexpr single(const Tp& e)
-    : elem(e) { }   // { dg-error "invalid field" }
+    : elem(e) { }
 
-    single(single&& s) // { dg-error "not a member" }
+    single(single&& s)
     noexcept(std::is_nothrow_move_constructible<Tp>::value) 
-    : elem(s.elem) { } // { dg-error "invalid field|no member" }
+    : elem(s.elem) { }
   };
 
 template<class Tp>
@@ -23,7 +57,7 @@ template<class Tp>
     return single<typename std::decay<Tp>::type>(x);
   }
 
-class Blob;  // { dg-error "forward declaration" }
+class Blob;  // { dg-message "forward declaration" }
 
 void
 foo(Blob *b)
@@ -31,4 +65,4 @@ foo(Blob *b)
   make_single(*b);
 }
 
-// { dg-prune-output "include" }
+// { dg-excess-errors "incomplete type|not a member" }

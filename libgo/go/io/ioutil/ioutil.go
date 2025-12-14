@@ -10,12 +10,13 @@ import (
 	"io"
 	"os"
 	"sort"
+	"sync"
 )
 
 // readAll reads from r until an error or EOF and returns the data it read
 // from the internal buffer allocated with a specified capacity.
 func readAll(r io.Reader, capacity int64) (b []byte, err error) {
-	buf := bytes.NewBuffer(make([]byte, 0, capacity))
+	var buf bytes.Buffer
 	// If the buffer overflows, we will get bytes.ErrTooLarge.
 	// Return that as an error. Any other panic remains.
 	defer func() {
@@ -29,6 +30,9 @@ func readAll(r io.Reader, capacity int64) (b []byte, err error) {
 			panic(e)
 		}
 	}()
+	if int64(int(capacity)) == capacity {
+		buf.Grow(int(capacity))
+	}
 	_, err = buf.ReadFrom(r)
 	return buf.Bytes(), err
 }
@@ -53,47 +57,39 @@ func ReadFile(filename string) ([]byte, error) {
 	defer f.Close()
 	// It's a good but not certain bet that FileInfo will tell us exactly how much to
 	// read, so let's try it but be prepared for the answer to be wrong.
-	var n int64
+	var n int64 = bytes.MinRead
 
 	if fi, err := f.Stat(); err == nil {
-		// Don't preallocate a huge buffer, just in case.
-		if size := fi.Size(); size < 1e9 {
+		// As initial capacity for readAll, use Size + a little extra in case Size
+		// is zero, and to avoid another allocation after Read has filled the
+		// buffer. The readAll call will read into its allocated internal buffer
+		// cheaply. If the size was wrong, we'll either waste some space off the end
+		// or reallocate as needed, but in the overwhelmingly common case we'll get
+		// it just right.
+		if size := fi.Size() + bytes.MinRead; size > n {
 			n = size
 		}
 	}
-	// As initial capacity for readAll, use n + a little extra in case Size is zero,
-	// and to avoid another allocation after Read has filled the buffer.  The readAll
-	// call will read into its allocated internal buffer cheaply.  If the size was
-	// wrong, we'll either waste some space off the end or reallocate as needed, but
-	// in the overwhelmingly common case we'll get it just right.
-	return readAll(f, n+bytes.MinRead)
+	return readAll(f, n)
 }
 
 // WriteFile writes data to a file named by filename.
-// If the file does not exist, WriteFile creates it with permissions perm;
-// otherwise WriteFile truncates it before writing.
+// If the file does not exist, WriteFile creates it with permissions perm
+// (before umask); otherwise WriteFile truncates it before writing.
 func WriteFile(filename string, data []byte, perm os.FileMode) error {
 	f, err := os.OpenFile(filename, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, perm)
 	if err != nil {
 		return err
 	}
-	n, err := f.Write(data)
-	f.Close()
-	if err == nil && n < len(data) {
-		err = io.ErrShortWrite
+	_, err = f.Write(data)
+	if err1 := f.Close(); err == nil {
+		err = err1
 	}
 	return err
 }
 
-// byName implements sort.Interface.
-type byName []os.FileInfo
-
-func (f byName) Len() int           { return len(f) }
-func (f byName) Less(i, j int) bool { return f[i].Name() < f[j].Name() }
-func (f byName) Swap(i, j int)      { f[i], f[j] = f[j], f[i] }
-
 // ReadDir reads the directory named by dirname and returns
-// a list of sorted directory entries.
+// a list of directory entries sorted by filename.
 func ReadDir(dirname string) ([]os.FileInfo, error) {
 	f, err := os.Open(dirname)
 	if err != nil {
@@ -104,7 +100,7 @@ func ReadDir(dirname string) ([]os.FileInfo, error) {
 	if err != nil {
 		return nil, err
 	}
-	sort.Sort(byName(list))
+	sort.Slice(list, func(i, j int) bool { return list[i].Name() < list[j].Name() })
 	return list, nil
 }
 
@@ -130,21 +126,31 @@ func (devNull) Write(p []byte) (int, error) {
 	return len(p), nil
 }
 
-var blackHole = make([]byte, 8192)
+func (devNull) WriteString(s string) (int, error) {
+	return len(s), nil
+}
+
+var blackHolePool = sync.Pool{
+	New: func() interface{} {
+		b := make([]byte, 8192)
+		return &b
+	},
+}
 
 func (devNull) ReadFrom(r io.Reader) (n int64, err error) {
+	bufp := blackHolePool.Get().(*[]byte)
 	readSize := 0
 	for {
-		readSize, err = r.Read(blackHole)
+		readSize, err = r.Read(*bufp)
 		n += int64(readSize)
 		if err != nil {
+			blackHolePool.Put(bufp)
 			if err == io.EOF {
 				return n, nil
 			}
 			return
 		}
 	}
-	panic("unreachable")
 }
 
 // Discard is an io.Writer on which all Write calls succeed

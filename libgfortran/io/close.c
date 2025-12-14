@@ -1,4 +1,4 @@
-/* Copyright (C) 2002, 2003, 2005, 2007, 2009 Free Software Foundation, Inc.
+/* Copyright (C) 2002-2020 Free Software Foundation, Inc.
    Contributed by Andy Vaught
 
 This file is part of the GNU Fortran 95 runtime library (libgfortran).
@@ -24,10 +24,14 @@ see the files COPYING3 and COPYING.RUNTIME respectively.  If not, see
 
 #include "io.h"
 #include "unix.h"
+#include "async.h"
 #include <limits.h>
+#if !HAVE_UNLINK_OPEN_FILE
+#include <string.h>
+#endif
 
 typedef enum
-{ CLOSE_DELETE, CLOSE_KEEP, CLOSE_UNSPECIFIED }
+{ CLOSE_INVALID = - 1, CLOSE_DELETE, CLOSE_KEEP, CLOSE_UNSPECIFIED }
 close_status;
 
 static const st_option status_opt[] = {
@@ -46,7 +50,7 @@ st_close (st_parameter_close *clp)
   close_status status;
   gfc_unit *u;
 #if !HAVE_UNLINK_OPEN_FILE
-  char * path;
+  char *path;
 
   path = NULL;
 #endif
@@ -57,43 +61,71 @@ st_close (st_parameter_close *clp)
     find_option (&clp->common, clp->status, clp->status_len,
 		 status_opt, "Bad STATUS parameter in CLOSE statement");
 
+  if (status == CLOSE_INVALID)
+    {
+      library_end ();
+      return;
+    }
+
+  u = find_unit (clp->common.unit);
+
+  if (ASYNC_IO && u && u->au)
+    if (async_wait (&(clp->common), u->au))
+      {
+	library_end ();
+	return;
+      }
+
   if ((clp->common.flags & IOPARM_LIBRETURN_MASK) != IOPARM_LIBRETURN_OK)
   {
     library_end ();
     return;
   }
 
-  u = find_unit (clp->common.unit);
   if (u != NULL)
     {
+      if (close_share (u) < 0)
+	generate_error (&clp->common, LIBERROR_OS, "Problem in CLOSE");
       if (u->flags.status == STATUS_SCRATCH)
 	{
 	  if (status == CLOSE_KEEP)
 	    generate_error (&clp->common, LIBERROR_BAD_OPTION,
 			    "Can't KEEP a scratch file on CLOSE");
 #if !HAVE_UNLINK_OPEN_FILE
-	  path = (char *) gfc_alloca (u->file_len + 1);
-          unpack_filename (path, u->file, u->file_len);
+	  path = strdup (u->filename);
 #endif
 	}
       else
 	{
 	  if (status == CLOSE_DELETE)
-            {
+	    {
+	      if (u->flags.readonly)
+		generate_warning (&clp->common, "STATUS set to DELETE on CLOSE"
+				  " but file protected by READONLY specifier");
+	      else
+		{
 #if HAVE_UNLINK_OPEN_FILE
-	      delete_file (u);
+
+		  if (remove (u->filename))
+		    generate_error (&clp->common, LIBERROR_OS,
+				    "File cannot be deleted");
 #else
-	      path = (char *) gfc_alloca (u->file_len + 1);
-              unpack_filename (path, u->file, u->file_len);
+		  path = strdup (u->filename);
 #endif
-            }
+		}
+	    }
 	}
 
       close_unit (u);
 
 #if !HAVE_UNLINK_OPEN_FILE
       if (path != NULL)
-        unlink (path);
+	{
+	  if (remove (path))
+	    generate_error (&clp->common, LIBERROR_OS,
+			    "File cannot be deleted");
+	  free (path);
+	}
 #endif
     }
 

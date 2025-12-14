@@ -1,6 +1,6 @@
 // -*- C++ -*-
 
-// Copyright (C) 2005, 2006, 2009, 2011 Free Software Foundation, Inc.
+// Copyright (C) 2005-2020 Free Software Foundation, Inc.
 //
 // This file is part of the GNU ISO C++ Library.  This library is free
 // software; you can redistribute it and/or modify it under the terms
@@ -37,6 +37,8 @@
  * @file binary_heap_/insert_fn_imps.hpp
  * Contains an implementation class for a binary_heap.
  */
+
+#ifdef PB_DS_CLASS_C_DEC
 
 PB_DS_CLASS_T_DEC
 inline typename PB_DS_CLASS_C_DEC::point_iterator
@@ -103,7 +105,6 @@ modify(point_iterator it, const_reference r_new_val)
   swap_value_imp(it.m_p_e, r_new_val, s_no_throw_copies_ind);
   fix(it.m_p_e);
   PB_DS_ASSERT_VALID((*this))
-  _GLIBCXX_DEBUG_ASSERT(is_heap());
 }
 
 PB_DS_CLASS_T_DEC
@@ -172,3 +173,4 @@ swap_value_imp(entry_pointer p_e, const_reference r_new_val, false_type)
   value_type tmp(r_new_val);
   (*p_e)->swap(tmp);
 }
+#endif

@@ -6,7 +6,7 @@
  *                                                                          *
  *                          C Implementation File                           *
  *                                                                          *
- *           Copyright (C) 1992-2009, Free Software Foundation, Inc.        *
+ *           Copyright (C) 1992-2019, Free Software Foundation, Inc.        *
  *                                                                          *
  * GNAT is free software;  you can  redistribute it  and/or modify it under *
  * terms of the  GNU General Public License as published  by the Free Soft- *
@@ -35,22 +35,10 @@
    as it may be defined using a macro.
 */
 
-
+#ifndef _REENTRANT
 #define _REENTRANT
-#define _THREAD_SAFE
-#define _SGI_MP_SOURCE
-
-#ifdef MaRTE
-
-/* MaRTE OS provides its own implementation of errno related functionality. We
-   want to ensure the use of the MaRTE version for tasking programs (the MaRTE
-   library will not be linked if no tasking constructs are used), so we use the
-   weak symbols mechanism to use the MaRTE version whenever is available. */
-
-#pragma weak __get_errno
-#pragma weak __set_errno
-
 #endif
+#define _THREAD_SAFE
 
 #include <errno.h>
 int
@@ -59,8 +47,10 @@ __get_errno(void)
   return errno;
 }
 
+#ifndef __ANDROID__
 void
 __set_errno(int err)
 {
   errno = err;
 }
+#endif

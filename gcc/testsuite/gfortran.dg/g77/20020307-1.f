@@ -1,4 +1,5 @@
 c { dg-do compile }
+c { dg-options "-std=legacy" }
       SUBROUTINE SWEEP
       PARAMETER(MAXDIM=4,MAXVEC=4**3*8,MAXT=20)
       REAL(KIND=8) B,W1,W2,BNORM,BINV,WT,W0,C1,C2,R1,R2

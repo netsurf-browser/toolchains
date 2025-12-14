@@ -4,14 +4,24 @@
 #include "config.h"
 #include "system.h"
 #include "coretypes.h"
+#include "gcc-plugin.h"
 #include "tm.h"
+#include "tree.h"
 #include "toplev.h"
 #include "basic-block.h"
+#include "hash-table.h"
+#include "vec.h"
+#include "ggc.h"
+#include "tree-ssa-alias.h"
+#include "internal-fn.h"
+#include "gimple-fold.h"
+#include "tree-eh.h"
+#include "gimple-expr.h"
+#include "is-a.h"
 #include "gimple.h"
 #include "tree.h"
 #include "tree-pass.h"
 #include "intl.h"
-#include "gcc-plugin.h"
 #include "plugin-version.h"
 #include "diagnostic.h"
 
@@ -54,8 +64,8 @@ plugin_init (struct plugin_name_args *plugin_info,
       if (!strcmp (argv[i].key, "count-ggc-start"))
 	{
 	  if (argv[i].value)
-	    warning (0, G_ ("option '-fplugin-arg-%s-count-ggc-start=%s'"
-			    " ignored (superfluous '=%s')"),
+	    warning (0, G_("option '-fplugin-arg-%s-count-ggc-start=%s'"
+			   " ignored (superfluous '=%s')"),
 		     plugin_name, argv[i].value, argv[i].value);
 	  else
 	    register_callback ("ggcplug",
@@ -66,8 +76,8 @@ plugin_init (struct plugin_name_args *plugin_info,
       else if (!strcmp (argv[i].key, "count-ggc-end"))
 	{
 	  if (argv[i].value)
-	    warning (0, G_ ("option '-fplugin-arg-%s-count-ggc-end=%s'"
-			    " ignored (superfluous '=%s')"),
+	    warning (0, G_("option '-fplugin-arg-%s-count-ggc-end=%s'"
+			   " ignored (superfluous '=%s')"),
 		     plugin_name, argv[i].value, argv[i].value);
 	  else
 	    register_callback ("ggcplug",
@@ -78,8 +88,8 @@ plugin_init (struct plugin_name_args *plugin_info,
       else if (!strcmp (argv[i].key, "count-ggc-mark"))
 	{
 	  if (argv[i].value)
-	    warning (0, G_ ("option '-fplugin-arg-%s-count-ggc-mark=%s'"
-			    " ignored (superfluous '=%s')"),
+	    warning (0, G_("option '-fplugin-arg-%s-count-ggc-mark=%s'"
+			   " ignored (superfluous '=%s')"),
 		     plugin_name, argv[i].value, argv[i].value);
 	  else
 	    register_callback ("ggcplug",
@@ -90,8 +100,8 @@ plugin_init (struct plugin_name_args *plugin_info,
       else if (!strcmp (argv[i].key, "test-extra-root"))
 	{
 	  if (argv[i].value)
-	    warning (0, G_ ("option '-fplugin-arg-%s-test-extra-root=%s'"
-			    " ignored (superfluous '=%s')"),
+	    warning (0, G_("option '-fplugin-arg-%s-test-extra-root=%s'"
+			   " ignored (superfluous '=%s')"),
 		     plugin_name, argv[i].value, argv[i].value);
 	  else
 	    register_callback ("ggcplug",

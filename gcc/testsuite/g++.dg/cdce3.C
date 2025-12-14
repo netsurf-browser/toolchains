@@ -1,27 +1,25 @@
 /* { dg-do run } */
 /* { dg-require-effective-target c99_runtime } */
-/* { dg-skip-if "exp2* missing despite C99 runtime" { alpha*-dec-osf5* } } */
 /* { dg-options "-O2 -fmath-errno -fdump-tree-cdce-details -lm" } */
 /* { dg-additional-options "-DLARGE_LONG_DOUBLE" { target large_long_double } } */
 /* { dg-additional-options "-DGNU_EXTENSION" { target pow10 } } */
 /* { dg-add-options ieee } */
-/* { dg-final { scan-tree-dump  "cdce3.C:93: note: function call is shrink-wrapped into error conditions\." "cdce" { target pow10 } } } */
-/* { dg-final { scan-tree-dump  "cdce3.C:94: note: function call is shrink-wrapped into error conditions\." "cdce" { target pow10 } } } */
-/* { dg-final { scan-tree-dump  "cdce3.C:96: note: function call is shrink-wrapped into error conditions\." "cdce" } } */
-/* { dg-final { scan-tree-dump  "cdce3.C:97: note: function call is shrink-wrapped into error conditions\." "cdce" } } */
-/* { dg-final { scan-tree-dump  "cdce3.C:98: note: function call is shrink-wrapped into error conditions\." "cdce" } } */
-/* { dg-final { scan-tree-dump  "cdce3.C:99: note: function call is shrink-wrapped into error conditions\." "cdce" } } */
-/* { dg-final { scan-tree-dump  "cdce3.C:100: note: function call is shrink-wrapped into error conditions\." "cdce" } } */
-/* { dg-final { scan-tree-dump  "cdce3.C:101: note: function call is shrink-wrapped into error conditions\." "cdce" } } */
-/* { dg-final { scan-tree-dump  "cdce3.C:102: note: function call is shrink-wrapped into error conditions\." "cdce" } } */
-/* { dg-final { scan-tree-dump  "cdce3.C:103: note: function call is shrink-wrapped into error conditions\." "cdce" } } */
-/* { dg-final { scan-tree-dump  "cdce3.C:104: note: function call is shrink-wrapped into error conditions\." "cdce" } } */
-/* { dg-final { scan-tree-dump  "cdce3.C:105: note: function call is shrink-wrapped into error conditions\." "cdce" } } */
-/* { dg-final { scan-tree-dump  "cdce3.C:106: note: function call is shrink-wrapped into error conditions\." "cdce" } } */
-/* { dg-final { scan-tree-dump  "cdce3.C:107: note: function call is shrink-wrapped into error conditions\." "cdce" } } */
-/* { dg-final { scan-tree-dump  "cdce3.C:108: note: function call is shrink-wrapped into error conditions\." "cdce" } } */
-/* { dg-final { scan-tree-dump  "cdce3.C:109: note: function call is shrink-wrapped into error conditions\." "cdce" } } */
-/* { dg-final { cleanup-tree-dump "cdce" } } */
+/* { dg-final { scan-tree-dump  "cdce3.C:91: .* function call is shrink-wrapped into error conditions\." "cdce" { target pow10 } } } */
+/* { dg-final { scan-tree-dump  "cdce3.C:92: .* function call is shrink-wrapped into error conditions\." "cdce" { target pow10 } } } */
+/* { dg-final { scan-tree-dump  "cdce3.C:94: .* function call is shrink-wrapped into error conditions\." "cdce" } } */
+/* { dg-final { scan-tree-dump  "cdce3.C:95: .* function call is shrink-wrapped into error conditions\." "cdce" } } */
+/* { dg-final { scan-tree-dump  "cdce3.C:96: .* function call is shrink-wrapped into error conditions\." "cdce" } } */
+/* { dg-final { scan-tree-dump  "cdce3.C:97: .* function call is shrink-wrapped into error conditions\." "cdce" } } */
+/* { dg-final { scan-tree-dump  "cdce3.C:98: .* function call is shrink-wrapped into error conditions\." "cdce" } } */
+/* { dg-final { scan-tree-dump  "cdce3.C:99: .* function call is shrink-wrapped into error conditions\." "cdce" } } */
+/* { dg-final { scan-tree-dump  "cdce3.C:100: .* function call is shrink-wrapped into error conditions\." "cdce" } } */
+/* { dg-final { scan-tree-dump  "cdce3.C:101: .* function call is shrink-wrapped into error conditions\." "cdce" } } */
+/* { dg-final { scan-tree-dump  "cdce3.C:102: .* function call is shrink-wrapped into error conditions\." "cdce" } } */
+/* { dg-final { scan-tree-dump  "cdce3.C:103: .* function call is shrink-wrapped into error conditions\." "cdce" } } */
+/* { dg-final { scan-tree-dump  "cdce3.C:104: .* function call is shrink-wrapped into error conditions\." "cdce" } } */
+/* { dg-final { scan-tree-dump  "cdce3.C:105: .* function call is shrink-wrapped into error conditions\." "cdce" } } */
+/* { dg-final { scan-tree-dump  "cdce3.C:106: .* function call is shrink-wrapped into error conditions\." "cdce" } } */
+/* { dg-final { scan-tree-dump  "cdce3.C:107: .* function call is shrink-wrapped into error conditions\." "cdce" } } */
 
 #include <stdlib.h>
 #include <math.h>

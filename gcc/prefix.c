@@ -1,6 +1,5 @@
 /* Utility to update paths from internal to external forms.
-   Copyright (C) 1997, 1998, 1999, 2000, 2001, 2002, 2003, 2004, 2005,
-   2007, 2011  Free Software Foundation, Inc.
+   Copyright (C) 1997-2020 Free Software Foundation, Inc.
 
 This file is part of GCC.
 
@@ -200,7 +199,7 @@ translate_name (char *name)
 	;
 
       key = (char *) alloca (keylen + 1);
-      strncpy (key, &name[1], keylen);
+      memcpy (key, &name[1], keylen);
       key[keylen] = 0;
 
       if (code == '@')
@@ -251,7 +250,7 @@ update_path (const char *path, const char *key)
   const int len = strlen (std_prefix);
 
   if (! filename_ncmp (path, std_prefix, len)
-      && (IS_DIR_SEPARATOR(path[len])
+      && (IS_DIR_SEPARATOR (path[len])
           || path[len] == '\0')
       && key != 0)
     {

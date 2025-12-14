@@ -1,11 +1,9 @@
-// { dg-do run { target *-*-freebsd* *-*-netbsd* *-*-linux* *-*-solaris* *-*-cygwin *-*-darwin* alpha*-*-osf* mips-sgi-irix6* powerpc-ibm-aix* } }
-// { dg-options " -std=gnu++0x -pthread" { target *-*-freebsd* *-*-netbsd* *-*-linux* alpha*-*-osf* mips-sgi-irix6* powerpc-ibm-aix* } }
-// { dg-options " -std=gnu++0x -pthreads" { target *-*-solaris* } }
-// { dg-options " -std=gnu++0x " { target *-*-cygwin *-*-darwin* } }
-// { dg-require-cstdint "" }
-// { dg-require-gthreads-timed "" }
+// { dg-do run }
+// { dg-options "-pthread"  }
+// { dg-require-effective-target c++11 }
+// { dg-require-effective-target pthread }
 
-// Copyright (C) 2008, 2009, 2010, 2011, 2012 Free Software Foundation, Inc.
+// Copyright (C) 2008-2020 Free Software Foundation, Inc.
 //
 // This file is part of the GNU ISO C++ Library.  This library is free
 // software; you can redistribute it and/or modify it under the
@@ -28,22 +26,22 @@
 #include <system_error>
 #include <testsuite_hooks.h>
 
-int main()
+template <typename clock_type>
+void test()
 {
-  bool test __attribute__((unused)) = true;
   typedef std::timed_mutex mutex_type;
   typedef std::unique_lock<mutex_type> lock_type;
-  typedef std::chrono::system_clock clock_type;
 
   try 
     {
       mutex_type m;
       lock_type l(m, std::defer_lock);
-      clock_type::time_point t = clock_type::now() + std::chrono::seconds(1);
+      const typename clock_type::time_point t = clock_type::now()
+	+ std::chrono::seconds(1);
 
       try
 	{
-	  l.try_lock_until(t);
+	  VERIFY( l.try_lock_until(t) );
 	}
       catch(const std::system_error&)
 	{
@@ -64,6 +62,11 @@ int main()
     {
       VERIFY( false );
     }
+}
 
+int main()
+{
+  test<std::chrono::system_clock>();
+  test<std::chrono::steady_clock>();
   return 0;
 }

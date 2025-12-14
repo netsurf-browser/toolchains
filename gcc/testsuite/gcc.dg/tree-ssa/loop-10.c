@@ -1,5 +1,5 @@
 /* { dg-do compile } */
-/* { dg-options "-O2 -fdump-tree-optimized" } */
+/* { dg-options "-O2 -fdump-tree-optimized -fno-finite-loops" } */
 /* { dg-require-effective-target int32plus } */
 
 int bar (void);
@@ -30,4 +30,3 @@ void foo (void)
 /* { dg-final { scan-tree-dump-times "if " 3 "optimized" } } */
 /* { dg-final { scan-tree-dump-times "bar " 2 "optimized" } } */
 
-/* { dg-final { cleanup-tree-dump "optimized" } } */

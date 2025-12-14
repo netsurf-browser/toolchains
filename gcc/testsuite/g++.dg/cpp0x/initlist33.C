@@ -1,5 +1,5 @@
 // PR c++/44045
-// { dg-options "-std=c++0x" }
+// { dg-do compile { target c++11 } }
 
 struct base
 {
@@ -9,5 +9,5 @@ struct base
 int main()
 {
  base ptr_array[1];
- ptr_array = { base() };	// { dg-error "assign" }
+ ptr_array = { base() };	// { dg-error "12:assigning to an array from an initializer list" }
 }

@@ -49,10 +49,8 @@ int foo(void) {
   [stupidVar boo];
   [stupidVar foo];
   [stupidVar anotherMsg]; /* { dg-warning ".\\-anotherMsg. not found in protocol" } */
-       /* { dg-warning "no .\\-anotherMsg. method found" "" { target *-*-* } 51 } */
+       /* { dg-warning "no .\\-anotherMsg. method found" "" { target *-*-* } .-1 } */
   return 0;
 }
 
-/* { dg-warning "Messages without a matching method signature" "" { target *-*-* } 0 } */
-/* { dg-warning "will be assumed to return .id. and accept" "" { target *-*-* } 0 } */
-/* { dg-warning ".\.\.\.. as arguments" "" { target *-*-* } 0 } */
+/* { dg-warning "messages without a matching method signature will be assumed to return .id. and accept .\.\.\.. as arguments" "" { target *-*-* } 0 } */

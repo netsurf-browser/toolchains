@@ -5,28 +5,41 @@
 package httputil
 
 import (
+	"bufio"
 	"bytes"
 	"fmt"
 	"io"
 	"io/ioutil"
 	"net/http"
 	"net/url"
+	"runtime"
+	"strings"
 	"testing"
 )
 
+type eofReader struct{}
+
+func (n eofReader) Close() error { return nil }
+
+func (n eofReader) Read([]byte) (int, error) { return 0, io.EOF }
+
 type dumpTest struct {
-	Req  http.Request
+	// Either Req or GetReq can be set/nil but not both.
+	Req    *http.Request
+	GetReq func() *http.Request
+
 	Body interface{} // optional []byte or func() io.ReadCloser to populate Req.Body
 
 	WantDump    string
 	WantDumpOut string
+	MustError   bool // if true, the test is expected to throw an error
+	NoBody      bool // if true, set DumpRequest{,Out} body to false
 }
 
 var dumpTests = []dumpTest{
-
 	// HTTP/1.1 => chunked coding; body; empty trailer
 	{
-		Req: http.Request{
+		Req: &http.Request{
 			Method: "GET",
 			URL: &url.URL{
 				Scheme: "http",
@@ -49,7 +62,7 @@ var dumpTests = []dumpTest{
 	// Verify that DumpRequest preserves the HTTP version number, doesn't add a Host,
 	// and doesn't add a User-Agent.
 	{
-		Req: http.Request{
+		Req: &http.Request{
 			Method:     "GET",
 			URL:        mustParseURL("/foo"),
 			ProtoMajor: 1,
@@ -64,11 +77,11 @@ var dumpTests = []dumpTest{
 	},
 
 	{
-		Req: *mustNewRequest("GET", "http://example.com/foo", nil),
+		Req: mustNewRequest("GET", "http://example.com/foo", nil),
 
 		WantDumpOut: "GET /foo HTTP/1.1\r\n" +
 			"Host: example.com\r\n" +
-			"User-Agent: Go http package\r\n" +
+			"User-Agent: Go-http-client/1.1\r\n" +
 			"Accept-Encoding: gzip\r\n\r\n",
 	},
 
@@ -76,38 +89,199 @@ var dumpTests = []dumpTest{
 	// with a bytes.Buffer and hang with all goroutines not
 	// runnable.
 	{
-		Req: *mustNewRequest("GET", "https://example.com/foo", nil),
-
+		Req: mustNewRequest("GET", "https://example.com/foo", nil),
 		WantDumpOut: "GET /foo HTTP/1.1\r\n" +
 			"Host: example.com\r\n" +
-			"User-Agent: Go http package\r\n" +
+			"User-Agent: Go-http-client/1.1\r\n" +
+			"Accept-Encoding: gzip\r\n\r\n",
+	},
+
+	// Request with Body, but Dump requested without it.
+	{
+		Req: &http.Request{
+			Method: "POST",
+			URL: &url.URL{
+				Scheme: "http",
+				Host:   "post.tld",
+				Path:   "/",
+			},
+			ContentLength: 6,
+			ProtoMajor:    1,
+			ProtoMinor:    1,
+		},
+
+		Body: []byte("abcdef"),
+
+		WantDumpOut: "POST / HTTP/1.1\r\n" +
+			"Host: post.tld\r\n" +
+			"User-Agent: Go-http-client/1.1\r\n" +
+			"Content-Length: 6\r\n" +
+			"Accept-Encoding: gzip\r\n\r\n",
+
+		NoBody: true,
+	},
+
+	// Request with Body > 8196 (default buffer size)
+	{
+		Req: &http.Request{
+			Method: "POST",
+			URL: &url.URL{
+				Scheme: "http",
+				Host:   "post.tld",
+				Path:   "/",
+			},
+			Header: http.Header{
+				"Content-Length": []string{"8193"},
+			},
+
+			ContentLength: 8193,
+			ProtoMajor:    1,
+			ProtoMinor:    1,
+		},
+
+		Body: bytes.Repeat([]byte("a"), 8193),
+
+		WantDumpOut: "POST / HTTP/1.1\r\n" +
+			"Host: post.tld\r\n" +
+			"User-Agent: Go-http-client/1.1\r\n" +
+			"Content-Length: 8193\r\n" +
+			"Accept-Encoding: gzip\r\n\r\n" +
+			strings.Repeat("a", 8193),
+		WantDump: "POST / HTTP/1.1\r\n" +
+			"Host: post.tld\r\n" +
+			"Content-Length: 8193\r\n\r\n" +
+			strings.Repeat("a", 8193),
+	},
+
+	{
+		GetReq: func() *http.Request {
+			return mustReadRequest("GET http://foo.com/ HTTP/1.1\r\n" +
+				"User-Agent: blah\r\n\r\n")
+		},
+		NoBody: true,
+		WantDump: "GET http://foo.com/ HTTP/1.1\r\n" +
+			"User-Agent: blah\r\n\r\n",
+	},
+
+	// Issue #7215. DumpRequest should return the "Content-Length" when set
+	{
+		GetReq: func() *http.Request {
+			return mustReadRequest("POST /v2/api/?login HTTP/1.1\r\n" +
+				"Host: passport.myhost.com\r\n" +
+				"Content-Length: 3\r\n" +
+				"\r\nkey1=name1&key2=name2")
+		},
+		WantDump: "POST /v2/api/?login HTTP/1.1\r\n" +
+			"Host: passport.myhost.com\r\n" +
+			"Content-Length: 3\r\n" +
+			"\r\nkey",
+	},
+	// Issue #7215. DumpRequest should return the "Content-Length" in ReadRequest
+	{
+		GetReq: func() *http.Request {
+			return mustReadRequest("POST /v2/api/?login HTTP/1.1\r\n" +
+				"Host: passport.myhost.com\r\n" +
+				"Content-Length: 0\r\n" +
+				"\r\nkey1=name1&key2=name2")
+		},
+		WantDump: "POST /v2/api/?login HTTP/1.1\r\n" +
+			"Host: passport.myhost.com\r\n" +
+			"Content-Length: 0\r\n\r\n",
+	},
+
+	// Issue #7215. DumpRequest should not return the "Content-Length" if unset
+	{
+		GetReq: func() *http.Request {
+			return mustReadRequest("POST /v2/api/?login HTTP/1.1\r\n" +
+				"Host: passport.myhost.com\r\n" +
+				"\r\nkey1=name1&key2=name2")
+		},
+		WantDump: "POST /v2/api/?login HTTP/1.1\r\n" +
+			"Host: passport.myhost.com\r\n\r\n",
+	},
+
+	// Issue 18506: make drainBody recognize NoBody. Otherwise
+	// this was turning into a chunked request.
+	{
+		Req: mustNewRequest("POST", "http://example.com/foo", http.NoBody),
+		WantDumpOut: "POST /foo HTTP/1.1\r\n" +
+			"Host: example.com\r\n" +
+			"User-Agent: Go-http-client/1.1\r\n" +
+			"Content-Length: 0\r\n" +
+			"Accept-Encoding: gzip\r\n\r\n",
+	},
+
+	// Issue 34504: a non-nil Body without ContentLength set should be chunked
+	{
+		Req: &http.Request{
+			Method: "PUT",
+			URL: &url.URL{
+				Scheme: "http",
+				Host:   "post.tld",
+				Path:   "/test",
+			},
+			ContentLength: 0,
+			Proto:         "HTTP/1.1",
+			ProtoMajor:    1,
+			ProtoMinor:    1,
+			Body:          &eofReader{},
+		},
+		NoBody: true,
+		WantDumpOut: "PUT /test HTTP/1.1\r\n" +
+			"Host: post.tld\r\n" +
+			"User-Agent: Go-http-client/1.1\r\n" +
+			"Transfer-Encoding: chunked\r\n" +
 			"Accept-Encoding: gzip\r\n\r\n",
 	},
 }
 
 func TestDumpRequest(t *testing.T) {
+	// Make a copy of dumpTests and add 10 new cases with an empty URL
+	// to test that no goroutines are leaked. See golang.org/issue/32571.
+	// 10 seems to be a decent number which always triggers the failure.
+	dumpTests := dumpTests[:]
+	for i := 0; i < 10; i++ {
+		dumpTests = append(dumpTests, dumpTest{
+			Req:       mustNewRequest("GET", "", nil),
+			MustError: true,
+		})
+	}
+	numg0 := runtime.NumGoroutine()
 	for i, tt := range dumpTests {
-		setBody := func() {
-			if tt.Body == nil {
-				return
-			}
-			switch b := tt.Body.(type) {
-			case []byte:
-				tt.Req.Body = ioutil.NopCloser(bytes.NewBuffer(b))
-			case func() io.ReadCloser:
-				tt.Req.Body = b()
-			}
+		if tt.Req != nil && tt.GetReq != nil || tt.Req == nil && tt.GetReq == nil {
+			t.Errorf("#%d: either .Req(%p) or .GetReq(%p) can be set/nil but not both", i, tt.Req, tt.GetReq)
+			continue
 		}
-		setBody()
-		if tt.Req.Header == nil {
-			tt.Req.Header = make(http.Header)
+
+		freshReq := func(ti dumpTest) *http.Request {
+			req := ti.Req
+			if req == nil {
+				req = ti.GetReq()
+			}
+
+			if req.Header == nil {
+				req.Header = make(http.Header)
+			}
+
+			if ti.Body == nil {
+				return req
+			}
+			switch b := ti.Body.(type) {
+			case []byte:
+				req.Body = ioutil.NopCloser(bytes.NewReader(b))
+			case func() io.ReadCloser:
+				req.Body = b()
+			default:
+				t.Fatalf("Test %d: unsupported Body of %T", i, ti.Body)
+			}
+			return req
 		}
 
 		if tt.WantDump != "" {
-			setBody()
-			dump, err := DumpRequest(&tt.Req, true)
+			req := freshReq(tt)
+			dump, err := DumpRequest(req, !tt.NoBody)
 			if err != nil {
-				t.Errorf("DumpRequest #%d: %s", i, err)
+				t.Errorf("DumpRequest #%d: %s\nWantDump:\n%s", i, err, tt.WantDump)
 				continue
 			}
 			if string(dump) != tt.WantDump {
@@ -116,9 +290,18 @@ func TestDumpRequest(t *testing.T) {
 			}
 		}
 
+		if tt.MustError {
+			req := freshReq(tt)
+			_, err := DumpRequestOut(req, !tt.NoBody)
+			if err == nil {
+				t.Errorf("DumpRequestOut #%d: expected an error, got nil", i)
+			}
+			continue
+		}
+
 		if tt.WantDumpOut != "" {
-			setBody()
-			dump, err := DumpRequestOut(&tt.Req, true)
+			req := freshReq(tt)
+			dump, err := DumpRequestOut(req, !tt.NoBody)
 			if err != nil {
 				t.Errorf("DumpRequestOut #%d: %s", i, err)
 				continue
@@ -128,6 +311,11 @@ func TestDumpRequest(t *testing.T) {
 				continue
 			}
 		}
+	}
+	if dg := runtime.NumGoroutine() - numg0; dg > 4 {
+		buf := make([]byte, 4096)
+		buf = buf[:runtime.Stack(buf, true)]
+		t.Errorf("Unexpectedly large number of new goroutines: %d new: %s", dg, buf)
 	}
 }
 
@@ -149,4 +337,112 @@ func mustNewRequest(method, url string, body io.Reader) *http.Request {
 		panic(fmt.Sprintf("NewRequest(%q, %q, %p) err = %v", method, url, body, err))
 	}
 	return req
+}
+
+func mustReadRequest(s string) *http.Request {
+	req, err := http.ReadRequest(bufio.NewReader(strings.NewReader(s)))
+	if err != nil {
+		panic(err)
+	}
+	return req
+}
+
+var dumpResTests = []struct {
+	res  *http.Response
+	body bool
+	want string
+}{
+	{
+		res: &http.Response{
+			Status:        "200 OK",
+			StatusCode:    200,
+			Proto:         "HTTP/1.1",
+			ProtoMajor:    1,
+			ProtoMinor:    1,
+			ContentLength: 50,
+			Header: http.Header{
+				"Foo": []string{"Bar"},
+			},
+			Body: ioutil.NopCloser(strings.NewReader("foo")), // shouldn't be used
+		},
+		body: false, // to verify we see 50, not empty or 3.
+		want: `HTTP/1.1 200 OK
+Content-Length: 50
+Foo: Bar`,
+	},
+
+	{
+		res: &http.Response{
+			Status:        "200 OK",
+			StatusCode:    200,
+			Proto:         "HTTP/1.1",
+			ProtoMajor:    1,
+			ProtoMinor:    1,
+			ContentLength: 3,
+			Body:          ioutil.NopCloser(strings.NewReader("foo")),
+		},
+		body: true,
+		want: `HTTP/1.1 200 OK
+Content-Length: 3
+
+foo`,
+	},
+
+	{
+		res: &http.Response{
+			Status:           "200 OK",
+			StatusCode:       200,
+			Proto:            "HTTP/1.1",
+			ProtoMajor:       1,
+			ProtoMinor:       1,
+			ContentLength:    -1,
+			Body:             ioutil.NopCloser(strings.NewReader("foo")),
+			TransferEncoding: []string{"chunked"},
+		},
+		body: true,
+		want: `HTTP/1.1 200 OK
+Transfer-Encoding: chunked
+
+3
+foo
+0`,
+	},
+	{
+		res: &http.Response{
+			Status:        "200 OK",
+			StatusCode:    200,
+			Proto:         "HTTP/1.1",
+			ProtoMajor:    1,
+			ProtoMinor:    1,
+			ContentLength: 0,
+			Header: http.Header{
+				// To verify if headers are not filtered out.
+				"Foo1": []string{"Bar1"},
+				"Foo2": []string{"Bar2"},
+			},
+			Body: nil,
+		},
+		body: false, // to verify we see 0, not empty.
+		want: `HTTP/1.1 200 OK
+Foo1: Bar1
+Foo2: Bar2
+Content-Length: 0`,
+	},
+}
+
+func TestDumpResponse(t *testing.T) {
+	for i, tt := range dumpResTests {
+		gotb, err := DumpResponse(tt.res, tt.body)
+		if err != nil {
+			t.Errorf("%d. DumpResponse = %v", i, err)
+			continue
+		}
+		got := string(gotb)
+		got = strings.TrimSpace(got)
+		got = strings.ReplaceAll(got, "\r", "")
+
+		if got != tt.want {
+			t.Errorf("%d.\nDumpResponse got:\n%s\n\nWant:\n%s\n", i, got, tt.want)
+		}
+	}
 }

@@ -6,7 +6,7 @@
 --                                                                          --
 --                                 B o d y                                  --
 --                                                                          --
---          Copyright (C) 1992-2011, Free Software Foundation, Inc.         --
+--          Copyright (C) 1992-2019, Free Software Foundation, Inc.         --
 --                                                                          --
 -- GNAT is free software;  you can  redistribute it  and/or modify it under --
 -- terms of the  GNU General Public License as published  by the Free Soft- --
@@ -42,7 +42,7 @@ package body Ch5 is
    function P_Label                              return Node_Id;
    function P_Null_Statement                     return Node_Id;
 
-   function P_Assignment_Statement (LHS : Node_Id)  return Node_Id;
+   function P_Assignment_Statement (LHS : Node_Id) return Node_Id;
    --  Parse assignment statement. On entry, the caller has scanned the left
    --  hand side (passed in as Lhs), and the colon-equal (or some symbol
    --  taken to be an error equivalent such as equal).
@@ -240,6 +240,10 @@ package body Ch5 is
                    and then Statement_Seen)
                 or else All_Pragmas)
             then
+               --  This Ada 2012 construct not allowed in a compiler unit
+
+               Check_Compiler_Unit ("null statement list", Token_Ptr);
+
                declare
                   Null_Stm : constant Node_Id :=
                                Make_Null_Statement (Token_Ptr);
@@ -338,8 +342,9 @@ package body Ch5 is
 
                --  Case of end or EOF
 
-               when Tok_End | Tok_EOF =>
-
+               when Tok_End
+                  | Tok_EOF
+               =>
                   --  These tokens always terminate the statement sequence
 
                   Test_Statement_Required;
@@ -353,7 +358,7 @@ package body Ch5 is
                   --  of the expected column of the end for this sequence
 
                   if SS_Flags.Eftm
-                     or else Start_Column < Scope.Table (Scope.Last).Ecol
+                     or else Start_Column < Scopes (Scope.Last).Ecol
                   then
                      Test_Statement_Required;
                      exit;
@@ -376,7 +381,7 @@ package body Ch5 is
                   --  of the expected column of the end for this sequence
 
                   if SS_Flags.Eltm
-                     or else Start_Column < Scope.Table (Scope.Last).Ecol
+                     or else Start_Column < Scopes (Scope.Last).Ecol
                   then
                      Test_Statement_Required;
                      exit;
@@ -400,7 +405,7 @@ package body Ch5 is
                   --  is not permitted.
 
                   if not SS_Flags.Extm and then
-                     Start_Column >= Scope.Table (Scope.Last).Ecol
+                     Start_Column >= Scopes (Scope.Last).Ecol
 
                   then
                      Error_Msg_SC ("exception handler not permitted here");
@@ -422,7 +427,7 @@ package body Ch5 is
                   --  expected column of the end for this sequence.
 
                   if SS_Flags.Ortm
-                     or else Start_Column < Scope.Table (Scope.Last).Ecol
+                     or else Start_Column < Scopes (Scope.Last).Ecol
                   then
                      Test_Statement_Required;
                      exit;
@@ -447,7 +452,7 @@ package body Ch5 is
 
                   --  Otherwise we treat THEN as some kind of mess where we did
                   --  not see the associated IF, but we pick up assuming it had
-                  --  been there!
+                  --  been there.
 
                   Restore_Scan_State (Scan_State); -- to THEN
                   Append_To (Statement_List, P_If_Statement);
@@ -455,13 +460,14 @@ package body Ch5 is
 
                --  Case of WHEN (error because we are not in a case)
 
-               when Tok_When | Tok_Others =>
-
+               when Tok_Others
+                  | Tok_When
+               =>
                   --  Terminate if Whtm set or if the WHEN is to the left of
                   --  the expected column of the end for this sequence.
 
                   if SS_Flags.Whtm
-                     or else Start_Column < Scope.Table (Scope.Last).Ecol
+                    or else Start_Column < Scopes (Scope.Last).Ecol
                   then
                      Test_Statement_Required;
                      exit;
@@ -505,6 +511,24 @@ package body Ch5 is
                      Append_To (Statement_List, Id_Node);
                      Scan; -- past semicolon
                      Statement_Required := False;
+
+                     --  Here is the special test for a suspicious label, more
+                     --  accurately a suspicious name, which we think perhaps
+                     --  should have been a label. If next token is one of
+                     --  LOOP, FOR, WHILE, DECLARE, BEGIN, then make an entry
+                     --  in the suspicious label table.
+
+                     if Token = Tok_Loop    or else
+                        Token = Tok_For     or else
+                        Token = Tok_While   or else
+                        Token = Tok_Declare or else
+                        Token = Tok_Begin
+                     then
+                        Suspicious_Labels.Append
+                          ((Proc_Call     => Id_Node,
+                            Semicolon_Loc => Prev_Token_Ptr,
+                            Start_Token   => Token_Ptr));
+                     end if;
 
                   --  Check for case of "go to" in place of "goto"
 
@@ -552,7 +576,7 @@ package body Ch5 is
 
                            --  We will set Error_name as the Block_Label since
                            --  we really don't know which of the labels might
-                           --  be used at the end of the loop or block!
+                           --  be used at the end of the loop or block.
 
                            Block_Label := Error_Name;
 
@@ -677,6 +701,11 @@ package body Ch5 is
 
                      else
                         TF_Semicolon;
+
+                        --  Normal processing as though semicolon were present
+
+                        Change_Name_To_Procedure_Call_Statement (Name_Node);
+                        Append_To (Statement_List, Name_Node);
                         Statement_Required := False;
                      end if;
 
@@ -921,7 +950,6 @@ package body Ch5 is
                --  handling of a bad statement.
 
                when others =>
-
                   if Token in Token_Class_Declk then
                      Junk_Declaration;
 
@@ -945,11 +973,9 @@ package body Ch5 is
          end;
 
          exit when SS_Flags.Unco;
-
       end loop;
 
       return Statement_List;
-
    end P_Sequence_Of_Statements;
 
    --------------------
@@ -1041,9 +1067,11 @@ package body Ch5 is
 
    begin
       Assign_Node := New_Node (N_Assignment_Statement, Prev_Token_Ptr);
+      Current_Assign_Node := Assign_Node;
       Set_Name (Assign_Node, LHS);
       Set_Expression (Assign_Node, P_Expression_No_Right_Paren);
       TF_Semicolon;
+      Current_Assign_Node := Empty;
       return Assign_Node;
    end P_Assignment_Statement;
 
@@ -1085,8 +1113,7 @@ package body Ch5 is
       procedure Check_Then_Column;
       --  This procedure carries out the style checks for a THEN token
       --  Note that the caller has set Loc to the Source_Ptr value for
-      --  the previous IF or ELSIF token. These checks apply only to a
-      --  THEN at the start of a line.
+      --  the previous IF or ELSIF token.
 
       function Else_Should_Be_Elsif return Boolean;
       --  An internal routine used to do a special error recovery check when
@@ -1115,16 +1142,16 @@ package body Ch5 is
       procedure Check_If_Column is
       begin
          if RM_Column_Check and then Token_Is_At_Start_Of_Line
-           and then Start_Column /= Scope.Table (Scope.Last).Ecol
+           and then Start_Column /= Scopes (Scope.Last).Ecol
          then
-            Error_Msg_Col := Scope.Table (Scope.Last).Ecol;
+            Error_Msg_Col := Scopes (Scope.Last).Ecol;
             Error_Msg_SC ("(style) this token should be@");
          end if;
       end Check_If_Column;
 
       procedure Check_Then_Column is
       begin
-         if Token_Is_At_Start_Of_Line and then Token = Tok_Then then
+         if Token = Tok_Then then
             Check_If_Column;
 
             if Style_Check then
@@ -1165,11 +1192,11 @@ package body Ch5 is
       If_Node := New_Node (N_If_Statement, Token_Ptr);
 
       Push_Scope_Stack;
-      Scope.Table (Scope.Last).Etyp := E_If;
-      Scope.Table (Scope.Last).Ecol := Start_Column;
-      Scope.Table (Scope.Last).Sloc := Token_Ptr;
-      Scope.Table (Scope.Last).Labl := Error;
-      Scope.Table (Scope.Last).Node := If_Node;
+      Scopes (Scope.Last).Etyp := E_If;
+      Scopes (Scope.Last).Ecol := Start_Column;
+      Scopes (Scope.Last).Sloc := Token_Ptr;
+      Scopes (Scope.Last).Labl := Error;
+      Scopes (Scope.Last).Node := If_Node;
 
       if Token = Tok_If then
          Loc := Token_Ptr;
@@ -1256,11 +1283,12 @@ package body Ch5 is
    --  CONDITION ::= boolean_EXPRESSION
 
    function P_Condition return Node_Id is
-      Cond : Node_Id;
-
    begin
-      Cond := P_Expression_No_Right_Paren;
+      return P_Condition (P_Expression_No_Right_Paren);
+   end P_Condition;
 
+   function P_Condition (Cond : Node_Id) return Node_Id is
+   begin
       --  It is never possible for := to follow a condition, so if we get
       --  a := we assume it is a mistyped equality. Note that we do not try
       --  to reconstruct the tree correctly in this case, but we do at least
@@ -1276,13 +1304,21 @@ package body Ch5 is
 
          return Cond;
 
-      --  Otherwise check for redundant parens
+      --  Otherwise check for redundant parentheses
+
+      --  If the condition is a conditional or a quantified expression, it is
+      --  parenthesized in the context of a condition, because of a separate
+      --  syntax rule.
 
       else
-         if Style_Check
-           and then Paren_Count (Cond) > 0
-         then
-            Style.Check_Xtra_Parens (First_Sloc (Cond));
+         if Style_Check and then Paren_Count (Cond) > 0 then
+            if not Nkind_In (Cond, N_If_Expression,
+                                   N_Case_Expression,
+                                   N_Quantified_Expression)
+              or else Paren_Count (Cond) > 1
+            then
+               Style.Check_Xtra_Parens (First_Sloc (Cond));
+            end if;
          end if;
 
          --  And return the result
@@ -1314,11 +1350,11 @@ package body Ch5 is
       Case_Node := New_Node (N_Case_Statement, Token_Ptr);
 
       Push_Scope_Stack;
-      Scope.Table (Scope.Last).Etyp := E_Case;
-      Scope.Table (Scope.Last).Ecol := Start_Column;
-      Scope.Table (Scope.Last).Sloc := Token_Ptr;
-      Scope.Table (Scope.Last).Labl := Error;
-      Scope.Table (Scope.Last).Node := Case_Node;
+      Scopes (Scope.Last).Etyp := E_Case;
+      Scopes (Scope.Last).Ecol := Start_Column;
+      Scopes (Scope.Last).Sloc := Token_Ptr;
+      Scopes (Scope.Last).Labl := Error;
+      Scopes (Scope.Last).Node := Case_Node;
 
       Scan; -- past CASE
       Set_Expression (Case_Node, P_Expression_No_Right_Paren);
@@ -1356,7 +1392,7 @@ package body Ch5 is
          --  complain about the missing WHEN, and discard the junk statements.
 
          elsif not Token_Is_At_Start_Of_Line
-           or else Start_Column > Scope.Table (Scope.Last).Ecol
+           or else Start_Column > Scopes (Scope.Last).Ecol
          then
             Error_Msg_BC ("WHEN (case statement alternative) expected");
 
@@ -1454,10 +1490,10 @@ package body Ch5 is
 
    begin
       Push_Scope_Stack;
-      Scope.Table (Scope.Last).Labl := Loop_Name;
-      Scope.Table (Scope.Last).Ecol := Start_Column;
-      Scope.Table (Scope.Last).Sloc := Token_Ptr;
-      Scope.Table (Scope.Last).Etyp := E_Loop;
+      Scopes (Scope.Last).Labl := Loop_Name;
+      Scopes (Scope.Last).Ecol := Start_Column;
+      Scopes (Scope.Last).Sloc := Token_Ptr;
+      Scopes (Scope.Last).Etyp := E_Loop;
 
       Loop_Node := New_Node (N_Loop_Statement, Token_Ptr);
       TF_Loop;
@@ -1468,7 +1504,7 @@ package body Ch5 is
          Set_Comes_From_Source (Created_Name, False);
          Set_Has_Created_Identifier (Loop_Node, True);
          Set_Identifier (Loop_Node, Created_Name);
-         Scope.Table (Scope.Last).Labl := Created_Name;
+         Scopes (Scope.Last).Labl := Created_Name;
       else
          Set_Identifier (Loop_Node, Loop_Name);
       end if;
@@ -1500,10 +1536,10 @@ package body Ch5 is
 
    begin
       Push_Scope_Stack;
-      Scope.Table (Scope.Last).Labl := Loop_Name;
-      Scope.Table (Scope.Last).Ecol := Start_Column;
-      Scope.Table (Scope.Last).Sloc := Token_Ptr;
-      Scope.Table (Scope.Last).Etyp := E_Loop;
+      Scopes (Scope.Last).Labl := Loop_Name;
+      Scopes (Scope.Last).Ecol := Start_Column;
+      Scopes (Scope.Last).Sloc := Token_Ptr;
+      Scopes (Scope.Last).Etyp := E_Loop;
 
       Loop_For_Flag := (Prev_Token = Tok_Loop);
       Scan; -- past FOR
@@ -1539,7 +1575,7 @@ package body Ch5 is
             Set_Comes_From_Source (Created_Name, False);
             Set_Has_Created_Identifier (Loop_Node, True);
             Set_Identifier (Loop_Node, Created_Name);
-            Scope.Table (Scope.Last).Labl := Created_Name;
+            Scopes (Scope.Last).Labl := Created_Name;
          else
             Set_Identifier (Loop_Node, Loop_Name);
          end if;
@@ -1571,10 +1607,10 @@ package body Ch5 is
 
    begin
       Push_Scope_Stack;
-      Scope.Table (Scope.Last).Labl := Loop_Name;
-      Scope.Table (Scope.Last).Ecol := Start_Column;
-      Scope.Table (Scope.Last).Sloc := Token_Ptr;
-      Scope.Table (Scope.Last).Etyp := E_Loop;
+      Scopes (Scope.Last).Labl := Loop_Name;
+      Scopes (Scope.Last).Ecol := Start_Column;
+      Scopes (Scope.Last).Sloc := Token_Ptr;
+      Scopes (Scope.Last).Etyp := E_Loop;
 
       Loop_While_Flag := (Prev_Token = Tok_Loop);
       Iter_Scheme_Node := New_Node (N_Iteration_Scheme, Token_Ptr);
@@ -1605,7 +1641,7 @@ package body Ch5 is
             Set_Comes_From_Source (Created_Name, False);
             Set_Has_Created_Identifier (Loop_Node, True);
             Set_Identifier (Loop_Node, Created_Name);
-            Scope.Table (Scope.Last).Labl := Created_Name;
+            Scopes (Scope.Last).Labl := Created_Name;
          else
             Set_Identifier (Loop_Node, Loop_Name);
          end if;
@@ -1648,10 +1684,7 @@ package body Ch5 is
       --  during analysis of the loop parameter specification.
 
       if Token = Tok_Of or else Token = Tok_Colon then
-         if Ada_Version < Ada_2012 then
-            Error_Msg_SC ("iterator is an Ada 2012 feature");
-         end if;
-
+         Error_Msg_Ada_2012_Feature ("iterator", Token_Ptr);
          return P_Iterator_Specification (ID_Node);
       end if;
 
@@ -1697,7 +1730,7 @@ package body Ch5 is
       Node1 : Node_Id;
 
    begin
-      Node1 :=  New_Node (N_Iterator_Specification, Sloc (Def_Id));
+      Node1 := New_Node (N_Iterator_Specification, Sloc (Def_Id));
       Set_Defining_Identifier (Node1, Def_Id);
 
       if Token = Tok_Colon then
@@ -1711,6 +1744,18 @@ package body Ch5 is
 
       elsif Token = Tok_In then
          Scan;  --  past IN
+
+      elsif Prev_Token = Tok_In
+        and then Present (Subtype_Indication (Node1))
+      then
+         --  Simplest recovery is to transform it into an element iterator.
+         --  Error message on 'in" has already been emitted when parsing the
+         --  optional constraint.
+
+         Set_Of_Present (Node1);
+         Error_Msg_N
+           ("subtype indication is only legal on an element iterator",
+              Subtype_Indication (Node1));
 
       else
          return Error;
@@ -1760,11 +1805,11 @@ package body Ch5 is
       Block_Node := New_Node (N_Block_Statement, Token_Ptr);
 
       Push_Scope_Stack;
-      Scope.Table (Scope.Last).Etyp := E_Name;
-      Scope.Table (Scope.Last).Lreq := Present (Block_Name);
-      Scope.Table (Scope.Last).Ecol := Start_Column;
-      Scope.Table (Scope.Last).Labl := Block_Name;
-      Scope.Table (Scope.Last).Sloc := Token_Ptr;
+      Scopes (Scope.Last).Etyp := E_Name;
+      Scopes (Scope.Last).Lreq := Present (Block_Name);
+      Scopes (Scope.Last).Ecol := Start_Column;
+      Scopes (Scope.Last).Labl := Block_Name;
+      Scopes (Scope.Last).Sloc := Token_Ptr;
 
       Scan; -- past DECLARE
 
@@ -1774,7 +1819,7 @@ package body Ch5 is
          Set_Comes_From_Source (Created_Name, False);
          Set_Has_Created_Identifier (Block_Node, True);
          Set_Identifier (Block_Node, Created_Name);
-         Scope.Table (Scope.Last).Labl := Created_Name;
+         Scopes (Scope.Last).Labl := Created_Name;
       else
          Set_Identifier (Block_Node, Block_Name);
       end if;
@@ -1803,11 +1848,11 @@ package body Ch5 is
       Block_Node := New_Node (N_Block_Statement, Token_Ptr);
 
       Push_Scope_Stack;
-      Scope.Table (Scope.Last).Etyp := E_Name;
-      Scope.Table (Scope.Last).Lreq := Present (Block_Name);
-      Scope.Table (Scope.Last).Ecol := Start_Column;
-      Scope.Table (Scope.Last).Labl := Block_Name;
-      Scope.Table (Scope.Last).Sloc := Token_Ptr;
+      Scopes (Scope.Last).Etyp := E_Name;
+      Scopes (Scope.Last).Lreq := Present (Block_Name);
+      Scopes (Scope.Last).Ecol := Start_Column;
+      Scopes (Scope.Last).Labl := Block_Name;
+      Scopes (Scope.Last).Sloc := Token_Ptr;
 
       if No (Block_Name) then
          Created_Name :=
@@ -1815,15 +1860,15 @@ package body Ch5 is
          Set_Comes_From_Source (Created_Name, False);
          Set_Has_Created_Identifier (Block_Node, True);
          Set_Identifier (Block_Node, Created_Name);
-         Scope.Table (Scope.Last).Labl := Created_Name;
+         Scopes (Scope.Last).Labl := Created_Name;
       else
          Set_Identifier (Block_Node, Block_Name);
       end if;
 
       Append_Elmt (Block_Node, Label_List);
 
-      Scope.Table (Scope.Last).Ecol := Start_Column;
-      Scope.Table (Scope.Last).Sloc := Token_Ptr;
+      Scopes (Scope.Last).Ecol := Start_Column;
+      Scopes (Scope.Last).Sloc := Token_Ptr;
       Scan; -- past BEGIN
       Set_Handled_Statement_Sequence
         (Block_Node, P_Handled_Sequence_Of_Statements);
@@ -1868,7 +1913,7 @@ package body Ch5 is
          if not Token_Is_At_Start_Of_Line then
             return False;
 
-         elsif Scope.Table (Scope.Last).Etyp /= E_Case then
+         elsif Scopes (Scope.Last).Etyp /= E_Case then
             return False;
 
          else
@@ -1901,13 +1946,13 @@ package body Ch5 is
 
          Check_No_Exit_Name :
          for J in reverse 1 .. Scope.Last loop
-            if Scope.Table (J).Etyp = E_Loop then
-               if Present (Scope.Table (J).Labl)
-                 and then Comes_From_Source (Scope.Table (J).Labl)
+            if Scopes (J).Etyp = E_Loop then
+               if Present (Scopes (J).Labl)
+                 and then Comes_From_Source (Scopes (J).Labl)
                then
                   --  Innermost loop in fact had a name, style check fails
 
-                  Style.No_Exit_Name (Scope.Table (J).Labl);
+                  Style.No_Exit_Name (Scopes (J).Labl);
                end if;
 
                exit Check_No_Exit_Name;
@@ -2109,7 +2154,7 @@ package body Ch5 is
                Style.Check_Indentation;
             end if;
 
-            Error_Msg_Col := Scope.Table (Scope.Last).Ecol;
+            Error_Msg_Col := Scopes (Scope.Last).Ecol;
 
             if RM_Column_Check
               and then Token_Is_At_Start_Of_Line
@@ -2118,10 +2163,10 @@ package body Ch5 is
                Error_Msg_SC ("(style) BEGIN in wrong column, should be@");
 
             else
-               Scope.Table (Scope.Last).Ecol := Start_Column;
+               Scopes (Scope.Last).Ecol := Start_Column;
             end if;
 
-            Scope.Table (Scope.Last).Sloc := Token_Ptr;
+            Scopes (Scope.Last).Sloc := Token_Ptr;
             Scan; -- past BEGIN
             Set_Handled_Statement_Sequence (Parent,
               P_Handled_Sequence_Of_Statements);
@@ -2138,9 +2183,9 @@ package body Ch5 is
 
             if Parent_Nkind = N_Subprogram_Body
               and then Token  = Tok_End
-              and then Scope.Table (Scope.Last).Etyp = E_Suspicious_Is
+              and then Scopes (Scope.Last).Etyp = E_Suspicious_Is
             then
-               Scope.Table (Scope.Last).Etyp := E_Bad_Is;
+               Scopes (Scope.Last).Etyp := E_Bad_Is;
 
             --  Otherwise BEGIN is not required for a package body, so we
             --  don't mind if it is missing, but we do construct a dummy
@@ -2166,8 +2211,8 @@ package body Ch5 is
 
                --  Prepare to issue error message
 
-               Error_Msg_Sloc := Scope.Table (Scope.Last).Sloc;
-               Error_Msg_Node_1 := Scope.Table (Scope.Last).Labl;
+               Error_Msg_Sloc := Scopes (Scope.Last).Sloc;
+               Error_Msg_Node_1 := Scopes (Scope.Last).Labl;
 
                --  Now issue appropriate message
 
@@ -2227,6 +2272,7 @@ package body Ch5 is
       --  (because it is required to do so under all circumstances). We can
       --  therefore reference the entry it removed one past the stack top.
       --  What we are interested in is whether it was a case of a bad IS.
+      --  We can't call Scopes here.
 
       if Scope.Table (Scope.Last + 1).Etyp = E_Bad_Is then
          Error_Msg -- CODEFIX

@@ -1,12 +1,11 @@
 /* { dg-do run } */
 /* { dg-require-effective-target sse4 } */
 /* { dg-options "-O2 -msse4.1" } */
-/* { dg-skip-if "no M_PI" { vxworks_kernel } } */
 
 #include "sse4_1-check.h"
 
 #include <smmintrin.h>
-#include <math.h>
+#include "math_m_pi.h"
 #include <string.h>
 
 #define NUM 64
@@ -36,7 +35,7 @@ init_round (double *src)
 static double
 do_round (double f, int type)
 {
-  short saved_cw, new_cw, clr_mask;
+  unsigned short saved_cw, new_cw, clr_mask;
   double ret;
 
   if ((type & 4))
@@ -50,16 +49,15 @@ do_round (double f, int type)
       clr_mask = ~0x0C3F;
     }
 
-  __asm__ ("fldl %0" : : "m" (*&f));
+  __asm__ ("fnstcw %0" : "=m" (saved_cw));
 
-  __asm__ ("fstcw %0" : "=m" (*&saved_cw));
   new_cw = saved_cw & clr_mask;
   new_cw |= type;
-  __asm__ ("fldcw %0" : : "m" (*&new_cw));
 
-  __asm__ ("frndint\n"
-	   "fstpl %0\n" : "=m" (*&ret));
-  __asm__ ("fldcw %0" : : "m" (*&saved_cw));
+  __asm__ ("fldcw %2\n\t"
+	   "frndint\n\t"
+	   "fldcw %3" : "=t" (ret)
+		      : "0" (f), "m" (new_cw), "m" (saved_cw));
   return ret;
 }
 

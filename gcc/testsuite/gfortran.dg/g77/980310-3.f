@@ -1,4 +1,5 @@
 c { dg-do compile }
+c { dg-options "-std=legacy" }
 c
 c This demonstrates a problem with g77 and pic on x86 where 
 c egcs 1.0.1 and earlier will generate bogus assembler output.

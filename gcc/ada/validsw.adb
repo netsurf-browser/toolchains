@@ -6,7 +6,7 @@
 --                                                                          --
 --                                 B o d y                                  --
 --                                                                          --
---          Copyright (C) 2001-2007, Free Software Foundation, Inc.         --
+--          Copyright (C) 2001-2019, Free Software Foundation, Inc.         --
 --                                                                          --
 -- GNAT is free software;  you can  redistribute it  and/or modify it under --
 -- terms of the  GNU General Public License as published  by the Free Soft- --
@@ -23,7 +23,8 @@
 --                                                                          --
 ------------------------------------------------------------------------------
 
-with Opt; use Opt;
+with Opt;    use Opt;
+with Output; use Output;
 
 package body Validsw is
 
@@ -35,11 +36,12 @@ package body Validsw is
    begin
       Validity_Check_Components     := False;
       Validity_Check_Copies         := False;
-      Validity_Check_Default        := True;
+      Validity_Check_Default        := False;
       Validity_Check_Floating_Point := False;
       Validity_Check_In_Out_Params  := False;
       Validity_Check_In_Params      := False;
       Validity_Check_Operands       := False;
+      Validity_Check_Parameters     := False;
       Validity_Check_Returns        := False;
       Validity_Check_Subscripts     := False;
       Validity_Check_Tests          := False;
@@ -72,14 +74,14 @@ package body Validsw is
          Options (K) := ' ';
       end loop;
 
-      Add ('n', not Validity_Check_Default);
-
-      Add ('c', Validity_Check_Copies);
       Add ('e', Validity_Check_Components);
+      Add ('c', Validity_Check_Copies);
+      Add ('d', Validity_Check_Default);
       Add ('f', Validity_Check_Floating_Point);
       Add ('i', Validity_Check_In_Params);
       Add ('m', Validity_Check_In_Out_Params);
       Add ('o', Validity_Check_Operands);
+      Add ('p', Validity_Check_Parameters);
       Add ('r', Validity_Check_Returns);
       Add ('s', Validity_Check_Subscripts);
       Add ('t', Validity_Check_Tests);
@@ -131,7 +133,6 @@ package body Validsw is
          Validity_Checks_On := True;
 
          case C is
-
             when 'c' =>
                Validity_Check_Copies         := True;
 
@@ -174,11 +175,11 @@ package body Validsw is
             when 'E' =>
                Validity_Check_Components     := False;
 
-            when 'I' =>
-               Validity_Check_In_Params      := False;
-
             when 'F' =>
                Validity_Check_Floating_Point := False;
+
+            when 'I' =>
+               Validity_Check_In_Params      := False;
 
             when 'M' =>
                Validity_Check_In_Out_Params  := False;
@@ -229,9 +230,13 @@ package body Validsw is
                null;
 
             when others =>
-               OK      := False;
-               Err_Col := J - 1;
-               return;
+               if Ignore_Unrecognized_VWY_Switches then
+                  Write_Line ("unrecognized switch -gnatV" & C & " ignored");
+               else
+                  OK      := False;
+                  Err_Col := J - 1;
+                  return;
+               end if;
          end case;
       end loop;
 

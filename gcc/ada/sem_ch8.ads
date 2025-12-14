@@ -6,7 +6,7 @@
 --                                                                          --
 --                                 S p e c                                  --
 --                                                                          --
---          Copyright (C) 1992-2011, Free Software Foundation, Inc.         --
+--          Copyright (C) 1992-2019, Free Software Foundation, Inc.         --
 --                                                                          --
 -- GNAT is free software;  you can  redistribute it  and/or modify it under --
 -- terms of the  GNU General Public License as published  by the Free Soft- --
@@ -52,8 +52,16 @@ package Sem_Ch8 is
    procedure Analyze_Object_Renaming            (N : Node_Id);
    procedure Analyze_Package_Renaming           (N : Node_Id);
    procedure Analyze_Subprogram_Renaming        (N : Node_Id);
-   procedure Analyze_Use_Package                (N : Node_Id);
-   procedure Analyze_Use_Type                   (N : Node_Id);
+
+   procedure Analyze_Use_Package (N : Node_Id; Chain : Boolean := True);
+   --  Analyze a use package clause and control (through the Chain parameter)
+   --  whether to add N to the use clause chain for the name denoted within
+   --  use clause N in case we are reanalyzing a use clause because of stack
+   --  manipulation.
+
+   procedure Analyze_Use_Type (N : Node_Id; Chain : Boolean := True);
+   --  Similar to Analyze_Use_Package except the Chain parameter applies to the
+   --  type within N's subtype mark Current_Use_Clause.
 
    procedure End_Scope;
    --  Called at end of scope. On exit from blocks and bodies (subprogram,
@@ -74,7 +82,11 @@ package Sem_Ch8 is
    --  Subsidiaries of End_Use_Clauses. Also called directly for use clauses
    --  appearing in context clauses.
 
-   procedure Find_Direct_Name (N : Node_Id);
+   procedure Find_Direct_Name
+     (N            : Node_Id;
+      Errors_OK    : Boolean := True;
+      Marker_OK    : Boolean := True;
+      Reference_OK : Boolean := True);
    --  Given a direct name (Identifier or Operator_Symbol), this routine scans
    --  the homonym chain for the name, searching for corresponding visible
    --  entities to find the referenced entity (or in the case of overloading,
@@ -91,6 +103,11 @@ package Sem_Ch8 is
    --  entries in the current scope, and that will give all homonyms that are
    --  declared before the point of call in the current scope. This is useful
    --  for example in the processing for pragma Inline.
+   --
+   --  Flag Errors_OK should be set when error diagnostics are desired. Flag
+   --  Marker_OK should be set when a N_Variable_Reference_Marker needs to be
+   --  generated for a SPARK object in order to detect elaboration issues. Flag
+   --  Reference_OK should be set when N must generate a cross reference.
 
    procedure Find_Selected_Component (N : Node_Id);
    --  Resolve various cases of selected components, recognize expanded names
@@ -131,6 +148,10 @@ package Sem_Ch8 is
    --  Analyze_Subunit.Re_Install_Use_Clauses to insure that, after the
    --  analysis of the subunit, the parent's environment is again identical.
 
+   procedure Mark_Use_Clauses (Id : Node_Or_Entity_Id);
+   --  Mark a given entity or node Id's relevant use clauses as effective,
+   --  including redundant ones and ones outside of the current scope.
+
    procedure Push_Scope (S : Entity_Id);
    --  Make new scope stack entry, pushing S, the entity for a scope onto the
    --  top of the scope table. The current setting of the scope suppress flags
@@ -148,25 +169,40 @@ package Sem_Ch8 is
    --  with-clause on system. N is absent when the function is called to find
    --  the visibility of implicit operators.
 
-   procedure Restore_Scope_Stack (Handle_Use : Boolean := True);
-   procedure Save_Scope_Stack (Handle_Use : Boolean := True);
-   --  These two procedures are called from Semantics, when a unit U1 is to
+   function Save_Scope_Stack
+     (Handle_Use : Boolean := True) return Elist_Id;
+   procedure Restore_Scope_Stack
+     (List       : Elist_Id;
+      Handle_Use : Boolean := True);
+   --  These two subprograms are called from Semantics, when a unit U1 is to
    --  be compiled in the course of the compilation of another unit U2. This
    --  happens whenever Rtsfind is called. U1, the unit retrieved by Rtsfind,
    --  must be compiled in its own context, and the current scope stack
-   --  containing U2 and local scopes must be made unreachable. On return, the
-   --  contents of the scope stack must be made accessible again. The flag
-   --  Handle_Use indicates whether local use clauses must be removed or
-   --  installed. In the case of inlining of instance bodies, the visibility
+   --  containing U2 and local scopes must be made unreachable. This is
+   --  achieved using a call to Save_Scope_Stack. On return, the contents
+   --  of the scope stack must be made accessible again with a call to
+   --  Restore_Scope_Stack.
+   --
+   --  The flag Handle_Use indicates whether local use clauses must be removed
+   --  or installed. In the case of inlining of instance bodies, the visibility
    --  handling is done fully in Inline_Instance_Body, and use clauses are
-   --  handled there.
+   --  handled there. Save_Scope_Stack returns the list of entities which have
+   --  been temporarily removed from visibility; that list must be passed to
+   --  Restore_Scope_Stack to restore their visibility.
 
    procedure Set_Use (L : List_Id);
    --  Find use clauses that are declarative items in a package declaration
-   --  and  set the potentially use-visible flags of imported entities before
+   --  and set the potentially use-visible flags of imported entities before
    --  analyzing the corresponding package body.
+
+   procedure Update_Use_Clause_Chain;
+   --  Called at the end of a declarative region to detect unused use type
+   --  clauses and maintain the Current_Use_Clause for type entities.
 
    procedure ws;
    --  Debugging routine for use in gdb: dump all entities on scope stack
+
+   procedure we (S : Entity_Id);
+   --  Debugging routine for use in gdb: dump all entities in given scope
 
 end Sem_Ch8;

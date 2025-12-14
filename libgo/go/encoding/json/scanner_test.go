@@ -1,4 +1,4 @@
-// Copyright 2010 The Go Authors.  All rights reserved.
+// Copyright 2010 The Go Authors. All rights reserved.
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
 
@@ -11,6 +11,26 @@ import (
 	"reflect"
 	"testing"
 )
+
+var validTests = []struct {
+	data string
+	ok   bool
+}{
+	{`foo`, false},
+	{`}{`, false},
+	{`{]`, false},
+	{`{}`, true},
+	{`{"foo":"bar"}`, true},
+	{`{"foo":"bar","bar":{"baz":["qux"]}}`, true},
+}
+
+func TestValid(t *testing.T) {
+	for _, tt := range validTests {
+		if ok := Valid([]byte(tt.data)); ok != tt.ok {
+			t.Errorf("Valid(%#q) = %v, want %v", tt.data, ok, tt.ok)
+		}
+	}
+}
 
 // Tests of simple examples.
 
@@ -28,6 +48,7 @@ var examples = []example{
 	{`[1,2,3]`, "[\n\t1,\n\t2,\n\t3\n]"},
 	{`{"x":1}`, "{\n\t\"x\": 1\n}"},
 	{ex1, ex1i},
+	{"{\"\":\"<>&\u2028\u2029\"}", "{\n\t\"\": \"<>&\u2028\u2029\"\n}"}, // See golang.org/issue/34070
 }
 
 var ex1 = `[true,false,null,"x",1,1.5,0,-5e+2]`
@@ -63,6 +84,25 @@ func TestCompact(t *testing.T) {
 	}
 }
 
+func TestCompactSeparators(t *testing.T) {
+	// U+2028 and U+2029 should be escaped inside strings.
+	// They should not appear outside strings.
+	tests := []struct {
+		in, compact string
+	}{
+		{"{\"\u2028\": 1}", "{\"\u2028\":1}"},
+		{"{\"\u2029\" :2}", "{\"\u2029\":2}"},
+	}
+	for _, tt := range tests {
+		var buf bytes.Buffer
+		if err := Compact(&buf, []byte(tt.in)); err != nil {
+			t.Errorf("Compact(%q): %v", tt.in, err)
+		} else if s := buf.String(); s != tt.compact {
+			t.Errorf("Compact(%q) = %q, want %q", tt.in, s, tt.compact)
+		}
+	}
+}
+
 func TestIndent(t *testing.T) {
 	var buf bytes.Buffer
 	for _, tt := range examples {
@@ -92,7 +132,7 @@ func TestCompactBig(t *testing.T) {
 		t.Fatalf("Compact: %v", err)
 	}
 	b := buf.Bytes()
-	if bytes.Compare(b, jsonBig) != 0 {
+	if !bytes.Equal(b, jsonBig) {
 		t.Error("Compact(jsonBig) != jsonBig")
 		diff(t, b, jsonBig)
 		return
@@ -100,6 +140,7 @@ func TestCompactBig(t *testing.T) {
 }
 
 func TestIndentBig(t *testing.T) {
+	t.Parallel()
 	initBig()
 	var buf bytes.Buffer
 	if err := Indent(&buf, jsonBig, "", "\t"); err != nil {
@@ -118,7 +159,7 @@ func TestIndentBig(t *testing.T) {
 		t.Fatalf("Indent2: %v", err)
 	}
 	b1 := buf1.Bytes()
-	if bytes.Compare(b1, b) != 0 {
+	if !bytes.Equal(b1, b) {
 		t.Error("Indent(Indent(jsonBig)) != Indent(jsonBig)")
 		diff(t, b1, b)
 		return
@@ -130,7 +171,7 @@ func TestIndentBig(t *testing.T) {
 		t.Fatalf("Compact: %v", err)
 	}
 	b1 = buf1.Bytes()
-	if bytes.Compare(b1, jsonBig) != 0 {
+	if !bytes.Equal(b1, jsonBig) {
 		t.Error("Compact(Indent(jsonBig)) != jsonBig")
 		diff(t, b1, jsonBig)
 		return
@@ -160,42 +201,6 @@ func TestIndentErrors(t *testing.T) {
 	}
 }
 
-func TestNextValueBig(t *testing.T) {
-	initBig()
-	var scan scanner
-	item, rest, err := nextValue(jsonBig, &scan)
-	if err != nil {
-		t.Fatalf("nextValue: %s", err)
-	}
-	if len(item) != len(jsonBig) || &item[0] != &jsonBig[0] {
-		t.Errorf("invalid item: %d %d", len(item), len(jsonBig))
-	}
-	if len(rest) != 0 {
-		t.Errorf("invalid rest: %d", len(rest))
-	}
-
-	item, rest, err = nextValue(append(jsonBig, "HELLO WORLD"...), &scan)
-	if err != nil {
-		t.Fatalf("nextValue extra: %s", err)
-	}
-	if len(item) != len(jsonBig) {
-		t.Errorf("invalid item: %d %d", len(item), len(jsonBig))
-	}
-	if string(rest) != "HELLO WORLD" {
-		t.Errorf("invalid rest: %d", len(rest))
-	}
-}
-
-var benchScan scanner
-
-func BenchmarkSkipValue(b *testing.B) {
-	initBig()
-	for i := 0; i < b.N; i++ {
-		nextValue(jsonBig, &benchScan)
-	}
-	b.SetBytes(int64(len(jsonBig)))
-}
-
 func diff(t *testing.T, a, b []byte) {
 	for i := 0; ; i++ {
 		if i >= len(a) || i >= len(b) || a[i] != b[i] {
@@ -220,23 +225,16 @@ func trim(b []byte) []byte {
 
 var jsonBig []byte
 
-const (
-	big   = 10000
-	small = 100
-)
-
 func initBig() {
-	n := big
+	n := 10000
 	if testing.Short() {
-		n = small
+		n = 100
 	}
-	if len(jsonBig) != n {
-		b, err := Marshal(genValue(n))
-		if err != nil {
-			panic(err)
-		}
-		jsonBig = b
+	b, err := Marshal(genValue(n))
+	if err != nil {
+		panic(err)
 	}
+	jsonBig = b
 }
 
 func genValue(n int) interface{} {
@@ -277,7 +275,7 @@ func genArray(n int) []interface{} {
 	if f > n {
 		f = n
 	}
-	if n > 0 && f == 0 {
+	if f < 1 {
 		f = 1
 	}
 	x := make([]interface{}, f)

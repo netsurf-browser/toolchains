@@ -6,7 +6,7 @@
  *                                                                          *
  *                              C Header File                               *
  *                                                                          *
- *          Copyright (C) 1992-2011, Free Software Foundation, Inc.         *
+ *          Copyright (C) 1992-2019, Free Software Foundation, Inc.         *
  *                                                                          *
  * GNAT is free software;  you can  redistribute it  and/or modify it under *
  * terms of the  GNU General Public License as published  by the Free Soft- *
@@ -23,8 +23,9 @@
  *                                                                          *
  ****************************************************************************/
 
-/* This is the C file that corresponds to the Ada package spec Types. It was
-   created manually from the files types.ads and types.adb.
+/* This is the C header that corresponds to the Ada package specification for
+   Types.  It was created manually from types.ads and must be kept synchronized
+   with changes in this file.
 
    This package contains host independent type definitions which are used
    throughout the compiler modules. The comments in the C version are brief
@@ -76,11 +77,19 @@ typedef Char *Str;
 /* Pointer to string of Chars */
 typedef Char *Str_Ptr;
 
-/* Types for the fat pointer used for strings and the template it
-   points to.  */
-typedef struct {int Low_Bound, High_Bound; } String_Template;
-typedef struct {const char *Array; String_Template *Bounds; }
-	__attribute ((aligned (sizeof (char *) * 2))) Fat_Pointer;
+/* Types for the fat pointer used for strings and the template it points to.
+   The fat pointer is conceptually a couple of pointers, but it is wrapped
+   up in a special record type.  On the Ada side, the record is naturally
+   aligned (i.e. given pointer alignment) on regular platforms, but it is
+   given twice this alignment on strict-alignment platforms for performance
+   reasons.  On the C side, for the sake of portability and simplicity, we
+   overalign it on all platforms (so the machine mode is always the same as
+   on the Ada side) but arrange to pass it in an even scalar position as a
+   parameter to functions (so the scalar parameter alignment is always the
+   same as on the Ada side).  */
+typedef struct { int Low_Bound, High_Bound; } String_Template;
+typedef struct { const char *Array; String_Template *Bounds; }
+	__attribute ((aligned (sizeof (char *) * 2))) String_Pointer;
 
 /* Types for Node/Entity Kinds:  */
 
@@ -89,7 +98,7 @@ typedef struct {const char *Array; String_Template *Bounds; }
    inlined stuff IN the C header changes the dependencies.  Both sinfo.h
    and einfo.h now reference routines defined in tree.h.
 
-   Note: these types would more naturally be defined as unsigned  char, but
+   Note: these types would more naturally be defined as unsigned char, but
    once again, the annoying restriction on bit fields for some compilers
    bites us!  */
 
@@ -129,6 +138,9 @@ typedef Text_Ptr Source_Ptr;
 
 /* Used for Sloc in all nodes in the representation of package Standard.  */
 #define Standard_Location -2
+
+/* Instance identifiers */
+typedef Nat Instance_Id;
 
 /* Type used for union of all possible ID values covering all ranges */
 typedef int Union_Id;
@@ -269,6 +281,8 @@ SUBTYPE (Uint_Direct, Uint, Uint_Direct_First, Uint_Direct_Last)
 #define Uint_10 (Uint_Direct_Bias + 10)
 #define Uint_16 (Uint_Direct_Bias + 16)
 
+#define Uint_Minus_1 (Uint_Direct_Bias - 1)
+
 /* Types for Ureal_Support Package:  */
 
 /* Type used for representation of universal reals.  */
@@ -292,6 +306,9 @@ typedef Int Unit_Number_Type;
 
 /* Unit number value for main unit.  */
 #define Main_Unit 0
+
+/* Type used to index the source file table.  */
+typedef Nat Source_File_Index;
 
 /* Type used for lines table.  */
 typedef Source_Ptr *Lines_Table_Type;
@@ -338,9 +355,6 @@ typedef Int Mechanism_Type;
 #define By_Short_Descriptor_NCA  (-18)
 #define By_Short_Descriptor_Last (-18)
 
-/* Internal to Gigi.  */
-#define By_Copy_Return     (-128)
-
 /* Definitions of Reason codes for Raise_xxx_Error nodes */
 #define CE_Access_Check_Failed              0
 #define CE_Access_Parameter_Is_Null         1
@@ -360,24 +374,27 @@ typedef Int Mechanism_Type;
 #define PE_Access_Before_Elaboration       14
 #define PE_Accessibility_Check_Failed      15
 #define PE_Address_Of_Intrinsic            16
-#define PE_All_Guards_Closed               17
-#define PE_Bad_Attribute_For_Predicate     18
-#define PE_Current_Task_In_Entry_Body      19
-#define PE_Duplicated_Entry_Address        20
-#define PE_Explicit_Raise                  21
-#define PE_Finalize_Raised_Exception       22
-#define PE_Implicit_Return                 23
-#define PE_Misaligned_Address_Value        24
-#define PE_Missing_Return                  25
-#define PE_Overlaid_Controlled_Object      26
-#define PE_Potentially_Blocking_Operation  27
-#define PE_Stubbed_Subprogram_Called       28
-#define PE_Unchecked_Union_Restriction     29
-#define PE_Non_Transportable_Actual        30
+#define PE_Aliased_Parameters              17
+#define PE_All_Guards_Closed               18
+#define PE_Bad_Predicated_Generic_Type     19
+#define PE_Build_In_Place_Mismatch         37
+#define PE_Current_Task_In_Entry_Body      20
+#define PE_Duplicated_Entry_Address        21
+#define PE_Explicit_Raise                  22
+#define PE_Finalize_Raised_Exception       23
+#define PE_Implicit_Return                 24
+#define PE_Misaligned_Address_Value        25
+#define PE_Missing_Return                  26
+#define PE_Non_Transportable_Actual        31
+#define PE_Overlaid_Controlled_Object      27
+#define PE_Potentially_Blocking_Operation  28
+#define PE_Stream_Operation_Not_Allowed    36
+#define PE_Stubbed_Subprogram_Called       29
+#define PE_Unchecked_Union_Restriction     30
 
-#define SE_Empty_Storage_Pool              31
-#define SE_Explicit_Raise                  32
-#define SE_Infinite_Recursion              33
-#define SE_Object_Too_Large                34
+#define SE_Empty_Storage_Pool              32
+#define SE_Explicit_Raise                  33
+#define SE_Infinite_Recursion              34
+#define SE_Object_Too_Large                35
 
-#define LAST_REASON_CODE                   34
+#define LAST_REASON_CODE                   37

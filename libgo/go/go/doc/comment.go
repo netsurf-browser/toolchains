@@ -7,56 +7,70 @@
 package doc
 
 import (
+	"bytes"
+	"internal/lazyregexp"
 	"io"
-	"regexp"
 	"strings"
 	"text/template" // for HTMLEscape
 	"unicode"
 	"unicode/utf8"
 )
 
+const (
+	ldquo = "&ldquo;"
+	rdquo = "&rdquo;"
+	ulquo = "“"
+	urquo = "”"
+)
+
 var (
-	ldquo = []byte("&ldquo;")
-	rdquo = []byte("&rdquo;")
+	htmlQuoteReplacer    = strings.NewReplacer(ulquo, ldquo, urquo, rdquo)
+	unicodeQuoteReplacer = strings.NewReplacer("``", ulquo, "''", urquo)
 )
 
 // Escape comment text for HTML. If nice is set,
 // also turn `` into &ldquo; and '' into &rdquo;.
 func commentEscape(w io.Writer, text string, nice bool) {
-	last := 0
 	if nice {
-		for i := 0; i < len(text)-1; i++ {
-			ch := text[i]
-			if ch == text[i+1] && (ch == '`' || ch == '\'') {
-				template.HTMLEscape(w, []byte(text[last:i]))
-				last = i + 2
-				switch ch {
-				case '`':
-					w.Write(ldquo)
-				case '\'':
-					w.Write(rdquo)
-				}
-				i++ // loop will add one more
-			}
-		}
+		// In the first pass, we convert `` and '' into their unicode equivalents.
+		// This prevents them from being escaped in HTMLEscape.
+		text = convertQuotes(text)
+		var buf bytes.Buffer
+		template.HTMLEscape(&buf, []byte(text))
+		// Now we convert the unicode quotes to their HTML escaped entities to maintain old behavior.
+		// We need to use a temp buffer to read the string back and do the conversion,
+		// otherwise HTMLEscape will escape & to &amp;
+		htmlQuoteReplacer.WriteString(w, buf.String())
+		return
 	}
-	template.HTMLEscape(w, []byte(text[last:]))
+	template.HTMLEscape(w, []byte(text))
+}
+
+func convertQuotes(text string) string {
+	return unicodeQuoteReplacer.Replace(text)
 }
 
 const (
 	// Regexp for Go identifiers
-	identRx = `[a-zA-Z_][a-zA-Z_0-9]*` // TODO(gri) ASCII only for now - fix this
+	identRx = `[\pL_][\pL_0-9]*`
 
 	// Regexp for URLs
-	protocol = `(https?|ftp|file|gopher|mailto|news|nntp|telnet|wais|prospero):`
-	hostPart = `[a-zA-Z0-9_@\-]+`
-	filePart = `[a-zA-Z0-9_?%#~&/\-+=]+`
-	urlRx    = protocol + `//` + // http://
-		hostPart + `([.:]` + hostPart + `)*/?` + // //www.google.com:8080/
-		filePart + `([:.,]` + filePart + `)*`
+	// Match parens, and check later for balance - see #5043, #22285
+	// Match .,:;?! within path, but not at end - see #18139, #16565
+	// This excludes some rare yet valid urls ending in common punctuation
+	// in order to allow sentences ending in URLs.
+
+	// protocol (required) e.g. http
+	protoPart = `(https?|ftp|file|gopher|mailto|nntp)`
+	// host (required) e.g. www.example.com or [::1]:8080
+	hostPart = `([a-zA-Z0-9_@\-.\[\]:]+)`
+	// path+query+fragment (optional) e.g. /path/index.html?q=foo#bar
+	pathPart = `([.,:;?!]*[a-zA-Z0-9$'()*+&#=@~_/\-\[\]%])*`
+
+	urlRx = protoPart + `://` + hostPart + pathPart
 )
 
-var matchRx = regexp.MustCompile(`(` + urlRx + `)|(` + identRx + `)`)
+var matchRx = lazyregexp.New(`(` + urlRx + `)|(` + identRx + `)`)
 
 var (
 	html_a      = []byte(`<a href="`)
@@ -92,18 +106,40 @@ func emphasize(w io.Writer, line string, words map[string]string, nice bool) {
 		// write text before match
 		commentEscape(w, line[0:m[0]], nice)
 
-		// analyze match
+		// adjust match for URLs
 		match := line[m[0]:m[1]]
+		if strings.Contains(match, "://") {
+			m0, m1 := m[0], m[1]
+			for _, s := range []string{"()", "{}", "[]"} {
+				open, close := s[:1], s[1:] // E.g., "(" and ")"
+				// require opening parentheses before closing parentheses (#22285)
+				if i := strings.Index(match, close); i >= 0 && i < strings.Index(match, open) {
+					m1 = m0 + i
+					match = line[m0:m1]
+				}
+				// require balanced pairs of parentheses (#5043)
+				for i := 0; strings.Count(match, open) != strings.Count(match, close) && i < 10; i++ {
+					m1 = strings.LastIndexAny(line[:m1], s)
+					match = line[m0:m1]
+				}
+			}
+			if m1 != m[1] {
+				// redo matching with shortened line for correct indices
+				m = matchRx.FindStringSubmatchIndex(line[:m[0]+len(match)])
+			}
+		}
+
+		// analyze match
 		url := ""
 		italics := false
 		if words != nil {
-			url, italics = words[string(match)]
+			url, italics = words[match]
 		}
 		if m[2] >= 0 {
 			// match against first parenthesized sub-regexp; must be match against urlRx
 			if !italics {
 				// no alternative URL in words list, use match instead
-				url = string(match)
+				url = match
 			}
 			italics = false // don't italicize URLs
 		}
@@ -174,7 +210,7 @@ func unindent(block []string) {
 }
 
 // heading returns the trimmed line if it passes as a section heading;
-// otherwise it returns the empty string. 
+// otherwise it returns the empty string.
 func heading(line string) string {
 	line = strings.TrimSpace(line)
 	if len(line) == 0 {
@@ -193,8 +229,8 @@ func heading(line string) string {
 		return ""
 	}
 
-	// exclude lines with illegal characters
-	if strings.IndexAny(line, ",.;:!?+*/=()[]{}_^°&§~%#@<\">\\") >= 0 {
+	// exclude lines with illegal characters. we allow "(),"
+	if strings.ContainsAny(line, ";:!?+*/=[]{}_^°&§~%#@<\">\\") {
 		return ""
 	}
 
@@ -208,6 +244,18 @@ func heading(line string) string {
 			return "" // not followed by "s "
 		}
 		b = b[i+2:]
+	}
+
+	// allow "." when followed by non-space
+	for b := line; ; {
+		i := strings.IndexRune(b, '.')
+		if i < 0 {
+			break
+		}
+		if i+1 >= len(b) || b[i+1] == ' ' {
+			return "" // not followed by non-space
+		}
+		b = b[i+1:]
 	}
 
 	return line
@@ -226,10 +274,11 @@ type block struct {
 	lines []string
 }
 
-var nonAlphaNumRx = regexp.MustCompile(`[^a-zA-Z0-9]`)
+var nonAlphaNumRx = lazyregexp.New(`[^a-zA-Z0-9]`)
 
 func anchorID(line string) string {
-	return nonAlphaNumRx.ReplaceAllString(line, "_")
+	// Add a "hdr-" prefix to avoid conflicting with IDs used for package symbols.
+	return "hdr-" + nonAlphaNumRx.ReplaceAllString(line, "_")
 }
 
 // ToHTML converts comment text to formatted HTML.
@@ -238,13 +287,21 @@ func anchorID(line string) string {
 // nor to have trailing spaces at the end of lines.
 // The comment markers have already been removed.
 //
-// Turn each run of multiple \n into </p><p>.
-// Turn each run of indented lines into a <pre> block without indent.
-// Enclose headings with header tags.
+// Each span of unindented non-blank lines is converted into
+// a single paragraph. There is one exception to the rule: a span that
+// consists of a single line, is followed by another paragraph span,
+// begins with a capital letter, and contains no punctuation
+// other than parentheses and commas is formatted as a heading.
+//
+// A span of indented lines is converted into a <pre> block,
+// with the common indent prefix removed.
 //
 // URLs in the comment text are converted into links; if the URL also appears
 // in the words map, the link is taken from the map (if the corresponding map
 // value is the empty string, the URL is not converted into a link).
+//
+// A pair of (consecutive) backticks (`) is converted to a unicode left quote (“), and a pair of (consecutive)
+// single quotes (') is converted to a unicode right quote (”).
 //
 // Go identifiers that appear in the words map are italicized; if the corresponding
 // map value is not the empty string, it is considered a URL and the word is converted
@@ -361,8 +418,11 @@ func blocks(text string) []block {
 
 // ToText prepares comment text for presentation in textual output.
 // It wraps paragraphs of text to width or fewer Unicode code points
-// and then prefixes each line with the indent.  In preformatted sections
+// and then prefixes each line with the indent. In preformatted sections
 // (such as program text), it prefixes each non-blank line with preIndent.
+//
+// A pair of (consecutive) backticks (`) is converted to a unicode left quote (“), and a pair of (consecutive)
+// single quotes (') is converted to a unicode right quote (”).
 func ToText(w io.Writer, text string, indent, preIndent string, width int) {
 	l := lineWrapper{
 		out:    w,
@@ -374,19 +434,23 @@ func ToText(w io.Writer, text string, indent, preIndent string, width int) {
 		case opPara:
 			// l.write will add leading newline if required
 			for _, line := range b.lines {
+				line = convertQuotes(line)
 				l.write(line)
 			}
 			l.flush()
 		case opHead:
 			w.Write(nl)
 			for _, line := range b.lines {
+				line = convertQuotes(line)
 				l.write(line + "\n")
 			}
 			l.flush()
 		case opPre:
 			w.Write(nl)
 			for _, line := range b.lines {
-				if !isBlank(line) {
+				if isBlank(line) {
+					w.Write([]byte("\n"))
+				} else {
 					w.Write([]byte(preIndent))
 					w.Write([]byte(line))
 				}
@@ -406,6 +470,7 @@ type lineWrapper struct {
 
 var nl = []byte("\n")
 var space = []byte(" ")
+var prefix = []byte("// ")
 
 func (l *lineWrapper) write(text string) {
 	if l.n == 0 && l.printed {
@@ -413,6 +478,8 @@ func (l *lineWrapper) write(text string) {
 	}
 	l.printed = true
 
+	needsPrefix := false
+	isComment := strings.HasPrefix(text, "//")
 	for _, f := range strings.Fields(text) {
 		w := utf8.RuneCountInString(f)
 		// wrap if line is too long
@@ -420,9 +487,14 @@ func (l *lineWrapper) write(text string) {
 			l.out.Write(nl)
 			l.n = 0
 			l.pendSpace = 0
+			needsPrefix = isComment
 		}
 		if l.n == 0 {
 			l.out.Write([]byte(l.indent))
+		}
+		if needsPrefix {
+			l.out.Write(prefix)
+			needsPrefix = false
 		}
 		l.out.Write(space[:l.pendSpace])
 		l.out.Write([]byte(f))

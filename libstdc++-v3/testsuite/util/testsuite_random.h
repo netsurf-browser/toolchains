@@ -1,6 +1,6 @@
 // -*- C++ -*-
 
-// Copyright (C) 2011 Free Software Foundation, Inc.
+// Copyright (C) 2011-2020 Free Software Foundation, Inc.
 //
 // This file is part of the GNU ISO C++ Library.  This library is free
 // software; you can redistribute it and/or modify it under the terms
@@ -39,7 +39,6 @@ namespace __gnu_test
     void
     testDiscreteDist(Distribution& f, Pdf pdf)
     {
-      bool test __attribute__((unused)) = true;
       double count[BINS], p[BINS];
 
       for (unsigned long i = 0; i < BINS; i++)
@@ -114,7 +113,10 @@ namespace __gnu_test
   discrete_pdf(int k, std::initializer_list<double> wl)
   {
     if (!wl.size())
-      wl = { 1.0 };
+      {
+	static std::initializer_list<double> one = { 1.0 };
+	wl = one;
+      }
 
     if (k < 0 || (std::size_t)k >= wl.size())
       return 0.0;
@@ -149,7 +151,7 @@ namespace __gnu_test
 	double f = std::lgamma(k + (double)n);
 	double a = std::lgamma(n);
 	double b = std::lgamma(k + 1.0);
- 
+
 	return std::exp(f - a - b) * std::pow(p, n) * std::pow(1 - p, k);
       }
   }
@@ -161,7 +163,7 @@ namespace __gnu_test
       return 0.0;
     else
       {
-	double lf = std::lgamma(k + 1.0); 
+	double lf = std::lgamma(k + 1.0);
 	return std::exp(std::log(mu) * k - lf - mu);
       }
   }
@@ -175,6 +177,25 @@ namespace __gnu_test
     else
       return 1.0 / (b - a + 1.0);
   }
+
+#ifdef _GLIBCXX_USE_C99_MATH_TR1
+  inline double
+  lbincoef(int n, int k)
+  {
+    return std::lgamma(double(1 + n))
+         - std::lgamma(double(1 + k))
+         - std::lgamma(double(1 + n - k));
+  }
+
+  inline double
+  hypergeometric_pdf(int k, int N, int K, int n)
+  {
+    if (k < 0 || k < std::max(0, n - (N - K)) || k > std::min(K, n))
+      return 0.0;
+    else
+      return lbincoef(K, k) + lbincoef(N - K, n - k) - lbincoef(N, n);
+  }
+#endif
 
 } // namespace __gnu_test
 

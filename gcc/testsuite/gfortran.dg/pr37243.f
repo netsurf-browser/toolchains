@@ -1,5 +1,6 @@
 ! PR rtl-optimization/37243
 ! { dg-do run }
+! { dg-options "-std=legacy" }
 ! { dg-add-options ieee }
 ! Check if register allocator handles IR flattening correctly.
       SUBROUTINE SCHMD(V,M,N,LDV)

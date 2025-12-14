@@ -1,5 +1,4 @@
 ! { dg-do compile }
-! { dg-options "-fwhole-file" }
 ! Test the fixes for the first two problems in PR40011
 !
 ! Contributed by Dominique d'Humieres <dominiq@lps.ens.fr>
@@ -29,6 +28,6 @@ end function test
 
 program arr     ! The error was not picked up causing an ICE
   real, dimension(2) :: res
-  res = test(2) ! { dg-error "needs an explicit INTERFACE" }
+  res = test(2) ! { dg-error "Explicit interface required" }
   print *, res
 end program

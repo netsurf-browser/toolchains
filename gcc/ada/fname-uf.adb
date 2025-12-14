@@ -6,7 +6,7 @@
 --                                                                          --
 --                                 B o d y                                  --
 --                                                                          --
---          Copyright (C) 1992-2011, Free Software Foundation, Inc.         --
+--          Copyright (C) 1992-2019, Free Software Foundation, Inc.         --
 --                                                                          --
 -- GNAT is free software;  you can  redistribute it  and/or modify it under --
 -- terms of the  GNU General Public License as published  by the Free Soft- --
@@ -30,7 +30,6 @@ with Krunch;
 with Opt;      use Opt;
 with Osint;    use Osint;
 with Table;
-with Targparm; use Targparm;
 with Uname;    use Uname;
 with Widechar; use Widechar;
 
@@ -232,7 +231,7 @@ package body Fname.UF is
       --    _and_.ads
 
       --  which is bit peculiar, but we keep it that way. This means that we
-      --  avoid bombs due to writing a bad file name, and w get expected error
+      --  avoid bombs due to writing a bad file name, and we get expected error
       --  processing downstream, e.g. a compilation following gnatchop.
 
       if Name_Buffer (1) = '"' then
@@ -299,14 +298,11 @@ package body Fname.UF is
             Pent := SFN_Patterns.First;
             while Pent <= SFN_Patterns.Last loop
                if SFN_Patterns.Table (Pent).Typ = Unit_Char_Search then
-                  Name_Len := 0;
-
                   --  Determine if we have a predefined file name
 
-                  Name_Len := Uname'Length;
-                  Name_Buffer (1 .. Name_Len) := Uname;
                   Is_Predef :=
-                    Is_Predefined_File_Name (Renamings_Included => True);
+                    Is_Predefined_Unit_Name
+                      (Uname, Renamings_Included => True);
 
                   --  Found a match, execute the pattern
 
@@ -410,8 +406,7 @@ package body Fname.UF is
                           (Name_Buffer,
                            Name_Len,
                            Integer (Maximum_File_Name_Length),
-                           Debug_Flag_4,
-                           OpenVMS_On_Target);
+                           Debug_Flag_4);
 
                         --  Replace extension
 
@@ -554,8 +549,8 @@ package body Fname.UF is
 
    procedure Lock is
    begin
-      SFN_Table.Locked := True;
       SFN_Table.Release;
+      SFN_Table.Locked := True;
    end Lock;
 
    -------------------

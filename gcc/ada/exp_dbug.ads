@@ -6,7 +6,7 @@
 --                                                                          --
 --                                 S p e c                                  --
 --                                                                          --
---          Copyright (C) 1996-2010, Free Software Foundation, Inc.         --
+--          Copyright (C) 1996-2019, Free Software Foundation, Inc.         --
 --                                                                          --
 -- GNAT is free software;  you can  redistribute it  and/or modify it under --
 -- terms of the  GNU General Public License as published  by the Free Soft- --
@@ -65,7 +65,7 @@ package Exp_Dbug is
 
    --  For global entities, the encoded name includes all components of the
    --  fully expanded name (but omitting Standard at the start). For example,
-   --  if a library level child package P.Q has an embedded package R, and
+   --  if a library-level child package P.Q has an embedded package R, and
    --  there is an entity in this embedded package whose name is S, the encoded
    --  name will include the components p.q.r.s.
 
@@ -75,6 +75,12 @@ package Exp_Dbug is
    --  local variables of procedures, so it is not necessary to have full
    --  qualification for such entities. In particular this means that direct
    --  local variables of a procedure are not qualified.
+
+   --  For Ghost entities, the encoding adds a prefix "___ghost_" to aid the
+   --  detection of leaks of Ignored Ghost entities in the "living" space.
+   --  Ignored Ghost entities and any code associated with them should be
+   --  removed by the compiler in a post-processing pass. As a result,
+   --  object files should not contain any occurrences of this prefix.
 
    --  As an example of the local name convention, consider a procedure V.W
    --  with a local variable X, and a nested block Y containing an entity Z.
@@ -285,7 +291,7 @@ package Exp_Dbug is
       --    #6.  x__y__m3          (no BNPE's in signt)
       --    #7.  x__y__j           (no BNPE's in sight)
       --    #8.  k__z              (no BNPE's, only up to procedure)
-      --    #9   _ada_x__m3        (library level subprogram)
+      --    #9   _ada_x__m3        (library-level subprogram)
 
       --  Note that we have instances here of both kind of potential name
       --  clashes, and the above examples show how the encodings avoid the
@@ -411,20 +417,13 @@ package Exp_Dbug is
    -- Conversion between Entities and External Names --
    ----------------------------------------------------
 
-   No_Dollar_In_Label : constant Boolean := True;
-   --  True iff the target does not allow dollar signs ("$") in external names
-   --  ??? We want to migrate all platforms to use the same convention. As a
-   --  first step, we force this constant to always be True. This constant will
-   --  eventually be deleted after we have verified that the migration does not
-   --  cause any unforeseen adverse impact. We chose "__" because it is
-   --  supported on all platforms, which is not the case of "$".
-
    procedure Get_External_Name
      (Entity     : Entity_Id;
-      Has_Suffix : Boolean);
-   --  Set Name_Buffer and Name_Len to the external name of entity E. The
+      Has_Suffix : Boolean := False;
+      Suffix     : String  := "");
+   --  Set Name_Buffer and Name_Len to the external name of the entity. The
    --  external name is the Interface_Name, if specified, unless the entity
-   --  has an address clause or a suffix.
+   --  has an address clause or Has_Suffix is true.
    --
    --  If the Interface is not present, or not used, the external name is the
    --  concatenation of:
@@ -436,26 +435,28 @@ package Exp_Dbug is
    --    - the string "$" (or "__" if target does not allow "$"), followed
    --        by homonym suffix, if the entity is an overloaded subprogram
    --        or is defined within an overloaded subprogram.
-
-   procedure Get_External_Name_With_Suffix
-     (Entity : Entity_Id;
-      Suffix : String);
-   --  Set Name_Buffer and Name_Len to the external name of entity E. If
-   --  Suffix is the empty string the external name is as above, otherwise
-   --  the external name is the concatenation of:
-   --
-   --    - the string "_ada_", if the entity is a library subprogram,
-   --    - the names of any enclosing scopes, each followed by "__",
-   --        or "X_" if the next entity is a subunit)
-   --    - the name of the entity
-   --    - the string "$" (or "__" if target does not allow "$"), followed
-   --        by homonym suffix, if the entity is an overloaded subprogram
-   --        or is defined within an overloaded subprogram.
-   --    - the string "___" followed by Suffix
+   --    - the string "___" followed by Suffix if Has_Suffix is true.
    --
    --  Note that a call to this procedure has no effect if we are not
    --  generating code, since the necessary information for computing the
-   --  proper encoded name is not available in this case.
+   --  proper external name is not available in this case.
+
+   --  WARNING: There is a matching C declaration of this subprogram in fe.h
+
+   -------------------------------------
+   -- Encoding for translation into C --
+   -------------------------------------
+
+   --  In Modify_Tree_For_C mode we must add encodings to dismabiguate cases
+   --  where Ada block structure cannot be directly translated. These cases
+   --  are as follows:
+
+   --    a)  A loop variable may hide a homonym in an enclosing block
+   --    b)  A block-local variable may hide a homonym in an enclosing block
+
+   --  In C these constructs are not scopes and we must distinguish the names
+   --  explicitly. In the first case we create a qualified name with the suffix
+   --  'L', in the second case with a suffix 'B'.
 
    --------------------------------------------
    -- Subprograms for Handling Qualification --
@@ -480,7 +481,7 @@ package Exp_Dbug is
    --  the changes till just before gigi is called, we avoid any concerns
    --  about such effects. Gigi itself does not use the names except for
    --  output of names for debugging purposes (which is why we are doing
-   --  the name changes in the first place.
+   --  the name changes in the first place).
 
    --  Note: the routines Get_Unqualified_[Decoded]_Name_String in Namet are
    --  useful to remove qualification from a name qualified by the call to
@@ -561,31 +562,6 @@ package Exp_Dbug is
       --   The second form is used if the small value is different from the
       --   delta. In this case, the first nn/dd rational value is for delta,
       --   and the second value is for small.
-
-      ------------------------------
-      -- VAX Floating-Point Types --
-      ------------------------------
-
-      --   Vax floating-point types are represented at run time as integer
-      --   types, which are treated specially by the code generator. Their
-      --   type names are encoded with the following suffix:
-
-      --     typ___XFF
-      --     typ___XFD
-      --     typ___XFG
-
-      --   representing the Vax F Float, D Float, and G Float types. The
-      --   debugger must treat these specially. In particular, printing these
-      --   values can be achieved using the debug procedures that are provided
-      --   in package System.Vax_Float_Operations:
-
-      --     procedure Debug_Output_D (Arg : D);
-      --     procedure Debug_Output_F (Arg : F);
-      --     procedure Debug_Output_G (Arg : G);
-
-      --   These three procedures take a Vax floating-point argument, and
-      --   output a corresponding decimal representation to standard output
-      --   with no terminating line return.
 
       --------------------
       -- Discrete Types --
@@ -901,9 +877,8 @@ package Exp_Dbug is
       --  names of these types).
 
       --  To conserve space, we do not produce this type unless one of the
-      --  index types is either an enumeration type, has a variable upper
-      --  bound, has a lower bound different from the constant 1, is a biased
-      --  type, or is wider than "sizetype".
+      --  index types is either an enumeration type, has a variable lower or
+      --  upper bound or is a biased type.
 
       --  Given the full encoding of these types (see above description for
       --  the encoding of discrete types), this means that all necessary
@@ -952,6 +927,8 @@ package Exp_Dbug is
    --  hold the entity name. Note that a call to this procedure has no effect
    --  if we are not generating code, since the necessary information for
    --  computing the proper encoded name is not available in this case.
+
+   --  WARNING: There is a matching C declaration of this subprogram in fe.h
 
    --------------
    -- Renaming --
@@ -1109,6 +1086,9 @@ package Exp_Dbug is
    --    ttt is the name of the original declared array
    --    nnn is the component size in bits (1-31)
 
+   --  Note that if the packed array is not bit-packed, the name will simply
+   --  be tttP.
+
    --  When the debugger sees that an object is of a type that is encoded in
    --  this manner, it can use the original type to determine the bounds and
    --  the component type, and the component size to determine the packing
@@ -1228,10 +1208,9 @@ package Exp_Dbug is
    -- Subprograms for Handling Packed Array Type Names --
    ------------------------------------------------------
 
-   function Make_Packed_Array_Type_Name
+   function Make_Packed_Array_Impl_Type_Name
      (Typ   : Entity_Id;
-      Csize : Uint)
-      return  Name_Id;
+      Csize : Uint) return Name_Id;
    --  This function is used in Exp_Pakd to create the name that is encoded as
    --  described above. The entity Typ provides the name ttt, and the value
    --  Csize is the component size that provides the nnn value.
@@ -1416,6 +1395,8 @@ package Exp_Dbug is
    --  of the string in Name_Len, and an ASCII.NUL character stored following
    --  the name.
 
+   --  WARNING: There is a matching C declaration of this subprogram in fe.h
+
    ---------------------------------
    -- Subtypes of Variant Records --
    ---------------------------------
@@ -1450,6 +1431,23 @@ package Exp_Dbug is
    --  corresponding to variants, and consider the fields inside as belonging
    --  to the containing record.
 
+   -----------------------------------------------
+   --  Extra renamings for subprogram instances --
+   -----------------------------------------------
+
+   procedure Build_Subprogram_Instance_Renamings
+     (N       : Node_Id;
+      Wrapper : Entity_Id);
+   --  The debugger has difficulties in recovering the value of actuals of an
+   --  elementary type, from within the body of a subprogram instantiation.
+   --  This is because such actuals generate an object declaration that is
+   --  placed within the wrapper package of the instance, and the entity in
+   --  these declarations is encoded in a complex way that GDB does not handle
+   --  well. These new renaming declarations appear within the body of the
+   --  subprogram, and are redundant from a visibility point of view, but They
+   --  should have no measurable performance impact, and require no special
+   --  decoding in the debugger.
+
    -------------------------------------------
    -- Character literals in Character Types --
    -------------------------------------------
@@ -1460,18 +1458,21 @@ package Exp_Dbug is
    --  a character literal, the name is encoded as described in the following
    --  paragraph.
 
-   --  A name QUhh, where each 'h' is a lower-case hexadecimal digit, stands
-   --  for a character whose Unicode encoding is hh, and QWhhhh likewise stands
-   --  for a wide character whose encoding is hhhh. The representation values
-   --  are encoded as for ordinary enumeration literals (and have no necessary
-   --  relationship to the values encoded in the names).
+   --  The characters 'a'..'z' and '0'..'9' are represented as Qc, where 'c'
+   --  stands for the character itself.  A name QUhh, where each 'h' is a
+   --  lower-case hexadecimal digit, stands for a character whose Unicode
+   --  encoding is hh, and QWhhhh likewise stands for a wide character whose
+   --  encoding is hhhh. The representation values are encoded as for ordinary
+   --  enumeration literals (and have no necessary relationship to the values
+   --  encoded in the names).
 
    --  For example, given the type declaration
 
-   --    type x is (A, 'C', B);
+   --    type x is (A, 'C', 'b');
 
    --  the second enumeration literal would be named QU43 and the value
-   --  assigned to it would be 1.
+   --  assigned to it would be 1, and the third enumeration literal would be
+   --  named Qb and the value assigned to it would be 2.
 
    -----------------------------------------------
    -- Secondary Dispatch tables of tagged types --

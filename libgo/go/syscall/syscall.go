@@ -3,34 +3,50 @@
 // license that can be found in the LICENSE file.
 
 // Package syscall contains an interface to the low-level operating system
-// primitives.  The details vary depending on the underlying system.
-// Its primary use is inside other packages that provide a more portable
-// interface to the system, such as "os", "time" and "net".  Use those
-// packages rather than this one if you can.
+// primitives. The details vary depending on the underlying system, and
+// by default, godoc will display the syscall documentation for the current
+// system. If you want godoc to display syscall documentation for another
+// system, set $GOOS and $GOARCH to the desired system. For example, if
+// you want to view documentation for freebsd/arm on linux/amd64, set $GOOS
+// to freebsd and $GOARCH to arm.
+// The primary use of syscall is inside other packages that provide a more
+// portable interface to the system, such as "os", "time" and "net".  Use
+// those packages rather than this one if you can.
 // For details of the functions and data types in this package consult
 // the manuals for the appropriate operating system.
 // These calls return err == nil to indicate success; otherwise
 // err is an operating system error describing the failure.
 // On most systems, that error has type syscall.Errno.
+//
+// Deprecated: this package is locked down. Callers should use the
+// corresponding package in the golang.org/x/sys repository instead.
+// That is also where updates required by new systems or versions
+// should be applied. See https://golang.org/s/go1.4-syscall for more
+// information.
+//
 package syscall
 
 import "unsafe"
 
-// StringByteSlice returns a NUL-terminated slice of bytes containing the text of s.
+//go:generate go run golang.org/x/sys/windows/mkwinsyscall -systemdll -output zsyscall_windows.go syscall_windows.go security_windows.go
+
+// StringByteSlice converts a string to a NUL-terminated []byte,
 // If s contains a NUL byte this function panics instead of
 // returning an error.
+//
+// Deprecated: Use ByteSliceFromString instead.
 func StringByteSlice(s string) []byte {
-	a, err := byteSliceFromString(s)
+	a, err := ByteSliceFromString(s)
 	if err != nil {
 		panic("syscall: string with NUL passed to StringByteSlice")
 	}
 	return a
 }
 
-// byteSliceFromString returns a NUL-terminated slice of bytes
+// ByteSliceFromString returns a NUL-terminated slice of bytes
 // containing the text of s. If s contains a NUL byte at any
 // location, it returns (nil, EINVAL).
-func byteSliceFromString(s string) ([]byte, error) {
+func ByteSliceFromString(s string) ([]byte, error) {
 	for i := 0; i < len(s); i++ {
 		if s[i] == 0 {
 			return nil, EINVAL
@@ -41,16 +57,18 @@ func byteSliceFromString(s string) ([]byte, error) {
 	return a, nil
 }
 
-// StringBytePtr returns a pointer to a NUL-terminated array of bytes containing the text of s.
-// If s contains a NUL byte this function panics instead of
-// returning an error.
+// StringBytePtr returns a pointer to a NUL-terminated array of bytes.
+// If s contains a NUL byte this function panics instead of returning
+// an error.
+//
+// Deprecated: Use BytePtrFromString instead.
 func StringBytePtr(s string) *byte { return &StringByteSlice(s)[0] }
 
-// bytePtrFromString returns a pointer to a NUL-terminated array of
+// BytePtrFromString returns a pointer to a NUL-terminated array of
 // bytes containing the text of s. If s contains a NUL byte at any
 // location, it returns (nil, EINVAL).
-func bytePtrFromString(s string) (*byte, error) {
-	a, err := byteSliceFromString(s)
+func BytePtrFromString(s string) (*byte, error) {
+	a, err := ByteSliceFromString(s)
 	if err != nil {
 		return nil, err
 	}
@@ -65,18 +83,29 @@ var dummy *byte
 
 const sizeofPtr uintptr = uintptr(unsafe.Sizeof(dummy))
 
+// Unix returns ts as the number of seconds and nanoseconds elapsed since the
+// Unix epoch.
 func (ts *Timespec) Unix() (sec int64, nsec int64) {
 	return int64(ts.Sec), int64(ts.Nsec)
 }
 
+// Unix returns tv as the number of seconds and nanoseconds elapsed since the
+// Unix epoch.
 func (tv *Timeval) Unix() (sec int64, nsec int64) {
 	return int64(tv.Sec), int64(tv.Usec) * 1000
 }
 
+// Nano returns ts as the number of nanoseconds elapsed since the Unix epoch.
 func (ts *Timespec) Nano() int64 {
 	return int64(ts.Sec)*1e9 + int64(ts.Nsec)
 }
 
+// Nano returns tv as the number of nanoseconds elapsed since the Unix epoch.
 func (tv *Timeval) Nano() int64 {
 	return int64(tv.Sec)*1e9 + int64(tv.Usec)*1000
 }
+
+// Getpagesize and Exit are provided by the runtime.
+
+func Getpagesize() int
+func Exit(code int)

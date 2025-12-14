@@ -13,7 +13,7 @@ void a (unsigned char x)
     return;
   if (255 >= x) /* { dg-warning "comparison is always true due to limited range of data type" } */
     return;
-  if ((int)x <= 255) /* { dg-bogus "comparison is always true due to limited range of data type" "" { xfail *-*-* } 16 } */
+  if ((int)x <= 255) /* { dg-bogus "comparison is always true due to limited range of data type" "" { xfail *-*-* } } */
     return;
   if (255 >= (unsigned char) 1)
     return;
@@ -30,10 +30,10 @@ void b (unsigned short x)
 
 void c (unsigned int x)
 {
-  if (x < 0)  return;/* { dg-warning "comparison of unsigned expression < 0 is always false" } */
-  if (x >= 0) return;/* { dg-warning "comparison of unsigned expression >= 0 is always true" } */
-  if (0 > x)  return;/* { dg-warning "comparison of unsigned expression < 0 is always false" } */
-  if (0 <= x) return;/* { dg-warning "comparison of unsigned expression >= 0 is always true" } */
+  if (x < 0)  return;/* { dg-warning "comparison of unsigned expression in '< 0' is always false" } */
+  if (x >= 0) return;/* { dg-warning "comparison of unsigned expression in '>= 0' is always true" } */
+  if (0 > x)  return;/* { dg-warning "comparison of unsigned expression in '< 0' is always false" } */
+  if (0 <= x) return;/* { dg-warning "comparison of unsigned expression in '>= 0' is always true" } */
   if (1U >= 0) return;
   if (1U < 0) return;
   if (0 <= 1U) return;
@@ -42,23 +42,23 @@ void c (unsigned int x)
 
 void d (unsigned long x)
 {
-  if (x < 0)  return;/* { dg-warning "comparison of unsigned expression < 0 is always false" } */
-  if (x >= 0) return;/* { dg-warning "comparison of unsigned expression >= 0 is always true" } */
-  if (0 > x)  return;/* { dg-warning "comparison of unsigned expression < 0 is always false" } */
-  if (0 <= x) return;/* { dg-warning "comparison of unsigned expression >= 0 is always true" } */
+  if (x < 0)  return;/* { dg-warning "comparison of unsigned expression in '< 0' is always false" } */
+  if (x >= 0) return;/* { dg-warning "comparison of unsigned expression in '>= 0' is always true" } */
+  if (0 > x)  return;/* { dg-warning "comparison of unsigned expression in '< 0' is always false" } */
+  if (0 <= x) return;/* { dg-warning "comparison of unsigned expression in '>= 0' is always true" } */
 }
 
 void e (unsigned long long x)
 {
-  if (x < 0)  return;/* { dg-warning "comparison of unsigned expression < 0 is always false" } */
-  if (x >= 0) return;/* { dg-warning "comparison of unsigned expression >= 0 is always true" } */
-  if (0 > x)  return;/* { dg-warning "comparison of unsigned expression < 0 is always false" } */
-  if (0 <= x) return;/* { dg-warning "comparison of unsigned expression >= 0 is always true" } */
+  if (x < 0)  return;/* { dg-warning "comparison of unsigned expression in '< 0' is always false" } */
+  if (x >= 0) return;/* { dg-warning "comparison of unsigned expression in '>= 0' is always true" } */
+  if (0 > x)  return;/* { dg-warning "comparison of unsigned expression in '< 0' is always false" } */
+  if (0 <= x) return;/* { dg-warning "comparison of unsigned expression in '>= 0' is always true" } */
 }
 
 int test (int x) 
 {
-  if ((long long)x <= 0x123456789ABCLL) /* { dg-bogus "comparison is always true due to limited range of data type" "" { xfail *-*-* } 61 } */
+  if ((long long)x <= 0x123456789ABCLL) /* { dg-bogus "comparison is always true due to limited range of data type" "" { xfail *-*-* } } */
     return 1;
   else 
     return 0;
@@ -66,10 +66,10 @@ int test (int x)
 
 template <typename Int, Int D>
 void f(Int x) {
-  assert(0 <= x and x <= D); // { dg-warning "comparison is always true due to limited range of data type" }
+  assert(0 <= x and x <= D);
 }
 
-int ff(void) {
+void ff(void) {
   f<unsigned char, 2>(5);
   f<signed char, 2>(5);
 }
@@ -78,7 +78,7 @@ template <typename Int, Int D>
 void g(void) {
   assert(0 <= D);
 }
-int gg(void) {
+void gg(void) {
   g<unsigned char, 2>();
 }
 

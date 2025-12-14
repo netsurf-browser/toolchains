@@ -24,7 +24,7 @@ main1 ()
   s *ptr = arr;
   s check_res[N];
   s res[N];
-  unsigned char u, t, s, x, y, z, w;
+  unsigned char u, t, s, x, z, w;
 
   for (i = 0; i < N; i++)
     {
@@ -50,8 +50,7 @@ main1 ()
       check_res[i].h = arr[i].d;
       check_res[i].g = u + t;
 
-      if (arr[i].a == 178)
-         abort ();
+      asm volatile ("" ::: "memory");
     }
 
   for (i = 0; i < N; i++)
@@ -97,5 +96,4 @@ int main (void)
 }
 
 /* { dg-final { scan-tree-dump-times "vectorized 1 loops" 1 "vect" { target vect_strided8 } } } */
-/* { dg-final { cleanup-tree-dump "vect" } } */
 

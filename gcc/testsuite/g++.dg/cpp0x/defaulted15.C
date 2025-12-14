@@ -1,5 +1,5 @@
 // PR c++/38796
-// { dg-options -std=c++0x }
+// { dg-do compile { target c++11 } }
 
 #define SA(X) static_assert ((X), #X)
 
@@ -43,13 +43,12 @@ SA(__has_trivial_copy(E));
 
 struct F
 {
-  F(F&) = default;		// { dg-error "non-const" }
+  F(F&) = default;
 };
 
 struct G: public F
 {
-  // Can't be const because F copy ctor isn't.
-  G(const G&) = default;	// { dg-error "const" }
+  G(const G&) = default;
 };
 
 struct H

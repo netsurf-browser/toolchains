@@ -1,5 +1,4 @@
 ! { dg-do compile }
-! { dg-options "-fwhole-file" }
 ! Test the fix for PR43450 in which the use of 'replica_env_type'
 ! caused an ICE in ep_types
 !
@@ -29,4 +28,3 @@ CONTAINS
   SUBROUTINE ep_force_release()
   END SUBROUTINE ep_force_release
 END MODULE ep_types
-! { dg-final { cleanup-modules "replica_types ep_types" } }

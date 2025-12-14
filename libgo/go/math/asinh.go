@@ -6,7 +6,7 @@ package math
 
 // The original C code, the long comment, and the constants
 // below are from FreeBSD's /usr/src/lib/msun/src/s_asinh.c
-// and came with this notice.  The go code is a simplified
+// and came with this notice. The go code is a simplified
 // version of the original C.
 //
 // ====================================================
@@ -30,13 +30,20 @@ package math
 //	         := sign(x)*log1p(|x| + x**2/(1 + sqrt(1+x**2)))
 //
 
-// Asinh(x) calculates the inverse hyperbolic sine of x.
+// Asinh returns the inverse hyperbolic sine of x.
 //
 // Special cases are:
 //	Asinh(±0) = ±0
 //	Asinh(±Inf) = ±Inf
 //	Asinh(NaN) = NaN
 func Asinh(x float64) float64 {
+	return libc_asinh(x)
+}
+
+//extern asinh
+func libc_asinh(float64) float64
+
+func asinh(x float64) float64 {
 	const (
 		Ln2      = 6.93147180559945286227e-01 // 0x3FE62E42FEFA39EF
 		NearZero = 1.0 / (1 << 28)            // 2**-28

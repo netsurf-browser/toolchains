@@ -1,8 +1,6 @@
-// { dg-do compile }
-// { dg-options "-std=gnu++0x" }
-// { dg-error "no matching" "" { target *-*-* } 1221 }
+// { dg-do compile { target c++11 } }
 
-// Copyright (C) 2009, 2010, 2011, 2012 Free Software Foundation
+// Copyright (C) 2009-2020 Free Software Foundation, Inc.
 //
 // This file is part of the GNU ISO C++ Library.  This library is free
 // software; you can redistribute it and/or modify it under the
@@ -24,5 +22,7 @@
 void f()
 {
   typedef std::forward_list<std::forward_list<int> > test_type;
-  test_type l(10, 1);
+  test_type l(10, 1); // { dg-error "no matching" }
 }
+
+// { dg-prune-output "iterator_traits" }

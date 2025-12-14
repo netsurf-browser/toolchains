@@ -6,7 +6,7 @@
 --                                                                          --
 --                                 B o d y                                  --
 --                                                                          --
---          Copyright (C) 1992-2010, Free Software Foundation, Inc.         --
+--          Copyright (C) 1992-2019, Free Software Foundation, Inc.         --
 --                                                                          --
 -- GNAT is free software;  you can  redistribute it  and/or modify it under --
 -- terms of the  GNU General Public License as published  by the Free Soft- --
@@ -25,7 +25,8 @@
 
 with Einfo;    use Einfo;
 with Errout;   use Errout;
-with Targparm; use Targparm;
+with Opt;      use Opt;
+with Sem_Util; use Sem_Util;
 
 package body Eval_Fat is
 
@@ -41,7 +42,7 @@ package body Eval_Fat is
    type Radix_Power_Table is array (Int range 1 .. 4) of Int;
 
    Radix_Powers : constant Radix_Power_Table :=
-                    (Radix ** 1, Radix ** 2, Radix ** 3, Radix ** 4);
+     (Radix ** 1, Radix ** 2, Radix ** 3, Radix ** 4);
 
    -----------------------
    -- Local Subprograms --
@@ -56,20 +57,6 @@ package body Eval_Fat is
    --  Decomposes a non-zero floating-point number into fraction and exponent
    --  parts. The fraction is in the interval 1.0 / Radix .. T'Pred (1.0) and
    --  uses Rbase = Radix. The result is rounded to a nearest machine number.
-
-   procedure Decompose_Int
-     (RT       : R;
-      X        : T;
-      Fraction : out UI;
-      Exponent : out UI;
-      Mode     : Rounding_Mode);
-   --  This is similar to Decompose, except that the Fraction value returned
-   --  is an integer representing the value Fraction * Scale, where Scale is
-   --  the value (Machine_Radix_Value (RT) ** Machine_Mantissa_Value (RT)). The
-   --  value is obtained by using biased rounding (halfway cases round away
-   --  from zero), round to even, a floor operation or a ceiling operation
-   --  depending on the setting of Mode (see corresponding descriptions in
-   --  Urealp).
 
    --------------
    -- Adjacent --
@@ -188,11 +175,11 @@ package body Eval_Fat is
       --  True iff Fraction is even
 
       Most_Significant_Digit : constant UI :=
-                                 Radix ** (Machine_Mantissa_Value (RT) - 1);
+        Radix ** (Machine_Mantissa_Value (RT) - 1);
 
       Uintp_Mark : Uintp.Save_Mark;
       --  The code is divided into blocks that systematically release
-      --  intermediate values (this routine generates lots of junk!)
+      --  intermediate values (this routine generates lots of junk).
 
    begin
       if N = Uint_0 then
@@ -371,9 +358,14 @@ package body Eval_Fat is
          case Mode is
             when Round_Even =>
 
-               --  This rounding mode should not be used for static
-               --  expressions, but only for compile-time evaluation of
-               --  non-static expressions.
+               --  This rounding mode corresponds to the unbiased rounding
+               --  method that is used at run time. When the real value is
+               --  exactly between two machine numbers, choose the machine
+               --  number with its least significant bit equal to zero.
+
+               --  The recommendation advice in RM 4.9(38) is that static
+               --  expressions are rounded to machine numbers in the same
+               --  way as the target machine does.
 
                if (Even and then N * 2 > D)
                      or else
@@ -382,11 +374,13 @@ package body Eval_Fat is
                   Fraction := Fraction + 1;
                end if;
 
-            when Round   =>
+            when Round =>
 
                --  Do not round to even as is done with IEEE arithmetic, but
                --  instead round away from zero when the result is exactly
-               --  between two machine numbers. See RM 4.9(38).
+               --  between two machine numbers. This biased rounding method
+               --  should not be used to convert static expressions to
+               --  machine numbers, see AI95-268.
 
                if N * 2 >= D then
                   Fraction := Fraction + 1;
@@ -397,7 +391,7 @@ package body Eval_Fat is
                   Fraction := Fraction + 1;
                end if;
 
-            when Floor   =>
+            when Floor =>
                if N > Uint_0 and then UR_Is_Negative (X) then
                   Fraction := Fraction + 1;
                end if;
@@ -509,22 +503,33 @@ package body Eval_Fat is
 
       if X_Exp < Emin then
          declare
-            Emin_Den : constant UI := Machine_Emin_Value (RT)
-                                        - Machine_Mantissa_Value (RT) + Uint_1;
+            Emin_Den : constant UI := Machine_Emin_Value (RT) -
+                                        Machine_Mantissa_Value (RT) + Uint_1;
+
          begin
-            if X_Exp < Emin_Den or not Denorm_On_Target then
-               if UR_Is_Negative (X) then
-                  Error_Msg_N
-                    ("floating-point value underflows to -0.0?", Enode);
+            --  Do not issue warnings about underflows in GNATprove mode,
+            --  as calling Machine as part of interval checking may lead
+            --  to spurious warnings.
+
+            if X_Exp < Emin_Den or not Has_Denormals (RT) then
+               if Has_Signed_Zeros (RT) and then UR_Is_Negative (X) then
+                  if not GNATprove_Mode then
+                     Error_Msg_N
+                       ("floating-point value underflows to -0.0??", Enode);
+                  end if;
+
                   return Ureal_M_0;
 
                else
-                  Error_Msg_N
-                    ("floating-point value underflows to 0.0?", Enode);
+                  if not GNATprove_Mode then
+                     Error_Msg_N
+                       ("floating-point value underflows to 0.0??", Enode);
+                  end if;
+
                   return Ureal_0;
                end if;
 
-            elsif Denorm_On_Target then
+            elsif Has_Denormals (RT) then
 
                --  Emin - Mant <= X_Exp < Emin, so result is denormal. Handle
                --  gradual underflow by first computing the number of
@@ -550,10 +555,16 @@ package body Eval_Fat is
                      UR_Is_Negative (X));
 
                begin
+                  --  Do not issue warnings about loss of precision in
+                  --  GNATprove mode, as calling Machine as part of interval
+                  --  checking may lead to spurious warnings.
+
                   if X_Frac_Denorm /= X_Frac then
-                     Error_Msg_N
-                       ("gradual underflow causes loss of precision?",
-                        Enode);
+                     if not GNATprove_Mode then
+                        Error_Msg_N
+                          ("gradual underflow causes loss of precision??",
+                           Enode);
+                     end if;
                      X_Frac := X_Frac_Denorm;
                   end if;
                end;
@@ -673,7 +684,7 @@ package body Eval_Fat is
       Result := Truncation (RT, abs X);
       Tail   := abs X - Result;
 
-      if Tail >= Ureal_Half  then
+      if Tail >= Ureal_Half then
          Result := Result + Ureal_1;
       end if;
 
@@ -725,7 +736,7 @@ package body Eval_Fat is
       --  Set exponent such that the radix point will be directly following the
       --  mantissa after scaling.
 
-      if Denorm_On_Target or Exp /= Emin then
+      if Has_Denormals (RT) or Exp /= Emin then
          Exp := Exp - Mantissa;
       else
          Exp := Exp - 1;
@@ -768,7 +779,7 @@ package body Eval_Fat is
       Result := Truncation (RT, Abs_X);
       Tail   := Abs_X - Result;
 
-      if Tail > Ureal_Half  then
+      if Tail > Ureal_Half then
          Result := Result + Ureal_1;
 
       elsif Tail = Ureal_Half then

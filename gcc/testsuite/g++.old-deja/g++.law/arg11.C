@@ -17,7 +17,6 @@ int
 foo(S *o)
 { // Neither call has a usable constructor for conversions of char[5] to Ack.
   function("adsf");// { dg-error "could not convert" }
-  o->method("adsf");// { dg-error "no matching" } 
-  // { dg-message "candidate" "candidate note" { target *-*-* } 20 }
+  o->method("adsf");// { dg-error "cannot convert" } 
   return 0;
 }

@@ -6,9 +6,11 @@ package scanner
 
 import (
 	"go/token"
+	"io/ioutil"
 	"os"
 	"path/filepath"
 	"runtime"
+	"strings"
 	"testing"
 )
 
@@ -43,12 +45,18 @@ var tokens = [...]elt{
 	// Special tokens
 	{token.COMMENT, "/* a comment */", special},
 	{token.COMMENT, "// a comment \n", special},
+	{token.COMMENT, "/*\r*/", special},
+	{token.COMMENT, "/**\r/*/", special}, // issue 11151
+	{token.COMMENT, "/**\r\r/*/", special},
+	{token.COMMENT, "//\r\n", special},
 
 	// Identifiers and basic type literals
 	{token.IDENT, "foobar", literal},
 	{token.IDENT, "a۰۱۸", literal},
 	{token.IDENT, "foo६४", literal},
 	{token.IDENT, "bar９８７６", literal},
+	{token.IDENT, "ŝ", literal},    // was bug (issue 4000)
+	{token.IDENT, "ŝfoo", literal}, // was bug (issue 4000)
 	{token.INT, "0", literal},
 	{token.INT, "1", literal},
 	{token.INT, "123456789012345678890", literal},
@@ -198,7 +206,9 @@ func newlineCount(s string) int {
 
 func checkPos(t *testing.T, lit string, p token.Pos, expected token.Position) {
 	pos := fset.Position(p)
-	if pos.Filename != expected.Filename {
+	// Check cleaned filenames so that we don't have to worry about
+	// different os.PathSeparator values.
+	if pos.Filename != expected.Filename && filepath.Clean(pos.Filename) != filepath.Clean(expected.Filename) {
 		t.Errorf("bad filename for %q: got %s, expected %s", lit, pos.Filename, expected.Filename)
 	}
 	if pos.Offset != expected.Offset {
@@ -214,8 +224,6 @@ func checkPos(t *testing.T, lit string, p token.Pos, expected token.Position) {
 
 // Verify that calling Scan() provides the correct results.
 func TestScan(t *testing.T) {
-	// make source
-	src_linecount := newlineCount(string(source))
 	whitespace_linecount := newlineCount(whitespace)
 
 	// error handler
@@ -226,61 +234,103 @@ func TestScan(t *testing.T) {
 	// verify scan
 	var s Scanner
 	s.Init(fset.AddFile("", fset.Base(), len(source)), source, eh, ScanComments|dontInsertSemis)
-	index := 0
-	// epos is the expected position
+
+	// set up expected position
 	epos := token.Position{
 		Filename: "",
 		Offset:   0,
 		Line:     1,
 		Column:   1,
 	}
+
+	index := 0
 	for {
 		pos, tok, lit := s.Scan()
-		if lit == "" {
-			// no literal value for non-literal tokens
-			lit = tok.String()
-		}
-		e := elt{token.EOF, "", special}
-		if index < len(tokens) {
-			e = tokens[index]
-		}
+
+		// check position
 		if tok == token.EOF {
-			lit = "<EOF>"
-			epos.Line = src_linecount
+			// correction for EOF
+			epos.Line = newlineCount(string(source))
 			epos.Column = 2
 		}
 		checkPos(t, lit, pos, epos)
+
+		// check token
+		e := elt{token.EOF, "", special}
+		if index < len(tokens) {
+			e = tokens[index]
+			index++
+		}
 		if tok != e.tok {
 			t.Errorf("bad token for %q: got %s, expected %s", lit, tok, e.tok)
 		}
-		if e.tok.IsLiteral() {
-			// no CRs in raw string literals
-			elit := e.lit
-			if elit[0] == '`' {
-				elit = string(stripCR([]byte(elit)))
-				epos.Offset += len(e.lit) - len(lit) // correct position
-			}
-			if lit != elit {
-				t.Errorf("bad literal for %q: got %q, expected %q", lit, lit, elit)
-			}
-		}
+
+		// check token class
 		if tokenclass(tok) != e.class {
 			t.Errorf("bad class for %q: got %d, expected %d", lit, tokenclass(tok), e.class)
 		}
-		epos.Offset += len(lit) + len(whitespace)
-		epos.Line += newlineCount(lit) + whitespace_linecount
-		if tok == token.COMMENT && lit[1] == '/' {
-			// correct for unaccounted '/n' in //-style comment
-			epos.Offset++
-			epos.Line++
+
+		// check literal
+		elit := ""
+		switch e.tok {
+		case token.COMMENT:
+			// no CRs in comments
+			elit = string(stripCR([]byte(e.lit), e.lit[1] == '*'))
+			//-style comment literal doesn't contain newline
+			if elit[1] == '/' {
+				elit = elit[0 : len(elit)-1]
+			}
+		case token.IDENT:
+			elit = e.lit
+		case token.SEMICOLON:
+			elit = ";"
+		default:
+			if e.tok.IsLiteral() {
+				// no CRs in raw string literals
+				elit = e.lit
+				if elit[0] == '`' {
+					elit = string(stripCR([]byte(elit), false))
+				}
+			} else if e.tok.IsKeyword() {
+				elit = e.lit
+			}
 		}
-		index++
+		if lit != elit {
+			t.Errorf("bad literal for %q: got %q, expected %q", lit, lit, elit)
+		}
+
 		if tok == token.EOF {
 			break
 		}
+
+		// update position
+		epos.Offset += len(e.lit) + len(whitespace)
+		epos.Line += newlineCount(e.lit) + whitespace_linecount
+
 	}
+
 	if s.ErrorCount != 0 {
 		t.Errorf("found %d errors", s.ErrorCount)
+	}
+}
+
+func TestStripCR(t *testing.T) {
+	for _, test := range []struct{ have, want string }{
+		{"//\n", "//\n"},
+		{"//\r\n", "//\n"},
+		{"//\r\r\r\n", "//\n"},
+		{"//\r*\r/\r\n", "//*/\n"},
+		{"/**/", "/**/"},
+		{"/*\r/*/", "/*/*/"},
+		{"/*\r*/", "/**/"},
+		{"/**\r/*/", "/**\r/*/"},
+		{"/*\r/\r*\r/*/", "/*/*\r/*/"},
+		{"/*\r\r\r\r*/", "/**/"},
+	} {
+		got := string(stripCR([]byte(test.have), len(test.have) >= 2 && test.have[1] == '*'))
+		if got != test.want {
+			t.Errorf("stripCR(%q) = %q; want %q", test.have, got, test.want)
+		}
 	}
 }
 
@@ -321,6 +371,7 @@ var lines = []string{
 	// # indicates a semicolon present in the source
 	// $ indicates an automatically inserted semicolon
 	"",
+	"\ufeff#;", // first BOM is ignored
 	"#;",
 	"foo$\n",
 	"123$\n",
@@ -455,73 +506,134 @@ func TestSemis(t *testing.T) {
 }
 
 type segment struct {
-	srcline  string // a line of source text
-	filename string // filename for current token
-	line     int    // line number for current token
+	srcline      string // a line of source text
+	filename     string // filename for current token; error message for invalid line directives
+	line, column int    // line and column for current token; error position for invalid line directives
 }
 
 var segments = []segment{
 	// exactly one token per line since the test consumes one token per segment
-	{"  line1", filepath.Join("dir", "TestLineComments"), 1},
-	{"\nline2", filepath.Join("dir", "TestLineComments"), 2},
-	{"\nline3  //line File1.go:100", filepath.Join("dir", "TestLineComments"), 3}, // bad line comment, ignored
-	{"\nline4", filepath.Join("dir", "TestLineComments"), 4},
-	{"\n//line File1.go:100\n  line100", filepath.Join("dir", "File1.go"), 100},
-	{"\n//line File2.go:200\n  line200", filepath.Join("dir", "File2.go"), 200},
-	{"\n//line :1\n  line1", "dir", 1},
-	{"\n//line foo:42\n  line42", filepath.Join("dir", "foo"), 42},
-	{"\n //line foo:42\n  line44", filepath.Join("dir", "foo"), 44},           // bad line comment, ignored
-	{"\n//line foo 42\n  line46", filepath.Join("dir", "foo"), 46},            // bad line comment, ignored
-	{"\n//line foo:42 extra text\n  line48", filepath.Join("dir", "foo"), 48}, // bad line comment, ignored
-	{"\n//line ./foo:42\n  line42", filepath.Join("dir", "foo"), 42},
-	{"\n//line a/b/c/File1.go:100\n  line100", filepath.Join("dir", "a", "b", "c", "File1.go"), 100},
+	{"  line1", "TestLineDirectives", 1, 3},
+	{"\nline2", "TestLineDirectives", 2, 1},
+	{"\nline3  //line File1.go:100", "TestLineDirectives", 3, 1}, // bad line comment, ignored
+	{"\nline4", "TestLineDirectives", 4, 1},
+	{"\n//line File1.go:100\n  line100", "File1.go", 100, 0},
+	{"\n//line  \t :42\n  line1", " \t ", 42, 0},
+	{"\n//line File2.go:200\n  line200", "File2.go", 200, 0},
+	{"\n//line foo\t:42\n  line42", "foo\t", 42, 0},
+	{"\n //line foo:42\n  line43", "foo\t", 44, 0}, // bad line comment, ignored (use existing, prior filename)
+	{"\n//line foo 42\n  line44", "foo\t", 46, 0},  // bad line comment, ignored (use existing, prior filename)
+	{"\n//line /bar:42\n  line45", "/bar", 42, 0},
+	{"\n//line ./foo:42\n  line46", "foo", 42, 0},
+	{"\n//line a/b/c/File1.go:100\n  line100", "a/b/c/File1.go", 100, 0},
+	{"\n//line c:\\bar:42\n  line200", "c:\\bar", 42, 0},
+	{"\n//line c:\\dir\\File1.go:100\n  line201", "c:\\dir\\File1.go", 100, 0},
+
+	// tests for new line directive syntax
+	{"\n//line :100\na1", "", 100, 0}, // missing filename means empty filename
+	{"\n//line bar:100\nb1", "bar", 100, 0},
+	{"\n//line :100:10\nc1", "bar", 100, 10}, // missing filename means current filename
+	{"\n//line foo:100:10\nd1", "foo", 100, 10},
+
+	{"\n/*line :100*/a2", "", 100, 0}, // missing filename means empty filename
+	{"\n/*line bar:100*/b2", "bar", 100, 0},
+	{"\n/*line :100:10*/c2", "bar", 100, 10}, // missing filename means current filename
+	{"\n/*line foo:100:10*/d2", "foo", 100, 10},
+	{"\n/*line foo:100:10*/    e2", "foo", 100, 14}, // line-directive relative column
+	{"\n/*line foo:100:10*/\n\nf2", "foo", 102, 1},  // absolute column since on new line
 }
 
-var unixsegments = []segment{
-	{"\n//line /bar:42\n  line42", "/bar", 42},
+var dirsegments = []segment{
+	// exactly one token per line since the test consumes one token per segment
+	{"  line1", "TestLineDir/TestLineDirectives", 1, 3},
+	{"\n//line File1.go:100\n  line100", "TestLineDir/File1.go", 100, 0},
 }
 
-var winsegments = []segment{
-	{"\n//line c:\\bar:42\n  line42", "c:\\bar", 42},
-	{"\n//line c:\\dir\\File1.go:100\n  line100", "c:\\dir\\File1.go", 100},
+var dirUnixSegments = []segment{
+	{"\n//line /bar:42\n  line42", "/bar", 42, 0},
 }
 
-// Verify that comments of the form "//line filename:line" are interpreted correctly.
-func TestLineComments(t *testing.T) {
-	segs := segments
+var dirWindowsSegments = []segment{
+	{"\n//line c:\\bar:42\n  line42", "c:\\bar", 42, 0},
+}
+
+// Verify that line directives are interpreted correctly.
+func TestLineDirectives(t *testing.T) {
+	testSegments(t, segments, "TestLineDirectives")
+	testSegments(t, dirsegments, "TestLineDir/TestLineDirectives")
 	if runtime.GOOS == "windows" {
-		segs = append(segs, winsegments...)
+		testSegments(t, dirWindowsSegments, "TestLineDir/TestLineDirectives")
 	} else {
-		segs = append(segs, unixsegments...)
+		testSegments(t, dirUnixSegments, "TestLineDir/TestLineDirectives")
 	}
+}
 
-	// make source
+func testSegments(t *testing.T, segments []segment, filename string) {
 	var src string
-	for _, e := range segs {
+	for _, e := range segments {
 		src += e.srcline
 	}
 
 	// verify scan
 	var S Scanner
-	file := fset.AddFile(filepath.Join("dir", "TestLineComments"), fset.Base(), len(src))
-	S.Init(file, []byte(src), nil, dontInsertSemis)
-	for _, s := range segs {
+	file := fset.AddFile(filename, fset.Base(), len(src))
+	S.Init(file, []byte(src), func(pos token.Position, msg string) { t.Error(Error{pos, msg}) }, dontInsertSemis)
+	for _, s := range segments {
 		p, _, lit := S.Scan()
 		pos := file.Position(p)
 		checkPos(t, lit, p, token.Position{
 			Filename: s.filename,
 			Offset:   pos.Offset,
 			Line:     s.line,
-			Column:   pos.Column,
+			Column:   s.column,
 		})
 	}
 
 	if S.ErrorCount != 0 {
-		t.Errorf("found %d errors", S.ErrorCount)
+		t.Errorf("got %d errors", S.ErrorCount)
 	}
 }
 
-// Verify that initializing the same scanner more then once works correctly.
+// The filename is used for the error message in these test cases.
+// The first line directive is valid and used to control the expected error line.
+var invalidSegments = []segment{
+	{"\n//line :1:1\n//line foo:42 extra text\ndummy", "invalid line number: 42 extra text", 1, 12},
+	{"\n//line :2:1\n//line foobar:\ndummy", "invalid line number: ", 2, 15},
+	{"\n//line :5:1\n//line :0\ndummy", "invalid line number: 0", 5, 9},
+	{"\n//line :10:1\n//line :1:0\ndummy", "invalid column number: 0", 10, 11},
+	{"\n//line :1:1\n//line :foo:0\ndummy", "invalid line number: 0", 1, 13}, // foo is considered part of the filename
+}
+
+// Verify that invalid line directives get the correct error message.
+func TestInvalidLineDirectives(t *testing.T) {
+	// make source
+	var src string
+	for _, e := range invalidSegments {
+		src += e.srcline
+	}
+
+	// verify scan
+	var S Scanner
+	var s segment // current segment
+	file := fset.AddFile(filepath.Join("dir", "TestInvalidLineDirectives"), fset.Base(), len(src))
+	S.Init(file, []byte(src), func(pos token.Position, msg string) {
+		if msg != s.filename {
+			t.Errorf("got error %q; want %q", msg, s.filename)
+		}
+		if pos.Line != s.line || pos.Column != s.column {
+			t.Errorf("got position %d:%d; want %d:%d", pos.Line, pos.Column, s.line, s.column)
+		}
+	}, dontInsertSemis)
+	for _, s = range invalidSegments {
+		S.Scan()
+	}
+
+	if S.ErrorCount != len(invalidSegments) {
+		t.Errorf("go %d errors; want %d", S.ErrorCount, len(invalidSegments))
+	}
+}
+
+// Verify that initializing the same scanner more than once works correctly.
 func TestInit(t *testing.T) {
 	var s Scanner
 
@@ -605,7 +717,7 @@ type errorCollector struct {
 	pos token.Position // last error position encountered
 }
 
-func checkError(t *testing.T, src string, tok token.Token, pos int, err string) {
+func checkError(t *testing.T, src string, tok token.Token, pos int, lit, err string) {
 	var s Scanner
 	var h errorCollector
 	eh := func(pos token.Position, msg string) {
@@ -614,13 +726,12 @@ func checkError(t *testing.T, src string, tok token.Token, pos int, err string) 
 		h.pos = pos
 	}
 	s.Init(fset.AddFile("", fset.Base(), len(src)), []byte(src), eh, ScanComments|dontInsertSemis)
-	_, tok0, _ := s.Scan()
-	_, tok1, _ := s.Scan()
+	_, tok0, lit0 := s.Scan()
 	if tok0 != tok {
 		t.Errorf("%q: got %s, expected %s", src, tok0, tok)
 	}
-	if tok1 != token.EOF {
-		t.Errorf("%q: got %s, expected EOF", src, tok1)
+	if tok0 != token.ILLEGAL && lit0 != lit {
+		t.Errorf("%q: got literal %q, expected %q", src, lit0, lit)
 	}
 	cnt := 0
 	if err != "" {
@@ -641,39 +752,124 @@ var errors = []struct {
 	src string
 	tok token.Token
 	pos int
+	lit string
 	err string
 }{
-	{"\a", token.ILLEGAL, 0, "illegal character U+0007"},
-	{`#`, token.ILLEGAL, 0, "illegal character U+0023 '#'"},
-	{`…`, token.ILLEGAL, 0, "illegal character U+2026 '…'"},
-	{`' '`, token.CHAR, 0, ""},
-	{`''`, token.CHAR, 0, "illegal character literal"},
-	{`'\8'`, token.CHAR, 2, "unknown escape sequence"},
-	{`'\08'`, token.CHAR, 3, "illegal character in escape sequence"},
-	{`'\x0g'`, token.CHAR, 4, "illegal character in escape sequence"},
-	{`'\Uffffffff'`, token.CHAR, 2, "escape sequence is invalid Unicode code point"},
-	{`'`, token.CHAR, 0, "character literal not terminated"},
-	{`""`, token.STRING, 0, ""},
-	{`"`, token.STRING, 0, "string not terminated"},
-	{"``", token.STRING, 0, ""},
-	{"`", token.STRING, 0, "string not terminated"},
-	{"/**/", token.COMMENT, 0, ""},
-	{"/*", token.COMMENT, 0, "comment not terminated"},
-	{"077", token.INT, 0, ""},
-	{"078.", token.FLOAT, 0, ""},
-	{"07801234567.", token.FLOAT, 0, ""},
-	{"078e0", token.FLOAT, 0, ""},
-	{"078", token.INT, 0, "illegal octal number"},
-	{"07800000009", token.INT, 0, "illegal octal number"},
-	{"0x", token.INT, 0, "illegal hexadecimal number"},
-	{"0X", token.INT, 0, "illegal hexadecimal number"},
-	{"\"abc\x00def\"", token.STRING, 4, "illegal character NUL"},
-	{"\"abc\x80def\"", token.STRING, 4, "illegal UTF-8 encoding"},
+	{"\a", token.ILLEGAL, 0, "", "illegal character U+0007"},
+	{`#`, token.ILLEGAL, 0, "", "illegal character U+0023 '#'"},
+	{`…`, token.ILLEGAL, 0, "", "illegal character U+2026 '…'"},
+	{"..", token.PERIOD, 0, "", ""}, // two periods, not invalid token (issue #28112)
+	{`' '`, token.CHAR, 0, `' '`, ""},
+	{`''`, token.CHAR, 0, `''`, "illegal rune literal"},
+	{`'12'`, token.CHAR, 0, `'12'`, "illegal rune literal"},
+	{`'123'`, token.CHAR, 0, `'123'`, "illegal rune literal"},
+	{`'\0'`, token.CHAR, 3, `'\0'`, "illegal character U+0027 ''' in escape sequence"},
+	{`'\07'`, token.CHAR, 4, `'\07'`, "illegal character U+0027 ''' in escape sequence"},
+	{`'\8'`, token.CHAR, 2, `'\8'`, "unknown escape sequence"},
+	{`'\08'`, token.CHAR, 3, `'\08'`, "illegal character U+0038 '8' in escape sequence"},
+	{`'\x'`, token.CHAR, 3, `'\x'`, "illegal character U+0027 ''' in escape sequence"},
+	{`'\x0'`, token.CHAR, 4, `'\x0'`, "illegal character U+0027 ''' in escape sequence"},
+	{`'\x0g'`, token.CHAR, 4, `'\x0g'`, "illegal character U+0067 'g' in escape sequence"},
+	{`'\u'`, token.CHAR, 3, `'\u'`, "illegal character U+0027 ''' in escape sequence"},
+	{`'\u0'`, token.CHAR, 4, `'\u0'`, "illegal character U+0027 ''' in escape sequence"},
+	{`'\u00'`, token.CHAR, 5, `'\u00'`, "illegal character U+0027 ''' in escape sequence"},
+	{`'\u000'`, token.CHAR, 6, `'\u000'`, "illegal character U+0027 ''' in escape sequence"},
+	{`'\u000`, token.CHAR, 6, `'\u000`, "escape sequence not terminated"},
+	{`'\u0000'`, token.CHAR, 0, `'\u0000'`, ""},
+	{`'\U'`, token.CHAR, 3, `'\U'`, "illegal character U+0027 ''' in escape sequence"},
+	{`'\U0'`, token.CHAR, 4, `'\U0'`, "illegal character U+0027 ''' in escape sequence"},
+	{`'\U00'`, token.CHAR, 5, `'\U00'`, "illegal character U+0027 ''' in escape sequence"},
+	{`'\U000'`, token.CHAR, 6, `'\U000'`, "illegal character U+0027 ''' in escape sequence"},
+	{`'\U0000'`, token.CHAR, 7, `'\U0000'`, "illegal character U+0027 ''' in escape sequence"},
+	{`'\U00000'`, token.CHAR, 8, `'\U00000'`, "illegal character U+0027 ''' in escape sequence"},
+	{`'\U000000'`, token.CHAR, 9, `'\U000000'`, "illegal character U+0027 ''' in escape sequence"},
+	{`'\U0000000'`, token.CHAR, 10, `'\U0000000'`, "illegal character U+0027 ''' in escape sequence"},
+	{`'\U0000000`, token.CHAR, 10, `'\U0000000`, "escape sequence not terminated"},
+	{`'\U00000000'`, token.CHAR, 0, `'\U00000000'`, ""},
+	{`'\Uffffffff'`, token.CHAR, 2, `'\Uffffffff'`, "escape sequence is invalid Unicode code point"},
+	{`'`, token.CHAR, 0, `'`, "rune literal not terminated"},
+	{`'\`, token.CHAR, 2, `'\`, "escape sequence not terminated"},
+	{"'\n", token.CHAR, 0, "'", "rune literal not terminated"},
+	{"'\n   ", token.CHAR, 0, "'", "rune literal not terminated"},
+	{`""`, token.STRING, 0, `""`, ""},
+	{`"abc`, token.STRING, 0, `"abc`, "string literal not terminated"},
+	{"\"abc\n", token.STRING, 0, `"abc`, "string literal not terminated"},
+	{"\"abc\n   ", token.STRING, 0, `"abc`, "string literal not terminated"},
+	{"``", token.STRING, 0, "``", ""},
+	{"`", token.STRING, 0, "`", "raw string literal not terminated"},
+	{"/**/", token.COMMENT, 0, "/**/", ""},
+	{"/*", token.COMMENT, 0, "/*", "comment not terminated"},
+	{"077", token.INT, 0, "077", ""},
+	{"078.", token.FLOAT, 0, "078.", ""},
+	{"07801234567.", token.FLOAT, 0, "07801234567.", ""},
+	{"078e0", token.FLOAT, 0, "078e0", ""},
+	{"0E", token.FLOAT, 2, "0E", "exponent has no digits"}, // issue 17621
+	{"078", token.INT, 2, "078", "invalid digit '8' in octal literal"},
+	{"07090000008", token.INT, 3, "07090000008", "invalid digit '9' in octal literal"},
+	{"0x", token.INT, 2, "0x", "hexadecimal literal has no digits"},
+	{"\"abc\x00def\"", token.STRING, 4, "\"abc\x00def\"", "illegal character NUL"},
+	{"\"abc\x80def\"", token.STRING, 4, "\"abc\x80def\"", "illegal UTF-8 encoding"},
+	{"\ufeff\ufeff", token.ILLEGAL, 3, "\ufeff\ufeff", "illegal byte order mark"},                        // only first BOM is ignored
+	{"//\ufeff", token.COMMENT, 2, "//\ufeff", "illegal byte order mark"},                                // only first BOM is ignored
+	{"'\ufeff" + `'`, token.CHAR, 1, "'\ufeff" + `'`, "illegal byte order mark"},                         // only first BOM is ignored
+	{`"` + "abc\ufeffdef" + `"`, token.STRING, 4, `"` + "abc\ufeffdef" + `"`, "illegal byte order mark"}, // only first BOM is ignored
 }
 
 func TestScanErrors(t *testing.T) {
 	for _, e := range errors {
-		checkError(t, e.src, e.tok, e.pos, e.err)
+		checkError(t, e.src, e.tok, e.pos, e.lit, e.err)
+	}
+}
+
+// Verify that no comments show up as literal values when skipping comments.
+func TestIssue10213(t *testing.T) {
+	const src = `
+		var (
+			A = 1 // foo
+		)
+
+		var (
+			B = 2
+			// foo
+		)
+
+		var C = 3 // foo
+
+		var D = 4
+		// foo
+
+		func anycode() {
+		// foo
+		}
+	`
+	var s Scanner
+	s.Init(fset.AddFile("", fset.Base(), len(src)), []byte(src), nil, 0)
+	for {
+		pos, tok, lit := s.Scan()
+		class := tokenclass(tok)
+		if lit != "" && class != keyword && class != literal && tok != token.SEMICOLON {
+			t.Errorf("%s: tok = %s, lit = %q", fset.Position(pos), tok, lit)
+		}
+		if tok <= token.EOF {
+			break
+		}
+	}
+}
+
+func TestIssue28112(t *testing.T) {
+	const src = "... .. 0.. .." // make sure to have stand-alone ".." immediately before EOF to test EOF behavior
+	tokens := []token.Token{token.ELLIPSIS, token.PERIOD, token.PERIOD, token.FLOAT, token.PERIOD, token.PERIOD, token.PERIOD, token.EOF}
+	var s Scanner
+	s.Init(fset.AddFile("", fset.Base(), len(src)), []byte(src), nil, 0)
+	for _, want := range tokens {
+		pos, got, lit := s.Scan()
+		if got != want {
+			t.Errorf("%s: got %s, want %s", fset.Position(pos), got, want)
+		}
+		// literals expect to have a (non-empty) literal string and we don't care about other tokens for this test
+		if tokenclass(got) == literal && lit == "" {
+			t.Errorf("%s: for %s got empty literal string", fset.Position(pos), got)
+		}
 	}
 }
 
@@ -683,13 +879,236 @@ func BenchmarkScan(b *testing.B) {
 	file := fset.AddFile("", fset.Base(), len(source))
 	var s Scanner
 	b.StartTimer()
-	for i := b.N - 1; i >= 0; i-- {
+	for i := 0; i < b.N; i++ {
 		s.Init(file, source, nil, ScanComments)
 		for {
 			_, tok, _ := s.Scan()
 			if tok == token.EOF {
 				break
 			}
+		}
+	}
+}
+
+func BenchmarkScanFile(b *testing.B) {
+	b.StopTimer()
+	const filename = "scanner.go"
+	src, err := ioutil.ReadFile(filename)
+	if err != nil {
+		panic(err)
+	}
+	fset := token.NewFileSet()
+	file := fset.AddFile(filename, fset.Base(), len(src))
+	b.SetBytes(int64(len(src)))
+	var s Scanner
+	b.StartTimer()
+	for i := 0; i < b.N; i++ {
+		s.Init(file, src, nil, ScanComments)
+		for {
+			_, tok, _ := s.Scan()
+			if tok == token.EOF {
+				break
+			}
+		}
+	}
+}
+
+func TestNumbers(t *testing.T) {
+	for _, test := range []struct {
+		tok              token.Token
+		src, tokens, err string
+	}{
+		// binaries
+		{token.INT, "0b0", "0b0", ""},
+		{token.INT, "0b1010", "0b1010", ""},
+		{token.INT, "0B1110", "0B1110", ""},
+
+		{token.INT, "0b", "0b", "binary literal has no digits"},
+		{token.INT, "0b0190", "0b0190", "invalid digit '9' in binary literal"},
+		{token.INT, "0b01a0", "0b01 a0", ""}, // only accept 0-9
+
+		{token.FLOAT, "0b.", "0b.", "invalid radix point in binary literal"},
+		{token.FLOAT, "0b.1", "0b.1", "invalid radix point in binary literal"},
+		{token.FLOAT, "0b1.0", "0b1.0", "invalid radix point in binary literal"},
+		{token.FLOAT, "0b1e10", "0b1e10", "'e' exponent requires decimal mantissa"},
+		{token.FLOAT, "0b1P-1", "0b1P-1", "'P' exponent requires hexadecimal mantissa"},
+
+		{token.IMAG, "0b10i", "0b10i", ""},
+		{token.IMAG, "0b10.0i", "0b10.0i", "invalid radix point in binary literal"},
+
+		// octals
+		{token.INT, "0o0", "0o0", ""},
+		{token.INT, "0o1234", "0o1234", ""},
+		{token.INT, "0O1234", "0O1234", ""},
+
+		{token.INT, "0o", "0o", "octal literal has no digits"},
+		{token.INT, "0o8123", "0o8123", "invalid digit '8' in octal literal"},
+		{token.INT, "0o1293", "0o1293", "invalid digit '9' in octal literal"},
+		{token.INT, "0o12a3", "0o12 a3", ""}, // only accept 0-9
+
+		{token.FLOAT, "0o.", "0o.", "invalid radix point in octal literal"},
+		{token.FLOAT, "0o.2", "0o.2", "invalid radix point in octal literal"},
+		{token.FLOAT, "0o1.2", "0o1.2", "invalid radix point in octal literal"},
+		{token.FLOAT, "0o1E+2", "0o1E+2", "'E' exponent requires decimal mantissa"},
+		{token.FLOAT, "0o1p10", "0o1p10", "'p' exponent requires hexadecimal mantissa"},
+
+		{token.IMAG, "0o10i", "0o10i", ""},
+		{token.IMAG, "0o10e0i", "0o10e0i", "'e' exponent requires decimal mantissa"},
+
+		// 0-octals
+		{token.INT, "0", "0", ""},
+		{token.INT, "0123", "0123", ""},
+
+		{token.INT, "08123", "08123", "invalid digit '8' in octal literal"},
+		{token.INT, "01293", "01293", "invalid digit '9' in octal literal"},
+		{token.INT, "0F.", "0 F .", ""}, // only accept 0-9
+		{token.INT, "0123F.", "0123 F .", ""},
+		{token.INT, "0123456x", "0123456 x", ""},
+
+		// decimals
+		{token.INT, "1", "1", ""},
+		{token.INT, "1234", "1234", ""},
+
+		{token.INT, "1f", "1 f", ""}, // only accept 0-9
+
+		{token.IMAG, "0i", "0i", ""},
+		{token.IMAG, "0678i", "0678i", ""},
+
+		// decimal floats
+		{token.FLOAT, "0.", "0.", ""},
+		{token.FLOAT, "123.", "123.", ""},
+		{token.FLOAT, "0123.", "0123.", ""},
+
+		{token.FLOAT, ".0", ".0", ""},
+		{token.FLOAT, ".123", ".123", ""},
+		{token.FLOAT, ".0123", ".0123", ""},
+
+		{token.FLOAT, "0.0", "0.0", ""},
+		{token.FLOAT, "123.123", "123.123", ""},
+		{token.FLOAT, "0123.0123", "0123.0123", ""},
+
+		{token.FLOAT, "0e0", "0e0", ""},
+		{token.FLOAT, "123e+0", "123e+0", ""},
+		{token.FLOAT, "0123E-1", "0123E-1", ""},
+
+		{token.FLOAT, "0.e+1", "0.e+1", ""},
+		{token.FLOAT, "123.E-10", "123.E-10", ""},
+		{token.FLOAT, "0123.e123", "0123.e123", ""},
+
+		{token.FLOAT, ".0e-1", ".0e-1", ""},
+		{token.FLOAT, ".123E+10", ".123E+10", ""},
+		{token.FLOAT, ".0123E123", ".0123E123", ""},
+
+		{token.FLOAT, "0.0e1", "0.0e1", ""},
+		{token.FLOAT, "123.123E-10", "123.123E-10", ""},
+		{token.FLOAT, "0123.0123e+456", "0123.0123e+456", ""},
+
+		{token.FLOAT, "0e", "0e", "exponent has no digits"},
+		{token.FLOAT, "0E+", "0E+", "exponent has no digits"},
+		{token.FLOAT, "1e+f", "1e+ f", "exponent has no digits"},
+		{token.FLOAT, "0p0", "0p0", "'p' exponent requires hexadecimal mantissa"},
+		{token.FLOAT, "1.0P-1", "1.0P-1", "'P' exponent requires hexadecimal mantissa"},
+
+		{token.IMAG, "0.i", "0.i", ""},
+		{token.IMAG, ".123i", ".123i", ""},
+		{token.IMAG, "123.123i", "123.123i", ""},
+		{token.IMAG, "123e+0i", "123e+0i", ""},
+		{token.IMAG, "123.E-10i", "123.E-10i", ""},
+		{token.IMAG, ".123E+10i", ".123E+10i", ""},
+
+		// hexadecimals
+		{token.INT, "0x0", "0x0", ""},
+		{token.INT, "0x1234", "0x1234", ""},
+		{token.INT, "0xcafef00d", "0xcafef00d", ""},
+		{token.INT, "0XCAFEF00D", "0XCAFEF00D", ""},
+
+		{token.INT, "0x", "0x", "hexadecimal literal has no digits"},
+		{token.INT, "0x1g", "0x1 g", ""},
+
+		{token.IMAG, "0xf00i", "0xf00i", ""},
+
+		// hexadecimal floats
+		{token.FLOAT, "0x0p0", "0x0p0", ""},
+		{token.FLOAT, "0x12efp-123", "0x12efp-123", ""},
+		{token.FLOAT, "0xABCD.p+0", "0xABCD.p+0", ""},
+		{token.FLOAT, "0x.0189P-0", "0x.0189P-0", ""},
+		{token.FLOAT, "0x1.ffffp+1023", "0x1.ffffp+1023", ""},
+
+		{token.FLOAT, "0x.", "0x.", "hexadecimal literal has no digits"},
+		{token.FLOAT, "0x0.", "0x0.", "hexadecimal mantissa requires a 'p' exponent"},
+		{token.FLOAT, "0x.0", "0x.0", "hexadecimal mantissa requires a 'p' exponent"},
+		{token.FLOAT, "0x1.1", "0x1.1", "hexadecimal mantissa requires a 'p' exponent"},
+		{token.FLOAT, "0x1.1e0", "0x1.1e0", "hexadecimal mantissa requires a 'p' exponent"},
+		{token.FLOAT, "0x1.2gp1a", "0x1.2 gp1a", "hexadecimal mantissa requires a 'p' exponent"},
+		{token.FLOAT, "0x0p", "0x0p", "exponent has no digits"},
+		{token.FLOAT, "0xeP-", "0xeP-", "exponent has no digits"},
+		{token.FLOAT, "0x1234PAB", "0x1234P AB", "exponent has no digits"},
+		{token.FLOAT, "0x1.2p1a", "0x1.2p1 a", ""},
+
+		{token.IMAG, "0xf00.bap+12i", "0xf00.bap+12i", ""},
+
+		// separators
+		{token.INT, "0b_1000_0001", "0b_1000_0001", ""},
+		{token.INT, "0o_600", "0o_600", ""},
+		{token.INT, "0_466", "0_466", ""},
+		{token.INT, "1_000", "1_000", ""},
+		{token.FLOAT, "1_000.000_1", "1_000.000_1", ""},
+		{token.IMAG, "10e+1_2_3i", "10e+1_2_3i", ""},
+		{token.INT, "0x_f00d", "0x_f00d", ""},
+		{token.FLOAT, "0x_f00d.0p1_2", "0x_f00d.0p1_2", ""},
+
+		{token.INT, "0b__1000", "0b__1000", "'_' must separate successive digits"},
+		{token.INT, "0o60___0", "0o60___0", "'_' must separate successive digits"},
+		{token.INT, "0466_", "0466_", "'_' must separate successive digits"},
+		{token.FLOAT, "1_.", "1_.", "'_' must separate successive digits"},
+		{token.FLOAT, "0._1", "0._1", "'_' must separate successive digits"},
+		{token.FLOAT, "2.7_e0", "2.7_e0", "'_' must separate successive digits"},
+		{token.IMAG, "10e+12_i", "10e+12_i", "'_' must separate successive digits"},
+		{token.INT, "0x___0", "0x___0", "'_' must separate successive digits"},
+		{token.FLOAT, "0x1.0_p0", "0x1.0_p0", "'_' must separate successive digits"},
+	} {
+		var s Scanner
+		var err string
+		s.Init(fset.AddFile("", fset.Base(), len(test.src)), []byte(test.src), func(_ token.Position, msg string) {
+			if err == "" {
+				err = msg
+			}
+		}, 0)
+		for i, want := range strings.Split(test.tokens, " ") {
+			err = ""
+			_, tok, lit := s.Scan()
+
+			// compute lit where for tokens where lit is not defined
+			switch tok {
+			case token.PERIOD:
+				lit = "."
+			case token.ADD:
+				lit = "+"
+			case token.SUB:
+				lit = "-"
+			}
+
+			if i == 0 {
+				if tok != test.tok {
+					t.Errorf("%q: got token %s; want %s", test.src, tok, test.tok)
+				}
+				if err != test.err {
+					t.Errorf("%q: got error %q; want %q", test.src, err, test.err)
+				}
+			}
+
+			if lit != want {
+				t.Errorf("%q: got literal %q (%s); want %s", test.src, lit, tok, want)
+			}
+		}
+
+		// make sure we read all
+		_, tok, _ := s.Scan()
+		if tok == token.SEMICOLON {
+			_, tok, _ = s.Scan()
+		}
+		if tok != token.EOF {
+			t.Errorf("%q: got %s; want EOF", test.src, tok)
 		}
 	}
 }

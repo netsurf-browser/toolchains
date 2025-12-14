@@ -6,7 +6,7 @@
 --                                                                          --
 --                                 B o d y                                  --
 --                                                                          --
---          Copyright (C) 1992-2011, Free Software Foundation, Inc.         --
+--          Copyright (C) 1992-2019, Free Software Foundation, Inc.         --
 --                                                                          --
 -- GNAT is free software;  you can  redistribute it  and/or modify it under --
 -- terms of the  GNU General Public License as published  by the Free Soft- --
@@ -23,8 +23,8 @@
 --                                                                          --
 ------------------------------------------------------------------------------
 
-with Makeutl;
-with Osint;   use Osint;
+with Make_Util;
+with Osint;
 with Output;  use Output;
 with Switch;  use Switch;
 with Usage;
@@ -84,6 +84,11 @@ begin
 
    Write_Str ("  -C=mapp  Cache source mappings: " &
               "invoke compiler with mapping file mapp");
+   Write_Eol;
+
+   --  Line for -d
+
+   Write_Str ("  -d       Display compilation progress");
    Write_Eol;
 
    --  Line for -D
@@ -260,6 +265,9 @@ begin
    Write_Str ("                      Create map file mapfile");
    Write_Eol;
 
+   Write_Str ("  --keep-temp-files   Keep temporary files");
+   Write_Eol;
+
    Write_Str ("  --GCC=command       Use this gcc command");
    Write_Eol;
 
@@ -342,14 +350,14 @@ begin
    --  Line for --source-info=
 
    Write_Str ("  ");
-   Write_Str (Makeutl.Source_Info_Option);
+   Write_Str (Make_Util.Source_Info_Option);
    Write_Str ("file specify a source info file");
    Write_Eol;
 
    --  Line for --unchecked-shared-lib-imports
 
    Write_Str ("  ");
-   Write_Str (Makeutl.Unchecked_Shared_Lib_Imports);
+   Write_Str (Make_Util.Unchecked_Shared_Lib_Imports);
    Write_Eol;
    Write_Str ("            Allow shared libraries to import static libraries");
    Write_Eol;

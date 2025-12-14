@@ -1,6 +1,6 @@
 // -*- C++ -*-
 
-// Copyright (C) 2005, 2006, 2009 Free Software Foundation, Inc.
+// Copyright (C) 2005-2020 Free Software Foundation, Inc.
 //
 // This file is part of the GNU ISO C++ Library.  This library is free
 // software; you can redistribute it and/or modify it under the terms
@@ -55,7 +55,7 @@ namespace __gnu_pbds
 	     class Cmp_Fn,
 	     template<typename Node_CItr,
 		      class Node_Itr,
-		      class Cmp_Fn,
+		      class _Cmp_Fn,
 		      typename _Alloc>
 	     class Node_Update,
 	     class Node,
@@ -64,14 +64,14 @@ namespace __gnu_pbds
     {
     private:
       typedef types_traits<Key, Mapped, _Alloc, false> type_traits;
+      typedef rebind_traits<_Alloc, Node> node_alloc_traits;
 
     public:
       typedef Node node;
 
       typedef
       bin_search_tree_const_it_<
-	typename _Alloc::template rebind<
-	node>::other::pointer,
+	typename node_alloc_traits::pointer,
 	typename type_traits::value_type,
 	typename type_traits::pointer,
 	typename type_traits::const_pointer,
@@ -83,8 +83,7 @@ namespace __gnu_pbds
 
       typedef
       bin_search_tree_it_<
-	typename _Alloc::template rebind<
-	node>::other::pointer,
+	typename node_alloc_traits::pointer,
 	typename type_traits::value_type,
 	typename type_traits::pointer,
 	typename type_traits::const_pointer,
@@ -96,8 +95,7 @@ namespace __gnu_pbds
 
       typedef
       bin_search_tree_const_it_<
-	typename _Alloc::template rebind<
-	node>::other::pointer,
+	typename node_alloc_traits::pointer,
 	typename type_traits::value_type,
 	typename type_traits::pointer,
 	typename type_traits::const_pointer,
@@ -109,8 +107,7 @@ namespace __gnu_pbds
 
       typedef
       bin_search_tree_it_<
-	typename _Alloc::template rebind<
-	node>::other::pointer,
+	typename node_alloc_traits::pointer,
 	typename type_traits::value_type,
 	typename type_traits::pointer,
 	typename type_traits::const_pointer,
@@ -161,29 +158,24 @@ namespace __gnu_pbds
 	     class Cmp_Fn,
 	     template<typename Node_CItr,
 		      class Node_Itr,
-		      class Cmp_Fn,
+		      class _Cmp_Fn,
 		      typename _Alloc>
 	     class Node_Update,
 	     class Node,
 	     typename _Alloc>
-    struct bin_search_tree_traits<
-      Key,
-      null_type,
-      Cmp_Fn,
-      Node_Update,
-      Node,
-      _Alloc>
+    struct
+    bin_search_tree_traits<Key, null_type, Cmp_Fn, Node_Update, Node, _Alloc>
     {
     private:
       typedef types_traits<Key, null_type, _Alloc, false> type_traits;
+      typedef rebind_traits<_Alloc, Node> node_alloc_traits;
 
     public:
       typedef Node node;
 
       typedef
       bin_search_tree_const_it_<
-	typename _Alloc::template rebind<
-	node>::other::pointer,
+	typename node_alloc_traits::pointer,
 	typename type_traits::value_type,
 	typename type_traits::pointer,
 	typename type_traits::const_pointer,
@@ -197,8 +189,7 @@ namespace __gnu_pbds
 
       typedef
       bin_search_tree_const_it_<
-	typename _Alloc::template rebind<
-	node>::other::pointer,
+	typename node_alloc_traits::pointer,
 	typename type_traits::value_type,
 	typename type_traits::pointer,
 	typename type_traits::const_pointer,

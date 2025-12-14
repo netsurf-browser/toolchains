@@ -7,7 +7,7 @@
 --                                                                          --
 --                                 S p e c                                  --
 --                                                                          --
---          Copyright (C) 2000-2011, Free Software Foundation, Inc.         --
+--          Copyright (C) 2000-2019, Free Software Foundation, Inc.         --
 --                                                                          --
 -- GNAT is free software;  you can  redistribute it  and/or modify it under --
 -- terms of the  GNU General Public License as published  by the Free Soft- --
@@ -80,26 +80,23 @@ pragma Style_Checks ("M32766");
 
 /* Feature macro definitions */
 
-#if defined (__linux__) && !defined (_XOPEN_SOURCE)
-/** For Linux _XOPEN_SOURCE must be defined, otherwise IOV_MAX is not defined
+/**
+ ** Note: we deliberately do not define _POSIX_SOURCE / _POSIX_C_SOURCE
+ ** unconditionally, as on many platforms these macros actually disable
+ ** a number of non-POSIX but useful/required features.
  **/
-#define _XOPEN_SOURCE 500
 
-#elif defined (__alpha__) && defined (__osf__)
-/** For Tru64 UNIX, _XOPEN_SOURCE must be defined, otherwise CLOCK_REALTIME
- ** is not defined.
- **/
-#define _XOPEN_SOURCE 500
+#if defined (__linux__) || defined (__ANDROID__)
 
-#elif defined (__mips) && defined (__sgi)
-/** For IRIX 6, _XOPEN5 must be defined and _XOPEN_IOV_MAX must be used as
- ** IOV_MAX, otherwise IOV_MAX is not defined.  IRIX 5 has neither.
- **/
-#ifdef _XOPEN_IOV_MAX
-#define _XOPEN5
-#define IOV_MAX _XOPEN_IOV_MAX
-#endif
-#endif
+/* Define _XOPEN_SOURCE to get IOV_MAX */
+# if !defined (_XOPEN_SOURCE)
+#  define _XOPEN_SOURCE 500
+# endif
+
+/* Define _BSD_SOURCE to get CRTSCTS */
+# define _BSD_SOURCE
+
+#endif /* defined (__linux__) */
 
 /* Include gsocket.h before any system header so it can redefine FD_SETSIZE */
 
@@ -111,24 +108,7 @@ pragma Style_Checks ("M32766");
 #include <fcntl.h>
 #include <time.h>
 
-#if defined (__alpha__) && defined (__osf__)
-/** Tru64 is unable to do vector IO operations with default value of IOV_MAX,
- ** so its value is redefined to a small one which is known to work properly.
- **/
-#undef IOV_MAX
-#define IOV_MAX 16
-#endif
-
-#if defined (__VMS)
-/** VMS is unable to do vector IO operations with default value of IOV_MAX,
- ** so its value is redefined to a small one which is known to work properly.
- **/
-#undef IOV_MAX
-#define IOV_MAX 16
-#endif
-
-#if ! (defined (__vxworks) || defined (__VMS) || defined (__MINGW32__) || \
-       defined (__nucleus__))
+#if ! (defined (__vxworks) || defined (__MINGW32__))
 # define HAVE_TERMIOS
 #endif
 
@@ -136,11 +116,14 @@ pragma Style_Checks ("M32766");
 
 /**
  ** For VxWorks, always include vxWorks.h (gsocket.h provides it only for
- ** the case of runtime libraries that support sockets).
+ ** the case of runtime libraries that support sockets). Note: this must
+ ** be done before including adaint.h.
  **/
 
 # include <vxWorks.h>
 #endif
+
+#include "adaint.h"
 
 #ifdef DUMMY
 
@@ -174,9 +157,15 @@ pragma Style_Checks ("M32766");
 # include <_types.h>
 #endif
 
-#ifdef __linux__
+#if defined (__linux__) || defined (__ANDROID__) || defined (__QNX__) \
+  || defined (__rtems__)
 # include <pthread.h>
 # include <signal.h>
+#endif
+
+#if defined(__MINGW32__) || defined(__CYGWIN__)
+# include <windef.h>
+# include <winbase.h>
 #endif
 
 #ifdef NATIVE
@@ -192,11 +181,17 @@ int counter = 0;
 #define CND(name,comment) \
   printf ("\n->CND:$%d:" #name ":$%d:" comment, __LINE__, ((int) _VAL (name)));
 
+#define CNU(name,comment) \
+  printf ("\n->CNU:$%d:" #name ":$%u:" comment, __LINE__, ((unsigned int) _VAL (name)));
+
 #define CNS(name,comment) \
   printf ("\n->CNS:$%d:" #name ":" name ":" comment, __LINE__);
 
 #define C(sname,type,value,comment)\
   printf ("\n->C:$%d:" sname ":" #type ":" value ":" comment, __LINE__);
+
+#define SUB(sname)\
+  printf ("\n->SUB:$%d:" #sname ":" sname, __LINE__);
 
 #define TXT(text) \
   printf ("\n->TXT:$%d:" text, __LINE__);
@@ -208,6 +203,13 @@ int counter = 0;
   : : "i" (__LINE__), "i" ((int) name));
 /* Decimal constant in the range of type "int" */
 
+#define CNU(name, comment) \
+  asm volatile("\n->CNU:%0:" #name ":%1:" comment \
+  : : "i" (__LINE__), "i" ((int) name));
+/* Decimal constant in the range of type "unsigned int" (note, assembler
+ * always wants a signed int, we convert back in xoscons).
+ */
+
 #define CNS(name, comment) \
   asm volatile("\n->CNS:%0:" #name ":" name ":" comment \
   : : "i" (__LINE__));
@@ -218,6 +220,11 @@ int counter = 0;
   : : "i" (__LINE__));
 /* Typed constant */
 
+#define SUB(sname) \
+  asm volatile("\n->SUB:%0:" #sname ":" sname \
+  : : "i" (__LINE__));
+/* Subtype */
+
 #define TXT(text) \
   asm volatile("\n->TXT:%0:" text \
   : : "i" (__LINE__));
@@ -226,6 +233,7 @@ int counter = 0;
 #endif /* NATIVE */
 
 #define CST(name,comment) C(#name,String,name,comment)
+/* String constant */
 
 #define STR(x) STR1(x)
 #define STR1(x) #x
@@ -252,13 +260,14 @@ main (void) {
  **/
 TXT("--  This is the version for " TARGET)
 TXT("")
-
-#ifdef HAVE_SOCKETS
-/**
- **  The type definitions for struct hostent components uses Interfaces.C
- **/
-
 TXT("with Interfaces.C;")
+#if defined (__MINGW32__) || defined (__CYGWIN__)
+# define TARGET_OS "Windows"
+# define Serial_Port_Descriptor "System.Win32.HANDLE"
+TXT("with System.Win32;")
+#else
+# define TARGET_OS "Other_OS"
+# define Serial_Port_Descriptor "Interfaces.C.int"
 #endif
 
 /*
@@ -273,22 +282,32 @@ package System.OS_Constants is
 
 /*
 
-   -----------------------------
-   -- Platform identification --
-   -----------------------------
+   ---------------------------------
+   -- General platform parameters --
+   ---------------------------------
 
-   type OS_Type is (Windows, VMS, Other_OS);
+   type OS_Type is (Windows, Other_OS);
 */
-#if defined (__MINGW32__)
-# define TARGET_OS "Windows"
-#elif defined (__VMS)
-# define TARGET_OS "VMS"
-#else
-# define TARGET_OS "Other_OS"
-#endif
 C("Target_OS", OS_Type, TARGET_OS, "")
+/*
+   pragma Warnings (Off, Target_OS);
+   --  Suppress warnings on Target_OS since it is in general tested for
+   --  equality with a constant value to implement conditional compilation,
+   --  which normally generates a constant condition warning.
+
+*/
 #define Target_Name TARGET
 CST(Target_Name, "")
+
+/**
+ ** Note: the name of the following constant is recognized specially by
+ **  xoscons (case sensitive).
+ **/
+#define SIZEOF_unsigned_int sizeof (unsigned int)
+CND(SIZEOF_unsigned_int, "Size of unsigned int")
+
+SUB(Serial_Port_Descriptor)
+
 /*
 
    -------------------
@@ -301,6 +320,29 @@ CST(Target_Name, "")
 # define IOV_MAX INT_MAX
 #endif
 CND(IOV_MAX, "Maximum writev iovcnt")
+
+/* NAME_MAX is used to compute the allocation size for a struct dirent
+ * passed to readdir() / readdir_r(). However on some systems it is not
+ * defined, as it is technically a filesystem dependent property that
+ * we should retrieve through pathconf(). In any case, we do not need a
+ * precise value but only an upper limit.
+ */
+#ifndef NAME_MAX
+# ifdef MAXNAMELEN
+   /* Solaris has no NAME_MAX but defines MAXNAMELEN */
+#  define NAME_MAX MAXNAMELEN
+# elif defined(PATH_MAX)
+   /* PATH_MAX (maximum length of a full path name) is a safe fall back */
+#  define NAME_MAX PATH_MAX
+# elif defined(FILENAME_MAX)
+   /* Similarly FILENAME_MAX can provide a safe fall back */
+#  define NAME_MAX FILENAME_MAX
+# else
+   /* Hardcode a reasonably large value as a last chance fallback */
+#  define NAME_MAX 1024
+# endif
+#endif
+CND(NAME_MAX, "Maximum file name length")
 
 /*
 
@@ -364,15 +406,27 @@ CND(FNDELAY, "Nonblocking")
 
 */
 
+/* ioctl(2) requests are "int" in UNIX, but "unsigned long" on FreeBSD */
+
+#if defined (__FreeBSD__) || defined (__DragonFly__)
+# define CNI CNU
+# define IOCTL_Req_T "Interfaces.C.unsigned"
+#else
+# define CNI CND
+# define IOCTL_Req_T "Interfaces.C.int"
+#endif
+
+SUB(IOCTL_Req_T)
+
 #ifndef FIONBIO
 # define FIONBIO -1
 #endif
-CND(FIONBIO, "Set/clear non-blocking io")
+CNI(FIONBIO, "Set/clear non-blocking io")
 
 #ifndef FIONREAD
 # define FIONREAD -1
 #endif
-CND(FIONREAD, "How many bytes to read")
+CNI(FIONREAD, "How many bytes to read")
 
 /*
 
@@ -612,12 +666,21 @@ CND(ETOOMANYREFS, "Too many references")
 #endif
 CND(EWOULDBLOCK, "Operation would block")
 
+#ifndef E2BIG
+# define E2BIG -1
+#endif
+CND(E2BIG, "Argument list too long")
+
+#ifndef EILSEQ
+# define EILSEQ -1
+#endif
+CND(EILSEQ, "Illegal byte sequence")
+
 /**
- **  Terminal I/O constants
+ **  Terminal/serial I/O constants
  **/
 
-#ifdef HAVE_TERMIOS
-
+#if defined(HAVE_TERMIOS) || defined(__MINGW32__)
 /*
 
    ----------------------
@@ -625,6 +688,9 @@ CND(EWOULDBLOCK, "Operation would block")
    ----------------------
 
 */
+#endif
+
+#ifdef HAVE_TERMIOS
 
 #ifndef TCSANOW
 # define TCSANOW -1
@@ -636,210 +702,215 @@ CND(TCSANOW, "Immediate")
 #endif
 CND(TCIFLUSH, "Flush input")
 
+#ifndef IXON
+# define IXON -1
+#endif
+CNU(IXON, "Output sw flow control")
+
 #ifndef CLOCAL
 # define CLOCAL -1
 #endif
-CND(CLOCAL, "Local")
+CNU(CLOCAL, "Local")
 
 #ifndef CRTSCTS
 # define CRTSCTS -1
 #endif
-CND(CRTSCTS, "Hardware flow control")
+CNU(CRTSCTS, "Output hw flow control")
 
 #ifndef CREAD
 # define CREAD -1
 #endif
-CND(CREAD, "Read")
+CNU(CREAD, "Read")
 
 #ifndef CS5
 # define CS5 -1
 #endif
-CND(CS5, "5 data bits")
+CNU(CS5, "5 data bits")
 
 #ifndef CS6
 # define CS6 -1
 #endif
-CND(CS6, "6 data bits")
+CNU(CS6, "6 data bits")
 
 #ifndef CS7
 # define CS7 -1
 #endif
-CND(CS7, "7 data bits")
+CNU(CS7, "7 data bits")
 
 #ifndef CS8
 # define CS8 -1
 #endif
-CND(CS8, "8 data bits")
+CNU(CS8, "8 data bits")
 
 #ifndef CSTOPB
 # define CSTOPB -1
 #endif
-CND(CSTOPB, "2 stop bits")
+CNU(CSTOPB, "2 stop bits")
 
 #ifndef PARENB
 # define PARENB -1
 #endif
-CND(PARENB, "Parity enable")
+CNU(PARENB, "Parity enable")
 
 #ifndef PARODD
 # define PARODD -1
 #endif
-CND(PARODD, "Parity odd")
+CNU(PARODD, "Parity odd")
 
 #ifndef B0
 # define B0 -1
 #endif
-CND(B0, "0 bps")
+CNU(B0, "0 bps")
 
 #ifndef B50
 # define B50 -1
 #endif
-CND(B50, "50 bps")
+CNU(B50, "50 bps")
 
 #ifndef B75
 # define B75 -1
 #endif
-CND(B75, "75 bps")
+CNU(B75, "75 bps")
 
 #ifndef B110
 # define B110 -1
 #endif
-CND(B110, "110 bps")
+CNU(B110, "110 bps")
 
 #ifndef B134
 # define B134 -1
 #endif
-CND(B134, "134 bps")
+CNU(B134, "134 bps")
 
 #ifndef B150
 # define B150 -1
 #endif
-CND(B150, "150 bps")
+CNU(B150, "150 bps")
 
 #ifndef B200
 # define B200 -1
 #endif
-CND(B200, "200 bps")
+CNU(B200, "200 bps")
 
 #ifndef B300
 # define B300 -1
 #endif
-CND(B300, "300 bps")
+CNU(B300, "300 bps")
 
 #ifndef B600
 # define B600 -1
 #endif
-CND(B600, "600 bps")
+CNU(B600, "600 bps")
 
 #ifndef B1200
 # define B1200 -1
 #endif
-CND(B1200, "1200 bps")
+CNU(B1200, "1200 bps")
 
 #ifndef B1800
 # define B1800 -1
 #endif
-CND(B1800, "1800 bps")
+CNU(B1800, "1800 bps")
 
 #ifndef B2400
 # define B2400 -1
 #endif
-CND(B2400, "2400 bps")
+CNU(B2400, "2400 bps")
 
 #ifndef B4800
 # define B4800 -1
 #endif
-CND(B4800, "4800 bps")
+CNU(B4800, "4800 bps")
 
 #ifndef B9600
 # define B9600 -1
 #endif
-CND(B9600, "9600 bps")
+CNU(B9600, "9600 bps")
 
 #ifndef B19200
 # define B19200 -1
 #endif
-CND(B19200, "19200 bps")
+CNU(B19200, "19200 bps")
 
 #ifndef B38400
 # define B38400 -1
 #endif
-CND(B38400, "38400 bps")
+CNU(B38400, "38400 bps")
 
 #ifndef B57600
 # define B57600 -1
 #endif
-CND(B57600, "57600 bps")
+CNU(B57600, "57600 bps")
 
 #ifndef B115200
 # define B115200 -1
 #endif
-CND(B115200, "115200 bps")
+CNU(B115200, "115200 bps")
 
 #ifndef B230400
 # define B230400 -1
 #endif
-CND(B230400, "230400 bps")
+CNU(B230400, "230400 bps")
 
 #ifndef B460800
 # define B460800 -1
 #endif
-CND(B460800, "460800 bps")
+CNU(B460800, "460800 bps")
 
 #ifndef B500000
 # define B500000 -1
 #endif
-CND(B500000, "500000 bps")
+CNU(B500000, "500000 bps")
 
 #ifndef B576000
 # define B576000 -1
 #endif
-CND(B576000, "576000 bps")
+CNU(B576000, "576000 bps")
 
 #ifndef B921600
 # define B921600 -1
 #endif
-CND(B921600, "921600 bps")
+CNU(B921600, "921600 bps")
 
 #ifndef B1000000
 # define B1000000 -1
 #endif
-CND(B1000000, "1000000 bps")
+CNU(B1000000, "1000000 bps")
 
 #ifndef B1152000
 # define B1152000 -1
 #endif
-CND(B1152000, "1152000 bps")
+CNU(B1152000, "1152000 bps")
 
 #ifndef B1500000
 # define B1500000 -1
 #endif
-CND(B1500000, "1500000 bps")
+CNU(B1500000, "1500000 bps")
 
 #ifndef B2000000
 # define B2000000 -1
 #endif
-CND(B2000000, "2000000 bps")
+CNU(B2000000, "2000000 bps")
 
 #ifndef B2500000
 # define B2500000 -1
 #endif
-CND(B2500000, "2500000 bps")
+CNU(B2500000, "2500000 bps")
 
 #ifndef B3000000
 # define B3000000 -1
 #endif
-CND(B3000000, "3000000 bps")
+CNU(B3000000, "3000000 bps")
 
 #ifndef B3500000
 # define B3500000 -1
 #endif
-CND(B3500000, "3500000 bps")
+CNU(B3500000, "3500000 bps")
 
 #ifndef B4000000
 # define B4000000 -1
 #endif
-CND(B4000000, "4000000 bps")
+CNU(B4000000, "4000000 bps")
 
 /*
 
@@ -936,6 +1007,11 @@ CND(VEOL2, "Alternative EOL")
 
 #endif /* HAVE_TERMIOS */
 
+#if defined(__MINGW32__) || defined(__CYGWIN__)
+CNU(DTR_CONTROL_ENABLE, "Enable DTR flow ctrl")
+CNU(RTS_CONTROL_ENABLE, "Enable RTS flow ctrl")
+#endif
+
 /*
 
    -----------------------------
@@ -944,7 +1020,7 @@ CND(VEOL2, "Alternative EOL")
 
 */
 
-#if defined (__FreeBSD__) || defined (linux)
+#if defined (__FreeBSD__) || defined (__linux__) || defined (__DragonFly__)
 # define PTY_Library "-lutil"
 #else
 # define PTY_Library ""
@@ -970,29 +1046,149 @@ CST(PTY_Library, "for g-exptty")
 #endif
 CND(AF_INET, "IPv4 address family")
 
-/**
- ** RTEMS lies and defines AF_INET6 even though there is no IPV6 support.
- ** Its TCP/IP stack is in transition.  It has newer .h files but no IPV6 yet.
- **/
-#if defined(__rtems__)
-# undef AF_INET6
-#endif
-
-/**
- ** Tru64 UNIX V4.0F defines AF_INET6 without IPv6 support, specifically
- ** without struct sockaddr_in6.  We use _SS_MAXSIZE (used for the definition
- ** of struct sockaddr_storage on Tru64 UNIX V5.1) to detect this.
- **/
-#if defined(__osf__) && !defined(_SS_MAXSIZE)
-# undef AF_INET6
-#endif
-
 #ifndef AF_INET6
 # define AF_INET6 -1
 #else
 # define HAVE_AF_INET6 1
 #endif
 CND(AF_INET6, "IPv6 address family")
+
+#ifndef AF_UNIX
+# define AF_UNIX -1
+#endif
+CND(AF_UNIX, "Local unix family")
+
+#ifndef AF_UNSPEC
+# define AF_UNSPEC -1
+#else
+# define HAVE_AF_UNSPEC 1
+#endif
+CND(AF_UNSPEC, "Unspecified address family")
+
+/*
+
+   -----------------------------
+   -- addrinfo fields offsets --
+   -----------------------------
+
+*/
+
+#ifdef AI_CANONNAME
+  const struct addrinfo ai;
+
+#define AI_FLAGS_OFFSET ((void *)&ai.ai_flags - (void *)&ai)
+#define AI_FAMILY_OFFSET ((void *)&ai.ai_family - (void *)&ai)
+#define AI_SOCKTYPE_OFFSET ((void *)&ai.ai_socktype - (void *)&ai)
+#define AI_PROTOCOL_OFFSET ((void *)&ai.ai_protocol - (void *)&ai)
+#define AI_ADDRLEN_OFFSET ((void *)&ai.ai_addrlen - (void *)&ai)
+#define AI_ADDR_OFFSET ((void *)&ai.ai_addr - (void *)&ai)
+#define AI_CANONNAME_OFFSET ((void *)&ai.ai_canonname - (void *)&ai)
+#define AI_NEXT_OFFSET ((void *)&ai.ai_next - (void *)&ai)
+
+#else
+
+#define AI_FLAGS_OFFSET 0
+#define AI_FAMILY_OFFSET 4
+#define AI_SOCKTYPE_OFFSET 8
+#define AI_PROTOCOL_OFFSET 12
+#define AI_ADDRLEN_OFFSET 16
+#define AI_CANONNAME_OFFSET 24
+#define AI_ADDR_OFFSET 32
+#define AI_NEXT_OFFSET 40
+
+#endif
+
+CND(AI_FLAGS_OFFSET,     "Offset of ai_flags in addrinfo");
+CND(AI_FAMILY_OFFSET,    "Offset of ai_family in addrinfo");
+CND(AI_SOCKTYPE_OFFSET,  "Offset of ai_socktype in addrinfo");
+CND(AI_PROTOCOL_OFFSET,  "Offset of ai_protocol in addrinfo");
+CND(AI_ADDRLEN_OFFSET,   "Offset of ai_addrlen in addrinfo");
+CND(AI_ADDR_OFFSET,      "Offset of ai_addr in addrinfo");
+CND(AI_CANONNAME_OFFSET, "Offset of ai_canonname in addrinfo");
+CND(AI_NEXT_OFFSET,      "Offset of ai_next in addrinfo");
+
+/*
+
+   ---------------------------------------
+   -- getaddrinfo getnameinfo constants --
+   ---------------------------------------
+
+*/
+
+#ifndef AI_PASSIVE
+# define AI_PASSIVE -1
+#endif
+CND(AI_PASSIVE, "NULL nodename for accepting")
+
+#ifndef AI_CANONNAME
+# define AI_CANONNAME -1
+#endif
+CND(AI_CANONNAME, "Get the host official name")
+
+#ifndef AI_NUMERICSERV
+# define AI_NUMERICSERV -1
+#endif
+CND(AI_NUMERICSERV, "Service is a numeric string")
+
+#ifndef AI_NUMERICHOST
+# define AI_NUMERICHOST -1
+#endif
+CND(AI_NUMERICHOST, "Node is a numeric IP address")
+
+#ifndef AI_ADDRCONFIG
+# define AI_ADDRCONFIG -1
+#endif
+CND(AI_ADDRCONFIG, "Returns addresses for only locally configured families")
+
+#ifndef AI_V4MAPPED
+# define AI_V4MAPPED -1
+#endif
+CND(AI_V4MAPPED, "Returns IPv4 mapped to IPv6")
+
+#ifndef AI_ALL
+# define AI_ALL -1
+#endif
+CND(AI_ALL, "Change AI_V4MAPPED behavior for unavailavle IPv6 addresses")
+
+#ifndef NI_NAMEREQD
+# define NI_NAMEREQD -1
+#endif
+CND(NI_NAMEREQD, "Error if the hostname cannot be determined")
+
+#ifndef NI_DGRAM
+# define NI_DGRAM -1
+#endif
+CND(NI_DGRAM, "Service is datagram")
+
+#ifndef NI_NOFQDN
+# define NI_NOFQDN -1
+#endif
+CND(NI_NOFQDN, "Return only the hostname part for local hosts")
+
+#ifndef NI_NUMERICSERV
+# define NI_NUMERICSERV -1
+#endif
+CND(NI_NUMERICSERV, "Numeric form of the service")
+
+#ifndef NI_NUMERICHOST
+# define NI_NUMERICHOST -1
+#endif
+CND(NI_NUMERICHOST, "Numeric form of the hostname")
+
+#ifndef NI_MAXHOST
+# define NI_MAXHOST -1
+#endif
+CND(NI_MAXHOST, "Maximum size of hostname")
+
+#ifndef NI_MAXSERV
+# define NI_MAXSERV -1
+#endif
+CND(NI_MAXSERV, "Maximum size of service name")
+
+#ifndef EAI_SYSTEM
+# define EAI_SYSTEM -1
+#endif
+CND(EAI_SYSTEM, "Check errno for details")
 
 /*
 
@@ -1011,6 +1207,11 @@ CND(SOCK_STREAM, "Stream socket")
 # define SOCK_DGRAM -1
 #endif
 CND(SOCK_DGRAM, "Datagram socket")
+
+#ifndef SOCK_RAW
+# define SOCK_RAW -1
+#endif
+CND(SOCK_RAW, "Raw socket")
 
 /*
 
@@ -1081,6 +1282,11 @@ CND(SOL_SOCKET, "Options for socket level")
 #endif
 CND(IPPROTO_IP, "Dummy protocol for IP")
 
+#ifndef IPPROTO_IPV6
+# define IPPROTO_IPV6 -1
+#endif
+CND(IPPROTO_IPV6, "IPv6 socket option level")
+
 #ifndef IPPROTO_UDP
 # define IPPROTO_UDP -1
 #endif
@@ -1090,6 +1296,111 @@ CND(IPPROTO_UDP, "UDP")
 # define IPPROTO_TCP -1
 #endif
 CND(IPPROTO_TCP, "TCP")
+
+#ifndef IPPROTO_ICMP
+# define IPPROTO_ICMP -1
+#endif
+CND(IPPROTO_ICMP, "Internet Control Message Protocol")
+
+#ifndef IPPROTO_IGMP
+# define IPPROTO_IGMP -1
+#endif
+CND(IPPROTO_IGMP, "Internet Group Management Protocol")
+
+#ifndef IPPROTO_IPIP
+# define IPPROTO_IPIP -1
+#endif
+CND(IPPROTO_IPIP, "IPIP tunnels (older KA9Q tunnels use 94)")
+
+#ifndef IPPROTO_EGP
+# define IPPROTO_EGP -1
+#endif
+CND(IPPROTO_EGP, "Exterior Gateway Protocol")
+
+#ifndef IPPROTO_PUP
+# define IPPROTO_PUP -1
+#endif
+CND(IPPROTO_PUP, "PUP protocol")
+
+#ifndef IPPROTO_IDP
+# define IPPROTO_IDP -1
+#endif
+CND(IPPROTO_IDP, "XNS IDP protocol")
+
+#ifndef IPPROTO_TP
+# define IPPROTO_TP -1
+#endif
+CND(IPPROTO_TP, "SO Transport Protocol Class 4")
+
+#ifndef IPPROTO_DCCP
+# define IPPROTO_DCCP -1
+#endif
+CND(IPPROTO_DCCP, "Datagram Congestion Control Protocol")
+
+#ifndef IPPROTO_RSVP
+# define IPPROTO_RSVP -1
+#endif
+CND(IPPROTO_RSVP, "Reservation Protocol")
+
+#ifndef IPPROTO_GRE
+# define IPPROTO_GRE -1
+#endif
+CND(IPPROTO_GRE, "General Routing Encapsulation")
+
+#ifndef IPPROTO_ESP
+# define IPPROTO_ESP -1
+#endif
+CND(IPPROTO_ESP, "encapsulating security payload")
+
+#ifndef IPPROTO_AH
+# define IPPROTO_AH -1
+#endif
+CND(IPPROTO_AH, "authentication header")
+
+#ifndef IPPROTO_MTP
+# define IPPROTO_MTP -1
+#endif
+CND(IPPROTO_MTP, "Multicast Transport Protocol")
+
+#ifndef IPPROTO_BEETPH
+# define IPPROTO_BEETPH -1
+#endif
+CND(IPPROTO_BEETPH, "IP option pseudo header for BEET")
+
+#ifndef IPPROTO_ENCAP
+# define IPPROTO_ENCAP -1
+#endif
+CND(IPPROTO_ENCAP, "Encapsulation Header")
+
+#ifndef IPPROTO_PIM
+# define IPPROTO_PIM -1
+#endif
+CND(IPPROTO_PIM, "Protocol Independent Multicast")
+
+#ifndef IPPROTO_COMP
+# define IPPROTO_COMP -1
+#endif
+CND(IPPROTO_COMP, "Compression Header Protocol")
+
+#ifndef IPPROTO_SCTP
+# define IPPROTO_SCTP -1
+#endif
+CND(IPPROTO_SCTP, "Stream Control Transmission Protocol")
+
+#ifndef IPPROTO_UDPLITE
+# define IPPROTO_UDPLITE -1
+#endif
+CND(IPPROTO_UDPLITE, "UDP-Lite protocol")
+
+#ifndef IPPROTO_MPLS
+# define IPPROTO_MPLS -1
+#endif
+CND(IPPROTO_MPLS, "MPLS in IP")
+
+#ifndef IPPROTO_RAW
+# define IPPROTO_RAW -1
+#endif
+CND(IPPROTO_RAW, "Raw IP packets")
 
 /*
 
@@ -1130,7 +1441,7 @@ CND(MSG_WAITALL, "Wait for full reception")
 #endif
 CND(MSG_NOSIGNAL, "No SIGPIPE on send")
 
-#ifdef __linux__
+#if defined (__linux__) || defined (__ANDROID__) || defined (__QNX__)
 # define MSG_Forced_Flags "MSG_NOSIGNAL"
 #else
 # define MSG_Forced_Flags "0"
@@ -1203,6 +1514,11 @@ CND(SO_RCVTIMEO, "Reception timeout")
 #endif
 CND(SO_ERROR, "Get/clear error status")
 
+#ifndef SO_BUSY_POLL
+# define SO_BUSY_POLL -1
+#endif
+CND(SO_BUSY_POLL, "Busy polling")
+
 #ifndef IP_MULTICAST_IF
 # define IP_MULTICAST_IF -1
 #endif
@@ -1233,6 +1549,111 @@ CND(IP_DROP_MEMBERSHIP, "Leave a multicast group")
 #endif
 CND(IP_PKTINFO, "Get datagram info")
 
+#ifndef IP_RECVERR
+# define IP_RECVERR -1
+#endif
+CND(IP_RECVERR, "Extended reliable error message passing")
+
+#ifndef IPV6_ADDRFORM
+# define IPV6_ADDRFORM -1
+#endif
+CND(IPV6_ADDRFORM, "Turn IPv6 socket into different address family")
+
+#ifndef IPV6_ADD_MEMBERSHIP
+# define IPV6_ADD_MEMBERSHIP -1
+#endif
+CND(IPV6_ADD_MEMBERSHIP, "Join IPv6 multicast group")
+
+#ifndef IPV6_DROP_MEMBERSHIP
+# define IPV6_DROP_MEMBERSHIP -1
+#endif
+CND(IPV6_DROP_MEMBERSHIP, "Leave IPv6 multicast group")
+
+#ifndef IPV6_MTU
+# define IPV6_MTU -1
+#endif
+CND(IPV6_MTU, "Set/get MTU used for the socket")
+
+#ifndef IPV6_MTU_DISCOVER
+# define IPV6_MTU_DISCOVER -1
+#endif
+CND(IPV6_MTU_DISCOVER, "Control path-MTU discovery on the socket")
+
+#ifndef IPV6_MULTICAST_HOPS
+# define IPV6_MULTICAST_HOPS -1
+#endif
+CND(IPV6_MULTICAST_HOPS, "Set the multicast hop limit for the socket")
+
+#ifndef IPV6_MULTICAST_IF
+# define IPV6_MULTICAST_IF -1
+#endif
+CND(IPV6_MULTICAST_IF, "Set/get IPv6 mcast interface")
+
+#ifndef IPV6_MULTICAST_LOOP
+# define IPV6_MULTICAST_LOOP -1
+#endif
+CND(IPV6_MULTICAST_LOOP, "Set/get mcast loopback")
+
+#ifndef IPV6_RECVPKTINFO
+# define IPV6_RECVPKTINFO -1
+#endif
+CND(IPV6_RECVPKTINFO, "Set delivery of the IPV6_PKTINFO")
+
+#ifndef IPV6_PKTINFO
+# define IPV6_PKTINFO -1
+#endif
+CND(IPV6_PKTINFO, "Get IPv6datagram info")
+
+#ifndef IPV6_RTHDR
+# define IPV6_RTHDR -1
+#endif
+CND(IPV6_RTHDR, "Set the routing header delivery")
+
+#ifndef IPV6_AUTHHDR
+# define IPV6_AUTHHDR -1
+#endif
+CND(IPV6_AUTHHDR, "Set the authentication header delivery")
+
+#ifndef IPV6_DSTOPTS
+# define IPV6_DSTOPTS -1
+#endif
+CND(IPV6_DSTOPTS, "Set the destination options delivery")
+
+#ifndef IPV6_HOPOPTS
+# define IPV6_HOPOPTS -1
+#endif
+CND(IPV6_HOPOPTS, "Set the hop options delivery")
+
+#ifndef IPV6_FLOWINFO
+# define IPV6_FLOWINFO -1
+#endif
+CND(IPV6_FLOWINFO, "Set the flow ID delivery")
+
+#ifndef IPV6_HOPLIMIT
+# define IPV6_HOPLIMIT -1
+#endif
+CND(IPV6_HOPLIMIT, "Set the hop count of the packet delivery")
+
+#ifndef IPV6_RECVERR
+# define IPV6_RECVERR -1
+#endif
+CND(IPV6_RECVERR, "Extended reliable error message passing")
+
+#ifndef IPV6_ROUTER_ALERT
+# define IPV6_ROUTER_ALERT -1
+#endif
+CND(IPV6_ROUTER_ALERT, "Pass forwarded router alert hop-by-hop option")
+
+#ifndef IPV6_UNICAST_HOPS
+# define IPV6_UNICAST_HOPS -1
+#endif
+CND(IPV6_UNICAST_HOPS, "Set the unicast hop limit")
+
+#ifndef IPV6_V6ONLY
+# define IPV6_V6ONLY -1
+#endif
+CND(IPV6_V6ONLY, "Restricted to IPv6 communications only")
+
 /*
 
    ----------------------
@@ -1256,11 +1677,11 @@ CND(SIZEOF_tv_usec, "tv_usec")
 */
 
 /**
- ** On Solaris and IRIX, field tv_sec in struct timeval has an undocumented
+ ** On Solaris, field tv_sec in struct timeval has an undocumented
  ** hard-wired limit of 100 million.
  ** On IA64 HP-UX the limit is 2**31 - 1.
  **/
-#if defined (sun) || (defined (__mips) && defined (__sgi))
+#if defined (__sun__)
 # define MAX_tv_sec "100_000_000"
 
 #elif defined (__hpux__)
@@ -1285,32 +1706,62 @@ CND(SIZEOF_sockaddr_in, "struct sockaddr_in")
 #endif
 CND(SIZEOF_sockaddr_in6, "struct sockaddr_in6")
 
+/**
+ ** The sockaddr_un structure is not defined in MINGW C headers
+ ** but Windows supports it from build 17063.
+ **/
+#if defined(__MINGW32__)
+struct sockaddr_un {
+  ADDRESS_FAMILY sun_family;    /* AF_UNIX */
+  char           sun_path[108]; /* Pathname */
+};
+#endif
+#define SIZEOF_sockaddr_un (sizeof (struct sockaddr_un))
+CND(SIZEOF_sockaddr_un, "struct sockaddr_un")
+
 #define SIZEOF_fd_set (sizeof (fd_set))
-CND(SIZEOF_fd_set, "fd_set");
-CND(FD_SETSIZE, "Max fd value");
+CND(SIZEOF_fd_set, "fd_set")
+CND(FD_SETSIZE, "Max fd value")
 
 #define SIZEOF_struct_hostent (sizeof (struct hostent))
-CND(SIZEOF_struct_hostent, "struct hostent");
+CND(SIZEOF_struct_hostent, "struct hostent")
 
 #define SIZEOF_struct_servent (sizeof (struct servent))
-CND(SIZEOF_struct_servent, "struct servent");
+CND(SIZEOF_struct_servent, "struct servent")
 
-#if defined (__linux__)
+#if defined (__linux__) || defined (__ANDROID__) || defined (__QNX__)
 #define SIZEOF_sigset (sizeof (sigset_t))
-CND(SIZEOF_sigset, "sigset");
+CND(SIZEOF_sigset, "sigset")
 #endif
+
+#if defined(_WIN32) || defined(__vxworks)
+#define SIZEOF_socklen_t sizeof (size_t)
+#else
+#define SIZEOF_socklen_t sizeof (socklen_t)
+#endif
+CND(SIZEOF_socklen_t, "Size of socklen_t");
+
+#ifndef IF_NAMESIZE
+#ifdef IF_MAX_STRING_SIZE
+#define IF_NAMESIZE IF_MAX_STRING_SIZE
+#else
+#define IF_NAMESIZE -1
+#endif
+#endif
+CND(IF_NAMESIZE, "Max size of interface name with 0 terminator");
+
 /*
 
    --  Fields of struct msghdr
 */
 
 #if defined (__sun__) || defined (__hpux__)
-# define msg_iovlen_t "int"
+# define Msg_Iovlen_T "Interfaces.C.int"
 #else
-# define msg_iovlen_t "size_t"
+# define Msg_Iovlen_T "Interfaces.C.size_t"
 #endif
 
-TXT("   subtype Msg_Iovlen_T is Interfaces.C." msg_iovlen_t ";")
+SUB(Msg_Iovlen_T)
 
 /*
 
@@ -1341,6 +1792,13 @@ C("Thread_Blocking_IO", Boolean, "True", "")
 #endif
 CST(Inet_Pton_Linkname, "")
 
+#ifdef HAVE_INET_NTOP
+# define Inet_Ntop_Linkname "inet_ntop"
+#else
+# define Inet_Ntop_Linkname "__gnat_inet_ntop"
+#endif
+CST(Inet_Ntop_Linkname, "")
+
 #endif /* HAVE_SOCKETS */
 
 /*
@@ -1355,13 +1813,10 @@ CST(Inet_Pton_Linkname, "")
 
 /* Note: On HP-UX, CLOCK_REALTIME is an enum, not a macro. */
 
-#if defined(CLOCK_REALTIME) || defined (__hpux__)
-# define HAVE_CLOCK_REALTIME
+#if !(defined(CLOCK_REALTIME) || defined (__hpux__))
+# define CLOCK_REALTIME (-1)
 #endif
-
-#ifdef HAVE_CLOCK_REALTIME
 CND(CLOCK_REALTIME, "System realtime clock")
-#endif
 
 #ifdef CLOCK_MONOTONIC
 CND(CLOCK_MONOTONIC, "System monotonic clock")
@@ -1371,29 +1826,26 @@ CND(CLOCK_MONOTONIC, "System monotonic clock")
 CND(CLOCK_FASTEST, "Fastest clock")
 #endif
 
-#if defined (__sgi)
-CND(CLOCK_SGI_FAST,  "SGI fast clock")
-CND(CLOCK_SGI_CYCLE, "SGI CPU clock")
-#endif
-
 #ifndef CLOCK_THREAD_CPUTIME_ID
 # define CLOCK_THREAD_CPUTIME_ID -1
 #endif
 CND(CLOCK_THREAD_CPUTIME_ID, "Thread CPU clock")
 
-#if defined(__APPLE__)
-/* There's no clock_gettime or clock_id's on Darwin, generate a dummy value */
-# define CLOCK_RT_Ada "-1"
-
-#elif defined(FreeBSD) || defined(_AIX)
+#if defined(__linux__) || defined(__FreeBSD__) \
+ || (defined(_AIX) && defined(_AIXVERSION_530)) \
+ || defined(__DragonFly__) || defined(__QNX__)
 /** On these platforms use system provided monotonic clock instead of
  ** the default CLOCK_REALTIME. We then need to set up cond var attributes
  ** appropriately (see thread.c).
+ **
+ ** Note that AIX 5.2 does not support CLOCK_MONOTONIC timestamps for
+ ** pthread_cond_timedwait (and does not have pthread_condattr_setclock),
+ ** hence the conditionalization on AIX version above). _AIXVERSION_530
+ ** is defined in AIX 5.3 and more recent versions.
  **/
 # define CLOCK_RT_Ada "CLOCK_MONOTONIC"
-# define NEED_PTHREAD_CONDATTR_SETCLOCK
 
-#elif defined(HAVE_CLOCK_REALTIME)
+#else
 /* By default use CLOCK_REALTIME */
 # define CLOCK_RT_Ada "CLOCK_REALTIME"
 #endif
@@ -1402,17 +1854,16 @@ CND(CLOCK_THREAD_CPUTIME_ID, "Thread CPU clock")
 CNS(CLOCK_RT_Ada, "")
 #endif
 
-#if defined (__APPLE__) || defined (__linux__) || defined (DUMMY)
+#if defined (__APPLE__) || defined (__linux__) || defined (__ANDROID__) \
+  || defined (__QNX__) || defined (__rtems__) || defined (DUMMY)
 /*
 
    --  Sizes of pthread data types
-
 */
 
 #if defined (__APPLE__) || defined (DUMMY)
 /*
    --  (on Darwin, these are just placeholders)
-
 */
 #define PTHREAD_SIZE            __PTHREAD_SIZE__
 #define PTHREAD_ATTR_SIZE       __PTHREAD_ATTR_SIZE__
@@ -1434,7 +1885,9 @@ CNS(CLOCK_RT_Ada, "")
 #define PTHREAD_RWLOCK_SIZE     (sizeof (pthread_rwlock_t))
 #define PTHREAD_ONCE_SIZE       (sizeof (pthread_once_t))
 #endif
+/*
 
+*/
 CND(PTHREAD_SIZE,            "pthread_t")
 CND(PTHREAD_ATTR_SIZE,       "pthread_attr_t")
 CND(PTHREAD_MUTEXATTR_SIZE,  "pthread_mutexattr_t")
@@ -1445,7 +1898,39 @@ CND(PTHREAD_RWLOCKATTR_SIZE, "pthread_rwlockattr_t")
 CND(PTHREAD_RWLOCK_SIZE,     "pthread_rwlock_t")
 CND(PTHREAD_ONCE_SIZE,       "pthread_once_t")
 
-#endif /* __APPLE__ || __linux__ */
+#endif /* __APPLE__ || __linux__ || __ANDROID__ || __rtems__ */
+
+/*
+
+   --------------------------------
+   -- File and directory support --
+   --------------------------------
+
+*/
+
+/**
+ ** Note: this constant can be used in the GNAT runtime library. In compiler
+ ** units on the other hand, System.OS_Constants is not available, so we
+ ** declare an Ada constant (Osint.File_Attributes_Size) independently, which
+ ** is at least as large as sizeof (struct file_attributes), and we have an
+ ** assertion at initialization of Osint checking that the size is indeed at
+ ** least sufficient.
+ **/
+#define SIZEOF_struct_file_attributes (sizeof (struct file_attributes))
+CND(SIZEOF_struct_file_attributes, "struct file_attributes")
+
+/**
+ ** Maximal size of buffer for struct dirent. Note: Since POSIX.1 does not
+ ** specify the size of the d_name field, and other nonstandard fields may
+ ** precede that field within the dirent structure, we must make a conservative
+ ** computation.
+ **/
+{
+  struct dirent dent;
+#define SIZEOF_struct_dirent_alloc \
+  ((char*) &dent.d_name - (char*) &dent) + NAME_MAX + 1
+CND(SIZEOF_struct_dirent_alloc, "struct dirent allocation")
+}
 
 /**
  **  System-specific constants follow

@@ -1,10 +1,15 @@
-! { dg-do compile }
+! { dg-do run }
 !
-! PR 60450: [4.7/4.8 Regression] ICE with SHAPE intrinsic
+! Check that we can use SHAPE with optional kind argument
 !
-! Contributed by Dave Allured <dave.allured@noaa.gov>
+program test
+   implicit none
+   real, allocatable :: x(:,:)
 
-  real, allocatable :: x(:,:)
-  allocate (x(3,2), source=99.)
-  print *, shape (x / 10.0)
+   allocate(x(2,5))
+   if (any(shape(x) /= [ 2, 5 ])) STOP 1
+   if (any(shape(x,kind=1) /= [ 2, 5 ])) STOP 2
+   if (any(shape(x,kind=2) /= [ 2, 5 ])) STOP 3
+   if (any(shape(x,kind=4) /= [ 2, 5 ])) STOP 4
+   if (any(shape(x,kind=8) /= [ 2, 5 ])) STOP 5
 end

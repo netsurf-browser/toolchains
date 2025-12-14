@@ -1,8 +1,8 @@
 /* Helper function for repacking arrays.
-   Copyright 2003, 2006, 2007, 2009 Free Software Foundation, Inc.
+   Copyright (C) 2003-2020 Free Software Foundation, Inc.
    Contributed by Paul Brook <paul@nowt.org>
 
-This file is part of the GNU Fortran 95 runtime library (libgfortran).
+This file is part of the GNU Fortran runtime library (libgfortran).
 
 Libgfortran is free software; you can redistribute it and/or
 modify it under the terms of the GNU General Public
@@ -24,8 +24,6 @@ see the files COPYING3 and COPYING.RUNTIME respectively.  If not, see
 <http://www.gnu.org/licenses/>.  */
 
 #include "libgfortran.h"
-#include <stdlib.h>
-#include <assert.h>
 
 
 #if defined (HAVE_GFC_INTEGER_2)
@@ -45,7 +43,6 @@ internal_pack_2 (gfc_array_i2 * source)
   const GFC_INTEGER_2 *src;
   GFC_INTEGER_2 * restrict dest;
   GFC_INTEGER_2 *destptr;
-  int n;
   int packed;
 
   /* TODO: Investigate how we can figure out if this is a temporary
@@ -54,7 +51,7 @@ internal_pack_2 (gfc_array_i2 * source)
   dim = GFC_DESCRIPTOR_RANK (source);
   ssize = 1;
   packed = 1;
-  for (n = 0; n < dim; n++)
+  for (index_type n = 0; n < dim; n++)
     {
       count[n] = 0;
       stride[n] = GFC_DESCRIPTOR_STRIDE(source,n);
@@ -73,12 +70,12 @@ internal_pack_2 (gfc_array_i2 * source)
     }
 
   if (packed)
-    return source->data;
+    return source->base_addr;
 
   /* Allocate storage for the destination.  */
-  destptr = (GFC_INTEGER_2 *)internal_malloc_size (ssize * sizeof (GFC_INTEGER_2));
+  destptr = xmallocarray (ssize, sizeof (GFC_INTEGER_2));
   dest = destptr;
-  src = source->data;
+  src = source->base_addr;
   stride0 = stride[0];
 
 
@@ -90,7 +87,7 @@ internal_pack_2 (gfc_array_i2 * source)
       src += stride0;
       count[0]++;
       /* Advance to the next source element.  */
-      n = 0;
+      index_type n = 0;
       while (count[n] == extent[n])
         {
           /* When we get to the end of a dimension, reset it and increment

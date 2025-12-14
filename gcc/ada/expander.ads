@@ -6,7 +6,7 @@
 --                                                                          --
 --                                 S p e c                                  --
 --                                                                          --
---          Copyright (C) 1992-2008, Free Software Foundation, Inc.         --
+--          Copyright (C) 1992-2019, Free Software Foundation, Inc.         --
 --                                                                          --
 -- GNAT is free software;  you can  redistribute it  and/or modify it under --
 -- terms of the  GNU General Public License as published  by the Free Soft- --
@@ -66,9 +66,9 @@
 --      always the case).
 
 --  In both these cases, Replace or Rewrite must be used to achieve the
---  of the node, since the Expander routine is only passed the Node_Id
---  of the node to be expanded, and the resulting expanded Node_Id must
---  be the same (the parameter to Expand is mode in, not mode in-out).
+--  expansion of the node, since the Expander routine is only passed the
+--  Node_Id of the node to be expanded, and the resulting expanded Node_Id
+--  must be the same (the parameter to Expand is mode in, not mode in-out).
 
 --  For nodes other than subexpressions, it is not necessary to preserve the
 --  original tree in the Expand routines, unlike the case for modifications
@@ -135,12 +135,12 @@ package Expander is
    --        or declaration (see routines Start_Generic_Processing and
    --        End_Generic_Processing in Sem_Ch12)
    --
-   --    (b) when starting/completing the pre-analysis of an expression
-   --        (see the spec of package Sem for more info on pre-analysis.)
+   --    (b) when starting/completing the preanalysis of an expression
+   --        (see the spec of package Sem for more info on preanalysis.)
    --
    --  Note that when processing a spec expression (In_Spec_Expression
    --  is True) or performing semantic analysis of a generic spec or body
-   --  (Inside_A_Generic) or when performing pre-analysis (Full_Analysis is
+   --  (Inside_A_Generic) or when performing preanalysis (Full_Analysis is
    --  False) the Expander_Active flag is False.
 
    procedure Expand (N : Node_Id);
@@ -150,18 +150,20 @@ package Expander is
    --  Saves the current setting of the Expander_Active flag on an internal
    --  stack and then sets the flag to the given value.
    --
-   --  Note: this routine has no effect in ASIS_Mode. In ASIS_Mode, all
-   --  expansion activity is always off, since we want the original semantic
-   --  tree for ASIS purposes without any expansion. This is achieved by
-   --  setting Expander_Active False in ASIS_Mode. In situations such as
-   --  the call to Instantiate_Bodies in Frontend, Expander_Mode_Save_And_Set
-   --  may be called to temporarily turn the expander on, but this will have
-   --  no effect in ASIS mode.
+   --  Note: this routine has no effect in ASIS and GNATprove modes. In ASIS
+   --  mode, all expansion activity is always off, since we want the original
+   --  semantic tree for ASIS purposes without any expansion. In GNATprove
+   --  mode, a very light expansion is performed on specific nodes. Both are
+   --  achieved by setting Expander_Active False in ASIS and GNATprove modes.
+   --  In situations such as the call to Instantiate_Bodies in Frontend,
+   --  Expander_Mode_Save_And_Set may be called to temporarily turn the
+   --  expander on, but this will have no effect in ASIS and GNATprove modes.
 
    procedure Expander_Mode_Restore;
    --  Restores the setting of the Expander_Active flag using the top entry
    --  pushed onto the stack by Expander_Mode_Save_And_Reset, popping the
-   --  stack, except that if any errors have been detected, then the state
-   --  of the flag is left set to False. Disabled for ASIS_Mode (see above).
+   --  stack, except that if any errors have been detected, then the state of
+   --  the flag is left set to False. Disabled for ASIS and GNATprove modes
+   --  (see above).
 
 end Expander;

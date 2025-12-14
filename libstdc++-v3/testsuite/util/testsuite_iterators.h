@@ -1,8 +1,7 @@
 // -*- C++ -*-
-// Iterator Wrappers for the C++ library testsuite. 
+// Iterator Wrappers for the C++ library testsuite.
 //
-// Copyright (C) 2004, 2005, 2006, 2007, 2008, 2009, 2010
-// Free Software Foundation, Inc.
+// Copyright (C) 2004-2020 Free Software Foundation, Inc.
 //
 // This file is part of the GNU ISO C++ Library.  This library is free
 // software; you can redistribute it and/or modify it under the
@@ -31,7 +30,7 @@
 #include <testsuite_hooks.h>
 #include <bits/stl_iterator_base_types.h>
 
-#ifdef __GXX_EXPERIMENTAL_CXX0X__
+#if __cplusplus >= 201103L
 #include <bits/move.h>
 #endif
 
@@ -57,8 +56,11 @@ namespace __gnu_test
     {
       T* first;
       T* last;
+
       BoundsContainer(T* _first, T* _last) : first(_first), last(_last)
       { }
+
+      std::size_t size() const { return last - first; }
     };
 
   // Simple container for holding state of a set of output iterators.
@@ -67,13 +69,11 @@ namespace __gnu_test
     {
       T* incrementedto;
       bool* writtento;
+
       OutputContainer(T* _first, T* _last)
-      : BoundsContainer<T>(_first, _last), incrementedto(_first)
-      {
-	writtento = new bool[this->last - this->first];
-	for(int i = 0; i < this->last - this->first; i++)
-	  writtento[i] = false;
-      }
+      : BoundsContainer<T>(_first, _last), incrementedto(_first),
+	writtento(new bool[this->size()]())
+      { }
 
       ~OutputContainer()
       { delete[] writtento; }
@@ -87,14 +87,15 @@ namespace __gnu_test
 
     public:
       OutputContainer<T>* SharedInfo;
-      WritableObject(T* ptr_in,OutputContainer<T>* SharedInfo_in):
+
+      WritableObject(T* ptr_in, OutputContainer<T>* SharedInfo_in):
 	ptr(ptr_in), SharedInfo(SharedInfo_in)
       { }
 
-#ifdef __GXX_EXPERIMENTAL_CXX0X__
+#if __cplusplus >= 201103L
       template<class U>
-      void
-      operator=(U&& new_val)
+      typename std::enable_if<std::is_assignable<T&, U>::value>::type
+      operator=(U&& new_val) const
       {
 	ITERATOR_VERIFY(SharedInfo->writtento[ptr - SharedInfo->first] == 0);
 	SharedInfo->writtento[ptr - SharedInfo->first] = 1;
@@ -114,15 +115,20 @@ namespace __gnu_test
 
   /**
    * @brief output_iterator wrapper for pointer
-   * 
+   *
    * This class takes a pointer and wraps it to provide exactly
    * the requirements of a output_iterator. It should not be
-   * instansiated directly, but generated from a test_container
+   * instantiated directly, but generated from a test_container
    */
   template<class T>
   struct output_iterator_wrapper
   : public std::iterator<std::output_iterator_tag, T, std::ptrdiff_t, T*, T&>
   {
+  protected:
+    output_iterator_wrapper() : ptr(0), SharedInfo(0)
+    { }
+
+  public:
     typedef OutputContainer<T> ContainerType;
     T* ptr;
     ContainerType* SharedInfo;
@@ -132,10 +138,13 @@ namespace __gnu_test
     {
       ITERATOR_VERIFY(ptr >= SharedInfo->first && ptr <= SharedInfo->last);
     }
-    
-    output_iterator_wrapper(const output_iterator_wrapper& in)
-    : ptr(in.ptr), SharedInfo(in.SharedInfo)
-    { }
+
+#if __cplusplus >= 201103L
+    output_iterator_wrapper(const output_iterator_wrapper&) = default;
+
+    output_iterator_wrapper&
+    operator=(const output_iterator_wrapper&) = default;
+#endif
 
     WritableObject<T>
     operator*() const
@@ -143,14 +152,6 @@ namespace __gnu_test
       ITERATOR_VERIFY(ptr < SharedInfo->last);
       ITERATOR_VERIFY(SharedInfo->writtento[ptr - SharedInfo->first] == false);
       return WritableObject<T>(ptr, SharedInfo);
-    }
-    
-    output_iterator_wrapper&
-    operator=(const output_iterator_wrapper& in) 
-    {
-      ptr = in.ptr;
-      SharedInfo = in.SharedInfo;
-      return *this;
     }
 
     output_iterator_wrapper&
@@ -171,21 +172,44 @@ namespace __gnu_test
       return tmp;
     }
 
+#if __cplusplus >= 201103L
+    template<typename U>
+      void operator,(const U&) const = delete;
+#else
+  private:
+    template<typename U>
+      void operator,(const U&) const;
+#endif
   };
+
+#if __cplusplus >= 201103L
+  template<typename T, typename U>
+    void operator,(const T&, const output_iterator_wrapper<U>&) = delete;
+#endif
+
+#if __cplusplus >= 201103L
+  using std::remove_cv;
+#else
+  template<typename T> struct remove_cv { typedef T type; };
+  template<typename T> struct remove_cv<const T> { typedef T type; };
+  template<typename T> struct remove_cv<volatile T> { typedef T type; };
+  template<typename T> struct remove_cv<const volatile T> { typedef T type; };
+#endif
 
   /**
    * @brief input_iterator wrapper for pointer
-   * 
+   *
    * This class takes a pointer and wraps it to provide exactly
    * the requirements of a input_iterator. It should not be
-   * instansiated directly, but generated from a test_container
+   * instantiated directly, but generated from a test_container
    */
   template<class T>
   class input_iterator_wrapper
-  : public std::iterator<std::input_iterator_tag, T, std::ptrdiff_t, T*, T&>
+  : public std::iterator<std::input_iterator_tag, typename remove_cv<T>::type,
+			 std::ptrdiff_t, T*, T&>
   {
   protected:
-    input_iterator_wrapper()
+    input_iterator_wrapper() : ptr(0), SharedInfo(0)
     { }
 
   public:
@@ -196,10 +220,13 @@ namespace __gnu_test
     input_iterator_wrapper(T* _ptr, ContainerType* SharedInfo_in)
     : ptr(_ptr), SharedInfo(SharedInfo_in)
     { ITERATOR_VERIFY(ptr >= SharedInfo->first && ptr <= SharedInfo->last); }
-    
-    input_iterator_wrapper(const input_iterator_wrapper& in)
-    : ptr(in.ptr), SharedInfo(in.SharedInfo)
-    { }
+
+#if __cplusplus >= 201103L
+    input_iterator_wrapper(const input_iterator_wrapper&) = default;
+
+    input_iterator_wrapper&
+    operator=(const input_iterator_wrapper&) = default;
+#endif
 
     bool
     operator==(const input_iterator_wrapper& in) const
@@ -230,14 +257,6 @@ namespace __gnu_test
     }
 
     input_iterator_wrapper&
-    operator=(const input_iterator_wrapper& in)
-    {
-      ptr = in.ptr;
-      SharedInfo = in.SharedInfo;
-      return *this;
-    }
-
-    input_iterator_wrapper&
     operator++()
     {
       ITERATOR_VERIFY(SharedInfo && ptr < SharedInfo->last);
@@ -252,34 +271,48 @@ namespace __gnu_test
     {
       ++*this;
     }
+
+#if __cplusplus >= 201103L
+    template<typename U>
+      void operator,(const U&) const = delete;
+#else
+  private:
+    template<typename U>
+      void operator,(const U&) const;
+#endif
   };
 
+#if __cplusplus >= 201103L
+  template<typename T, typename U>
+    void operator,(const T&, const input_iterator_wrapper<U>&) = delete;
+#endif
 
   /**
    * @brief forward_iterator wrapper for pointer
-   * 
+   *
    * This class takes a pointer and wraps it to provide exactly
    * the requirements of a forward_iterator. It should not be
-   * instansiated directly, but generated from a test_container
+   * instantiated directly, but generated from a test_container
    */
   template<class T>
   struct forward_iterator_wrapper : public input_iterator_wrapper<T>
   {
     typedef BoundsContainer<T> ContainerType;
     typedef std::forward_iterator_tag iterator_category;
+
     forward_iterator_wrapper(T* _ptr, ContainerType* SharedInfo_in)
     : input_iterator_wrapper<T>(_ptr, SharedInfo_in)
     { }
-    
-    forward_iterator_wrapper(const forward_iterator_wrapper& in)
-    : input_iterator_wrapper<T>(in)
-    { }
 
     forward_iterator_wrapper()
-    {
-      this->ptr = 0;
-      this->SharedInfo = 0;
-    }
+    { }
+
+#if __cplusplus >= 201103L
+    forward_iterator_wrapper(const forward_iterator_wrapper&) = default;
+
+    forward_iterator_wrapper&
+    operator=(const forward_iterator_wrapper&) = default;
+#endif
 
     T&
     operator*() const
@@ -307,39 +340,57 @@ namespace __gnu_test
       ++*this;
       return tmp;
     }
-   };
+
+#if __cplusplus >= 201402L
+    bool
+    operator==(const forward_iterator_wrapper& it) const noexcept
+    {
+      // Since C++14 value-initialized forward iterators are comparable.
+      if (this->SharedInfo == nullptr || it.SharedInfo == nullptr)
+	return this->SharedInfo == it.SharedInfo && this->ptr == it.ptr;
+
+      const input_iterator_wrapper<T>& base_this = *this;
+      const input_iterator_wrapper<T>& base_that = it;
+      return base_this == base_that;
+    }
+
+    bool
+    operator!=(const forward_iterator_wrapper& it) const noexcept
+    {
+      return !(*this == it);
+    }
+#endif
+  };
 
   /**
    * @brief bidirectional_iterator wrapper for pointer
-   * 
+   *
    * This class takes a pointer and wraps it to provide exactly
-   * the requirements of a forward_iterator. It should not be
-   * instansiated directly, but generated from a test_container
+   * the requirements of a bidirectional_iterator. It should not be
+   * instantiated directly, but generated from a test_container
    */
   template<class T>
   struct bidirectional_iterator_wrapper : public forward_iterator_wrapper<T>
   {
     typedef BoundsContainer<T> ContainerType;
     typedef std::bidirectional_iterator_tag iterator_category;
+
     bidirectional_iterator_wrapper(T* _ptr, ContainerType* SharedInfo_in)
     : forward_iterator_wrapper<T>(_ptr, SharedInfo_in)
     { }
 
-    bidirectional_iterator_wrapper(const bidirectional_iterator_wrapper& in)
-    : forward_iterator_wrapper<T>(in)
+    bidirectional_iterator_wrapper()
+    : forward_iterator_wrapper<T>()
     { }
 
-    bidirectional_iterator_wrapper(): forward_iterator_wrapper<T>()
-    { }
+#if __cplusplus >= 201103L
+    bidirectional_iterator_wrapper(
+	const bidirectional_iterator_wrapper&) = default;
 
     bidirectional_iterator_wrapper&
-    operator=(const bidirectional_iterator_wrapper& in)
-    {
-      this->ptr = in.ptr;
-      this->SharedInfo = in.SharedInfo;
-      return *this;
-    }
-   
+    operator=(const bidirectional_iterator_wrapper&) = default;
+#endif
+
     bidirectional_iterator_wrapper&
     operator++()
     {
@@ -356,7 +407,7 @@ namespace __gnu_test
       return tmp;
     }
 
-    bidirectional_iterator_wrapper& 
+    bidirectional_iterator_wrapper&
     operator--()
     {
       ITERATOR_VERIFY(this->SharedInfo && this->ptr > this->SharedInfo->first);
@@ -366,44 +417,42 @@ namespace __gnu_test
 
     bidirectional_iterator_wrapper
     operator--(int)
-    { 
+    {
       bidirectional_iterator_wrapper<T> tmp = *this;
       --*this;
       return tmp;
     }
-   };
+  };
 
   /**
    * @brief random_access_iterator wrapper for pointer
-   * 
+   *
    * This class takes a pointer and wraps it to provide exactly
-   * the requirements of a forward_iterator. It should not be
-   * instansiated directly, but generated from a test_container
+   * the requirements of a random_access_iterator. It should not be
+   * instantiated directly, but generated from a test_container
    */
   template<class T>
-  struct random_access_iterator_wrapper 
+  struct random_access_iterator_wrapper
   : public bidirectional_iterator_wrapper<T>
   {
     typedef BoundsContainer<T> ContainerType;
     typedef std::random_access_iterator_tag iterator_category;
+
     random_access_iterator_wrapper(T* _ptr, ContainerType* SharedInfo_in)
     : bidirectional_iterator_wrapper<T>(_ptr, SharedInfo_in)
     { }
 
-    random_access_iterator_wrapper(const random_access_iterator_wrapper<T>& in)
-    : bidirectional_iterator_wrapper<T>(in)
+    random_access_iterator_wrapper()
+    : bidirectional_iterator_wrapper<T>()
     { }
 
-    random_access_iterator_wrapper():bidirectional_iterator_wrapper<T>()
-    { }
+#if __cplusplus >= 201103L
+    random_access_iterator_wrapper(
+	const random_access_iterator_wrapper&) = default;
 
     random_access_iterator_wrapper&
-    operator=(const random_access_iterator_wrapper& in)
-    {
-      this->ptr = in.ptr;
-      this->SharedInfo = in.SharedInfo;
-      return *this;
-    }
+    operator=(const random_access_iterator_wrapper&) = default;
+#endif
 
     random_access_iterator_wrapper&
     operator++()
@@ -494,12 +543,12 @@ namespace __gnu_test
       return !(*this < in);
     }
 
-    bool 
+    bool
     operator<=(const random_access_iterator_wrapper<T>& in) const
     {
       return !(*this > in);
     }
-   };
+  };
 
   template<typename T>
     random_access_iterator_wrapper<T>
@@ -508,28 +557,36 @@ namespace __gnu_test
 
   template<typename T>
     random_access_iterator_wrapper<T>
-    operator+(std::ptrdiff_t n, random_access_iterator_wrapper<T> it) 
+    operator+(std::ptrdiff_t n, random_access_iterator_wrapper<T> it)
     { return it += n; }
 
 
-  /** 
+  /**
    * @brief A container-type class for holding iterator wrappers
    * test_container takes two parameters, a class T and an iterator
    * wrapper templated by T (for example forward_iterator_wrapper<T>.
-   * It takes two pointers representing a range and presents them as 
+   * It takes two pointers representing a range and presents them as
    * a container of iterators.
    */
-  template <class T, template<class T> class ItType>
+  template <class T, template<class TT> class ItType>
   struct test_container
   {
     typename ItType<T>::ContainerType bounds;
-    test_container(T* _first, T* _last):bounds(_first, _last)
+
+    test_container(T* _first, T* _last) : bounds(_first, _last)
     { }
+
+#if __cplusplus >= 201103L
+    template<std::size_t N>
+      explicit
+      test_container(T (&arr)[N]) : test_container(arr, arr+N)
+      { }
+#endif
 
     ItType<T>
     it(int pos)
     {
-      ITERATOR_VERIFY(pos >= 0 && pos <= (bounds.last - bounds.first));
+      ITERATOR_VERIFY(pos >= 0 && pos <= size());
       return ItType<T>(bounds.first + pos, &bounds);
     }
 
@@ -540,6 +597,10 @@ namespace __gnu_test
       return ItType<T>(pos, &bounds);
     }
 
+    const T&
+    val(int pos)
+    { return (bounds.first)[pos]; }
+
     ItType<T>
     begin()
     { return it(bounds.first); }
@@ -547,6 +608,253 @@ namespace __gnu_test
     ItType<T>
     end()
     { return it(bounds.last); }
-   };
-}
-#endif
+
+    std::size_t
+    size() const
+    { return bounds.size(); }
+  };
+
+#if __cplusplus > 201703L
+  template<typename T>
+    struct contiguous_iterator_wrapper
+    : random_access_iterator_wrapper<T>
+    {
+      using random_access_iterator_wrapper<T>::random_access_iterator_wrapper;
+
+      using iterator_concept = std::contiguous_iterator_tag;
+
+      contiguous_iterator_wrapper&
+      operator++()
+      {
+	random_access_iterator_wrapper<T>::operator++();
+	return *this;
+      }
+
+      contiguous_iterator_wrapper&
+      operator--()
+      {
+	random_access_iterator_wrapper<T>::operator--();
+	return *this;
+      }
+
+      contiguous_iterator_wrapper
+      operator++(int)
+      {
+	auto tmp = *this;
+	++*this;
+	return tmp;
+      }
+
+      contiguous_iterator_wrapper
+      operator--(int)
+      {
+	auto tmp = *this;
+	--*this;
+	return tmp;
+      }
+
+      contiguous_iterator_wrapper&
+      operator+=(std::ptrdiff_t n)
+      {
+	random_access_iterator_wrapper<T>::operator+=(n);
+	return *this;
+      }
+
+      friend contiguous_iterator_wrapper
+      operator+(contiguous_iterator_wrapper iter, std::ptrdiff_t n)
+      { return iter += n; }
+
+      friend contiguous_iterator_wrapper
+      operator+(std::ptrdiff_t n, contiguous_iterator_wrapper iter)
+      { return iter += n; }
+
+      contiguous_iterator_wrapper&
+      operator-=(std::ptrdiff_t n)
+      { return *this += -n; }
+
+      friend contiguous_iterator_wrapper
+      operator-(contiguous_iterator_wrapper iter, std::ptrdiff_t n)
+      { return iter -= n; }
+    };
+
+  // A move-only input iterator type.
+  template<typename T>
+    struct input_iterator_wrapper_nocopy : input_iterator_wrapper<T>
+    {
+      using input_iterator_wrapper<T>::input_iterator_wrapper;
+
+      input_iterator_wrapper_nocopy()
+	: input_iterator_wrapper<T>(nullptr, nullptr)
+      { }
+
+      input_iterator_wrapper_nocopy(const input_iterator_wrapper_nocopy&) = delete;
+      input_iterator_wrapper_nocopy&
+      operator=(const input_iterator_wrapper_nocopy&) = delete;
+
+      input_iterator_wrapper_nocopy(input_iterator_wrapper_nocopy&&) = default;
+      input_iterator_wrapper_nocopy&
+      operator=(input_iterator_wrapper_nocopy&&) = default;
+
+      using input_iterator_wrapper<T>::operator++;
+
+      input_iterator_wrapper_nocopy&
+      operator++()
+      {
+	input_iterator_wrapper<T>::operator++();
+	return *this;
+      }
+    };
+
+  // A type meeting the minimum std::range requirements
+  template<typename T, template<typename> class Iter>
+    class test_range
+    {
+      // Exposes the protected default constructor of Iter<T> if needed.  This
+      // is needed only when Iter is input_iterator_wrapper or
+      // output_iterator_wrapper, because legacy forward iterators and beyond
+      // are already default constructible.
+      struct iterator : Iter<T>
+      {
+	using Iter<T>::Iter;
+
+	using Iter<T>::operator++;
+
+	iterator& operator++() { Iter<T>::operator++(); return *this; }
+      };
+
+      template<typename I>
+	struct sentinel
+	{
+	  T* end;
+
+	  friend bool operator==(const sentinel& s, const I& i) noexcept
+	  { return s.end == i.ptr; }
+
+	  friend auto operator-(const sentinel& s, const I& i) noexcept
+	    requires std::random_access_iterator<I>
+	  { return s.end - i.ptr; }
+
+	  friend auto operator-(const I& i, const sentinel& s) noexcept
+	    requires std::random_access_iterator<I>
+	  { return i.ptr - s.end; }
+	};
+
+    protected:
+      auto
+      get_iterator(T* p)
+      {
+	if constexpr (std::default_initializable<Iter<T>>)
+	  return Iter<T>(p, &bounds);
+	else
+	  return iterator(p, &bounds);
+      }
+
+    public:
+      test_range(T* first, T* last) : bounds(first, last)
+      { }
+
+      template<std::size_t N>
+	explicit
+	test_range(T (&arr)[N]) : test_range(arr, arr+N)
+	{ }
+
+      auto begin() & { return get_iterator(bounds.first); }
+
+      auto end() &
+      {
+	using I = decltype(get_iterator(bounds.last));
+	return sentinel<I>{bounds.last};
+      }
+
+      typename Iter<T>::ContainerType bounds;
+    };
+
+  template<typename T>
+    using test_contiguous_range
+      = test_range<T, contiguous_iterator_wrapper>;
+  template<typename T>
+    using test_random_access_range
+      = test_range<T, random_access_iterator_wrapper>;
+  template<typename T>
+    using test_bidirectional_range
+      = test_range<T, bidirectional_iterator_wrapper>;
+  template<typename T>
+    using test_forward_range
+      = test_range<T, forward_iterator_wrapper>;
+  template<typename T>
+    using test_input_range
+      = test_range<T, input_iterator_wrapper>;
+  template<typename T>
+    using test_output_range
+      = test_range<T, output_iterator_wrapper>;
+
+  // A type meeting the minimum std::sized_range requirements
+  template<typename T, template<typename> class Iter>
+    struct test_sized_range : test_range<T, Iter>
+    {
+      using test_range<T, Iter>::test_range;
+
+      std::size_t size() const noexcept
+      { return this->bounds.size(); }
+    };
+
+  template<typename T>
+    using test_contiguous_sized_range
+      = test_sized_range<T, contiguous_iterator_wrapper>;
+  template<typename T>
+    using test_random_access_sized_range
+      = test_sized_range<T, random_access_iterator_wrapper>;
+  template<typename T>
+    using test_bidirectional_sized_range
+      = test_sized_range<T, bidirectional_iterator_wrapper>;
+  template<typename T>
+    using test_forward_sized_range
+      = test_sized_range<T, forward_iterator_wrapper>;
+  template<typename T>
+    using test_input_sized_range
+      = test_sized_range<T, input_iterator_wrapper>;
+  template<typename T>
+    using test_output_sized_range
+      = test_sized_range<T, output_iterator_wrapper>;
+
+  // A type meeting the minimum std::sized_range requirements, and whose end()
+  // returns a sized sentinel.
+  template<typename T, template<typename> class Iter>
+    struct test_sized_range_sized_sent : test_sized_range<T, Iter>
+    {
+      using test_sized_range<T, Iter>::test_sized_range;
+
+      template<typename I>
+	struct sentinel
+	{
+	  T* end;
+
+	  friend bool operator==(const sentinel& s, const I& i) noexcept
+	  { return s.end == i.ptr; }
+
+	  friend std::iter_difference_t<I>
+	  operator-(const sentinel& s, const I& i) noexcept
+	  { return s.end - i.ptr; }
+
+	  friend std::iter_difference_t<I>
+	  operator-(const I& i, const sentinel& s) noexcept
+	  { return i.ptr - s.end; }
+	};
+
+      auto end() &
+      {
+	using I = decltype(this->get_iterator(this->bounds.last));
+	return sentinel<I>{this->bounds.last};
+      }
+    };
+
+// test_range and test_sized_range do not own their elements, so they model
+// std::ranges::borrowed_range.  This file does not define specializations of
+// std::ranges::enable_borrowed_range, so that individual tests can decide
+// whether or not to do so.
+// This is also true for test_container, although only when it has forward
+// iterators (because output_iterator_wrapper and input_iterator_wrapper are
+// not default constructible so do not model std::input_or_output_iterator).
+#endif // C++20
+} // namespace __gnu_test
+#endif // _TESTSUITE_ITERATORS

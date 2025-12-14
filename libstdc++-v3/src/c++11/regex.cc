@@ -1,6 +1,6 @@
 // regex -*- C++ -*-
 
-// Copyright (C) 2011-2013 Free Software Foundation, Inc.
+// Copyright (C) 2011-2020 Free Software Foundation, Inc.
 //
 // This file is part of the GNU ISO C++ Library.  This library is free
 // software; you can redistribute it and/or modify it under the
@@ -22,24 +22,24 @@
 // see the files COPYING3 and COPYING.RUNTIME respectively.  If not, see
 // <http://www.gnu.org/licenses/>.
 
-#include <regex>
+#include <stdexcept>
+#include <bits/regex_error.h>
+#include <bits/functexcept.h>
 
 namespace std _GLIBCXX_VISIBILITY(default)
 {
 _GLIBCXX_BEGIN_NAMESPACE_VERSION
+
+  void
+  __throw_regex_error(regex_constants::error_type __ecode
+		      __attribute__((unused)))
+  { _GLIBCXX_THROW_OR_ABORT(regex_error(__ecode)); }
 
   regex_error::regex_error(regex_constants::error_type __ecode)
   : std::runtime_error("regex_error"), _M_code(__ecode)
   { }
 
   regex_error::~regex_error() throw() { }
-
-#ifdef _AIX
-  // PR libstdc++/52887
-  template class function<void (__regex::_PatternCursor const&,
-				__regex::_Results&)>;
-  template class function<bool (__regex::_PatternCursor const&)>;
-#endif
 
 _GLIBCXX_END_NAMESPACE_VERSION
 } // namespace std

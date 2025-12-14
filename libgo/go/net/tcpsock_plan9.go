@@ -1,97 +1,92 @@
-// Copyright 2009 The Go Authors.  All rights reserved.
+// Copyright 2009 The Go Authors. All rights reserved.
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
-
-// TCP for Plan 9
 
 package net
 
 import (
-	"syscall"
-	"time"
+	"context"
+	"io"
+	"os"
 )
 
-// TCPConn is an implementation of the Conn interface
-// for TCP network connections.
-type TCPConn struct {
-	plan9Conn
+func (c *TCPConn) readFrom(r io.Reader) (int64, error) {
+	return genericReadFrom(c, r)
 }
 
-// SetDeadline implements the Conn SetDeadline method.
-func (c *TCPConn) SetDeadline(t time.Time) error {
-	return syscall.EPLAN9
-}
-
-// SetReadDeadline implements the Conn SetReadDeadline method.
-func (c *TCPConn) SetReadDeadline(t time.Time) error {
-	return syscall.EPLAN9
-}
-
-// SetWriteDeadline implements the Conn SetWriteDeadline method.
-func (c *TCPConn) SetWriteDeadline(t time.Time) error {
-	return syscall.EPLAN9
-}
-
-// CloseRead shuts down the reading side of the TCP connection.
-// Most callers should just use Close.
-func (c *TCPConn) CloseRead() error {
-	if !c.ok() {
-		return syscall.EINVAL
+func (sd *sysDialer) dialTCP(ctx context.Context, laddr, raddr *TCPAddr) (*TCPConn, error) {
+	if testHookDialTCP != nil {
+		return testHookDialTCP(ctx, sd.network, laddr, raddr)
 	}
-	return syscall.EPLAN9
+	return sd.doDialTCP(ctx, laddr, raddr)
 }
 
-// CloseWrite shuts down the writing side of the TCP connection.
-// Most callers should just use Close.
-func (c *TCPConn) CloseWrite() error {
-	if !c.ok() {
-		return syscall.EINVAL
-	}
-	return syscall.EPLAN9
-}
-
-// DialTCP connects to the remote address raddr on the network net,
-// which must be "tcp", "tcp4", or "tcp6".  If laddr is not nil, it is used
-// as the local address for the connection.
-func DialTCP(net string, laddr, raddr *TCPAddr) (c *TCPConn, err error) {
-	switch net {
-	case "tcp", "tcp4", "tcp6":
+func (sd *sysDialer) doDialTCP(ctx context.Context, laddr, raddr *TCPAddr) (*TCPConn, error) {
+	switch sd.network {
+	case "tcp4":
+		// Plan 9 doesn't complain about [::]:0->127.0.0.1, so it's up to us.
+		if laddr != nil && len(laddr.IP) != 0 && laddr.IP.To4() == nil {
+			return nil, &AddrError{Err: "non-IPv4 local address", Addr: laddr.String()}
+		}
+	case "tcp", "tcp6":
 	default:
-		return nil, UnknownNetworkError(net)
+		return nil, UnknownNetworkError(sd.network)
 	}
 	if raddr == nil {
-		return nil, &OpError{"dial", net, nil, errMissingAddress}
+		return nil, errMissingAddress
 	}
-	c1, err := dialPlan9(net, laddr, raddr)
+	fd, err := dialPlan9(ctx, sd.network, laddr, raddr)
 	if err != nil {
-		return
+		return nil, err
 	}
-	return &TCPConn{*c1}, nil
+	return newTCPConn(fd), nil
 }
 
-// TCPListener is a TCP network listener.
-// Clients should typically use variables of type Listener
-// instead of assuming TCP.
-type TCPListener struct {
-	plan9Listener
+func (ln *TCPListener) ok() bool { return ln != nil && ln.fd != nil && ln.fd.ctl != nil }
+
+func (ln *TCPListener) accept() (*TCPConn, error) {
+	fd, err := ln.fd.acceptPlan9()
+	if err != nil {
+		return nil, err
+	}
+	tc := newTCPConn(fd)
+	if ln.lc.KeepAlive >= 0 {
+		setKeepAlive(fd, true)
+		ka := ln.lc.KeepAlive
+		if ln.lc.KeepAlive == 0 {
+			ka = defaultTCPKeepAlive
+		}
+		setKeepAlivePeriod(fd, ka)
+	}
+	return tc, nil
 }
 
-// ListenTCP announces on the TCP address laddr and returns a TCP listener.
-// Net must be "tcp", "tcp4", or "tcp6".
-// If laddr has a port of 0, it means to listen on some available port.
-// The caller can use l.Addr() to retrieve the chosen address.
-func ListenTCP(net string, laddr *TCPAddr) (l *TCPListener, err error) {
-	switch net {
-	case "tcp", "tcp4", "tcp6":
-	default:
-		return nil, UnknownNetworkError(net)
+func (ln *TCPListener) close() error {
+	if err := ln.fd.pfd.Close(); err != nil {
+		return err
 	}
-	if laddr == nil {
-		return nil, &OpError{"listen", net, nil, errMissingAddress}
+	if _, err := ln.fd.ctl.WriteString("hangup"); err != nil {
+		ln.fd.ctl.Close()
+		return err
 	}
-	l1, err := listenPlan9(net, laddr)
+	if err := ln.fd.ctl.Close(); err != nil {
+		return err
+	}
+	return nil
+}
+
+func (ln *TCPListener) file() (*os.File, error) {
+	f, err := ln.dup()
 	if err != nil {
-		return
+		return nil, err
 	}
-	return &TCPListener{*l1}, nil
+	return f, nil
+}
+
+func (sl *sysListener) listenTCP(ctx context.Context, laddr *TCPAddr) (*TCPListener, error) {
+	fd, err := listenPlan9(ctx, sl.network, laddr)
+	if err != nil {
+		return nil, err
+	}
+	return &TCPListener{fd: fd, lc: sl.ListenConfig}, nil
 }

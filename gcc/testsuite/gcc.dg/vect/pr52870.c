@@ -1,5 +1,7 @@
 /* { dg-do compile } */
-/* { dg-options "-O1 -ftree-vectorize" } */
+/* { dg-additional-options "-O1" } */
+
+void foo (unsigned long int);
 
 long
 test (int *x)

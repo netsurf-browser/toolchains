@@ -1,7 +1,6 @@
 // Short-string-optimized versatile string base -*- C++ -*-
 
-// Copyright (C) 2005, 2006, 2007, 2008, 2009, 2010
-// Free Software Foundation, Inc.
+// Copyright (C) 2005-2020 Free Software Foundation, Inc.
 //
 // This file is part of the GNU ISO C++ Library.  This library is free
 // software; you can redistribute it and/or modify it under the
@@ -99,7 +98,8 @@ _GLIBCXX_BEGIN_NAMESPACE_VERSION
         _M_construct_aux(_InIterator __beg, _InIterator __end, 
 			 std::__false_type)
 	{
-          typedef typename iterator_traits<_InIterator>::iterator_category _Tag;
+          typedef typename std::iterator_traits<_InIterator>::iterator_category
+	    _Tag;
           _M_construct(__beg, __end, _Tag());
 	}
 
@@ -141,7 +141,10 @@ _GLIBCXX_BEGIN_NAMESPACE_VERSION
     public:
       size_type
       _M_max_size() const
-      { return (_M_get_allocator().max_size() - 1) / 2; }
+      {
+	typedef __alloc_traits<_CharT_alloc_type> _ATraits;
+	return (_ATraits::max_size(_M_get_allocator()) - 1) / 2;
+      }
 
       _CharT*
       _M_data() const
@@ -183,7 +186,7 @@ _GLIBCXX_BEGIN_NAMESPACE_VERSION
 
       __sso_string_base(const __sso_string_base& __rcs);
 
-#ifdef __GXX_EXPERIMENTAL_CXX0X__
+#if __cplusplus >= 201103L
       __sso_string_base(__sso_string_base&& __rcs);
 #endif
 
@@ -344,7 +347,7 @@ _GLIBCXX_BEGIN_NAMESPACE_VERSION
     : _M_dataplus(__rcs._M_get_allocator(), _M_local_data)
     { _M_construct(__rcs._M_data(), __rcs._M_data() + __rcs._M_length()); }
 
-#ifdef __GXX_EXPERIMENTAL_CXX0X__
+#if __cplusplus >= 201103L
   template<typename _CharT, typename _Traits, typename _Alloc>
     __sso_string_base<_CharT, _Traits, _Alloc>::
     __sso_string_base(__sso_string_base&& __rcs)
@@ -362,9 +365,9 @@ _GLIBCXX_BEGIN_NAMESPACE_VERSION
 	  _M_capacity(__rcs._M_allocated_capacity);
 	}
 
-      _M_length(__rcs._M_length());
-      __rcs._M_length(0);
+      _M_set_length(__rcs._M_length());
       __rcs._M_data(__rcs._M_local_data);
+      __rcs._M_set_length(0);
     }
 #endif
 

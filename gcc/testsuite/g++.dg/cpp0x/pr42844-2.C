@@ -1,6 +1,5 @@
 // PR c++/42844
-// { dg-do compile }
-// { dg-options "-std=c++0x" }
+// { dg-do compile { target c++11 } }
 
 struct A // { dg-message "user-provided default constructor" }
 {
@@ -35,8 +34,8 @@ struct Derived3 : Base // { dg-message "user-provided default constructor" }
 
 void f()
 {
-    const A a; // { dg-error "uninitialized const" }
-    const Derived d; // { dg-error "uninitialized const" }
-    const Derived2 d2; // { dg-error "uninitialized const" }
-    const Derived3 d3; // { dg-error "uninitialized const" }
+    const A a; // { dg-error "uninitialized 'const" }
+    const Derived d; // { dg-error "uninitialized 'const" }
+    const Derived2 d2; // { dg-error "uninitialized 'const" }
+    const Derived3 d3; // { dg-error "uninitialized 'const" }
 }

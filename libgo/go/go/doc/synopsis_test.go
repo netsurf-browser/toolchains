@@ -28,6 +28,14 @@ var tests = []struct {
 	{"P. Q.   ", 8, "P. Q."},
 	{"Package Καλημέρα κόσμε.", 36, "Package Καλημέρα κόσμε."},
 	{"Package こんにちは 世界\n", 31, "Package こんにちは 世界"},
+	{"Package こんにちは。世界", 26, "Package こんにちは。"},
+	{"Package 안녕．世界", 17, "Package 안녕．"},
+	{"Package foo does bar.", 21, "Package foo does bar."},
+	{"Copyright 2012 Google, Inc. Package foo does bar.", 27, ""},
+	{"All Rights reserved. Package foo does bar.", 20, ""},
+	{"All rights reserved. Package foo does bar.", 20, ""},
+	{"Authors: foo@bar.com. Package foo does bar.", 21, ""},
+	{"typically invoked as ``go tool asm'',", 37, "typically invoked as " + ulquo + "go tool asm" + urquo + ","},
 }
 
 func TestSynopsis(t *testing.T) {

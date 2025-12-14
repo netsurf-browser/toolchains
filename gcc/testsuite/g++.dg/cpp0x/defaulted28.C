@@ -1,15 +1,15 @@
 // PR c++/49102
 // PR c++/50034
-// { dg-options -std=c++0x }
+// { dg-do compile { target c++11 } }
 
 struct A {
   A() = default;
 
 private:
-  A(A const&) = default;	// { dg-error "private" }
+  A(A const&) = default;	// { dg-message "private" }
 };
 
-int f(...) { }
+int f(...) { return 0; }
 int main() {
   A a;
   f(a); 			// { dg-error "this context" }

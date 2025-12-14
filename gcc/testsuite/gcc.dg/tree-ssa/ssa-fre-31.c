@@ -1,5 +1,5 @@
 /* { dg-do compile } */
-/* { dg-options "-O -fdump-tree-fre1-details" } */
+/* { dg-options "-O -fdump-tree-fre1-details -fno-tree-forwprop" } */
 /* { dg-additional-options "-fno-common" { target hppa*-*-hpux* } } */
 
 typedef double d128 __attribute__((vector_size(16)));
@@ -44,4 +44,3 @@ void test4 (unsigned char x)
 
 /* { dg-final { scan-tree-dump-times "Replaced \{" 4 "fre1" } } */
 /* { dg-final { scan-tree-dump-times "Deleted redundant store" 4 "fre1" } } */
-/* { dg-final { cleanup-tree-dump "fre1" } } */

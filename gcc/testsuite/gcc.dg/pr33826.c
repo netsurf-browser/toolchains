@@ -1,9 +1,12 @@
 /* Regression test for PR middle-end/33826 */
 /* Verify that recursive functions cannot be pure or const.  */
 
-/* { dg-do compile } */
-/* { dg-require-effective-target nonpic } */
+/* { dg-do compile { target { nonpic || pie_enabled } } } */
 /* { dg-options "-O1 -fdump-tree-local-pure-const1 -fdump-ipa-pure-const" } */
+
+int recurse1 (int);
+int recurse2b (int);
+int norecurse1b (int);
 
 int recurese1 (int i)
 {
@@ -44,5 +47,3 @@ int norecurse1b (int i)
 /* { dg-final { scan-ipa-dump-not "found to be const: recurse1" "pure-const" } } */
 /* { dg-final { scan-ipa-dump-not "found to be const: recurse2a" "pure-const" } } */
 /* { dg-final { scan-ipa-dump-not "found to be const: recurse2b" "pure-const" } } */
-/* { dg-final { cleanup-ipa-dump "pure-const" } } */
-/* { dg-final { cleanup-tree-dump "local-pure-const1" } } */

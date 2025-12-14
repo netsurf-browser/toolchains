@@ -14,10 +14,17 @@
 #include <errno.h>
 #include <fcntl.h>
 #include <math.h>
+#include <pthread.h>
 #include <stdint.h>
+#include <stdlib.h>
+#include <string.h>
 #include <sys/types.h>
+#include <sys/resource.h>
+#include <sys/socket.h>
 #include <sys/stat.h>
 #include <sys/time.h>
+#include <sys/wait.h>
+#include <time.h>
 #include <unistd.h>
 
 #ifndef HAVE_OFF64_T
@@ -26,6 +33,30 @@ typedef signed int off64_t __attribute__ ((mode (DI)));
 
 #ifndef HAVE_LOFF_T
 typedef off64_t loff_t;
+#endif
+
+#ifndef HAVE_ACCEPT4
+struct sockaddr;
+int
+accept4 (int sockfd __attribute__ ((unused)),
+	 struct sockaddr *addr __attribute__ ((unused)),
+	 socklen_t *addrlen __attribute__ ((unused)),
+	 int flags __attribute__ ((unused)))
+{
+  errno = ENOSYS;
+  return -1;
+}
+#endif
+
+#ifndef HAVE_DUP3
+int
+dup3 (int oldfd __attribute__ ((unused)),
+      int newfd __attribute__ ((unused)),
+      int flags __attribute__ ((unused)))
+{
+  errno = ENOSYS;
+  return -1;
+}
 #endif
 
 #ifndef HAVE_EPOLL_CREATE1
@@ -97,6 +128,18 @@ futimesat (int dirfd __attribute__ ((unused)),
 }
 #endif
 
+#ifndef HAVE_GETXATTR
+ssize_t
+getxattr (const char *path __attribute__ ((unused)),
+	  const char *name __attribute__ ((unused)),
+	  void *value __attribute__ ((unused)),
+	  size_t size __attribute__ ((unused)))
+{
+  errno = ENOSYS;
+  return -1;
+}
+#endif
+
 #ifndef HAVE_INOTIFY_ADD_WATCH
 int
 inotify_add_watch (int fd __attribute__ ((unused)),
@@ -130,6 +173,17 @@ inotify_init1 (int flags __attribute__ ((unused)))
 int
 inotify_rm_watch (int fd __attribute__ ((unused)),
 		  uint32_t wd __attribute__ ((unused)))
+{
+  errno = ENOSYS;
+  return -1;
+}
+#endif
+
+#ifndef HAVE_LISTXATTR
+ssize_t
+listxattr (const char *path __attribute__ ((unused)),
+	   char *list __attribute__ ((unused)),
+	   size_t size __attribute__ ((unused)))
 {
   errno = ENOSYS;
   return -1;
@@ -171,12 +225,45 @@ openat (int dirfd __attribute__ ((unused)),
 }
 #endif
 
+#ifndef HAVE_PIPE2
+int
+pipe2 (int pipefd[2] __attribute__ ((unused)),
+       int flags __attribute__ ((unused)))
+{
+  errno = ENOSYS;
+  return -1;
+}
+#endif
+
+#ifndef HAVE_REMOVEXATTR
+int
+removexattr (const char *path __attribute__ ((unused)),
+	     const char *name __attribute__ ((unused)))
+{
+  errno = ENOSYS;
+  return -1;
+}
+#endif
+
 #ifndef HAVE_RENAMEAT
 int
 renameat (int olddirfd __attribute__ ((unused)),
 	  const char *oldpath __attribute__ ((unused)),
 	  int newdirfd __attribute__ ((unused)),
 	  const char *newpath __attribute__ ((unused)))
+{
+  errno = ENOSYS;
+  return -1;
+}
+#endif
+
+#ifndef HAVE_SETXATTR
+int
+setxattr (const char *path __attribute__ ((unused)),
+	  const char *name __attribute__ ((unused)),
+	  const void *value __attribute__ ((unused)),
+	  size_t size __attribute__ ((unused)),
+	  int flags __attribute__ ((unused)))
 {
   errno = ENOSYS;
   return -1;
@@ -235,6 +322,31 @@ unlinkat (int dirfd __attribute__ ((unused)),
 #ifndef HAVE_UNSHARE
 int
 unshare (int flags __attribute__ ((unused)))
+{
+  errno = ENOSYS;
+  return -1;
+}
+#endif
+
+#ifndef HAVE_UTIMENSAT
+struct timespec;
+int
+utimensat(int dirfd __attribute__ ((unused)),
+	  const char *pathname __attribute__ ((unused)),
+	  const struct timespec times[2] __attribute__ ((unused)),
+	  int flags __attribute__ ((unused)))
+{
+  errno = ENOSYS;
+  return -1;
+}
+#endif
+
+
+#ifndef HAVE_MINCORE
+int
+mincore(void *addr __attribute__ ((unused)),
+	size_t length __attribute__ ((unused)),
+	unsigned char *vec __attribute__ ((unused)))
 {
   errno = ENOSYS;
   return -1;
@@ -352,4 +464,64 @@ log1pl (long double a)
 {
   return (long double) log1p ((double) a);
 }
+#endif
+
+#ifndef HAVE_STRERROR_R
+
+/* Some old systems do not have strerror_r.  This is a replacement.
+   It assumes that nothing else in the program calls strerror.  */
+
+static pthread_mutex_t strerror_lock = PTHREAD_MUTEX_INITIALIZER;
+
+int
+strerror_r (int errnum, char *buf, size_t buflen)
+{
+  int i;
+  char *errmsg;
+  size_t len;
+  int ret;
+
+  i = pthread_mutex_lock (&strerror_lock);
+  if (i != 0)
+    abort ();
+
+  errmsg = strerror (errnum);
+  len = strlen (errmsg);
+  if (len >= buflen)
+    ret = ERANGE;
+  else
+    {
+      memcpy (buf, errmsg, len + 1);
+      ret = 0;
+    }
+
+  i = pthread_mutex_unlock (&strerror_lock);
+  if (i != 0)
+    abort ();
+
+  return ret;
+}
+
+#endif /* ! HAVE_STRERROR_R */
+
+#ifndef HAVE_SYSCALL
+int
+syscall(int number __attribute__ ((unused)), ...)
+{
+  errno = ENOSYS;
+  return -1;
+}
+#endif
+
+#ifndef HAVE_WAIT4
+
+/* Some old systems do not have wait4.  This is a replacement that
+   uses waitpid.  */
+
+pid_t
+wait4 (pid_t pid, int *status, int options, struct rusage *rusage __attribute__ ((unused)))
+{
+  return waitpid (pid, status, options);
+}
+
 #endif

@@ -1,6 +1,6 @@
 /* { dg-do run { target powerpc*-*-* } } */
 /* { dg-require-effective-target powerpc64 } */
-/* { dg-options "-mcpu=G5" } */
+/* { dg-options "-mdejagnu-cpu=G5" } */
 
 #include <stdlib.h>
 
@@ -11,7 +11,11 @@ int  msw(long long in)
     int  i[2];
   } ud;
   ud.ll = in;
+#ifdef __LITTLE_ENDIAN__
+  return ud.i[1];
+#else
   return ud.i[0];
+#endif
 }
 
 int main()

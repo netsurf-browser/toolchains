@@ -1,5 +1,4 @@
-// { dg-do run }
-// { dg-options "-std=c++0x" }
+// { dg-do run { target c++11 } }
 
 // Test throw and catch
 
@@ -19,8 +18,6 @@ int main()
 {
   try {
     throw nullptr;
-  } catch (void*) {
-    foo (0, 1);
   } catch (bool) {
     foo (0, 2);
   } catch (int) {
@@ -36,8 +33,6 @@ int main()
   nullptr_t mynull = 0;
   try {
     throw mynull;
-  } catch (void*) {
-    foo (1, 1);
   } catch (bool) {
     foo (1, 2);
   } catch (int) {

@@ -1,27 +1,37 @@
 // Test for checking of exception specifications on defaulted fns
-// { dg-options -std=c++0x }
+// { dg-do compile { target c++11 } }
 
 struct A
 {
   A() noexcept = default;
 };
 
+A a;
+
 struct B
 {
-  B() throw (int) = default; // { dg-error "exception-specification that differs from the implicit declaration" }
-};
+  B() throw (int) = default;
+};				// { dg-error "dynamic exception specification" "" { target c++17 } .-1 }
+				// { dg-warning "deprecated" "" { target { ! c++17 } } .-2 }
+B b;
 
 struct C
 {
-  C() throw (int) { }
-};
+  C() throw (int) { }		// { dg-error "dynamic exception specification" "" { target c++17 } }
+};				// { dg-warning "deprecated" "" { target { ! c++17 } } .-1 }
+
+C c;
 
 struct D: C
 {
-  D() throw (int) = default;
-};
+  D() throw (int) = default;	// { dg-error "dynamic exception specification" "" { target c++17 } }
+};				// { dg-warning "deprecated" "" { target { ! c++17 } } .-1 }
+
+D d;
 
 struct E
 {
   E() = default;
 };
+
+E e;

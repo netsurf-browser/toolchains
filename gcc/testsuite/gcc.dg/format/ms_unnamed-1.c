@@ -10,7 +10,7 @@
 
 /* Definition of TItype follows same logic as in gcc.dg/titype-1.c,
    but must be a #define to avoid giving the type a name.  */
-#if (defined(__LP64__) && !defined(__hppa__)) || defined(__SPU__)
+#if defined(__LP64__) && !defined(__hppa__)
 #define TItype int __attribute__ ((mode (TI)))
 #else
 #define TItype long
@@ -21,5 +21,5 @@ f (TItype x)
 {
   printf("%d", x); /* { dg-warning "expects argument" } */
   printf("%d", 141592653589793238462643383279502884197169399375105820974944); /* { dg-warning "expects argument" } */
-  /* { dg-warning "unsigned only|too large" "constant" { target *-*-* } 23 } */
+  /* { dg-warning "unsigned only|too large" "constant" { target *-*-* } .-1 } */
 }

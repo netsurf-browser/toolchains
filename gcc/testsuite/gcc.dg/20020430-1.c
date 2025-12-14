@@ -6,6 +6,7 @@
 
 /* { dg-do compile { target fpic } } */
 /* { dg-options "-O2 -frename-registers -fpic" } */
+/* { dg-skip-if "too many arguments in function call" { bpf-*-* } } */
 
 typedef unsigned long XID;
 typedef XID Window;
@@ -105,6 +106,11 @@ typedef struct _RectObjRec {
 typedef struct _RectObjRec *RectObj;
 
 SmeObject DoGetEventEntry();
+int XtWidgetToApplicationContext();
+void XtAppError();
+void Unhighlight();
+void XtMoveWidget();
+void XWarpPointer();
 
 SmeObject
 GetEventEntry(Widget w, XEvent *event)

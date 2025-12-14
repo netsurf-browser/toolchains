@@ -13,12 +13,25 @@
  * ====================================================
  */
 
+#if defined(LIBM_SCCS) && !defined(lint)
+static char rcsid[] = "$NetBSD: $";
+#endif
+
+/*
+ * modfq(long double x, long double *iptr)
+ * return fraction part of x, and return x's integral part in *iptr.
+ * Method:
+ *	Bit twiddling.
+ *
+ * Exception:
+ *	No exception.
+ */
+
 #include "quadmath-imp.h"
 
 static const __float128 one = 1.0;
 
-__float128
-modfq (__float128 x, __float128 *iptr)
+__float128 modfq(__float128 x, __float128 *iptr)
 {
 	int64_t i0,i1,j0;
 	uint64_t i;

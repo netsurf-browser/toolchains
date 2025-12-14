@@ -1,9 +1,8 @@
 /* Generic helper function for repacking arrays.
-   Copyright 2003, 2004, 2005, 2007, 2009, 2010
-   Free Software Foundation, Inc.
+   Copyright (C) 2003-2020 Free Software Foundation, Inc.
    Contributed by Paul Brook <paul@nowt.org>
 
-This file is part of the GNU Fortran 95 runtime library (libgfortran).
+This file is part of the GNU Fortran runtime library (libgfortran).
 
 Libgfortran is free software; you can redistribute it and/or
 modify it under the terms of the GNU General Public
@@ -25,8 +24,6 @@ see the files COPYING3 and COPYING.RUNTIME respectively.  If not, see
 <http://www.gnu.org/licenses/>.  */
 
 #include "libgfortran.h"
-#include <stdlib.h>
-#include <assert.h>
 #include <string.h>
 
 extern void *internal_pack (gfc_array_char *);
@@ -44,10 +41,12 @@ internal_pack (gfc_array_char * source)
   const char *src;
   char *dest;
   void *destptr;
-  int n;
   int packed;
   index_type size;
   index_type type_size;
+
+  if (source->base_addr == NULL)
+    return NULL;
 
   type_size = GFC_DTYPE_TYPE_SIZE(source);
   size = GFC_DESCRIPTOR_SIZE (source);
@@ -55,7 +54,6 @@ internal_pack (gfc_array_char * source)
     {
     case GFC_DTYPE_INTEGER_1:
     case GFC_DTYPE_LOGICAL_1:
-    case GFC_DTYPE_DERIVED_1:
       return internal_pack_1 ((gfc_array_i1 *) source);
 
     case GFC_DTYPE_INTEGER_2:
@@ -123,40 +121,48 @@ internal_pack (gfc_array_char * source)
 # endif
 #endif
 
-    case GFC_DTYPE_DERIVED_2:
-      if (GFC_UNALIGNED_2(source->data))
+    default:
+      break;
+    }
+
+  switch(GFC_DESCRIPTOR_SIZE (source))
+    {
+    case 1:
+      return internal_pack_1 ((gfc_array_i1 *) source);
+
+    case 2:
+      if (GFC_UNALIGNED_2(source->base_addr))
 	break;
       else
 	return internal_pack_2 ((gfc_array_i2 *) source);
 
-    case GFC_DTYPE_DERIVED_4:
-      if (GFC_UNALIGNED_4(source->data))
+    case 4:
+      if (GFC_UNALIGNED_4(source->base_addr))
 	break;
       else
 	return internal_pack_4 ((gfc_array_i4 *) source);
 
-    case GFC_DTYPE_DERIVED_8:
-      if (GFC_UNALIGNED_8(source->data))
+    case 8:
+      if (GFC_UNALIGNED_8(source->base_addr))
 	break;
       else
 	return internal_pack_8 ((gfc_array_i8 *) source);
 
 #ifdef HAVE_GFC_INTEGER_16
-    case GFC_DTYPE_DERIVED_16:
-      if (GFC_UNALIGNED_16(source->data))
+    case 16:
+      if (GFC_UNALIGNED_16(source->base_addr))
 	break;
       else
 	return internal_pack_16 ((gfc_array_i16 *) source);
 #endif
-
     default:
       break;
     }
-
+  
   dim = GFC_DESCRIPTOR_RANK (source);
   ssize = 1;
   packed = 1;
-  for (n = 0; n < dim; n++)
+  for (index_type n = 0; n < dim; n++)
     {
       count[n] = 0;
       stride[n] = GFC_DESCRIPTOR_STRIDE(source,n);
@@ -175,12 +181,12 @@ internal_pack (gfc_array_char * source)
     }
 
   if (packed)
-    return source->data;
+    return source->base_addr;
 
    /* Allocate storage for the destination.  */
-  destptr = internal_malloc_size (ssize * size);
+  destptr = xmallocarray (ssize, size);
   dest = (char *)destptr;
-  src = source->data;
+  src = source->base_addr;
   stride0 = stride[0] * size;
 
   while (src)
@@ -192,7 +198,7 @@ internal_pack (gfc_array_char * source)
       src += stride0;
       count[0]++;
       /* Advance to the next source element.  */
-      n = 0;
+      index_type n = 0;
       while (count[n] == extent[n])
         {
           /* When we get to the end of a dimension, reset it and increment

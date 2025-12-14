@@ -6,7 +6,7 @@
 --                                                                          --
 --                                 B o d y                                  --
 --                                                                          --
---          Copyright (C) 1992-2011, Free Software Foundation, Inc.         --
+--          Copyright (C) 1992-2019, Free Software Foundation, Inc.         --
 --                                                                          --
 -- GNAT is free software;  you can  redistribute it  and/or modify it under --
 -- terms of the  GNU General Public License as published  by the Free Soft- --
@@ -23,6 +23,7 @@
 --                                                                          --
 ------------------------------------------------------------------------------
 
+with Aspects;  use Aspects;
 with Atree;    use Atree;
 with Checks;   use Checks;
 with Debug;    use Debug;
@@ -37,6 +38,8 @@ with Namet;    use Namet;
 with Nmake;    use Nmake;
 with Nlists;   use Nlists;
 with Opt;      use Opt;
+with Par_SCO;  use Par_SCO;
+with Rtsfind;  use Rtsfind;
 with Sem;      use Sem;
 with Sem_Aux;  use Sem_Aux;
 with Sem_Cat;  use Sem_Cat;
@@ -63,33 +66,25 @@ package body Sem_Eval is
    --  a subexpression is resolved and is therefore accomplished in a bottom
    --  up fashion. The flags are synthesized using the following approach.
 
-   --    Is_Static_Expression is determined by following the detailed rules
-   --    in RM 4.9(4-14). This involves testing the Is_Static_Expression
-   --    flag of the operands in many cases.
+   --    Is_Static_Expression is determined by following the rules in
+   --    RM-4.9. This involves testing the Is_Static_Expression flag of
+   --    the operands in many cases.
 
-   --    Raises_Constraint_Error is set if any of the operands have the flag
-   --    set or if an attempt to compute the value of the current expression
-   --    results in detection of a runtime constraint error.
-
-   --  As described in the spec, the requirement is that Is_Static_Expression
-   --  be accurately set, and in addition for nodes for which this flag is set,
-   --  Raises_Constraint_Error must also be set. Furthermore a node which has
-   --  Is_Static_Expression set, and Raises_Constraint_Error clear, then the
-   --  requirement is that the expression value must be precomputed, and the
-   --  node is either a literal, or the name of a constant entity whose value
-   --  is a static expression.
+   --    Raises_Constraint_Error is usually set if any of the operands have
+   --    the flag set or if an attempt to compute the value of the current
+   --    expression results in Constraint_Error.
 
    --  The general approach is as follows. First compute Is_Static_Expression.
    --  If the node is not static, then the flag is left off in the node and
    --  we are all done. Otherwise for a static node, we test if any of the
-   --  operands will raise constraint error, and if so, propagate the flag
+   --  operands will raise Constraint_Error, and if so, propagate the flag
    --  Raises_Constraint_Error to the result node and we are done (since the
    --  error was already posted at a lower level).
 
    --  For the case of a static node whose operands do not raise constraint
    --  error, we attempt to evaluate the node. If this evaluation succeeds,
    --  then the node is replaced by the result of this computation. If the
-   --  evaluation raises constraint error, then we rewrite the node with
+   --  evaluation raises Constraint_Error, then we rewrite the node with
    --  Apply_Compile_Time_Constraint_Error to raise the exception and also
    --  to post appropriate error messages.
 
@@ -100,12 +95,12 @@ package body Sem_Eval is
    type Bits is array (Nat range <>) of Boolean;
    --  Used to convert unsigned (modular) values for folding logical ops
 
-   --  The following definitions are used to maintain a cache of nodes that
-   --  have compile time known values. The cache is maintained only for
+   --  The following declarations are used to maintain a cache of nodes that
+   --  have compile-time-known values. The cache is maintained only for
    --  discrete types (the most common case), and is populated by calls to
    --  Compile_Time_Known_Value and Expr_Value, but only used by Expr_Value
    --  since it is possible for the status to change (in particular it is
-   --  possible for a node to get replaced by a constraint error node).
+   --  possible for a node to get replaced by a Constraint_Error node).
 
    CV_Bits : constant := 5;
    --  Number of low order bits of Node_Id value used to reference entries
@@ -121,6 +116,11 @@ package body Sem_Eval is
       V : Uint;
    end record;
 
+   type Match_Result is (Match, No_Match, Non_Static);
+   --  Result returned from functions that test for a matching result. If the
+   --  operands are not OK_Static then Non_Static will be returned. Otherwise
+   --  Match/No_Match is returned depending on whether the match succeeds.
+
    type CV_Cache_Array is array (CV_Range) of CV_Entry;
 
    CV_Cache : CV_Cache_Array := (others => (Node_High_Bound, Uint_0));
@@ -135,44 +135,119 @@ package body Sem_Eval is
    -- Local Subprograms --
    -----------------------
 
+   function Choice_Matches
+     (Expr   : Node_Id;
+      Choice : Node_Id) return Match_Result;
+   --  Determines whether given value Expr matches the given Choice. The Expr
+   --  can be of discrete, real, or string type and must be a compile time
+   --  known value (it is an error to make the call if these conditions are
+   --  not met). The choice can be a range, subtype name, subtype indication,
+   --  or expression. The returned result is Non_Static if Choice is not
+   --  OK_Static, otherwise either Match or No_Match is returned depending
+   --  on whether Choice matches Expr. This is used for case expression
+   --  alternatives, and also for membership tests. In each case, more
+   --  possibilities are tested than the syntax allows (e.g. membership allows
+   --  subtype indications and non-discrete types, and case allows an OTHERS
+   --  choice), but it does not matter, since we have already done a full
+   --  semantic and syntax check of the construct, so the extra possibilities
+   --  just will not arise for correct expressions.
+   --
+   --  Note: if Choice_Matches finds that a choice raises Constraint_Error, e.g
+   --  a reference to a type, one of whose bounds raises Constraint_Error, then
+   --  it also sets the Raises_Constraint_Error flag on the Choice itself.
+
+   function Choices_Match
+     (Expr    : Node_Id;
+      Choices : List_Id) return Match_Result;
+   --  This function applies Choice_Matches to each element of Choices. If the
+   --  result is No_Match, then it continues and checks the next element. If
+   --  the result is Match or Non_Static, this result is immediately given
+   --  as the result without checking the rest of the list. Expr can be of
+   --  discrete, real, or string type and must be a compile-time-known value
+   --  (it is an error to make the call if these conditions are not met).
+
+   function Find_Universal_Operator_Type (N : Node_Id) return Entity_Id;
+   --  Check whether an arithmetic operation with universal operands which is a
+   --  rewritten function call with an explicit scope indication is ambiguous:
+   --  P."+" (1, 2) will be ambiguous if there is more than one visible numeric
+   --  type declared in P and the context does not impose a type on the result
+   --  (e.g. in the expression of a type conversion). If ambiguous, emit an
+   --  error and return Empty, else return the result type of the operator.
+
    function From_Bits (B : Bits; T : Entity_Id) return Uint;
-   --  Converts a bit string of length B'Length to a Uint value to be used
-   --  for a target of type T, which is a modular type. This procedure
-   --  includes the necessary reduction by the modulus in the case of a
-   --  non-binary modulus (for a binary modulus, the bit string is the
-   --  right length any way so all is well).
+   --  Converts a bit string of length B'Length to a Uint value to be used for
+   --  a target of type T, which is a modular type. This procedure includes the
+   --  necessary reduction by the modulus in the case of a nonbinary modulus
+   --  (for a binary modulus, the bit string is the right length any way so all
+   --  is well).
 
    function Get_String_Val (N : Node_Id) return Node_Id;
-   --  Given a tree node for a folded string or character value, returns
-   --  the corresponding string literal or character literal (one of the
-   --  two must be available, or the operand would not have been marked
-   --  as foldable in the earlier analysis of the operation).
+   --  Given a tree node for a folded string or character value, returns the
+   --  corresponding string literal or character literal (one of the two must
+   --  be available, or the operand would not have been marked as foldable in
+   --  the earlier analysis of the operation).
+
+   function Is_OK_Static_Choice (Choice : Node_Id) return Boolean;
+   --  Given a choice (from a case expression or membership test), returns
+   --  True if the choice is static and does not raise a Constraint_Error.
+
+   function Is_OK_Static_Choice_List (Choices : List_Id) return Boolean;
+   --  Given a choice list (from a case expression or membership test), return
+   --  True if all choices are static in the sense of Is_OK_Static_Choice.
+
+   function Is_Static_Choice (Choice : Node_Id) return Boolean;
+   --  Given a choice (from a case expression or membership test), returns
+   --  True if the choice is static. No test is made for raising of constraint
+   --  error, so this function is used only for legality tests.
+
+   function Is_Static_Choice_List (Choices : List_Id) return Boolean;
+   --  Given a choice list (from a case expression or membership test), return
+   --  True if all choices are static in the sense of Is_Static_Choice.
+
+   function Is_Static_Range (N : Node_Id) return Boolean;
+   --  Determine if range is static, as defined in RM 4.9(26). The only allowed
+   --  argument is an N_Range node (but note that the semantic analysis of
+   --  equivalent range attribute references already turned them into the
+   --  equivalent range). This differs from Is_OK_Static_Range (which is what
+   --  must be used by clients) in that it does not care whether the bounds
+   --  raise Constraint_Error or not. Used for checking whether expressions are
+   --  static in the 4.9 sense (without worrying about exceptions).
 
    function OK_Bits (N : Node_Id; Bits : Uint) return Boolean;
    --  Bits represents the number of bits in an integer value to be computed
    --  (but the value has not been computed yet). If this value in Bits is
-   --  reasonable, a result of True is returned, with the implication that
-   --  the caller should go ahead and complete the calculation. If the value
-   --  in Bits is unreasonably large, then an error is posted on node N, and
+   --  reasonable, a result of True is returned, with the implication that the
+   --  caller should go ahead and complete the calculation. If the value in
+   --  Bits is unreasonably large, then an error is posted on node N, and
    --  False is returned (and the caller skips the proposed calculation).
 
    procedure Out_Of_Range (N : Node_Id);
-   --  This procedure is called if it is determined that node N, which
-   --  appears in a non-static context, is a compile time known value
-   --  which is outside its range, i.e. the range of Etype. This is used
-   --  in contexts where this is an illegality if N is static, and should
-   --  generate a warning otherwise.
+   --  This procedure is called if it is determined that node N, which appears
+   --  in a non-static context, is a compile-time-known value which is outside
+   --  its range, i.e. the range of Etype. This is used in contexts where
+   --  this is an illegality if N is static, and should generate a warning
+   --  otherwise.
+
+   function Real_Or_String_Static_Predicate_Matches
+     (Val : Node_Id;
+      Typ : Entity_Id) return Boolean;
+   --  This is the function used to evaluate real or string static predicates.
+   --  Val is an unanalyzed N_Real_Literal or N_String_Literal node, which
+   --  represents the value to be tested against the predicate. Typ is the
+   --  type with the predicate, from which the predicate expression can be
+   --  extracted. The result returned is True if the given value satisfies
+   --  the predicate.
 
    procedure Rewrite_In_Raise_CE (N : Node_Id; Exp : Node_Id);
-   --  N and Exp are nodes representing an expression, Exp is known
-   --  to raise CE. N is rewritten in term of Exp in the optimal way.
+   --  N and Exp are nodes representing an expression, Exp is known to raise
+   --  CE. N is rewritten in term of Exp in the optimal way.
 
    function String_Type_Len (Stype : Entity_Id) return Uint;
-   --  Given a string type, determines the length of the index type, or,
-   --  if this index type is non-static, the length of the base type of
-   --  this index type. Note that if the string type is itself static,
-   --  then the index type is static, so the second case applies only
-   --  if the string type passed is non-static.
+   --  Given a string type, determines the length of the index type, or, if
+   --  this index type is non-static, the length of the base type of this index
+   --  type. Note that if the string type is itself static, then the index type
+   --  is static, so the second case applies only if the string type passed is
+   --  non-static.
 
    function Test (Cond : Boolean) return Uint;
    pragma Inline (Test);
@@ -181,15 +256,6 @@ package body Sem_Eval is
    --  used for producing the result of the static evaluation of the
    --  logical operators
 
-   function Find_Universal_Operator_Type (N : Node_Id) return Entity_Id;
-   --  Check whether an arithmetic operation with universal operands which
-   --  is a rewritten function call with an explicit scope indication is
-   --  ambiguous: P."+" (1, 2) will be ambiguous if there is more than one
-   --  visible numeric type declared in P and the context does not impose a
-   --  type on the result (e.g. in the expression of a type conversion).
-   --  If ambiguous, emit an error and return Empty, else return the result
-   --  type of the operator.
-
    procedure Test_Expression_Is_Foldable
      (N    : Node_Id;
       Op1  : Node_Id;
@@ -197,32 +263,46 @@ package body Sem_Eval is
       Fold : out Boolean);
    --  Tests to see if expression N whose single operand is Op1 is foldable,
    --  i.e. the operand value is known at compile time. If the operation is
-   --  foldable, then Fold is True on return, and Stat indicates whether
-   --  the result is static (i.e. both operands were static). Note that it
-   --  is quite possible for Fold to be True, and Stat to be False, since
-   --  there are cases in which we know the value of an operand even though
-   --  it is not technically static (e.g. the static lower bound of a range
-   --  whose upper bound is non-static).
+   --  foldable, then Fold is True on return, and Stat indicates whether the
+   --  result is static (i.e. the operand was static). Note that it is quite
+   --  possible for Fold to be True, and Stat to be False, since there are
+   --  cases in which we know the value of an operand even though it is not
+   --  technically static (e.g. the static lower bound of a range whose upper
+   --  bound is non-static).
    --
-   --  If Stat is set False on return, then Test_Expression_Is_Foldable makes a
-   --  call to Check_Non_Static_Context on the operand. If Fold is False on
-   --  return, then all processing is complete, and the caller should
-   --  return, since there is nothing else to do.
+   --  If Stat is set False on return, then Test_Expression_Is_Foldable makes
+   --  a call to Check_Non_Static_Context on the operand. If Fold is False on
+   --  return, then all processing is complete, and the caller should return,
+   --  since there is nothing else to do.
    --
    --  If Stat is set True on return, then Is_Static_Expression is also set
    --  true in node N. There are some cases where this is over-enthusiastic,
-   --  e.g. in the two operand case below, for string comparison, the result
-   --  is not static even though the two operands are static. In such cases,
-   --  the caller must reset the Is_Static_Expression flag in N.
+   --  e.g. in the two operand case below, for string comparison, the result is
+   --  not static even though the two operands are static. In such cases, the
+   --  caller must reset the Is_Static_Expression flag in N.
+   --
+   --  If Fold and Stat are both set to False then this routine performs also
+   --  the following extra actions:
+   --
+   --    If either operand is Any_Type then propagate it to result to prevent
+   --    cascaded errors.
+   --
+   --    If some operand raises Constraint_Error, then replace the node N
+   --    with the raise Constraint_Error node. This replacement inherits the
+   --    Is_Static_Expression flag from the operands.
 
    procedure Test_Expression_Is_Foldable
-     (N    : Node_Id;
-      Op1  : Node_Id;
-      Op2  : Node_Id;
-      Stat : out Boolean;
-      Fold : out Boolean);
+     (N        : Node_Id;
+      Op1      : Node_Id;
+      Op2      : Node_Id;
+      Stat     : out Boolean;
+      Fold     : out Boolean;
+      CRT_Safe : Boolean := False);
    --  Same processing, except applies to an expression N with two operands
-   --  Op1 and Op2.
+   --  Op1 and Op2. The result is static only if both operands are static. If
+   --  CRT_Safe is set True, then CRT_Safe_Compile_Time_Known_Value is used
+   --  for the tests that the two operands are known at compile time. See
+   --  spec of this routine for further details.
 
    function Test_In_Range
      (N            : Node_Id;
@@ -230,14 +310,101 @@ package body Sem_Eval is
       Assume_Valid : Boolean;
       Fixed_Int    : Boolean;
       Int_Real     : Boolean) return Range_Membership;
-   --  Common processing for Is_In_Range and Is_Out_Of_Range:
-   --  Returns In_Range or Out_Of_Range if it can be guaranteed at compile time
-   --  that expression N is known to be in or out of range of the subtype Typ.
-   --  If not compile time known, Unknown is returned.
-   --  See documentation of Is_In_Range for complete description of parameters.
+   --  Common processing for Is_In_Range and Is_Out_Of_Range: Returns In_Range
+   --  or Out_Of_Range if it can be guaranteed at compile time that expression
+   --  N is known to be in or out of range of the subtype Typ. If not compile
+   --  time known, Unknown is returned. See documentation of Is_In_Range for
+   --  complete description of parameters.
 
    procedure To_Bits (U : Uint; B : out Bits);
    --  Converts a Uint value to a bit string of length B'Length
+
+   -----------------------------------------------
+   -- Check_Expression_Against_Static_Predicate --
+   -----------------------------------------------
+
+   procedure Check_Expression_Against_Static_Predicate
+     (Expr : Node_Id;
+      Typ  : Entity_Id)
+   is
+   begin
+      --  Nothing to do if expression is not known at compile time, or the
+      --  type has no static predicate set (will be the case for all non-scalar
+      --  types, so no need to make a special test for that).
+
+      if not (Has_Static_Predicate (Typ)
+               and then Compile_Time_Known_Value (Expr))
+      then
+         return;
+      end if;
+
+      --  Here we have a static predicate (note that it could have arisen from
+      --  an explicitly specified Dynamic_Predicate whose expression met the
+      --  rules for being predicate-static). If the expression is known at
+      --  compile time and obeys the predicate, then it is static and must be
+      --  labeled as such, which matters e.g. for case statements. The original
+      --  expression may be a type conversion of a variable with a known value,
+      --  which might otherwise not be marked static.
+
+      --  Case of real static predicate
+
+      if Is_Real_Type (Typ) then
+         if Real_Or_String_Static_Predicate_Matches
+              (Val => Make_Real_Literal (Sloc (Expr), Expr_Value_R (Expr)),
+               Typ => Typ)
+         then
+            Set_Is_Static_Expression (Expr);
+            return;
+         end if;
+
+      --  Case of string static predicate
+
+      elsif Is_String_Type (Typ) then
+         if Real_Or_String_Static_Predicate_Matches
+              (Val => Expr_Value_S (Expr), Typ => Typ)
+         then
+            Set_Is_Static_Expression (Expr);
+            return;
+         end if;
+
+      --  Case of discrete static predicate
+
+      else
+         pragma Assert (Is_Discrete_Type (Typ));
+
+         --  If static predicate matches, nothing to do
+
+         if Choices_Match (Expr, Static_Discrete_Predicate (Typ)) = Match then
+            Set_Is_Static_Expression (Expr);
+            return;
+         end if;
+      end if;
+
+      --  Here we know that the predicate will fail
+
+      --  Special case of static expression failing a predicate (other than one
+      --  that was explicitly specified with a Dynamic_Predicate aspect). This
+      --  is the case where the expression is no longer considered static.
+
+      if Is_Static_Expression (Expr)
+        and then not Has_Dynamic_Predicate_Aspect (Typ)
+      then
+         Error_Msg_NE
+           ("??static expression fails static predicate check on &",
+            Expr, Typ);
+         Error_Msg_N
+           ("\??expression is no longer considered static", Expr);
+         Set_Is_Static_Expression (Expr, False);
+
+      --  In all other cases, this is just a warning that a test will fail.
+      --  It does not matter if the expression is static or not, or if the
+      --  predicate comes from a dynamic predicate aspect or not.
+
+      else
+         Error_Msg_NE
+           ("??expression fails predicate check on &", Expr, Typ);
+      end if;
+   end Check_Expression_Against_Static_Predicate;
 
    ------------------------------
    -- Check_Non_Static_Context --
@@ -262,8 +429,8 @@ package body Sem_Eval is
       end if;
 
       --  At this stage we have a scalar type. If we have an expression that
-      --  raises CE, then we already issued a warning or error msg so there
-      --  is nothing more to be done in this routine.
+      --  raises CE, then we already issued a warning or error msg so there is
+      --  nothing more to be done in this routine.
 
       if Raises_Constraint_Error (N) then
          return;
@@ -278,11 +445,24 @@ package body Sem_Eval is
       --  that an infinity will result.
 
       if not Is_Static_Expression (N) then
-         if Is_Floating_Point_Type (T)
-           and then Is_Out_Of_Range (N, Base_Type (T), Assume_Valid => True)
-         then
-            Error_Msg_N
-              ("?float value out of range, infinity will be generated", N);
+         if Is_Floating_Point_Type (T) then
+            if Is_Out_Of_Range (N, Base_Type (T), Assume_Valid => True) then
+               Error_Msg_N
+                 ("??float value out of range, infinity will be generated", N);
+
+            --  The literal may be the result of constant-folding of a non-
+            --  static subexpression of a larger expression (e.g. a conversion
+            --  of a non-static variable whose value happens to be known). At
+            --  this point we must reduce the value of the subexpression to a
+            --  machine number (RM 4.9 (38/2)).
+
+            elsif Nkind (N) = N_Real_Literal
+              and then Nkind (Parent (N)) in N_Subexpr
+            then
+               Rewrite (N, New_Copy (N));
+               Set_Realval
+                 (N, Machine (Base_Type (T), Realval (N), Round_Even, N));
+            end if;
          end if;
 
          return;
@@ -299,6 +479,14 @@ package body Sem_Eval is
       --  particular if we do not convert all literals to machine values in
       --  non-static contexts, then ACVC test C490001 fails on Sparc/Solaris
       --  and SGI/Irix.
+
+      --  This conversion is always done by GNATprove on real literals in
+      --  non-static expressions, by calling Check_Non_Static_Context from
+      --  gnat2why, as GNATprove cannot do the conversion later contrary
+      --  to gigi. The frontend computes the information about which
+      --  expressions are static, which is used by gnat2why to call
+      --  Check_Non_Static_Context on exactly those real literals that are
+      --  not subexpressions of static expressions.
 
       if Nkind (N) = N_Real_Literal
         and then not Is_Machine_Number (N)
@@ -330,13 +518,15 @@ package body Sem_Eval is
             --  differences in rounding between static and non-static
             --  expressions. AI-100 specifies that the effect of such rounding
             --  is implementation dependent, and in GNAT we round to nearest
-            --  even to match the run-time behavior.
+            --  even to match the run-time behavior. Note that this applies
+            --  to floating point literals, not fixed points ones, even though
+            --  their compiler representation is also as a universal real.
 
             Set_Realval
               (N, Machine (Base_Type (T), Realval (N), Round_Even, N));
+            Set_Is_Machine_Number (N);
          end if;
 
-         Set_Is_Machine_Number (N);
       end if;
 
       --  Check for out of range universal integer. This is a non-static
@@ -349,16 +539,22 @@ package body Sem_Eval is
       --  called in contexts like the expression of a number declaration where
       --  we certainly want to allow out of range values.
 
+      --  We inhibit the warning when expansion is disabled, because the
+      --  preanalysis of a range of a 64-bit modular type may appear to
+      --  violate the constraint on non-static Universal_Integer. If there
+      --  is a true overflow it will be diagnosed during full analysis.
+
       if Etype (N) = Universal_Integer
         and then Nkind (N) = N_Integer_Literal
         and then Nkind (Parent (N)) in N_Subexpr
+        and then Expander_Active
         and then
           (Intval (N) < Expr_Value (Type_Low_Bound (Universal_Integer))
-            or else
+             or else
            Intval (N) > Expr_Value (Type_High_Bound (Universal_Integer)))
       then
          Apply_Compile_Time_Constraint_Error
-           (N, "non-static universal integer value out of range?",
+           (N, "non-static universal integer value out of range<<",
             CE_Range_Check_Failed);
 
       --  Check out of range of base type
@@ -366,20 +562,35 @@ package body Sem_Eval is
       elsif Is_Out_Of_Range (N, Base_Type (T), Assume_Valid => True) then
          Out_Of_Range (N);
 
-      --  Give warning if outside subtype (where one or both of the bounds of
-      --  the subtype is static). This warning is omitted if the expression
-      --  appears in a range that could be null (warnings are handled elsewhere
-      --  for this case).
+      --  Give a warning or error on the value outside the subtype. A warning
+      --  is omitted if the expression appears in a range that could be null
+      --  (warnings are handled elsewhere for this case).
 
-      elsif T /= Base_Type (T)
-        and then Nkind (Parent (N)) /= N_Range
-      then
+      elsif T /= Base_Type (T) and then Nkind (Parent (N)) /= N_Range then
          if Is_In_Range (N, T, Assume_Valid => True) then
             null;
 
          elsif Is_Out_Of_Range (N, T, Assume_Valid => True) then
-            Apply_Compile_Time_Constraint_Error
-              (N, "value not in range of}?", CE_Range_Check_Failed);
+            --  Ignore out of range values for System.Priority in CodePeer
+            --  mode since the actual target compiler may provide a wider
+            --  range.
+
+            if CodePeer_Mode and then T = RTE (RE_Priority) then
+               Set_Do_Range_Check (N, False);
+
+            --  Determine if the out-of-range violation constitutes a warning
+            --  or an error based on context, according to RM 4.9 (34/3).
+
+            elsif Nkind_In (Original_Node (N), N_Type_Conversion,
+                                               N_Qualified_Expression)
+              and then Comes_From_Source (Original_Node (N))
+            then
+               Apply_Compile_Time_Constraint_Error
+                 (N, "value not in range of}", CE_Range_Check_Failed);
+            else
+               Apply_Compile_Time_Constraint_Error
+                 (N, "value not in range of}<<", CE_Range_Check_Failed);
+            end if;
 
          elsif Checks_On then
             Enable_Range_Check (N);
@@ -396,20 +607,198 @@ package body Sem_Eval is
 
    procedure Check_String_Literal_Length (N : Node_Id; Ttype : Entity_Id) is
    begin
-      if not Raises_Constraint_Error (N)
-        and then Is_Constrained (Ttype)
-      then
-         if
-           UI_From_Int (String_Length (Strval (N))) /= String_Type_Len (Ttype)
+      if not Raises_Constraint_Error (N) and then Is_Constrained (Ttype) then
+         if UI_From_Int (String_Length (Strval (N))) /= String_Type_Len (Ttype)
          then
             Apply_Compile_Time_Constraint_Error
-              (N, "string length wrong for}?",
+              (N, "string length wrong for}??",
                CE_Length_Check_Failed,
                Ent => Ttype,
                Typ => Ttype);
          end if;
       end if;
    end Check_String_Literal_Length;
+
+   --------------------
+   -- Choice_Matches --
+   --------------------
+
+   function Choice_Matches
+     (Expr   : Node_Id;
+      Choice : Node_Id) return Match_Result
+   is
+      Etyp : constant Entity_Id := Etype (Expr);
+      Val  : Uint;
+      ValR : Ureal;
+      ValS : Node_Id;
+
+   begin
+      pragma Assert (Compile_Time_Known_Value (Expr));
+      pragma Assert (Is_Scalar_Type (Etyp) or else Is_String_Type (Etyp));
+
+      if not Is_OK_Static_Choice (Choice) then
+         Set_Raises_Constraint_Error (Choice);
+         return Non_Static;
+
+      --  When the choice denotes a subtype with a static predictate, check the
+      --  expression against the predicate values. Different procedures apply
+      --  to discrete and non-discrete types.
+
+      elsif (Nkind (Choice) = N_Subtype_Indication
+              or else (Is_Entity_Name (Choice)
+                        and then Is_Type (Entity (Choice))))
+        and then Has_Predicates (Etype (Choice))
+        and then Has_Static_Predicate (Etype (Choice))
+      then
+         if Is_Discrete_Type (Etype (Choice)) then
+            return
+              Choices_Match
+                (Expr, Static_Discrete_Predicate (Etype (Choice)));
+
+         elsif Real_Or_String_Static_Predicate_Matches (Expr, Etype (Choice))
+         then
+            return Match;
+
+         else
+            return No_Match;
+         end if;
+
+      --  Discrete type case only
+
+      elsif Is_Discrete_Type (Etyp) then
+         Val := Expr_Value (Expr);
+
+         if Nkind (Choice) = N_Range then
+            if Val >= Expr_Value (Low_Bound (Choice))
+                 and then
+               Val <= Expr_Value (High_Bound (Choice))
+            then
+               return Match;
+            else
+               return No_Match;
+            end if;
+
+         elsif Nkind (Choice) = N_Subtype_Indication
+           or else (Is_Entity_Name (Choice) and then Is_Type (Entity (Choice)))
+         then
+            if Val >= Expr_Value (Type_Low_Bound  (Etype (Choice)))
+                 and then
+               Val <= Expr_Value (Type_High_Bound (Etype (Choice)))
+            then
+               return Match;
+            else
+               return No_Match;
+            end if;
+
+         elsif Nkind (Choice) = N_Others_Choice then
+            return Match;
+
+         else
+            if Val = Expr_Value (Choice) then
+               return Match;
+            else
+               return No_Match;
+            end if;
+         end if;
+
+      --  Real type case
+
+      elsif Is_Real_Type (Etyp) then
+         ValR := Expr_Value_R (Expr);
+
+         if Nkind (Choice) = N_Range then
+            if ValR >= Expr_Value_R (Low_Bound  (Choice))
+                 and then
+               ValR <= Expr_Value_R (High_Bound (Choice))
+            then
+               return Match;
+            else
+               return No_Match;
+            end if;
+
+         elsif Nkind (Choice) = N_Subtype_Indication
+           or else (Is_Entity_Name (Choice) and then Is_Type (Entity (Choice)))
+         then
+            if ValR >= Expr_Value_R (Type_Low_Bound  (Etype (Choice)))
+                 and then
+               ValR <= Expr_Value_R (Type_High_Bound (Etype (Choice)))
+            then
+               return Match;
+            else
+               return No_Match;
+            end if;
+
+         else
+            if ValR = Expr_Value_R (Choice) then
+               return Match;
+            else
+               return No_Match;
+            end if;
+         end if;
+
+      --  String type cases
+
+      else
+         pragma Assert (Is_String_Type (Etyp));
+         ValS := Expr_Value_S (Expr);
+
+         if Nkind (Choice) = N_Subtype_Indication
+           or else (Is_Entity_Name (Choice) and then Is_Type (Entity (Choice)))
+         then
+            if not Is_Constrained (Etype (Choice)) then
+               return Match;
+
+            else
+               declare
+                  Typlen : constant Uint :=
+                             String_Type_Len (Etype (Choice));
+                  Strlen : constant Uint :=
+                             UI_From_Int (String_Length (Strval (ValS)));
+               begin
+                  if Typlen = Strlen then
+                     return Match;
+                  else
+                     return No_Match;
+                  end if;
+               end;
+            end if;
+
+         else
+            if String_Equal (Strval (ValS), Strval (Expr_Value_S (Choice)))
+            then
+               return Match;
+            else
+               return No_Match;
+            end if;
+         end if;
+      end if;
+   end Choice_Matches;
+
+   -------------------
+   -- Choices_Match --
+   -------------------
+
+   function Choices_Match
+     (Expr    : Node_Id;
+      Choices : List_Id) return Match_Result
+   is
+      Choice : Node_Id;
+      Result : Match_Result;
+
+   begin
+      Choice := First (Choices);
+      while Present (Choice) loop
+         Result := Choice_Matches (Expr, Choice);
+
+         if Result /= No_Match then
+            return Result;
+         end if;
+
+         Next (Choice);
+      end loop;
+
+      return No_Match;
+   end Choices_Match;
 
    --------------------------
    -- Compile_Time_Compare --
@@ -430,12 +819,8 @@ package body Sem_Eval is
       Assume_Valid : Boolean;
       Rec          : Boolean := False) return Compare_Result
    is
-      Ltyp : Entity_Id := Underlying_Type (Etype (L));
-      Rtyp : Entity_Id := Underlying_Type (Etype (R));
-      --  These get reset to the base type for the case of entities where
-      --  Is_Known_Valid is not set. This takes care of handling possible
-      --  invalid representations using the value of the base type, in
-      --  accordance with RM 13.9.1(10).
+      Ltyp : Entity_Id := Etype (L);
+      Rtyp : Entity_Id := Etype (R);
 
       Discard : aliased Uint;
 
@@ -461,7 +846,7 @@ package body Sem_Eval is
 
       function Is_Same_Value (L, R : Node_Id) return Boolean;
       --  Returns True iff L and R represent expressions that definitely have
-      --  identical (but not necessarily compile time known) values Indeed the
+      --  identical (but not necessarily compile-time-known) values Indeed the
       --  caller is expected to have already dealt with the cases of compile
       --  time known values, so these are not tested here.
 
@@ -489,7 +874,7 @@ package body Sem_Eval is
             V := UI_Negate (Intval (Right_Opnd (N)));
             return;
 
-         elsif Nkind (N) = N_Attribute_Reference  then
+         elsif Nkind (N) = N_Attribute_Reference then
             if Attribute_Name (N) = Name_Succ then
                R := First (Expressions (N));
                V := Uint_1;
@@ -516,10 +901,10 @@ package body Sem_Eval is
          Subs : Nat;
 
       begin
+         --  Fixup only required for First/Last attribute reference
+
          if Nkind (N) = N_Attribute_Reference
-           and then (Attribute_Name (N) = Name_First
-                       or else
-                     Attribute_Name (N) = Name_Last)
+           and then Nam_In (Attribute_Name (N), Name_First, Name_Last)
          then
             Xtyp := Etype (Prefix (N));
 
@@ -536,9 +921,9 @@ package body Sem_Eval is
                Xtyp := Designated_Type (Xtyp);
             end if;
 
-            --  If we don't have an array type at this stage, something
-            --  is peculiar, e.g. another error, and we abandon the attempt
-            --  at a fixup.
+            --  If we don't have an array type at this stage, something is
+            --  peculiar, e.g. another error, and we abandon the attempt at
+            --  a fixup.
 
             if not Is_Array_Type (Xtyp) then
                return N;
@@ -553,11 +938,11 @@ package body Sem_Eval is
             if Ekind (Xtyp) = E_String_Literal_Subtype then
                if Attribute_Name (N) = Name_First then
                   return String_Literal_Low_Bound (Xtyp);
-
-               else         -- Attribute_Name (N) = Name_Last
-                  return Make_Integer_Literal (Sloc (N),
-                    Intval => Intval (String_Literal_Low_Bound (Xtyp))
-                                + String_Literal_Length (Xtyp));
+               else
+                  return
+                    Make_Integer_Literal (Sloc (N),
+                      Intval => Intval (String_Literal_Low_Bound (Xtyp)) +
+                                          String_Literal_Length (Xtyp));
                end if;
             end if;
 
@@ -577,8 +962,7 @@ package body Sem_Eval is
 
             if Attribute_Name (N) = Name_First then
                return Type_Low_Bound (Xtyp);
-
-            else -- Attribute_Name (N) = Name_Last
+            else
                return Type_High_Bound (Xtyp);
             end if;
          end if;
@@ -598,7 +982,7 @@ package body Sem_Eval is
                       or else Ekind (Entity (Opnd)) = E_In_Parameter
                       or else
                         (Ekind (Entity (Opnd)) in Object_Kind
-                           and then Present (Current_Value (Entity (Opnd))))))
+                          and then Present (Current_Value (Entity (Opnd))))))
            or else Is_OK_Static_Expression (Opnd);
       end Is_Known_Valid_Operand;
 
@@ -610,12 +994,32 @@ package body Sem_Eval is
          Lf : constant Node_Id := Compare_Fixup (L);
          Rf : constant Node_Id := Compare_Fixup (R);
 
+         function Is_Rewritten_Loop_Entry (N : Node_Id) return Boolean;
+         --  An attribute reference to Loop_Entry may have been rewritten into
+         --  its prefix as a way to avoid generating a constant for that
+         --  attribute when the corresponding pragma is ignored. These nodes
+         --  should be ignored when deciding if they can be equal to one
+         --  another.
+
          function Is_Same_Subscript (L, R : List_Id) return Boolean;
          --  L, R are the Expressions values from two attribute nodes for First
          --  or Last attributes. Either may be set to No_List if no expressions
          --  are present (indicating subscript 1). The result is True if both
          --  expressions represent the same subscript (note one case is where
          --  one subscript is missing and the other is explicitly set to 1).
+
+         -----------------------------
+         -- Is_Rewritten_Loop_Entry --
+         -----------------------------
+
+         function Is_Rewritten_Loop_Entry (N : Node_Id) return Boolean is
+            Orig_N : constant Node_Id := Original_Node (N);
+         begin
+            return Orig_N /= N
+              and then Nkind (Orig_N) = N_Attribute_Reference
+              and then Get_Attribute_Id (Attribute_Name (Orig_N)) =
+                Attribute_Loop_Entry;
+         end Is_Rewritten_Loop_Entry;
 
          -----------------------
          -- Is_Same_Subscript --
@@ -642,30 +1046,39 @@ package body Sem_Eval is
       --  Start of processing for Is_Same_Value
 
       begin
+         --  Loop_Entry nodes rewritten into their prefix inside ignored
+         --  pragmas should never lead to a decision of equality.
+
+         if Is_Rewritten_Loop_Entry (Lf)
+           or else Is_Rewritten_Loop_Entry (Rf)
+         then
+            return False;
+
          --  Values are the same if they refer to the same entity and the
-         --  entity is non-volatile. This does not however apply to Float
-         --  types, since we may have two NaN values and they should never
-         --  compare equal.
+         --  entity is nonvolatile.
 
-         --  If the entity is a discriminant, the two expressions may be bounds
-         --  of components of objects of the same discriminated type. The
-         --  values of the discriminants are not static, and therefore the
-         --  result is unknown.
-
-         --  It would be better to comment individual branches of this test ???
-
-         if Nkind_In (Lf, N_Identifier, N_Expanded_Name)
+         elsif Nkind_In (Lf, N_Identifier, N_Expanded_Name)
            and then Nkind_In (Rf, N_Identifier, N_Expanded_Name)
            and then Entity (Lf) = Entity (Rf)
+
+           --  If the entity is a discriminant, the two expressions may be
+           --  bounds of components of objects of the same discriminated type.
+           --  The values of the discriminants are not static, and therefore
+           --  the result is unknown.
+
            and then Ekind (Entity (Lf)) /= E_Discriminant
            and then Present (Entity (Lf))
+
+           --  This does not however apply to Float types, since we may have
+           --  two NaN values and they should never compare equal.
+
            and then not Is_Floating_Point_Type (Etype (L))
            and then not Is_Volatile_Reference (L)
            and then not Is_Volatile_Reference (R)
          then
             return True;
 
-         --  Or if they are compile time known and identical
+         --  Or if they are compile-time-known and identical
 
          elsif Compile_Time_Known_Value (Lf)
                  and then
@@ -687,9 +1100,7 @@ package body Sem_Eval is
 
          elsif Nkind (Lf) = N_Attribute_Reference
            and then Attribute_Name (Lf) = Attribute_Name (Rf)
-           and then (Attribute_Name (Lf) = Name_First
-                       or else
-                     Attribute_Name (Lf) = Name_Last)
+           and then Nam_In (Attribute_Name (Lf), Name_First, Name_Last)
            and then Nkind_In (Prefix (Lf), N_Identifier, N_Expanded_Name)
            and then Nkind_In (Prefix (Rf), N_Identifier, N_Expanded_Name)
            and then Entity (Prefix (Lf)) = Entity (Prefix (Rf))
@@ -732,8 +1143,23 @@ package body Sem_Eval is
    begin
       Diff.all := No_Uint;
 
-      --  If either operand could raise constraint error, then we cannot
-      --  know the result at compile time (since CE may be raised!)
+      --  In preanalysis mode, always return Unknown unless the expression
+      --  is static. It is too early to be thinking we know the result of a
+      --  comparison, save that judgment for the full analysis. This is
+      --  particularly important in the case of pre and postconditions, which
+      --  otherwise can be prematurely collapsed into having True or False
+      --  conditions when this is inappropriate.
+
+      if not (Full_Analysis
+               or else (Is_OK_Static_Expression (L)
+                          and then
+                        Is_OK_Static_Expression (R)))
+      then
+         return Unknown;
+      end if;
+
+      --  If either operand could raise Constraint_Error, then we cannot
+      --  know the result at compile time (since CE may be raised).
 
       if not (Cannot_Raise_Constraint_Error (L)
                 and then
@@ -746,19 +1172,35 @@ package body Sem_Eval is
 
       if L = R then
          return EQ;
+      end if;
 
       --  If expressions have no types, then do not attempt to determine if
       --  they are the same, since something funny is going on. One case in
       --  which this happens is during generic template analysis, when bounds
       --  are not fully analyzed.
 
-      elsif No (Ltyp) or else No (Rtyp) then
+      if No (Ltyp) or else No (Rtyp) then
          return Unknown;
+      end if;
 
-      --  We do not attempt comparisons for packed arrays arrays represented as
+      --  These get reset to the base type for the case of entities where
+      --  Is_Known_Valid is not set. This takes care of handling possible
+      --  invalid representations using the value of the base type, in
+      --  accordance with RM 13.9.1(10).
+
+      Ltyp := Underlying_Type (Ltyp);
+      Rtyp := Underlying_Type (Rtyp);
+
+      --  Same rationale as above, but for Underlying_Type instead of Etype
+
+      if No (Ltyp) or else No (Rtyp) then
+         return Unknown;
+      end if;
+
+      --  We do not attempt comparisons for packed arrays represented as
       --  modular types, where the semantics of comparison is quite different.
 
-      elsif Is_Packed_Array_Type (Ltyp)
+      if Is_Packed_Array_Impl_Type (Ltyp)
         and then Is_Modular_Integer_Type (Ltyp)
       then
          return Unknown;
@@ -785,10 +1227,11 @@ package body Sem_Eval is
             return Unknown;
          end if;
 
-      --  Case where comparison involves two compile time known values
+      --  Case where comparison involves two compile-time-known values
 
       elsif Compile_Time_Known_Value (L)
-        and then Compile_Time_Known_Value (R)
+              and then
+            Compile_Time_Known_Value (R)
       then
          --  For the floating-point case, we have to be a little careful, since
          --  at compile time we are dealing with universal exact values, but at
@@ -802,7 +1245,6 @@ package body Sem_Eval is
             declare
                Lo : constant Ureal := Expr_Value_R (L);
                Hi : constant Ureal := Expr_Value_R (R);
-
             begin
                if Lo < Hi then
                   return LE;
@@ -854,15 +1296,12 @@ package body Sem_Eval is
             declare
                Lo : constant Uint := Expr_Value (L);
                Hi : constant Uint := Expr_Value (R);
-
             begin
                if Lo < Hi then
                   Diff.all := Hi - Lo;
                   return LT;
-
                elsif Lo = Hi then
                   return EQ;
-
                else
                   Diff.all := Lo - Hi;
                   return GT;
@@ -876,7 +1315,8 @@ package body Sem_Eval is
          --  Remaining checks apply only for discrete types
 
          if not Is_Discrete_Type (Ltyp)
-           or else not Is_Discrete_Type (Rtyp)
+              or else
+            not Is_Discrete_Type (Rtyp)
          then
             return Unknown;
          end if;
@@ -907,42 +1347,108 @@ package body Sem_Eval is
             return Unknown;
          end if;
 
-         --  Replace types by base types for the case of entities which are
-         --  not known to have valid representations. This takes care of
-         --  properly dealing with invalid representations.
+         --  Replace types by base types for the case of values which are not
+         --  known to have valid representations. This takes care of properly
+         --  dealing with invalid representations.
 
-         if not Assume_Valid and then not Assume_No_Invalid_Values then
-            if Is_Entity_Name (L) and then not Is_Known_Valid (Entity (L)) then
+         if not Assume_Valid then
+            if not (Is_Entity_Name (L)
+                     and then (Is_Known_Valid (Entity (L))
+                                or else Assume_No_Invalid_Values))
+            then
                Ltyp := Underlying_Type (Base_Type (Ltyp));
             end if;
 
-            if Is_Entity_Name (R) and then not Is_Known_Valid (Entity (R)) then
+            if not (Is_Entity_Name (R)
+                     and then (Is_Known_Valid (Entity (R))
+                                or else Assume_No_Invalid_Values))
+            then
                Rtyp := Underlying_Type (Base_Type (Rtyp));
             end if;
          end if;
 
-         --  Try range analysis on variables and see if ranges are disjoint
+         --  First attempt is to decompose the expressions to extract a
+         --  constant offset resulting from the use of any of the forms:
+
+         --     expr + literal
+         --     expr - literal
+         --     typ'Succ (expr)
+         --     typ'Pred (expr)
+
+         --  Then we see if the two expressions are the same value, and if so
+         --  the result is obtained by comparing the offsets.
+
+         --  Note: the reason we do this test first is that it returns only
+         --  decisive results (with diff set), where other tests, like the
+         --  range test, may not be as so decisive. Consider for example
+         --  J .. J + 1. This code can conclude LT with a difference of 1,
+         --  even if the range of J is not known.
+
+         declare
+            Lnode : Node_Id;
+            Loffs : Uint;
+            Rnode : Node_Id;
+            Roffs : Uint;
+
+         begin
+            Compare_Decompose (L, Lnode, Loffs);
+            Compare_Decompose (R, Rnode, Roffs);
+
+            if Is_Same_Value (Lnode, Rnode) then
+               if Loffs = Roffs then
+                  return EQ;
+               end if;
+
+               --  When the offsets are not equal, we can go farther only if
+               --  the types are not modular (e.g. X < X + 1 is False if X is
+               --  the largest number).
+
+               if not Is_Modular_Integer_Type (Ltyp)
+                 and then not Is_Modular_Integer_Type (Rtyp)
+               then
+                  if Loffs < Roffs then
+                     Diff.all := Roffs - Loffs;
+                     return LT;
+                  else
+                     Diff.all := Loffs - Roffs;
+                     return GT;
+                  end if;
+               end if;
+            end if;
+         end;
+
+         --  Next, try range analysis and see if operand ranges are disjoint
 
          declare
             LOK, ROK : Boolean;
             LLo, LHi : Uint;
             RLo, RHi : Uint;
 
+            Single : Boolean;
+            --  True if each range is a single point
+
          begin
             Determine_Range (L, LOK, LLo, LHi, Assume_Valid);
             Determine_Range (R, ROK, RLo, RHi, Assume_Valid);
 
             if LOK and ROK then
+               Single := (LLo = LHi) and then (RLo = RHi);
+
                if LHi < RLo then
+                  if Single and Assume_Valid then
+                     Diff.all := RLo - LLo;
+                  end if;
+
                   return LT;
 
                elsif RHi < LLo then
+                  if Single and Assume_Valid then
+                     Diff.all := LLo - RLo;
+                  end if;
+
                   return GT;
 
-               elsif LLo = LHi
-                 and then RLo = RHi
-                 and then LLo = RLo
-               then
+               elsif Single and then LLo = RLo then
 
                   --  If the range includes a single literal and we can assume
                   --  validity then the result is known even if an operand is
@@ -994,9 +1500,9 @@ package body Sem_Eval is
 
          if not Rec then
 
-            --  See if we can get a decisive check against one operand and
-            --  a bound of the other operand (four possible tests here).
-            --  Note that we avoid testing junk bounds of a generic type.
+            --  See if we can get a decisive check against one operand and a
+            --  bound of the other operand (four possible tests here). Note
+            --  that we avoid testing junk bounds of a generic type.
 
             if not Is_Generic_Type (Rtyp) then
                case Compile_Time_Compare (L, Type_Low_Bound (Rtyp),
@@ -1043,44 +1549,8 @@ package body Sem_Eval is
             end if;
          end if;
 
-         --  Next attempt is to decompose the expressions to extract
-         --  a constant offset resulting from the use of any of the forms:
-
-         --     expr + literal
-         --     expr - literal
-         --     typ'Succ (expr)
-         --     typ'Pred (expr)
-
-         --  Then we see if the two expressions are the same value, and if so
-         --  the result is obtained by comparing the offsets.
-
-         declare
-            Lnode : Node_Id;
-            Loffs : Uint;
-            Rnode : Node_Id;
-            Roffs : Uint;
-
-         begin
-            Compare_Decompose (L, Lnode, Loffs);
-            Compare_Decompose (R, Rnode, Roffs);
-
-            if Is_Same_Value (Lnode, Rnode) then
-               if Loffs = Roffs then
-                  return EQ;
-
-               elsif Loffs < Roffs then
-                  Diff.all := Roffs - Loffs;
-                  return LT;
-
-               else
-                  Diff.all := Loffs - Roffs;
-                  return GT;
-               end if;
-            end if;
-         end;
-
          --  Next attempt is to see if we have an entity compared with a
-         --  compile time known value, where there is a current value
+         --  compile-time-known value, where there is a current value
          --  conditional for the entity which can tell us the result.
 
          declare
@@ -1218,7 +1688,7 @@ package body Sem_Eval is
       Typ  : Entity_Id;
 
    begin
-      if not Is_Array_Type (T) then
+      if T = Any_Composite or else not Is_Array_Type (T) then
          return False;
       end if;
 
@@ -1232,7 +1702,7 @@ package body Sem_Eval is
             return False;
          end if;
 
-         --  Otherwise check bounds for compile time known
+         --  Otherwise check bounds for compile-time-known
 
          if not Compile_Time_Known_Value (Type_Low_Bound (Typ)) then
             return False;
@@ -1255,59 +1725,65 @@ package body Sem_Eval is
       CV_Ent : CV_Entry renames CV_Cache (Nat (Op) mod CV_Cache_Size);
 
    begin
-      --  Never known at compile time if bad type or raises constraint error
-      --  or empty (latter case occurs only as a result of a previous error)
+      --  Never known at compile time if bad type or raises Constraint_Error
+      --  or empty (latter case occurs only as a result of a previous error).
 
-      if No (Op)
-        or else Op = Error
+      if No (Op) then
+         Check_Error_Detected;
+         return False;
+
+      elsif Op = Error
         or else Etype (Op) = Any_Type
         or else Raises_Constraint_Error (Op)
       then
          return False;
       end if;
 
-      --  If this is not a static expression or a null literal, and we are in
-      --  configurable run-time mode, then we consider it not known at compile
-      --  time. This avoids anomalies where whether something is allowed with a
-      --  given configurable run-time library depends on how good the compiler
-      --  is at optimizing and knowing that things are constant when they are
-      --  nonstatic.
-
-      if Configurable_Run_Time_Mode
-        and then K /= N_Null
-        and then not Is_Static_Expression (Op)
-      then
-         return False;
-      end if;
-
       --  If we have an entity name, then see if it is the name of a constant
-      --  and if so, test the corresponding constant value, or the name of
-      --  an enumeration literal, which is always a constant.
+      --  and if so, test the corresponding constant value, or the name of an
+      --  enumeration literal, which is always a constant.
 
       if Present (Etype (Op)) and then Is_Entity_Name (Op) then
          declare
-            E : constant Entity_Id := Entity (Op);
-            V : Node_Id;
+            Ent : constant Entity_Id := Entity (Op);
+            Val : Node_Id;
 
          begin
-            --  Never known at compile time if it is a packed array value.
-            --  We might want to try to evaluate these at compile time one
-            --  day, but we do not make that attempt now.
+            --  Never known at compile time if it is a packed array value. We
+            --  might want to try to evaluate these at compile time one day,
+            --  but we do not make that attempt now.
 
-            if Is_Packed_Array_Type (Etype (Op)) then
+            if Is_Packed_Array_Impl_Type (Etype (Op)) then
                return False;
-            end if;
 
-            if Ekind (E) = E_Enumeration_Literal then
+            elsif Ekind (Ent) = E_Enumeration_Literal then
                return True;
 
-            elsif Ekind (E) = E_Constant then
-               V := Constant_Value (E);
-               return Present (V) and then Compile_Time_Known_Value (V);
+            elsif Ekind (Ent) = E_Constant then
+               Val := Constant_Value (Ent);
+
+               if Present (Val) then
+
+                  --  Guard against an illegal deferred constant whose full
+                  --  view is initialized with a reference to itself. Treat
+                  --  this case as a value not known at compile time.
+
+                  if Is_Entity_Name (Val) and then Entity (Val) = Ent then
+                     return False;
+                  else
+                     return Compile_Time_Known_Value (Val);
+                  end if;
+
+               --  Otherwise, the constant does not have a compile-time-known
+               --  value.
+
+               else
+                  return False;
+               end if;
             end if;
          end;
 
-      --  We have a value, see if it is compile time known
+      --  We have a value, see if it is compile-time-known
 
       else
          --  Integer literals are worth storing in the cache
@@ -1320,22 +1796,12 @@ package body Sem_Eval is
          --  Other literals and NULL are known at compile time
 
          elsif
-            K = N_Character_Literal
-              or else
-            K = N_Real_Literal
-              or else
-            K = N_String_Literal
-              or else
-            K = N_Null
+            Nkind_In (K, N_Character_Literal,
+                         N_Real_Literal,
+                         N_String_Literal,
+                         N_Null)
          then
             return True;
-
-         --  Any reference to Null_Parameter is known at compile time. No
-         --  other attribute references (that have not already been folded)
-         --  are known at compile time.
-
-         elsif K = N_Attribute_Reference then
-            return Attribute_Name (Op) = Name_Null_Parameter;
          end if;
       end if;
 
@@ -1380,7 +1846,7 @@ package body Sem_Eval is
             end if;
          end;
 
-      --  We have a value, see if it is compile time known
+      --  We have a value, see if it is compile-time-known
 
       else
          if Compile_Time_Known_Value (Op) then
@@ -1391,15 +1857,14 @@ package body Sem_Eval is
             if Present (Expressions (Op)) then
                declare
                   Expr : Node_Id;
-
                begin
                   Expr := First (Expressions (Op));
                   while Present (Expr) loop
                      if not Compile_Time_Known_Value_Or_Aggr (Expr) then
                         return False;
+                     else
+                        Next (Expr);
                      end if;
-
-                     Next (Expr);
                   end loop;
                end;
             end if;
@@ -1424,6 +1889,9 @@ package body Sem_Eval is
 
             return True;
 
+         elsif Nkind (Op) = N_Qualified_Expression then
+            return Compile_Time_Known_Value_Or_Aggr (Expression (Op));
+
          --  All other types of values are not known at compile time
 
          else
@@ -1432,6 +1900,21 @@ package body Sem_Eval is
 
       end if;
    end Compile_Time_Known_Value_Or_Aggr;
+
+   ---------------------------------------
+   -- CRT_Safe_Compile_Time_Known_Value --
+   ---------------------------------------
+
+   function CRT_Safe_Compile_Time_Known_Value (Op : Node_Id) return Boolean is
+   begin
+      if (Configurable_Run_Time_Mode or No_Run_Time_Mode)
+        and then not Is_OK_Static_Expression (Op)
+      then
+         return False;
+      else
+         return Compile_Time_Known_Value (Op);
+      end if;
+   end CRT_Safe_Compile_Time_Known_Value;
 
    -----------------
    -- Eval_Actual --
@@ -1456,7 +1939,6 @@ package body Sem_Eval is
 
    procedure Eval_Allocator (N : Node_Id) is
       Expr : constant Node_Id := Expression (N);
-
    begin
       if Nkind (Expr) = N_Qualified_Expression then
          Check_Non_Static_Context (Expression (Expr));
@@ -1488,6 +1970,8 @@ package body Sem_Eval is
          return;
       end if;
 
+      --  Otherwise attempt to fold
+
       if Is_Universal_Numeric_Type (Etype (Left))
            and then
          Is_Universal_Numeric_Type (Etype (Right))
@@ -1505,7 +1989,6 @@ package body Sem_Eval is
 
          begin
             case Nkind (N) is
-
                when N_Op_Add =>
                   Result := Left_Int + Right_Int;
 
@@ -1528,11 +2011,18 @@ package body Sem_Eval is
                   --  division, rem and mod if the right operand is zero.
 
                   if Right_Int = 0 then
+
+                     --  When SPARK_Mode is On, force a warning instead of
+                     --  an error in that case, as this likely corresponds
+                     --  to deactivated code.
+
                      Apply_Compile_Time_Constraint_Error
-                       (N, "division by zero",
-                        CE_Divide_By_Zero,
-                        Warn => not Stat);
+                       (N, "division by zero", CE_Divide_By_Zero,
+                        Warn => not Stat or SPARK_Mode = On);
+                     Set_Raises_Constraint_Error (N);
                      return;
+
+                  --  Otherwise we can do the division
 
                   else
                      Result := Left_Int / Right_Int;
@@ -1544,11 +2034,16 @@ package body Sem_Eval is
                   --  division, rem and mod if the right operand is zero.
 
                   if Right_Int = 0 then
+
+                     --  When SPARK_Mode is On, force a warning instead of
+                     --  an error in that case, as this likely corresponds
+                     --  to deactivated code.
+
                      Apply_Compile_Time_Constraint_Error
-                       (N, "mod with zero divisor",
-                        CE_Divide_By_Zero,
-                        Warn => not Stat);
+                       (N, "mod with zero divisor", CE_Divide_By_Zero,
+                        Warn => not Stat or SPARK_Mode = On);
                      return;
+
                   else
                      Result := Left_Int mod Right_Int;
                   end if;
@@ -1559,10 +2054,14 @@ package body Sem_Eval is
                   --  division, rem and mod if the right operand is zero.
 
                   if Right_Int = 0 then
+
+                     --  When SPARK_Mode is On, force a warning instead of
+                     --  an error in that case, as this likely corresponds
+                     --  to deactivated code.
+
                      Apply_Compile_Time_Constraint_Error
-                       (N, "rem with zero divisor",
-                        CE_Divide_By_Zero,
-                        Warn => not Stat);
+                       (N, "rem with zero divisor", CE_Divide_By_Zero,
+                        Warn => not Stat or SPARK_Mode = On);
                      return;
 
                   else
@@ -1588,7 +2087,7 @@ package body Sem_Eval is
                begin
                   if Result < Lo or else Result > Hi then
                      Apply_Compile_Time_Constraint_Error
-                       (N, "value not in range of }?",
+                       (N, "value not in range of }??",
                         CE_Overflow_Check_Failed,
                         Ent => BT);
                      return;
@@ -1660,7 +2159,7 @@ package body Sem_Eval is
    -- Eval_Character_Literal --
    ----------------------------
 
-   --  Nothing to be done!
+   --  Nothing to be done
 
    procedure Eval_Character_Literal (N : Node_Id) is
       pragma Warnings (Off, N);
@@ -1712,21 +2211,105 @@ package body Sem_Eval is
    -- Eval_Case_Expression --
    --------------------------
 
-   --  Right now we do not attempt folding of any case expressions, and the
-   --  language does not require it, so the only required processing is to
-   --  do the check for all expressions appearing in the case expression.
+   --  A conditional expression is static if all its conditions and dependent
+   --  expressions are static. Note that we do not care if the dependent
+   --  expressions raise CE, except for the one that will be selected.
 
    procedure Eval_Case_Expression (N : Node_Id) is
-      Alt : Node_Id;
+      Alt    : Node_Id;
+      Choice : Node_Id;
 
    begin
-      Check_Non_Static_Context (Expression (N));
+      Set_Is_Static_Expression (N, False);
+
+      if Error_Posted (Expression (N))
+        or else not Is_Static_Expression (Expression (N))
+      then
+         Check_Non_Static_Context (Expression (N));
+         return;
+      end if;
+
+      --  First loop, make sure all the alternatives are static expressions
+      --  none of which raise Constraint_Error. We make the Constraint_Error
+      --  check because part of the legality condition for a correct static
+      --  case expression is that the cases are covered, like any other case
+      --  expression. And we can't do that if any of the conditions raise an
+      --  exception, so we don't even try to evaluate if that is the case.
 
       Alt := First (Alternatives (N));
       while Present (Alt) loop
-         Check_Non_Static_Context (Expression (Alt));
+
+         --  The expression must be static, but we don't care at this stage
+         --  if it raises Constraint_Error (the alternative might not match,
+         --  in which case the expression is statically unevaluated anyway).
+
+         if not Is_Static_Expression (Expression (Alt)) then
+            Check_Non_Static_Context (Expression (Alt));
+            return;
+         end if;
+
+         --  The choices of a case always have to be static, and cannot raise
+         --  an exception. If this condition is not met, then the expression
+         --  is plain illegal, so just abandon evaluation attempts. No need
+         --  to check non-static context when we have something illegal anyway.
+
+         if not Is_OK_Static_Choice_List (Discrete_Choices (Alt)) then
+            return;
+         end if;
+
          Next (Alt);
       end loop;
+
+      --  OK, if the above loop gets through it means that all choices are OK
+      --  static (don't raise exceptions), so the whole case is static, and we
+      --  can find the matching alternative.
+
+      Set_Is_Static_Expression (N);
+
+      --  Now to deal with propagating a possible Constraint_Error
+
+      --  If the selecting expression raises CE, propagate and we are done
+
+      if Raises_Constraint_Error (Expression (N)) then
+         Set_Raises_Constraint_Error (N);
+
+      --  Otherwise we need to check the alternatives to find the matching
+      --  one. CE's in other than the matching one are not relevant. But we
+      --  do need to check the matching one. Unlike the first loop, we do not
+      --  have to go all the way through, when we find the matching one, quit.
+
+      else
+         Alt := First (Alternatives (N));
+         Search : loop
+
+            --  We must find a match among the alternatives. If not, this must
+            --  be due to other errors, so just ignore, leaving as non-static.
+
+            if No (Alt) then
+               Set_Is_Static_Expression (N, False);
+               return;
+            end if;
+
+            --  Otherwise loop through choices of this alternative
+
+            Choice := First (Discrete_Choices (Alt));
+            while Present (Choice) loop
+
+               --  If we find a matching choice, then the Expression of this
+               --  alternative replaces N (Raises_Constraint_Error flag is
+               --  included, so we don't have to special case that).
+
+               if Choice_Matches (Expression (N), Choice) = Match then
+                  Rewrite (N, Relocate_Node (Expression (Alt)));
+                  return;
+               end if;
+
+               Next (Choice);
+            end loop;
+
+            Next (Alt);
+         end loop Search;
+      end if;
    end Eval_Case_Expression;
 
    ------------------------
@@ -1779,7 +2362,7 @@ package body Sem_Eval is
          Left_Str   : constant Node_Id := Get_String_Val (Left);
          Left_Len   : Nat;
          Right_Str  : constant Node_Id := Get_String_Val (Right);
-         Folded_Val : String_Id;
+         Folded_Val : String_Id        := No_String;
 
       begin
          --  Establish new string literal, and store left operand. We make
@@ -1790,7 +2373,7 @@ package body Sem_Eval is
          --  case of a concatenation of a series of string literals.
 
          if Nkind (Left_Str) = N_String_Literal then
-            Left_Len :=  String_Length (Strval (Left_Str));
+            Left_Len := String_Length (Strval (Left_Str));
 
             --  If the left operand is the empty string, and the right operand
             --  is a string literal (the case of "" & "..."), the result is the
@@ -1825,101 +2408,19 @@ package body Sem_Eval is
 
          Set_Is_Static_Expression (N, Stat);
 
-         if Stat then
+         --  If left operand is the empty string, the result is the
+         --  right operand, including its bounds if anomalous.
 
-            --  If left operand is the empty string, the result is the
-            --  right operand, including its bounds if anomalous.
-
-            if Left_Len = 0
-              and then Is_Array_Type (Etype (Right))
-              and then Etype (Right) /= Any_String
-            then
-               Set_Etype (N, Etype (Right));
-            end if;
-
-            Fold_Str (N, Folded_Val, Static => True);
+         if Left_Len = 0
+           and then Is_Array_Type (Etype (Right))
+           and then Etype (Right) /= Any_String
+         then
+            Set_Etype (N, Etype (Right));
          end if;
+
+         Fold_Str (N, Folded_Val, Static => Stat);
       end;
    end Eval_Concatenation;
-
-   ---------------------------------
-   -- Eval_Conditional_Expression --
-   ---------------------------------
-
-   --  We can fold to a static expression if the condition and both constituent
-   --  expressions are static. Otherwise, the only required processing is to do
-   --  the check for non-static context for the then and else expressions.
-
-   procedure Eval_Conditional_Expression (N : Node_Id) is
-      Condition  : constant Node_Id := First (Expressions (N));
-      Then_Expr  : constant Node_Id := Next (Condition);
-      Else_Expr  : constant Node_Id := Next (Then_Expr);
-      Result     : Node_Id;
-      Non_Result : Node_Id;
-
-      Rstat : constant Boolean :=
-                Is_Static_Expression (Condition)
-                  and then
-                Is_Static_Expression (Then_Expr)
-                  and then
-                Is_Static_Expression (Else_Expr);
-
-   begin
-      --  If any operand is Any_Type, just propagate to result and do not try
-      --  to fold, this prevents cascaded errors.
-
-      if Etype (Condition) = Any_Type or else
-         Etype (Then_Expr) = Any_Type or else
-         Etype (Else_Expr) = Any_Type
-      then
-         Set_Etype (N, Any_Type);
-         Set_Is_Static_Expression (N, False);
-         return;
-
-      --  Static case where we can fold. Note that we don't try to fold cases
-      --  where the condition is known at compile time, but the result is
-      --  non-static. This avoids possible cases of infinite recursion where
-      --  the expander puts in a redundant test and we remove it. Instead we
-      --  deal with these cases in the expander.
-
-      elsif Rstat then
-
-         --  Select result operand
-
-         if Is_True (Expr_Value (Condition)) then
-            Result := Then_Expr;
-            Non_Result := Else_Expr;
-         else
-            Result := Else_Expr;
-            Non_Result := Then_Expr;
-         end if;
-
-         --  Note that it does not matter if the non-result operand raises a
-         --  Constraint_Error, but if the result raises constraint error then
-         --  we replace the node with a raise constraint error. This will
-         --  properly propagate Raises_Constraint_Error since this flag is
-         --  set in Result.
-
-         if Raises_Constraint_Error (Result) then
-            Rewrite_In_Raise_CE (N, Result);
-            Check_Non_Static_Context (Non_Result);
-
-         --  Otherwise the result operand replaces the original node
-
-         else
-            Rewrite (N, Relocate_Node (Result));
-         end if;
-
-      --  Case of condition not known at compile time
-
-      else
-         Check_Non_Static_Context (Condition);
-         Check_Non_Static_Context (Then_Expr);
-         Check_Non_Static_Context (Else_Expr);
-      end if;
-
-      Set_Is_Static_Expression (N, Rstat);
-   end Eval_Conditional_Expression;
 
    ----------------------
    -- Eval_Entity_Name --
@@ -1936,7 +2437,7 @@ package body Sem_Eval is
 
    begin
       --  Enumeration literals are always considered to be constants
-      --  and cannot raise constraint error (RM 4.9(22)).
+      --  and cannot raise Constraint_Error (RM 4.9(22)).
 
       if Ekind (Def_Id) = E_Enumeration_Literal then
          Set_Is_Static_Expression (N);
@@ -1948,8 +2449,8 @@ package body Sem_Eval is
 
       elsif Ekind (Def_Id) = E_Constant then
 
-         --  Deferred constants must always be treated as nonstatic
-         --  outside the scope of their full view.
+         --  Deferred constants must always be treated as nonstatic outside the
+         --  scope of their full view.
 
          if Present (Full_View (Def_Id))
            and then not In_Open_Scopes (Scope (Def_Id))
@@ -1971,6 +2472,16 @@ package body Sem_Eval is
                Validate_Static_Object_Name (N);
             end if;
 
+            --  Mark constant condition in SCOs
+
+            if Generate_SCO
+              and then Comes_From_Source (N)
+              and then Is_Boolean_Type (Etype (Def_Id))
+              and then Compile_Time_Known_Value (N)
+            then
+               Set_SCO_Condition (N, Expr_Value_E (N) = Standard_True);
+            end if;
+
             return;
          end if;
       end if;
@@ -1979,6 +2490,91 @@ package body Sem_Eval is
 
       Validate_Static_Object_Name (N);
    end Eval_Entity_Name;
+
+   ------------------------
+   -- Eval_If_Expression --
+   ------------------------
+
+   --  We can fold to a static expression if the condition and both dependent
+   --  expressions are static. Otherwise, the only required processing is to do
+   --  the check for non-static context for the then and else expressions.
+
+   procedure Eval_If_Expression (N : Node_Id) is
+      Condition  : constant Node_Id := First (Expressions (N));
+      Then_Expr  : constant Node_Id := Next (Condition);
+      Else_Expr  : constant Node_Id := Next (Then_Expr);
+      Result     : Node_Id;
+      Non_Result : Node_Id;
+
+      Rstat : constant Boolean :=
+                Is_Static_Expression (Condition)
+                  and then
+                Is_Static_Expression (Then_Expr)
+                  and then
+                Is_Static_Expression (Else_Expr);
+      --  True if result is static
+
+   begin
+      --  If result not static, nothing to do, otherwise set static result
+
+      if not Rstat then
+         return;
+      else
+         Set_Is_Static_Expression (N);
+      end if;
+
+      --  If any operand is Any_Type, just propagate to result and do not try
+      --  to fold, this prevents cascaded errors.
+
+      if Etype (Condition) = Any_Type or else
+         Etype (Then_Expr) = Any_Type or else
+         Etype (Else_Expr) = Any_Type
+      then
+         Set_Etype (N, Any_Type);
+         Set_Is_Static_Expression (N, False);
+         return;
+      end if;
+
+      --  If condition raises Constraint_Error then we have already signaled
+      --  an error, and we just propagate to the result and do not fold.
+
+      if Raises_Constraint_Error (Condition) then
+         Set_Raises_Constraint_Error (N);
+         return;
+      end if;
+
+      --  Static case where we can fold. Note that we don't try to fold cases
+      --  where the condition is known at compile time, but the result is
+      --  non-static. This avoids possible cases of infinite recursion where
+      --  the expander puts in a redundant test and we remove it. Instead we
+      --  deal with these cases in the expander.
+
+      --  Select result operand
+
+      if Is_True (Expr_Value (Condition)) then
+         Result     := Then_Expr;
+         Non_Result := Else_Expr;
+      else
+         Result     := Else_Expr;
+         Non_Result := Then_Expr;
+      end if;
+
+      --  Note that it does not matter if the non-result operand raises a
+      --  Constraint_Error, but if the result raises Constraint_Error then we
+      --  replace the node with a raise Constraint_Error. This will properly
+      --  propagate Raises_Constraint_Error since this flag is set in Result.
+
+      if Raises_Constraint_Error (Result) then
+         Rewrite_In_Raise_CE (N, Result);
+         Check_Non_Static_Context (Non_Result);
+
+      --  Otherwise the result operand replaces the original node
+
+      else
+         Rewrite (N, Relocate_Node (Result));
+         Set_Is_Static_Expression (N);
+      end if;
+   end Eval_If_Expression;
 
    ----------------------------
    -- Eval_Indexed_Component --
@@ -2072,7 +2668,7 @@ package body Sem_Eval is
                   if List_Length (Expressions (Arr)) >= Lin then
                      Elm := Pick (Expressions (Arr), Lin);
 
-                     --  If the resulting expression is compile time known,
+                     --  If the resulting expression is compile-time-known,
                      --  then we can rewrite the indexed component with this
                      --  value, being sure to mark the result as non-static.
                      --  We also reset the Sloc, in case this generates an
@@ -2127,9 +2723,7 @@ package body Sem_Eval is
    --  the expander that do not correspond to static expressions.
 
    procedure Eval_Integer_Literal (N : Node_Id) is
-      T : constant Entity_Id := Etype (N);
-
-      function In_Any_Integer_Context return Boolean;
+      function In_Any_Integer_Context (Context : Node_Id) return Boolean;
       --  If the literal is resolved with a specific type in a context where
       --  the expected type is Any_Integer, there are no range checks on the
       --  literal. By the time the literal is evaluated, it carries the type
@@ -2140,41 +2734,54 @@ package body Sem_Eval is
       -- In_Any_Integer_Context --
       ----------------------------
 
-      function In_Any_Integer_Context return Boolean is
-         Par : constant Node_Id   := Parent (N);
-         K   : constant Node_Kind := Nkind (Par);
-
+      function In_Any_Integer_Context (Context : Node_Id) return Boolean is
       begin
          --  Any_Integer also appears in digits specifications for real types,
          --  but those have bounds smaller that those of any integer base type,
          --  so we can safely ignore these cases.
 
-         return    K = N_Number_Declaration
-           or else K = N_Attribute_Reference
-           or else K = N_Attribute_Definition_Clause
-           or else K = N_Modular_Type_Definition
-           or else K = N_Signed_Integer_Type_Definition;
+         return
+           Nkind_In (Context, N_Attribute_Definition_Clause,
+                              N_Attribute_Reference,
+                              N_Modular_Type_Definition,
+                              N_Number_Declaration,
+                              N_Signed_Integer_Type_Definition);
       end In_Any_Integer_Context;
+
+      --  Local variables
+
+      Par : constant Node_Id   := Parent (N);
+      Typ : constant Entity_Id := Etype (N);
 
    --  Start of processing for Eval_Integer_Literal
 
    begin
-
       --  If the literal appears in a non-expression context, then it is
       --  certainly appearing in a non-static context, so check it. This is
       --  actually a redundant check, since Check_Non_Static_Context would
-      --  check it, but it seems worth while avoiding the call.
+      --  check it, but it seems worthwhile to optimize out the call.
 
-      if Nkind (Parent (N)) not in N_Subexpr
-        and then not In_Any_Integer_Context
+      --  Additionally, when the literal appears within an if or case
+      --  expression it must be checked as well. However, due to the literal
+      --  appearing within a conditional statement, expansion greatly changes
+      --  the nature of its context and performing some of the checks within
+      --  Check_Non_Static_Context on an expanded literal may lead to spurious
+      --  and misleading warnings.
+
+      if (Nkind_In (Par, N_Case_Expression_Alternative, N_If_Expression)
+           or else Nkind (Parent (N)) not in N_Subexpr)
+        and then (not Nkind_In (Par, N_Case_Expression_Alternative,
+                                     N_If_Expression)
+                   or else Comes_From_Source (N))
+        and then not In_Any_Integer_Context (Par)
       then
          Check_Non_Static_Context (N);
       end if;
 
       --  Modular integer literals must be in their base range
 
-      if Is_Modular_Integer_Type (T)
-        and then Is_Out_Of_Range (N, Base_Type (T), Assume_Valid => True)
+      if Is_Modular_Integer_Type (Typ)
+        and then Is_Out_Of_Range (N, Base_Type (Typ), Assume_Valid => True)
       then
          Out_Of_Range (N);
       end if;
@@ -2209,11 +2816,7 @@ package body Sem_Eval is
          Right_Int : constant Uint := Expr_Value (Right);
 
       begin
-         --  VMS includes bitwise operations on signed types
-
-         if Is_Modular_Integer_Type (Etype (N))
-           or else Is_VMS_Operator (Entity (N))
-         then
+         if Is_Modular_Integer_Type (Etype (N)) then
             declare
                Left_Bits  : Bits (0 .. UI_To_Int (Esize (Etype (N))) - 1);
                Right_Bits : Bits (0 .. UI_To_Int (Esize (Etype (N))) - 1);
@@ -2275,137 +2878,69 @@ package body Sem_Eval is
    --  static subtype (RM 4.9(12)).
 
    procedure Eval_Membership_Op (N : Node_Id) is
-      Left   : constant Node_Id := Left_Opnd (N);
-      Right  : constant Node_Id := Right_Opnd (N);
-      Def_Id : Entity_Id;
-      Lo     : Node_Id;
-      Hi     : Node_Id;
-      Result : Boolean;
-      Stat   : Boolean;
-      Fold   : Boolean;
+      Alts   : constant List_Id := Alternatives (N);
+      Choice : constant Node_Id := Right_Opnd (N);
+      Expr   : constant Node_Id := Left_Opnd (N);
+      Result : Match_Result;
 
    begin
       --  Ignore if error in either operand, except to make sure that Any_Type
       --  is properly propagated to avoid junk cascaded errors.
 
-      if Etype (Left) = Any_Type or else Etype (Right) = Any_Type then
+      if Etype (Expr) = Any_Type
+        or else (Present (Choice) and then Etype (Choice) = Any_Type)
+      then
          Set_Etype (N, Any_Type);
          return;
       end if;
 
-      --  Ignore if types involved have predicates
+      --  If left operand non-static, then nothing to do
 
-      if Present (Predicate_Function (Etype (Left)))
-           or else
-         Present (Predicate_Function (Etype (Right)))
-      then
+      if not Is_Static_Expression (Expr) then
          return;
       end if;
 
-      --  Case of right operand is a subtype name
+      --  If choice is non-static, left operand is in non-static context
 
-      if Is_Entity_Name (Right) then
-         Def_Id := Entity (Right);
+      if (Present (Choice) and then not Is_Static_Choice (Choice))
+        or else (Present (Alts) and then not Is_Static_Choice_List (Alts))
+      then
+         Check_Non_Static_Context (Expr);
+         return;
+      end if;
 
-         if (Is_Scalar_Type (Def_Id) or else Is_String_Type (Def_Id))
-           and then Is_OK_Static_Subtype (Def_Id)
-         then
-            Test_Expression_Is_Foldable (N, Left, Stat, Fold);
+      --  Otherwise we definitely have a static expression
 
-            if not Fold or else not Stat then
-               return;
-            end if;
-         else
-            Check_Non_Static_Context (Left);
-            return;
-         end if;
+      Set_Is_Static_Expression (N);
 
-         --  For string membership tests we will check the length further on
+      --  If left operand raises Constraint_Error, propagate and we are done
 
-         if not Is_String_Type (Def_Id) then
-            Lo := Type_Low_Bound (Def_Id);
-            Hi := Type_High_Bound (Def_Id);
+      if Raises_Constraint_Error (Expr) then
+         Set_Raises_Constraint_Error (N, True);
 
-         else
-            Lo := Empty;
-            Hi := Empty;
-         end if;
-
-      --  Case of right operand is a range
+      --  See if we match
 
       else
-         if Is_Static_Range (Right) then
-            Test_Expression_Is_Foldable (N, Left, Stat, Fold);
-
-            if not Fold or else not Stat then
-               return;
-
-            --  If one bound of range raises CE, then don't try to fold
-
-            elsif not Is_OK_Static_Range (Right) then
-               Check_Non_Static_Context (Left);
-               return;
-            end if;
-
+         if Present (Choice) then
+            Result := Choice_Matches (Expr, Choice);
          else
-            Check_Non_Static_Context (Left);
-            return;
+            Result := Choices_Match (Expr, Alts);
          end if;
 
-         --  Here we know range is an OK static range
+         --  If result is Non_Static, it means that we raise Constraint_Error,
+         --  since we already tested that the operands were themselves static.
 
-         Lo := Low_Bound (Right);
-         Hi := High_Bound (Right);
-      end if;
+         if Result = Non_Static then
+            Set_Raises_Constraint_Error (N);
 
-      --  For strings we check that the length of the string expression is
-      --  compatible with the string subtype if the subtype is constrained,
-      --  or if unconstrained then the test is always true.
-
-      if Is_String_Type (Etype (Right)) then
-         if not Is_Constrained (Etype (Right)) then
-            Result := True;
+         --  Otherwise we have our result (flipped if NOT IN case)
 
          else
-            declare
-               Typlen : constant Uint := String_Type_Len (Etype (Right));
-               Strlen : constant Uint :=
-                          UI_From_Int
-                            (String_Length (Strval (Get_String_Val (Left))));
-            begin
-               Result := (Typlen = Strlen);
-            end;
+            Fold_Uint
+              (N, Test ((Result = Match) xor (Nkind (N) = N_Not_In)), True);
+            Warn_On_Known_Condition (N);
          end if;
-
-      --  Fold the membership test. We know we have a static range and Lo and
-      --  Hi are set to the expressions for the end points of this range.
-
-      elsif Is_Real_Type (Etype (Right)) then
-         declare
-            Leftval : constant Ureal := Expr_Value_R (Left);
-
-         begin
-            Result := Expr_Value_R (Lo) <= Leftval
-                        and then Leftval <= Expr_Value_R (Hi);
-         end;
-
-      else
-         declare
-            Leftval : constant Uint := Expr_Value (Left);
-
-         begin
-            Result := Expr_Value (Lo) <= Leftval
-                        and then Leftval <= Expr_Value (Hi);
-         end;
       end if;
-
-      if Nkind (N) = N_Not_In then
-         Result := not Result;
-      end if;
-
-      Fold_Uint (N, Test (Result), True);
-
-      Warn_On_Known_Condition (N);
    end Eval_Membership_Op;
 
    ------------------------
@@ -2444,9 +2979,16 @@ package body Sem_Eval is
    begin
       --  If not foldable we are done
 
-      Test_Expression_Is_Foldable (N, Left, Right, Stat, Fold);
+      Test_Expression_Is_Foldable
+        (N, Left, Right, Stat, Fold, CRT_Safe => True);
+
+      --  Return if not foldable
 
       if not Fold then
+         return;
+      end if;
+
+      if Configurable_Run_Time_Mode and not Stat then
          return;
       end if;
 
@@ -2469,8 +3011,7 @@ package body Sem_Eval is
 
                if Right_Int < 0 then
                   Apply_Compile_Time_Constraint_Error
-                    (N, "integer exponent negative",
-                     CE_Range_Check_Failed,
+                    (N, "integer exponent negative", CE_Range_Check_Failed,
                      Warn => not Stat);
                   return;
 
@@ -2502,8 +3043,7 @@ package body Sem_Eval is
 
                   if Right_Int < 0 then
                      Apply_Compile_Time_Constraint_Error
-                       (N, "zero ** negative integer",
-                        CE_Range_Check_Failed,
+                       (N, "zero ** negative integer", CE_Range_Check_Failed,
                         Warn => not Stat);
                      return;
                   else
@@ -2522,7 +3062,7 @@ package body Sem_Eval is
    -- Eval_Op_Not --
    -----------------
 
-   --  The not operation is a  static functions, so the result is potentially
+   --  The not operation is a static functions, so the result is potentially
    --  static if the operand is potentially static (RM 4.9(7), 4.9(20)).
 
    procedure Eval_Op_Not (N : Node_Id) is
@@ -2548,14 +3088,12 @@ package body Sem_Eval is
       begin
          --  Negation is equivalent to subtracting from the modulus minus one.
          --  For a binary modulus this is equivalent to the ones-complement of
-         --  the original value. For non-binary modulus this is an arbitrary
+         --  the original value. For a nonbinary modulus this is an arbitrary
          --  but consistent definition.
 
          if Is_Modular_Integer_Type (Typ) then
             Fold_Uint (N, Modulus (Typ) - 1 - Rint, Stat);
-
-         else
-            pragma Assert (Is_Boolean_Type (Typ));
+         else pragma Assert (Is_Boolean_Type (Typ));
             Fold_Uint (N, Test (not Is_True (Rint)), Stat);
          end if;
 
@@ -2608,7 +3146,7 @@ package body Sem_Eval is
       if not Fold then
          return;
 
-      --  Don't try fold if target type has constraint error bounds
+      --  Don't try fold if target type has Constraint_Error bounds
 
       elsif not Is_OK_Static_Subtype (Target_Type) then
          Set_Raises_Constraint_Error (N);
@@ -2686,357 +3224,405 @@ package body Sem_Eval is
    --  both operands are static (RM 4.9(7), 4.9(20)), except that for strings,
    --  the result is never static, even if the operands are.
 
+   --  However, for internally generated nodes, we allow string equality and
+   --  inequality to be static. This is because we rewrite A in "ABC" as an
+   --  equality test A = "ABC", and the former is definitely static.
+
    procedure Eval_Relational_Op (N : Node_Id) is
-      Left   : constant Node_Id   := Left_Opnd (N);
-      Right  : constant Node_Id   := Right_Opnd (N);
-      Typ    : constant Entity_Id := Etype (Left);
-      Otype  : Entity_Id := Empty;
-      Result : Boolean;
-      Stat   : Boolean;
-      Fold   : Boolean;
+      Left  : constant Node_Id := Left_Opnd  (N);
+      Right : constant Node_Id := Right_Opnd (N);
+
+      procedure Decompose_Expr
+        (Expr : Node_Id;
+         Ent  : out Entity_Id;
+         Kind : out Character;
+         Cons : out Uint;
+         Orig : Boolean := True);
+      --  Given expression Expr, see if it is of the form X [+/- K]. If so, Ent
+      --  is set to the entity in X, Kind is 'F','L','E' for 'First or 'Last or
+      --  simple entity, and Cons is the value of K. If the expression is not
+      --  of the required form, Ent is set to Empty.
+      --
+      --  Orig indicates whether Expr is the original expression to consider,
+      --  or if we are handling a subexpression (e.g. recursive call to
+      --  Decompose_Expr).
+
+      procedure Fold_General_Op (Is_Static : Boolean);
+      --  Attempt to fold arbitrary relational operator N. Flag Is_Static must
+      --  be set when the operator denotes a static expression.
+
+      procedure Fold_Static_Real_Op;
+      --  Attempt to fold static real type relational operator N
+
+      function Static_Length (Expr : Node_Id) return Uint;
+      --  If Expr is an expression for a constrained array whose length is
+      --  known at compile time, return the non-negative length, otherwise
+      --  return -1.
+
+      --------------------
+      -- Decompose_Expr --
+      --------------------
+
+      procedure Decompose_Expr
+        (Expr : Node_Id;
+         Ent  : out Entity_Id;
+         Kind : out Character;
+         Cons : out Uint;
+         Orig : Boolean := True)
+      is
+         Exp : Node_Id;
+
+      begin
+         --  Assume that the expression does not meet the expected form
+
+         Cons := No_Uint;
+         Ent  := Empty;
+         Kind := '?';
+
+         if Nkind (Expr) = N_Op_Add
+           and then Compile_Time_Known_Value (Right_Opnd (Expr))
+         then
+            Exp  := Left_Opnd (Expr);
+            Cons := Expr_Value (Right_Opnd (Expr));
+
+         elsif Nkind (Expr) = N_Op_Subtract
+           and then Compile_Time_Known_Value (Right_Opnd (Expr))
+         then
+            Exp  := Left_Opnd (Expr);
+            Cons := -Expr_Value (Right_Opnd (Expr));
+
+         --  If the bound is a constant created to remove side effects, recover
+         --  the original expression to see if it has one of the recognizable
+         --  forms.
+
+         elsif Nkind (Expr) = N_Identifier
+           and then not Comes_From_Source (Entity (Expr))
+           and then Ekind (Entity (Expr)) = E_Constant
+           and then Nkind (Parent (Entity (Expr))) = N_Object_Declaration
+         then
+            Exp := Expression (Parent (Entity (Expr)));
+            Decompose_Expr (Exp, Ent, Kind, Cons, Orig => False);
+
+            --  If original expression includes an entity, create a reference
+            --  to it for use below.
+
+            if Present (Ent) then
+               Exp := New_Occurrence_Of (Ent, Sloc (Ent));
+            else
+               return;
+            end if;
+
+         else
+            --  Only consider the case of X + 0 for a full expression, and
+            --  not when recursing, otherwise we may end up with evaluating
+            --  expressions not known at compile time to 0.
+
+            if Orig then
+               Exp  := Expr;
+               Cons := Uint_0;
+            else
+               return;
+            end if;
+         end if;
+
+         --  At this stage Exp is set to the potential X
+
+         if Nkind (Exp) = N_Attribute_Reference then
+            if Attribute_Name (Exp) = Name_First then
+               Kind := 'F';
+            elsif Attribute_Name (Exp) = Name_Last then
+               Kind := 'L';
+            else
+               return;
+            end if;
+
+            Exp := Prefix (Exp);
+
+         else
+            Kind := 'E';
+         end if;
+
+         if Is_Entity_Name (Exp) and then Present (Entity (Exp)) then
+            Ent := Entity (Exp);
+         end if;
+      end Decompose_Expr;
+
+      ---------------------
+      -- Fold_General_Op --
+      ---------------------
+
+      procedure Fold_General_Op (Is_Static : Boolean) is
+         CR : constant Compare_Result :=
+                Compile_Time_Compare (Left, Right, Assume_Valid => False);
+
+         Result : Boolean;
+
+      begin
+         if CR = Unknown then
+            return;
+         end if;
+
+         case Nkind (N) is
+            when N_Op_Eq =>
+               if CR = EQ then
+                  Result := True;
+               elsif CR = NE or else CR = GT or else CR = LT then
+                  Result := False;
+               else
+                  return;
+               end if;
+
+            when N_Op_Ge =>
+               if CR = GT or else CR = EQ or else CR = GE then
+                  Result := True;
+               elsif CR = LT then
+                  Result := False;
+               else
+                  return;
+               end if;
+
+            when N_Op_Gt =>
+               if CR = GT then
+                  Result := True;
+               elsif CR = EQ or else CR = LT or else CR = LE then
+                  Result := False;
+               else
+                  return;
+               end if;
+
+            when N_Op_Le =>
+               if CR = LT or else CR = EQ or else CR = LE then
+                  Result := True;
+               elsif CR = GT then
+                  Result := False;
+               else
+                  return;
+               end if;
+
+            when N_Op_Lt =>
+               if CR = LT then
+                  Result := True;
+               elsif CR = EQ or else CR = GT or else CR = GE then
+                  Result := False;
+               else
+                  return;
+               end if;
+
+            when N_Op_Ne =>
+               if CR = NE or else CR = GT or else CR = LT then
+                  Result := True;
+               elsif CR = EQ then
+                  Result := False;
+               else
+                  return;
+               end if;
+
+            when others =>
+               raise Program_Error;
+         end case;
+
+         --  Determine the potential outcome of the relation assuming the
+         --  operands are valid and emit a warning when the relation yields
+         --  True or False only in the presence of invalid values.
+
+         Warn_On_Constant_Valid_Condition (N);
+
+         Fold_Uint (N, Test (Result), Is_Static);
+      end Fold_General_Op;
+
+      -------------------------
+      -- Fold_Static_Real_Op --
+      -------------------------
+
+      procedure Fold_Static_Real_Op is
+         Left_Real  : constant Ureal := Expr_Value_R (Left);
+         Right_Real : constant Ureal := Expr_Value_R (Right);
+         Result     : Boolean;
+
+      begin
+         case Nkind (N) is
+            when N_Op_Eq => Result := (Left_Real =  Right_Real);
+            when N_Op_Ge => Result := (Left_Real >= Right_Real);
+            when N_Op_Gt => Result := (Left_Real >  Right_Real);
+            when N_Op_Le => Result := (Left_Real <= Right_Real);
+            when N_Op_Lt => Result := (Left_Real <  Right_Real);
+            when N_Op_Ne => Result := (Left_Real /= Right_Real);
+            when others  => raise Program_Error;
+         end case;
+
+         Fold_Uint (N, Test (Result), True);
+      end Fold_Static_Real_Op;
+
+      -------------------
+      -- Static_Length --
+      -------------------
+
+      function Static_Length (Expr : Node_Id) return Uint is
+         Cons1 : Uint;
+         Cons2 : Uint;
+         Ent1  : Entity_Id;
+         Ent2  : Entity_Id;
+         Kind1 : Character;
+         Kind2 : Character;
+         Typ   : Entity_Id;
+
+      begin
+         --  First easy case string literal
+
+         if Nkind (Expr) = N_String_Literal then
+            return UI_From_Int (String_Length (Strval (Expr)));
+
+         --  With frontend inlining as performed in GNATprove mode, a variable
+         --  may be inserted that has a string literal subtype. Deal with this
+         --  specially as for the previous case.
+
+         elsif Ekind (Etype (Expr)) = E_String_Literal_Subtype then
+            return String_Literal_Length (Etype (Expr));
+
+         --  Second easy case, not constrained subtype, so no length
+
+         elsif not Is_Constrained (Etype (Expr)) then
+            return Uint_Minus_1;
+         end if;
+
+         --  General case
+
+         Typ := Etype (First_Index (Etype (Expr)));
+
+         --  The simple case, both bounds are known at compile time
+
+         if Is_Discrete_Type (Typ)
+           and then Compile_Time_Known_Value (Type_Low_Bound (Typ))
+           and then Compile_Time_Known_Value (Type_High_Bound (Typ))
+         then
+            return
+              UI_Max (Uint_0, Expr_Value (Type_High_Bound (Typ)) -
+                              Expr_Value (Type_Low_Bound  (Typ)) + 1);
+         end if;
+
+         --  A more complex case, where the bounds are of the form X [+/- K1]
+         --  .. X [+/- K2]), where X is an expression that is either A'First or
+         --  A'Last (with A an entity name), or X is an entity name, and the
+         --  two X's are the same and K1 and K2 are known at compile time, in
+         --  this case, the length can also be computed at compile time, even
+         --  though the bounds are not known. A common case of this is e.g.
+         --  (X'First .. X'First+5).
+
+         Decompose_Expr
+           (Original_Node (Type_Low_Bound  (Typ)), Ent1, Kind1, Cons1);
+         Decompose_Expr
+           (Original_Node (Type_High_Bound (Typ)), Ent2, Kind2, Cons2);
+
+         if Present (Ent1) and then Ent1 = Ent2 and then Kind1 = Kind2 then
+            return Cons2 - Cons1 + 1;
+         else
+            return Uint_Minus_1;
+         end if;
+      end Static_Length;
+
+      --  Local variables
+
+      Left_Typ  : constant Entity_Id := Etype (Left);
+      Right_Typ : constant Entity_Id := Etype (Right);
+      Fold      : Boolean;
+      Left_Len  : Uint;
+      Op_Typ    : Entity_Id := Empty;
+      Right_Len : Uint;
+
+      Is_Static_Expression : Boolean;
+
+   --  Start of processing for Eval_Relational_Op
 
    begin
       --  One special case to deal with first. If we can tell that the result
       --  will be false because the lengths of one or more index subtypes are
-      --  compile time known and different, then we can replace the entire
-      --  result by False. We only do this for one dimensional arrays, because
-      --  the case of multi-dimensional arrays is rare and too much trouble! If
+      --  compile-time known and different, then we can replace the entire
+      --  result by False. We only do this for one-dimensional arrays, because
+      --  the case of multidimensional arrays is rare and too much trouble. If
       --  one of the operands is an illegal aggregate, its type might still be
       --  an arbitrary composite type, so nothing to do.
 
-      if Is_Array_Type (Typ)
-        and then Typ /= Any_Composite
-        and then Number_Dimensions (Typ) = 1
-        and then (Nkind (N) = N_Op_Eq or else Nkind (N) = N_Op_Ne)
+      if Is_Array_Type (Left_Typ)
+        and then Left_Typ /= Any_Composite
+        and then Number_Dimensions (Left_Typ) = 1
+        and then Nkind_In (N, N_Op_Eq, N_Op_Ne)
       then
          if Raises_Constraint_Error (Left)
-           or else Raises_Constraint_Error (Right)
+              or else
+            Raises_Constraint_Error (Right)
          then
             return;
-         end if;
 
          --  OK, we have the case where we may be able to do this fold
 
-         Length_Mismatch : declare
-            procedure Get_Static_Length (Op : Node_Id; Len : out Uint);
-            --  If Op is an expression for a constrained array with a known at
-            --  compile time length, then Len is set to this (non-negative
-            --  length). Otherwise Len is set to minus 1.
+         else
+            Left_Len  := Static_Length (Left);
+            Right_Len := Static_Length (Right);
 
-            -----------------------
-            -- Get_Static_Length --
-            -----------------------
-
-            procedure Get_Static_Length (Op : Node_Id; Len : out Uint) is
-               T : Entity_Id;
-
-            begin
-               --  First easy case string literal
-
-               if Nkind (Op) = N_String_Literal then
-                  Len := UI_From_Int (String_Length (Strval (Op)));
-                  return;
-               end if;
-
-               --  Second easy case, not constrained subtype, so no length
-
-               if not Is_Constrained (Etype (Op)) then
-                  Len := Uint_Minus_1;
-                  return;
-               end if;
-
-               --  General case
-
-               T := Etype (First_Index (Etype (Op)));
-
-               --  The simple case, both bounds are known at compile time
-
-               if Is_Discrete_Type (T)
-                 and then
-                   Compile_Time_Known_Value (Type_Low_Bound (T))
-                 and then
-                   Compile_Time_Known_Value (Type_High_Bound (T))
-               then
-                  Len := UI_Max (Uint_0,
-                                 Expr_Value (Type_High_Bound (T)) -
-                                   Expr_Value (Type_Low_Bound  (T)) + 1);
-                  return;
-               end if;
-
-               --  A more complex case, where the bounds are of the form
-               --  X [+/- K1] .. X [+/- K2]), where X is an expression that is
-               --  either A'First or A'Last (with A an entity name), or X is an
-               --  entity name, and the two X's are the same and K1 and K2 are
-               --  known at compile time, in this case, the length can also be
-               --  computed at compile time, even though the bounds are not
-               --  known. A common case of this is e.g. (X'First .. X'First+5).
-
-               Extract_Length : declare
-                  procedure Decompose_Expr
-                    (Expr : Node_Id;
-                     Ent  : out Entity_Id;
-                     Kind : out Character;
-                     Cons : out Uint);
-                  --  Given an expression, see if is of the form above,
-                  --  X [+/- K]. If so Ent is set to the entity in X,
-                  --  Kind is 'F','L','E' for 'First/'Last/simple entity,
-                  --  and Cons is the value of K. If the expression is
-                  --  not of the required form, Ent is set to Empty.
-
-                  --------------------
-                  -- Decompose_Expr --
-                  --------------------
-
-                  procedure Decompose_Expr
-                    (Expr : Node_Id;
-                     Ent  : out Entity_Id;
-                     Kind : out Character;
-                     Cons : out Uint)
-                  is
-                     Exp : Node_Id;
-
-                  begin
-                     if Nkind (Expr) = N_Op_Add
-                       and then Compile_Time_Known_Value (Right_Opnd (Expr))
-                     then
-                        Exp  := Left_Opnd (Expr);
-                        Cons := Expr_Value (Right_Opnd (Expr));
-
-                     elsif Nkind (Expr) = N_Op_Subtract
-                       and then Compile_Time_Known_Value (Right_Opnd (Expr))
-                     then
-                        Exp  := Left_Opnd (Expr);
-                        Cons := -Expr_Value (Right_Opnd (Expr));
-
-                     --  If the bound is a constant created to remove side
-                     --  effects, recover original expression to see if it has
-                     --  one of the recognizable forms.
-
-                     elsif Nkind (Expr) = N_Identifier
-                       and then not Comes_From_Source (Entity (Expr))
-                       and then Ekind (Entity (Expr)) = E_Constant
-                       and then
-                         Nkind (Parent (Entity (Expr))) = N_Object_Declaration
-                     then
-                        Exp := Expression (Parent (Entity (Expr)));
-                        Decompose_Expr (Exp, Ent, Kind, Cons);
-
-                        --  If original expression includes an entity, create a
-                        --  reference to it for use below.
-
-                        if Present (Ent) then
-                           Exp := New_Occurrence_Of (Ent, Sloc (Ent));
-                        end if;
-
-                     else
-                        Exp  := Expr;
-                        Cons := Uint_0;
-                     end if;
-
-                     --  At this stage Exp is set to the potential X
-
-                     if Nkind (Exp) = N_Attribute_Reference then
-                        if Attribute_Name (Exp) = Name_First then
-                           Kind := 'F';
-
-                        elsif Attribute_Name (Exp) = Name_Last then
-                           Kind := 'L';
-
-                        else
-                           Ent := Empty;
-                           return;
-                        end if;
-
-                        Exp := Prefix (Exp);
-
-                     else
-                        Kind := 'E';
-                     end if;
-
-                     if Is_Entity_Name (Exp)
-                       and then Present (Entity (Exp))
-                     then
-                        Ent := Entity (Exp);
-                     else
-                        Ent := Empty;
-                     end if;
-                  end Decompose_Expr;
-
-                  --  Local Variables
-
-                  Ent1,  Ent2  : Entity_Id;
-                  Kind1, Kind2 : Character;
-                  Cons1, Cons2 : Uint;
-
-               --  Start of processing for Extract_Length
-
-               begin
-                  Decompose_Expr
-                    (Original_Node (Type_Low_Bound  (T)), Ent1, Kind1, Cons1);
-                  Decompose_Expr
-                    (Original_Node (Type_High_Bound (T)), Ent2, Kind2, Cons2);
-
-                  if Present (Ent1)
-                    and then Kind1 = Kind2
-                    and then Ent1 = Ent2
-                  then
-                     Len := Cons2 - Cons1 + 1;
-                  else
-                     Len := Uint_Minus_1;
-                  end if;
-               end Extract_Length;
-            end Get_Static_Length;
-
-            --  Local Variables
-
-            Len_L : Uint;
-            Len_R : Uint;
-
-         --  Start of processing for Length_Mismatch
-
-         begin
-            Get_Static_Length (Left,  Len_L);
-            Get_Static_Length (Right, Len_R);
-
-            if Len_L /= Uint_Minus_1
-              and then Len_R /= Uint_Minus_1
-              and then Len_L /= Len_R
+            if Left_Len /= Uint_Minus_1
+              and then Right_Len /= Uint_Minus_1
+              and then Left_Len /= Right_Len
             then
                Fold_Uint (N, Test (Nkind (N) = N_Op_Ne), False);
                Warn_On_Known_Condition (N);
                return;
             end if;
-         end Length_Mismatch;
-      end if;
+         end if;
 
-      --  Test for expression being foldable
-
-      Test_Expression_Is_Foldable (N, Left, Right, Stat, Fold);
-
-      --  Only comparisons of scalars can give static results. In particular,
-      --  comparisons of strings never yield a static result, even if both
-      --  operands are static strings.
-
-      if not Is_Scalar_Type (Typ) then
-         Stat := False;
-         Set_Is_Static_Expression (N, False);
-      end if;
-
-      --  For operators on universal numeric types called as functions with
-      --  an explicit scope, determine appropriate specific numeric type, and
-      --  diagnose possible ambiguity.
-
-      if Is_Universal_Numeric_Type (Etype (Left))
-           and then
-         Is_Universal_Numeric_Type (Etype (Right))
-      then
-         Otype := Find_Universal_Operator_Type (N);
-      end if;
-
-      --  For static real type expressions, we cannot use Compile_Time_Compare
-      --  since it worries about run-time results which are not exact.
-
-      if Stat and then Is_Real_Type (Typ) then
-         declare
-            Left_Real  : constant Ureal := Expr_Value_R (Left);
-            Right_Real : constant Ureal := Expr_Value_R (Right);
-
-         begin
-            case Nkind (N) is
-               when N_Op_Eq => Result := (Left_Real =  Right_Real);
-               when N_Op_Ne => Result := (Left_Real /= Right_Real);
-               when N_Op_Lt => Result := (Left_Real <  Right_Real);
-               when N_Op_Le => Result := (Left_Real <= Right_Real);
-               when N_Op_Gt => Result := (Left_Real >  Right_Real);
-               when N_Op_Ge => Result := (Left_Real >= Right_Real);
-
-               when others =>
-                  raise Program_Error;
-            end case;
-
-            Fold_Uint (N, Test (Result), True);
-         end;
-
-      --  For all other cases, we use Compile_Time_Compare to do the compare
+      --  General case
 
       else
-         declare
-            CR : constant Compare_Result :=
-                   Compile_Time_Compare (Left, Right, Assume_Valid => False);
+         --  Initialize the value of Is_Static_Expression. The value of Fold
+         --  returned by Test_Expression_Is_Foldable is not needed since, even
+         --  when some operand is a variable, we can still perform the static
+         --  evaluation of the expression in some cases (for example, for a
+         --  variable of a subtype of Integer we statically know that any value
+         --  stored in such variable is smaller than Integer'Last).
 
-         begin
-            if CR = Unknown then
-               return;
-            end if;
+         Test_Expression_Is_Foldable
+           (N, Left, Right, Is_Static_Expression, Fold);
 
-            case Nkind (N) is
-               when N_Op_Eq =>
-                  if CR = EQ then
-                     Result := True;
-                  elsif CR = NE or else CR = GT or else CR = LT then
-                     Result := False;
-                  else
-                     return;
-                  end if;
+         --  Only comparisons of scalars can give static results. A comparison
+         --  of strings never yields a static result, even if both operands are
+         --  static strings, except that as noted above, we allow equality and
+         --  inequality for strings.
 
-               when N_Op_Ne =>
-                  if CR = NE or else CR = GT or else CR = LT then
-                     Result := True;
-                  elsif CR = EQ then
-                     Result := False;
-                  else
-                     return;
-                  end if;
+         if Is_String_Type (Left_Typ)
+           and then not Comes_From_Source (N)
+           and then Nkind_In (N, N_Op_Eq, N_Op_Ne)
+         then
+            null;
 
-               when N_Op_Lt =>
-                  if CR = LT then
-                     Result := True;
-                  elsif CR = EQ or else CR = GT or else CR = GE then
-                     Result := False;
-                  else
-                     return;
-                  end if;
+         elsif not Is_Scalar_Type (Left_Typ) then
+            Is_Static_Expression := False;
+            Set_Is_Static_Expression (N, False);
+         end if;
 
-               when N_Op_Le =>
-                  if CR = LT or else CR = EQ or else CR = LE then
-                     Result := True;
-                  elsif CR = GT then
-                     Result := False;
-                  else
-                     return;
-                  end if;
+         --  For operators on universal numeric types called as functions with
+         --  an explicit scope, determine appropriate specific numeric type,
+         --  and diagnose possible ambiguity.
 
-               when N_Op_Gt =>
-                  if CR = GT then
-                     Result := True;
-                  elsif CR = EQ or else CR = LT or else CR = LE then
-                     Result := False;
-                  else
-                     return;
-                  end if;
+         if Is_Universal_Numeric_Type (Left_Typ)
+              and then
+            Is_Universal_Numeric_Type (Right_Typ)
+         then
+            Op_Typ := Find_Universal_Operator_Type (N);
+         end if;
 
-               when N_Op_Ge =>
-                  if CR = GT or else CR = EQ or else CR = GE then
-                     Result := True;
-                  elsif CR = LT then
-                     Result := False;
-                  else
-                     return;
-                  end if;
+         --  Attempt to fold the relational operator
 
-               when others =>
-                  raise Program_Error;
-            end case;
-         end;
-
-         Fold_Uint (N, Test (Result), Stat);
+         if Is_Static_Expression and then Is_Real_Type (Left_Typ) then
+            Fold_Static_Real_Op;
+         else
+            Fold_General_Op (Is_Static_Expression);
+         end if;
       end if;
 
       --  For the case of a folded relational operator on a specific numeric
-      --  type, freeze operand type now.
+      --  type, freeze the operand type now.
 
-      if Present (Otype) then
-         Freeze_Before (N, Otype);
+      if Present (Op_Typ) then
+         Freeze_Before (N, Op_Typ);
       end if;
 
       Warn_On_Known_Condition (N);
@@ -3088,7 +3674,7 @@ package body Sem_Eval is
       --  Now look at the operands, we can't quite use the normal call to
       --  Test_Expression_Is_Foldable here because short circuit operations
       --  are a special case, they can still be foldable, even if the right
-      --  operand raises constraint error.
+      --  operand raises Constraint_Error.
 
       --  If either operand is Any_Type, just propagate to result and do not
       --  try to fold, this prevents cascaded errors.
@@ -3097,8 +3683,8 @@ package body Sem_Eval is
          Set_Etype (N, Any_Type);
          return;
 
-      --  If left operand raises constraint error, then replace node N with
-      --  the raise constraint error node, and we are obviously not foldable.
+      --  If left operand raises Constraint_Error, then replace node N with
+      --  the raise Constraint_Error node, and we are obviously not foldable.
       --  Is_Static_Expression is set from the two operands in the normal way,
       --  and we check the right operand if it is in a non-static context.
 
@@ -3121,12 +3707,12 @@ package body Sem_Eval is
 
       --  Here the result is static, note that, unlike the normal processing
       --  in Test_Expression_Is_Foldable, we did *not* check above to see if
-      --  the right operand raises constraint error, that's because it is not
+      --  the right operand raises Constraint_Error, that's because it is not
       --  significant if the left operand is decisive.
 
       Set_Is_Static_Expression (N);
 
-      --  It does not matter if the right operand raises constraint error if
+      --  It does not matter if the right operand raises Constraint_Error if
       --  it will not be evaluated. So deal specially with the cases where
       --  the right operand is not evaluated. Note that we will fold these
       --  cases even if the right operand is non-static, which is fine, but
@@ -3135,7 +3721,7 @@ package body Sem_Eval is
       Left_Int := Expr_Value (Left);
 
       if (Kind = N_And_Then and then Is_False (Left_Int))
-            or else
+           or else
          (Kind = N_Or_Else  and then Is_True  (Left_Int))
       then
          Fold_Uint (N, Left_Int, Rstat);
@@ -3143,7 +3729,7 @@ package body Sem_Eval is
       end if;
 
       --  If first operand not decisive, then it does matter if the right
-      --  operand raises constraint error, since it will be evaluated, so
+      --  operand raises Constraint_Error, since it will be evaluated, so
       --  we simply replace the node with the right operand. Note that this
       --  properly propagates Is_Static_Expression and Raises_Constraint_Error
       --  (both are set to True in Right).
@@ -3169,6 +3755,7 @@ package body Sem_Eval is
 
    procedure Eval_Slice (N : Node_Id) is
       Drange : constant Node_Id := Discrete_Range (N);
+
    begin
       if Nkind (Drange) = N_Range then
          Check_Non_Static_Context (Low_Bound (Drange));
@@ -3183,6 +3770,7 @@ package body Sem_Eval is
          declare
             E : constant Entity_Id := Entity (Prefix (N));
             T : constant Entity_Id := Etype (E);
+
          begin
             if Ekind (E) = E_Constant
               and then Is_Array_Type (T)
@@ -3193,10 +3781,10 @@ package body Sem_Eval is
                     = Entity (Drange)
                then
                   if Warn_On_Redundant_Constructs then
-                     Error_Msg_N ("redundant slice denotes whole array?", N);
+                     Error_Msg_N ("redundant slice denotes whole array?r?", N);
                   end if;
 
-                  --  The following might be a useful optimization????
+                  --  The following might be a useful optimization???
 
                   --  Rewrite (N, New_Occurrence_Of (E, Sloc (N)));
                end if;
@@ -3239,7 +3827,7 @@ package body Sem_Eval is
       --  but may be possible in future).
 
       elsif not Is_OK_Static_Expression
-                    (Type_Low_Bound (Etype (First_Index (Typ))))
+                  (Type_Low_Bound (Etype (First_Index (Typ))))
       then
          Set_Is_Static_Expression (N, False);
          return;
@@ -3255,15 +3843,11 @@ package body Sem_Eval is
       --  Test for illegal Ada 95 cases. A string literal is illegal in Ada 95
       --  if its bounds are outside the index base type and this index type is
       --  static. This can happen in only two ways. Either the string literal
-      --  is too long, or it is null, and the lower bound is type'First. In
-      --  either case it is the upper bound that is out of range of the index
-      --  type.
+      --  is too long, or it is null, and the lower bound is type'First. Either
+      --  way it is the upper bound that is out of range of the index type.
 
       if Ada_Version >= Ada_95 then
-         if Root_Type (Bas) = Standard_String
-              or else
-            Root_Type (Bas) = Standard_Wide_String
-         then
+         if Is_Standard_String_Type (Bas) then
             Xtp := Standard_Positive;
          else
             Xtp := Etype (First_Index (Bas));
@@ -3275,24 +3859,54 @@ package body Sem_Eval is
             Lo := Type_Low_Bound (Etype (First_Index (Typ)));
          end if;
 
+         --  Check for string too long
+
          Len := String_Length (Strval (N));
 
          if UI_From_Int (Len) > String_Type_Len (Bas) then
-            Apply_Compile_Time_Constraint_Error
-              (N, "string literal too long for}", CE_Length_Check_Failed,
-               Ent => Bas,
-               Typ => First_Subtype (Bas));
+
+            --  Issue message. Note that this message is a warning if the
+            --  string literal is not marked as static (happens in some cases
+            --  of folding strings known at compile time, but not static).
+            --  Furthermore in such cases, we reword the message, since there
+            --  is no string literal in the source program.
+
+            if Is_Static_Expression (N) then
+               Apply_Compile_Time_Constraint_Error
+                 (N, "string literal too long for}", CE_Length_Check_Failed,
+                  Ent => Bas,
+                  Typ => First_Subtype (Bas));
+            else
+               Apply_Compile_Time_Constraint_Error
+                 (N, "string value too long for}", CE_Length_Check_Failed,
+                  Ent  => Bas,
+                  Typ  => First_Subtype (Bas),
+                  Warn => True);
+            end if;
+
+         --  Test for null string not allowed
 
          elsif Len = 0
            and then not Is_Generic_Type (Xtp)
            and then
              Expr_Value (Lo) = Expr_Value (Type_Low_Bound (Base_Type (Xtp)))
          then
-            Apply_Compile_Time_Constraint_Error
-              (N, "null string literal not allowed for}",
-               CE_Length_Check_Failed,
-               Ent => Bas,
-               Typ => First_Subtype (Bas));
+            --  Same specialization of message
+
+            if Is_Static_Expression (N) then
+               Apply_Compile_Time_Constraint_Error
+                 (N, "null string literal not allowed for}",
+                  CE_Length_Check_Failed,
+                  Ent => Bas,
+                  Typ => First_Subtype (Bas));
+            else
+               Apply_Compile_Time_Constraint_Error
+                 (N, "null string value not allowed for}",
+                  CE_Length_Check_Failed,
+                  Ent  => Bas,
+                  Typ  => First_Subtype (Bas),
+                  Warn => True);
+            end if;
          end if;
       end if;
    end Eval_String_Literal;
@@ -3309,9 +3923,6 @@ package body Sem_Eval is
       Operand     : constant Node_Id   := Expression (N);
       Source_Type : constant Entity_Id := Etype (Operand);
       Target_Type : constant Entity_Id := Etype (N);
-
-      Stat   : Boolean;
-      Fold   : Boolean;
 
       function To_Be_Treated_As_Integer (T : Entity_Id) return Boolean;
       --  Returns true if type T is an integer type, or if it is a fixed-point
@@ -3345,6 +3956,11 @@ package body Sem_Eval is
              or else (Is_Fixed_Point_Type (T) and then not Conversion_OK (N));
       end To_Be_Treated_As_Real;
 
+      --  Local variables
+
+      Fold : Boolean;
+      Stat : Boolean;
+
    --  Start of processing for Eval_Type_Conversion
 
    begin
@@ -3353,7 +3969,6 @@ package body Sem_Eval is
       if not Is_Static_Subtype (Target_Type) then
          Check_Non_Static_Context (Operand);
          return;
-
       elsif Error_Posted (N) then
          return;
       end if;
@@ -3365,7 +3980,7 @@ package body Sem_Eval is
       if not Fold then
          return;
 
-      --  Don't try fold if target type has constraint error bounds
+      --  Don't try fold if target type has Constraint_Error bounds
 
       elsif not Is_OK_Static_Subtype (Target_Type) then
          Set_Raises_Constraint_Error (N);
@@ -3380,7 +3995,6 @@ package body Sem_Eval is
 
       if Is_String_Type (Target_Type) then
          Fold_Str (N, Strval (Get_String_Val (Operand)), Static => False);
-
          return;
 
       --  Fold conversion, case of integer target type
@@ -3517,10 +4131,8 @@ package body Sem_Eval is
          begin
             if Nkind (N) = N_Op_Plus then
                Result := Rreal;
-
             elsif Nkind (N) = N_Op_Minus then
                Result := UR_Negate (Rreal);
-
             else
                pragma Assert (Nkind (N) = N_Op_Abs);
                Result := abs Rreal;
@@ -3591,13 +4203,6 @@ package body Sem_Eval is
          pragma Assert (Is_Fixed_Point_Type (Underlying_Type (Etype (N))));
          return Corresponding_Integer_Value (N);
 
-      --  Peculiar VMS case, if we have xxx'Null_Parameter, return zero
-
-      elsif Kind = N_Attribute_Reference
-        and then Attribute_Name (N) = Name_Null_Parameter
-      then
-         return Uint_0;
-
       --  Otherwise must be character literal
 
       else
@@ -3629,9 +4234,9 @@ package body Sem_Eval is
       Val    : Uint;
 
    begin
-      --  If already in cache, then we know it's compile time known and we can
+      --  If already in cache, then we know it's compile-time-known and we can
       --  return the value that was previously stored in the cache since
-      --  compile time known values cannot change.
+      --  compile-time-known values cannot change.
 
       if CV_Ent.N = N then
          return CV_Ent.V;
@@ -3667,21 +4272,19 @@ package body Sem_Eval is
       --  obtain the desired value from Corresponding_Integer_Value.
 
       elsif Kind = N_Real_Literal then
-
          pragma Assert (Is_Fixed_Point_Type (Underlying_Type (Etype (N))));
          Val := Corresponding_Integer_Value (N);
 
-      --  Peculiar VMS case, if we have xxx'Null_Parameter, return zero
+      --  The NULL access value
 
-      elsif Kind = N_Attribute_Reference
-        and then Attribute_Name (N) = Name_Null_Parameter
-      then
+      elsif Kind = N_Null then
+         pragma Assert (Is_Access_Type (Underlying_Type (Etype (N)))
+           or else Error_Posted (N));
          Val := Uint_0;
 
-      --  Otherwise must be character literal
+      --  Character literal
 
-      else
-         pragma Assert (Kind = N_Character_Literal);
+      elsif Kind = N_Character_Literal then
          Ent := Entity (N);
 
          --  Since Character literals of type Standard.Character don't
@@ -3695,6 +4298,15 @@ package body Sem_Eval is
          else
             Val := Enumeration_Pos (Ent);
          end if;
+
+      --  Unchecked conversion, which can come from System'To_Address (X)
+      --  where X is a static integer expression. Recursively evaluate X.
+
+      elsif Kind = N_Unchecked_Type_Conversion then
+         Val := Expr_Value (Expression (N));
+
+      else
+         raise Program_Error;
       end if;
 
       --  Come here with Val set to value to be returned, set cache
@@ -3710,13 +4322,20 @@ package body Sem_Eval is
 
    function Expr_Value_E (N : Node_Id) return Entity_Id is
       Ent  : constant Entity_Id := Entity (N);
-
    begin
       if Ekind (Ent) = E_Enumeration_Literal then
          return Ent;
       else
          pragma Assert (Ekind (Ent) = E_Constant);
-         return Expr_Value_E (Constant_Value (Ent));
+
+         --  We may be dealing with a enumerated character type constant, so
+         --  handle that case here.
+
+         if Nkind (Constant_Value (Ent)) = N_Character_Literal then
+            return Ent;
+         else
+            return Expr_Value_E (Constant_Value (Ent));
+         end if;
       end if;
    end Expr_Value_E;
 
@@ -3727,7 +4346,6 @@ package body Sem_Eval is
    function Expr_Value_R (N : Node_Id) return Ureal is
       Kind : constant Node_Kind := Nkind (N);
       Ent  : Entity_Id;
-      Expr : Node_Id;
 
    begin
       if Kind = N_Real_Literal then
@@ -3741,37 +4359,12 @@ package body Sem_Eval is
       elsif Kind = N_Integer_Literal then
          return UR_From_Uint (Expr_Value (N));
 
-      --  Strange case of VAX literals, which are at this stage transformed
-      --  into Vax_Type!x_To_y(IEEE_Literal). See Expand_N_Real_Literal in
-      --  Exp_Vfpt for further details.
+      --  Here, we have a node that cannot be interpreted as a compile time
+      --  constant. That is definitely an error.
 
-      elsif Vax_Float (Etype (N))
-        and then Nkind (N) = N_Unchecked_Type_Conversion
-      then
-         Expr := Expression (N);
-
-         if Nkind (Expr) = N_Function_Call
-           and then Present (Parameter_Associations (Expr))
-         then
-            Expr := First (Parameter_Associations (Expr));
-
-            if Nkind (Expr) = N_Real_Literal then
-               return Realval (Expr);
-            end if;
-         end if;
-
-      --  Peculiar VMS case, if we have xxx'Null_Parameter, return 0.0
-
-      elsif Kind = N_Attribute_Reference
-        and then Attribute_Name (N) = Name_Null_Parameter
-      then
-         return Ureal_0;
+      else
+         raise Program_Error;
       end if;
-
-      --  If we fall through, we have a node that cannot be interpreted as a
-      --  compile time constant. That is definitely an error.
-
-      raise Program_Error;
    end Expr_Value_R;
 
    ------------------
@@ -3885,10 +4478,9 @@ package body Sem_Eval is
               and then Nkind (Parent (E)) /= N_Subtype_Declaration
               and then Comes_From_Source (E)
               and then Is_Integer_Type (E) = Is_Int
-              and then
-                (Nkind (N) in N_Unary_Op
-                  or else Is_Relational
-                  or else Is_Fixed_Point_Type (E) = Is_Fix)
+              and then (Nkind (N) in N_Unary_Op
+                         or else Is_Relational
+                         or else Is_Fixed_Point_Type (E) = Is_Fix)
             then
                if No (Typ1) then
                   Typ1 := E;
@@ -3949,16 +4541,27 @@ package body Sem_Eval is
       Typ : constant Entity_Id  := Etype (N);
 
    begin
+      if Raises_Constraint_Error (N) then
+         Set_Is_Static_Expression (N, Static);
+         return;
+      end if;
+
       Rewrite (N, Make_String_Literal (Loc, Strval => Val));
 
       --  We now have the literal with the right value, both the actual type
       --  and the expected type of this literal are taken from the expression
-      --  that was evaluated.
+      --  that was evaluated. So now we do the Analyze and Resolve.
+
+      --  Note that we have to reset Is_Static_Expression both after the
+      --  analyze step (because Resolve will evaluate the literal, which
+      --  will cause semantic errors if it is marked as static), and after
+      --  the Resolve step (since Resolve in some cases resets this flag).
 
       Analyze (N);
       Set_Is_Static_Expression (N, Static);
       Set_Etype (N, Typ);
       Resolve (N);
+      Set_Is_Static_Expression (N, Static);
    end Fold_Str;
 
    ---------------
@@ -3971,12 +4574,15 @@ package body Sem_Eval is
       Ent : Entity_Id;
 
    begin
+      if Raises_Constraint_Error (N) then
+         Set_Is_Static_Expression (N, Static);
+         return;
+      end if;
+
       --  If we are folding a named number, retain the entity in the literal,
       --  for ASIS use.
 
-      if Is_Entity_Name (N)
-        and then Ekind (Entity (N)) = E_Named_Integer
-      then
+      if Is_Entity_Name (N) and then Ekind (Entity (N)) = E_Named_Integer then
          Ent := Entity (N);
       else
          Ent := Empty;
@@ -3993,7 +4599,6 @@ package body Sem_Eval is
 
       if Is_Integer_Type (Typ) then
          Rewrite (N, Make_Integer_Literal (Loc, Val));
-
          Set_Original_Entity (N, Ent);
 
       --  Otherwise we have an enumeration type, and we substitute either
@@ -4007,12 +4612,18 @@ package body Sem_Eval is
 
       --  We now have the literal with the right value, both the actual type
       --  and the expected type of this literal are taken from the expression
-      --  that was evaluated.
+      --  that was evaluated. So now we do the Analyze and Resolve.
+
+      --  Note that we have to reset Is_Static_Expression both after the
+      --  analyze step (because Resolve will evaluate the literal, which
+      --  will cause semantic errors if it is marked as static), and after
+      --  the Resolve step (since Resolve in some cases sets this flag).
 
       Analyze (N);
       Set_Is_Static_Expression (N, Static);
       Set_Etype (N, Typ);
       Resolve (N);
+      Set_Is_Static_Expression (N, Static);
    end Fold_Uint;
 
    ----------------
@@ -4025,12 +4636,15 @@ package body Sem_Eval is
       Ent : Entity_Id;
 
    begin
+      if Raises_Constraint_Error (N) then
+         Set_Is_Static_Expression (N, Static);
+         return;
+      end if;
+
       --  If we are folding a named number, retain the entity in the literal,
       --  for ASIS use.
 
-      if Is_Entity_Name (N)
-        and then Ekind (Entity (N)) = E_Named_Real
-      then
+      if Is_Entity_Name (N) and then Ekind (Entity (N)) = E_Named_Real then
          Ent := Entity (N);
       else
          Ent := Empty;
@@ -4042,12 +4656,24 @@ package body Sem_Eval is
 
       Set_Original_Entity (N, Ent);
 
-      --  Both the actual and expected type comes from the original expression
+      --  We now have the literal with the right value, both the actual type
+      --  and the expected type of this literal are taken from the expression
+      --  that was evaluated. So now we do the Analyze and Resolve.
+
+      --  Note that we have to reset Is_Static_Expression both after the
+      --  analyze step (because Resolve will evaluate the literal, which
+      --  will cause semantic errors if it is marked as static), and after
+      --  the Resolve step (since Resolve in some cases sets this flag).
+
+      --  We mark the node as analyzed so that its type is not erased by
+      --  calling Analyze_Real_Literal.
 
       Analyze (N);
       Set_Is_Static_Expression (N, Static);
       Set_Etype (N, Typ);
       Resolve (N);
+      Set_Analyzed (N);
+      Set_Is_Static_Expression (N, Static);
    end Fold_Ureal;
 
    ---------------
@@ -4077,12 +4703,8 @@ package body Sem_Eval is
 
    function Get_String_Val (N : Node_Id) return Node_Id is
    begin
-      if Nkind (N) = N_String_Literal then
+      if Nkind_In (N, N_String_Literal, N_Character_Literal) then
          return N;
-
-      elsif Nkind (N) = N_Character_Literal then
-         return N;
-
       else
          pragma Assert (Is_Entity_Name (N));
          return Get_String_Val (Constant_Value (Entity (N)));
@@ -4120,7 +4742,7 @@ package body Sem_Eval is
       --  Never in range if both types are not scalar. Don't know if this can
       --  actually happen, but just in case.
 
-      elsif not Is_Scalar_Type (T1) or else not Is_Scalar_Type (T1) then
+      elsif not Is_Scalar_Type (T1) or else not Is_Scalar_Type (T2) then
          return False;
 
       --  If T1 has infinities but T2 doesn't have infinities, then T1 is
@@ -4150,7 +4772,7 @@ package body Sem_Eval is
          end if;
 
          --  If bounds not comparable at compile time, then the bounds of T2
-         --  must be compile time known or we cannot answer the query.
+         --  must be compile-time-known or we cannot answer the query.
 
          if not Compile_Time_Known_Value (L2)
            or else not Compile_Time_Known_Value (H2)
@@ -4221,8 +4843,8 @@ package body Sem_Eval is
       Int_Real     : Boolean := False) return Boolean
    is
    begin
-      return Test_In_Range (N, Typ, Assume_Valid, Fixed_Int, Int_Real)
-               = In_Range;
+      return
+        Test_In_Range (N, Typ, Assume_Valid, Fixed_Int, Int_Real) = In_Range;
    end Is_In_Range;
 
    -------------------
@@ -4230,23 +4852,89 @@ package body Sem_Eval is
    -------------------
 
    function Is_Null_Range (Lo : Node_Id; Hi : Node_Id) return Boolean is
-      Typ : constant Entity_Id := Etype (Lo);
+   begin
+      if Compile_Time_Known_Value (Lo)
+        and then Compile_Time_Known_Value (Hi)
+      then
+         declare
+            Typ : Entity_Id := Etype (Lo);
+         begin
+            --  When called from the frontend, as part of the analysis of
+            --  potentially static expressions, Typ will be the full view of a
+            --  type with all the info needed to answer this query. When called
+            --  from the backend, for example to know whether a range of a loop
+            --  is null, Typ might be a private type and we need to explicitly
+            --  switch to its corresponding full view to access the same info.
+
+            if Is_Incomplete_Or_Private_Type (Typ)
+              and then Present (Full_View (Typ))
+            then
+               Typ := Full_View (Typ);
+            end if;
+
+            if Is_Discrete_Type (Typ) then
+               return Expr_Value (Lo) > Expr_Value (Hi);
+            else pragma Assert (Is_Real_Type (Typ));
+               return Expr_Value_R (Lo) > Expr_Value_R (Hi);
+            end if;
+         end;
+      else
+         return False;
+      end if;
+   end Is_Null_Range;
+
+   -------------------------
+   -- Is_OK_Static_Choice --
+   -------------------------
+
+   function Is_OK_Static_Choice (Choice : Node_Id) return Boolean is
+   begin
+      --  Check various possibilities for choice
+
+      --  Note: for membership tests, we test more cases than are possible
+      --  (in particular subtype indication), but it doesn't matter because
+      --  it just won't occur (we have already done a syntax check).
+
+      if Nkind (Choice) = N_Others_Choice then
+         return True;
+
+      elsif Nkind (Choice) = N_Range then
+         return Is_OK_Static_Range (Choice);
+
+      elsif Nkind (Choice) = N_Subtype_Indication
+        or else (Is_Entity_Name (Choice) and then Is_Type (Entity (Choice)))
+      then
+         return Is_OK_Static_Subtype (Etype (Choice));
+
+      else
+         return Is_OK_Static_Expression (Choice);
+      end if;
+   end Is_OK_Static_Choice;
+
+   ------------------------------
+   -- Is_OK_Static_Choice_List --
+   ------------------------------
+
+   function Is_OK_Static_Choice_List (Choices : List_Id) return Boolean is
+      Choice : Node_Id;
 
    begin
-      if not Compile_Time_Known_Value (Lo)
-        or else not Compile_Time_Known_Value (Hi)
-      then
+      if not Is_Static_Choice_List (Choices) then
          return False;
       end if;
 
-      if Is_Discrete_Type (Typ) then
-         return Expr_Value (Lo) > Expr_Value (Hi);
+      Choice := First (Choices);
+      while Present (Choice) loop
+         if not Is_OK_Static_Choice (Choice) then
+            Set_Raises_Constraint_Error (Choice);
+            return False;
+         end if;
 
-      else
-         pragma Assert (Is_Real_Type (Typ));
-         return Expr_Value_R (Lo) > Expr_Value_R (Hi);
-      end if;
-   end Is_Null_Range;
+         Next (Choice);
+      end loop;
+
+      return True;
+   end Is_OK_Static_Choice_List;
 
    -----------------------------
    -- Is_OK_Static_Expression --
@@ -4254,8 +4942,7 @@ package body Sem_Eval is
 
    function Is_OK_Static_Expression (N : Node_Id) return Boolean is
    begin
-      return Is_Static_Expression (N)
-        and then not Raises_Constraint_Error (N);
+      return Is_Static_Expression (N) and then not Raises_Constraint_Error (N);
    end Is_OK_Static_Expression;
 
    ------------------------
@@ -4278,7 +4965,7 @@ package body Sem_Eval is
    --------------------------
 
    --  Determines if Typ is a static subtype as defined in (RM 4.9(26)) where
-   --  neither bound raises constraint error when evaluated.
+   --  neither bound raises Constraint_Error when evaluated.
 
    function Is_OK_Static_Subtype (Typ : Entity_Id) return Boolean is
       Base_T   : constant Entity_Id := Base_Type (Typ);
@@ -4304,14 +4991,17 @@ package body Sem_Eval is
       then
          return False;
 
+      elsif Has_Dynamic_Predicate_Aspect (Typ) then
+         return False;
+
       --  String types
 
       elsif Is_String_Type (Typ) then
          return
            Ekind (Typ) = E_String_Literal_Subtype
              or else
-           (Is_OK_Static_Subtype (Component_Type (Typ))
-              and then Is_OK_Static_Subtype (Etype (First_Index (Typ))));
+               (Is_OK_Static_Subtype (Component_Type (Typ))
+                 and then Is_OK_Static_Subtype (Etype (First_Index (Typ))));
 
       --  Scalar types
 
@@ -4347,9 +5037,57 @@ package body Sem_Eval is
       Int_Real     : Boolean := False) return Boolean
    is
    begin
-      return Test_In_Range (N, Typ, Assume_Valid, Fixed_Int, Int_Real)
-               = Out_Of_Range;
+      return Test_In_Range (N, Typ, Assume_Valid, Fixed_Int, Int_Real) =
+                                                               Out_Of_Range;
    end Is_Out_Of_Range;
+
+   ----------------------
+   -- Is_Static_Choice --
+   ----------------------
+
+   function Is_Static_Choice (Choice : Node_Id) return Boolean is
+   begin
+      --  Check various possibilities for choice
+
+      --  Note: for membership tests, we test more cases than are possible
+      --  (in particular subtype indication), but it doesn't matter because
+      --  it just won't occur (we have already done a syntax check).
+
+      if Nkind (Choice) = N_Others_Choice then
+         return True;
+
+      elsif Nkind (Choice) = N_Range then
+         return Is_Static_Range (Choice);
+
+      elsif Nkind (Choice) = N_Subtype_Indication
+        or else (Is_Entity_Name (Choice) and then Is_Type (Entity (Choice)))
+      then
+         return Is_Static_Subtype (Etype (Choice));
+
+      else
+         return Is_Static_Expression (Choice);
+      end if;
+   end Is_Static_Choice;
+
+   ---------------------------
+   -- Is_Static_Choice_List --
+   ---------------------------
+
+   function Is_Static_Choice_List (Choices : List_Id) return Boolean is
+      Choice : Node_Id;
+
+   begin
+      Choice := First (Choices);
+      while Present (Choice) loop
+         if not Is_Static_Choice (Choice) then
+            return False;
+         end if;
+
+         Next (Choice);
+      end loop;
+
+      return True;
+   end Is_Static_Choice_List;
 
    ---------------------
    -- Is_Static_Range --
@@ -4362,8 +5100,9 @@ package body Sem_Eval is
 
    function Is_Static_Range (N : Node_Id) return Boolean is
    begin
-      return Is_Static_Expression (Low_Bound (N))
-        and then Is_Static_Expression (High_Bound (N));
+      return Is_Static_Expression (Low_Bound  (N))
+               and then
+             Is_Static_Expression (High_Bound (N));
    end Is_Static_Range;
 
    -----------------------
@@ -4396,14 +5135,22 @@ package body Sem_Eval is
       then
          return False;
 
+      --  If there is a dynamic predicate for the type (declared or inherited)
+      --  the expression is not static.
+
+      elsif Has_Dynamic_Predicate_Aspect (Typ)
+        or else (Is_Derived_Type (Typ)
+                  and then Has_Aspect (Typ, Aspect_Dynamic_Predicate))
+      then
+         return False;
+
       --  String types
 
       elsif Is_String_Type (Typ) then
          return
            Ekind (Typ) = E_String_Literal_Subtype
-             or else
-           (Is_Static_Subtype (Component_Type (Typ))
-              and then Is_Static_Subtype (Etype (First_Index (Typ))));
+             or else (Is_Static_Subtype (Component_Type (Typ))
+                       and then Is_Static_Subtype (Etype (First_Index (Typ))));
 
       --  Scalar types
 
@@ -4424,28 +5171,307 @@ package body Sem_Eval is
       end if;
    end Is_Static_Subtype;
 
+   -------------------------------
+   -- Is_Statically_Unevaluated --
+   -------------------------------
+
+   function Is_Statically_Unevaluated (Expr : Node_Id) return Boolean is
+      function Check_Case_Expr_Alternative
+        (CEA : Node_Id) return Match_Result;
+      --  We have a message emanating from the Expression of a case expression
+      --  alternative. We examine this alternative, as follows:
+      --
+      --  If the selecting expression of the parent case is non-static, or
+      --  if any of the discrete choices of the given case alternative are
+      --  non-static or raise Constraint_Error, return Non_Static.
+      --
+      --  Otherwise check if the selecting expression matches any of the given
+      --  discrete choices. If so, the alternative is executed and we return
+      --  Match, otherwise, the alternative can never be executed, and so we
+      --  return No_Match.
+
+      ---------------------------------
+      -- Check_Case_Expr_Alternative --
+      ---------------------------------
+
+      function Check_Case_Expr_Alternative
+        (CEA : Node_Id) return Match_Result
+      is
+         Case_Exp : constant Node_Id := Parent (CEA);
+         Choice   : Node_Id;
+         Prev_CEA : Node_Id;
+
+      begin
+         pragma Assert (Nkind (Case_Exp) = N_Case_Expression);
+
+         --  Check that selecting expression is static
+
+         if not Is_OK_Static_Expression (Expression (Case_Exp)) then
+            return Non_Static;
+         end if;
+
+         if not Is_OK_Static_Choice_List (Discrete_Choices (CEA)) then
+            return Non_Static;
+         end if;
+
+         --  All choices are now known to be static. Now see if alternative
+         --  matches one of the choices.
+
+         Choice := First (Discrete_Choices (CEA));
+         while Present (Choice) loop
+
+            --  Check various possibilities for choice, returning Match if we
+            --  find the selecting value matches any of the choices. Note that
+            --  we know we are the last choice, so we don't have to keep going.
+
+            if Nkind (Choice) = N_Others_Choice then
+
+               --  Others choice is a bit annoying, it matches if none of the
+               --  previous alternatives matches (note that we know we are the
+               --  last alternative in this case, so we can just go backwards
+               --  from us to see if any previous one matches).
+
+               Prev_CEA := Prev (CEA);
+               while Present (Prev_CEA) loop
+                  if Check_Case_Expr_Alternative (Prev_CEA) = Match then
+                     return No_Match;
+                  end if;
+
+                  Prev (Prev_CEA);
+               end loop;
+
+               return Match;
+
+            --  Else we have a normal static choice
+
+            elsif Choice_Matches (Expression (Case_Exp), Choice) = Match then
+               return Match;
+            end if;
+
+            --  If we fall through, it means that the discrete choice did not
+            --  match the selecting expression, so continue.
+
+            Next (Choice);
+         end loop;
+
+         --  If we get through that loop then all choices were static, and none
+         --  of them matched the selecting expression. So return No_Match.
+
+         return No_Match;
+      end Check_Case_Expr_Alternative;
+
+      --  Local variables
+
+      P      : Node_Id;
+      OldP   : Node_Id;
+      Choice : Node_Id;
+
+   --  Start of processing for Is_Statically_Unevaluated
+
+   begin
+      --  The (32.x) references here are from RM section 4.9
+
+      --  (32.1) An expression is statically unevaluated if it is part of ...
+
+      --  This means we have to climb the tree looking for one of the cases
+
+      P := Expr;
+      loop
+         OldP := P;
+         P := Parent (P);
+
+         --  (32.2) The right operand of a static short-circuit control form
+         --  whose value is determined by its left operand.
+
+         --  AND THEN with False as left operand
+
+         if Nkind (P) = N_And_Then
+           and then Compile_Time_Known_Value (Left_Opnd (P))
+           and then Is_False (Expr_Value (Left_Opnd (P)))
+         then
+            return True;
+
+         --  OR ELSE with True as left operand
+
+         elsif Nkind (P) = N_Or_Else
+           and then Compile_Time_Known_Value (Left_Opnd (P))
+           and then Is_True (Expr_Value (Left_Opnd (P)))
+         then
+            return True;
+
+         --  (32.3) A dependent_expression of an if_expression whose associated
+         --  condition is static and equals False.
+
+         elsif Nkind (P) = N_If_Expression then
+            declare
+               Cond : constant Node_Id := First (Expressions (P));
+               Texp : constant Node_Id := Next (Cond);
+               Fexp : constant Node_Id := Next (Texp);
+
+            begin
+               if Compile_Time_Known_Value (Cond) then
+
+                  --  Condition is True and we are in the right operand
+
+                  if Is_True (Expr_Value (Cond)) and then OldP = Fexp then
+                     return True;
+
+                  --  Condition is False and we are in the left operand
+
+                  elsif Is_False (Expr_Value (Cond)) and then OldP = Texp then
+                     return True;
+                  end if;
+               end if;
+            end;
+
+         --  (32.4) A condition or dependent_expression of an if_expression
+         --  where the condition corresponding to at least one preceding
+         --  dependent_expression of the if_expression is static and equals
+         --  True.
+
+         --  This refers to cases like
+
+         --    (if True then 1 elsif 1/0=2 then 2 else 3)
+
+         --  But we expand elsif's out anyway, so the above looks like:
+
+         --    (if True then 1 else (if 1/0=2 then 2 else 3))
+
+         --  So for us this is caught by the above check for the 32.3 case.
+
+         --  (32.5) A dependent_expression of a case_expression whose
+         --  selecting_expression is static and whose value is not covered
+         --  by the corresponding discrete_choice_list.
+
+         elsif Nkind (P) = N_Case_Expression_Alternative then
+
+            --  First, we have to be in the expression to suppress messages.
+            --  If we are within one of the choices, we want the message.
+
+            if OldP = Expression (P) then
+
+               --  Statically unevaluated if alternative does not match
+
+               if Check_Case_Expr_Alternative (P) = No_Match then
+                  return True;
+               end if;
+            end if;
+
+         --  (32.6) A choice_expression (or a simple_expression of a range
+         --  that occurs as a membership_choice of a membership_choice_list)
+         --  of a static membership test that is preceded in the enclosing
+         --  membership_choice_list by another item whose individual
+         --  membership test (see (RM 4.5.2)) statically yields True.
+
+         elsif Nkind (P) in N_Membership_Test then
+
+            --  Only possibly unevaluated if simple expression is static
+
+            if not Is_OK_Static_Expression (Left_Opnd (P)) then
+               null;
+
+            --  All members of the choice list must be static
+
+            elsif (Present (Right_Opnd (P))
+                    and then not Is_OK_Static_Choice (Right_Opnd (P)))
+              or else (Present (Alternatives (P))
+                        and then
+                          not Is_OK_Static_Choice_List (Alternatives (P)))
+            then
+               null;
+
+            --  If expression is the one and only alternative, then it is
+            --  definitely not statically unevaluated, so we only have to
+            --  test the case where there are alternatives present.
+
+            elsif Present (Alternatives (P)) then
+
+               --  Look for previous matching Choice
+
+               Choice := First (Alternatives (P));
+               while Present (Choice) loop
+
+                  --  If we reached us and no previous choices matched, this
+                  --  is not the case where we are statically unevaluated.
+
+                  exit when OldP = Choice;
+
+                  --  If a previous choice matches, then that is the case where
+                  --  we know our choice is statically unevaluated.
+
+                  if Choice_Matches (Left_Opnd (P), Choice) = Match then
+                     return True;
+                  end if;
+
+                  Next (Choice);
+               end loop;
+
+               --  If we fall through the loop, we were not one of the choices,
+               --  we must have been the expression, so that is not covered by
+               --  this rule, and we keep going.
+
+               null;
+            end if;
+         end if;
+
+         --  OK, not statically unevaluated at this level, see if we should
+         --  keep climbing to look for a higher level reason.
+
+         --  Special case for component association in aggregates, where
+         --  we want to keep climbing up to the parent aggregate.
+
+         if Nkind (P) = N_Component_Association
+           and then Nkind (Parent (P)) = N_Aggregate
+         then
+            null;
+
+         --  All done if not still within subexpression
+
+         else
+            exit when Nkind (P) not in N_Subexpr;
+         end if;
+      end loop;
+
+      --  If we fall through the loop, not one of the cases covered!
+
+      return False;
+   end Is_Statically_Unevaluated;
+
    --------------------
    -- Not_Null_Range --
    --------------------
 
    function Not_Null_Range (Lo : Node_Id; Hi : Node_Id) return Boolean is
-      Typ : constant Entity_Id := Etype (Lo);
-
    begin
-      if not Compile_Time_Known_Value (Lo)
-        or else not Compile_Time_Known_Value (Hi)
+      if Compile_Time_Known_Value (Lo)
+        and then Compile_Time_Known_Value (Hi)
       then
+         declare
+            Typ : Entity_Id := Etype (Lo);
+         begin
+            --  When called from the frontend, as part of the analysis of
+            --  potentially static expressions, Typ will be the full view of a
+            --  type with all the info needed to answer this query. When called
+            --  from the backend, for example to know whether a range of a loop
+            --  is null, Typ might be a private type and we need to explicitly
+            --  switch to its corresponding full view to access the same info.
+
+            if Is_Incomplete_Or_Private_Type (Typ)
+              and then Present (Full_View (Typ))
+            then
+               Typ := Full_View (Typ);
+            end if;
+
+            if Is_Discrete_Type (Typ) then
+               return Expr_Value (Lo) <= Expr_Value (Hi);
+            else pragma Assert (Is_Real_Type (Typ));
+               return Expr_Value_R (Lo) <= Expr_Value_R (Hi);
+            end if;
+         end;
+      else
          return False;
       end if;
 
-      if Is_Discrete_Type (Typ) then
-         return Expr_Value (Lo) <= Expr_Value (Hi);
-
-      else
-         pragma Assert (Is_Real_Type (Typ));
-
-         return Expr_Value_R (Lo) <= Expr_Value_R (Hi);
-      end if;
    end Not_Null_Range;
 
    -------------
@@ -4458,6 +5484,8 @@ package body Sem_Eval is
 
       if Bits < 500_000 then
          return True;
+
+      --  Error if this maximum is exceeded
 
       else
          Error_Msg_N ("static value too large, capacity exceeded", N);
@@ -4474,17 +5502,24 @@ package body Sem_Eval is
       --  If we have the static expression case, then this is an illegality
       --  in Ada 95 mode, except that in an instance, we never generate an
       --  error (if the error is legitimate, it was already diagnosed in the
-      --  template). The expression to compute the length of a packed array is
-      --  attached to the array type itself, and deserves a separate message.
+      --  template).
 
       if Is_Static_Expression (N)
         and then not In_Instance
         and then not In_Inlined_Body
         and then Ada_Version >= Ada_95
       then
-         if Nkind (Parent (N)) = N_Defining_Identifier
+         --  No message if we are statically unevaluated
+
+         if Is_Statically_Unevaluated (N) then
+            null;
+
+         --  The expression to compute the length of a packed array is attached
+         --  to the array type itself, and deserves a separate message.
+
+         elsif Nkind (Parent (N)) = N_Defining_Identifier
            and then Is_Array_Type (Parent (N))
-           and then Present (Packed_Array_Type (Parent (N)))
+           and then Present (Packed_Array_Impl_Type (Parent (N)))
            and then Present (First_Rep_Item (Parent (N)))
          then
             Error_Msg_N
@@ -4492,9 +5527,23 @@ package body Sem_Eval is
               First_Rep_Item (Parent (N)));
             Rewrite (N, Make_Integer_Literal (Sloc (N), Uint_1));
 
-         else
-            Apply_Compile_Time_Constraint_Error
-              (N, "value not in range of}", CE_Range_Check_Failed);
+         --  All cases except the special array case.
+         --  No message if we are dealing with System.Priority values in
+         --  CodePeer mode where the target runtime may have more priorities.
+
+         elsif not CodePeer_Mode or else Etype (N) /= RTE (RE_Priority) then
+            --  Determine if the out-of-range violation constitutes a warning
+            --  or an error based on context, according to RM 4.9 (34/3).
+
+            if Nkind (Original_Node (N)) = N_Type_Conversion
+              and then not Comes_From_Source (Original_Node (N))
+            then
+               Apply_Compile_Time_Constraint_Error
+                 (N, "value not in range of}??", CE_Range_Check_Failed);
+            else
+               Apply_Compile_Time_Constraint_Error
+                 (N, "value not in range of}", CE_Range_Check_Failed);
+            end if;
          end if;
 
       --  Here we generate a warning for the Ada 83 case, or when we are in an
@@ -4502,42 +5551,246 @@ package body Sem_Eval is
 
       else
          Apply_Compile_Time_Constraint_Error
-           (N, "value not in range of}?", CE_Range_Check_Failed);
+           (N, "value not in range of}??", CE_Range_Check_Failed);
       end if;
    end Out_Of_Range;
+
+   ----------------------
+   -- Predicates_Match --
+   ----------------------
+
+   function Predicates_Match (T1, T2 : Entity_Id) return Boolean is
+      Pred1 : Node_Id;
+      Pred2 : Node_Id;
+
+   begin
+      if Ada_Version < Ada_2012 then
+         return True;
+
+         --  Both types must have predicates or lack them
+
+      elsif Has_Predicates (T1) /= Has_Predicates (T2) then
+         return False;
+
+         --  Check matching predicates
+
+      else
+         Pred1 :=
+           Get_Rep_Item
+             (T1, Name_Static_Predicate, Check_Parents => False);
+         Pred2 :=
+           Get_Rep_Item
+             (T2, Name_Static_Predicate, Check_Parents => False);
+
+         --  Subtypes statically match if the predicate comes from the
+         --  same declaration, which can only happen if one is a subtype
+         --  of the other and has no explicit predicate.
+
+         --  Suppress warnings on order of actuals, which is otherwise
+         --  triggered by one of the two calls below.
+
+         pragma Warnings (Off);
+         return Pred1 = Pred2
+           or else (No (Pred1) and then Is_Subtype_Of (T1, T2))
+           or else (No (Pred2) and then Is_Subtype_Of (T2, T1));
+         pragma Warnings (On);
+      end if;
+   end Predicates_Match;
+
+   ---------------------------------------------
+   -- Real_Or_String_Static_Predicate_Matches --
+   ---------------------------------------------
+
+   function Real_Or_String_Static_Predicate_Matches
+     (Val : Node_Id;
+      Typ : Entity_Id) return Boolean
+   is
+      Expr : constant Node_Id := Static_Real_Or_String_Predicate (Typ);
+      --  The predicate expression from the type
+
+      Pfun : constant Entity_Id := Predicate_Function (Typ);
+      --  The entity for the predicate function
+
+      Ent_Name : constant Name_Id := Chars (First_Formal (Pfun));
+      --  The name of the formal of the predicate function. Occurrences of the
+      --  type name in Expr have been rewritten as references to this formal,
+      --  and it has a unique name, so we can identify references by this name.
+
+      Copy : Node_Id;
+      --  Copy of the predicate function tree
+
+      function Process (N : Node_Id) return Traverse_Result;
+      --  Function used to process nodes during the traversal in which we will
+      --  find occurrences of the entity name, and replace such occurrences
+      --  by a real literal with the value to be tested.
+
+      procedure Traverse is new Traverse_Proc (Process);
+      --  The actual traversal procedure
+
+      -------------
+      -- Process --
+      -------------
+
+      function Process (N : Node_Id) return Traverse_Result is
+      begin
+         if Nkind (N) = N_Identifier and then Chars (N) = Ent_Name then
+            declare
+               Nod : constant Node_Id := New_Copy (Val);
+            begin
+               Set_Sloc (Nod, Sloc (N));
+               Rewrite (N, Nod);
+               return Skip;
+            end;
+
+         --  The predicate function may contain string-comparison operations
+         --  that have been converted into calls to run-time array-comparison
+         --  routines. To evaluate the predicate statically, we recover the
+         --  original comparison operation and replace the occurrence of the
+         --  formal by the static string value. The actuals of the generated
+         --  call are of the form X'Address.
+
+         elsif Nkind (N) in N_Op_Compare
+           and then Nkind (Left_Opnd (N)) = N_Function_Call
+         then
+            declare
+               C : constant Node_Id := Left_Opnd (N);
+               F : constant Node_Id := First (Parameter_Associations (C));
+               L : constant Node_Id := Prefix (F);
+               R : constant Node_Id := Prefix (Next (F));
+
+            begin
+               --  If an operand is an entity name, it is the formal of the
+               --  predicate function, so replace it with the string value.
+               --  It may be either operand in the call. The other operand
+               --  is a static string from the original predicate.
+
+               if Is_Entity_Name (L) then
+                  Rewrite (Left_Opnd (N),  New_Copy (Val));
+                  Rewrite (Right_Opnd (N), New_Copy (R));
+
+               else
+                  Rewrite (Left_Opnd (N),  New_Copy (L));
+                  Rewrite (Right_Opnd (N), New_Copy (Val));
+               end if;
+
+               return Skip;
+            end;
+
+         else
+            return OK;
+         end if;
+      end Process;
+
+   --  Start of processing for Real_Or_String_Static_Predicate_Matches
+
+   begin
+      --  First deal with special case of inherited predicate, where the
+      --  predicate expression looks like:
+
+      --     xxPredicate (typ (Ent)) and then Expr
+
+      --  where Expr is the predicate expression for this level, and the
+      --  left operand is the call to evaluate the inherited predicate.
+
+      if Nkind (Expr) = N_And_Then
+        and then Nkind (Left_Opnd (Expr)) = N_Function_Call
+        and then Is_Predicate_Function (Entity (Name (Left_Opnd (Expr))))
+      then
+         --  OK we have the inherited case, so make a call to evaluate the
+         --  inherited predicate. If that fails, so do we!
+
+         if not
+           Real_Or_String_Static_Predicate_Matches
+             (Val => Val,
+              Typ => Etype (First_Formal (Entity (Name (Left_Opnd (Expr))))))
+         then
+            return False;
+         end if;
+
+         --  Use the right operand for the continued processing
+
+         Copy := Copy_Separate_Tree (Right_Opnd (Expr));
+
+      --  Case where call to predicate function appears on its own (this means
+      --  that the predicate at this level is just inherited from the parent).
+
+      elsif Nkind (Expr) = N_Function_Call then
+         declare
+            Typ : constant Entity_Id :=
+                    Etype (First_Formal (Entity (Name (Expr))));
+
+         begin
+            --  If the inherited predicate is dynamic, just ignore it. We can't
+            --  go trying to evaluate a dynamic predicate as a static one!
+
+            if Has_Dynamic_Predicate_Aspect (Typ) then
+               return True;
+
+            --  Otherwise inherited predicate is static, check for match
+
+            else
+               return Real_Or_String_Static_Predicate_Matches (Val, Typ);
+            end if;
+         end;
+
+      --  If not just an inherited predicate, copy whole expression
+
+      else
+         Copy := Copy_Separate_Tree (Expr);
+      end if;
+
+      --  Now we replace occurrences of the entity by the value
+
+      Traverse (Copy);
+
+      --  And analyze the resulting static expression to see if it is True
+
+      Analyze_And_Resolve (Copy, Standard_Boolean);
+      return Is_True (Expr_Value (Copy));
+   end Real_Or_String_Static_Predicate_Matches;
 
    -------------------------
    -- Rewrite_In_Raise_CE --
    -------------------------
 
    procedure Rewrite_In_Raise_CE (N : Node_Id; Exp : Node_Id) is
-      Typ : constant Entity_Id := Etype (N);
+      Stat : constant Boolean   := Is_Static_Expression (N);
+      Typ  : constant Entity_Id := Etype (N);
 
    begin
-      --  If we want to raise CE in the condition of a N_Raise_CE node
-      --  we may as well get rid of the condition.
+      --  If we want to raise CE in the condition of a N_Raise_CE node, we
+      --  can just clear the condition if the reason is appropriate. We do
+      --  not do this operation if the parent has a reason other than range
+      --  check failed, because otherwise we would change the reason.
 
       if Present (Parent (N))
         and then Nkind (Parent (N)) = N_Raise_Constraint_Error
+        and then Reason (Parent (N)) =
+                   UI_From_Int (RT_Exception_Code'Pos (CE_Range_Check_Failed))
       then
          Set_Condition (Parent (N), Empty);
 
-      --  If the expression raising CE is a N_Raise_CE node, we can use that
-      --  one. We just preserve the type of the context.
-
-      elsif Nkind (Exp) = N_Raise_Constraint_Error then
-         Rewrite (N, Exp);
-         Set_Etype (N, Typ);
-
-      --  Else build an explcit N_Raise_CE
+      --  Else build an explicit N_Raise_CE
 
       else
-         Rewrite (N,
-           Make_Raise_Constraint_Error (Sloc (Exp),
-             Reason => CE_Range_Check_Failed));
+         if Nkind (Exp) = N_Raise_Constraint_Error then
+            Rewrite (N,
+              Make_Raise_Constraint_Error (Sloc (Exp),
+                Reason => Reason (Exp)));
+         else
+            Rewrite (N,
+              Make_Raise_Constraint_Error (Sloc (Exp),
+                Reason => CE_Range_Check_Failed));
+         end if;
+
          Set_Raises_Constraint_Error (N);
          Set_Etype (N, Typ);
       end if;
+
+      --  Set proper flags in result
+
+      Set_Raises_Constraint_Error (N, True);
+      Set_Is_Static_Expression (N, Stat);
    end Rewrite_In_Raise_CE;
 
    ---------------------
@@ -4564,8 +5817,9 @@ package body Sem_Eval is
    ------------------------------------
 
    function Subtypes_Statically_Compatible
-     (T1 : Entity_Id;
-      T2 : Entity_Id) return Boolean
+     (T1                      : Entity_Id;
+      T2                      : Entity_Id;
+      Formal_Derived_Matching : Boolean := False) return Boolean
    is
    begin
       --  Scalar types
@@ -4579,18 +5833,11 @@ package body Sem_Eval is
 
          --  If either subtype is nonstatic then they're not compatible
 
-         elsif not Is_Static_Subtype (T1)
-           or else not Is_Static_Subtype (T2)
+         elsif not Is_OK_Static_Subtype (T1)
+                 or else
+               not Is_OK_Static_Subtype (T2)
          then
             return False;
-
-         --  If either type has constraint error bounds, then consider that
-         --  they match to avoid junk cascaded errors here.
-
-         elsif not Is_OK_Static_Subtype (T1)
-           or else not Is_OK_Static_Subtype (T2)
-         then
-            return True;
 
          --  Base types must match, but we don't check that (should we???) but
          --  we do at least check that both types are real, or both types are
@@ -4611,19 +5858,17 @@ package body Sem_Eval is
             begin
                if Is_Real_Type (T1) then
                   return
-                    (Expr_Value_R (LB1) > Expr_Value_R (HB1))
+                    Expr_Value_R (LB1) > Expr_Value_R (HB1)
                       or else
-                    (Expr_Value_R (LB2) <= Expr_Value_R (LB1)
-                       and then
-                     Expr_Value_R (HB1) <= Expr_Value_R (HB2));
+                        (Expr_Value_R (LB2) <= Expr_Value_R (LB1)
+                          and then Expr_Value_R (HB1) <= Expr_Value_R (HB2));
 
                else
                   return
-                    (Expr_Value (LB1) > Expr_Value (HB1))
+                    Expr_Value (LB1) > Expr_Value (HB1)
                       or else
-                    (Expr_Value (LB2) <= Expr_Value (LB1)
-                       and then
-                     Expr_Value (HB1) <= Expr_Value (HB2));
+                        (Expr_Value (LB2) <= Expr_Value (LB1)
+                          and then Expr_Value (HB1) <= Expr_Value (HB2));
                end if;
             end;
          end if;
@@ -4631,17 +5876,20 @@ package body Sem_Eval is
       --  Access types
 
       elsif Is_Access_Type (T1) then
-         return (not Is_Constrained (T2)
-                  or else (Subtypes_Statically_Match
-                             (Designated_Type (T1), Designated_Type (T2))))
+         return
+           (not Is_Constrained (T2)
+             or else Subtypes_Statically_Match
+                       (Designated_Type (T1), Designated_Type (T2)))
            and then not (Can_Never_Be_Null (T2)
                           and then not Can_Never_Be_Null (T1));
 
       --  All other cases
 
       else
-         return (Is_Composite_Type (T1) and then not Is_Constrained (T2))
-           or else Subtypes_Statically_Match (T1, T2);
+         return
+           (Is_Composite_Type (T1) and then not Is_Constrained (T2))
+             or else Subtypes_Statically_Match
+                       (T1, T2, Formal_Derived_Matching);
       end if;
    end Subtypes_Statically_Compatible;
 
@@ -4654,12 +5902,38 @@ package body Sem_Eval is
    --  they are the same identical constraint, or if they are static and the
    --  values match (RM 4.9.1(1)).
 
-   function Subtypes_Statically_Match (T1, T2 : Entity_Id) return Boolean is
+   --  In addition, in GNAT, the object size (Esize) values of the types must
+   --  match if they are set (unless checking an actual for a formal derived
+   --  type). The use of 'Object_Size can cause this to be false even if the
+   --  types would otherwise match in the Ada 95 RM sense, but this deviation
+   --  is adopted by AI12-059 which introduces Object_Size in Ada 2020.
+
+   function Subtypes_Statically_Match
+     (T1                      : Entity_Id;
+      T2                      : Entity_Id;
+      Formal_Derived_Matching : Boolean := False) return Boolean
+   is
    begin
       --  A type always statically matches itself
 
       if T1 = T2 then
          return True;
+
+      --  No match if sizes different (from use of 'Object_Size). This test
+      --  is excluded if Formal_Derived_Matching is True, as the base types
+      --  can be different in that case and typically have different sizes.
+
+      elsif not Formal_Derived_Matching
+        and then Known_Static_Esize (T1)
+        and then Known_Static_Esize (T2)
+        and then Esize (T1) /= Esize (T2)
+      then
+         return False;
+
+      --  No match if predicates do not match
+
+      elsif not Predicates_Match (T1, T2) then
+         return False;
 
       --  Scalar types
 
@@ -4715,7 +5989,7 @@ package body Sem_Eval is
             return True;
          end if;
 
-         --  Otherwise both types have bound that can be compared
+         --  Otherwise both types have bounds that can be compared
 
          declare
             LB1 : constant Node_Id := Type_Low_Bound  (T1);
@@ -4724,7 +5998,7 @@ package body Sem_Eval is
             HB2 : constant Node_Id := Type_High_Bound (T2);
 
          begin
-            --  If the bounds are the same tree node, then match
+            --  If the bounds are the same tree node, then match (common case)
 
             if LB1 = LB2 and then HB1 = HB2 then
                return True;
@@ -4732,24 +6006,17 @@ package body Sem_Eval is
             --  Otherwise bounds must be static and identical value
 
             else
-               if not Is_Static_Subtype (T1)
-                 or else not Is_Static_Subtype (T2)
+               if not Is_OK_Static_Subtype (T1)
+                    or else
+                  not Is_OK_Static_Subtype (T2)
                then
                   return False;
 
-               --  If either type has constraint error bounds, then say that
-               --  they match to avoid junk cascaded errors here.
-
-               elsif not Is_OK_Static_Subtype (T1)
-                 or else not Is_OK_Static_Subtype (T2)
-               then
-                  return True;
-
                elsif Is_Real_Type (T1) then
                   return
-                    (Expr_Value_R (LB1) = Expr_Value_R (LB2))
+                    Expr_Value_R (LB1) = Expr_Value_R (LB2)
                       and then
-                    (Expr_Value_R (HB1) = Expr_Value_R (HB2));
+                    Expr_Value_R (HB1) = Expr_Value_R (HB2);
 
                else
                   return
@@ -4821,12 +6088,12 @@ package body Sem_Eval is
                      Expr2 : constant Node_Id := Node (DA2);
 
                   begin
-                     if not Is_Static_Expression (Expr1)
-                       or else not Is_Static_Expression (Expr2)
+                     if not Is_OK_Static_Expression (Expr1)
+                       or else not Is_OK_Static_Expression (Expr2)
                      then
                         return False;
 
-                        --  If either expression raised a constraint error,
+                        --  If either expression raised a Constraint_Error,
                         --  consider the expressions as matching, since this
                         --  helps to prevent cascading errors.
 
@@ -4854,8 +6121,7 @@ package body Sem_Eval is
       --  checking on an inherited operation may compare the actual with the
       --  subtype that renames it in the instance.
 
-      elsif
-         Has_Unknown_Discriminants (T1) /= Has_Unknown_Discriminants (T2)
+      elsif Has_Unknown_Discriminants (T1) /= Has_Unknown_Discriminants (T2)
       then
          return
            Is_Generic_Actual_Type (T1) or else Is_Generic_Actual_Type (T2);
@@ -4932,6 +6198,85 @@ package body Sem_Eval is
       end if;
    end Test;
 
+   ---------------------
+   -- Test_Comparison --
+   ---------------------
+
+   procedure Test_Comparison
+     (Op           : Node_Id;
+      Assume_Valid : Boolean;
+      True_Result  : out Boolean;
+      False_Result : out Boolean)
+   is
+      Left     : constant Node_Id   := Left_Opnd (Op);
+      Left_Typ : constant Entity_Id := Etype (Left);
+      Orig_Op  : constant Node_Id   := Original_Node (Op);
+
+      procedure Replacement_Warning (Msg : String);
+      --  Emit a warning on a comparison that can be replaced by '='
+
+      -------------------------
+      -- Replacement_Warning --
+      -------------------------
+
+      procedure Replacement_Warning (Msg : String) is
+      begin
+         if Constant_Condition_Warnings
+           and then Comes_From_Source (Orig_Op)
+           and then Is_Integer_Type (Left_Typ)
+           and then not Error_Posted (Op)
+           and then not Has_Warnings_Off (Left_Typ)
+           and then not In_Instance
+         then
+            Error_Msg_N (Msg, Op);
+         end if;
+      end Replacement_Warning;
+
+      --  Local variables
+
+      Res : constant Compare_Result :=
+              Compile_Time_Compare (Left, Right_Opnd (Op), Assume_Valid);
+
+   --  Start of processing for Test_Comparison
+
+   begin
+      case N_Op_Compare (Nkind (Op)) is
+         when N_Op_Eq =>
+            True_Result  := Res = EQ;
+            False_Result := Res = LT or else Res = GT or else Res = NE;
+
+         when N_Op_Ge =>
+            True_Result  := Res in Compare_GE;
+            False_Result := Res = LT;
+
+            if Res = LE and then Nkind (Orig_Op) = N_Op_Ge then
+               Replacement_Warning
+                 ("can never be greater than, could replace by ""'=""?c?");
+            end if;
+
+         when N_Op_Gt =>
+            True_Result  := Res = GT;
+            False_Result := Res in Compare_LE;
+
+         when N_Op_Le =>
+            True_Result  := Res in Compare_LE;
+            False_Result := Res = GT;
+
+            if Res = GE and then Nkind (Orig_Op) = N_Op_Le then
+               Replacement_Warning
+                 ("can never be less than, could replace by ""'=""?c?");
+            end if;
+
+         when N_Op_Lt =>
+            True_Result  := Res = LT;
+            False_Result := Res in Compare_GE;
+
+         when N_Op_Ne =>
+            True_Result  := Res = NE or else Res = GT or else Res = LT;
+            False_Result := Res = EQ;
+      end case;
+   end Test_Comparison;
+
    ---------------------------------
    -- Test_Expression_Is_Foldable --
    ---------------------------------
@@ -4959,8 +6304,8 @@ package body Sem_Eval is
          Set_Etype (N, Any_Type);
          return;
 
-      --  If operand raises constraint error, then replace node N with the
-      --  raise constraint error node, and we are obviously not foldable.
+      --  If operand raises Constraint_Error, then replace node N with the
+      --  raise Constraint_Error node, and we are obviously not foldable.
       --  Note that this replacement inherits the Is_Static_Expression flag
       --  from the operand.
 
@@ -4987,7 +6332,7 @@ package body Sem_Eval is
          return;
 
       --  Here we have the case of an operand whose type is OK, which is
-      --  static, and which does not raise constraint error, we can fold.
+      --  static, and which does not raise Constraint_Error, we can fold.
 
       else
          Set_Is_Static_Expression (N);
@@ -4999,18 +6344,22 @@ package body Sem_Eval is
    --  Two operand case
 
    procedure Test_Expression_Is_Foldable
-     (N    : Node_Id;
-      Op1  : Node_Id;
-      Op2  : Node_Id;
-      Stat : out Boolean;
-      Fold : out Boolean)
+     (N        : Node_Id;
+      Op1      : Node_Id;
+      Op2      : Node_Id;
+      Stat     : out Boolean;
+      Fold     : out Boolean;
+      CRT_Safe : Boolean := False)
    is
       Rstat : constant Boolean := Is_Static_Expression (Op1)
-                                    and then Is_Static_Expression (Op2);
+                                    and then
+                                  Is_Static_Expression (Op2);
 
    begin
       Stat := False;
       Fold := False;
+
+      --  Inhibit folding if -gnatd.f flag set
 
       if Debug_Flag_Dot_F and then In_Extended_Main_Source_Unit (N) then
          return;
@@ -5023,7 +6372,7 @@ package body Sem_Eval is
          Set_Etype (N, Any_Type);
          return;
 
-      --  If left operand raises constraint error, then replace node N with the
+      --  If left operand raises Constraint_Error, then replace node N with the
       --  Raise_Constraint_Error node, and we are obviously not foldable.
       --  Is_Static_Expression is set from the two operands in the normal way,
       --  and we check the right operand if it is in a non-static context.
@@ -5064,12 +6413,19 @@ package body Sem_Eval is
       elsif not Rstat then
          Check_Non_Static_Context (Op1);
          Check_Non_Static_Context (Op2);
-         Fold := Compile_Time_Known_Value (Op1)
-                   and then Compile_Time_Known_Value (Op2);
+
+         if CRT_Safe then
+            Fold := CRT_Safe_Compile_Time_Known_Value (Op1)
+                      and then CRT_Safe_Compile_Time_Known_Value (Op2);
+         else
+            Fold := Compile_Time_Known_Value (Op1)
+                      and then Compile_Time_Known_Value (Op2);
+         end if;
+
          return;
 
       --  Else result is static and foldable. Both operands are static, and
-      --  neither raises constraint error, so we can definitely fold.
+      --  neither raises Constraint_Error, so we can definitely fold.
 
       else
          Set_Is_Static_Expression (N);
@@ -5095,39 +6451,50 @@ package body Sem_Eval is
 
       pragma Warnings (Off, Assume_Valid);
       --  For now Assume_Valid is unreferenced since the current implementation
-      --  always returns Unknown if N is not a compile time known value, but we
+      --  always returns Unknown if N is not a compile-time-known value, but we
       --  keep the parameter to allow for future enhancements in which we try
       --  to get the information in the variable case as well.
 
    begin
+      --  If an error was posted on expression, then return Unknown, we do not
+      --  want cascaded errors based on some false analysis of a junk node.
+
+      if Error_Posted (N) then
+         return Unknown;
+
+      --  Expression that raises Constraint_Error is an odd case. We certainly
+      --  do not want to consider it to be in range. It might make sense to
+      --  consider it always out of range, but this causes incorrect error
+      --  messages about static expressions out of range. So we just return
+      --  Unknown, which is always safe.
+
+      elsif Raises_Constraint_Error (N) then
+         return Unknown;
+
       --  Universal types have no range limits, so always in range
 
-      if Typ = Universal_Integer or else Typ = Universal_Real then
+      elsif Typ = Universal_Integer or else Typ = Universal_Real then
          return In_Range;
 
       --  Never known if not scalar type. Don't know if this can actually
-      --  happen, but our spec allows it, so we must check!
+      --  happen, but our spec allows it, so we must check.
 
       elsif not Is_Scalar_Type (Typ) then
          return Unknown;
 
       --  Never known if this is a generic type, since the bounds of generic
       --  types are junk. Note that if we only checked for static expressions
-      --  (instead of compile time known values) below, we would not need this
+      --  (instead of compile-time-known values) below, we would not need this
       --  check, because values of a generic type can never be static, but they
       --  can be known at compile time.
 
       elsif Is_Generic_Type (Typ) then
          return Unknown;
 
-      --  Never known unless we have a compile time known value
+      --  Case of a known compile time value, where we can check if it is in
+      --  the bounds of the given type.
 
-      elsif not Compile_Time_Known_Value (N) then
-         return Unknown;
-
-      --  General processing with a known compile time value
-
-      else
+      elsif Compile_Time_Known_Value (N) then
          declare
             Lo       : Node_Id;
             Hi       : Node_Id;
@@ -5175,9 +6542,7 @@ package body Sem_Eval is
                Val := Expr_Value (N);
 
                if LB_Known and HB_Known then
-                  if Val >= Expr_Value (Lo)
-                       and then
-                     Val <= Expr_Value (Hi)
+                  if Val >= Expr_Value (Lo) and then Val <= Expr_Value (Hi)
                   then
                      return In_Range;
                   else
@@ -5195,6 +6560,32 @@ package body Sem_Eval is
                end if;
             end if;
          end;
+
+      --  Here for value not known at compile time. Case of expression subtype
+      --  is Typ or is a subtype of Typ, and we can assume expression is valid.
+      --  In this case we know it is in range without knowing its value.
+
+      elsif Assume_Valid
+        and then (Etype (N) = Typ or else Is_Subtype_Of (Etype (N), Typ))
+      then
+         return In_Range;
+
+      --  Another special case. For signed integer types, if the target type
+      --  has Is_Known_Valid set, and the source type does not have a larger
+      --  size, then the source value must be in range. We exclude biased
+      --  types, because they bizarrely can generate out of range values.
+
+      elsif Is_Signed_Integer_Type (Etype (N))
+        and then Is_Known_Valid (Typ)
+        and then Esize (Etype (N)) <= Esize (Typ)
+        and then not Has_Biased_Representation (Etype (N))
+      then
+         return In_Range;
+
+      --  For all other cases, result is unknown
+
+      else
+         return Unknown;
       end if;
    end Test_In_Range;
 
@@ -5214,9 +6605,11 @@ package body Sem_Eval is
    --------------------
 
    procedure Why_Not_Static (Expr : Node_Id) is
-      N   : constant Node_Id   := Original_Node (Expr);
-      Typ : Entity_Id;
+      N   : constant Node_Id := Original_Node (Expr);
+      Typ : Entity_Id        := Empty;
       E   : Entity_Id;
+      Alt : Node_Id;
+      Exp : Node_Id;
 
       procedure Why_Not_Static_List (L : List_Id);
       --  A version that can be called on a list of expressions. Finds all
@@ -5228,7 +6621,6 @@ package body Sem_Eval is
 
       procedure Why_Not_Static_List (L : List_Id) is
          N : Node_Id;
-
       begin
          if Is_Non_Empty_List (L) then
             N := First (L);
@@ -5242,13 +6634,6 @@ package body Sem_Eval is
    --  Start of processing for Why_Not_Static
 
    begin
-      --  If in ACATS mode (debug flag 2), then suppress all these messages,
-      --  this avoids massive updates to the ACATS base line.
-
-      if Debug_Flag_2 then
-         return;
-      end if;
-
       --  Ignore call on error or empty node
 
       if No (Expr) or else Nkind (Expr) = N_Error then
@@ -5265,12 +6650,82 @@ package body Sem_Eval is
             return;
          end if;
 
-         --  Test for constraint error raised
+         --  Test for Constraint_Error raised
 
          if Raises_Constraint_Error (Expr) then
+
+            --  Special case membership to find out which piece to flag
+
+            if Nkind (N) in N_Membership_Test then
+               if Raises_Constraint_Error (Left_Opnd (N)) then
+                  Why_Not_Static (Left_Opnd (N));
+                  return;
+
+               elsif Present (Right_Opnd (N))
+                 and then Raises_Constraint_Error (Right_Opnd (N))
+               then
+                  Why_Not_Static (Right_Opnd (N));
+                  return;
+
+               else
+                  pragma Assert (Present (Alternatives (N)));
+
+                  Alt := First (Alternatives (N));
+                  while Present (Alt) loop
+                     if Raises_Constraint_Error (Alt) then
+                        Why_Not_Static (Alt);
+                        return;
+                     else
+                        Next (Alt);
+                     end if;
+                  end loop;
+               end if;
+
+            --  Special case a range to find out which bound to flag
+
+            elsif Nkind (N) = N_Range then
+               if Raises_Constraint_Error (Low_Bound (N)) then
+                  Why_Not_Static (Low_Bound (N));
+                  return;
+
+               elsif Raises_Constraint_Error (High_Bound (N)) then
+                  Why_Not_Static (High_Bound (N));
+                  return;
+               end if;
+
+            --  Special case attribute to see which part to flag
+
+            elsif Nkind (N) = N_Attribute_Reference then
+               if Raises_Constraint_Error (Prefix (N)) then
+                  Why_Not_Static (Prefix (N));
+                  return;
+               end if;
+
+               if Present (Expressions (N)) then
+                  Exp := First (Expressions (N));
+                  while Present (Exp) loop
+                     if Raises_Constraint_Error (Exp) then
+                        Why_Not_Static (Exp);
+                        return;
+                     end if;
+
+                     Next (Exp);
+                  end loop;
+               end if;
+
+            --  Special case a subtype name
+
+            elsif Is_Entity_Name (Expr) and then Is_Type (Entity (Expr)) then
+               Error_Msg_NE
+                 ("!& is not a static subtype (RM 4.9(26))", N, Entity (Expr));
+               return;
+            end if;
+
+            --  End of special cases
+
             Error_Msg_N
-              ("expression raises exception, cannot be static " &
-               "(RM 4.9(34))!", N);
+              ("!expression raises exception, cannot be static (RM 4.9(34))",
+               N);
             return;
          end if;
 
@@ -5282,14 +6737,16 @@ package body Sem_Eval is
             return;
          end if;
 
-         --  Type must be scalar or string type
+         --  Type must be scalar or string type (but allow Bignum, since this
+         --  is really a scalar type from our point of view in this diagnosis).
 
          if not Is_Scalar_Type (Typ)
            and then not Is_String_Type (Typ)
+           and then not Is_RTE (Typ, RE_Bignum)
          then
             Error_Msg_N
-              ("static expression must have scalar or string type " &
-               "(RM 4.9(2))!", N);
+              ("!static expression must have scalar or string type " &
+               "(RM 4.9(2))", N);
             return;
          end if;
       end if;
@@ -5297,36 +6754,104 @@ package body Sem_Eval is
       --  If we got through those checks, test particular node kind
 
       case Nkind (N) is
-         when N_Expanded_Name | N_Identifier | N_Operator_Symbol =>
+
+         --  Entity name
+
+         when N_Expanded_Name
+            | N_Identifier
+            | N_Operator_Symbol
+         =>
             E := Entity (N);
 
             if Is_Named_Number (E) then
                null;
 
             elsif Ekind (E) = E_Constant then
-               if not Is_Static_Expression (Constant_Value (E)) then
-                  Error_Msg_NE
-                    ("& is not a static constant (RM 4.9(5))!", N, E);
-               end if;
+
+               --  One case we can give a metter message is when we have a
+               --  string literal created by concatenating an aggregate with
+               --  an others expression.
+
+               Entity_Case : declare
+                  CV : constant Node_Id := Constant_Value (E);
+                  CO : constant Node_Id := Original_Node (CV);
+
+                  function Is_Aggregate (N : Node_Id) return Boolean;
+                  --  See if node N came from an others aggregate, if so
+                  --  return True and set Error_Msg_Sloc to aggregate.
+
+                  ------------------
+                  -- Is_Aggregate --
+                  ------------------
+
+                  function Is_Aggregate (N : Node_Id) return Boolean is
+                  begin
+                     if Nkind (Original_Node (N)) = N_Aggregate then
+                        Error_Msg_Sloc := Sloc (Original_Node (N));
+                        return True;
+
+                     elsif Is_Entity_Name (N)
+                       and then Ekind (Entity (N)) = E_Constant
+                       and then
+                         Nkind (Original_Node (Constant_Value (Entity (N)))) =
+                                                                  N_Aggregate
+                     then
+                        Error_Msg_Sloc :=
+                          Sloc (Original_Node (Constant_Value (Entity (N))));
+                        return True;
+
+                     else
+                        return False;
+                     end if;
+                  end Is_Aggregate;
+
+               --  Start of processing for Entity_Case
+
+               begin
+                  if Is_Aggregate (CV)
+                    or else (Nkind (CO) = N_Op_Concat
+                              and then (Is_Aggregate (Left_Opnd (CO))
+                                          or else
+                                        Is_Aggregate (Right_Opnd (CO))))
+                  then
+                     Error_Msg_N ("!aggregate (#) is never static", N);
+
+                  elsif No (CV) or else not Is_Static_Expression (CV) then
+                     Error_Msg_NE
+                       ("!& is not a static constant (RM 4.9(5))", N, E);
+                  end if;
+               end Entity_Case;
+
+            elsif Is_Type (E) then
+               Error_Msg_NE
+                 ("!& is not a static subtype (RM 4.9(26))", N, E);
 
             else
                Error_Msg_NE
-                 ("& is not static constant or named number " &
-                  "(RM 4.9(5))!", N, E);
+                 ("!& is not static constant or named number "
+                  & "(RM 4.9(5))", N, E);
             end if;
 
-         when N_Binary_Op | N_Short_Circuit | N_Membership_Test =>
+         --  Binary operator
+
+         when N_Binary_Op
+            | N_Membership_Test
+            | N_Short_Circuit
+         =>
             if Nkind (N) in N_Op_Shift then
                Error_Msg_N
-                ("shift functions are never static (RM 4.9(6,18))!", N);
-
+                 ("!shift functions are never static (RM 4.9(6,18))", N);
             else
                Why_Not_Static (Left_Opnd (N));
                Why_Not_Static (Right_Opnd (N));
             end if;
 
+         --  Unary operator
+
          when N_Unary_Op =>
             Why_Not_Static (Right_Opnd (N));
+
+         --  Attribute reference
 
          when N_Attribute_Reference =>
             Why_Not_Static_List (Expressions (N));
@@ -5341,28 +6866,26 @@ package body Sem_Eval is
 
             if Attribute_Name (N) = Name_Size then
                Error_Msg_N
-                 ("size attribute is only static for static scalar type " &
-                  "(RM 4.9(7,8))", N);
+                 ("!size attribute is only static for static scalar type "
+                  & "(RM 4.9(7,8))", N);
 
             --  Flag array cases
 
             elsif Is_Array_Type (E) then
-               if Attribute_Name (N) /= Name_First
-                    and then
-                  Attribute_Name (N) /= Name_Last
-                    and then
-                  Attribute_Name (N) /= Name_Length
+               if not Nam_In (Attribute_Name (N), Name_First,
+                                                  Name_Last,
+                                                  Name_Length)
                then
                   Error_Msg_N
-                    ("static array attribute must be Length, First, or Last " &
-                     "(RM 4.9(8))!", N);
+                    ("!static array attribute must be Length, First, or Last "
+                     & "(RM 4.9(8))", N);
 
                --  Since we know the expression is not-static (we already
                --  tested for this, must mean array is not static).
 
                else
                   Error_Msg_N
-                    ("prefix is non-static array (RM 4.9(8))!", Prefix (N));
+                    ("!prefix is non-static array (RM 4.9(8))", Prefix (N));
                end if;
 
                return;
@@ -5370,94 +6893,124 @@ package body Sem_Eval is
             --  Special case generic types, since again this is a common source
             --  of confusion.
 
-            elsif Is_Generic_Actual_Type (E)
-                    or else
-                  Is_Generic_Type (E)
-            then
+            elsif Is_Generic_Actual_Type (E) or else Is_Generic_Type (E) then
                Error_Msg_N
-                 ("attribute of generic type is never static " &
-                  "(RM 4.9(7,8))!", N);
+                 ("!attribute of generic type is never static "
+                  & "(RM 4.9(7,8))", N);
 
-            elsif Is_Static_Subtype (E) then
+            elsif Is_OK_Static_Subtype (E) then
                null;
 
             elsif Is_Scalar_Type (E) then
                Error_Msg_N
-                 ("prefix type for attribute is not static scalar subtype " &
-                  "(RM 4.9(7))!", N);
+                 ("!prefix type for attribute is not static scalar subtype "
+                  & "(RM 4.9(7))", N);
 
             else
                Error_Msg_N
-                 ("static attribute must apply to array/scalar type " &
-                  "(RM 4.9(7,8))!", N);
+                 ("!static attribute must apply to array/scalar type "
+                  & "(RM 4.9(7,8))", N);
             end if;
+
+         --  String literal
 
          when N_String_Literal =>
             Error_Msg_N
-              ("subtype of string literal is non-static (RM 4.9(4))!", N);
+              ("!subtype of string literal is non-static (RM 4.9(4))", N);
+
+         --  Explicit dereference
 
          when N_Explicit_Dereference =>
             Error_Msg_N
-              ("explicit dereference is never static (RM 4.9)!", N);
+              ("!explicit dereference is never static (RM 4.9)", N);
+
+         --  Function call
 
          when N_Function_Call =>
             Why_Not_Static_List (Parameter_Associations (N));
-            Error_Msg_N ("non-static function call (RM 4.9(6,18))!", N);
+
+            --  Complain about non-static function call unless we have Bignum
+            --  which means that the underlying expression is really some
+            --  scalar arithmetic operation.
+
+            if not Is_RTE (Typ, RE_Bignum) then
+               Error_Msg_N ("!non-static function call (RM 4.9(6,18))", N);
+            end if;
+
+         --  Parameter assocation (test actual parameter)
 
          when N_Parameter_Association =>
             Why_Not_Static (Explicit_Actual_Parameter (N));
 
+         --  Indexed component
+
          when N_Indexed_Component =>
-            Error_Msg_N
-              ("indexed component is never static (RM 4.9)!", N);
+            Error_Msg_N ("!indexed component is never static (RM 4.9)", N);
+
+         --  Procedure call
 
          when N_Procedure_Call_Statement =>
-            Error_Msg_N
-              ("procedure call is never static (RM 4.9)!", N);
+            Error_Msg_N ("!procedure call is never static (RM 4.9)", N);
+
+         --  Qualified expression (test expression)
 
          when N_Qualified_Expression =>
             Why_Not_Static (Expression (N));
 
-         when N_Aggregate | N_Extension_Aggregate =>
-            Error_Msg_N
-              ("an aggregate is never static (RM 4.9)!", N);
+         --  Aggregate
+
+         when N_Aggregate
+            | N_Extension_Aggregate
+         =>
+            Error_Msg_N ("!an aggregate is never static (RM 4.9)", N);
+
+         --  Range
 
          when N_Range =>
             Why_Not_Static (Low_Bound (N));
             Why_Not_Static (High_Bound (N));
 
+         --  Range constraint, test range expression
+
          when N_Range_Constraint =>
             Why_Not_Static (Range_Expression (N));
+
+         --  Subtype indication, test constraint
 
          when N_Subtype_Indication =>
             Why_Not_Static (Constraint (N));
 
+         --  Selected component
+
          when N_Selected_Component =>
-            Error_Msg_N
-              ("selected component is never static (RM 4.9)!", N);
+            Error_Msg_N ("!selected component is never static (RM 4.9)", N);
+
+         --  Slice
 
          when N_Slice =>
-            Error_Msg_N
-              ("slice is never static (RM 4.9)!", N);
+            Error_Msg_N ("!slice is never static (RM 4.9)", N);
 
          when N_Type_Conversion =>
             Why_Not_Static (Expression (N));
 
             if not Is_Scalar_Type (Entity (Subtype_Mark (N)))
-              or else not Is_Static_Subtype (Entity (Subtype_Mark (N)))
+              or else not Is_OK_Static_Subtype (Entity (Subtype_Mark (N)))
             then
                Error_Msg_N
-                 ("static conversion requires static scalar subtype result " &
-                  "(RM 4.9(9))!", N);
+                 ("!static conversion requires static scalar subtype result "
+                  & "(RM 4.9(9))", N);
             end if;
+
+         --  Unchecked type conversion
 
          when N_Unchecked_Type_Conversion =>
             Error_Msg_N
-              ("unchecked type conversion is never static (RM 4.9)!", N);
+              ("!unchecked type conversion is never static (RM 4.9)", N);
+
+         --  All other cases, no reason to give
 
          when others =>
             null;
-
       end case;
    end Why_Not_Static;
 

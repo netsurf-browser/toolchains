@@ -1,7 +1,7 @@
 /* ARM ldm/stm instruction patterns.  This file was automatically generated
    using arm-ldmstm.ml.  Please do not edit manually.
 
-   Copyright (C) 2010 Free Software Foundation, Inc.
+   Copyright (C) 2010-2020 Free Software Foundation, Inc.
    Contributed by CodeSourcery.
 
    This file is part of GCC.
@@ -21,7 +21,7 @@
    see the files COPYING3 and COPYING.RUNTIME respectively.  If not, see
    <http://www.gnu.org/licenses/>.  */
 
-(define_insn "*ldm4_ia"
+(define_insn "*ldm4_"
   [(match_parallel 0 "load_multiple_operation"
     [(set (match_operand:SI 1 "arm_hard_general_register_operand" "")
           (mem:SI (match_operand:SI 5 "s_register_operand" "rk")))
@@ -35,8 +35,8 @@
           (mem:SI (plus:SI (match_dup 5)
                   (const_int 12))))])]
   "TARGET_32BIT && XVECLEN (operands[0], 0) == 4"
-  "ldm%(ia%)\t%5, {%1, %2, %3, %4}"
-  [(set_attr "type" "load4")
+  "ldm%?\t%5, {%1, %2, %3, %4}"
+  [(set_attr "type" "load_16")
    (set_attr "predicable" "yes")])
 
 (define_insn "*thumb_ldm4_ia"
@@ -53,8 +53,8 @@
           (mem:SI (plus:SI (match_dup 5)
                   (const_int 12))))])]
   "TARGET_THUMB1 && XVECLEN (operands[0], 0) == 4"
-  "ldm%(ia%)\t%5, {%1, %2, %3, %4}"
-  [(set_attr "type" "load4")])
+  "ldmia\t%5, {%1, %2, %3, %4}"
+  [(set_attr "type" "load_16")])
 
 (define_insn "*ldm4_ia_update"
   [(match_parallel 0 "load_multiple_operation"
@@ -72,8 +72,8 @@
           (mem:SI (plus:SI (match_dup 5)
                   (const_int 12))))])]
   "TARGET_32BIT && XVECLEN (operands[0], 0) == 5"
-  "ldm%(ia%)\t%5!, {%1, %2, %3, %4}"
-  [(set_attr "type" "load4")
+  "ldmia%?\t%5!, {%1, %2, %3, %4}"
+  [(set_attr "type" "load_16")
    (set_attr "predicable" "yes")])
 
 (define_insn "*thumb_ldm4_ia_update"
@@ -92,10 +92,10 @@
           (mem:SI (plus:SI (match_dup 5)
                   (const_int 12))))])]
   "TARGET_THUMB1 && XVECLEN (operands[0], 0) == 5"
-  "ldm%(ia%)\t%5!, {%1, %2, %3, %4}"
-  [(set_attr "type" "load4")])
+  "ldmia\t%5!, {%1, %2, %3, %4}"
+  [(set_attr "type" "load_16")])
 
-(define_insn "*stm4_ia"
+(define_insn "*stm4_"
   [(match_parallel 0 "store_multiple_operation"
     [(set (mem:SI (match_operand:SI 5 "s_register_operand" "rk"))
           (match_operand:SI 1 "arm_hard_general_register_operand" ""))
@@ -106,8 +106,8 @@
      (set (mem:SI (plus:SI (match_dup 5) (const_int 12)))
           (match_operand:SI 4 "arm_hard_general_register_operand" ""))])]
   "TARGET_32BIT && XVECLEN (operands[0], 0) == 4"
-  "stm%(ia%)\t%5, {%1, %2, %3, %4}"
-  [(set_attr "type" "store4")
+  "stm%?\t%5, {%1, %2, %3, %4}"
+  [(set_attr "type" "store_16")
    (set_attr "predicable" "yes")])
 
 (define_insn "*stm4_ia_update"
@@ -123,8 +123,8 @@
      (set (mem:SI (plus:SI (match_dup 5) (const_int 12)))
           (match_operand:SI 4 "arm_hard_general_register_operand" ""))])]
   "TARGET_32BIT && XVECLEN (operands[0], 0) == 5"
-  "stm%(ia%)\t%5!, {%1, %2, %3, %4}"
-  [(set_attr "type" "store4")
+  "stmia%?\t%5!, {%1, %2, %3, %4}"
+  [(set_attr "type" "store_16")
    (set_attr "predicable" "yes")])
 
 (define_insn "*thumb_stm4_ia_update"
@@ -140,8 +140,8 @@
      (set (mem:SI (plus:SI (match_dup 5) (const_int 12)))
           (match_operand:SI 4 "low_register_operand" ""))])]
   "TARGET_THUMB1 && XVECLEN (operands[0], 0) == 5"
-  "stm%(ia%)\t%5!, {%1, %2, %3, %4}"
-  [(set_attr "type" "store4")])
+  "stmia\t%5!, {%1, %2, %3, %4}"
+  [(set_attr "type" "store_16")])
 
 (define_insn "*ldm4_ib"
   [(match_parallel 0 "load_multiple_operation"
@@ -158,8 +158,8 @@
           (mem:SI (plus:SI (match_dup 5)
                   (const_int 16))))])]
   "TARGET_ARM && XVECLEN (operands[0], 0) == 4"
-  "ldm%(ib%)\t%5, {%1, %2, %3, %4}"
-  [(set_attr "type" "load4")
+  "ldmib%?\t%5, {%1, %2, %3, %4}"
+  [(set_attr "type" "load_16")
    (set_attr "predicable" "yes")])
 
 (define_insn "*ldm4_ib_update"
@@ -179,8 +179,8 @@
           (mem:SI (plus:SI (match_dup 5)
                   (const_int 16))))])]
   "TARGET_ARM && XVECLEN (operands[0], 0) == 5"
-  "ldm%(ib%)\t%5!, {%1, %2, %3, %4}"
-  [(set_attr "type" "load4")
+  "ldmib%?\t%5!, {%1, %2, %3, %4}"
+  [(set_attr "type" "load_16")
    (set_attr "predicable" "yes")])
 
 (define_insn "*stm4_ib"
@@ -194,8 +194,8 @@
      (set (mem:SI (plus:SI (match_dup 5) (const_int 16)))
           (match_operand:SI 4 "arm_hard_general_register_operand" ""))])]
   "TARGET_ARM && XVECLEN (operands[0], 0) == 4"
-  "stm%(ib%)\t%5, {%1, %2, %3, %4}"
-  [(set_attr "type" "store4")
+  "stmib%?\t%5, {%1, %2, %3, %4}"
+  [(set_attr "type" "store_16")
    (set_attr "predicable" "yes")])
 
 (define_insn "*stm4_ib_update"
@@ -211,8 +211,8 @@
      (set (mem:SI (plus:SI (match_dup 5) (const_int 16)))
           (match_operand:SI 4 "arm_hard_general_register_operand" ""))])]
   "TARGET_ARM && XVECLEN (operands[0], 0) == 5"
-  "stm%(ib%)\t%5!, {%1, %2, %3, %4}"
-  [(set_attr "type" "store4")
+  "stmib%?\t%5!, {%1, %2, %3, %4}"
+  [(set_attr "type" "store_16")
    (set_attr "predicable" "yes")])
 
 (define_insn "*ldm4_da"
@@ -229,8 +229,8 @@
      (set (match_operand:SI 4 "arm_hard_general_register_operand" "")
           (mem:SI (match_dup 5)))])]
   "TARGET_ARM && XVECLEN (operands[0], 0) == 4"
-  "ldm%(da%)\t%5, {%1, %2, %3, %4}"
-  [(set_attr "type" "load4")
+  "ldmda%?\t%5, {%1, %2, %3, %4}"
+  [(set_attr "type" "load_16")
    (set_attr "predicable" "yes")])
 
 (define_insn "*ldm4_da_update"
@@ -249,8 +249,8 @@
      (set (match_operand:SI 4 "arm_hard_general_register_operand" "")
           (mem:SI (match_dup 5)))])]
   "TARGET_ARM && XVECLEN (operands[0], 0) == 5"
-  "ldm%(da%)\t%5!, {%1, %2, %3, %4}"
-  [(set_attr "type" "load4")
+  "ldmda%?\t%5!, {%1, %2, %3, %4}"
+  [(set_attr "type" "load_16")
    (set_attr "predicable" "yes")])
 
 (define_insn "*stm4_da"
@@ -264,8 +264,8 @@
      (set (mem:SI (match_dup 5))
           (match_operand:SI 4 "arm_hard_general_register_operand" ""))])]
   "TARGET_ARM && XVECLEN (operands[0], 0) == 4"
-  "stm%(da%)\t%5, {%1, %2, %3, %4}"
-  [(set_attr "type" "store4")
+  "stmda%?\t%5, {%1, %2, %3, %4}"
+  [(set_attr "type" "store_16")
    (set_attr "predicable" "yes")])
 
 (define_insn "*stm4_da_update"
@@ -281,8 +281,8 @@
      (set (mem:SI (match_dup 5))
           (match_operand:SI 4 "arm_hard_general_register_operand" ""))])]
   "TARGET_ARM && XVECLEN (operands[0], 0) == 5"
-  "stm%(da%)\t%5!, {%1, %2, %3, %4}"
-  [(set_attr "type" "store4")
+  "stmda%?\t%5!, {%1, %2, %3, %4}"
+  [(set_attr "type" "store_16")
    (set_attr "predicable" "yes")])
 
 (define_insn "*ldm4_db"
@@ -300,8 +300,8 @@
           (mem:SI (plus:SI (match_dup 5)
                   (const_int -4))))])]
   "TARGET_32BIT && XVECLEN (operands[0], 0) == 4"
-  "ldm%(db%)\t%5, {%1, %2, %3, %4}"
-  [(set_attr "type" "load4")
+  "ldmdb%?\t%5, {%1, %2, %3, %4}"
+  [(set_attr "type" "load_16")
    (set_attr "predicable" "yes")])
 
 (define_insn "*ldm4_db_update"
@@ -321,8 +321,8 @@
           (mem:SI (plus:SI (match_dup 5)
                   (const_int -4))))])]
   "TARGET_32BIT && XVECLEN (operands[0], 0) == 5"
-  "ldm%(db%)\t%5!, {%1, %2, %3, %4}"
-  [(set_attr "type" "load4")
+  "ldmdb%?\t%5!, {%1, %2, %3, %4}"
+  [(set_attr "type" "load_16")
    (set_attr "predicable" "yes")])
 
 (define_insn "*stm4_db"
@@ -336,8 +336,8 @@
      (set (mem:SI (plus:SI (match_dup 5) (const_int -4)))
           (match_operand:SI 4 "arm_hard_general_register_operand" ""))])]
   "TARGET_32BIT && XVECLEN (operands[0], 0) == 4"
-  "stm%(db%)\t%5, {%1, %2, %3, %4}"
-  [(set_attr "type" "store4")
+  "stmdb%?\t%5, {%1, %2, %3, %4}"
+  [(set_attr "type" "store_16")
    (set_attr "predicable" "yes")])
 
 (define_insn "*stm4_db_update"
@@ -353,8 +353,8 @@
      (set (mem:SI (plus:SI (match_dup 5) (const_int -4)))
           (match_operand:SI 4 "arm_hard_general_register_operand" ""))])]
   "TARGET_32BIT && XVECLEN (operands[0], 0) == 5"
-  "stm%(db%)\t%5!, {%1, %2, %3, %4}"
-  [(set_attr "type" "store4")
+  "stmdb%?\t%5!, {%1, %2, %3, %4}"
+  [(set_attr "type" "store_16")
    (set_attr "predicable" "yes")])
 
 (define_peephole2
@@ -464,7 +464,7 @@
     FAIL;
 })
 
-(define_insn "*ldm3_ia"
+(define_insn "*ldm3_"
   [(match_parallel 0 "load_multiple_operation"
     [(set (match_operand:SI 1 "arm_hard_general_register_operand" "")
           (mem:SI (match_operand:SI 4 "s_register_operand" "rk")))
@@ -475,8 +475,8 @@
           (mem:SI (plus:SI (match_dup 4)
                   (const_int 8))))])]
   "TARGET_32BIT && XVECLEN (operands[0], 0) == 3"
-  "ldm%(ia%)\t%4, {%1, %2, %3}"
-  [(set_attr "type" "load3")
+  "ldm%?\t%4, {%1, %2, %3}"
+  [(set_attr "type" "load_12")
    (set_attr "predicable" "yes")])
 
 (define_insn "*thumb_ldm3_ia"
@@ -490,8 +490,8 @@
           (mem:SI (plus:SI (match_dup 4)
                   (const_int 8))))])]
   "TARGET_THUMB1 && XVECLEN (operands[0], 0) == 3"
-  "ldm%(ia%)\t%4, {%1, %2, %3}"
-  [(set_attr "type" "load3")])
+  "ldmia\t%4, {%1, %2, %3}"
+  [(set_attr "type" "load_12")])
 
 (define_insn "*ldm3_ia_update"
   [(match_parallel 0 "load_multiple_operation"
@@ -506,8 +506,8 @@
           (mem:SI (plus:SI (match_dup 4)
                   (const_int 8))))])]
   "TARGET_32BIT && XVECLEN (operands[0], 0) == 4"
-  "ldm%(ia%)\t%4!, {%1, %2, %3}"
-  [(set_attr "type" "load3")
+  "ldmia%?\t%4!, {%1, %2, %3}"
+  [(set_attr "type" "load_12")
    (set_attr "predicable" "yes")])
 
 (define_insn "*thumb_ldm3_ia_update"
@@ -523,10 +523,10 @@
           (mem:SI (plus:SI (match_dup 4)
                   (const_int 8))))])]
   "TARGET_THUMB1 && XVECLEN (operands[0], 0) == 4"
-  "ldm%(ia%)\t%4!, {%1, %2, %3}"
-  [(set_attr "type" "load3")])
+  "ldmia\t%4!, {%1, %2, %3}"
+  [(set_attr "type" "load_12")])
 
-(define_insn "*stm3_ia"
+(define_insn "*stm3_"
   [(match_parallel 0 "store_multiple_operation"
     [(set (mem:SI (match_operand:SI 4 "s_register_operand" "rk"))
           (match_operand:SI 1 "arm_hard_general_register_operand" ""))
@@ -535,8 +535,8 @@
      (set (mem:SI (plus:SI (match_dup 4) (const_int 8)))
           (match_operand:SI 3 "arm_hard_general_register_operand" ""))])]
   "TARGET_32BIT && XVECLEN (operands[0], 0) == 3"
-  "stm%(ia%)\t%4, {%1, %2, %3}"
-  [(set_attr "type" "store3")
+  "stm%?\t%4, {%1, %2, %3}"
+  [(set_attr "type" "store_12")
    (set_attr "predicable" "yes")])
 
 (define_insn "*stm3_ia_update"
@@ -550,8 +550,8 @@
      (set (mem:SI (plus:SI (match_dup 4) (const_int 8)))
           (match_operand:SI 3 "arm_hard_general_register_operand" ""))])]
   "TARGET_32BIT && XVECLEN (operands[0], 0) == 4"
-  "stm%(ia%)\t%4!, {%1, %2, %3}"
-  [(set_attr "type" "store3")
+  "stmia%?\t%4!, {%1, %2, %3}"
+  [(set_attr "type" "store_12")
    (set_attr "predicable" "yes")])
 
 (define_insn "*thumb_stm3_ia_update"
@@ -565,8 +565,8 @@
      (set (mem:SI (plus:SI (match_dup 4) (const_int 8)))
           (match_operand:SI 3 "low_register_operand" ""))])]
   "TARGET_THUMB1 && XVECLEN (operands[0], 0) == 4"
-  "stm%(ia%)\t%4!, {%1, %2, %3}"
-  [(set_attr "type" "store3")])
+  "stmia\t%4!, {%1, %2, %3}"
+  [(set_attr "type" "store_12")])
 
 (define_insn "*ldm3_ib"
   [(match_parallel 0 "load_multiple_operation"
@@ -580,8 +580,8 @@
           (mem:SI (plus:SI (match_dup 4)
                   (const_int 12))))])]
   "TARGET_ARM && XVECLEN (operands[0], 0) == 3"
-  "ldm%(ib%)\t%4, {%1, %2, %3}"
-  [(set_attr "type" "load3")
+  "ldmib%?\t%4, {%1, %2, %3}"
+  [(set_attr "type" "load_12")
    (set_attr "predicable" "yes")])
 
 (define_insn "*ldm3_ib_update"
@@ -598,8 +598,8 @@
           (mem:SI (plus:SI (match_dup 4)
                   (const_int 12))))])]
   "TARGET_ARM && XVECLEN (operands[0], 0) == 4"
-  "ldm%(ib%)\t%4!, {%1, %2, %3}"
-  [(set_attr "type" "load3")
+  "ldmib%?\t%4!, {%1, %2, %3}"
+  [(set_attr "type" "load_12")
    (set_attr "predicable" "yes")])
 
 (define_insn "*stm3_ib"
@@ -611,8 +611,8 @@
      (set (mem:SI (plus:SI (match_dup 4) (const_int 12)))
           (match_operand:SI 3 "arm_hard_general_register_operand" ""))])]
   "TARGET_ARM && XVECLEN (operands[0], 0) == 3"
-  "stm%(ib%)\t%4, {%1, %2, %3}"
-  [(set_attr "type" "store3")
+  "stmib%?\t%4, {%1, %2, %3}"
+  [(set_attr "type" "store_12")
    (set_attr "predicable" "yes")])
 
 (define_insn "*stm3_ib_update"
@@ -626,8 +626,8 @@
      (set (mem:SI (plus:SI (match_dup 4) (const_int 12)))
           (match_operand:SI 3 "arm_hard_general_register_operand" ""))])]
   "TARGET_ARM && XVECLEN (operands[0], 0) == 4"
-  "stm%(ib%)\t%4!, {%1, %2, %3}"
-  [(set_attr "type" "store3")
+  "stmib%?\t%4!, {%1, %2, %3}"
+  [(set_attr "type" "store_12")
    (set_attr "predicable" "yes")])
 
 (define_insn "*ldm3_da"
@@ -641,8 +641,8 @@
      (set (match_operand:SI 3 "arm_hard_general_register_operand" "")
           (mem:SI (match_dup 4)))])]
   "TARGET_ARM && XVECLEN (operands[0], 0) == 3"
-  "ldm%(da%)\t%4, {%1, %2, %3}"
-  [(set_attr "type" "load3")
+  "ldmda%?\t%4, {%1, %2, %3}"
+  [(set_attr "type" "load_12")
    (set_attr "predicable" "yes")])
 
 (define_insn "*ldm3_da_update"
@@ -658,8 +658,8 @@
      (set (match_operand:SI 3 "arm_hard_general_register_operand" "")
           (mem:SI (match_dup 4)))])]
   "TARGET_ARM && XVECLEN (operands[0], 0) == 4"
-  "ldm%(da%)\t%4!, {%1, %2, %3}"
-  [(set_attr "type" "load3")
+  "ldmda%?\t%4!, {%1, %2, %3}"
+  [(set_attr "type" "load_12")
    (set_attr "predicable" "yes")])
 
 (define_insn "*stm3_da"
@@ -671,8 +671,8 @@
      (set (mem:SI (match_dup 4))
           (match_operand:SI 3 "arm_hard_general_register_operand" ""))])]
   "TARGET_ARM && XVECLEN (operands[0], 0) == 3"
-  "stm%(da%)\t%4, {%1, %2, %3}"
-  [(set_attr "type" "store3")
+  "stmda%?\t%4, {%1, %2, %3}"
+  [(set_attr "type" "store_12")
    (set_attr "predicable" "yes")])
 
 (define_insn "*stm3_da_update"
@@ -686,8 +686,8 @@
      (set (mem:SI (match_dup 4))
           (match_operand:SI 3 "arm_hard_general_register_operand" ""))])]
   "TARGET_ARM && XVECLEN (operands[0], 0) == 4"
-  "stm%(da%)\t%4!, {%1, %2, %3}"
-  [(set_attr "type" "store3")
+  "stmda%?\t%4!, {%1, %2, %3}"
+  [(set_attr "type" "store_12")
    (set_attr "predicable" "yes")])
 
 (define_insn "*ldm3_db"
@@ -702,8 +702,8 @@
           (mem:SI (plus:SI (match_dup 4)
                   (const_int -4))))])]
   "TARGET_32BIT && XVECLEN (operands[0], 0) == 3"
-  "ldm%(db%)\t%4, {%1, %2, %3}"
-  [(set_attr "type" "load3")
+  "ldmdb%?\t%4, {%1, %2, %3}"
+  [(set_attr "type" "load_12")
    (set_attr "predicable" "yes")])
 
 (define_insn "*ldm3_db_update"
@@ -720,8 +720,8 @@
           (mem:SI (plus:SI (match_dup 4)
                   (const_int -4))))])]
   "TARGET_32BIT && XVECLEN (operands[0], 0) == 4"
-  "ldm%(db%)\t%4!, {%1, %2, %3}"
-  [(set_attr "type" "load3")
+  "ldmdb%?\t%4!, {%1, %2, %3}"
+  [(set_attr "type" "load_12")
    (set_attr "predicable" "yes")])
 
 (define_insn "*stm3_db"
@@ -733,8 +733,8 @@
      (set (mem:SI (plus:SI (match_dup 4) (const_int -4)))
           (match_operand:SI 3 "arm_hard_general_register_operand" ""))])]
   "TARGET_32BIT && XVECLEN (operands[0], 0) == 3"
-  "stm%(db%)\t%4, {%1, %2, %3}"
-  [(set_attr "type" "store3")
+  "stmdb%?\t%4, {%1, %2, %3}"
+  [(set_attr "type" "store_12")
    (set_attr "predicable" "yes")])
 
 (define_insn "*stm3_db_update"
@@ -748,8 +748,8 @@
      (set (mem:SI (plus:SI (match_dup 4) (const_int -4)))
           (match_operand:SI 3 "arm_hard_general_register_operand" ""))])]
   "TARGET_32BIT && XVECLEN (operands[0], 0) == 4"
-  "stm%(db%)\t%4!, {%1, %2, %3}"
-  [(set_attr "type" "store3")
+  "stmdb%?\t%4!, {%1, %2, %3}"
+  [(set_attr "type" "store_12")
    (set_attr "predicable" "yes")])
 
 (define_peephole2
@@ -845,7 +845,7 @@
     FAIL;
 })
 
-(define_insn "*ldm2_ia"
+(define_insn "*ldm2_"
   [(match_parallel 0 "load_multiple_operation"
     [(set (match_operand:SI 1 "arm_hard_general_register_operand" "")
           (mem:SI (match_operand:SI 3 "s_register_operand" "rk")))
@@ -853,8 +853,8 @@
           (mem:SI (plus:SI (match_dup 3)
                   (const_int 4))))])]
   "TARGET_32BIT && XVECLEN (operands[0], 0) == 2"
-  "ldm%(ia%)\t%3, {%1, %2}"
-  [(set_attr "type" "load2")
+  "ldm%?\t%3, {%1, %2}"
+  [(set_attr "type" "load_8")
    (set_attr "predicable" "yes")])
 
 (define_insn "*thumb_ldm2_ia"
@@ -865,8 +865,8 @@
           (mem:SI (plus:SI (match_dup 3)
                   (const_int 4))))])]
   "TARGET_THUMB1 && XVECLEN (operands[0], 0) == 2"
-  "ldm%(ia%)\t%3, {%1, %2}"
-  [(set_attr "type" "load2")])
+  "ldmia\t%3, {%1, %2}"
+  [(set_attr "type" "load_8")])
 
 (define_insn "*ldm2_ia_update"
   [(match_parallel 0 "load_multiple_operation"
@@ -878,8 +878,8 @@
           (mem:SI (plus:SI (match_dup 3)
                   (const_int 4))))])]
   "TARGET_32BIT && XVECLEN (operands[0], 0) == 3"
-  "ldm%(ia%)\t%3!, {%1, %2}"
-  [(set_attr "type" "load2")
+  "ldmia%?\t%3!, {%1, %2}"
+  [(set_attr "type" "load_8")
    (set_attr "predicable" "yes")])
 
 (define_insn "*thumb_ldm2_ia_update"
@@ -892,18 +892,18 @@
           (mem:SI (plus:SI (match_dup 3)
                   (const_int 4))))])]
   "TARGET_THUMB1 && XVECLEN (operands[0], 0) == 3"
-  "ldm%(ia%)\t%3!, {%1, %2}"
-  [(set_attr "type" "load2")])
+  "ldmia\t%3!, {%1, %2}"
+  [(set_attr "type" "load_8")])
 
-(define_insn "*stm2_ia"
+(define_insn "*stm2_"
   [(match_parallel 0 "store_multiple_operation"
     [(set (mem:SI (match_operand:SI 3 "s_register_operand" "rk"))
           (match_operand:SI 1 "arm_hard_general_register_operand" ""))
      (set (mem:SI (plus:SI (match_dup 3) (const_int 4)))
           (match_operand:SI 2 "arm_hard_general_register_operand" ""))])]
   "TARGET_32BIT && XVECLEN (operands[0], 0) == 2"
-  "stm%(ia%)\t%3, {%1, %2}"
-  [(set_attr "type" "store2")
+  "stm%?\t%3, {%1, %2}"
+  [(set_attr "type" "store_8")
    (set_attr "predicable" "yes")])
 
 (define_insn "*stm2_ia_update"
@@ -915,8 +915,8 @@
      (set (mem:SI (plus:SI (match_dup 3) (const_int 4)))
           (match_operand:SI 2 "arm_hard_general_register_operand" ""))])]
   "TARGET_32BIT && XVECLEN (operands[0], 0) == 3"
-  "stm%(ia%)\t%3!, {%1, %2}"
-  [(set_attr "type" "store2")
+  "stmia%?\t%3!, {%1, %2}"
+  [(set_attr "type" "store_8")
    (set_attr "predicable" "yes")])
 
 (define_insn "*thumb_stm2_ia_update"
@@ -928,8 +928,8 @@
      (set (mem:SI (plus:SI (match_dup 3) (const_int 4)))
           (match_operand:SI 2 "low_register_operand" ""))])]
   "TARGET_THUMB1 && XVECLEN (operands[0], 0) == 3"
-  "stm%(ia%)\t%3!, {%1, %2}"
-  [(set_attr "type" "store2")])
+  "stmia\t%3!, {%1, %2}"
+  [(set_attr "type" "store_8")])
 
 (define_insn "*ldm2_ib"
   [(match_parallel 0 "load_multiple_operation"
@@ -940,8 +940,8 @@
           (mem:SI (plus:SI (match_dup 3)
                   (const_int 8))))])]
   "TARGET_ARM && XVECLEN (operands[0], 0) == 2"
-  "ldm%(ib%)\t%3, {%1, %2}"
-  [(set_attr "type" "load2")
+  "ldmib%?\t%3, {%1, %2}"
+  [(set_attr "type" "load_8")
    (set_attr "predicable" "yes")])
 
 (define_insn "*ldm2_ib_update"
@@ -955,8 +955,8 @@
           (mem:SI (plus:SI (match_dup 3)
                   (const_int 8))))])]
   "TARGET_ARM && XVECLEN (operands[0], 0) == 3"
-  "ldm%(ib%)\t%3!, {%1, %2}"
-  [(set_attr "type" "load2")
+  "ldmib%?\t%3!, {%1, %2}"
+  [(set_attr "type" "load_8")
    (set_attr "predicable" "yes")])
 
 (define_insn "*stm2_ib"
@@ -966,8 +966,8 @@
      (set (mem:SI (plus:SI (match_dup 3) (const_int 8)))
           (match_operand:SI 2 "arm_hard_general_register_operand" ""))])]
   "TARGET_ARM && XVECLEN (operands[0], 0) == 2"
-  "stm%(ib%)\t%3, {%1, %2}"
-  [(set_attr "type" "store2")
+  "stmib%?\t%3, {%1, %2}"
+  [(set_attr "type" "store_8")
    (set_attr "predicable" "yes")])
 
 (define_insn "*stm2_ib_update"
@@ -979,8 +979,8 @@
      (set (mem:SI (plus:SI (match_dup 3) (const_int 8)))
           (match_operand:SI 2 "arm_hard_general_register_operand" ""))])]
   "TARGET_ARM && XVECLEN (operands[0], 0) == 3"
-  "stm%(ib%)\t%3!, {%1, %2}"
-  [(set_attr "type" "store2")
+  "stmib%?\t%3!, {%1, %2}"
+  [(set_attr "type" "store_8")
    (set_attr "predicable" "yes")])
 
 (define_insn "*ldm2_da"
@@ -991,8 +991,8 @@
      (set (match_operand:SI 2 "arm_hard_general_register_operand" "")
           (mem:SI (match_dup 3)))])]
   "TARGET_ARM && XVECLEN (operands[0], 0) == 2"
-  "ldm%(da%)\t%3, {%1, %2}"
-  [(set_attr "type" "load2")
+  "ldmda%?\t%3, {%1, %2}"
+  [(set_attr "type" "load_8")
    (set_attr "predicable" "yes")])
 
 (define_insn "*ldm2_da_update"
@@ -1005,8 +1005,8 @@
      (set (match_operand:SI 2 "arm_hard_general_register_operand" "")
           (mem:SI (match_dup 3)))])]
   "TARGET_ARM && XVECLEN (operands[0], 0) == 3"
-  "ldm%(da%)\t%3!, {%1, %2}"
-  [(set_attr "type" "load2")
+  "ldmda%?\t%3!, {%1, %2}"
+  [(set_attr "type" "load_8")
    (set_attr "predicable" "yes")])
 
 (define_insn "*stm2_da"
@@ -1016,8 +1016,8 @@
      (set (mem:SI (match_dup 3))
           (match_operand:SI 2 "arm_hard_general_register_operand" ""))])]
   "TARGET_ARM && XVECLEN (operands[0], 0) == 2"
-  "stm%(da%)\t%3, {%1, %2}"
-  [(set_attr "type" "store2")
+  "stmda%?\t%3, {%1, %2}"
+  [(set_attr "type" "store_8")
    (set_attr "predicable" "yes")])
 
 (define_insn "*stm2_da_update"
@@ -1029,8 +1029,8 @@
      (set (mem:SI (match_dup 3))
           (match_operand:SI 2 "arm_hard_general_register_operand" ""))])]
   "TARGET_ARM && XVECLEN (operands[0], 0) == 3"
-  "stm%(da%)\t%3!, {%1, %2}"
-  [(set_attr "type" "store2")
+  "stmda%?\t%3!, {%1, %2}"
+  [(set_attr "type" "store_8")
    (set_attr "predicable" "yes")])
 
 (define_insn "*ldm2_db"
@@ -1042,8 +1042,8 @@
           (mem:SI (plus:SI (match_dup 3)
                   (const_int -4))))])]
   "TARGET_32BIT && XVECLEN (operands[0], 0) == 2"
-  "ldm%(db%)\t%3, {%1, %2}"
-  [(set_attr "type" "load2")
+  "ldmdb%?\t%3, {%1, %2}"
+  [(set_attr "type" "load_8")
    (set_attr "predicable" "yes")])
 
 (define_insn "*ldm2_db_update"
@@ -1057,8 +1057,8 @@
           (mem:SI (plus:SI (match_dup 3)
                   (const_int -4))))])]
   "TARGET_32BIT && XVECLEN (operands[0], 0) == 3"
-  "ldm%(db%)\t%3!, {%1, %2}"
-  [(set_attr "type" "load2")
+  "ldmdb%?\t%3!, {%1, %2}"
+  [(set_attr "type" "load_8")
    (set_attr "predicable" "yes")])
 
 (define_insn "*stm2_db"
@@ -1068,8 +1068,8 @@
      (set (mem:SI (plus:SI (match_dup 3) (const_int -4)))
           (match_operand:SI 2 "arm_hard_general_register_operand" ""))])]
   "TARGET_32BIT && XVECLEN (operands[0], 0) == 2"
-  "stm%(db%)\t%3, {%1, %2}"
-  [(set_attr "type" "store2")
+  "stmdb%?\t%3, {%1, %2}"
+  [(set_attr "type" "store_8")
    (set_attr "predicable" "yes")])
 
 (define_insn "*stm2_db_update"
@@ -1081,8 +1081,8 @@
      (set (mem:SI (plus:SI (match_dup 3) (const_int -4)))
           (match_operand:SI 2 "arm_hard_general_register_operand" ""))])]
   "TARGET_32BIT && XVECLEN (operands[0], 0) == 3"
-  "stm%(db%)\t%3!, {%1, %2}"
-  [(set_attr "type" "store2")
+  "stmdb%?\t%3!, {%1, %2}"
+  [(set_attr "type" "store_8")
    (set_attr "predicable" "yes")])
 
 (define_peephole2
@@ -1160,9 +1160,14 @@
             [(match_operand:SI 6 "s_register_operand" "")
              (match_operand:SI 7 "s_register_operand" "")]))
       (clobber (reg:CC CC_REGNUM))])]
-  "(((operands[6] == operands[0] && operands[7] == operands[1])
-     || (operands[7] == operands[0] && operands[6] == operands[1]))
-    && peep2_reg_dead_p (3, operands[0]) && peep2_reg_dead_p (3, operands[1]))"
+  "((((REGNO (operands[6]) == REGNO (operands[0]))
+         && (REGNO (operands[7]) == REGNO (operands[1])))
+      || ((REGNO (operands[7]) == REGNO (operands[0]))
+         && (REGNO (operands[6]) == REGNO (operands[1]))))
+    && (peep2_regno_dead_p (3, REGNO (operands[0]))
+      || (REGNO (operands[0]) == REGNO (operands[4])))
+    && (peep2_regno_dead_p (3, REGNO (operands[1]))
+      || (REGNO (operands[1]) == REGNO (operands[4]))))"
   [(parallel
     [(set (match_dup 4) (match_op_dup 5 [(match_dup 6) (match_dup 7)]))
      (clobber (reg:CC CC_REGNUM))])]
@@ -1180,9 +1185,14 @@
         (match_operator:SI 5 "commutative_binary_operator"
          [(match_operand:SI 6 "s_register_operand" "")
           (match_operand:SI 7 "s_register_operand" "")]))]
-  "(((operands[6] == operands[0] && operands[7] == operands[1])
-     || (operands[7] == operands[0] && operands[6] == operands[1]))
-    && peep2_reg_dead_p (3, operands[0]) && peep2_reg_dead_p (3, operands[1]))"
+  "((((REGNO (operands[6]) == REGNO (operands[0]))
+         && (REGNO (operands[7]) == REGNO (operands[1])))
+      || ((REGNO (operands[7]) == REGNO (operands[0]))
+         && (REGNO (operands[6]) == REGNO (operands[1]))))
+    && (peep2_regno_dead_p (3, REGNO (operands[0]))
+      || (REGNO (operands[0]) == REGNO (operands[4])))
+    && (peep2_regno_dead_p (3, REGNO (operands[1]))
+      || (REGNO (operands[1]) == REGNO (operands[4]))))"
   [(set (match_dup 4) (match_op_dup 5 [(match_dup 6) (match_dup 7)]))]
 {
   if (!gen_ldm_seq (operands, 2, true))

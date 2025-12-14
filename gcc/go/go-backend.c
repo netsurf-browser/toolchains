@@ -1,5 +1,5 @@
 /* go-backend.c -- Go frontend interface to gcc backend.
-   Copyright (C) 2010, 2011, 2012 Free Software Foundation, Inc.
+   Copyright (C) 2010-2020 Free Software Foundation, Inc.
 
 This file is part of GCC.
 
@@ -20,16 +20,16 @@ along with GCC; see the file COPYING3.  If not see
 #include "config.h"
 #include "system.h"
 #include "coretypes.h"
-#include "simple-object.h"
-#include "tm.h"
-#include "rtl.h"
-#include "tree.h"
-#include "tm_p.h"
-#include "intl.h"
-#include "output.h"
 #include "target.h"
+#include "tree.h"
+#include "memmodel.h"
+#include "tm_p.h"
+#include "diagnostic.h"
+#include "simple-object.h"
+#include "stor-layout.h"
+#include "intl.h"
+#include "output.h"	/* for assemble_string */
 #include "common/common-target.h"
-
 #include "go-c.h"
 
 /* The segment name we pass to simple_object_start_read to find Go
@@ -45,8 +45,20 @@ along with GCC; see the file COPYING3.  If not see
 #define GO_EXPORT_SECTION_NAME ".go_export"
 #endif
 
+#ifndef TARGET_AIX
+#define TARGET_AIX 0
+#endif
+
 /* This file holds all the cases where the Go frontend needs
    information from gcc's backend.  */
+
+/* Return whether or not GCC has reported any errors.  */
+
+bool
+saw_errors (void)
+{
+  return errorcount != 0 || sorrycount != 0;
+}
 
 /* Return the alignment in bytes of a struct field of type T.  */
 
@@ -63,39 +75,21 @@ go_field_alignment (tree t)
 #endif
 
 #ifdef ADJUST_FIELD_ALIGN
-  {
-    tree field ATTRIBUTE_UNUSED;
-    field = build_decl (UNKNOWN_LOCATION, FIELD_DECL, NULL, t);
-    v = ADJUST_FIELD_ALIGN (field, v);
-  }
+  v = ADJUST_FIELD_ALIGN (NULL_TREE, t, v);
 #endif
 
   return v / BITS_PER_UNIT;
 }
 
-/* Return the size and alignment of a trampoline.  */
-
-void
-go_trampoline_info (unsigned int *size, unsigned int *alignment)
-{
-  *size = TRAMPOLINE_SIZE;
-  *alignment = TRAMPOLINE_ALIGNMENT;
-}
-
 /* This is called by the Go frontend proper if the unsafe package was
-   imported.  When that happens we can not do type-based alias
+   imported.  When that happens we cannot do type-based alias
    analysis.  */
 
 void
 go_imported_unsafe (void)
 {
   flag_strict_aliasing = false;
-
-  /* This is a real hack.  init_varasm_once has already grabbed an
-     alias set, which we don't want when we aren't doing strict
-     aliasing.  We reinitialize to make it do it again.  This should
-     be OK in practice since we haven't really done anything yet.  */
-  init_varasm_once ();
+  TREE_OPTIMIZATION (optimization_default_node)->x_flag_strict_aliasing = false;
 
   /* Let the backend know that the options have changed.  */
   targetm.override_options_after_change ();
@@ -112,7 +106,9 @@ go_write_export_data (const char *bytes, unsigned int size)
   if (sec == NULL)
     {
       gcc_assert (targetm_common.have_named_sections);
-      sec = get_section (GO_EXPORT_SECTION_NAME, SECTION_DEBUG, NULL);
+      sec = get_section (GO_EXPORT_SECTION_NAME,
+			 TARGET_AIX ? SECTION_EXCLUDE : SECTION_DEBUG,
+			 NULL);
     }
 
   switch_to_section (sec);

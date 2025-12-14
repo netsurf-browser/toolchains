@@ -10,10 +10,8 @@ import (
 )
 
 const (
-	nByte = 65 // %b of an int64, plus a sign.
-
-	ldigits = "0123456789abcdef"
-	udigits = "0123456789ABCDEF"
+	ldigits = "0123456789abcdefx"
+	udigits = "0123456789ABCDEFX"
 )
 
 const (
@@ -21,50 +19,40 @@ const (
 	unsigned = false
 )
 
-var padZeroBytes = make([]byte, nByte)
-var padSpaceBytes = make([]byte, nByte)
-
-var newline = []byte{'\n'}
-
-func init() {
-	for i := 0; i < nByte; i++ {
-		padZeroBytes[i] = '0'
-		padSpaceBytes[i] = ' '
-	}
-}
-
-// A fmt is the raw formatter used by Printf etc.
-// It prints into a buffer that must be set up separately.
-type fmt struct {
-	intbuf [nByte]byte
-	buf    *buffer
-	// width, precision
-	wid  int
-	prec int
-	// flags
+// flags placed in a separate struct for easy clearing.
+type fmtFlags struct {
 	widPresent  bool
 	precPresent bool
 	minus       bool
 	plus        bool
 	sharp       bool
 	space       bool
-	unicode     bool
-	uniQuote    bool // Use 'x'= prefix for %U if printable.
 	zero        bool
+
+	// For the formats %+v %#v, we set the plusV/sharpV flags
+	// and clear the plus/sharp flags since %+v and %#v are in effect
+	// different, flagless formats set at the top level.
+	plusV  bool
+	sharpV bool
+}
+
+// A fmt is the raw formatter used by Printf etc.
+// It prints into a buffer that must be set up separately.
+type fmt struct {
+	buf *buffer
+
+	fmtFlags
+
+	wid  int // width
+	prec int // precision
+
+	// intbuf is large enough to store %b of an int64 with a sign and
+	// avoids padding at the end of the struct on 32 bit architectures.
+	intbuf [68]byte
 }
 
 func (f *fmt) clearflags() {
-	f.wid = 0
-	f.widPresent = false
-	f.prec = 0
-	f.precPresent = false
-	f.minus = false
-	f.plus = false
-	f.sharp = false
-	f.space = false
-	f.unicode = false
-	f.uniQuote = false
-	f.zero = false
+	f.fmtFlags = fmtFlags{}
 }
 
 func (f *fmt) init(buf *buffer) {
@@ -72,141 +60,214 @@ func (f *fmt) init(buf *buffer) {
 	f.clearflags()
 }
 
-// Compute left and right padding widths (only one will be non-zero).
-func (f *fmt) computePadding(width int) (padding []byte, leftWidth, rightWidth int) {
-	left := !f.minus
-	w := f.wid
-	if w < 0 {
-		left = false
-		w = -w
-	}
-	w -= width
-	if w > 0 {
-		if left && f.zero {
-			return padZeroBytes, w, 0
-		}
-		if left {
-			return padSpaceBytes, w, 0
-		} else {
-			// can't be zero padding on the right
-			return padSpaceBytes, 0, w
-		}
-	}
-	return
-}
-
-// Generate n bytes of padding.
-func (f *fmt) writePadding(n int, padding []byte) {
-	for n > 0 {
-		m := n
-		if m > nByte {
-			m = nByte
-		}
-		f.buf.Write(padding[0:m])
-		n -= m
-	}
-}
-
-// Append b to f.buf, padded on left (w > 0) or right (w < 0 or f.minus)
-// clear flags afterwards.
-func (f *fmt) pad(b []byte) {
-	var padding []byte
-	var left, right int
-	if f.widPresent && f.wid != 0 {
-		padding, left, right = f.computePadding(len(b))
-	}
-	if left > 0 {
-		f.writePadding(left, padding)
-	}
-	f.buf.Write(b)
-	if right > 0 {
-		f.writePadding(right, padding)
-	}
-}
-
-// append s to buf, padded on left (w > 0) or right (w < 0 or f.minus).
-// clear flags afterwards.
-func (f *fmt) padString(s string) {
-	var padding []byte
-	var left, right int
-	if f.widPresent && f.wid != 0 {
-		padding, left, right = f.computePadding(utf8.RuneCountInString(s))
-	}
-	if left > 0 {
-		f.writePadding(left, padding)
-	}
-	f.buf.WriteString(s)
-	if right > 0 {
-		f.writePadding(right, padding)
-	}
-}
-
-func putint(buf []byte, base, val uint64, digits string) int {
-	i := len(buf) - 1
-	for val >= base {
-		buf[i] = digits[val%base]
-		i--
-		val /= base
-	}
-	buf[i] = digits[val]
-	return i - 1
-}
-
-var (
-	trueBytes  = []byte("true")
-	falseBytes = []byte("false")
-)
-
-// fmt_boolean formats a boolean.
-func (f *fmt) fmt_boolean(v bool) {
-	if v {
-		f.pad(trueBytes)
-	} else {
-		f.pad(falseBytes)
-	}
-}
-
-// integer; interprets prec but not wid.  Once formatted, result is sent to pad()
-// and then flags are cleared.
-func (f *fmt) integer(a int64, base uint64, signedness bool, digits string) {
-	// precision of 0 and value of 0 means "print nothing"
-	if f.precPresent && f.prec == 0 && a == 0 {
+// writePadding generates n bytes of padding.
+func (f *fmt) writePadding(n int) {
+	if n <= 0 { // No padding bytes needed.
 		return
 	}
+	buf := *f.buf
+	oldLen := len(buf)
+	newLen := oldLen + n
+	// Make enough room for padding.
+	if newLen > cap(buf) {
+		buf = make(buffer, cap(buf)*2+n)
+		copy(buf, *f.buf)
+	}
+	// Decide which byte the padding should be filled with.
+	padByte := byte(' ')
+	if f.zero {
+		padByte = byte('0')
+	}
+	// Fill padding with padByte.
+	padding := buf[oldLen:newLen]
+	for i := range padding {
+		padding[i] = padByte
+	}
+	*f.buf = buf[:newLen]
+}
 
-	var buf []byte = f.intbuf[0:]
-	negative := signedness == signed && a < 0
-	if negative {
-		a = -a
+// pad appends b to f.buf, padded on left (!f.minus) or right (f.minus).
+func (f *fmt) pad(b []byte) {
+	if !f.widPresent || f.wid == 0 {
+		f.buf.write(b)
+		return
+	}
+	width := f.wid - utf8.RuneCount(b)
+	if !f.minus {
+		// left padding
+		f.writePadding(width)
+		f.buf.write(b)
+	} else {
+		// right padding
+		f.buf.write(b)
+		f.writePadding(width)
+	}
+}
+
+// padString appends s to f.buf, padded on left (!f.minus) or right (f.minus).
+func (f *fmt) padString(s string) {
+	if !f.widPresent || f.wid == 0 {
+		f.buf.writeString(s)
+		return
+	}
+	width := f.wid - utf8.RuneCountInString(s)
+	if !f.minus {
+		// left padding
+		f.writePadding(width)
+		f.buf.writeString(s)
+	} else {
+		// right padding
+		f.buf.writeString(s)
+		f.writePadding(width)
+	}
+}
+
+// fmtBoolean formats a boolean.
+func (f *fmt) fmtBoolean(v bool) {
+	if v {
+		f.padString("true")
+	} else {
+		f.padString("false")
+	}
+}
+
+// fmtUnicode formats a uint64 as "U+0078" or with f.sharp set as "U+0078 'x'".
+func (f *fmt) fmtUnicode(u uint64) {
+	buf := f.intbuf[0:]
+
+	// With default precision set the maximum needed buf length is 18
+	// for formatting -1 with %#U ("U+FFFFFFFFFFFFFFFF") which fits
+	// into the already allocated intbuf with a capacity of 68 bytes.
+	prec := 4
+	if f.precPresent && f.prec > 4 {
+		prec = f.prec
+		// Compute space needed for "U+" , number, " '", character, "'".
+		width := 2 + prec + 2 + utf8.UTFMax + 1
+		if width > len(buf) {
+			buf = make([]byte, width)
+		}
 	}
 
-	// two ways to ask for extra leading zero digits: %.3d or %03d.
-	// apparently the first cancels the second.
+	// Format into buf, ending at buf[i]. Formatting numbers is easier right-to-left.
+	i := len(buf)
+
+	// For %#U we want to add a space and a quoted character at the end of the buffer.
+	if f.sharp && u <= utf8.MaxRune && strconv.IsPrint(rune(u)) {
+		i--
+		buf[i] = '\''
+		i -= utf8.RuneLen(rune(u))
+		utf8.EncodeRune(buf[i:], rune(u))
+		i--
+		buf[i] = '\''
+		i--
+		buf[i] = ' '
+	}
+	// Format the Unicode code point u as a hexadecimal number.
+	for u >= 16 {
+		i--
+		buf[i] = udigits[u&0xF]
+		prec--
+		u >>= 4
+	}
+	i--
+	buf[i] = udigits[u]
+	prec--
+	// Add zeros in front of the number until requested precision is reached.
+	for prec > 0 {
+		i--
+		buf[i] = '0'
+		prec--
+	}
+	// Add a leading "U+".
+	i--
+	buf[i] = '+'
+	i--
+	buf[i] = 'U'
+
+	oldZero := f.zero
+	f.zero = false
+	f.pad(buf[i:])
+	f.zero = oldZero
+}
+
+// fmtInteger formats signed and unsigned integers.
+func (f *fmt) fmtInteger(u uint64, base int, isSigned bool, verb rune, digits string) {
+	negative := isSigned && int64(u) < 0
+	if negative {
+		u = -u
+	}
+
+	buf := f.intbuf[0:]
+	// The already allocated f.intbuf with a capacity of 68 bytes
+	// is large enough for integer formatting when no precision or width is set.
+	if f.widPresent || f.precPresent {
+		// Account 3 extra bytes for possible addition of a sign and "0x".
+		width := 3 + f.wid + f.prec // wid and prec are always positive.
+		if width > len(buf) {
+			// We're going to need a bigger boat.
+			buf = make([]byte, width)
+		}
+	}
+
+	// Two ways to ask for extra leading zero digits: %.3d or %03d.
+	// If both are specified the f.zero flag is ignored and
+	// padding with spaces is used instead.
 	prec := 0
 	if f.precPresent {
 		prec = f.prec
-		f.zero = false
-	} else if f.zero && f.widPresent && !f.minus && f.wid > 0 {
+		// Precision of 0 and value of 0 means "print nothing" but padding.
+		if prec == 0 && u == 0 {
+			oldZero := f.zero
+			f.zero = false
+			f.writePadding(f.wid)
+			f.zero = oldZero
+			return
+		}
+	} else if f.zero && f.widPresent {
 		prec = f.wid
 		if negative || f.plus || f.space {
 			prec-- // leave room for sign
 		}
 	}
 
-	// format a into buf, ending at buf[i].  (printing is easier right-to-left.)
-	// a is made into unsigned ua.  we could make things
-	// marginally faster by splitting the 32-bit case out into a separate
-	// block but it's not worth the duplication, so ua has 64 bits.
-	i := len(f.intbuf)
-	ua := uint64(a)
-	for ua >= base {
-		i--
-		buf[i] = digits[ua%base]
-		ua /= base
+	// Because printing is easier right-to-left: format u into buf, ending at buf[i].
+	// We could make things marginally faster by splitting the 32-bit case out
+	// into a separate block but it's not worth the duplication, so u has 64 bits.
+	i := len(buf)
+	// Use constants for the division and modulo for more efficient code.
+	// Switch cases ordered by popularity.
+	switch base {
+	case 10:
+		for u >= 10 {
+			i--
+			next := u / 10
+			buf[i] = byte('0' + u - next*10)
+			u = next
+		}
+	case 16:
+		for u >= 16 {
+			i--
+			buf[i] = digits[u&0xF]
+			u >>= 4
+		}
+	case 8:
+		for u >= 8 {
+			i--
+			buf[i] = byte('0' + u&7)
+			u >>= 3
+		}
+	case 2:
+		for u >= 2 {
+			i--
+			buf[i] = byte('0' + u&1)
+			u >>= 1
+		}
+	default:
+		panic("fmt: unknown base; can't happen")
 	}
 	i--
-	buf[i] = digits[ua]
-	for i > 0 && prec > nByte-i {
+	buf[i] = digits[u]
+	for i > 0 && prec > len(buf)-i {
 		i--
 		buf[i] = '0'
 	}
@@ -214,23 +275,30 @@ func (f *fmt) integer(a int64, base uint64, signedness bool, digits string) {
 	// Various prefixes: 0x, -, etc.
 	if f.sharp {
 		switch base {
+		case 2:
+			// Add a leading 0b.
+			i--
+			buf[i] = 'b'
+			i--
+			buf[i] = '0'
 		case 8:
 			if buf[i] != '0' {
 				i--
 				buf[i] = '0'
 			}
 		case 16:
+			// Add a leading 0x or 0X.
 			i--
-			buf[i] = 'x' + digits[10] - 'a'
+			buf[i] = digits[16]
 			i--
 			buf[i] = '0'
 		}
 	}
-	if f.unicode {
+	if verb == 'O' {
 		i--
-		buf[i] = '+'
+		buf[i] = 'o'
 		i--
-		buf[i] = 'U'
+		buf[i] = '0'
 	}
 
 	if negative {
@@ -244,211 +312,271 @@ func (f *fmt) integer(a int64, base uint64, signedness bool, digits string) {
 		buf[i] = ' '
 	}
 
-	// If we want a quoted char for %#U, move the data up to make room.
-	if f.unicode && f.uniQuote && a >= 0 && a <= utf8.MaxRune && strconv.IsPrint(rune(a)) {
-		runeWidth := utf8.RuneLen(rune(a))
-		width := 1 + 1 + runeWidth + 1 // space, quote, rune, quote
-		copy(buf[i-width:], buf[i:])   // guaranteed to have enough room.
-		i -= width
-		// Now put " 'x'" at the end.
-		j := len(buf) - width
-		buf[j] = ' '
-		j++
-		buf[j] = '\''
-		j++
-		utf8.EncodeRune(buf[j:], rune(a))
-		j += runeWidth
-		buf[j] = '\''
-	}
-
+	// Left padding with zeros has already been handled like precision earlier
+	// or the f.zero flag is ignored due to an explicitly set precision.
+	oldZero := f.zero
+	f.zero = false
 	f.pad(buf[i:])
+	f.zero = oldZero
 }
 
-// truncate truncates the string to the specified precision, if present.
-func (f *fmt) truncate(s string) string {
-	if f.precPresent && f.prec < utf8.RuneCountInString(s) {
+// truncate truncates the string s to the specified precision, if present.
+func (f *fmt) truncateString(s string) string {
+	if f.precPresent {
 		n := f.prec
 		for i := range s {
-			if n == 0 {
-				s = s[:i]
-				break
-			}
 			n--
+			if n < 0 {
+				return s[:i]
+			}
 		}
 	}
 	return s
 }
 
-// fmt_s formats a string.
-func (f *fmt) fmt_s(s string) {
-	s = f.truncate(s)
+// truncate truncates the byte slice b as a string of the specified precision, if present.
+func (f *fmt) truncate(b []byte) []byte {
+	if f.precPresent {
+		n := f.prec
+		for i := 0; i < len(b); {
+			n--
+			if n < 0 {
+				return b[:i]
+			}
+			wid := 1
+			if b[i] >= utf8.RuneSelf {
+				_, wid = utf8.DecodeRune(b[i:])
+			}
+			i += wid
+		}
+	}
+	return b
+}
+
+// fmtS formats a string.
+func (f *fmt) fmtS(s string) {
+	s = f.truncateString(s)
 	f.padString(s)
 }
 
-// fmt_sx formats a string as a hexadecimal encoding of its bytes.
-func (f *fmt) fmt_sx(s, digits string) {
-	// TODO: Avoid buffer by pre-padding.
-	var b []byte
-	for i := 0; i < len(s); i++ {
-		if i > 0 && f.space {
-			b = append(b, ' ')
-		}
-		v := s[i]
-		b = append(b, digits[v>>4], digits[v&0xF])
-	}
+// fmtBs formats the byte slice b as if it was formatted as string with fmtS.
+func (f *fmt) fmtBs(b []byte) {
+	b = f.truncate(b)
 	f.pad(b)
 }
 
-// fmt_q formats a string as a double-quoted, escaped Go string constant.
-func (f *fmt) fmt_q(s string) {
-	s = f.truncate(s)
-	var quoted string
+// fmtSbx formats a string or byte slice as a hexadecimal encoding of its bytes.
+func (f *fmt) fmtSbx(s string, b []byte, digits string) {
+	length := len(b)
+	if b == nil {
+		// No byte slice present. Assume string s should be encoded.
+		length = len(s)
+	}
+	// Set length to not process more bytes than the precision demands.
+	if f.precPresent && f.prec < length {
+		length = f.prec
+	}
+	// Compute width of the encoding taking into account the f.sharp and f.space flag.
+	width := 2 * length
+	if width > 0 {
+		if f.space {
+			// Each element encoded by two hexadecimals will get a leading 0x or 0X.
+			if f.sharp {
+				width *= 2
+			}
+			// Elements will be separated by a space.
+			width += length - 1
+		} else if f.sharp {
+			// Only a leading 0x or 0X will be added for the whole string.
+			width += 2
+		}
+	} else { // The byte slice or string that should be encoded is empty.
+		if f.widPresent {
+			f.writePadding(f.wid)
+		}
+		return
+	}
+	// Handle padding to the left.
+	if f.widPresent && f.wid > width && !f.minus {
+		f.writePadding(f.wid - width)
+	}
+	// Write the encoding directly into the output buffer.
+	buf := *f.buf
+	if f.sharp {
+		// Add leading 0x or 0X.
+		buf = append(buf, '0', digits[16])
+	}
+	var c byte
+	for i := 0; i < length; i++ {
+		if f.space && i > 0 {
+			// Separate elements with a space.
+			buf = append(buf, ' ')
+			if f.sharp {
+				// Add leading 0x or 0X for each element.
+				buf = append(buf, '0', digits[16])
+			}
+		}
+		if b != nil {
+			c = b[i] // Take a byte from the input byte slice.
+		} else {
+			c = s[i] // Take a byte from the input string.
+		}
+		// Encode each byte as two hexadecimal digits.
+		buf = append(buf, digits[c>>4], digits[c&0xF])
+	}
+	*f.buf = buf
+	// Handle padding to the right.
+	if f.widPresent && f.wid > width && f.minus {
+		f.writePadding(f.wid - width)
+	}
+}
+
+// fmtSx formats a string as a hexadecimal encoding of its bytes.
+func (f *fmt) fmtSx(s, digits string) {
+	f.fmtSbx(s, nil, digits)
+}
+
+// fmtBx formats a byte slice as a hexadecimal encoding of its bytes.
+func (f *fmt) fmtBx(b []byte, digits string) {
+	f.fmtSbx("", b, digits)
+}
+
+// fmtQ formats a string as a double-quoted, escaped Go string constant.
+// If f.sharp is set a raw (backquoted) string may be returned instead
+// if the string does not contain any control characters other than tab.
+func (f *fmt) fmtQ(s string) {
+	s = f.truncateString(s)
 	if f.sharp && strconv.CanBackquote(s) {
-		quoted = "`" + s + "`"
-	} else {
-		if f.plus {
-			quoted = strconv.QuoteToASCII(s)
-		} else {
-			quoted = strconv.Quote(s)
-		}
+		f.padString("`" + s + "`")
+		return
 	}
-	f.padString(quoted)
-}
-
-// fmt_qc formats the integer as a single-quoted, escaped Go character constant.
-// If the character is not valid Unicode, it will print '\ufffd'.
-func (f *fmt) fmt_qc(c int64) {
-	var quoted []byte
+	buf := f.intbuf[:0]
 	if f.plus {
-		quoted = strconv.AppendQuoteRuneToASCII(f.intbuf[0:0], rune(c))
+		f.pad(strconv.AppendQuoteToASCII(buf, s))
 	} else {
-		quoted = strconv.AppendQuoteRune(f.intbuf[0:0], rune(c))
+		f.pad(strconv.AppendQuote(buf, s))
 	}
-	f.pad(quoted)
 }
 
-// floating-point
+// fmtC formats an integer as a Unicode character.
+// If the character is not valid Unicode, it will print '\ufffd'.
+func (f *fmt) fmtC(c uint64) {
+	r := rune(c)
+	if c > utf8.MaxRune {
+		r = utf8.RuneError
+	}
+	buf := f.intbuf[:0]
+	w := utf8.EncodeRune(buf[:utf8.UTFMax], r)
+	f.pad(buf[:w])
+}
 
-func doPrec(f *fmt, def int) int {
+// fmtQc formats an integer as a single-quoted, escaped Go character constant.
+// If the character is not valid Unicode, it will print '\ufffd'.
+func (f *fmt) fmtQc(c uint64) {
+	r := rune(c)
+	if c > utf8.MaxRune {
+		r = utf8.RuneError
+	}
+	buf := f.intbuf[:0]
+	if f.plus {
+		f.pad(strconv.AppendQuoteRuneToASCII(buf, r))
+	} else {
+		f.pad(strconv.AppendQuoteRune(buf, r))
+	}
+}
+
+// fmtFloat formats a float64. It assumes that verb is a valid format specifier
+// for strconv.AppendFloat and therefore fits into a byte.
+func (f *fmt) fmtFloat(v float64, size int, verb rune, prec int) {
+	// Explicit precision in format specifier overrules default precision.
 	if f.precPresent {
-		return f.prec
+		prec = f.prec
 	}
-	return def
-}
-
-// formatFloat formats a float64; it is an efficient equivalent to  f.pad(strconv.FormatFloat()...).
-func (f *fmt) formatFloat(v float64, verb byte, prec, n int) {
-	// We leave one byte at the beginning of f.intbuf for a sign if needed,
-	// and make it a space, which we might be able to use.
-	f.intbuf[0] = ' '
-	slice := strconv.AppendFloat(f.intbuf[0:1], v, verb, prec, n)
-	// Add a plus sign or space to the floating-point string representation if missing and required.
-	// The formatted number starts at slice[1].
-	switch slice[1] {
-	case '-', '+':
-		// We're set; drop the leading space.
-		slice = slice[1:]
-	default:
-		// There's no sign, but we might need one.
-		if f.plus {
-			slice[0] = '+'
-		} else if f.space {
-			// space is already there
-		} else {
-			slice = slice[1:]
+	// Format number, reserving space for leading + sign if needed.
+	num := strconv.AppendFloat(f.intbuf[:1], v, byte(verb), prec, size)
+	if num[1] == '-' || num[1] == '+' {
+		num = num[1:]
+	} else {
+		num[0] = '+'
+	}
+	// f.space means to add a leading space instead of a "+" sign unless
+	// the sign is explicitly asked for by f.plus.
+	if f.space && num[0] == '+' && !f.plus {
+		num[0] = ' '
+	}
+	// Special handling for infinities and NaN,
+	// which don't look like a number so shouldn't be padded with zeros.
+	if num[1] == 'I' || num[1] == 'N' {
+		oldZero := f.zero
+		f.zero = false
+		// Remove sign before NaN if not asked for.
+		if num[1] == 'N' && !f.space && !f.plus {
+			num = num[1:]
 		}
+		f.pad(num)
+		f.zero = oldZero
+		return
 	}
-	f.pad(slice)
-}
-
-// fmt_e64 formats a float64 in the form -1.23e+12.
-func (f *fmt) fmt_e64(v float64) { f.formatFloat(v, 'e', doPrec(f, 6), 64) }
-
-// fmt_E64 formats a float64 in the form -1.23E+12.
-func (f *fmt) fmt_E64(v float64) { f.formatFloat(v, 'E', doPrec(f, 6), 64) }
-
-// fmt_f64 formats a float64 in the form -1.23.
-func (f *fmt) fmt_f64(v float64) { f.formatFloat(v, 'f', doPrec(f, 6), 64) }
-
-// fmt_g64 formats a float64 in the 'f' or 'e' form according to size.
-func (f *fmt) fmt_g64(v float64) { f.formatFloat(v, 'g', doPrec(f, -1), 64) }
-
-// fmt_g64 formats a float64 in the 'f' or 'E' form according to size.
-func (f *fmt) fmt_G64(v float64) { f.formatFloat(v, 'G', doPrec(f, -1), 64) }
-
-// fmt_fb64 formats a float64 in the form -123p3 (exponent is power of 2).
-func (f *fmt) fmt_fb64(v float64) { f.formatFloat(v, 'b', 0, 64) }
-
-// float32
-// cannot defer to float64 versions
-// because it will get rounding wrong in corner cases.
-
-// fmt_e32 formats a float32 in the form -1.23e+12.
-func (f *fmt) fmt_e32(v float32) { f.formatFloat(float64(v), 'e', doPrec(f, 6), 32) }
-
-// fmt_E32 formats a float32 in the form -1.23E+12.
-func (f *fmt) fmt_E32(v float32) { f.formatFloat(float64(v), 'E', doPrec(f, 6), 32) }
-
-// fmt_f32 formats a float32 in the form -1.23.
-func (f *fmt) fmt_f32(v float32) { f.formatFloat(float64(v), 'f', doPrec(f, 6), 32) }
-
-// fmt_g32 formats a float32 in the 'f' or 'e' form according to size.
-func (f *fmt) fmt_g32(v float32) { f.formatFloat(float64(v), 'g', doPrec(f, -1), 32) }
-
-// fmt_G32 formats a float32 in the 'f' or 'E' form according to size.
-func (f *fmt) fmt_G32(v float32) { f.formatFloat(float64(v), 'G', doPrec(f, -1), 32) }
-
-// fmt_fb32 formats a float32 in the form -123p3 (exponent is power of 2).
-func (f *fmt) fmt_fb32(v float32) { f.formatFloat(float64(v), 'b', 0, 32) }
-
-// fmt_c64 formats a complex64 according to the verb.
-func (f *fmt) fmt_c64(v complex64, verb rune) {
-	f.buf.WriteByte('(')
-	r := real(v)
-	for i := 0; ; i++ {
+	// The sharp flag forces printing a decimal point for non-binary formats
+	// and retains trailing zeros, which we may need to restore.
+	if f.sharp && verb != 'b' {
+		digits := 0
 		switch verb {
-		case 'e':
-			f.fmt_e32(r)
-		case 'E':
-			f.fmt_E32(r)
-		case 'f':
-			f.fmt_f32(r)
-		case 'g':
-			f.fmt_g32(r)
-		case 'G':
-			f.fmt_G32(r)
+		case 'v', 'g', 'G', 'x':
+			digits = prec
+			// If no precision is set explicitly use a precision of 6.
+			if digits == -1 {
+				digits = 6
+			}
 		}
-		if i != 0 {
-			break
-		}
-		f.plus = true
-		r = imag(v)
-	}
-	f.buf.Write(irparenBytes)
-}
 
-// fmt_c128 formats a complex128 according to the verb.
-func (f *fmt) fmt_c128(v complex128, verb rune) {
-	f.buf.WriteByte('(')
-	r := real(v)
-	for i := 0; ; i++ {
-		switch verb {
-		case 'e':
-			f.fmt_e64(r)
-		case 'E':
-			f.fmt_E64(r)
-		case 'f':
-			f.fmt_f64(r)
-		case 'g':
-			f.fmt_g64(r)
-		case 'G':
-			f.fmt_G64(r)
+		// Buffer pre-allocated with enough room for
+		// exponent notations of the form "e+123" or "p-1023".
+		var tailBuf [6]byte
+		tail := tailBuf[:0]
+
+		hasDecimalPoint := false
+		// Starting from i = 1 to skip sign at num[0].
+		for i := 1; i < len(num); i++ {
+			switch num[i] {
+			case '.':
+				hasDecimalPoint = true
+			case 'p', 'P':
+				tail = append(tail, num[i:]...)
+				num = num[:i]
+			case 'e', 'E':
+				if verb != 'x' && verb != 'X' {
+					tail = append(tail, num[i:]...)
+					num = num[:i]
+					break
+				}
+				fallthrough
+			default:
+				digits--
+			}
 		}
-		if i != 0 {
-			break
+		if !hasDecimalPoint {
+			num = append(num, '.')
 		}
-		f.plus = true
-		r = imag(v)
+		for digits > 0 {
+			num = append(num, '0')
+			digits--
+		}
+		num = append(num, tail...)
 	}
-	f.buf.Write(irparenBytes)
+	// We want a sign if asked for and if the sign is not positive.
+	if f.plus || num[0] != '+' {
+		// If we're zero padding to the left we want the sign before the leading zeros.
+		// Achieve this by writing the sign out and then padding the unsigned number.
+		if f.zero && f.widPresent && f.wid > len(num) {
+			f.buf.writeByte(num[0])
+			f.writePadding(f.wid - len(num))
+			f.buf.write(num[1:])
+			return
+		}
+		f.pad(num)
+		return
+	}
+	// No sign to show and the number is positive; just print the unsigned number.
+	f.pad(num[1:])
 }

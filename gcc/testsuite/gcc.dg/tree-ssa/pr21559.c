@@ -1,5 +1,5 @@
 /* { dg-do compile } */
-/* { dg-options "-O2 -fdump-tree-vrp1-details" } */
+/* { dg-options "-O2 -fdump-tree-evrp-details -fdump-tree-vrp1-details" } */
 
 static int blocksize = 4096;
 
@@ -9,6 +9,7 @@ void foo (void)
 {
   int toread;
   int bytes;
+  __attribute__ ((used))
   static char eof_reached = 0;
 
   toread = blocksize;
@@ -32,12 +33,12 @@ void foo (void)
 
 
 /* First, we should simplify the bits < 0 test within the loop.  */
-/* { dg-final { scan-tree-dump-times "Simplified relational" 1 "vrp1" } } */
+/* { dg-final { scan-tree-dump-times "Simplified relational" 1 "evrp" } } */
 
 /* Second, we should thread the edge out of the loop via the break
    statement.  We also realize that the final bytes == 0 test is useless,
-   and thread over it.  */
+   and thread over it.  We also know that toread != 0 is useless when
+   entering while loop and thread over it.  */
 /* { dg-final { scan-tree-dump-times "Threaded jump" 3 "vrp1" } } */
 
-/* { dg-final { cleanup-tree-dump "vrp1" } } */
 

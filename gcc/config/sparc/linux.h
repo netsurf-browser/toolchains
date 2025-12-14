@@ -1,6 +1,5 @@
 /* Definitions for SPARC running Linux-based GNU systems with ELF.
-   Copyright (C) 1996, 1997, 1998, 1999, 2000, 2002, 2003, 2004, 2005, 2006,
-   2007, 2008, 2009, 2010, 2011 Free Software Foundation, Inc.
+   Copyright (C) 1996-2020 Free Software Foundation, Inc.
    Contributed by Eddie C. Dost (ecd@skynet.be)
 
 This file is part of GCC.
@@ -55,10 +54,11 @@ extern const char *host_detect_local_cpu (int argc, const char **argv);
 
 #define DRIVER_SELF_SPECS MCPU_MTUNE_NATIVE_SPECS
 
-/* This is for -profile to use -lc_p instead of -lc.  */
-#undef	CC1_SPEC
-#define	CC1_SPEC "%{profile:-p} \
-"
+#undef  ASAN_CC1_SPEC
+#define ASAN_CC1_SPEC "%{%:sanitize(address):-funwind-tables}"
+
+#undef  CC1_SPEC
+#define CC1_SPEC GNU_USER_TARGET_CC1_SPEC ASAN_CC1_SPEC
 
 #undef SIZE_TYPE
 #define SIZE_TYPE "unsigned int"
@@ -87,7 +87,7 @@ extern const char *host_detect_local_cpu (int argc, const char **argv);
 #define GLIBC_DYNAMIC_LINKER "/lib/ld-linux.so.2"
 
 #undef  LINK_SPEC
-#define LINK_SPEC "-m elf32_sparc -Y P,/usr/lib %{shared:-shared} \
+#define LINK_SPEC "-m elf32_sparc %{shared:-shared} \
   %{!mno-relax:%{!r:-relax}} \
   %{!shared: \
     %{!static: \
@@ -99,7 +99,7 @@ extern const char *host_detect_local_cpu (int argc, const char **argv);
 #undef ASM_SPEC
 #define ASM_SPEC "\
 -s \
-%{fpic|fPIC|fpie|fPIE:-K PIC} \
+%{" FPIE_OR_FPIC_SPEC ":-K PIC} \
 %{!.c:%{findirect-dispatch:-K PIC}} \
 %(asm_cpu) %(asm_relax)"
 
@@ -123,14 +123,6 @@ do {									\
    SPARC ABI says that long double is 4 words.  */
 #define LONG_DOUBLE_TYPE_SIZE (TARGET_LONG_DOUBLE_128 ? 128 : 64)
 
-/* Define this to set long double type size to use in libgcc2.c, which can
-   not depend on target_flags.  */
-#ifdef __LONG_DOUBLE_128__
-#define LIBGCC2_LONG_DOUBLE_TYPE_SIZE 128
-#else
-#define LIBGCC2_LONG_DOUBLE_TYPE_SIZE 64
-#endif
-
 #undef DITF_CONVERSION_LIBFUNCS
 #define DITF_CONVERSION_LIBFUNCS 1
 
@@ -147,12 +139,6 @@ do {									\
 
 /* Static stack checking is supported by means of probes.  */
 #define STACK_CHECK_STATIC_BUILTIN 1
-
-/* Linux currently uses RMO in uniprocessor mode, which is equivalent to
-   TMO, and TMO in multiprocessor mode.  But they reserve the right to
-   change their minds.  */
-#undef SPARC_RELAXED_ORDERING
-#define SPARC_RELAXED_ORDERING true
 
 #undef NEED_INDICATE_EXEC_STACK
 #define NEED_INDICATE_EXEC_STACK 1

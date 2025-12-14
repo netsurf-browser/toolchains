@@ -1,6 +1,10 @@
 /* { dg-do compile } */
 /* { dg-options "-O2 -fdump-tree-optimized" } */
 
+/* For powerpc, disable doloop IV cand generation in IVOPTs to avoid unexpected
+   division operation for its base setup.  */
+/* { dg-additional-options "-fno-branch-count-reg" { target { powerpc*-*-* } } } */
+
 int foo (int n)
 {
   while (n >= 45)
@@ -48,7 +52,6 @@ int baz (int n)
 
 /* There should be no division/modulo in the final dump (division and modulo
    by 64 are done using bit operations).  */
-/* { dg-final { scan-tree-dump-times "/" 0 "optimized" } } */
-/* { dg-final { scan-tree-dump-times "%" 0 "optimized" } } */
+/* { dg-final { scan-tree-dump-times " / " 0 "optimized" } } */
+/* { dg-final { scan-tree-dump-times " % " 0 "optimized" } } */
 
-/* { dg-final { cleanup-tree-dump "optimized" } } */

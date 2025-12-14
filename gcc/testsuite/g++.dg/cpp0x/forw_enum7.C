@@ -1,11 +1,9 @@
-// { dg-do compile }
-// { dg-options "-std=c++0x" }
+// { dg-do compile { target c++11 } }
+// { dg-options "" }
 
 template<typename T> struct S1
 {
     enum E1 : int;
-    enum E1 : T;
-    enum class E2 : int;
     enum class E2 : T;
 };
 

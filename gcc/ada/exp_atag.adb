@@ -6,7 +6,7 @@
 --                                                                          --
 --                                 S p e c                                  --
 --                                                                          --
---          Copyright (C) 2006-2011, Free Software Foundation, Inc.         --
+--          Copyright (C) 2006-2019, Free Software Foundation, Inc.         --
 --                                                                          --
 -- GNAT is free software;  you can  redistribute it  and/or modify it under --
 -- terms of the  GNU General Public License as published  by the Free Soft- --
@@ -87,22 +87,23 @@ package body Exp_Atag is
       if Tagged_Type_Expansion then
          Tag_Node :=
            Unchecked_Convert_To (RTE (RE_Tag),
-             New_Reference_To
+             New_Occurrence_Of
               (Node (First_Elmt (Access_Disp_Table (Typ))), Loc));
 
       else
          Tag_Node :=
            Make_Attribute_Reference (Loc,
-             Prefix => New_Reference_To (Typ, Loc),
+             Prefix => New_Occurrence_Of (Typ, Loc),
              Attribute_Name => Name_Tag);
       end if;
 
       Append_To (Stmts,
         Make_Assignment_Statement (Loc,
-          Name => Make_Identifier (Loc, Name_uC),
+          Name       => Make_Identifier (Loc, Name_uC),
           Expression =>
             Make_Function_Call (Loc,
-              Name => New_Occurrence_Of (RTE (RE_Get_Prim_Op_Kind), Loc),
+              Name                   =>
+                New_Occurrence_Of (RTE (RE_Get_Prim_Op_Kind), Loc),
               Parameter_Associations => New_List (
                 Tag_Node,
                 Make_Identifier (Loc, Name_uS)))));
@@ -128,27 +129,27 @@ package body Exp_Atag is
                 Make_Op_Eq (Loc,
                   Left_Opnd  => Make_Identifier (Loc, Name_uC),
                   Right_Opnd =>
-                    New_Reference_To (RTE (RE_POK_Procedure), Loc)),
+                    New_Occurrence_Of (RTE (RE_POK_Procedure), Loc)),
               Right_Opnd =>
                 Make_Or_Else (Loc,
                   Left_Opnd =>
                     Make_Op_Eq (Loc,
                       Left_Opnd => Make_Identifier (Loc, Name_uC),
                       Right_Opnd =>
-                        New_Reference_To
+                        New_Occurrence_Of
                           (RTE (RE_POK_Protected_Procedure), Loc)),
                   Right_Opnd =>
                     Make_Op_Eq (Loc,
                       Left_Opnd  => Make_Identifier (Loc, Name_uC),
                       Right_Opnd =>
-                        New_Reference_To
+                        New_Occurrence_Of
                           (RTE (RE_POK_Task_Procedure), Loc)))),
 
           Then_Statements =>
             New_List (
               Make_Assignment_Statement (Loc,
                 Name       => Make_Identifier (Loc, Name_uF),
-                Expression => New_Reference_To (Standard_True, Loc)),
+                Expression => New_Occurrence_Of (Standard_True, Loc)),
               Make_Simple_Return_Statement (Loc))));
    end Build_Common_Dispatching_Select_Statements;
 
@@ -177,13 +178,13 @@ package body Exp_Atag is
       --    Typ_TSD  : constant Type_Specific_Data_Ptr
       --                          := Build_TSD (Address!(Typ_Tag));
       --    Index    : constant Integer := Obj_TSD.Idepth - Typ_TSD.Idepth
-      --    Index > 0 and then Obj_TSD.Tags_Table (Index) = Typ'Tag
+      --    Index >= 0 and then Obj_TSD.Tags_Table (Index) = Typ'Tag
 
       Insert_Action (Related_Nod,
         Make_Object_Declaration (Loc,
           Defining_Identifier => Tag_Addr,
           Constant_Present    => True,
-          Object_Definition   => New_Reference_To (RTE (RE_Address), Loc),
+          Object_Definition   => New_Occurrence_Of (RTE (RE_Address), Loc),
           Expression          => Unchecked_Convert_To
                                    (RTE (RE_Address), Obj_Tag_Node)));
 
@@ -196,19 +197,22 @@ package body Exp_Atag is
         Make_Object_Declaration (Loc,
           Defining_Identifier => Obj_TSD,
           Constant_Present    => True,
-          Object_Definition   => New_Reference_To
-                                   (RTE (RE_Type_Specific_Data_Ptr), Loc),
-          Expression => Build_TSD (Loc, New_Reference_To (Tag_Addr, Loc))));
+          Object_Definition   =>
+            New_Occurrence_Of (RTE (RE_Type_Specific_Data_Ptr), Loc),
+          Expression          =>
+            Build_TSD (Loc, New_Occurrence_Of (Tag_Addr, Loc))),
+        Suppress => All_Checks);
 
       Insert_Action (Related_Nod,
         Make_Object_Declaration (Loc,
           Defining_Identifier => Typ_TSD,
           Constant_Present    => True,
-          Object_Definition   => New_Reference_To
-                                   (RTE (RE_Type_Specific_Data_Ptr), Loc),
-          Expression => Build_TSD (Loc,
-                          Unchecked_Convert_To (RTE (RE_Address),
-                            Typ_Tag_Node))));
+          Object_Definition   =>
+            New_Occurrence_Of (RTE (RE_Type_Specific_Data_Ptr), Loc),
+          Expression          =>
+            Build_TSD (Loc,
+              Unchecked_Convert_To (RTE (RE_Address), Typ_Tag_Node))),
+        Suppress => All_Checks);
 
       Insert_Action (Related_Nod,
         Make_Object_Declaration (Loc,
@@ -219,17 +223,18 @@ package body Exp_Atag is
             Make_Op_Subtract (Loc,
               Left_Opnd =>
                 Make_Selected_Component (Loc,
-                  Prefix        => New_Reference_To (Obj_TSD, Loc),
+                  Prefix        => New_Occurrence_Of (Obj_TSD, Loc),
                   Selector_Name =>
-                     New_Reference_To
+                     New_Occurrence_Of
                        (RTE_Record_Component (RE_Idepth), Loc)),
 
                Right_Opnd =>
                  Make_Selected_Component (Loc,
-                   Prefix        => New_Reference_To (Typ_TSD, Loc),
+                   Prefix        => New_Occurrence_Of (Typ_TSD, Loc),
                    Selector_Name =>
-                     New_Reference_To
-                       (RTE_Record_Component (RE_Idepth), Loc)))));
+                     New_Occurrence_Of
+                       (RTE_Record_Component (RE_Idepth), Loc)))),
+        Suppress => All_Checks);
 
       New_Node :=
         Make_And_Then (Loc,
@@ -242,11 +247,11 @@ package body Exp_Atag is
             Make_Op_Eq (Loc,
               Left_Opnd =>
                 Make_Indexed_Component (Loc,
-                  Prefix =>
+                  Prefix      =>
                     Make_Selected_Component (Loc,
-                      Prefix        => New_Reference_To (Obj_TSD, Loc),
+                      Prefix        => New_Occurrence_Of (Obj_TSD, Loc),
                       Selector_Name =>
-                        New_Reference_To
+                        New_Occurrence_Of
                           (RTE_Record_Component (RE_Tags_Table), Loc)),
                   Expressions =>
                     New_List (New_Occurrence_Of (Index, Loc))),
@@ -265,7 +270,7 @@ package body Exp_Atag is
    begin
       return
         Make_Function_Call (Loc,
-          Name => New_Reference_To (RTE (RE_DT), Loc),
+          Name => New_Occurrence_Of (RTE (RE_DT), Loc),
           Parameter_Associations => New_List (
             Unchecked_Convert_To (RTE (RE_Tag), Tag_Node)));
    end Build_DT;
@@ -285,7 +290,7 @@ package body Exp_Atag is
             Build_TSD (Loc,
               Unchecked_Convert_To (RTE (RE_Address), Tag_Node)),
           Selector_Name =>
-            New_Reference_To
+            New_Occurrence_Of
               (RTE_Record_Component (RE_Access_Level), Loc));
    end Build_Get_Access_Level;
 
@@ -303,7 +308,7 @@ package body Exp_Atag is
           Prefix        =>
             Build_TSD (Loc, Unchecked_Convert_To (RTE (RE_Address), Tag_Node)),
           Selector_Name =>
-            New_Reference_To (RTE_Record_Component (RE_Alignment), Loc));
+            New_Occurrence_Of (RTE_Record_Component (RE_Alignment), Loc));
    end Build_Get_Alignment;
 
    ------------------------------------------
@@ -344,13 +349,13 @@ package body Exp_Atag is
                       Make_Expanded_Name (Loc,
                         Chars => Name_Op_Subtract,
                         Prefix =>
-                          New_Reference_To
+                          New_Occurrence_Of
                             (RTU_Entity (System_Storage_Elements), Loc),
                         Selector_Name =>
                           Make_Identifier (Loc, Name_Op_Subtract)),
                     Parameter_Associations => New_List (
                       Ctrl_Tag,
-                      New_Reference_To
+                      New_Occurrence_Of
                         (RTE (RE_DT_Predef_Prims_Offset), Loc)))))),
           Expressions =>
             New_List (Make_Integer_Literal (Loc, Position)));
@@ -415,20 +420,20 @@ package body Exp_Atag is
 
             Append_To (Result,
               Make_Assignment_Statement (Loc,
-                Name =>
+                Name      =>
                   Make_Indexed_Component (Loc,
-                    Prefix =>
+                    Prefix      =>
                       Make_Explicit_Dereference (Loc,
                         Unchecked_Convert_To
                           (Node (Last_Elmt (Access_Disp_Table (Typ))),
-                           New_Reference_To (Typ_Tag, Loc))),
+                           New_Occurrence_Of (Typ_Tag, Loc))),
                     Expressions =>
                        New_List (Make_Integer_Literal (Loc, Prim_Pos))),
 
                Expression =>
                  Unchecked_Convert_To (RTE (RE_Prim_Ptr),
                    Make_Attribute_Reference (Loc,
-                     Prefix => New_Reference_To (E, Loc),
+                     Prefix         => New_Occurrence_Of (E, Loc),
                      Attribute_Name => Name_Unrestricted_Access))));
          end if;
 
@@ -455,16 +460,16 @@ package body Exp_Atag is
          if not CPP_Table (J) then
             Prepend_To (Result,
               Make_Assignment_Statement (Loc,
-                Name =>
+                Name       =>
                   Make_Explicit_Dereference (Loc,
                     Unchecked_Convert_To
                       (Node (Last_Elmt (Access_Disp_Table (CPP_Typ))),
-                       New_Reference_To (Typ_Tag, Loc))),
+                       New_Occurrence_Of (Typ_Tag, Loc))),
                 Expression =>
                   Make_Explicit_Dereference (Loc,
                     Unchecked_Convert_To
                       (Node (Last_Elmt (Access_Disp_Table (CPP_Typ))),
-                       New_Reference_To (Parent_Tag, Loc)))));
+                       New_Occurrence_Of (Parent_Tag, Loc)))));
             exit;
          end if;
       end loop;
@@ -550,15 +555,15 @@ package body Exp_Atag is
 
                         Append_To (Result,
                           Make_Assignment_Statement (Loc,
-                            Name =>
+                            Name       =>
                               Make_Indexed_Component (Loc,
-                                Prefix =>
+                                Prefix      =>
                                   Make_Explicit_Dereference (Loc,
                                     Unchecked_Convert_To
                                       (Node
                                         (Last_Elmt
-                                          (Access_Disp_Table (Iface))),
-                                       New_Reference_To (Typ_Tag, Loc))),
+                                           (Access_Disp_Table (Iface))),
+                                       New_Occurrence_Of (Typ_Tag, Loc))),
                                 Expressions =>
                                    New_List
                                     (Make_Integer_Literal (Loc, Prim_Pos))),
@@ -566,7 +571,7 @@ package body Exp_Atag is
                             Expression =>
                               Unchecked_Convert_To (RTE (RE_Prim_Ptr),
                                 Make_Attribute_Reference (Loc,
-                                  Prefix => New_Reference_To (E, Loc),
+                                  Prefix         => New_Occurrence_Of (E, Loc),
                                   Attribute_Name =>
                                     Name_Unrestricted_Access))));
                      end if;
@@ -584,16 +589,16 @@ package body Exp_Atag is
                      if not Prims_Table (J) then
                         Insert_After (Last_Nod,
                           Make_Assignment_Statement (Loc,
-                            Name =>
+                            Name       =>
                               Make_Explicit_Dereference (Loc,
                                 Unchecked_Convert_To
                                  (Node (Last_Elmt (Access_Disp_Table (Iface))),
-                                  New_Reference_To (Typ_Tag, Loc))),
+                                  New_Occurrence_Of (Typ_Tag, Loc))),
                             Expression =>
                               Make_Explicit_Dereference (Loc,
                                 Unchecked_Convert_To
                                  (Node (Last_Elmt (Access_Disp_Table (Iface))),
-                                  New_Reference_To (Parent_Tag, Loc)))));
+                                  New_Occurrence_Of (Parent_Tag, Loc)))));
                         exit;
                      end if;
                   end loop;
@@ -630,7 +635,7 @@ package body Exp_Atag is
                      Prefix =>
                        Build_DT (Loc, New_Tag_Node),
                      Selector_Name =>
-                       New_Reference_To
+                       New_Occurrence_Of
                          (RTE_Record_Component (RE_Prims_Ptr), Loc)),
                  Discrete_Range =>
                    Make_Range (Loc,
@@ -644,7 +649,7 @@ package body Exp_Atag is
                      Prefix =>
                        Build_DT (Loc, Old_Tag_Node),
                      Selector_Name =>
-                       New_Reference_To
+                       New_Occurrence_Of
                          (RTE_Record_Component (RE_Prims_Ptr), Loc)),
                  Discrete_Range =>
                    Make_Range (Loc,
@@ -728,7 +733,7 @@ package body Exp_Atag is
             Build_TSD (Loc,
               Unchecked_Convert_To (RTE (RE_Address), Tag_Node)),
           Selector_Name =>
-            New_Reference_To
+            New_Occurrence_Of
               (RTE_Record_Component (RE_Transportable), Loc));
    end Build_Get_Transportable;
 
@@ -737,9 +742,10 @@ package body Exp_Atag is
    ------------------------------------
 
    function Build_Inherit_Predefined_Prims
-     (Loc          : Source_Ptr;
-      Old_Tag_Node : Node_Id;
-      New_Tag_Node : Node_Id) return Node_Id
+     (Loc              : Source_Ptr;
+      Old_Tag_Node     : Node_Id;
+      New_Tag_Node     : Node_Id;
+      Num_Predef_Prims : Int) return Node_Id
    is
    begin
       return
@@ -754,7 +760,7 @@ package body Exp_Atag is
                         New_Tag_Node)))),
               Discrete_Range => Make_Range (Loc,
                 Make_Integer_Literal (Loc, Uint_1),
-                New_Reference_To (RTE (RE_Max_Predef_Prims), Loc))),
+                Make_Integer_Literal (Loc, Num_Predef_Prims))),
 
           Expression =>
             Make_Slice (Loc,
@@ -767,7 +773,7 @@ package body Exp_Atag is
               Discrete_Range =>
                 Make_Range (Loc,
                   Make_Integer_Literal (Loc, 1),
-                  New_Reference_To (RTE (RE_Max_Predef_Prims), Loc))));
+                  Make_Integer_Literal (Loc, Num_Predef_Prims))));
    end Build_Inherit_Predefined_Prims;
 
    -------------------------
@@ -793,12 +799,12 @@ package body Exp_Atag is
                 Make_Expanded_Name (Loc,
                   Chars         => Name_Op_Subtract,
                   Prefix        =>
-                    New_Reference_To
+                    New_Occurrence_Of
                       (RTU_Entity (System_Storage_Elements), Loc),
                   Selector_Name => Make_Identifier (Loc, Name_Op_Subtract)),
               Parameter_Associations => New_List (
                 Unchecked_Convert_To (RTE (RE_Address), Tag_Node),
-                New_Reference_To
+                New_Occurrence_Of
                   (RTE (RE_DT_Offset_To_Top_Offset), Loc)))));
    end Build_Offset_To_Top;
 
@@ -869,12 +875,12 @@ package body Exp_Atag is
                 Build_TSD (Loc,
                   Unchecked_Convert_To (RTE (RE_Address), Tag_Node)),
               Selector_Name =>
-                New_Reference_To
+                New_Occurrence_Of
                   (RTE_Record_Component (RE_Size_Func), Loc)),
           Expression =>
             Unchecked_Convert_To (RTE (RE_Size_Ptr),
               Make_Attribute_Reference (Loc,
-                Prefix => New_Reference_To (Size_Func, Loc),
+                Prefix => New_Occurrence_Of (Size_Func, Loc),
                 Attribute_Name => Name_Unrestricted_Access)));
    end Build_Set_Size_Function;
 
@@ -896,12 +902,12 @@ package body Exp_Atag is
                   Make_Expanded_Name (Loc,
                     Chars         => Name_Op_Subtract,
                     Prefix        =>
-                      New_Reference_To
+                      New_Occurrence_Of
                         (RTU_Entity (System_Storage_Elements), Loc),
                     Selector_Name => Make_Identifier (Loc, Name_Op_Subtract)),
                 Parameter_Associations => New_List (
                   Unchecked_Convert_To (RTE (RE_Address), Iface_Tag),
-                  New_Reference_To
+                  New_Occurrence_Of
                     (RTE (RE_DT_Offset_To_Top_Offset), Loc))))),
           Offset_Value);
    end Build_Set_Static_Offset_To_Top;
@@ -923,13 +929,13 @@ package body Exp_Atag is
                   Make_Expanded_Name (Loc,
                     Chars => Name_Op_Subtract,
                     Prefix =>
-                      New_Reference_To
+                      New_Occurrence_Of
                         (RTU_Entity (System_Storage_Elements), Loc),
                     Selector_Name => Make_Identifier (Loc, Name_Op_Subtract)),
 
                 Parameter_Associations => New_List (
                   Tag_Node_Addr,
-                  New_Reference_To
+                  New_Occurrence_Of
                     (RTE (RE_DT_Typeinfo_Ptr_Size), Loc))))));
    end Build_TSD;
 

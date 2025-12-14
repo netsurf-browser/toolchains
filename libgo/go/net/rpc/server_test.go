@@ -11,6 +11,7 @@ import (
 	"log"
 	"net"
 	"net/http/httptest"
+	"reflect"
 	"runtime"
 	"strings"
 	"sync"
@@ -74,6 +75,40 @@ func (t *Arith) Error(args *Args, reply *Reply) error {
 	panic("ERROR")
 }
 
+func (t *Arith) SleepMilli(args *Args, reply *Reply) error {
+	time.Sleep(time.Duration(args.A) * time.Millisecond)
+	return nil
+}
+
+type hidden int
+
+func (t *hidden) Exported(args Args, reply *Reply) error {
+	reply.C = args.A + args.B
+	return nil
+}
+
+type Embed struct {
+	hidden
+}
+
+type BuiltinTypes struct{}
+
+func (BuiltinTypes) Map(args *Args, reply *map[int]int) error {
+	(*reply)[args.A] = args.B
+	return nil
+}
+
+func (BuiltinTypes) Slice(args *Args, reply *[]int) error {
+	*reply = append(*reply, args.A, args.B)
+	return nil
+}
+
+func (BuiltinTypes) Array(args *Args, reply *[2]int) error {
+	(*reply)[0] = args.A
+	(*reply)[1] = args.B
+	return nil
+}
+
 func listenTCP() (net.Listener, string) {
 	l, e := net.Listen("tcp", "127.0.0.1:0") // any available address
 	if e != nil {
@@ -84,6 +119,9 @@ func listenTCP() (net.Listener, string) {
 
 func startServer() {
 	Register(new(Arith))
+	Register(new(Embed))
+	RegisterName("net.rpc.Arith", new(Arith))
+	Register(BuiltinTypes{})
 
 	var l net.Listener
 	l, serverAddr = listenTCP()
@@ -97,11 +135,14 @@ func startServer() {
 func startNewServer() {
 	newServer = NewServer()
 	newServer.Register(new(Arith))
+	newServer.Register(new(Embed))
+	newServer.RegisterName("net.rpc.Arith", new(Arith))
+	newServer.RegisterName("newServer.Arith", new(Arith))
 
 	var l net.Listener
 	l, newServerAddr = listenTCP()
 	log.Println("NewServer test RPC server listening on", newServerAddr)
-	go Accept(l)
+	go newServer.Accept(l)
 
 	newServer.HandleHTTP(newHttpPath, "/bar")
 	httpOnce.Do(startHttpServer)
@@ -118,6 +159,7 @@ func TestRPC(t *testing.T) {
 	testRPC(t, serverAddr)
 	newOnce.Do(startNewServer)
 	testRPC(t, newServerAddr)
+	testNewServerRPC(t, newServerAddr)
 }
 
 func testRPC(t *testing.T, addr string) {
@@ -125,11 +167,23 @@ func testRPC(t *testing.T, addr string) {
 	if err != nil {
 		t.Fatal("dialing", err)
 	}
+	defer client.Close()
 
 	// Synchronous calls
 	args := &Args{7, 8}
 	reply := new(Reply)
 	err = client.Call("Arith.Add", args, reply)
+	if err != nil {
+		t.Errorf("Add: expected no error but got string %q", err.Error())
+	}
+	if reply.C != args.A+args.B {
+		t.Errorf("Add: expected %d got %d", reply.C, args.A+args.B)
+	}
+
+	// Methods exported from unexported embedded structs
+	args = &Args{7, 0}
+	reply = new(Reply)
+	err = client.Call("Embed.Exported", args, reply)
 	if err != nil {
 		t.Errorf("Add: expected no error but got string %q", err.Error())
 	}
@@ -154,7 +208,7 @@ func testRPC(t *testing.T, addr string) {
 	err = client.Call("Arith.Unknown", args, reply)
 	if err == nil {
 		t.Error("expected error calling unknown service")
-	} else if strings.Index(err.Error(), "method") < 0 {
+	} else if !strings.Contains(err.Error(), "method") {
 		t.Error("expected error about method; got", err)
 	}
 
@@ -197,7 +251,7 @@ func testRPC(t *testing.T, addr string) {
 	err = client.Call("Arith.Add", reply, reply) // args, reply would be the correct thing to use
 	if err == nil {
 		t.Error("expected error calling Arith.Add with wrong arg type")
-	} else if strings.Index(err.Error(), "type") < 0 {
+	} else if !strings.Contains(err.Error(), "type") {
 		t.Error("expected error about type; got", err)
 	}
 
@@ -233,6 +287,36 @@ func testRPC(t *testing.T, addr string) {
 	if reply.C != args.A*args.B {
 		t.Errorf("Mul: expected %d got %d", reply.C, args.A*args.B)
 	}
+
+	// ServiceName contain "." character
+	args = &Args{7, 8}
+	reply = new(Reply)
+	err = client.Call("net.rpc.Arith.Add", args, reply)
+	if err != nil {
+		t.Errorf("Add: expected no error but got string %q", err.Error())
+	}
+	if reply.C != args.A+args.B {
+		t.Errorf("Add: expected %d got %d", reply.C, args.A+args.B)
+	}
+}
+
+func testNewServerRPC(t *testing.T, addr string) {
+	client, err := Dial("tcp", addr)
+	if err != nil {
+		t.Fatal("dialing", err)
+	}
+	defer client.Close()
+
+	// Synchronous calls
+	args := &Args{7, 8}
+	reply := new(Reply)
+	err = client.Call("newServer.Arith.Add", args, reply)
+	if err != nil {
+		t.Errorf("Add: expected no error but got string %q", err.Error())
+	}
+	if reply.C != args.A+args.B {
+		t.Errorf("Add: expected %d got %d", reply.C, args.A+args.B)
+	}
 }
 
 func TestHTTP(t *testing.T) {
@@ -253,6 +337,7 @@ func testHTTPRPC(t *testing.T, path string) {
 	if err != nil {
 		t.Fatal("dialing", err)
 	}
+	defer client.Close()
 
 	// Synchronous calls
 	args := &Args{7, 8}
@@ -263,6 +348,49 @@ func testHTTPRPC(t *testing.T, path string) {
 	}
 	if reply.C != args.A+args.B {
 		t.Errorf("Add: expected %d got %d", reply.C, args.A+args.B)
+	}
+}
+
+func TestBuiltinTypes(t *testing.T) {
+	once.Do(startServer)
+
+	client, err := DialHTTP("tcp", httpServerAddr)
+	if err != nil {
+		t.Fatal("dialing", err)
+	}
+	defer client.Close()
+
+	// Map
+	args := &Args{7, 8}
+	replyMap := map[int]int{}
+	err = client.Call("BuiltinTypes.Map", args, &replyMap)
+	if err != nil {
+		t.Errorf("Map: expected no error but got string %q", err.Error())
+	}
+	if replyMap[args.A] != args.B {
+		t.Errorf("Map: expected %d got %d", args.B, replyMap[args.A])
+	}
+
+	// Slice
+	args = &Args{7, 8}
+	replySlice := []int{}
+	err = client.Call("BuiltinTypes.Slice", args, &replySlice)
+	if err != nil {
+		t.Errorf("Slice: expected no error but got string %q", err.Error())
+	}
+	if e := []int{args.A, args.B}; !reflect.DeepEqual(replySlice, e) {
+		t.Errorf("Slice: expected %v got %v", e, replySlice)
+	}
+
+	// Array
+	args = &Args{7, 8}
+	replyArray := [2]int{}
+	err = client.Call("BuiltinTypes.Array", args, &replyArray)
+	if err != nil {
+		t.Errorf("Array: expected no error but got string %q", err.Error())
+	}
+	if e := [2]int{args.A, args.B}; !reflect.DeepEqual(replyArray, e) {
+		t.Errorf("Array: expected %v got %v", e, replyArray)
 	}
 }
 
@@ -329,6 +457,7 @@ func TestServeRequest(t *testing.T) {
 
 func testServeRequest(t *testing.T, server *Server) {
 	client := CodecEmulator{server: server}
+	defer client.Close()
 
 	args := &Args{7, 8}
 	reply := new(Reply)
@@ -349,6 +478,7 @@ func testServeRequest(t *testing.T, server *Server) {
 type ReplyNotPointer int
 type ArgNotPublic int
 type ReplyNotPublic int
+type NeedsPtrType int
 type local struct{}
 
 func (t *ReplyNotPointer) ReplyNotPointer(args *Args, reply Reply) error {
@@ -363,19 +493,29 @@ func (t *ReplyNotPublic) ReplyNotPublic(args *Args, reply *local) error {
 	return nil
 }
 
+func (t *NeedsPtrType) NeedsPtrType(args *Args, reply *Reply) error {
+	return nil
+}
+
 // Check that registration handles lots of bad methods and a type with no suitable methods.
 func TestRegistrationError(t *testing.T) {
 	err := Register(new(ReplyNotPointer))
 	if err == nil {
-		t.Errorf("expected error registering ReplyNotPointer")
+		t.Error("expected error registering ReplyNotPointer")
 	}
 	err = Register(new(ArgNotPublic))
 	if err == nil {
-		t.Errorf("expected error registering ArgNotPublic")
+		t.Error("expected error registering ArgNotPublic")
 	}
 	err = Register(new(ReplyNotPublic))
 	if err == nil {
-		t.Errorf("expected error registering ReplyNotPublic")
+		t.Error("expected error registering ReplyNotPublic")
+	}
+	err = Register(NeedsPtrType(0))
+	if err == nil {
+		t.Error("expected error registering NeedsPtrType")
+	} else if !strings.Contains(err.Error(), "pointer") {
+		t.Error("expected hint when registering NeedsPtrType")
 	}
 }
 
@@ -388,12 +528,10 @@ func (WriteFailCodec) WriteRequest(*Request, interface{}) error {
 
 func (WriteFailCodec) ReadResponseHeader(*Response) error {
 	select {}
-	panic("unreachable")
 }
 
 func (WriteFailCodec) ReadResponseBody(interface{}) error {
 	select {}
-	panic("unreachable")
 }
 
 func (WriteFailCodec) Close() error {
@@ -402,6 +540,7 @@ func (WriteFailCodec) Close() error {
 
 func TestSendDeadlock(t *testing.T) {
 	client := NewClientWithCodec(WriteFailCodec(0))
+	defer client.Close()
 
 	done := make(chan bool)
 	go func() {
@@ -434,19 +573,17 @@ func dialHTTP() (*Client, error) {
 	return DialHTTP("tcp", httpServerAddr)
 }
 
-func countMallocs(dial func() (*Client, error), t *testing.T) uint64 {
+func countMallocs(dial func() (*Client, error), t *testing.T) float64 {
 	once.Do(startServer)
 	client, err := dial()
 	if err != nil {
 		t.Fatal("error dialing", err)
 	}
+	defer client.Close()
+
 	args := &Args{7, 8}
 	reply := new(Reply)
-	memstats := new(runtime.MemStats)
-	runtime.ReadMemStats(memstats)
-	mallocs := 0 - memstats.Mallocs
-	const count = 100
-	for i := 0; i < count; i++ {
+	return testing.AllocsPerRun(100, func() {
 		err := client.Call("Arith.Add", args, reply)
 		if err != nil {
 			t.Errorf("Add: expected no error but got string %q", err.Error())
@@ -454,18 +591,27 @@ func countMallocs(dial func() (*Client, error), t *testing.T) uint64 {
 		if reply.C != args.A+args.B {
 			t.Errorf("Add: expected %d got %d", reply.C, args.A+args.B)
 		}
-	}
-	runtime.ReadMemStats(memstats)
-	mallocs += memstats.Mallocs
-	return mallocs / count
+	})
 }
 
 func TestCountMallocs(t *testing.T) {
-	fmt.Printf("mallocs per rpc round trip: %d\n", countMallocs(dialDirect, t))
+	if testing.Short() {
+		t.Skip("skipping malloc count in short mode")
+	}
+	if runtime.GOMAXPROCS(0) > 1 {
+		t.Skip("skipping; GOMAXPROCS>1")
+	}
+	fmt.Printf("mallocs per rpc round trip: %v\n", countMallocs(dialDirect, t))
 }
 
 func TestCountMallocsOverHTTP(t *testing.T) {
-	fmt.Printf("mallocs per HTTP rpc round trip: %d\n", countMallocs(dialHTTP, t))
+	if testing.Short() {
+		t.Skip("skipping malloc count in short mode")
+	}
+	if runtime.GOMAXPROCS(0) > 1 {
+		t.Skip("skipping; GOMAXPROCS>1")
+	}
+	fmt.Printf("mallocs per HTTP rpc round trip: %v\n", countMallocs(dialHTTP, t))
 }
 
 type writeCrasher struct {
@@ -488,6 +634,8 @@ func (writeCrasher) Write(p []byte) (int, error) {
 func TestClientWriteError(t *testing.T) {
 	w := &writeCrasher{done: make(chan bool)}
 	c := NewClient(w)
+	defer c.Close()
+
 	res := false
 	err := c.Call("foo", 1, &res)
 	if err == nil {
@@ -499,48 +647,141 @@ func TestClientWriteError(t *testing.T) {
 	w.done <- true
 }
 
+func TestTCPClose(t *testing.T) {
+	once.Do(startServer)
+
+	client, err := dialHTTP()
+	if err != nil {
+		t.Fatalf("dialing: %v", err)
+	}
+	defer client.Close()
+
+	args := Args{17, 8}
+	var reply Reply
+	err = client.Call("Arith.Mul", args, &reply)
+	if err != nil {
+		t.Fatal("arith error:", err)
+	}
+	t.Logf("Arith: %d*%d=%d\n", args.A, args.B, reply)
+	if reply.C != args.A*args.B {
+		t.Errorf("Add: expected %d got %d", reply.C, args.A*args.B)
+	}
+}
+
+func TestErrorAfterClientClose(t *testing.T) {
+	once.Do(startServer)
+
+	client, err := dialHTTP()
+	if err != nil {
+		t.Fatalf("dialing: %v", err)
+	}
+	err = client.Close()
+	if err != nil {
+		t.Fatal("close error:", err)
+	}
+	err = client.Call("Arith.Add", &Args{7, 9}, new(Reply))
+	if err != ErrShutdown {
+		t.Errorf("Forever: expected ErrShutdown got %v", err)
+	}
+}
+
+// Tests the fix to issue 11221. Without the fix, this loops forever or crashes.
+func TestAcceptExitAfterListenerClose(t *testing.T) {
+	newServer := NewServer()
+	newServer.Register(new(Arith))
+	newServer.RegisterName("net.rpc.Arith", new(Arith))
+	newServer.RegisterName("newServer.Arith", new(Arith))
+
+	var l net.Listener
+	l, _ = listenTCP()
+	l.Close()
+	newServer.Accept(l)
+}
+
+func TestShutdown(t *testing.T) {
+	var l net.Listener
+	l, _ = listenTCP()
+	ch := make(chan net.Conn, 1)
+	go func() {
+		defer l.Close()
+		c, err := l.Accept()
+		if err != nil {
+			t.Error(err)
+		}
+		ch <- c
+	}()
+	c, err := net.Dial("tcp", l.Addr().String())
+	if err != nil {
+		t.Fatal(err)
+	}
+	c1 := <-ch
+	if c1 == nil {
+		t.Fatal(err)
+	}
+
+	newServer := NewServer()
+	newServer.Register(new(Arith))
+	go newServer.ServeConn(c1)
+
+	args := &Args{7, 8}
+	reply := new(Reply)
+	client := NewClient(c)
+	err = client.Call("Arith.Add", args, reply)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// On an unloaded system 10ms is usually enough to fail 100% of the time
+	// with a broken server. On a loaded system, a broken server might incorrectly
+	// be reported as passing, but we're OK with that kind of flakiness.
+	// If the code is correct, this test will never fail, regardless of timeout.
+	args.A = 10 // 10 ms
+	done := make(chan *Call, 1)
+	call := client.Go("Arith.SleepMilli", args, reply, done)
+	c.(*net.TCPConn).CloseWrite()
+	<-done
+	if call.Error != nil {
+		t.Fatal(err)
+	}
+}
+
 func benchmarkEndToEnd(dial func() (*Client, error), b *testing.B) {
-	b.StopTimer()
 	once.Do(startServer)
 	client, err := dial()
 	if err != nil {
 		b.Fatal("error dialing:", err)
 	}
+	defer client.Close()
 
 	// Synchronous calls
 	args := &Args{7, 8}
-	procs := runtime.GOMAXPROCS(-1)
-	N := int32(b.N)
-	var wg sync.WaitGroup
-	wg.Add(procs)
-	b.StartTimer()
+	b.ResetTimer()
 
-	for p := 0; p < procs; p++ {
-		go func() {
-			reply := new(Reply)
-			for atomic.AddInt32(&N, -1) >= 0 {
-				err := client.Call("Arith.Add", args, reply)
-				if err != nil {
-					b.Fatalf("rpc error: Add: expected no error but got string %q", err.Error())
-				}
-				if reply.C != args.A+args.B {
-					b.Fatalf("rpc error: Add: expected %d got %d", reply.C, args.A+args.B)
-				}
+	b.RunParallel(func(pb *testing.PB) {
+		reply := new(Reply)
+		for pb.Next() {
+			err := client.Call("Arith.Add", args, reply)
+			if err != nil {
+				b.Fatalf("rpc error: Add: expected no error but got string %q", err.Error())
 			}
-			wg.Done()
-		}()
-	}
-	wg.Wait()
+			if reply.C != args.A+args.B {
+				b.Fatalf("rpc error: Add: expected %d got %d", reply.C, args.A+args.B)
+			}
+		}
+	})
 }
 
 func benchmarkEndToEndAsync(dial func() (*Client, error), b *testing.B) {
+	if b.N == 0 {
+		return
+	}
 	const MaxConcurrentCalls = 100
-	b.StopTimer()
 	once.Do(startServer)
 	client, err := dial()
 	if err != nil {
 		b.Fatal("error dialing:", err)
 	}
+	defer client.Close()
 
 	// Asynchronous calls
 	args := &Args{7, 8}
@@ -551,7 +792,7 @@ func benchmarkEndToEndAsync(dial func() (*Client, error), b *testing.B) {
 	wg.Add(procs)
 	gate := make(chan bool, MaxConcurrentCalls)
 	res := make(chan *Call, MaxConcurrentCalls)
-	b.StartTimer()
+	b.ResetTimer()
 
 	for p := 0; p < procs; p++ {
 		go func() {
@@ -567,7 +808,8 @@ func benchmarkEndToEndAsync(dial func() (*Client, error), b *testing.B) {
 				B := call.Args.(*Args).B
 				C := call.Reply.(*Reply).C
 				if A+B != C {
-					b.Fatalf("incorrect reply: Add: expected %d got %d", A+B, C)
+					b.Errorf("incorrect reply: Add: expected %d got %d", A+B, C)
+					return
 				}
 				<-gate
 				if atomic.AddInt32(&recv, -1) == 0 {

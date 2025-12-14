@@ -14,7 +14,7 @@ import (
 )
 
 // nextJSCtx returns the context that determines whether a slash after the
-// given run of tokens tokens starts a regular expression instead of a division
+// given run of tokens starts a regular expression instead of a division
 // operator: / or /=.
 //
 // This assumes that the token run does not include any string tokens, comment
@@ -24,7 +24,7 @@ import (
 // "x = ++/foo/i" which is quite different than "x++/foo/i", but is not known to
 // fail on any known useful programs. It is based on the draft
 // JavaScript 2.0 lexical grammar and requires one token of lookbehind:
-// http://www.mozilla.org/js/language/js20-2000-07/rationale/syntax.html
+// https://www.mozilla.org/js/language/js20-2000-07/rationale/syntax.html
 func nextJSCtx(s []byte, preceding jsCtx) jsCtx {
 	s = bytes.TrimRight(s, "\t\n\f\r \u2028\u2029")
 	if len(s) == 0 {
@@ -99,7 +99,7 @@ func nextJSCtx(s []byte, preceding jsCtx) jsCtx {
 	return jsCtxDivOp
 }
 
-// regexPrecederKeywords is a set of reserved JS keywords that can precede a
+// regexpPrecederKeywords is a set of reserved JS keywords that can precede a
 // regular expression in JS source.
 var regexpPrecederKeywords = map[string]bool{
 	"break":      true,
@@ -123,6 +123,14 @@ var jsonMarshalType = reflect.TypeOf((*json.Marshaler)(nil)).Elem()
 // indirectToJSONMarshaler returns the value, after dereferencing as many times
 // as necessary to reach the base type (or nil) or an implementation of json.Marshal.
 func indirectToJSONMarshaler(a interface{}) interface{} {
+	// text/template now supports passing untyped nil as a func call
+	// argument, so we must support it. Otherwise we'd panic below, as one
+	// cannot call the Type or Interface methods on an invalid
+	// reflect.Value. See golang.org/issue/18716.
+	if a == nil {
+		return nil
+	}
+
 	v := reflect.ValueOf(a)
 	for !v.Type().Implements(jsonMarshalType) && v.Kind() == reflect.Ptr && !v.IsNil() {
 		v = v.Elem()
@@ -162,14 +170,14 @@ func jsValEscaper(args ...interface{}) string {
 		// a division operator it is not turned into a line comment:
 		//     x/{{y}}
 		// turning into
-		//     x//* error marshalling y:
+		//     x//* error marshaling y:
 		//          second line of error message */null
-		return fmt.Sprintf(" /* %s */null ", strings.Replace(err.Error(), "*/", "* /", -1))
+		return fmt.Sprintf(" /* %s */null ", strings.ReplaceAll(err.Error(), "*/", "* /"))
 	}
 
 	// TODO: maybe post-process output to prevent it from containing
 	// "<!--", "-->", "<![CDATA[", "]]>", or "</script"
-	// in case custom marshallers produce output containing those.
+	// in case custom marshalers produce output containing those.
 
 	// TODO: Maybe abbreviate \u00ab to \xab to produce more compact output.
 	if len(b) == 0 {
@@ -179,7 +187,7 @@ func jsValEscaper(args ...interface{}) string {
 	}
 	first, _ := utf8.DecodeRune(b)
 	last, _ := utf8.DecodeLastRune(b)
-	var buf bytes.Buffer
+	var buf strings.Builder
 	// Prevent IdentifierNames and NumericLiterals from running into
 	// keywords: in, instanceof, typeof, void
 	pad := isJSIdentPart(first) || isJSIdentPart(last)
@@ -209,7 +217,7 @@ func jsValEscaper(args ...interface{}) string {
 		if pad {
 			buf.WriteByte(' ')
 		}
-		b = buf.Bytes()
+		return buf.String()
 	}
 	return string(b)
 }
@@ -245,9 +253,11 @@ func jsRegexpEscaper(args ...interface{}) string {
 // It also replaces runes U+2028 and U+2029 with the raw strings `\u2028` and
 // `\u2029`.
 func replace(s string, replacementTable []string) string {
-	var b bytes.Buffer
-	written := 0
-	for i, r := range s {
+	var b strings.Builder
+	r, w, written := rune(0), 0, 0
+	for i := 0; i < len(s); i += w {
+		// See comment in htmlEscaper.
+		r, w = utf8.DecodeRuneInString(s[i:])
 		var repl string
 		switch {
 		case int(r) < len(replacementTable) && replacementTable[r] != "":
@@ -259,9 +269,12 @@ func replace(s string, replacementTable []string) string {
 		default:
 			continue
 		}
+		if written == 0 {
+			b.Grow(len(s))
+		}
 		b.WriteString(s[written:i])
 		b.WriteString(repl)
-		written = i + utf8.RuneLen(r)
+		written = i + w
 	}
 	if written == 0 {
 		return s
@@ -341,7 +354,7 @@ var jsRegexpReplacementTable = []string{
 	'}':  `\}`,
 }
 
-// isJSIdentPart returns whether the given rune is a JS identifier part.
+// isJSIdentPart reports whether the given rune is a JS identifier part.
 // It does not handle all the non-Latin letters, joiners, and combining marks,
 // but it does handle every codepoint that can occur in a numeric literal or
 // a keyword.
@@ -359,4 +372,46 @@ func isJSIdentPart(r rune) bool {
 		return true
 	}
 	return false
+}
+
+// isJSType reports whether the given MIME type should be considered JavaScript.
+//
+// It is used to determine whether a script tag with a type attribute is a javascript container.
+func isJSType(mimeType string) bool {
+	// per
+	//   https://www.w3.org/TR/html5/scripting-1.html#attr-script-type
+	//   https://tools.ietf.org/html/rfc7231#section-3.1.1
+	//   https://tools.ietf.org/html/rfc4329#section-3
+	//   https://www.ietf.org/rfc/rfc4627.txt
+	// discard parameters
+	if i := strings.Index(mimeType, ";"); i >= 0 {
+		mimeType = mimeType[:i]
+	}
+	mimeType = strings.ToLower(mimeType)
+	mimeType = strings.TrimSpace(mimeType)
+	switch mimeType {
+	case
+		"application/ecmascript",
+		"application/javascript",
+		"application/json",
+		"application/ld+json",
+		"application/x-ecmascript",
+		"application/x-javascript",
+		"module",
+		"text/ecmascript",
+		"text/javascript",
+		"text/javascript1.0",
+		"text/javascript1.1",
+		"text/javascript1.2",
+		"text/javascript1.3",
+		"text/javascript1.4",
+		"text/javascript1.5",
+		"text/jscript",
+		"text/livescript",
+		"text/x-ecmascript",
+		"text/x-javascript":
+		return true
+	default:
+		return false
+	}
 }

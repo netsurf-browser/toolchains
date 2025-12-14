@@ -1,7 +1,5 @@
 /* Definitions for PA_RISC with ELF format
-   Copyright 1999, 2000, 2001, 2002, 2003, 2004, 2005, 2006, 2007, 2009, 2010,
-   2011
-   Free Software Foundation, Inc.
+   Copyright (C) 1999-2020 Free Software Foundation, Inc.
 
 This file is part of GCC.
 
@@ -30,7 +28,7 @@ along with GCC; see the file COPYING3.  If not see
   while (0)
 
 #undef CPP_SPEC
-#define CPP_SPEC "%{posix:-D_POSIX_SOURCE}"
+#define CPP_SPEC "%{posix:-D_POSIX_SOURCE} %{pthread:-D_REENTRANT}"
 
 #undef ASM_SPEC
 #define ASM_SPEC \
@@ -80,17 +78,11 @@ along with GCC; see the file COPYING3.  If not see
 
 #undef ASM_OUTPUT_ADDR_VEC_ELT
 #define ASM_OUTPUT_ADDR_VEC_ELT(FILE, VALUE) \
-  if (TARGET_BIG_SWITCH)					\
-    fprintf (FILE, "\t.word .L%d\n", VALUE);			\
-  else								\
-    fprintf (FILE, "\tb .L%d\n\tnop\n", VALUE)
+  fprintf (FILE, "\t.word .L%d\n", VALUE)
 
 #undef ASM_OUTPUT_ADDR_DIFF_ELT
 #define ASM_OUTPUT_ADDR_DIFF_ELT(FILE, BODY, VALUE, REL) \
-  if (TARGET_BIG_SWITCH)					\
-    fprintf (FILE, "\t.word .L%d-.L%d\n", VALUE, REL);		\
-  else								\
-    fprintf (FILE, "\tb .L%d\n\tnop\n", VALUE)
+  fprintf (FILE, "\t.word .L%d-.L%d\n", VALUE, REL)
 
 /* Use the default.  */
 #undef ASM_OUTPUT_LABEL
@@ -109,7 +101,7 @@ along with GCC; see the file COPYING3.  If not see
 
 /* FIXME: Hacked from the <elfos.h> one so that we avoid multiple
    labels in a function declaration (since pa.c seems determined to do
-   it differently)  */
+   it differently).  */
 
 #undef ASM_DECLARE_FUNCTION_NAME
 #define ASM_DECLARE_FUNCTION_NAME(FILE, NAME, DECL)		\
@@ -117,8 +109,13 @@ along with GCC; see the file COPYING3.  If not see
     {								\
       ASM_OUTPUT_TYPE_DIRECTIVE (FILE, NAME, "function");	\
       ASM_DECLARE_RESULT (FILE, DECL_RESULT (DECL));		\
+      pa_output_function_label (FILE);				\
     }								\
   while (0)
+
+/* Output function prologue for linux.  */
+#undef TARGET_ASM_FUNCTION_PROLOGUE
+#define TARGET_ASM_FUNCTION_PROLOGUE pa_linux_output_function_prologue
 
 /* As well as globalizing the label, we need to encode the label
    to ensure a plabel is generated in an indirect call.  */
@@ -138,3 +135,20 @@ along with GCC; see the file COPYING3.  If not see
 
 #undef TARGET_SYNC_LIBCALL
 #define TARGET_SYNC_LIBCALL 1
+
+/* The SYNC operations are implemented as library functions, not
+   INSN patterns.  As a result, the HAVE defines for the patterns are
+   not defined.  We need to define them to generate the corresponding
+   __GCC_HAVE_SYNC_COMPARE_AND_SWAP_* and __GCC_ATOMIC_*_LOCK_FREE
+   defines.  */
+
+#define HAVE_sync_compare_and_swapqi 1
+#define HAVE_sync_compare_and_swaphi 1
+#define HAVE_sync_compare_and_swapsi 1
+#define HAVE_sync_compare_and_swapdi 1
+
+/* It's not possible to enable GNU_stack notes since the kernel needs
+   an executable stack for signal returns and syscall restarts.  */
+
+#undef NEED_INDICATE_EXEC_STACK
+#define NEED_INDICATE_EXEC_STACK 0

@@ -1,5 +1,4 @@
-// This test only applies to glibc (NPTL) targets.
-// { dg-do run { target *-*-linux* } }
+// { dg-do run { target *-*-linux* *-*-gnu* *-*-uclinux* } }
 // { dg-options "-pthread" }
 
 #include <pthread.h>

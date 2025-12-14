@@ -1,6 +1,6 @@
 // std::placeholders -*- C++ -*-
 
-// Copyright (C) 2011 Free Software Foundation, Inc.
+// Copyright (C) 2011-2020 Free Software Foundation, Inc.
 //
 // This file is part of the GNU ISO C++ Library.  This library is free
 // software; you can redistribute it and/or modify it under the
@@ -22,7 +22,7 @@
 // see the files COPYING3 and COPYING.RUNTIME respectively.  If not, see
 // <http://www.gnu.org/licenses/>.
 
-#ifndef __GXX_EXPERIMENTAL_CXX0X__
+#if __cplusplus < 201103L
 # error "placeholders.cc must be compiled with -std=gnu++0x"
 #endif
 
@@ -30,9 +30,10 @@
 
 namespace std _GLIBCXX_VISIBILITY(default)
 {
-  namespace placeholders 
+_GLIBCXX_BEGIN_NAMESPACE_VERSION
+
+  namespace placeholders
   {
-  _GLIBCXX_BEGIN_NAMESPACE_VERSION
     extern const _Placeholder<1> _1{};
     extern const _Placeholder<2> _2{};
     extern const _Placeholder<3> _3{};
@@ -62,6 +63,7 @@ namespace std _GLIBCXX_VISIBILITY(default)
     extern const _Placeholder<27> _27{};
     extern const _Placeholder<28> _28{};
     extern const _Placeholder<29> _29{};
-  _GLIBCXX_END_NAMESPACE_VERSION
   }
+
+_GLIBCXX_END_NAMESPACE_VERSION
 }

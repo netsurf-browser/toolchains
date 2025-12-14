@@ -1,4 +1,4 @@
-// Copyright 2009 The Go Authors.  All rights reserved.
+// Copyright 2009 The Go Authors. All rights reserved.
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
 
@@ -7,23 +7,52 @@
 package dwarf
 
 import (
+	"bytes"
 	"encoding/binary"
 	"strconv"
 )
 
 // Data buffer being decoded.
 type buf struct {
-	dwarf *Data
-	u     *unit
-	order binary.ByteOrder
-	name  string
-	off   Offset
-	data  []byte
-	err   error
+	dwarf  *Data
+	order  binary.ByteOrder
+	format dataFormat
+	name   string
+	off    Offset
+	data   []byte
+	err    error
 }
 
-func makeBuf(d *Data, u *unit, name string, off Offset, data []byte) buf {
-	return buf{d, u, d.order, name, off, data, nil}
+// Data format, other than byte order. This affects the handling of
+// certain field formats.
+type dataFormat interface {
+	// DWARF version number. Zero means unknown.
+	version() int
+
+	// 64-bit DWARF format?
+	dwarf64() (dwarf64 bool, isKnown bool)
+
+	// Size of an address, in bytes. Zero means unknown.
+	addrsize() int
+}
+
+// Some parts of DWARF have no data format, e.g., abbrevs.
+type unknownFormat struct{}
+
+func (u unknownFormat) version() int {
+	return 0
+}
+
+func (u unknownFormat) dwarf64() (bool, bool) {
+	return false, false
+}
+
+func (u unknownFormat) addrsize() int {
+	return 0
+}
+
+func makeBuf(d *Data, format dataFormat, name string, off Offset, data []byte) buf {
+	return buf{d, d.order, format, name, off, data, nil}
 }
 
 func (b *buf) uint8() uint8 {
@@ -51,16 +80,16 @@ func (b *buf) bytes(n int) []byte {
 func (b *buf) skip(n int) { b.bytes(n) }
 
 func (b *buf) string() string {
-	for i := 0; i < len(b.data); i++ {
-		if b.data[i] == 0 {
-			s := string(b.data[0:i])
-			b.data = b.data[i+1:]
-			b.off += Offset(i + 1)
-			return s
-		}
+	i := bytes.IndexByte(b.data, 0)
+	if i < 0 {
+		b.error("underflow")
+		return ""
 	}
-	b.error("underflow")
-	return ""
+
+	s := string(b.data[0:i])
+	b.data = b.data[i+1:]
+	b.off += Offset(i + 1)
+	return s
 }
 
 func (b *buf) uint16() uint16 {
@@ -69,6 +98,18 @@ func (b *buf) uint16() uint16 {
 		return 0
 	}
 	return b.order.Uint16(a)
+}
+
+func (b *buf) uint24() uint32 {
+	a := b.bytes(3)
+	if a == nil {
+		return 0
+	}
+	if b.dwarf.bigEndian {
+		return uint32(a[2]) | uint32(a[1])<<8 | uint32(a[0])<<16
+	} else {
+		return uint32(a[0]) | uint32(a[1])<<8 | uint32(a[2])<<16
+	}
 }
 
 func (b *buf) uint32() uint32 {
@@ -121,20 +162,29 @@ func (b *buf) int() int64 {
 
 // Address-sized uint.
 func (b *buf) addr() uint64 {
-	if b.u != nil {
-		switch b.u.addrsize {
-		case 1:
-			return uint64(b.uint8())
-		case 2:
-			return uint64(b.uint16())
-		case 4:
-			return uint64(b.uint32())
-		case 8:
-			return uint64(b.uint64())
-		}
+	switch b.format.addrsize() {
+	case 1:
+		return uint64(b.uint8())
+	case 2:
+		return uint64(b.uint16())
+	case 4:
+		return uint64(b.uint32())
+	case 8:
+		return b.uint64()
 	}
 	b.error("unknown address size")
 	return 0
+}
+
+func (b *buf) unitLength() (length Offset, dwarf64 bool) {
+	length = Offset(b.uint32())
+	if length == 0xffffffff {
+		dwarf64 = true
+		length = Offset(b.uint64())
+	} else if length >= 0xfffffff0 {
+		b.error("unit length has reserved value")
+	}
+	return
 }
 
 func (b *buf) error(s string) {

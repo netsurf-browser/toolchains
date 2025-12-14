@@ -179,7 +179,7 @@ func TestLink2(t *testing.T) {
 func TestLink3(t *testing.T) {
 	var r Ring
 	n := 1
-	for i := 1; i < 100; i++ {
+	for i := 1; i < 10; i++ {
 		n += i
 		verify(t, r.Link(New(i)), n, -1)
 	}
@@ -217,4 +217,12 @@ func TestLinkUnlink(t *testing.T) {
 			verify(t, ri, i, -1)
 		}
 	}
+}
+
+// Test that calling Move() on an empty Ring initializes it.
+func TestMoveEmptyRing(t *testing.T) {
+	var r Ring
+
+	r.Move(1)
+	verify(t, &r, 1, 0)
 }

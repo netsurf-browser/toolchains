@@ -1,4 +1,4 @@
-// Copyright (C) 2007, 2009, 2010, 2012 Free Software Foundation, Inc.
+// Copyright (C) 2007-2020 Free Software Foundation, Inc.
 //
 // This file is part of the GNU ISO C++ Library.  This library is free
 // software; you can redistribute it and/or modify it under the
@@ -17,16 +17,14 @@
 
 // 23.2.5 class vector<bool> [lib.vector.bool]
 
-// { dg-skip-if "" { powerpc64-*-freebsd* } { "*" } { "" } }
 // { dg-do run { xfail *-*-darwin8.[0-4].* } }
+// { dg-skip-if "" { powerpc64-*-freebsd* } }
 
 #include <vector>
 #include <stdexcept>
 #include <testsuite_hooks.h>
 
 #ifdef _GLIBCXX_DEBUG
-  using std::_GLIBCXX_STD_C::_S_word_bit;
-#elif defined(_GLIBCXX_PROFILE)
   using std::_GLIBCXX_STD_C::_S_word_bit;
 #else
   using std::_S_word_bit;
@@ -49,7 +47,6 @@ check_cap_eq_maxsize(const std::vector<bool>& x)
 // libstdc++/31370
 void test01()
 {
-  bool test __attribute__((unused)) = true;
   int myexit = 0;
 
   try

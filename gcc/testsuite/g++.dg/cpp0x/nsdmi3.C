@@ -1,4 +1,4 @@
-// { dg-options -std=c++0x }
+// { dg-do compile { target c++11 } }
 
 struct A
 {
@@ -10,9 +10,10 @@ struct B
 {
   A a1 = 1;			// { dg-error "" }
   A a2 { 2 };
-  A a3 = { 3 };			// { dg-error "" }
+  A a3 = { 3 };			// { dg-error "explicit" }
 };
 
-constexpr B b;			// { dg-error "B::B" }
+constexpr B b;
 
-// { dg-message "a1. is invalid" "" { target *-*-* } 11 }
+// { dg-prune-output "B::B. is not usable" }
+// { dg-prune-output "B::a1" }

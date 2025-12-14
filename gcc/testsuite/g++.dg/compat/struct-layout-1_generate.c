@@ -1,5 +1,5 @@
 /* Structure layout test generator.
-   Copyright (C) 2004, 2005, 2007, 2008, 2009, 2011
+   Copyright (C) 2004-2020
    Free Software Foundation, Inc.
    Contributed by Jakub Jelinek <jakub@redhat.com>.
 
@@ -44,12 +44,12 @@ along with GCC; see the file COPYING3.  If not see
 #endif
 
 const char *dg_options[] = {
-"/* { dg-options \"%s-I%s\" } */\n",
-"/* { dg-options \"%s-I%s -mno-mmx -Wno-abi\" { target i?86-*-* x86_64-*-* } } */\n",
-"/* { dg-options \"%s-I%s -fno-common\" { target alpha*-dec-osf* hppa*-*-hpux* powerpc*-*-darwin* *-*-mingw32* *-*-cygwin* } } */\n",
-"/* { dg-options \"%s-I%s -mno-mmx -fno-common -Wno-abi\" { target i?86-*-darwin* x86_64-*-darwin* i?86-*-mingw32* x86_64-*-mingw32* i?86-*-cygwin* } } */\n",
-"/* { dg-options \"%s-I%s -mno-base-addresses\" { target mmix-*-* } } */\n",
-"/* { dg-options \"%s-I%s -mlongcalls -mtext-section-literals\" { target xtensa*-*-* } } */\n"
+"/* { dg-options \"%s%s-I%s -Wno-abi\" } */\n",
+"/* { dg-options \"%s%s-I%s -mno-mmx -Wno-abi\" { target i?86-*-* x86_64-*-* } } */\n",
+"/* { dg-options \"%s%s-I%s -fno-common\" { target hppa*-*-hpux* powerpc*-*-darwin* *-*-mingw32* *-*-cygwin* } } */\n",
+"/* { dg-options \"%s%s-I%s -mno-mmx -fno-common -Wno-abi\" { target i?86-*-darwin* x86_64-*-darwin* i?86-*-mingw32* x86_64-*-mingw32* i?86-*-cygwin* } } */\n",
+"/* { dg-options \"%s%s-I%s -mno-base-addresses\" { target mmix-*-* } } */\n",
+"/* { dg-options \"%s%s-I%s -mlongcalls -mtext-section-literals\" { target xtensa*-*-* } } */\n"
 #define NDG_OPTIONS (sizeof (dg_options) / sizeof (dg_options[0]))
 };
 
@@ -495,10 +495,21 @@ struct types attrib_array_types[] = {
 #define HASH_SIZE 32749
 static struct entry *hash_table[HASH_SIZE];
 
-static int idx, limidx, output_one, short_enums;
+/* The index of the current type being output.  */
+static int idx;
+
+/* The maximum index of the type(s) to output.  */
+static int limidx;
+
+/* Set to non-zero to output a single type in response to the -i option
+   (which sets LIMIDX to the index of the type to output.  */
+static int output_one;
+static int short_enums;
 static const char *destdir;
 static const char *srcdir;
 static const char *srcdir_safe;
+static int cxx14_vs_cxx17;
+static int do_cxx14_vs_cxx17;
 FILE *outfile;
 
 void
@@ -507,6 +518,8 @@ switchfiles (int fields)
   static int filecnt;
   static char *destbuf, *destptr;
   int i;
+  int cxx14_first = 0;
+  const char *cxxnn = "";
 
   ++filecnt;
   if (outfile)
@@ -535,8 +548,16 @@ switchfiles (int fields)
       fputs ("failed to create test files\n", stderr);
       exit (1);
     }
+
+  if (cxx14_vs_cxx17)
+    {
+      cxx14_first = generate_random () & 1;
+      cxxnn = (cxx14_first
+	       ? "-std=c++14 -DCXX14_VS_CXX17 "
+	       : "-std=c++17 -DCXX14_VS_CXX17 ");
+    }
   for (i = 0; i < NDG_OPTIONS; i++)
-    fprintf (outfile, dg_options[i], "", srcdir_safe);
+    fprintf (outfile, dg_options[i], "", "", srcdir_safe);
   fprintf (outfile, "\n\
 #include \"struct-layout-1.h\"\n\
 \n\
@@ -562,7 +583,7 @@ int main (void)\n\
   if (outfile == NULL)
     goto fail;
   for (i = 0; i < NDG_OPTIONS; i++)
-    fprintf (outfile, dg_options[i], "-w ", srcdir_safe);
+    fprintf (outfile, dg_options[i], cxxnn, "-w ", srcdir_safe);
   fprintf (outfile, "\n\
 #include \"struct-layout-1_x1.h\"\n\
 #include \"t%03d_test.h\"\n\
@@ -573,8 +594,12 @@ int main (void)\n\
   outfile = fopen (destbuf, "w");
   if (outfile == NULL)
     goto fail;
+  if (cxx14_vs_cxx17)
+    cxxnn = (cxx14_first
+	     ? "-std=c++17 -DCXX14_VS_CXX17 "
+	     : "-std=c++14 -DCXX14_VS_CXX17 ");
   for (i = 0; i < NDG_OPTIONS; i++)
-    fprintf (outfile, dg_options[i], "-w ", srcdir_safe);
+    fprintf (outfile, dg_options[i], cxxnn, "-w ", srcdir_safe);
   fprintf (outfile, "\n\
 #include \"struct-layout-1_y1.h\"\n\
 #include \"t%03d_test.h\"\n\
@@ -605,8 +630,16 @@ getrandll (void)
   return ret;
 }
 
+/* Generate a subfield.  The object pointed to by FLEX is set to a non-zero
+   value when the generated field is a flexible array member.  When set, it
+   prevents subsequent fields from being generated (a flexible array member
+   must be the last member of the struct it's defined in).  ARRAY is non-
+   zero when the enclosing structure is part of an array.  In that case,
+   avoid generating a flexible array member as a subfield (such a member
+   would be invalid).  */
+
 int
-subfield (struct entry *e, char *letter)
+subfield (struct entry *e, char *letter, int *flex, int array)
 {
   int i, type;
   char buf[20];
@@ -625,7 +658,10 @@ subfield (struct entry *e, char *letter)
       if (e[0].etype == ETYPE_STRUCT_ARRAY || e[0].etype == ETYPE_UNION_ARRAY)
 	{
 	  if (e[0].arr_len == 255)
-	    snprintf (buf, 20, "%c[]", *letter);
+	    {
+	      *flex = 1;
+ 	      snprintf (buf, 20, "%c[]", *letter);
+	    }
 	  else
 	    snprintf (buf, 20, "%c[%d]", *letter, e[0].arr_len);
 	  /* If this is an array type, do not put aligned attributes on
@@ -657,8 +693,15 @@ subfield (struct entry *e, char *letter)
 	  break;
 	}
 
-      for (i = 1; i <= e[0].len; )
-	i += subfield (e + i, letter);
+      for (i = 1; !*flex && i <= e[0].len; )
+	{
+	  /* Avoid generating flexible array members if the enclosing
+	     type is an array.  */
+	  int array
+	    = (e[0].etype == ETYPE_STRUCT_ARRAY
+	       || e[0].etype == ETYPE_UNION_ARRAY);
+	    i += subfield (e + i, letter, flex, array);
+	}
 
       switch (type)
 	{
@@ -679,8 +722,11 @@ subfield (struct entry *e, char *letter)
     case ETYPE_ARRAY:
       if (e[0].etype == ETYPE_ARRAY)
 	{
-	  if (e[0].arr_len == 255)
-	    snprintf (buf, 20, "%c[]", *letter);
+	  if (!array && e[0].arr_len == 255)
+	    {
+	      *flex = 1;
+ 	      snprintf (buf, 20, "%c[]", *letter);
+	    }
 	  else
 	    snprintf (buf, 20, "%c[%d]", *letter, e[0].arr_len);
 	}
@@ -1019,12 +1065,12 @@ acceptable.  Do NOT use for cryptographic purposes.
 
 static hashval_t
 iterative_hash (const void *k_in /* the key */,
-		register size_t  length /* the length of the key */,
-		register hashval_t initval /* the previous hash, or
-					      an arbitrary value */)
+		size_t  length /* the length of the key */,
+		hashval_t initval /* the previous hash, or
+				     an arbitrary value */)
 {
-  register const unsigned char *k = (const unsigned char *)k_in;
-  register hashval_t a,b,c,len;
+  const unsigned char *k = (const unsigned char *)k_in;
+  hashval_t a,b,c,len;
 
   /* Set up the internal state */
   len = length;
@@ -1132,10 +1178,11 @@ e_insert (struct entry *e)
   hash_table[hval % HASH_SIZE] = e;
 }
 
+/* Output a single type.  */
 void
 output (struct entry *e)
 {
-  int i;
+  int i, flex, len;
   char c;
   struct entry *n;
 
@@ -1157,8 +1204,19 @@ output (struct entry *e)
   else
     fprintf (outfile, "U(%d,", idx);
   c = 'a';
+
+  flex = 0;
+  len = e[0].len;
   for (i = 1; i <= e[0].len; )
-    i += subfield (e + i, &c);
+    {
+      if (flex)
+	{
+	  e[0].len = i - 1;
+	  break;
+	}
+      i += subfield (e + i, &c, &flex, 0);
+    }
+  
   fputs (",", outfile);
   c = 'a';
   for (i = 1; i <= e[0].len; )
@@ -1167,6 +1225,7 @@ output (struct entry *e)
       if (e[0].etype == ETYPE_UNION)
 	break;
     }
+  e[0].len = len;
   fputs (")\n", outfile);
   if (output_one && idx == limidx)
     exit (0);
@@ -1504,7 +1563,7 @@ generate_random_tests (enum FEATURE features, int len)
     abort ();
   memset (e, 0, sizeof (e));
   r = generate_random ();
-  if ((r & 7) == 0)
+  if ((r & 7) == 0 && !cxx14_vs_cxx17)
     e[0].etype = ETYPE_UNION;
   else
     e[0].etype = ETYPE_STRUCT;
@@ -1542,7 +1601,7 @@ main (int argc, char **argv)
       if (argv[i][0] == '-' && argv[i][2] == '\0')
 	c = argv[i][1];
       optarg = argv[i + 1];
-      if (!optarg)
+      if (!optarg && c != 'e' && c != 'c')
 	goto usage;
       switch (c)
 	{
@@ -1563,6 +1622,10 @@ main (int argc, char **argv)
 	  short_enums = 1;
 	  i--;
 	  break;
+	case 'c':
+	  do_cxx14_vs_cxx17 = 1;
+	  i--;
+	  break;
 	default:
 	  fprintf (stderr, "unrecognized option %s\n", argv[i]);
 	  goto usage;
@@ -1579,13 +1642,18 @@ main (int argc, char **argv)
 	  return 1;
 	}
       n = limidx + 1;
+      if (do_cxx14_vs_cxx17)
+	{
+	  fputs ("-c is incompatible with -i", stderr);
+	  return 1;
+	}
     }
 
   if (destdir == NULL && !output_one)
     {
     usage:
       fprintf (stderr, "Usage:\n\
-%s [-e] [-s srcdir -d destdir] [-n count] [-i idx]\n\
+%s [-e] [-c] [-s srcdir -d destdir] [-n count] [-i idx]\n\
 Either -s srcdir -d destdir or -i idx must be used\n", argv[0]);
       return 1;
     }
@@ -1615,6 +1683,7 @@ Either -s srcdir -d destdir or -i idx must be used\n", argv[0]);
   for (i = 0; i < NATYPES2; ++i)
     if (attrib_types[i].bitfld)
       aligned_bitfld_types[n_aligned_bitfld_types++] = attrib_types[i];
+repeat:;
   for (i = 0; i < sizeof (features) / sizeof (features[0]); ++i)
     {
       int startidx = idx;
@@ -1661,6 +1730,14 @@ Either -s srcdir -d destdir or -i idx must be used\n", argv[0]);
     limidx = idx;
   while (idx < n)
     generate_random_tests (ALL_FEATURES, 1 + (generate_random () % 25));
+  if (do_cxx14_vs_cxx17)
+    {
+      cxx14_vs_cxx17 = 1;
+      do_cxx14_vs_cxx17 = 0;
+      limidx = 0;
+      idx = 0;
+      goto repeat;
+    }
   fclose (outfile);
   return 0;
 }

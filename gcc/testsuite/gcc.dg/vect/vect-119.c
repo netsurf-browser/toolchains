@@ -1,4 +1,7 @@
+/* Disabling epilogues until we find a better way to deal with scans.  */
+/* { dg-additional-options "--param vect-epilogues-nomask=0" } */
 /* { dg-do compile } */
+/* { dg-require-effective-target vect_int } */
 
 #define OUTER 32
 #define INNER 40
@@ -24,5 +27,4 @@ unsigned int foo (const unsigned int x[OUTER][INNER][2])
   return sum;
 }
 
-/* { dg-final { scan-tree-dump-times "Detected interleaving of size 2" 1 "vect" } } */
-/* { dg-final { cleanup-tree-dump "vect" } } */
+/* { dg-final { scan-tree-dump-times "Detected interleaving load of size 2" 1 "vect" } } */

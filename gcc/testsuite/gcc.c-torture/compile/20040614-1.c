@@ -1,4 +1,6 @@
-#ifndef NO_LABEL_VALUES
+/* { dg-require-effective-target label_values } */
+/* { dg-require-effective-target indirect_calls } */
+
 void f(int r1, int *fp) 
 {     
   void *hlbl_tbl[] = { &&label1 }; 
@@ -14,7 +16,6 @@ void f(int r1, int *fp)
     goto label0; 
  label2: 
   ; 
-} 
-#else
+}
+
 int x;
-#endif

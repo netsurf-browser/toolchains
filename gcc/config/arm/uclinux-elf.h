@@ -1,6 +1,5 @@
 /* Definitions for ARM running ucLinux using ELF
-   Copyright (C) 1999, 2001, 2004, 2005, 2007, 2008, 2009, 2011
-   Free Software Foundation, Inc.
+   Copyright (C) 1999-2020 Free Software Foundation, Inc.
    Contributed by Philip Blundell <pb@nexus.co.uk>
 
    This file is part of GCC.
@@ -15,8 +14,13 @@
    or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU General Public
    License for more details.
 
-   You should have received a copy of the GNU General Public License
-   along with GCC; see the file COPYING3.  If not see
+   Under Section 7 of GPL version 3, you are granted additional
+   permissions described in the GCC Runtime Library Exception, version
+   3.1, as published by the Free Software Foundation.
+
+   You should have received a copy of the GNU General Public License and
+   a copy of the GCC Runtime Library Exception along with this program;
+   see the files COPYING3 and COPYING.RUNTIME respectively.  If not, see
    <http://www.gnu.org/licenses/>.  */
 
 /* We don't want a PLT.  */
@@ -44,9 +48,6 @@
     }						\
   while (false)
 
-/* Do not assume anything about header files.  */
-#define NO_IMPLICIT_EXTERN_C
-
 /* The GNU C++ standard library requires that these macros be defined.  */
 #undef CPLUSPLUS_CPP_SPEC
 #define CPLUSPLUS_CPP_SPEC "-D_GNU_SOURCE %(cpp)"
@@ -66,7 +67,8 @@
 
 #undef LINK_GCC_C_SEQUENCE_SPEC
 #define LINK_GCC_C_SEQUENCE_SPEC \
-  "%{static:--start-group} %G %L %{static:--end-group}%{!static:%G}"
+  "%{static|static-pie:--start-group} %G %{!nolibc:%L} \
+   %{static|static-pie:--end-group}%{!static:%{!static-pie:%G %{!nolibc:%L}}}"
 
 /* Use --as-needed -lgcc_s for eh support.  */
 #ifdef HAVE_LD_AS_NEEDED

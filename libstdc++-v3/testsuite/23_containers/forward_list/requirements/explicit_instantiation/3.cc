@@ -1,6 +1,5 @@
-// { dg-options "-std=gnu++0x" }
 
-// Copyright (C) 2008, 2009 Free Software Foundation, Inc.
+// Copyright (C) 2008-2020 Free Software Foundation, Inc.
 //
 // This file is part of the GNU ISO C++ Library.  This library is free
 // software; you can redistribute it and/or modify it under the
@@ -17,12 +16,14 @@
 // with this library; see the file COPYING3.  If not see
 // <http://www.gnu.org/licenses/>.
 
-
 // This file tests explicit instantiation of library containers
+// with an allocator for a different value_type (which is a GNU extension).
 
 #include <forward_list>
 
-// { dg-do compile }
+// { dg-do compile { target c++11 } }
+// The extension that implicitly rebinds allocators is in gnu++98/11/14/17 only
+// { dg-skip-if "" { *-*-* } { "-std=c++*" "-std=gnu++2*" } }
 
 // libstdc++/21770
 template class std::forward_list<int, std::allocator<char> >;

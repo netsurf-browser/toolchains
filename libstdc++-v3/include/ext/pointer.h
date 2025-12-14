@@ -1,6 +1,6 @@
 // Custom pointer adapter and sample storage policies
 
-// Copyright (C) 2008, 2009, 2010, 2012 Free Software Foundation, Inc.
+// Copyright (C) 2008-2020 Free Software Foundation, Inc.
 //
 // This file is part of the GNU ISO C++ Library.  This library is free
 // software; you can redistribute it and/or modify it under the
@@ -42,9 +42,12 @@
 #include <bits/stl_iterator_base_types.h>
 #include <ext/cast.h>
 #include <ext/type_traits.h>
-#ifdef __GXX_EXPERIMENTAL_CXX0X__
+#if __cplusplus >= 201103L
 # include <bits/move.h>
 # include <bits/ptr_traits.h>
+#endif
+#if __cplusplus > 201703L
+# include <iterator> // for indirectly_readable_traits
 #endif
 
 namespace __gnu_cxx _GLIBCXX_VISIBILITY(default)
@@ -356,6 +359,9 @@ _GLIBCXX_BEGIN_NAMESPACE_VERSION
       { return _Storage_policy::get()[__index]; }
 
       // To allow implicit conversion to "bool", for "if (ptr)..."
+#if __cplusplus >= 201103L
+      explicit operator bool() const { return _Storage_policy::get() != 0; }
+#else
     private:
       typedef element_type*(_Pointer_adapter::*__unspecified_bool_type)() const;
 
@@ -370,6 +376,7 @@ _GLIBCXX_BEGIN_NAMESPACE_VERSION
       inline bool
       operator!() const 
       { return (_Storage_policy::get() == 0); }
+#endif
   
       // Pointer differences
       inline friend std::ptrdiff_t 
@@ -437,6 +444,10 @@ _GLIBCXX_BEGIN_NAMESPACE_VERSION
       _CXX_POINTER_ARITH_OPERATOR_SET(unsigned int);
       _CXX_POINTER_ARITH_OPERATOR_SET(long);
       _CXX_POINTER_ARITH_OPERATOR_SET(unsigned long);
+#ifdef _GLIBCXX_USE_LONG_LONG
+      _CXX_POINTER_ARITH_OPERATOR_SET(long long);
+      _CXX_POINTER_ARITH_OPERATOR_SET(unsigned long long);
+#endif
 
       // Mathematical Manipulators
       inline _Pointer_adapter& 
@@ -449,9 +460,9 @@ _GLIBCXX_BEGIN_NAMESPACE_VERSION
       inline _Pointer_adapter 
       operator++(int)
       {
-        _Pointer_adapter tmp(*this);
+        _Pointer_adapter __tmp(*this);
         _Storage_policy::set(_Storage_policy::get() + 1);
-        return tmp;
+        return __tmp;
       }
   
       inline _Pointer_adapter& 
@@ -464,11 +475,17 @@ _GLIBCXX_BEGIN_NAMESPACE_VERSION
       inline _Pointer_adapter
       operator--(int) 
       {
-        _Pointer_adapter tmp(*this);
+        _Pointer_adapter __tmp(*this);
         _Storage_policy::set(_Storage_policy::get() - 1);
-        return tmp;
+        return __tmp;
       }
-  
+
+#if __cpp_lib_three_way_comparison
+      friend std::strong_ordering
+      operator<=>(const _Pointer_adapter& __lhs, const _Pointer_adapter& __rhs)
+      noexcept
+      { return __lhs.get() <=> __rhs.get(); }
+#endif
     }; // class _Pointer_adapter
 
 
@@ -563,7 +580,7 @@ _GLIBCXX_BEGIN_NAMESPACE_VERSION
 _GLIBCXX_END_NAMESPACE_VERSION
 } // namespace
 
-#ifdef __GXX_EXPERIMENTAL_CXX0X__
+#if __cplusplus >= 201103L
 namespace std _GLIBCXX_VISIBILITY(default)
 {
 _GLIBCXX_BEGIN_NAMESPACE_VERSION
@@ -580,12 +597,20 @@ _GLIBCXX_BEGIN_NAMESPACE_VERSION
 
       template<typename _Up>
         using rebind = typename __gnu_cxx::_Pointer_adapter<
-	typename pointer_traits<_Storage_policy>::rebind<_Up>>;
+	typename pointer_traits<_Storage_policy>::template rebind<_Up>>;
 
       static pointer pointer_to(typename pointer::reference __r) noexcept
       { return pointer(std::addressof(__r)); }
     };
 
+#if __cpp_lib_concepts
+  template<typename _Policy>
+    struct indirectly_readable_traits<__gnu_cxx::_Pointer_adapter<_Policy>>
+    {
+      using value_type
+	= typename __gnu_cxx::_Pointer_adapter<_Policy>::value_type;
+    };
+#endif
 _GLIBCXX_END_NAMESPACE_VERSION
 } // namespace
 #endif

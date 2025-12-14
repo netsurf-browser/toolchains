@@ -1,6 +1,5 @@
 /* Compiler arithmetic header.
-   Copyright (C) 2000, 2001, 2002, 2004, 2005, 2006, 2007, 2008, 2010
-   Free Software Foundation, Inc.
+   Copyright (C) 2000-2020 Free Software Foundation, Inc.
    Contributed by Steven Bosscher
 
 This file is part of GCC.
@@ -60,11 +59,6 @@ gfc_expr *gfc_ge (gfc_expr *, gfc_expr *, gfc_intrinsic_op);
 gfc_expr *gfc_lt (gfc_expr *, gfc_expr *, gfc_intrinsic_op);
 gfc_expr *gfc_le (gfc_expr *, gfc_expr *, gfc_intrinsic_op);
 
-/* Convert strings to literal constants.  */
-gfc_expr *gfc_convert_integer (const char *, int, int, locus *);
-gfc_expr *gfc_convert_real (const char *, int, locus *);
-gfc_expr *gfc_convert_complex (gfc_expr *, gfc_expr *, int);
-
 /* Convert a constant of one kind to another kind.  */
 gfc_expr *gfc_int2int (gfc_expr *, int);
 gfc_expr *gfc_int2real (gfc_expr *, int);
@@ -83,6 +77,11 @@ gfc_expr *gfc_hollerith2real (gfc_expr *, int);
 gfc_expr *gfc_hollerith2complex (gfc_expr *, int);
 gfc_expr *gfc_hollerith2character (gfc_expr *, int);
 gfc_expr *gfc_hollerith2logical (gfc_expr *, int);
+gfc_expr *gfc_character2int (gfc_expr *, int);
+gfc_expr *gfc_character2real (gfc_expr *, int);
+gfc_expr *gfc_character2complex (gfc_expr *, int);
+gfc_expr *gfc_character2character (gfc_expr *, int);
+gfc_expr *gfc_character2logical (gfc_expr *, int);
 
 #endif /* GFC_ARITH_H  */
 

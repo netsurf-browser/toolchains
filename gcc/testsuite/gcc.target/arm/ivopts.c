@@ -1,5 +1,5 @@
 /* { dg-do assemble } */
-/* { dg-options "-Os -fdump-tree-ivopts -save-temps" } */
+/* { dg-options "-Os -fdump-tree-ivopts -save-temps -fno-tree-loop-distribute-patterns" } */
 
 void
 tr5 (short array[], int n)
@@ -14,5 +14,3 @@ tr5 (short array[], int n)
 /* { dg-final { object-size text <= 20 { target arm_thumb2 } } } */
 /* { dg-final { object-size text <= 32 { target { arm_nothumb && { ! arm_iwmmxt_ok } } } } } */
 /* { dg-final { object-size text <= 36 { target { arm_nothumb && arm_iwmmxt_ok }  } } } */
-/* { dg-final { cleanup-tree-dump "ivopts" } } */
-/* { dg-final { cleanup-saved-temps "ivopts" } } */

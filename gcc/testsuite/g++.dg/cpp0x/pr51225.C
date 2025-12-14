@@ -1,11 +1,11 @@
 // PR c++/51225
-// { dg-options "-std=c++0x" }
+// { dg-do compile { target c++11 } }
 
 template<int> struct A {};
 
 template<typename> void foo()
 {
-  A<int(x)> a; // { dg-error "not declared|invalid type" }
+  A<int(x)> a; // { dg-error "not declared|could not convert" }
 }
 
 template<typename> struct bar

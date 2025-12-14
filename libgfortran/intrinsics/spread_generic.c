@@ -1,8 +1,8 @@
 /* Generic implementation of the SPREAD intrinsic
-   Copyright 2002, 2005, 2006, 2007, 2009, 2010 Free Software Foundation, Inc.
+   Copyright (C) 2002-2020 Free Software Foundation, Inc.
    Contributed by Paul Brook <paul@nowt.org>
 
-This file is part of the GNU Fortran 95 runtime library (libgfortran).
+This file is part of the GNU Fortran runtime library (libgfortran).
 
 Libgfortran is free software; you can redistribute it and/or
 modify it under the terms of the GNU General Public
@@ -24,8 +24,6 @@ see the files COPYING3 and COPYING.RUNTIME respectively.  If not, see
 <http://www.gnu.org/licenses/>.  */
 
 #include "libgfortran.h"
-#include <stdlib.h>
-#include <assert.h>
 #include <string.h>
 
 static void
@@ -66,14 +64,15 @@ spread_internal (gfc_array_char *ret, const gfc_array_char *source,
 
   ncopies = *pncopies;
 
-  if (ret->data == NULL)
+  if (ret->base_addr == NULL)
     {
       /* The front end has signalled that we need to populate the
 	 return array descriptor.  */
 
       size_t ub, stride;
 
-      ret->dtype = (source->dtype & ~GFC_DTYPE_RANK_MASK) | rrank;
+      ret->dtype.rank = rrank;
+
       dim = 0;
       rs = 1;
       for (n = 0; n < rrank; n++)
@@ -100,7 +99,7 @@ spread_internal (gfc_array_char *ret, const gfc_array_char *source,
 	  GFC_DIMENSION_SET(ret->dim[n], 0, ub, stride);
 	}
       ret->offset = 0;
-      ret->data = internal_malloc_size (rs * size);
+      ret->base_addr = xmallocarray (rs, size);
 
       if (rs <= 0)
 	return;
@@ -180,8 +179,8 @@ spread_internal (gfc_array_char *ret, const gfc_array_char *source,
     }
   sstride0 = sstride[0];
   rstride0 = rstride[0];
-  rptr = ret->data;
-  sptr = source->data;
+  rptr = ret->base_addr;
+  sptr = source->base_addr;
 
   while (sptr)
     {
@@ -243,9 +242,9 @@ spread_internal_scalar (gfc_array_char *ret, const char *source,
   if (*along > 1)
     runtime_error ("dim outside of rank in spread()");
 
-  if (ret->data == NULL)
+  if (ret->base_addr == NULL)
     {
-      ret->data = internal_malloc_size (ncopies * size);
+      ret->base_addr = xmallocarray (ncopies, size);
       ret->offset = 0;
       GFC_DIMENSION_SET(ret->dim[0], 0, ncopies - 1, 1);
     }
@@ -258,7 +257,7 @@ spread_internal_scalar (gfc_array_char *ret, const char *source,
 
   for (n = 0; n < ncopies; n++)
     {
-      dest = (char*)(ret->data + n * GFC_DESCRIPTOR_STRIDE_BYTES(ret,0));
+      dest = (char*)(ret->base_addr + n * GFC_DESCRIPTOR_STRIDE_BYTES(ret,0));
       memcpy (dest , source, size);
     }
 }
@@ -276,7 +275,6 @@ spread (gfc_array_char *ret, const gfc_array_char *source,
   type_size = GFC_DTYPE_TYPE_SIZE(ret);
   switch(type_size)
     {
-    case GFC_DTYPE_DERIVED_1:
     case GFC_DTYPE_LOGICAL_1:
     case GFC_DTYPE_INTEGER_1:
       spread_i1 ((gfc_array_i1 *) ret, (gfc_array_i1 *) source,
@@ -373,8 +371,17 @@ spread (gfc_array_char *ret, const gfc_array_char *source,
 # endif
 #endif
 
-    case GFC_DTYPE_DERIVED_2:
-      if (GFC_UNALIGNED_2(ret->data) || GFC_UNALIGNED_2(source->data))
+    }
+  
+  switch (GFC_DESCRIPTOR_SIZE (ret))
+    {
+    case 1:
+      spread_i1 ((gfc_array_i1 *) ret, (gfc_array_i1 *) source,
+		 *along, *pncopies);
+      return;
+
+    case 2:
+      if (GFC_UNALIGNED_2(ret->base_addr) || GFC_UNALIGNED_2(source->base_addr))
 	break;
       else
 	{
@@ -383,8 +390,8 @@ spread (gfc_array_char *ret, const gfc_array_char *source,
 	  return;
 	}
 
-    case GFC_DTYPE_DERIVED_4:
-      if (GFC_UNALIGNED_4(ret->data) || GFC_UNALIGNED_4(source->data))
+    case 4:
+      if (GFC_UNALIGNED_4(ret->base_addr) || GFC_UNALIGNED_4(source->base_addr))
 	break;
       else
 	{
@@ -393,8 +400,8 @@ spread (gfc_array_char *ret, const gfc_array_char *source,
 	  return;
 	}
 
-    case GFC_DTYPE_DERIVED_8:
-      if (GFC_UNALIGNED_8(ret->data) || GFC_UNALIGNED_8(source->data))
+    case 8:
+      if (GFC_UNALIGNED_8(ret->base_addr) || GFC_UNALIGNED_8(source->base_addr))
 	break;
       else
 	{
@@ -402,18 +409,19 @@ spread (gfc_array_char *ret, const gfc_array_char *source,
 		     *along, *pncopies);
 	  return;
 	}
-
 #ifdef HAVE_GFC_INTEGER_16
-    case GFC_DTYPE_DERIVED_16:
-      if (GFC_UNALIGNED_16(ret->data) || GFC_UNALIGNED_16(source->data))
+    case 16:
+      if (GFC_UNALIGNED_16(ret->base_addr)
+	  || GFC_UNALIGNED_16(source->base_addr))
 	break;
       else
 	{
 	  spread_i16 ((gfc_array_i16 *) ret, (gfc_array_i16 *) source,
 		      *along, *pncopies);
 	  return;
-	}
+	    }
 #endif
+
     }
 
   spread_internal (ret, source, along, pncopies);
@@ -465,13 +473,12 @@ spread_scalar (gfc_array_char *ret, const char *source,
 {
   index_type type_size;
 
-  if (!ret->dtype)
+  if (GFC_DTYPE_IS_UNSET(ret))
     runtime_error ("return array missing descriptor in spread()");
 
   type_size = GFC_DTYPE_TYPE_SIZE(ret);
   switch(type_size)
     {
-    case GFC_DTYPE_DERIVED_1:
     case GFC_DTYPE_LOGICAL_1:
     case GFC_DTYPE_INTEGER_1:
       spread_scalar_i1 ((gfc_array_i1 *) ret, (GFC_INTEGER_1 *) source,
@@ -568,8 +575,17 @@ spread_scalar (gfc_array_char *ret, const char *source,
 # endif
 #endif
 
-    case GFC_DTYPE_DERIVED_2:
-      if (GFC_UNALIGNED_2(ret->data) || GFC_UNALIGNED_2(source))
+    }
+
+  switch (GFC_DESCRIPTOR_SIZE(ret))
+    {
+    case 1:
+      spread_scalar_i1 ((gfc_array_i1 *) ret, (GFC_INTEGER_1 *) source,
+			*along, *pncopies);
+      return;
+
+    case 2:
+      if (GFC_UNALIGNED_2(ret->base_addr) || GFC_UNALIGNED_2(source))
 	break;
       else
 	{
@@ -578,8 +594,8 @@ spread_scalar (gfc_array_char *ret, const char *source,
 	  return;
 	}
 
-    case GFC_DTYPE_DERIVED_4:
-      if (GFC_UNALIGNED_4(ret->data) || GFC_UNALIGNED_4(source))
+    case 4:
+      if (GFC_UNALIGNED_4(ret->base_addr) || GFC_UNALIGNED_4(source))
 	break;
       else
 	{
@@ -588,8 +604,8 @@ spread_scalar (gfc_array_char *ret, const char *source,
 	  return;
 	}
 
-    case GFC_DTYPE_DERIVED_8:
-      if (GFC_UNALIGNED_8(ret->data) || GFC_UNALIGNED_8(source))
+    case 8:
+      if (GFC_UNALIGNED_8(ret->base_addr) || GFC_UNALIGNED_8(source))
 	break;
       else
 	{
@@ -598,8 +614,8 @@ spread_scalar (gfc_array_char *ret, const char *source,
 	  return;
 	}
 #ifdef HAVE_GFC_INTEGER_16
-    case GFC_DTYPE_DERIVED_16:
-      if (GFC_UNALIGNED_16(ret->data) || GFC_UNALIGNED_16(source))
+    case 16:
+      if (GFC_UNALIGNED_16(ret->base_addr) || GFC_UNALIGNED_16(source))
 	break;
       else
 	{
@@ -608,6 +624,8 @@ spread_scalar (gfc_array_char *ret, const char *source,
 	  return;
 	}
 #endif
+    default:
+      break;
     }
 
   spread_internal_scalar (ret, source, along, pncopies);
@@ -626,7 +644,7 @@ spread_char_scalar (gfc_array_char *ret,
 		    const index_type *pncopies,
 		    GFC_INTEGER_4 source_length __attribute__((unused)))
 {
-  if (!ret->dtype)
+  if (GFC_DTYPE_IS_UNSET(ret))
     runtime_error ("return array missing descriptor in spread()");
   spread_internal_scalar (ret, source, along, pncopies);
 }
@@ -644,7 +662,7 @@ spread_char4_scalar (gfc_array_char *ret,
 		     const index_type *pncopies,
 		     GFC_INTEGER_4 source_length __attribute__((unused)))
 {
-  if (!ret->dtype)
+  if (GFC_DTYPE_IS_UNSET(ret))
     runtime_error ("return array missing descriptor in spread()");
   spread_internal_scalar (ret, source, along, pncopies);
 

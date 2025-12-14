@@ -7,11 +7,12 @@ package template
 import (
 	"bytes"
 	"fmt"
+	"strings"
 	"unicode"
 	"unicode/utf8"
 )
 
-// endsWithCSSKeyword returns whether b ends with an ident that
+// endsWithCSSKeyword reports whether b ends with an ident that
 // case-insensitively matches the lower-case kw.
 func endsWithCSSKeyword(b []byte, kw string) bool {
 	i := len(b) - len(kw)
@@ -28,17 +29,17 @@ func endsWithCSSKeyword(b []byte, kw string) bool {
 	}
 	// Many CSS keywords, such as "!important" can have characters encoded,
 	// but the URI production does not allow that according to
-	// http://www.w3.org/TR/css3-syntax/#TOK-URI
+	// https://www.w3.org/TR/css3-syntax/#TOK-URI
 	// This does not attempt to recognize encoded keywords. For example,
 	// given "\75\72\6c" and "url" this return false.
 	return string(bytes.ToLower(b[i:])) == kw
 }
 
-// isCSSNmchar returns whether rune is allowed anywhere in a CSS identifier.
+// isCSSNmchar reports whether rune is allowed anywhere in a CSS identifier.
 func isCSSNmchar(r rune) bool {
 	// Based on the CSS3 nmchar production but ignores multi-rune escape
 	// sequences.
-	// http://www.w3.org/TR/css3-syntax/#SUBTOK-nmchar
+	// https://www.w3.org/TR/css3-syntax/#SUBTOK-nmchar
 	return 'a' <= r && r <= 'z' ||
 		'A' <= r && r <= 'Z' ||
 		'0' <= r && r <= '9' ||
@@ -53,7 +54,7 @@ func isCSSNmchar(r rune) bool {
 // decodeCSS decodes CSS3 escapes given a sequence of stringchars.
 // If there is no change, it returns the input, otherwise it returns a slice
 // backed by a new array.
-// http://www.w3.org/TR/css3-syntax/#SUBTOK-stringchar defines stringchar.
+// https://www.w3.org/TR/css3-syntax/#SUBTOK-stringchar defines stringchar.
 func decodeCSS(s []byte) []byte {
 	i := bytes.IndexByte(s, '\\')
 	if i == -1 {
@@ -72,10 +73,10 @@ func decodeCSS(s []byte) []byte {
 		if len(s) < 2 {
 			break
 		}
-		// http://www.w3.org/TR/css3-syntax/#SUBTOK-escape
+		// https://www.w3.org/TR/css3-syntax/#SUBTOK-escape
 		// escape ::= unicode | '\' [#x20-#x7E#x80-#xD7FF#xE000-#xFFFD#x10000-#x10FFFF]
 		if isHex(s[1]) {
-			// http://www.w3.org/TR/css3-syntax/#SUBTOK-unicode
+			// https://www.w3.org/TR/css3-syntax/#SUBTOK-unicode
 			//   unicode ::= '\' [0-9a-fA-F]{1,6} wc?
 			j := 2
 			for j < len(s) && j < 7 && isHex(s[j]) {
@@ -99,7 +100,7 @@ func decodeCSS(s []byte) []byte {
 	return b
 }
 
-// isHex returns whether the given character is a hex digit.
+// isHex reports whether the given character is a hex digit.
 func isHex(c byte) bool {
 	return '0' <= c && c <= '9' || 'a' <= c && c <= 'f' || 'A' <= c && c <= 'F'
 }
@@ -144,7 +145,7 @@ func skipCSSSpace(c []byte) []byte {
 	return c
 }
 
-// isCSSSpace returns whether b is a CSS space char as defined in wc.
+// isCSSSpace reports whether b is a CSS space char as defined in wc.
 func isCSSSpace(b byte) bool {
 	switch b {
 	case '\t', '\n', '\f', '\r', ' ':
@@ -156,57 +157,24 @@ func isCSSSpace(b byte) bool {
 // cssEscaper escapes HTML and CSS special characters using \<hex>+ escapes.
 func cssEscaper(args ...interface{}) string {
 	s, _ := stringify(args...)
-	var b bytes.Buffer
-	written := 0
-	for i, r := range s {
+	var b strings.Builder
+	r, w, written := rune(0), 0, 0
+	for i := 0; i < len(s); i += w {
+		// See comment in htmlEscaper.
+		r, w = utf8.DecodeRuneInString(s[i:])
 		var repl string
-		switch r {
-		case 0:
-			repl = `\0`
-		case '\t':
-			repl = `\9`
-		case '\n':
-			repl = `\a`
-		case '\f':
-			repl = `\c`
-		case '\r':
-			repl = `\d`
-		// Encode HTML specials as hex so the output can be embedded
-		// in HTML attributes without further encoding.
-		case '"':
-			repl = `\22`
-		case '&':
-			repl = `\26`
-		case '\'':
-			repl = `\27`
-		case '(':
-			repl = `\28`
-		case ')':
-			repl = `\29`
-		case '+':
-			repl = `\2b`
-		case '/':
-			repl = `\2f`
-		case ':':
-			repl = `\3a`
-		case ';':
-			repl = `\3b`
-		case '<':
-			repl = `\3c`
-		case '>':
-			repl = `\3e`
-		case '\\':
-			repl = `\\`
-		case '{':
-			repl = `\7b`
-		case '}':
-			repl = `\7d`
+		switch {
+		case int(r) < len(cssReplacementTable) && cssReplacementTable[r] != "":
+			repl = cssReplacementTable[r]
 		default:
 			continue
 		}
+		if written == 0 {
+			b.Grow(len(s))
+		}
 		b.WriteString(s[written:i])
 		b.WriteString(repl)
-		written = i + utf8.RuneLen(r)
+		written = i + w
 		if repl != `\\` && (written == len(s) || isHex(s[written]) || isCSSSpace(s[written])) {
 			b.WriteByte(' ')
 		}
@@ -216,6 +184,30 @@ func cssEscaper(args ...interface{}) string {
 	}
 	b.WriteString(s[written:])
 	return b.String()
+}
+
+var cssReplacementTable = []string{
+	0:    `\0`,
+	'\t': `\9`,
+	'\n': `\a`,
+	'\f': `\c`,
+	'\r': `\d`,
+	// Encode HTML specials as hex so the output can be embedded
+	// in HTML attributes without further encoding.
+	'"':  `\22`,
+	'&':  `\26`,
+	'\'': `\27`,
+	'(':  `\28`,
+	')':  `\29`,
+	'+':  `\2b`,
+	'/':  `\2f`,
+	':':  `\3a`,
+	';':  `\3b`,
+	'<':  `\3c`,
+	'>':  `\3e`,
+	'\\': `\\`,
+	'{':  `\7b`,
+	'}':  `\7d`,
 }
 
 var expressionBytes = []byte("expression")
@@ -234,7 +226,7 @@ func cssValueFilter(args ...interface{}) string {
 	b, id := decodeCSS([]byte(s)), make([]byte, 0, 64)
 
 	// CSS3 error handling is specified as honoring string boundaries per
-	// http://www.w3.org/TR/css3-syntax/#error-handling :
+	// https://www.w3.org/TR/css3-syntax/#error-handling :
 	//     Malformed declarations. User agents must handle unexpected
 	//     tokens encountered while parsing a declaration by reading until
 	//     the end of the declaration, while observing the rules for
@@ -255,13 +247,13 @@ func cssValueFilter(args ...interface{}) string {
 				return filterFailsafe
 			}
 		default:
-			if c < 0x80 && isCSSNmchar(rune(c)) {
+			if c < utf8.RuneSelf && isCSSNmchar(rune(c)) {
 				id = append(id, c)
 			}
 		}
 	}
 	id = bytes.ToLower(id)
-	if bytes.Index(id, expressionBytes) != -1 || bytes.Index(id, mozBindingBytes) != -1 {
+	if bytes.Contains(id, expressionBytes) || bytes.Contains(id, mozBindingBytes) {
 		return filterFailsafe
 	}
 	return string(b)

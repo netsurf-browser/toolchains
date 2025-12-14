@@ -6,7 +6,7 @@
 --                                                                          --
 --                                 S p e c                                  --
 --                                                                          --
---          Copyright (C) 1992-2012, Free Software Foundation, Inc.         --
+--          Copyright (C) 1992-2019, Free Software Foundation, Inc.         --
 --                                                                          --
 -- GNAT is free software;  you can  redistribute it  and/or modify it under --
 -- terms of the  GNU General Public License as published  by the Free Soft- --
@@ -42,15 +42,14 @@ package Sprint is
    --  When the generated tree is printed, it contains constructs that are not
    --  pure Ada. For convenience, syntactic extensions to Ada have been defined
    --  purely for the purposes of this printout (they are not recognized by the
-   --  parser)
+   --  parser).
 
    --  Could use more documentation for all of these ???
 
    --    Allocator                           new xxx [storage_pool = xxx]
    --    Cleanup action                      at end procedure name;
-   --    Conditional expression              (if expr then expr else expr)
-   --    Conversion wi Float_Truncate        target^(source)
    --    Convert wi Conversion_OK            target?(source)
+   --    Convert wi Float_Truncate           target^(source)
    --    Convert wi Rounded_Result           target@(source)
    --    Divide wi Treat_Fixed_As_Integer    x #/ y
    --    Divide wi Rounded_Result            x @/ y
@@ -58,6 +57,7 @@ package Sprint is
    --    Expression with range check         {expression}
    --    Free statement                      free expr [storage_pool = xxx]
    --    Freeze entity with freeze actions   freeze entityname [ actions ]
+   --    Freeze generic entity               freeze_generic entityname
    --    Implicit call to run time routine   $routine-name
    --    Implicit exportation                $pragma import (...)
    --    Implicit importation                $pragma export (...)
@@ -70,7 +70,7 @@ package Sprint is
    --    Multiple concatenation              expr && expr && expr ... && expr
    --    Multiply wi Treat_Fixed_As_Integer  x #* y
    --    Multiply wi Rounded_Result          x @* y
-   --    Operator with range check           {operator} (e.g. {+})
+   --    Operator with overflow check        {operator} (e.g. {+})
    --    Others choice for cleanup           when all others
    --    Pop exception label                 %pop_xxx_exception_label
    --    Push exception label                %push_xxx_exception_label (label)
@@ -81,7 +81,6 @@ package Sprint is
    --    Reference                           expression'reference
    --    Shift nodes                         shift_name!(expr, count)
    --    Static declaration                  name : static xxx
-   --    Subprogram_Info                     subprog'Subprogram_Info
    --    Unchecked conversion                target_type!(source_expression)
    --    Unchecked expression                `(expression)
    --    Validate_Unchecked_Conversion       validate unchecked_conversion

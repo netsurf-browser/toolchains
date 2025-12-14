@@ -1,5 +1,5 @@
 /* Implementation of the CTIME and FDATE g77 intrinsics.
-   Copyright (C) 2005-2013 Free Software Foundation, Inc.
+   Copyright (C) 2005-2020 Free Software Foundation, Inc.
    Contributed by François-Xavier Coudert <coudert@clipper.ens.fr>
 
 This file is part of the GNU Fortran runtime library (libgfortran).
@@ -27,7 +27,6 @@ see the files COPYING3 and COPYING.RUNTIME respectively.  If not, see
 
 #include "time_1.h"
 
-#include <stdlib.h>
 #include <string.h>
 
 
@@ -86,7 +85,7 @@ void
 fdate (char ** date, gfc_charlen_type * date_len)
 {
   time_t now = time(NULL);
-  *date = get_mem (CTIME_BUFSZ);
+  *date = xmalloc (CTIME_BUFSZ);
   *date_len = gf_ctime (*date, CTIME_BUFSZ, now);
 }
 
@@ -110,7 +109,7 @@ void
 PREFIX(ctime) (char ** date, gfc_charlen_type * date_len, GFC_INTEGER_8 t)
 {
   time_t now = t;
-  *date = get_mem (CTIME_BUFSZ);
+  *date = xmalloc (CTIME_BUFSZ);
   *date_len = gf_ctime (*date, CTIME_BUFSZ, now);
 }
 

@@ -1,5 +1,5 @@
 ;; Constraint definitions for ARM and Thumb
-;; Copyright (C) 2006, 2007, 2008, 2010 Free Software Foundation, Inc.
+;; Copyright (C) 2006-2020 Free Software Foundation, Inc.
 ;; Contributed by ARM Ltd.
 
 ;; This file is part of GCC.
@@ -19,34 +19,95 @@
 ;; <http://www.gnu.org/licenses/>.
 
 ;; The following register constraints have been used:
-;; - in ARM/Thumb-2 state: f, t, v, w, x, y, z
+;; - in ARM/Thumb-2 state: t, w, x, y, z
 ;; - in Thumb state: h, b
-;; - in both states: l, c, k
+;; - in both states: l, c, k, q, Cs, Ts, US
 ;; In ARM state, 'l' is an alias for 'r'
+;; 'f' and 'v' were previously used for FPA and MAVERICK registers.
 
 ;; The following normal constraints have been used:
-;; in ARM/Thumb-2 state: G, H, I, j, J, K, L, M
+;; in ARM/Thumb-2 state: G, I, j, J, K, L, M
 ;; in Thumb-1 state: I, J, K, L, M, N, O
+;; 'H' was previously used for FPA.
 
 ;; The following multi-letter normal constraints have been used:
-;; in ARM/Thumb-2 state: Da, Db, Dc, Dn, Dl, DL, Dv, Dy, Di, Dt, Dz
-;; in Thumb-1 state: Pa, Pb, Pc, Pd
-;; in Thumb-2 state: Pj, PJ, Ps, Pt, Pu, Pv, Pw, Px, Py
+;; in ARM/Thumb-2 state: Da, Db, Dc, Dd, Dn, DN, Dm, Dl, DL, Do, Dv, Dy, Di,
+;;			 Dt, Dp, Dz, Tu, Te
+;; in Thumb-1 state: Pa, Pb, Pc, Pd, Pe
+;; in Thumb-2 state: Ha, Pj, PJ, Ps, Pt, Pu, Pv, Pw, Px, Py, Pz, Rd, Rf, Rb, Ra,
+;;		     Rg, Ri
+;; in all states: Pf, Pg
 
 ;; The following memory constraints have been used:
-;; in ARM/Thumb-2 state: Q, Ut, Uv, Uy, Un, Um, Us
+;; in ARM/Thumb-2 state: Uh, Ut, Uv, Uy, Un, Um, Us, Up, Uf, Ux, Ul
 ;; in ARM state: Uq
 ;; in Thumb state: Uu, Uw
+;; in all states: Q
 
+(define_register_constraint "Up" "TARGET_HAVE_MVE ? VPR_REG : NO_REGS"
+  "MVE VPR register")
 
-(define_register_constraint "f" "TARGET_ARM ? FPA_REGS : NO_REGS"
- "Legacy FPA registers @code{f0}-@code{f7}.")
+(define_memory_constraint "Ul"
+ "@internal
+  In ARM/Thumb-2 state a valid address for load instruction with XEXP (op, 0)
+  being label of the literal data item to be loaded."
+ (and (match_code "mem")
+      (match_test "TARGET_HAVE_MVE && reload_completed
+		   && (GET_CODE (XEXP (op, 0)) == LABEL_REF
+		       || (GET_CODE (XEXP (op, 0)) == CONST
+			   && GET_CODE (XEXP (XEXP (op, 0), 0)) == PLUS
+			   && GET_CODE (XEXP (XEXP (XEXP (op, 0), 0), 0)) == LABEL_REF
+			   && CONST_INT_P (XEXP (XEXP (XEXP (op, 0), 0), 1))))")))
+
+(define_register_constraint "Uf" "TARGET_HAVE_MVE ? VFPCC_REG : NO_REGS"
+  "MVE FPCCR register")
+
+(define_register_constraint "Te" "TARGET_HAVE_MVE ? EVEN_REG : NO_REGS"
+  "EVEN core registers @code{r0}, @code{r2}, @code{r4}, @code{r6}, @code{r8},
+   @code{r10}, @code{r12}, @code{r14}")
+
+(define_constraint "Rd"
+  "@internal In Thumb-2 state a constant in range 1 to 16"
+  (and (match_code "const_int")
+       (match_test "TARGET_HAVE_MVE && ival >= 1 && ival <= 16")))
+
+(define_constraint "Ra"
+  "@internal In Thumb-2 state a constant in range 0 to 7"
+  (and (match_code "const_int")
+       (match_test "TARGET_HAVE_MVE && ival >= 0 && ival <= 7")))
+
+(define_constraint "Rb"
+  "@internal In Thumb-2 state a constant in range 1 to 8"
+  (and (match_code "const_int")
+       (match_test "TARGET_HAVE_MVE && ival >= 1 && ival <= 8")))
+
+(define_constraint "Rc"
+  "@internal In Thumb-2 state a constant in range 0 to 15"
+  (and (match_code "const_int")
+       (match_test "TARGET_HAVE_MVE && ival >= 0 && ival <= 15")))
+
+(define_constraint "Re"
+  "@internal In Thumb-2 state a constant in range 0 to 31"
+  (and (match_code "const_int")
+       (match_test "TARGET_HAVE_MVE && ival >= 0 && ival <= 31")))
+
+(define_constraint "Rf"
+  "@internal In Thumb-2 state a constant in range 1 to 32"
+  (and (match_code "const_int")
+       (match_test "TARGET_HAVE_MVE && ival >= 1 && ival <= 32")))
+
+(define_constraint "Rg"
+  "@internal In Thumb-2 state a constant is one among 1, 2, 4 and 8"
+  (and (match_code "const_int")
+       (match_test "TARGET_HAVE_MVE && ((ival == 1) || (ival == 2)
+				       || (ival == 4) || (ival == 8))")))
+
+;; True if the immediate is multiple of 8 and in range of -/+ 1016 for MVE.
+(define_predicate "mve_vldrd_immediate"
+  (match_test "satisfies_constraint_Ri (op)"))
 
 (define_register_constraint "t" "TARGET_32BIT ? VFP_LO_REGS : NO_REGS"
  "The VFP registers @code{s0}-@code{s31}.")
-
-(define_register_constraint "v" "TARGET_ARM ? CIRRUS_REGS : NO_REGS"
- "The Cirrus Maverick co-processor registers.")
 
 (define_register_constraint "w"
   "TARGET_32BIT ? (TARGET_VFPD32 ? VFP_REGS : VFP_LO_REGS) : NO_REGS"
@@ -70,8 +131,9 @@
 
 (define_constraint "j"
  "A constant suitable for a MOVW instruction. (ARM/Thumb-2)"
- (and (match_test "TARGET_32BIT && arm_arch_thumb2")
-      (ior (match_code "high")
+ (and (match_test "TARGET_HAVE_MOVT")
+      (ior (and (match_code "high")
+		(match_test "arm_valid_symbolic_address_p (XEXP (op, 0))"))
 	   (and (match_code "const_int")
                 (match_test "(ival & 0xffff0000) == 0")))))
 
@@ -94,8 +156,12 @@
  "@internal
   Thumb only.  The union of the low registers and the stack register.")
 
-(define_register_constraint "c" "CC_REG"
- "@internal The condition code register.")
+(define_constraint "c"
+ "@internal The condition code register."
+ (match_operand 0 "cc_register"))
+
+(define_register_constraint "Cs" "CALLER_SAVE_REGS"
+ "@internal The caller save registers.  Useful for sibcalls.")
 
 (define_constraint "I"
  "In ARM/Thumb-2 state a constant that can be used as an immediate value in a
@@ -168,9 +234,26 @@
   		    && ival > 1020 && ival <= 1275")))
 
 (define_constraint "Pd"
-  "@internal In Thumb-1 state a constant in the range 0 to 7"
+  "@internal In Thumb state a constant in the range 0 to 7"
   (and (match_code "const_int")
-       (match_test "TARGET_THUMB1 && ival >= 0 && ival <= 7")))
+       (match_test "TARGET_THUMB && ival >= 0 && ival <= 7")))
+
+(define_constraint "Pe"
+  "@internal In Thumb-1 state a constant in the range 256 to +510"
+  (and (match_code "const_int")
+       (match_test "TARGET_THUMB1 && ival >= 256 && ival <= 510")))
+
+(define_constraint "Pf"
+  "Memory models except relaxed, consume or release ones."
+  (and (match_code "const_int")
+       (match_test "!is_mm_relaxed (memmodel_from_int (ival))
+		    && !is_mm_consume (memmodel_from_int (ival))
+		    && !is_mm_release (memmodel_from_int (ival))")))
+
+(define_constraint "Pg"
+  "@internal In Thumb-2 state a constant in range 1 to 32"
+  (and (match_code "const_int")
+       (match_test "TARGET_THUMB2 && ival >= 1 && ival <= 32")))
 
 (define_constraint "Ps"
   "@internal In Thumb-2 state a constant in the range -255 to +255"
@@ -207,15 +290,21 @@
   (and (match_code "const_int")
        (match_test "TARGET_THUMB2 && ival >= 0 && ival <= 255")))
 
+(define_constraint "Pz"
+  "@internal In Thumb-2 state the constant 0"
+  (and (match_code "const_int")
+       (match_test "TARGET_THUMB2 && (ival == 0)")))
+
 (define_constraint "G"
- "In ARM/Thumb-2 state a valid FPA immediate constant."
+ "In ARM/Thumb-2 state the floating-point constant 0."
  (and (match_code "const_double")
       (match_test "TARGET_32BIT && arm_const_double_rtx (op)")))
 
-(define_constraint "H"
- "In ARM/Thumb-2 state a valid FPA immediate constant when negated."
- (and (match_code "const_double")
-      (match_test "TARGET_32BIT && neg_const_double_rtx_ok_for_fpa (op)")))
+(define_constraint "Ha"
+  "@internal In ARM / Thumb-2 a float constant iff literal pools are allowed."
+  (and (match_code "const_double")
+       (match_test "satisfies_constraint_E (op)")
+       (match_test "!arm_disable_literal_pool")))
 
 (define_constraint "Dz"
  "@internal
@@ -246,6 +335,12 @@
       (match_test "TARGET_32BIT && arm_const_double_inline_cost (op) == 4
 		   && !(optimize_size || arm_ld_sched)")))
 
+(define_constraint "Dd"
+ "@internal
+  In ARM/Thumb-2 state a const_int that can be used by insn adddi."
+ (and (match_code "const_int")
+      (match_test "TARGET_32BIT && const_ok_for_dimode_op (ival, PLUS)")))
+
 (define_constraint "Di"
  "@internal
   In ARM/Thumb-2 state a const_int or const_double where both the high
@@ -253,13 +348,27 @@
  (and (match_code "const_double,const_int")
       (match_test "TARGET_32BIT && arm_const_double_by_immediates (op)")))
 
-(define_constraint "Dn"
+(define_constraint "Dm"
  "@internal
   In ARM/Thumb-2 state a const_vector which can be loaded with a Neon vmov
   immediate instruction."
  (and (match_code "const_vector")
       (match_test "TARGET_32BIT
 		   && imm_for_neon_mov_operand (op, GET_MODE (op))")))
+
+(define_constraint "Dn"
+ "@internal
+  In ARM/Thumb-2 state a DImode const_int which can be loaded with a Neon vmov
+  immediate instruction."
+ (and (match_code "const_int")
+      (match_test "TARGET_32BIT && imm_for_neon_mov_operand (op, DImode)")))
+
+(define_constraint "DN"
+ "@internal
+  In ARM/Thumb-2 state a TImode const_int which can be loaded with a Neon vmov
+  immediate instruction."
+ (and (match_code "const_int")
+      (match_test "TARGET_32BIT && imm_for_neon_mov_operand (op, TImode)")))
 
 (define_constraint "Dl"
  "@internal
@@ -277,6 +386,12 @@
       (match_test "TARGET_32BIT
 		   && imm_for_neon_inv_logic_operand (op, GET_MODE (op))")))
 
+(define_constraint "Do"
+ "@internal
+  In ARM/Thumb2 state valid offset for an ldrd/strd instruction."
+ (and (match_code "const_int")
+      (match_test "TARGET_LDRD && offset_ok_for_ldrd_strd (ival)")))
+
 (define_constraint "Dv"
  "@internal
   In ARM/Thumb-2 state a const_double which can be used with a VFP fconsts
@@ -291,16 +406,38 @@
  (and (match_code "const_double")
       (match_test "TARGET_32BIT && TARGET_VFP_DOUBLE && vfp3_const_double_rtx (op)")))
 
-(define_constraint "Dt" 
+(define_constraint "Dt"
  "@internal
   In ARM/ Thumb2 a const_double which can be used with a vcvt.f32.s32 with fract bits operation"
   (and (match_code "const_double")
-       (match_test "TARGET_32BIT && TARGET_VFP && vfp3_const_double_for_fract_bits (op)")))
+       (match_test "TARGET_32BIT && vfp3_const_double_for_fract_bits (op)")))
+
+(define_constraint "Dp"
+ "@internal
+  In ARM/ Thumb2 a const_double which can be used with a vcvt.s32.f32 with bits operation"
+  (and (match_code "const_double")
+       (match_test "TARGET_32BIT
+		    && vfp3_const_double_for_bits (op) > 0")))
+
+(define_constraint "Tu"
+  "@internal In ARM / Thumb-2 an integer constant iff literal pools are
+   allowed."
+  (and (match_test "CONSTANT_P (op)")
+       (match_test "!arm_disable_literal_pool")))
+
+(define_register_constraint "Ts" "(arm_restrict_it) ? LO_REGS : GENERAL_REGS"
+ "For arm_restrict_it the core registers @code{r0}-@code{r7}.  GENERAL_REGS otherwise.")
 
 (define_memory_constraint "Ua"
  "@internal
   An address valid for loading/storing register exclusive"
  (match_operand 0 "mem_noofs_operand"))
+
+(define_memory_constraint "Uh"
+ "@internal
+  An address suitable for byte and half-word loads which does not point inside a constant pool"
+ (and (match_code "mem")
+      (match_test "arm_legitimate_address_p (GET_MODE (op), XEXP (op, 0), false) && !arm_is_constant_pool_ref (op)")))
 
 (define_memory_constraint "Ut"
  "@internal
@@ -326,21 +463,30 @@
   In ARM/Thumb-2 state a valid address for Neon doubleword vector
   load/store instructions."
  (and (match_code "mem")
-      (match_test "TARGET_32BIT && neon_vector_mem_operand (op, 0)")))
+      (match_test "TARGET_32BIT && neon_vector_mem_operand (op, 0, true)")))
 
 (define_memory_constraint "Um"
  "@internal
   In ARM/Thumb-2 state a valid address for Neon element and structure
   load/store instructions."
  (and (match_code "mem")
-      (match_test "TARGET_32BIT && neon_vector_mem_operand (op, 2)")))
+      (match_test "TARGET_32BIT && neon_vector_mem_operand (op, 2, true)")))
 
 (define_memory_constraint "Us"
  "@internal
   In ARM/Thumb-2 state a valid address for non-offset loads/stores of
   quad-word values in four ARM registers."
  (and (match_code "mem")
-      (match_test "TARGET_32BIT && neon_vector_mem_operand (op, 1)")))
+      (match_test "TARGET_32BIT && neon_vector_mem_operand (op, 1, true)")))
+
+(define_memory_constraint "Ux"
+ "@internal
+  In ARM/Thumb-2 state a valid address and load into CORE regs or only to
+  LO_REGS based on mode of op."
+ (and (match_code "mem")
+      (match_test "(TARGET_HAVE_MVE || TARGET_HAVE_MVE_FLOAT)
+		   && mve_vector_mem_operand (GET_MODE (op),
+					      XEXP (op, 0), true)")))
 
 (define_memory_constraint "Uq"
  "@internal
@@ -348,11 +494,12 @@
  (and (match_code "mem")
       (match_test "TARGET_ARM
 		   && arm_legitimate_address_outer_p (GET_MODE (op), XEXP (op, 0),
-						      SIGN_EXTEND, 0)")))
+						      SIGN_EXTEND, 0)
+		   && !arm_is_constant_pool_ref (op)")))
 
 (define_memory_constraint "Q"
  "@internal
-  In ARM/Thumb-2 state an address that is a single base register."
+  An address that is a single base register."
  (and (match_code "mem")
       (match_test "REG_P (XEXP (op, 0))")))
 
@@ -377,9 +524,22 @@
 						   0)
 		   && GET_CODE (XEXP (op, 0)) != POST_INC")))
 
+(define_constraint "US"
+ "@internal
+  US is a symbol reference."
+ (match_code "symbol_ref")
+)
+
+(define_memory_constraint "Uz"
+ "@internal
+  A memory access that is accessible as an LDC/STC operand"
+ (and (match_code "mem")
+      (match_test "arm_coproc_ldc_stc_legitimate_address (op)")))
+
 ;; We used to have constraint letters for S and R in ARM state, but
 ;; all uses of these now appear to have been removed.
 
 ;; Additionally, we used to have a Q constraint in Thumb state, but
 ;; this wasn't really a valid memory constraint.  Again, all uses of
 ;; this now seem to have been removed.
+

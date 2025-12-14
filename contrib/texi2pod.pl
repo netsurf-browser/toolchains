@@ -1,6 +1,6 @@
 #! /usr/bin/perl -w
 
-#   Copyright (C) 1999, 2000, 2001, 2003, 2010 Free Software Foundation, Inc.
+#   Copyright (C) 1999-2014 Free Software Foundation, Inc.
 
 # This file is part of GCC.
 
@@ -164,6 +164,7 @@ while(<$inf>) {
 	    $ic = pop @icstack;
 	} elsif ($ended eq "multitable") {
 	    $_ = "\n=back\n";
+	    $ic = pop @icstack;
 	} else {
 	    die "unknown command \@end $ended at line $.\n";
 	}
@@ -288,7 +289,9 @@ while(<$inf>) {
 
     /^\@multitable\s.*/ and do {
 	push @endwstack, $endw;
+	push @icstack, $ic;
 	$endw = "multitable";
+	$ic = "";
 	$_ = "\n=over 4\n";
     };
 
@@ -312,11 +315,13 @@ while(<$inf>) {
 	$_ = "";	# need a paragraph break
     };
 
-    /^\@item\s+(.*\S)\s*$/ and $endw eq "multitable" and do {
+    /^\@(headitem|item)\s+(.*\S)\s*$/ and $endw eq "multitable" and do {
 	@columns = ();
-	for $column (split (/\s*\@tab\s*/, $1)) {
+	$item = $1;
+	for $column (split (/\s*\@tab\s*/, $2)) {
 	    # @strong{...} is used a @headitem work-alike
-	    $column =~ s/^\@strong{(.*)}$/$1/;
+	    $column =~ s/^\@strong\{(.*)\}$/$1/;
+	    $column = "I<$column>" if $item eq "headitem";
 	    push @columns, $column;
 	}
 	$_ = "\n=item ".join (" : ", @columns)."\n";
@@ -337,7 +342,7 @@ while(<$inf>) {
                 $_ = "\n=item $1\n";
             }
 	} else {
-	    $_ = "\n=item $ic\n";
+	    $_ = "\n=item Z\&LT;\&GT;$ic\n";
 	    $ic =~ y/A-Ya-y/B-Zb-z/;
 	    $ic =~ s/(\d+)/$1 + 1/eg;
 	}
@@ -389,15 +394,16 @@ sub postprocess
     # Formatting commands.
     # Temporary escape for @r.
     s/\@r\{([^\}]*)\}/R<$1>/g;
+    s/\@sc\{([^\}]*)\}/\U$1/g;
     s/\@(?:dfn|var|emph|cite|i)\{([^\}]*)\}/I<$1>/g;
     s/\@(?:code|kbd)\{([^\}]*)\}/C<$1>/g;
     s/\@(?:samp|strong|key|option|env|command|b)\{([^\}]*)\}/B<$1>/g;
-    s/\@sc\{([^\}]*)\}/\U$1/g;
     s/\@acronym\{([^\}]*)\}/\U$1/g;
     s/\@file\{([^\}]*)\}/F<$1>/g;
     s/\@w\{([^\}]*)\}/S<$1>/g;
     s/\@(?:dmn|math)\{([^\}]*)\}/$1/g;
     s/\@\///g;
+    s/\@t\{([^\}]*)\}/$1/g;
 
     # keep references of the form @ref{...}, print them bold
     s/\@(?:ref)\{([^\}]*)\}/B<$1>/g;

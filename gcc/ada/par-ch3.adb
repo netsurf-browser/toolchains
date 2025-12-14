@@ -6,7 +6,7 @@
 --                                                                          --
 --                                 B o d y                                  --
 --                                                                          --
---          Copyright (C) 1992-2012, Free Software Foundation, Inc.         --
+--          Copyright (C) 1992-2019, Free Software Foundation, Inc.         --
 --                                                                          --
 -- GNAT is free software;  you can  redistribute it  and/or modify it under --
 -- terms of the  GNU General Public License as published  by the Free Soft- --
@@ -228,8 +228,12 @@ package body Ch3 is
          raise Error_Resync;
       end if;
 
+      if Style_Check then
+         Style.Check_Defining_Identifier_Casing;
+      end if;
+
       Ident_Node := Token_Node;
-      Scan; -- past the reserved identifier
+      Scan; -- past the identifier
 
       --  If we already have a defining identifier, clean it out and make
       --  a new clean identifier. This situation arises in some error cases
@@ -243,6 +247,13 @@ package body Ch3 is
 
       if Ident_Node /= Error then
          Change_Identifier_To_Defining_Identifier (Ident_Node);
+
+         --  Warn if standard redefinition, except that we never warn on a
+         --  record field definition (since this is always a harmless case).
+
+         if not Inside_Record_Definition then
+            Warn_If_Standard_Redefinition (Ident_Node);
+         end if;
       end if;
 
       return Ident_Node;
@@ -268,13 +279,14 @@ package body Ch3 is
 
    --  PRIVATE_TYPE_DECLARATION ::=
    --    type DEFINING_IDENTIFIER [DISCRIMINANT_PART]
-   --      is [abstract] [tagged] [limited] private;
+   --      is [abstract] [tagged] [limited] private
+   --        [ASPECT_SPECIFICATIONS];
 
    --  PRIVATE_EXTENSION_DECLARATION ::=
    --    type DEFINING_IDENTIFIER [DISCRIMINANT_PART] is
    --      [abstract] [limited | synchronized]
    --        new ancestor_SUBTYPE_INDICATION [and INTERFACE_LIST]
-   --          with private;
+   --          with private [ASPECT_SPECIFICATIONS];
 
    --  TYPE_DEFINITION ::=
    --    ENUMERATION_TYPE_DEFINITION  | INTEGER_TYPE_DEFINITION
@@ -456,9 +468,9 @@ package body Ch3 is
 
       loop
          case Token is
-
-            when Tok_Access |
-                 Tok_Not    => --  Ada 2005 (AI-231)
+            when Tok_Access
+               | Tok_Not  --  Ada 2005 (AI-231)
+            =>
                Typedef_Node := P_Access_Type_Definition;
                exit;
 
@@ -644,6 +656,10 @@ package body Ch3 is
 
                   Typedef_Node := P_Record_Definition;
                   Set_Limited_Present (Typedef_Node, True);
+                  End_Labl := Make_Identifier (Token_Ptr, Chars (Ident_Node));
+                  Set_Comes_From_Source (End_Labl, False);
+
+                  Set_End_Label (Typedef_Node, End_Labl);
 
                --  Ada 2005 (AI-251): LIMITED INTERFACE
 
@@ -693,7 +709,7 @@ package body Ch3 is
                else
                   Decl_Node := New_Node (N_Private_Type_Declaration, Type_Loc);
                   Set_Limited_Present (Decl_Node, True);
-                  T_Private; -- past PRIVATE (or complain if not there!)
+                  T_Private; -- past PRIVATE (or complain if not there)
                end if;
 
                exit;
@@ -765,10 +781,10 @@ package body Ch3 is
             --  Ada 2005 (AI-345): Protected, synchronized or task interface
             --  or Ada 2005 (AI-443): Synchronized private extension.
 
-            when Tok_Protected    |
-                 Tok_Synchronized |
-                 Tok_Task         =>
-
+            when Tok_Protected
+               | Tok_Synchronized
+               | Tok_Task
+            =>
                declare
                   Saved_Token : constant Token_Type := Token;
 
@@ -852,7 +868,6 @@ package body Ch3 is
                   Error_Msg_AP ("type definition expected");
                   raise Error_Resync;
                end if;
-
          end case;
       end loop;
 
@@ -928,7 +943,7 @@ package body Ch3 is
 
    --  SUBTYPE_DECLARATION ::=
    --    subtype DEFINING_IDENTIFIER is [NULL_EXCLUSION] SUBTYPE_INDICATION
-   --    {ASPECT_SPECIFICATIONS];
+   --      [ASPECT_SPECIFICATIONS];
 
    --  The caller has checked that the initial token is SUBTYPE
 
@@ -1209,19 +1224,13 @@ package body Ch3 is
 
    function P_Constraint_Opt return Node_Id is
    begin
-      if Token = Tok_Range
-        or else Bad_Spelling_Of (Tok_Range)
-      then
+      if Token = Tok_Range or else Bad_Spelling_Of (Tok_Range) then
          return P_Range_Constraint;
 
-      elsif Token = Tok_Digits
-        or else Bad_Spelling_Of (Tok_Digits)
-      then
+      elsif Token = Tok_Digits or else Bad_Spelling_Of (Tok_Digits) then
          return P_Digits_Constraint;
 
-      elsif Token = Tok_Delta
-        or else Bad_Spelling_Of (Tok_Delta)
-      then
+      elsif Token = Tok_Delta or else Bad_Spelling_Of (Tok_Delta) then
          return P_Delta_Constraint;
 
       elsif Token = Tok_Left_Paren then
@@ -1230,6 +1239,31 @@ package body Ch3 is
       elsif Token = Tok_In then
          Ignore (Tok_In);
          return P_Constraint_Opt;
+
+      --  One more possibility is e.g. 1 .. 10 (i.e. missing RANGE keyword)
+
+      elsif Token = Tok_Identifier      or else
+            Token = Tok_Integer_Literal or else
+            Token = Tok_Real_Literal
+      then
+         declare
+            Scan_State : Saved_Scan_State;
+
+         begin
+            Save_Scan_State (Scan_State); -- at identifier or literal
+            Scan; -- past identifier or literal
+
+            if Token = Tok_Dot_Dot then
+               Restore_Scan_State (Scan_State);
+               Error_Msg_BC ("missing RANGE keyword");
+               return P_Range_Constraint;
+            else
+               Restore_Scan_State (Scan_State);
+               return Empty;
+            end if;
+         end;
+
+      --  Nothing worked, no constraint there
 
       else
          return Empty;
@@ -1270,12 +1304,15 @@ package body Ch3 is
 
    --  OBJECT_RENAMING_DECLARATION ::=
    --    DEFINING_IDENTIFIER :
-   --      [NULL_EXCLUSION] SUBTYPE_MARK renames object_NAME;
+   --      [NULL_EXCLUSION] SUBTYPE_MARK renames object_NAME
+   --        [ASPECT_SPECIFICATIONS];
    --  | DEFINING_IDENTIFIER :
-   --      ACCESS_DEFINITION renames object_NAME;
+   --      ACCESS_DEFINITION renames object_NAME
+   --        [ASPECT_SPECIFICATIONS];
 
    --  EXCEPTION_RENAMING_DECLARATION ::=
-   --    DEFINING_IDENTIFIER : exception renames exception_NAME;
+   --    DEFINING_IDENTIFIER : exception renames exception_NAME
+   --      [ASPECT_SPECIFICATIONS];
 
    --  EXCEPTION_DECLARATION ::=
    --    DEFINING_IDENTIFIER_LIST : exception
@@ -1421,6 +1458,16 @@ package body Ch3 is
 
          else
             Restore_Scan_State (Scan_State);
+
+            --  Reset Token_Node, because it already got changed from an
+            --  Identifier to a Defining_Identifier, and we don't want that
+            --  for a statement!
+
+            Token_Node :=
+              Make_Identifier (Sloc (Token_Node), Chars (Token_Node));
+
+            --  And now scan out one or more statements
+
             Statement_When_Declaration_Expected (Decls, Done, In_Spec);
             return;
          end if;
@@ -1470,14 +1517,34 @@ package body Ch3 is
             return;
 
          --  Otherwise we definitely have an ordinary identifier with a junk
-         --  token after it. Just complain that we expect a declaration, and
-         --  skip to a semicolon
+         --  token after it.
 
          else
-            Set_Declaration_Expected;
-            Resync_Past_Semicolon;
-            Done := False;
-            return;
+            --  If in -gnatd.2 mode, try for statements
+
+            if Debug_Flag_Dot_2 then
+               Restore_Scan_State (Scan_State);
+
+               --  Reset Token_Node, because it already got changed from an
+               --  Identifier to a Defining_Identifier, and we don't want that
+               --  for a statement!
+
+               Token_Node :=
+                 Make_Identifier (Sloc (Token_Node), Chars (Token_Node));
+
+               --  And now scan out one or more statements
+
+               Statement_When_Declaration_Expected (Decls, Done, In_Spec);
+               return;
+
+            --  Normal case, just complain and skip to semicolon
+
+            else
+               Set_Declaration_Expected;
+               Resync_Past_Semicolon;
+               Done := False;
+               return;
+            end if;
          end if;
       end if;
 
@@ -1662,15 +1729,19 @@ package body Ch3 is
 
             --  OBJECT_DECLARATION ::=
             --    DEFINING_IDENTIFIER_LIST : [aliased] [constant]
-            --      [NULL_EXCLUSION] SUBTYPE_INDICATION [:= EXPRESSION];
+            --      [NULL_EXCLUSION] SUBTYPE_INDICATION [:= EXPRESSION]
+            --        [ASPECT_SPECIFICATIONS];
             --  | DEFINING_IDENTIFIER_LIST : [aliased] [constant]
-            --      ACCESS_DEFINITION [:= EXPRESSION];
+            --      ACCESS_DEFINITION [:= EXPRESSION]
+            --        [ASPECT_SPECIFICATIONS];
 
             --  OBJECT_RENAMING_DECLARATION ::=
             --    DEFINING_IDENTIFIER :
-            --      [NULL_EXCLUSION] SUBTYPE_MARK renames object_NAME;
+            --      [NULL_EXCLUSION] SUBTYPE_MARK renames object_NAME
+            --        [ASPECT_SPECIFICATIONS];
             --  | DEFINING_IDENTIFIER :
-            --      ACCESS_DEFINITION renames object_NAME;
+            --      ACCESS_DEFINITION renames object_NAME
+            --        [ASPECT_SPECIFICATIONS];
 
             Not_Null_Present := P_Null_Exclusion;  --  Ada 2005 (AI-231/423)
 
@@ -1820,7 +1891,31 @@ package body Ch3 is
          end if;
 
          Set_Defining_Identifier (Decl_Node, Idents (Ident));
-         P_Aspect_Specifications (Decl_Node);
+         P_Aspect_Specifications (Decl_Node, Semicolon => False);
+
+         --  Allow initialization expression to follow aspects (note that in
+         --  this case P_Aspect_Specifications already issued an error msg).
+
+         if Token = Tok_Colon_Equal then
+            if Is_Non_Empty_List (Aspect_Specifications (Decl_Node)) then
+               Error_Msg
+                 ("aspect specifications must come after initialization "
+                  & "expression",
+                  Sloc (First (Aspect_Specifications (Decl_Node))));
+
+            else
+               --  In any case, the assignment symbol doesn't belong.
+
+               Error_Msg ("misplaced assignment symbol", Scan_Ptr);
+            end if;
+
+            Set_Expression (Decl_Node, Init_Expr_Opt);
+            Set_Has_Init_Expression (Decl_Node);
+         end if;
+
+         --  Now scan out the semicolon, which we deferred above
+
+         T_Semicolon;
 
          if List_OK then
             if Ident < Num_Idents then
@@ -1886,7 +1981,7 @@ package body Ch3 is
    --     type DEFINING_IDENTIFIER [DISCRIMINANT_PART] is
    --       [abstract] [limited | synchronized]
    --          new ancestor_SUBTYPE_INDICATION [and INTERFACE_LIST]
-   --            with private;
+   --            with private [ASPECT_SPECIFICATIONS];
 
    --  RECORD_EXTENSION_PART ::= with RECORD_DEFINITION
 
@@ -2018,7 +2113,9 @@ package body Ch3 is
 
    --  RANGE_CONSTRAINT ::= range RANGE
 
-   --  The caller has checked that the initial token is RANGE
+   --  The caller has checked that the initial token is RANGE or some
+   --  misspelling of it, or it may be absent completely (and a message
+   --  has already been issued).
 
    --  Error recovery: cannot raise Error_Resync
 
@@ -2027,7 +2124,13 @@ package body Ch3 is
 
    begin
       Range_Node := New_Node (N_Range_Constraint, Token_Ptr);
-      Scan; -- past RANGE
+
+      --  Skip range keyword if present
+
+      if Token = Tok_Range or else Bad_Spelling_Of (Tok_Range) then
+         Scan; -- past RANGE
+      end if;
+
       Set_Range_Expression (Range_Node, P_Range);
       return Range_Node;
    end P_Range_Constraint;
@@ -2935,8 +3038,23 @@ package body Ch3 is
                   Set_Discriminant_Type
                     (Specification_Node,
                      P_Access_Definition (Not_Null_Present));
-               else
 
+               --  Catch ouf-of-order keywords
+
+               elsif Token = Tok_Constant then
+                  Scan;
+
+                  if Token = Tok_Access then
+                     Error_Msg_SC ("CONSTANT must appear after ACCESS");
+                     Set_Discriminant_Type
+                       (Specification_Node,
+                        P_Access_Definition (Not_Null_Present));
+
+                  else
+                     Error_Msg_SC ("misplaced CONSTANT");
+                  end if;
+
+               else
                   Set_Discriminant_Type
                     (Specification_Node, P_Subtype_Mark);
                   No_Constraint;
@@ -3191,6 +3309,7 @@ package body Ch3 is
       Rec_Node : Node_Id;
 
    begin
+      Inside_Record_Definition := True;
       Rec_Node := New_Node (N_Record_Definition, Token_Ptr);
 
       --  Null record case
@@ -3219,11 +3338,11 @@ package body Ch3 is
 
       else
          Push_Scope_Stack;
-         Scope.Table (Scope.Last).Etyp := E_Record;
-         Scope.Table (Scope.Last).Ecol := Start_Column;
-         Scope.Table (Scope.Last).Sloc := Token_Ptr;
-         Scope.Table (Scope.Last).Labl := Error;
-         Scope.Table (Scope.Last).Junk := (Token /= Tok_Record);
+         Scopes (Scope.Last).Etyp := E_Record;
+         Scopes (Scope.Last).Ecol := Start_Column;
+         Scopes (Scope.Last).Sloc := Token_Ptr;
+         Scopes (Scope.Last).Labl := Error;
+         Scopes (Scope.Last).Junk := (Token /= Tok_Record);
 
          T_Record;
 
@@ -3235,6 +3354,7 @@ package body Ch3 is
          end loop;
       end if;
 
+      Inside_Record_Definition := False;
       return Rec_Node;
    end P_Record_Definition;
 
@@ -3253,87 +3373,100 @@ package body Ch3 is
       Component_List_Node : Node_Id;
       Decls_List          : List_Id;
       Scan_State          : Saved_Scan_State;
+      Null_Loc            : Source_Ptr;
 
    begin
       Component_List_Node := New_Node (N_Component_List, Token_Ptr);
       Decls_List := New_List;
 
+      --  Handle null
+
       if Token = Tok_Null then
+         Null_Loc := Token_Ptr;
          Scan; -- past NULL
          TF_Semicolon;
          P_Pragmas_Opt (Decls_List);
-         Set_Null_Present (Component_List_Node, True);
-         return Component_List_Node;
 
-      else
-         P_Pragmas_Opt (Decls_List);
+         --  If we have an END or WHEN now, everything is fine, otherwise we
+         --  complain about the null, ignore it, and scan for more components.
 
-         if Token /= Tok_Case then
-            Component_Scan_Loop : loop
-               P_Component_Items (Decls_List);
-               P_Pragmas_Opt (Decls_List);
+         if Token = Tok_End or else Token = Tok_When then
+            Set_Null_Present (Component_List_Node, True);
+            return Component_List_Node;
+         else
+            Error_Msg ("NULL component only allowed in null record", Null_Loc);
+         end if;
+      end if;
 
-               exit Component_Scan_Loop when Token = Tok_End
-                 or else Token = Tok_Case
-                 or else Token = Tok_When;
+      --  Scan components for non-null record
 
-               --  We are done if we do not have an identifier. However, if
-               --  we have a misspelled reserved identifier that is in a column
-               --  to the right of the record definition, we will treat it as
-               --  an identifier. It turns out to be too dangerous in practice
-               --  to accept such a mis-spelled identifier which does not have
-               --  this additional clue that confirms the incorrect spelling.
+      P_Pragmas_Opt (Decls_List);
 
-               if Token /= Tok_Identifier then
-                  if Start_Column > Scope.Table (Scope.Last).Ecol
-                    and then Is_Reserved_Identifier
-                  then
-                     Save_Scan_State (Scan_State); -- at reserved id
-                     Scan; -- possible reserved id
+      if Token /= Tok_Case then
+         Component_Scan_Loop : loop
+            P_Component_Items (Decls_List);
+            P_Pragmas_Opt (Decls_List);
 
-                     if Token = Tok_Comma or else Token = Tok_Colon then
-                        Restore_Scan_State (Scan_State);
-                        Scan_Reserved_Identifier (Force_Msg => True);
+            exit Component_Scan_Loop when Token = Tok_End
+              or else Token = Tok_Case
+              or else Token = Tok_When;
 
-                     --  Note reserved identifier used as field name after
-                     --  all because not followed by colon or comma
+            --  We are done if we do not have an identifier. However, if we
+            --  have a misspelled reserved identifier that is in a column to
+            --  the right of the record definition, we will treat it as an
+            --  identifier. It turns out to be too dangerous in practice to
+            --  accept such a mis-spelled identifier which does not have this
+            --  additional clue that confirms the incorrect spelling.
 
-                     else
-                        Restore_Scan_State (Scan_State);
-                        exit Component_Scan_Loop;
-                     end if;
+            if Token /= Tok_Identifier then
+               if Start_Column > Scopes (Scope.Last).Ecol
+                 and then Is_Reserved_Identifier
+               then
+                  Save_Scan_State (Scan_State); -- at reserved id
+                  Scan; -- possible reserved id
+
+                  if Token = Tok_Comma or else Token = Tok_Colon then
+                     Restore_Scan_State (Scan_State);
+                     Scan_Reserved_Identifier (Force_Msg => True);
+
+                     --  Note reserved identifier used as field name after all
+                     --  because not followed by colon or comma.
+
+                  else
+                     Restore_Scan_State (Scan_State);
+                     exit Component_Scan_Loop;
+                  end if;
 
                   --  Non-identifier that definitely was not reserved id
 
-                  else
-                     exit Component_Scan_Loop;
-                  end if;
-               end if;
-            end loop Component_Scan_Loop;
-         end if;
-
-         if Token = Tok_Case then
-            Set_Variant_Part (Component_List_Node, P_Variant_Part);
-
-            --  Check for junk after variant part
-
-            if Token = Tok_Identifier then
-               Save_Scan_State (Scan_State);
-               Scan; -- past identifier
-
-               if Token = Tok_Colon then
-                  Restore_Scan_State (Scan_State);
-                  Error_Msg_SC ("component may not follow variant part");
-                  Discard_Junk_Node (P_Component_List);
-
-               elsif Token = Tok_Case then
-                  Restore_Scan_State (Scan_State);
-                  Error_Msg_SC ("only one variant part allowed in a record");
-                  Discard_Junk_Node (P_Component_List);
-
                else
-                  Restore_Scan_State (Scan_State);
+                  exit Component_Scan_Loop;
                end if;
+            end if;
+         end loop Component_Scan_Loop;
+      end if;
+
+      if Token = Tok_Case then
+         Set_Variant_Part (Component_List_Node, P_Variant_Part);
+
+         --  Check for junk after variant part
+
+         if Token = Tok_Identifier then
+            Save_Scan_State (Scan_State);
+            Scan; -- past identifier
+
+            if Token = Tok_Colon then
+               Restore_Scan_State (Scan_State);
+               Error_Msg_SC ("component may not follow variant part");
+               Discard_Junk_Node (P_Component_List);
+
+            elsif Token = Tok_Case then
+               Restore_Scan_State (Scan_State);
+               Error_Msg_SC ("only one variant part allowed in a record");
+               Discard_Junk_Node (P_Component_List);
+
+            else
+               Restore_Scan_State (Scan_State);
             end if;
          end if;
       end if;
@@ -3365,7 +3498,7 @@ package body Ch3 is
    procedure P_Component_Items (Decls : List_Id) is
       Aliased_Present  : Boolean := False;
       CompDef_Node     : Node_Id;
-      Decl_Node        : Node_Id;
+      Decl_Node        : Node_Id := Empty;  -- initialize to prevent warning
       Scan_State       : Saved_Scan_State;
       Not_Null_Present : Boolean := False;
       Num_Idents       : Nat;
@@ -3385,6 +3518,7 @@ package body Ch3 is
       end if;
 
       Ident_Sloc := Token_Ptr;
+      Check_Bad_Layout;
       Idents (1) := P_Defining_Identifier (C_Comma_Colon);
       Num_Idents := 1;
 
@@ -3527,9 +3661,9 @@ package body Ch3 is
    begin
       Variant_Part_Node := New_Node (N_Variant_Part, Token_Ptr);
       Push_Scope_Stack;
-      Scope.Table (Scope.Last).Etyp := E_Case;
-      Scope.Table (Scope.Last).Sloc := Token_Ptr;
-      Scope.Table (Scope.Last).Ecol := Start_Column;
+      Scopes (Scope.Last).Etyp := E_Case;
+      Scopes (Scope.Last).Sloc := Token_Ptr;
+      Scopes (Scope.Last).Ecol := Start_Column;
 
       Scan; -- past CASE
       Case_Node := P_Expression;
@@ -3624,7 +3758,7 @@ package body Ch3 is
 
    function P_Discrete_Choice_List return List_Id is
       Choices     : List_Id;
-      Expr_Node   : Node_Id;
+      Expr_Node   : Node_Id := Empty;  -- initialize to prevent warning
       Choice_Node : Node_Id;
 
    begin
@@ -3726,6 +3860,10 @@ package body Ch3 is
          end if;
 
          if Token = Tok_Comma then
+            if Nkind (Expr_Node) = N_Iterated_Component_Association then
+               return Choices;
+            end if;
+
             Scan; -- past comma
 
             if Token = Tok_Vertical_Bar then
@@ -3873,6 +4011,7 @@ package body Ch3 is
       Access_Loc       : constant Source_Ptr := Token_Ptr;
       Prot_Flag        : Boolean;
       Not_Null_Present : Boolean := False;
+      Not_Null_Subtype : Boolean := False;
       Type_Def_Node    : Node_Id;
       Result_Not_Null  : Boolean;
       Result_Node      : Node_Id;
@@ -3907,8 +4046,18 @@ package body Ch3 is
 
    begin
       if not Header_Already_Parsed then
-         Not_Null_Present := P_Null_Exclusion;         --  Ada 2005 (AI-231)
+
+         --  NOT NULL ACCESS .. is a common form of access definition.
+         --  ACCESS NOT NULL ..  is certainly rare, but syntactically legal.
+         --  NOT NULL ACCESS NOT NULL .. is rarer yet, and also legal.
+         --  The last two cases are only meaningful if the following subtype
+         --  indication denotes an access type (semantic check). The flag
+         --  Not_Null_Subtype indicates that this second null exclusion is
+         --  present in the access type definition.
+
+         Not_Null_Present := P_Null_Exclusion;     --  Ada 2005 (AI-231)
          Scan; -- past ACCESS
+         Not_Null_Subtype := P_Null_Exclusion;     --  Might also appear
       end if;
 
       if Token_Name = Name_Protected then
@@ -3983,6 +4132,7 @@ package body Ch3 is
          Type_Def_Node :=
            New_Node (N_Access_To_Object_Definition, Access_Loc);
          Set_Null_Exclusion_Present (Type_Def_Node, Not_Null_Present);
+         Set_Null_Excluding_Subtype (Type_Def_Node, Not_Null_Subtype);
 
          if Token = Tok_All or else Token = Tok_Constant then
             if Ada_Version = Ada_83 then
@@ -4168,16 +4318,20 @@ package body Ch3 is
       Scan_State : Saved_Scan_State;
 
    begin
+      Done := False;
+
       if Style_Check then
          Style.Check_Indentation;
       end if;
 
       case Token is
-
-         when Tok_Function =>
+         when Tok_Function
+            | Tok_Not
+            | Tok_Overriding
+            | Tok_Procedure
+         =>
             Check_Bad_Layout;
             Append (P_Subprogram (Pf_Decl_Gins_Pbod_Rnam_Stub_Pexp), Decls);
-            Done := False;
 
          when Tok_For =>
             Check_Bad_Layout;
@@ -4201,12 +4355,10 @@ package body Ch3 is
 
             Restore_Scan_State (Scan_State);
             Append (P_Representation_Clause, Decls);
-            Done := False;
 
          when Tok_Generic =>
             Check_Bad_Layout;
             Append (P_Generic, Decls);
-            Done := False;
 
          when Tok_Identifier =>
             Check_Bad_Layout;
@@ -4221,7 +4373,6 @@ package body Ch3 is
 
                Token := Tok_Overriding;
                Append (P_Subprogram (Pf_Decl_Gins_Pbod_Rnam_Stub_Pexp), Decls);
-               Done := False;
 
             --  Normal case, no overriding, or overriding followed by colon
 
@@ -4229,60 +4380,34 @@ package body Ch3 is
                P_Identifier_Declarations (Decls, Done, In_Spec);
             end if;
 
-         --  Ada 2005: A subprogram declaration can start with "not" or
-         --  "overriding". In older versions, "overriding" is handled
-         --  like an identifier, with the appropriate messages.
-
-         when Tok_Not =>
-            Check_Bad_Layout;
-            Append (P_Subprogram (Pf_Decl_Gins_Pbod_Rnam_Stub_Pexp), Decls);
-            Done := False;
-
-         when Tok_Overriding =>
-            Check_Bad_Layout;
-            Append (P_Subprogram (Pf_Decl_Gins_Pbod_Rnam_Stub_Pexp), Decls);
-            Done := False;
-
          when Tok_Package =>
             Check_Bad_Layout;
             Append (P_Package (Pf_Decl_Gins_Pbod_Rnam_Stub_Pexp), Decls);
-            Done := False;
 
          when Tok_Pragma =>
             Append (P_Pragma, Decls);
-            Done := False;
-
-         when Tok_Procedure =>
-            Check_Bad_Layout;
-            Append (P_Subprogram (Pf_Decl_Gins_Pbod_Rnam_Stub_Pexp), Decls);
-            Done := False;
 
          when Tok_Protected =>
             Check_Bad_Layout;
             Scan; -- past PROTECTED
             Append (P_Protected, Decls);
-            Done := False;
 
          when Tok_Subtype =>
             Check_Bad_Layout;
             Append (P_Subtype_Declaration, Decls);
-            Done := False;
 
          when Tok_Task =>
             Check_Bad_Layout;
             Scan; -- past TASK
             Append (P_Task, Decls);
-            Done := False;
 
          when Tok_Type =>
             Check_Bad_Layout;
             Append (P_Type_Declaration, Decls);
-            Done := False;
 
          when Tok_Use =>
             Check_Bad_Layout;
-            Append (P_Use_Clause, Decls);
-            Done := False;
+            P_Use_Clause (Decls);
 
          when Tok_With =>
             Check_Bad_Layout;
@@ -4304,6 +4429,10 @@ package body Ch3 is
                else
                   Error_Msg_SC ("aspect specifications not allowed here");
                end if;
+
+               --  Assume that this is a misplaced aspect specification within
+               --  a declarative list. After discarding the misplaced aspects
+               --  we can continue the scan.
 
                declare
                   Dummy_Node : constant Node_Id :=
@@ -4385,19 +4514,17 @@ package body Ch3 is
                   --  scan it out
 
                   Push_Scope_Stack;
-                  Scope.Table (Scope.Last).Sloc := SIS_Sloc;
-                  Scope.Table (Scope.Last).Etyp := E_Name;
-                  Scope.Table (Scope.Last).Ecol := SIS_Ecol;
-                  Scope.Table (Scope.Last).Labl := SIS_Labl;
-                  Scope.Table (Scope.Last).Lreq := False;
+                  Scopes (Scope.Last).Sloc := SIS_Sloc;
+                  Scopes (Scope.Last).Etyp := E_Name;
+                  Scopes (Scope.Last).Ecol := SIS_Ecol;
+                  Scopes (Scope.Last).Labl := SIS_Labl;
+                  Scopes (Scope.Last).Lreq := False;
                   SIS_Entry_Active := False;
                   Scan; -- past BEGIN
                   Set_Handled_Statement_Sequence (Body_Node,
                     P_Handled_Sequence_Of_Statements);
                   End_Statements (Handled_Statement_Sequence (Body_Node));
                end;
-
-               Done := False;
 
             else
                Done := True;
@@ -4416,6 +4543,10 @@ package body Ch3 is
                Scan; -- past RECORD
                TF_Semicolon;
 
+               --  This might happen because of misplaced aspect specification.
+               --  After discarding the misplaced aspects we can continue the
+               --  scan.
+
             else
                Restore_Scan_State (Scan_State); -- to END
                Done := True;
@@ -4427,19 +4558,19 @@ package body Ch3 is
          --  judgment, because it is a real mess to go into statement mode
          --  prematurely in response to a junk declaration.
 
-         when Tok_Abort     |
-              Tok_Accept    |
-              Tok_Declare   |
-              Tok_Delay     |
-              Tok_Exit      |
-              Tok_Goto      |
-              Tok_If        |
-              Tok_Loop      |
-              Tok_Null      |
-              Tok_Requeue   |
-              Tok_Select    |
-              Tok_While     =>
-
+         when Tok_Abort
+            | Tok_Accept
+            | Tok_Declare
+            | Tok_Delay
+            | Tok_Exit
+            | Tok_Goto
+            | Tok_If
+            | Tok_Loop
+            | Tok_Null
+            | Tok_Requeue
+            | Tok_Select
+            | Tok_While
+         =>
             --  But before we decide that it's a statement, let's check for
             --  a reserved word misused as an identifier.
 
@@ -4489,7 +4620,7 @@ package body Ch3 is
                Scan; -- past PRIVATE
             end if;
 
-         --  An end of file definitely terminates the declarations!
+         --  An end of file definitely terminates the declarations
 
          when Tok_EOF =>
             Done := True;
@@ -4530,7 +4661,6 @@ package body Ch3 is
    exception
       when Error_Resync =>
          Resync_Past_Semicolon;
-         Done := False;
    end P_Declarative_Items;
 
    ----------------------------------
@@ -4590,11 +4720,22 @@ package body Ch3 is
          --  Test for body scanned, not acceptable as basic decl item
 
          if Kind = N_Subprogram_Body or else
-            Kind = N_Package_Body or else
-            Kind = N_Task_Body or else
+            Kind = N_Package_Body    or else
+            Kind = N_Task_Body       or else
             Kind = N_Protected_Body
          then
             Error_Msg ("proper body not allowed in package spec", Sloc (Decl));
+
+            --  Complete declaration of mangled subprogram body, for better
+            --  recovery if analysis is attempted.
+
+            if Nkind_In (Decl, N_Subprogram_Body, N_Package_Body, N_Task_Body)
+              and then No (Handled_Statement_Sequence (Decl))
+            then
+               Set_Handled_Statement_Sequence (Decl,
+                 Make_Handled_Sequence_Of_Statements (Sloc (Decl),
+                   Statements => New_List));
+            end if;
 
          --  Test for body stub scanned, not acceptable as basic decl item
 
@@ -4674,6 +4815,12 @@ package body Ch3 is
          if In_Spec then
             null;
 
+         --  Just ignore it if we are in -gnatd.2 (allow statements to appear
+         --  in declaration sequences) mode.
+
+         elsif Debug_Flag_Dot_2 then
+            null;
+
          --  In the declarative part case, take a second statement as a sure
          --  sign that we really have a missing BEGIN, and end the declarative
          --  part now. Note that the caller will fix up the first message to
@@ -4687,33 +4834,39 @@ package body Ch3 is
       --  Case of first occurrence of unexpected statement
 
       else
-         --  If we are in a package spec, then give message of statement
-         --  not allowed in package spec. This message never gets changed.
+         --  Do not give error message if we are operating in -gnatd.2 mode
+         --  (alllow statements to appear in declarative parts).
 
-         if In_Spec then
-            Error_Msg_SC ("statement not allowed in package spec");
+         if not Debug_Flag_Dot_2 then
 
-         --  If in declarative part, then we give the message complaining
-         --  about finding a statement when a declaration is expected. This
-         --  gets changed to a complaint about a missing BEGIN if we later
-         --  find that no BEGIN is present.
+            --  If we are in a package spec, then give message of statement
+            --  not allowed in package spec. This message never gets changed.
 
-         else
-            Error_Msg_SC ("statement not allowed in declarative part");
+            if In_Spec then
+               Error_Msg_SC ("statement not allowed in package spec");
+
+            --  If in declarative part, then we give the message complaining
+            --  about finding a statement when a declaration is expected. This
+            --  gets changed to a complaint about a missing BEGIN if we later
+            --  find that no BEGIN is present.
+
+            else
+               Error_Msg_SC ("statement not allowed in declarative part");
+            end if;
+
+            --  Capture message Id. This is used for two purposes, first to
+            --  stop multiple messages, see test above, and second, to allow
+            --  the replacement of the message in the declarative part case.
+
+            Missing_Begin_Msg := Get_Msg_Id;
          end if;
-
-         --  Capture message Id. This is used for two purposes, first to
-         --  stop multiple messages, see test above, and second, to allow
-         --  the replacement of the message in the declarative part case.
-
-         Missing_Begin_Msg := Get_Msg_Id;
       end if;
 
       --  In all cases except the case in which we decided to terminate the
       --  declaration sequence on a second error, we scan out the statement
       --  and append it to the list of declarations (note that the semantics
       --  can handle statements in a declaration list so if we proceed to
-      --  call the semantic phase, all will be (reasonably) well!
+      --  call the semantic phase, all will be (reasonably) well.
 
       Append_List_To (Decls, P_Sequence_Of_Statements (SS_Unco));
 

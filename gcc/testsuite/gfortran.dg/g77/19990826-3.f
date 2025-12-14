@@ -1,4 +1,5 @@
 c { dg-do compile }
+c { dg-options "-std=legacy" }
 * Date: Thu, 19 Aug 1999 10:02:32 +0200
 * From: Frederic Devernay <devernay@istar.fr>
 * Organization: ISTAR

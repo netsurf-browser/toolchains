@@ -1,4 +1,5 @@
 /* { dg-require-effective-target vect_int } */
+/* { dg-additional-options "-fno-tree-loop-distribute-patterns" } */
 
 #include <stdarg.h>
 #include "../../tree-vect.h"
@@ -18,7 +19,7 @@ struct s{
   struct t e;   /* unaligned (offset 2N+4N+4 B) */
 };
  
-struct s tmp;
+struct s tmp = { 1 };
 
 int main1 ()
 {  
@@ -86,6 +87,4 @@ int main (void)
   return main1 ();
 } 
 
-/* { dg-final { scan-tree-dump-times "vectorization not profitable" 1 "vect" } } */
-/* { dg-final { scan-tree-dump-times "vectorized 3 loops" 1 "vect" } } */
-/* { dg-final { cleanup-tree-dump "vect" } } */
+/* { dg-final { scan-tree-dump-times "vectorized 4 loops" 1 "vect" } } */

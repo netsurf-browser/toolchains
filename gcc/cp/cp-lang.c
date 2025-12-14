@@ -1,6 +1,5 @@
 /* Language-dependent hooks for C++.
-   Copyright 2001, 2002, 2004, 2007, 2008, 2009, 2010
-   Free Software Foundation, Inc.
+   Copyright (C) 2001-2020 Free Software Foundation, Inc.
    Contributed by Alexandre Oliva  <aoliva@redhat.com>
 
 This file is part of GCC.
@@ -22,25 +21,19 @@ along with GCC; see the file COPYING3.  If not see
 #include "config.h"
 #include "system.h"
 #include "coretypes.h"
-#include "tm.h"
-#include "tree.h"
 #include "cp-tree.h"
-#include "c-family/c-common.h"
+#include "stor-layout.h"
 #include "langhooks.h"
 #include "langhooks-def.h"
-#include "debug.h"
 #include "cp-objcp-common.h"
-#include "hashtab.h"
-#include "target.h"
-#include "parser.h"
 
 enum c_language_kind c_language = clk_cxx;
-static void cp_init_ts (void);
 static const char * cxx_dwarf_name (tree t, int verbosity);
 static enum classify_record cp_classify_record (tree type);
 static tree cp_eh_personality (void);
 static tree get_template_innermost_arguments_folded (const_tree);
 static tree get_template_argument_pack_elems_folded (const_tree);
+static tree cxx_enum_underlying_base_type (const_tree);
 
 /* Lang hooks common to C++ and ObjC++ are declared in cp/cp-objcp-common.h;
    consequently, there should be very few hooks below.  */
@@ -77,11 +70,21 @@ static tree get_template_argument_pack_elems_folded (const_tree);
 #undef LANG_HOOKS_DWARF_NAME
 #define LANG_HOOKS_DWARF_NAME cxx_dwarf_name
 #undef LANG_HOOKS_INIT_TS
-#define LANG_HOOKS_INIT_TS cp_init_ts
+#define LANG_HOOKS_INIT_TS cp_common_init_ts
 #undef LANG_HOOKS_EH_PERSONALITY
 #define LANG_HOOKS_EH_PERSONALITY cp_eh_personality
 #undef LANG_HOOKS_EH_RUNTIME_TYPE
 #define LANG_HOOKS_EH_RUNTIME_TYPE build_eh_type_type
+#undef LANG_HOOKS_ENUM_UNDERLYING_BASE_TYPE
+#define LANG_HOOKS_ENUM_UNDERLYING_BASE_TYPE cxx_enum_underlying_base_type
+
+#if CHECKING_P
+#undef LANG_HOOKS_RUN_LANG_SELFTESTS
+#define LANG_HOOKS_RUN_LANG_SELFTESTS selftest::run_cp_tests
+#endif /* #if CHECKING_P */
+
+#undef LANG_HOOKS_GET_SUBSTRING_LOCATION
+#define LANG_HOOKS_GET_SUBSTRING_LOCATION c_get_substring_location
 
 /* Each front end provides its own lang hook initializer.  */
 struct lang_hooks lang_hooks = LANG_HOOKS_INITIALIZER;
@@ -92,21 +95,13 @@ struct lang_hooks lang_hooks = LANG_HOOKS_INITIALIZER;
 /* The following function does something real, but only in Objective-C++.  */
 
 tree
-objcp_tsubst_copy_and_build (tree t ATTRIBUTE_UNUSED,
-			     tree args ATTRIBUTE_UNUSED,
-			     tsubst_flags_t complain ATTRIBUTE_UNUSED,
-			     tree in_decl ATTRIBUTE_UNUSED,
-			     bool function_p ATTRIBUTE_UNUSED)
+objcp_tsubst_copy_and_build (tree /*t*/,
+			     tree /*args*/,
+			     tsubst_flags_t /*complain*/,
+			     tree /*in_decl*/,
+			     bool /*function_p*/)
 {
   return NULL_TREE;
-}
-
-static void
-cp_init_ts (void)
-{
-  cp_common_init_ts ();
-
-  init_shadowed_var_for_decl ();
 }
 
 static const char *
@@ -114,21 +109,21 @@ cxx_dwarf_name (tree t, int verbosity)
 {
   gcc_assert (DECL_P (t));
 
-  if (DECL_NAME (t)
-      && (ANON_AGGRNAME_P (DECL_NAME (t)) || LAMBDANAME_P (DECL_NAME (t))))
+  if (DECL_NAME (t) && IDENTIFIER_ANON_P (DECL_NAME (t)))
     return NULL;
   if (verbosity >= 2)
-    return decl_as_string (t,
-			   TFF_DECL_SPECIFIERS | TFF_UNQUALIFIED_NAME
-			   | TFF_NO_OMIT_DEFAULT_TEMPLATE_ARGUMENTS);
+    return decl_as_dwarf_string (t,
+                                 TFF_DECL_SPECIFIERS | TFF_UNQUALIFIED_NAME
+                                 | TFF_NO_OMIT_DEFAULT_TEMPLATE_ARGUMENTS);
 
-  return cxx_printable_name (t, verbosity);
+  return lang_decl_dwarf_name (t, verbosity, false);
 }
 
 static enum classify_record
 cp_classify_record (tree type)
 {
-  if (CLASSTYPE_DECLARED_CLASS (type))
+  if (TYPE_LANG_SPECIFIC (type)
+      && CLASSTYPE_DECLARED_CLASS (type))
     return RECORD_IS_CLASS;
 
   return RECORD_IS_STRUCT;
@@ -140,10 +135,7 @@ static tree
 cp_eh_personality (void)
 {
   if (!cp_eh_personality_decl)
-    {
-      const char *lang = (pragma_java_exceptions ? "gcj" : "gxx");
-      cp_eh_personality_decl = build_personality_function (lang);
-    }
+    cp_eh_personality_decl = build_personality_function ("gxx");
 
   return cp_eh_personality_decl;
 }
@@ -218,6 +210,44 @@ get_template_argument_pack_elems_folded (const_tree t)
 {
   return fold_cplus_constants (get_template_argument_pack_elems (t));
 }
+
+/* The C++ version of the enum_underlying_base_type langhook.
+   See also cp/semantics.c (finish_underlying_type).  */
+
+static
+tree cxx_enum_underlying_base_type (const_tree type)
+{
+  tree underlying_type = ENUM_UNDERLYING_TYPE (type);
+
+  if (! ENUM_FIXED_UNDERLYING_TYPE_P (type))
+    underlying_type
+      = c_common_type_for_mode (TYPE_MODE (underlying_type),
+                                TYPE_UNSIGNED (underlying_type));
+
+  return underlying_type;
+}
+
+#if CHECKING_P
+
+namespace selftest {
+
+/* Implementation of LANG_HOOKS_RUN_LANG_SELFTESTS for the C++ frontend.  */
+
+void
+run_cp_tests (void)
+{
+  /* Run selftests shared within the C family.  */
+  c_family_tests ();
+
+  /* Additional C++-specific tests.  */
+  cp_pt_c_tests ();
+  cp_tree_c_tests ();
+}
+
+} // namespace selftest
+
+#endif /* #if CHECKING_P */
+
 
 #include "gt-cp-cp-lang.h"
 #include "gtype-cp.h"

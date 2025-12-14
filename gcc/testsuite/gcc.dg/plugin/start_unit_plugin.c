@@ -1,7 +1,7 @@
 /* This plugin tests the correct operation of a PLUGIN_START_UNIT callback.
  * By the time a PLUGIN_START_UNIT callback is invoked, the frontend 
  * initialization should have completed. At least the different *_type_nodes
- * should have been created. This plugin creates an artifical global 
+ * should have been created. This plugin creates an artificial global 
  * interger variable.
  * 
 */
@@ -10,8 +10,20 @@
 #include "system.h"
 #include "coretypes.h"
 #include "tm.h"
+#include "tree.h"
+#include "stringpool.h"
 #include "toplev.h"
 #include "basic-block.h"
+#include "hash-table.h"
+#include "vec.h"
+#include "ggc.h"
+#include "basic-block.h"
+#include "tree-ssa-alias.h"
+#include "internal-fn.h"
+#include "gimple-fold.h"
+#include "tree-eh.h"
+#include "gimple-expr.h"
+#include "is-a.h"
 #include "gimple.h"
 #include "tree.h"
 #include "tree-pass.h"
@@ -28,6 +40,19 @@ gate_start_unit (void)
 
 static void start_unit_callback (void *gcc_data, void *user_data)
 {
+  static const struct ggc_root_tab root[] = {
+    {
+      &fake_var,
+      1,
+      sizeof (fake_var),
+      &gt_ggc_mx_tree_node,
+      &gt_pch_nx_tree_node
+    },
+    LAST_GGC_ROOT_TAB
+  };
+
+  register_callback ("start_unit", PLUGIN_REGISTER_GGC_ROOTS, NULL,
+		     (void *)root);
   if (integer_type_node) {
     fake_var = build_decl (UNKNOWN_LOCATION, VAR_DECL, 
                            get_identifier ("_fake_var_"),

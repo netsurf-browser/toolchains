@@ -1,6 +1,6 @@
 // PR c++/47416
-// { dg-do compile }
-// { dg-options "-std=c++0x" }
+// { dg-do compile { target c++11 } }
+// { dg-additional-options "-Wno-return-type" }
 
 namespace std
 {
@@ -214,7 +214,7 @@ namespace boost
     {
     }
   };
-};
+}
 
 void
 foo (const int &a)

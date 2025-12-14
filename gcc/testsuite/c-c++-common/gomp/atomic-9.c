@@ -1,5 +1,6 @@
 /* { dg-do compile } */
 /* { dg-options "-fopenmp -fdump-tree-ompexp" } */
+/* { dg-additional-options "-Wno-volatile" { target c++ } } */
 /* { dg-require-effective-target cas_int } */
 
 volatile int *bar(void);
@@ -11,4 +12,3 @@ void f1(void)
 }
 
 /* { dg-final { scan-tree-dump-times "__atomic_fetch_add" 1 "ompexp" } } */
-/* { dg-final { cleanup-tree-dump "ompexp" } } */

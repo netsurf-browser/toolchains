@@ -92,9 +92,9 @@ func Tanh(x complex128) complex128 {
 func reducePi(x float64) float64 {
 	const (
 		// extended precision value of PI:
-		DP1 = 3.14159265160560607910E0   // ?? 0x400921fb54000000
-		DP2 = 1.98418714791870343106E-9  // ?? 0x3e210b4610000000
-		DP3 = 1.14423774522196636802E-17 // ?? 0x3c6a62633145c06e
+		DP1 = 3.14159265160560607910e0   // ?? 0x400921fb54000000
+		DP2 = 1.98418714791870343106e-9  // ?? 0x3e210b4610000000
+		DP3 = 1.14423774522196636802e-17 // ?? 0x3c6a62633145c06e
 	)
 	t := x / math.Pi
 	if t >= 0 {
@@ -120,9 +120,9 @@ func tanSeries(z complex128) float64 {
 	rn := 0.0
 	d := 0.0
 	for {
-		rn += 1
+		rn++
 		f *= rn
-		rn += 1
+		rn++
 		f *= rn
 		x2 *= x
 		y2 *= y
@@ -130,16 +130,18 @@ func tanSeries(z complex128) float64 {
 		t /= f
 		d += t
 
-		rn += 1
+		rn++
 		f *= rn
-		rn += 1
+		rn++
 		f *= rn
 		x2 *= x
 		y2 *= y
 		t = y2 - x2
 		t /= f
 		d += t
-		if math.Abs(t/d) <= MACHEP {
+		if !(math.Abs(t/d) > MACHEP) {
+			// Caution: Use ! and > instead of <= for correct behavior if t/d is NaN.
+			// See issue 17577.
 			break
 		}
 	}

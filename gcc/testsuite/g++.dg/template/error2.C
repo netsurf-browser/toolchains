@@ -7,24 +7,22 @@
 
 template<class T> struct X
 {
-  T m;	// { dg-error "as type 'void'" "void" }
-	// { dg-error "incomplete type" "incomplate" { target *-*-* } 10 }
-	// { dg-error "invalid" "invalid" { target *-*-* } 10 }
+  T m;	// { dg-error "incomplete type|invalid use" }
 };
 
 template<class T >
 struct Derived
 {
-  class Nested : public X<T> // { dg-message "required" "" }
+  class Nested : public X<T> // { dg-message "required" }
   {
   };
   
-  Nested m; // { dg-message "required" "" }
+  Nested m; // { dg-message "required" }
   
   void Foo ();
 };
 
 void Foo (Derived<void> &x)
 {
-  x.Foo (); // { dg-message "required" "" }
+  x.Foo (); // { dg-message "required" }
 }

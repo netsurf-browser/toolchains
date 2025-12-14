@@ -1,5 +1,5 @@
 ;; IA-64 machine description for vector operations.
-;; Copyright (C) 2004, 2005, 2007, 2010 Free Software Foundation, Inc.
+;; Copyright (C) 2004-2020 Free Software Foundation, Inc.
 ;;
 ;; This file is part of GCC.
 ;;
@@ -278,7 +278,29 @@
   "pmpyshr2.u %0 = %1, %2, %3"
   [(set_attr "itanium_class" "mmmul")])
 
-(define_insn "pmpy2_even"
+(define_expand "smulv4hi3_highpart"
+  [(match_operand:V4HI 0 "gr_register_operand")
+   (match_operand:V4HI 1 "gr_register_operand")
+   (match_operand:V4HI 2 "gr_register_operand")]
+  ""
+{
+  emit_insn (gen_pmpyshr2 (operands[0], operands[1],
+			   operands[2], GEN_INT (16)));
+  DONE;
+})
+
+(define_expand "umulv4hi3_highpart"
+  [(match_operand:V4HI 0 "gr_register_operand")
+   (match_operand:V4HI 1 "gr_register_operand")
+   (match_operand:V4HI 2 "gr_register_operand")]
+  ""
+{
+  emit_insn (gen_pmpyshr2_u (operands[0], operands[1],
+			     operands[2], GEN_INT (16)));
+  DONE;
+})
+
+(define_insn "vec_widen_smult_even_v4hi"
   [(set (match_operand:V2SI 0 "gr_register_operand" "=r")
 	(mult:V2SI
 	  (vec_select:V2SI
@@ -299,7 +321,7 @@
 }
   [(set_attr "itanium_class" "mmshf")])
 
-(define_insn "pmpy2_odd"
+(define_insn "vec_widen_smult_odd_v4hi"
   [(set (match_operand:V2SI 0 "gr_register_operand" "=r")
 	(mult:V2SI
 	  (vec_select:V2SI
@@ -403,7 +425,7 @@
   x = gen_rtx_PARALLEL (VOIDmode, gen_rtvec (4, const1_rtx, const0_rtx,
 					     GEN_INT (3), const2_rtx));
   x = gen_rtx_VEC_SELECT (V4HImode, op1h, x);
-  emit_insn (gen_rtx_SET (VOIDmode, t0, x));
+  emit_insn (gen_rtx_SET (t0, x));
 
   /* T1 = DZ.l, CY.l, BX.l, AW.l.  */
   emit_insn (gen_mulv4hi3 (t1, op1h, op2h));
@@ -599,68 +621,6 @@
   ""
 {
   ia64_expand_widen_sum (operands, false);
-  DONE;
-})
-
-(define_expand "udot_prodv8qi"
-  [(match_operand:V2SI 0 "gr_register_operand" "")
-   (match_operand:V8QI 1 "gr_register_operand" "")
-   (match_operand:V8QI 2 "gr_register_operand" "")
-   (match_operand:V2SI 3 "gr_register_operand" "")]
-  ""
-{
-  ia64_expand_dot_prod_v8qi (operands, true);
-  DONE;
-})
-
-(define_expand "sdot_prodv8qi"
-  [(match_operand:V2SI 0 "gr_register_operand" "")
-   (match_operand:V8QI 1 "gr_register_operand" "")
-   (match_operand:V8QI 2 "gr_register_operand" "")
-   (match_operand:V2SI 3 "gr_register_operand" "")]
-  ""
-{
-  ia64_expand_dot_prod_v8qi (operands, false);
-  DONE;
-})
-
-(define_expand "sdot_prodv4hi"
-  [(match_operand:V2SI 0 "gr_register_operand" "")
-   (match_operand:V4HI 1 "gr_register_operand" "")
-   (match_operand:V4HI 2 "gr_register_operand" "")
-   (match_operand:V2SI 3 "gr_register_operand" "")]
-  ""
-{
-  rtx e, o, t;
-
-  e = gen_reg_rtx (V2SImode);
-  o = gen_reg_rtx (V2SImode);
-  t = gen_reg_rtx (V2SImode);
-
-  emit_insn (gen_pmpy2_even (e, operands[1], operands[2]));
-  emit_insn (gen_pmpy2_odd (o, operands[1], operands[2]));
-  emit_insn (gen_addv2si3 (t, e, operands[3]));
-  emit_insn (gen_addv2si3 (operands[0], t, o));
-  DONE;
-})
-
-(define_expand "udot_prodv4hi"
-  [(match_operand:V2SI 0 "gr_register_operand" "")
-   (match_operand:V4HI 1 "gr_register_operand" "")
-   (match_operand:V4HI 2 "gr_register_operand" "")
-   (match_operand:V2SI 3 "gr_register_operand" "")]
-  ""
-{
-  rtx l, h, t;
-
-  l = gen_reg_rtx (V2SImode);
-  h = gen_reg_rtx (V2SImode);
-  t = gen_reg_rtx (V2SImode);
-
-  emit_insn (gen_vec_widen_umult_lo_v4hi (l, operands[1], operands[2]));
-  emit_insn (gen_vec_widen_umult_hi_v4hi (h, operands[1], operands[2]));
-  emit_insn (gen_addv2si3 (t, l, operands[3]));
-  emit_insn (gen_addv2si3 (operands[0], t, h));
   DONE;
 })
 
@@ -1055,7 +1015,7 @@
 }
   [(set_attr "itanium_class" "mmshf")])
 
-(define_expand "vec_initv2si"
+(define_expand "vec_initv2sisi"
   [(match_operand:V2SI 0 "gr_register_operand" "")
    (match_operand 1 "" "")]
   ""
@@ -1077,7 +1037,7 @@
     op2 = force_reg (SImode, op2);
 
   x = gen_rtx_VEC_CONCAT (V2SImode, op1, op2);
-  emit_insn (gen_rtx_SET (VOIDmode, operands[0], x));
+  emit_insn (gen_rtx_SET (operands[0], x));
   DONE;
 })
 
@@ -1178,8 +1138,7 @@
 		  (match_operand:V2SF 2 "fr_register_operand" "")))]
   ""
 {
-  rtvec v = gen_rtvec (2, CONST1_RTX (SFmode), CONST1_RTX (SFmode));
-  operands[3] = force_reg (V2SFmode, gen_rtx_CONST_VECTOR (V2SFmode, v));
+  operands[3] = force_reg (V2SFmode, CONST1_RTX (V2SFmode));
 })
 
 (define_expand "subv2sf3"
@@ -1190,8 +1149,7 @@
 	  (neg:V2SF (match_operand:V2SF 2 "fr_register_operand" ""))))]
   ""
 {
-  rtvec v = gen_rtvec (2, CONST1_RTX (SFmode), CONST1_RTX (SFmode));
-  operands[3] = force_reg (V2SFmode, gen_rtx_CONST_VECTOR (V2SFmode, v));
+  operands[3] = force_reg (V2SFmode, CONST1_RTX (V2SFmode));
 })
 
 (define_insn "mulv2sf3"
@@ -1313,10 +1271,10 @@
 
   cmp = gen_reg_rtx (V2SFmode);
   PUT_MODE (operands[3], V2SFmode);
-  emit_insn (gen_rtx_SET (VOIDmode, cmp, operands[3]));
+  emit_insn (gen_rtx_SET (cmp, operands[3]));
 
   x = gen_rtx_IF_THEN_ELSE (V2SFmode, cmp, operands[1], operands[2]);
-  emit_insn (gen_rtx_SET (VOIDmode, operands[0], x));
+  emit_insn (gen_rtx_SET (operands[0], x));
   DONE;
 })
 
@@ -1339,7 +1297,7 @@
   "fselect %0 = %F2, %F3, %1"
   [(set_attr "itanium_class" "fmisc")])
 
-(define_expand "vec_initv2sf"
+(define_expand "vec_initv2sfsf"
   [(match_operand:V2SF 0 "fr_register_operand" "")
    (match_operand 1 "" "")]
   ""
@@ -1523,7 +1481,7 @@
   operands[1] = gen_rtx_REG (SFmode, REGNO (operands[1]));
 })
 
-(define_expand "vec_extractv2sf"
+(define_expand "vec_extractv2sfsf"
   [(set (match_operand:SF 0 "register_operand" "")
 	(unspec:SF [(match_operand:V2SF 1 "register_operand" "")
 		    (match_operand:DI 2 "const_int_operand" "")]
@@ -1589,19 +1547,6 @@
   rtx op2 = gen_lowpart (V4HImode, operands[2]);
   ia64_expand_vec_perm_even_odd (operands[0], op1, op2, TARGET_BIG_ENDIAN);
   DONE;
-})
-
-(define_expand "vec_perm_const<mode>"
-  [(match_operand:VEC 0 "register_operand" "")
-   (match_operand:VEC 1 "register_operand" "")
-   (match_operand:VEC 2 "register_operand" "")
-   (match_operand:<vecint> 3 "" "")]
-  ""
-{
-  if (ia64_expand_vec_perm_const (operands))
-    DONE;
-  else
-    FAIL;
 })
 
 ;; Missing operations

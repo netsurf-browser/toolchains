@@ -1,8 +1,9 @@
 // PR c++/55753
-// { dg-options -std=c++11 }
+// { dg-do compile { target c++11 } }
 
 template <typename Tp>
 struct C {
+  C() = default;
   constexpr C(const Tp& r) { }
 };
 

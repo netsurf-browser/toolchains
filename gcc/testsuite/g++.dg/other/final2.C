@@ -1,5 +1,6 @@
 // PR c++/53186
-// { dg-options "-fdump-tree-original -std=c++11"  }
+// { dg-do compile { target c++11 } }
+// { dg-options "-fdump-tree-original"  }
 
 struct F1
 {
@@ -24,4 +25,3 @@ void fooF2(F2& a) { a(); int m = a; ++a; }
 // { dg-final { scan-tree-dump-times "F2::operator\\(\\)" 1 "original" } }
 // { dg-final { scan-tree-dump-times "F2::operator int" 1 "original" } }
 // { dg-final { scan-tree-dump-times "F2::operator\\+\\+" 1 "original" } }
-// { dg-final { cleanup-tree-dump "original" } }

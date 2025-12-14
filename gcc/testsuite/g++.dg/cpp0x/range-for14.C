@@ -1,17 +1,18 @@
 // Test for other range-based for loops with
 // begin/end member functions
 
-// { dg-do compile }
-// { dg-options "-std=c++0x" }
+// { dg-do compile { target c++11 } }
 
 //These should not be used
 template<typename T> int *begin(T &t)
 {
     T::fail;
+    return 0;
 }
 template<typename T> int *end(T &t)
 {
     T::fail;
+    return 0;
 }
 
 //Test for defaults
@@ -59,7 +60,7 @@ void test1()
 
 struct base_begin
 {
-    int *begin(); // { dg-error "" }
+    int *begin(); // { dg-message "" }
 };
 
 struct base_end

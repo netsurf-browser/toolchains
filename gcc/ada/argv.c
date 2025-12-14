@@ -6,7 +6,7 @@
  *                                                                          *
  *                          C Implementation File                           *
  *                                                                          *
- *         Copyright (C) 1992-2011, Free Software Foundation, Inc.          *
+ *         Copyright (C) 1992-2019, Free Software Foundation, Inc.          *
  *                                                                          *
  * GNAT is free software;  you can  redistribute it  and/or modify it under *
  * terms of the  GNU General Public License as published  by the Free Soft- *
@@ -42,20 +42,19 @@
    main program, and these routines are accessed from the
    Ada.Command_Line.Environment package.  */
 
-#ifdef __cplusplus
-extern "C" {
-#endif
-
 #ifdef IN_RTS
-#include "tconfig.h"
-#include "tsystem.h"
-#include <sys/stat.h>
+#include "runtime.h"
+#include <string.h>
 #else
 #include "config.h"
 #include "system.h"
 #endif
 
 #include "adaint.h"
+
+#ifdef __cplusplus
+extern "C" {
+#endif
 
 /* argc and argv of the main program are saved under gnat_argc and gnat_argv,
    envp of the main program is saved under gnat_envp.  */
@@ -92,7 +91,7 @@ void
 __gnat_fill_arg (char *a, int i)
 {
   if (gnat_argv != NULL)
-    strncpy (a, gnat_argv[i], strlen(gnat_argv[i]));
+    memcpy (a, gnat_argv[i], strlen (gnat_argv[i]));
 }
 
 int
@@ -118,7 +117,7 @@ void
 __gnat_fill_env (char *a, int i)
 {
   if (gnat_envp != NULL)
-    strncpy (a, gnat_envp[i], strlen (gnat_envp[i]));
+    memcpy (a, gnat_envp[i], strlen (gnat_envp[i]));
 }
 
 #ifdef __cplusplus

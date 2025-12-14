@@ -1,6 +1,6 @@
 // 2001-06-14  Benjamin Kosnik  <bkoz@redhat.com>
 
-// Copyright (C) 2001, 2002, 2004, 2005, 2009 Free Software Foundation, Inc.
+// Copyright (C) 2001-2020 Free Software Foundation, Inc.
 //
 // This file is part of the GNU ISO C++ Library.  This library is free
 // software; you can redistribute it and/or modify it under the
@@ -22,19 +22,20 @@
 #include <memory>
 #include <stdexcept>
 #include <testsuite_hooks.h>
+#include <testsuite_allocator.h>
 
 // libstdc++/8230
 void test02()
 {
-  bool test __attribute__((unused)) = true;
+  bool test = true;
   try 
     {
       std::allocator<int> alloc;
-      const std::allocator<int>::size_type n = alloc.max_size();
+      const std::allocator<int>::size_type n = __gnu_test::max_size(alloc);
       int* p = alloc.allocate(n + 1);
       p[n] = 2002;
     } 
-  catch(const std::bad_alloc& e) 
+  catch(const std::bad_alloc& e)
     {
       // Allowed.
       test = true;

@@ -1,13 +1,13 @@
 // PR c++/56059
-// { dg-options -std=c++11 }
+// { dg-do compile { target c++11 } }
 
 typedef int Int;
 template<typename T> struct baz { };
 template<typename T> T bar();
 
 template<typename T, typename ... U>
-baz<decltype(bar<Int>(bar<U>() ...))>
-foo();				// { dg-error "no match" }
+baz<decltype(bar<Int>(bar<U>() ...))> // { dg-error "" }
+foo();
 
 int main()
 {

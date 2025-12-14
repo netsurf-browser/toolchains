@@ -1,5 +1,4 @@
 ! { dg-do compile }
-! { dg-options "-fwhole-file" }
 !
 ! Tests the fix PR40011 comment 16 in which the derived type lists in
 ! different program units were getting mixed up.
@@ -35,5 +34,3 @@ FUNCTION foo_count()
   USE module_foo, ONLY: foo
   INTEGER :: foo_count
 END FUNCTION
-
-! { dg-final { cleanup-modules "module_foo" } }

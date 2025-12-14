@@ -1,11 +1,10 @@
-// { dg-do run { target *-*-freebsd* *-*-netbsd* *-*-linux* *-*-solaris* *-*-cygwin *-*-darwin* alpha*-*-osf* mips-sgi-irix6* powerpc-ibm-aix* } }
-// { dg-options " -std=gnu++0x -pthread" { target *-*-freebsd* *-*-netbsd* *-*-linux* alpha*-*-osf* mips-sgi-irix6* powerpc-ibm-aix* } }
-// { dg-options " -std=gnu++0x -pthreads" { target *-*-solaris* } }
-// { dg-options " -std=gnu++0x " { target *-*-cygwin *-*-darwin* } }
-// { dg-require-cstdint "" }
+// { dg-do run }
+// { dg-options "-pthread"  }
+// { dg-require-effective-target c++11 }
+// { dg-require-effective-target pthread }
 // { dg-require-gthreads "" }
 
-// Copyright (C) 2010, 2011, 2012 Free Software Foundation, Inc.
+// Copyright (C) 2010-2020 Free Software Foundation, Inc.
 //
 // This file is part of the GNU ISO C++ Library.  This library is free
 // software; you can redistribute it and/or modify it under the
@@ -52,10 +51,9 @@ struct Mutex
 };
 
 
+template <typename ClockType>
 void test01()
 {
-  bool test __attribute__((unused)) = true;
-
   try 
     {
       std::chrono::microseconds ms(500);
@@ -63,10 +61,10 @@ void test01()
       Mutex m;
       m.lock();
 
-      auto then = std::chrono::steady_clock::now();
+      auto then = ClockType::now();
       std::cv_status result = c1.wait_until(m, then + ms);
       VERIFY( result == std::cv_status::timeout );
-      VERIFY( (std::chrono::steady_clock::now() - then) >= ms );
+      VERIFY( (ClockType::now() - then) >= ms );
       VERIFY( m.locked );
     }
   catch (const std::system_error& e)
@@ -79,8 +77,29 @@ void test01()
     }
 }
 
+/* User defined clock that ticks in two-thousandths of a second
+   forty-two minutes ahead of steady_clock. */
+struct user_defined_clock
+{
+  typedef std::chrono::steady_clock::rep rep;
+  typedef std::ratio<1, 2000> period;
+  typedef std::chrono::duration<rep, period> duration;
+  typedef std::chrono::time_point<user_defined_clock> time_point;
+
+  static constexpr bool is_steady = true;
+
+  static time_point now() noexcept
+  {
+    using namespace std::chrono;
+    const auto steady_since_epoch = steady_clock::now().time_since_epoch();
+    const auto user_since_epoch = duration_cast<duration>(steady_since_epoch);
+    return time_point(user_since_epoch + minutes(42));
+  }
+};
+
 int main()
 {
-  test01();
-  return 0;
+  test01<std::chrono::steady_clock>();
+  test01<std::chrono::system_clock>();
+  test01<user_defined_clock>();
 }

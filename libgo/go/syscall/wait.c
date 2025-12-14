@@ -10,8 +10,18 @@
 #include <stdint.h>
 #include <sys/wait.h>
 
+#include "runtime.h"
+
+#ifndef WCOREDUMP
+#define WCOREDUMP(status) (((status) & 0200) != 0)
+#endif
+
+#ifndef WIFCONTINUED
+#define WIFCONTINUED(x) 0
+#endif
+
 extern _Bool Exited (uint32_t *w)
-  __asm__ ("syscall.Exited.N18_syscall.WaitStatus");
+  __asm__ (GOSYM_PREFIX "syscall.WaitStatus.Exited");
 
 _Bool
 Exited (uint32_t *w)
@@ -20,7 +30,7 @@ Exited (uint32_t *w)
 }
 
 extern _Bool Signaled (uint32_t *w)
-  __asm__ ("syscall.Signaled.N18_syscall.WaitStatus");
+  __asm__ (GOSYM_PREFIX "syscall.WaitStatus.Signaled");
 
 _Bool
 Signaled (uint32_t *w)
@@ -29,7 +39,7 @@ Signaled (uint32_t *w)
 }
 
 extern _Bool Stopped (uint32_t *w)
-  __asm__ ("syscall.Stopped.N18_syscall.WaitStatus");
+  __asm__ (GOSYM_PREFIX "syscall.WaitStatus.Stopped");
 
 _Bool
 Stopped (uint32_t *w)
@@ -38,16 +48,16 @@ Stopped (uint32_t *w)
 }
 
 extern _Bool Continued (uint32_t *w)
-  __asm__ ("syscall.Continued.N18_syscall.WaitStatus");
+  __asm__ (GOSYM_PREFIX "syscall.WaitStatus.Continued");
 
 _Bool
-Continued (uint32_t *w)
+Continued (uint32_t *w __attribute__ ((unused)))
 {
   return WIFCONTINUED (*w) != 0;
 }
 
 extern _Bool CoreDump (uint32_t *w)
-  __asm__ ("syscall.CoreDump.N18_syscall.WaitStatus");
+  __asm__ (GOSYM_PREFIX "syscall.WaitStatus.CoreDump");
 
 _Bool
 CoreDump (uint32_t *w)
@@ -55,10 +65,10 @@ CoreDump (uint32_t *w)
   return WCOREDUMP (*w) != 0;
 }
 
-extern int ExitStatus (uint32_t *w)
-  __asm__ ("syscall.ExitStatus.N18_syscall.WaitStatus");
+extern intgo ExitStatus (uint32_t *w)
+  __asm__ (GOSYM_PREFIX "syscall.WaitStatus.ExitStatus");
 
-int
+intgo
 ExitStatus (uint32_t *w)
 {
   if (!WIFEXITED (*w))
@@ -66,10 +76,10 @@ ExitStatus (uint32_t *w)
   return WEXITSTATUS (*w);
 }
 
-extern int Signal (uint32_t *w)
-  __asm__ ("syscall.Signal.N18_syscall.WaitStatus");
+extern intgo Signal (uint32_t *w)
+  __asm__ (GOSYM_PREFIX "syscall.WaitStatus.Signal");
 
-int
+intgo
 Signal (uint32_t *w)
 {
   if (!WIFSIGNALED (*w))
@@ -77,10 +87,10 @@ Signal (uint32_t *w)
   return WTERMSIG (*w);
 }
 
-extern int StopSignal (uint32_t *w)
-  __asm__ ("syscall.StopSignal.N18_syscall.WaitStatus");
+extern intgo StopSignal (uint32_t *w)
+  __asm__ (GOSYM_PREFIX "syscall.WaitStatus.StopSignal");
 
-int
+intgo
 StopSignal (uint32_t *w)
 {
   if (!WIFSTOPPED (*w))
@@ -88,10 +98,10 @@ StopSignal (uint32_t *w)
   return WSTOPSIG (*w);
 }
 
-extern int TrapCause (uint32_t *w)
-  __asm__ ("syscall.TrapCause.N18_syscall.WaitStatus");
+extern intgo TrapCause (uint32_t *w)
+  __asm__ (GOSYM_PREFIX "syscall.WaitStatus.TrapCause");
 
-int
+intgo
 TrapCause (uint32_t *w __attribute__ ((unused)))
 {
 #ifndef __linux__

@@ -1,5 +1,5 @@
 /* Generic implementation of the CSHIFT intrinsic
-   Copyright 2003, 2005, 2006, 2007, 2010 Free Software Foundation, Inc.
+   Copyright (C) 2003-2020 Free Software Foundation, Inc.
    Contributed by Feng Wang <wf_cs@yahoo.com>
 
 This file is part of the GNU Fortran runtime library (libgfortran).
@@ -24,8 +24,6 @@ see the files COPYING3 and COPYING.RUNTIME respectively.  If not, see
 <http://www.gnu.org/licenses/>.  */
 
 #include "libgfortran.h"
-#include <stdlib.h>
-#include <assert.h>
 #include <string.h>
 
 static void
@@ -58,12 +56,12 @@ cshift0 (gfc_array_char * ret, const gfc_array_char * array,
 
   arraysize = size0 ((array_t *) array);
 
-  if (ret->data == NULL)
+  if (ret->base_addr == NULL)
     {
       int i;
 
       ret->offset = 0;
-      ret->dtype = array->dtype;
+      GFC_DTYPE_COPY(ret,array);
       for (i = 0; i < GFC_DESCRIPTOR_RANK (array); i++)
         {
 	  index_type ub, str;
@@ -79,8 +77,8 @@ cshift0 (gfc_array_char * ret, const gfc_array_char * array,
 	  GFC_DIMENSION_SET(ret->dim[i], 0, ub, str);
         }
 
-      /* internal_malloc_size allocates a single byte for zero size.  */
-      ret->data = internal_malloc_size (size * arraysize);
+      /* xmallocarray allocates a single byte for zero size.  */
+      ret->base_addr = xmallocarray (arraysize, size);
     }
   else if (unlikely (compile_options.bounds_check))
     {
@@ -97,7 +95,6 @@ cshift0 (gfc_array_char * ret, const gfc_array_char * array,
     {
     case GFC_DTYPE_LOGICAL_1:
     case GFC_DTYPE_INTEGER_1:
-    case GFC_DTYPE_DERIVED_1:
       cshift0_i1 ((gfc_array_i1 *)ret, (gfc_array_i1 *) array, shift, which);
       return;
 
@@ -199,7 +196,7 @@ cshift0 (gfc_array_char * ret, const gfc_array_char * array,
       break;
 
     case sizeof (GFC_INTEGER_2):
-      if (GFC_UNALIGNED_2(ret->data) || GFC_UNALIGNED_2(array->data))
+      if (GFC_UNALIGNED_2(ret->base_addr) || GFC_UNALIGNED_2(array->base_addr))
 	break;
       else
 	{
@@ -209,7 +206,7 @@ cshift0 (gfc_array_char * ret, const gfc_array_char * array,
 	}
 
     case sizeof (GFC_INTEGER_4):
-      if (GFC_UNALIGNED_4(ret->data) || GFC_UNALIGNED_4(array->data))
+      if (GFC_UNALIGNED_4(ret->base_addr) || GFC_UNALIGNED_4(array->base_addr))
 	break;
       else
 	{
@@ -219,7 +216,7 @@ cshift0 (gfc_array_char * ret, const gfc_array_char * array,
 	}
 
     case sizeof (GFC_INTEGER_8):
-      if (GFC_UNALIGNED_8(ret->data) || GFC_UNALIGNED_8(array->data))
+      if (GFC_UNALIGNED_8(ret->base_addr) || GFC_UNALIGNED_8(array->base_addr))
 	{
 	  /* Let's try to use the complex routines.  First, a sanity
 	     check that the sizes match; this should be optimized to
@@ -227,7 +224,8 @@ cshift0 (gfc_array_char * ret, const gfc_array_char * array,
 	  if (sizeof(GFC_INTEGER_8) != sizeof(GFC_COMPLEX_4))
 	    break;
 
-	  if (GFC_UNALIGNED_C4(ret->data) || GFC_UNALIGNED_C4(array->data))
+	  if (GFC_UNALIGNED_C4(ret->base_addr)
+	      || GFC_UNALIGNED_C4(array->base_addr))
 	    break;
 
 	  cshift0_c4 ((gfc_array_c4 *) ret, (gfc_array_c4 *) array, shift,
@@ -243,7 +241,8 @@ cshift0 (gfc_array_char * ret, const gfc_array_char * array,
 
 #ifdef HAVE_GFC_INTEGER_16
     case sizeof (GFC_INTEGER_16):
-      if (GFC_UNALIGNED_16(ret->data) || GFC_UNALIGNED_16(array->data))
+      if (GFC_UNALIGNED_16(ret->base_addr)
+	  || GFC_UNALIGNED_16(array->base_addr))
 	{
 	  /* Let's try to use the complex routines.  First, a sanity
 	     check that the sizes match; this should be optimized to
@@ -251,7 +250,8 @@ cshift0 (gfc_array_char * ret, const gfc_array_char * array,
 	  if (sizeof(GFC_INTEGER_16) != sizeof(GFC_COMPLEX_8))
 	    break;
 
-	  if (GFC_UNALIGNED_C8(ret->data) || GFC_UNALIGNED_C8(array->data))
+	  if (GFC_UNALIGNED_C8(ret->base_addr)
+	      || GFC_UNALIGNED_C8(array->base_addr))
 	    break;
 
 	  cshift0_c8 ((gfc_array_c8 *) ret, (gfc_array_c8 *) array, shift,
@@ -267,7 +267,8 @@ cshift0 (gfc_array_char * ret, const gfc_array_char * array,
 #else
     case sizeof (GFC_COMPLEX_8):
 
-      if (GFC_UNALIGNED_C8(ret->data) || GFC_UNALIGNED_C8(array->data))
+      if (GFC_UNALIGNED_C8(ret->base_addr)
+	  || GFC_UNALIGNED_C8(array->base_addr))
 	break;
       else
 	{
@@ -323,8 +324,8 @@ cshift0 (gfc_array_char * ret, const gfc_array_char * array,
   dim = GFC_DESCRIPTOR_RANK (array);
   rstride0 = rstride[0];
   sstride0 = sstride[0];
-  rptr = ret->data;
-  sptr = array->data;
+  rptr = ret->base_addr;
+  sptr = array->base_addr;
 
   shift = len == 0 ? 0 : shift % (ptrdiff_t)len;
   if (shift < 0)

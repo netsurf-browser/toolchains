@@ -2,11 +2,9 @@
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
 
-package regexp_test
+package regexp
 
 import (
-	. "regexp"
-
 	"fmt"
 	"strings"
 	"testing"
@@ -163,6 +161,9 @@ func TestFind(t *testing.T) {
 			t.Errorf("expected match; got none: %s", test)
 		case test.matches != nil && result != nil:
 			expect := test.text[test.matches[0][0]:test.matches[0][1]]
+			if len(result) != cap(result) {
+				t.Errorf("expected capacity %d got %d: %s", len(result), cap(result), test)
+			}
 			if expect != string(result) {
 				t.Errorf("expected %q got %q: %s", expect, result, test)
 			}
@@ -244,9 +245,13 @@ func TestFindAll(t *testing.T) {
 				continue
 			}
 			for k, e := range test.matches {
+				got := result[k]
+				if len(got) != cap(got) {
+					t.Errorf("match %d: expected capacity %d got %d: %s", k, len(got), cap(got), test)
+				}
 				expect := test.text[e[0]:e[1]]
-				if expect != string(result[k]) {
-					t.Errorf("match %d: expected %q got %q: %s", k, expect, result[k], test)
+				if expect != string(got) {
+					t.Errorf("match %d: expected %q got %q: %s", k, expect, got, test)
 				}
 			}
 		}
@@ -325,9 +330,14 @@ func testSubmatchBytes(test *FindTest, n int, submatches []int, result [][]byte,
 			}
 			continue
 		}
+		got := result[k/2]
+		if len(got) != cap(got) {
+			t.Errorf("match %d: expected capacity %d got %d: %s", n, len(got), cap(got), test)
+			return
+		}
 		expect := test.text[submatches[k]:submatches[k+1]]
-		if expect != string(result[k/2]) {
-			t.Errorf("match %d: expected %q got %q: %s", n, expect, result, test)
+		if expect != string(got) {
+			t.Errorf("match %d: expected %q got %q: %s", n, expect, got, test)
 			return
 		}
 	}

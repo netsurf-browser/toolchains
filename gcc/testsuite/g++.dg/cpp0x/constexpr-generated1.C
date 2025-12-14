@@ -1,4 +1,4 @@
-// { dg-options -std=c++0x }
+// { dg-do compile { target c++11 } }
 
 template <class T> struct A
 {
@@ -9,7 +9,7 @@ int g();
 
 // We should complain about this.
 template<> constexpr int A<int>::f()
-{ return g(); }			// { dg-error "non-constexpr" }
+{ return g(); }			// { dg-error "non-.constexpr." }
 
 // But not about this.
 struct B

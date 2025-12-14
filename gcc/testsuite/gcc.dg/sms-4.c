@@ -1,4 +1,4 @@
-/* Inspired from sbitmap_a_or_b_and_c_cg function in sbitmap.c.  */
+/* Inspired from bitmap_or_and function in sbitmap.c.  */
 /* { dg-do run } */
 /* { dg-options "-O2 -fmodulo-sched -fmodulo-sched-allow-regmoves -fdump-rtl-sms" } */
 /* { dg-options "-O2 -fmodulo-sched -fmodulo-sched-allow-regmoves -fdump-rtl-sms --param sms-min-sc=1" { target powerpc*-*-* } } */
@@ -35,6 +35,5 @@ main ()
   return 0;
 }
 
-/* { dg-final { scan-rtl-dump-times "SMS succeeded" 1 "sms" { target spu-*-* powerpc*-*-* } } } */
-/* { dg-final { cleanup-rtl-dump "sms" } } */
+/* { dg-final { scan-rtl-dump-times "SMS succeeded" 1 "sms" { target powerpc*-*-* } } } */
 

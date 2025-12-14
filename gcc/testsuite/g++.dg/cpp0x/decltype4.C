@@ -1,5 +1,4 @@
-// { dg-do compile }
-// { dg-options "-std=gnu++0x" }
+// { dg-do compile { target c++11 } }
 
 template<typename T, typename U> 
 struct is_same 
@@ -24,7 +23,7 @@ struct A {
 }; 
 
 CHECK_DECLTYPE(decltype(&A::x), int A::*);
-decltype(&A::y) Ay; // { dg-error "cannot create pointer to reference member|invalid type" }
+decltype(&A::y) Ay; // { dg-error "14:cannot create pointer to reference member|invalid type" }
 CHECK_DECLTYPE(decltype(&A::foo), int (A::*) (char));
 CHECK_DECLTYPE(decltype(&A::bar), int& (A::*) () const);
 

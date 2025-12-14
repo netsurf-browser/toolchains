@@ -1,6 +1,6 @@
-// <algorithm> parallel extensions -*- C++ -*-
+// <parallel/algorithm> Forward declarations -*- C++ -*-
 
-// Copyright (C) 2007, 2008, 2009, 2010 Free Software Foundation, Inc.
+// Copyright (C) 2007-2020 Free Software Foundation, Inc.
 //
 // This file is part of the GNU ISO C++ Library.  This library is free
 // software; you can redistribute it and/or modify it under the terms
@@ -130,10 +130,12 @@ namespace __parallel
           __gnu_parallel::sequential_tag);
 
   template<typename _IIter1, typename _IIter2>
+    _GLIBCXX20_CONSTEXPR
     bool
     equal(_IIter1, _IIter1, _IIter2);
 
   template<typename _IIter1, typename _IIter2, typename _Predicate>
+    _GLIBCXX20_CONSTEXPR
     bool
     equal(_IIter1, _IIter1, _IIter2, _Predicate);
 
@@ -285,10 +287,12 @@ namespace __parallel
                             __gnu_parallel::sequential_tag);
 
   template<typename _IIter1, typename _IIter2>
+    _GLIBCXX20_CONSTEXPR
     bool
     lexicographical_compare(_IIter1, _IIter1, _IIter2, _IIter2);
 
   template<typename _IIter1, typename _IIter2, typename _Predicate>
+    _GLIBCXX20_CONSTEXPR
     bool
     lexicographical_compare(_IIter1, _IIter1, _IIter2, _IIter2, _Predicate);
 
@@ -691,7 +695,7 @@ namespace __parallel
   template<typename _RAIter, typename _RandomNumberGenerator>
     void
     random_shuffle(_RAIter, _RAIter,
-#ifdef __GXX_EXPERIMENTAL_CXX0X__
+#if __cplusplus >= 201103L
 		   _RandomNumberGenerator&&);
 #else
 		   _RandomNumberGenerator&);

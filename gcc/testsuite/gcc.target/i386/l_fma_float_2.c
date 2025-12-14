@@ -1,5 +1,7 @@
 /* { dg-do compile } */
-/* { dg-options "-O3 -Wno-attributes -mfpmath=sse -mfma -mtune=generic" } */
+/* { dg-options "-O3 -Wno-attributes -mfpmath=sse -mfma -mtune=generic -mno-fma4" } */
+/* Disabling epilogues until we find a better way to deal with scans.  */
+/* { dg-additional-options "--param vect-epilogues-nomask=0" } */
 
 /* Test that the compiler properly optimizes floating point multiply
    and add instructions into FMA3 instructions.  */
@@ -8,11 +10,11 @@
 
 #include "l_fma_2.h"
 
-/* { dg-final { scan-assembler-times "vfmadd132ps" 8  } } */
-/* { dg-final { scan-assembler-times "vfmsub132ps" 8  } } */
-/* { dg-final { scan-assembler-times "vfnmadd132ps" 8  } } */
-/* { dg-final { scan-assembler-times "vfnmsub132ps" 8  } } */
-/* { dg-final { scan-assembler-times "vfmadd132ss" 8  } } */
-/* { dg-final { scan-assembler-times "vfmsub132ss" 8  } } */
-/* { dg-final { scan-assembler-times "vfnmadd132ss" 8  } } */
-/* { dg-final { scan-assembler-times "vfnmsub132ss" 8  } } */
+/* { dg-final { scan-assembler-times "vfmadd\[123\]+ps" 8 } } */
+/* { dg-final { scan-assembler-times "vfmsub\[123\]+ps" 8 } } */
+/* { dg-final { scan-assembler-times "vfnmadd\[123\]+ps" 8 } } */
+/* { dg-final { scan-assembler-times "vfnmsub\[123\]+ps" 8 } } */
+/* { dg-final { scan-assembler-times "vfmadd\[123\]+ss" 64 } } */
+/* { dg-final { scan-assembler-times "vfmsub\[123\]+ss" 64 } } */
+/* { dg-final { scan-assembler-times "vfnmadd\[123\]+ss" 64 } } */
+/* { dg-final { scan-assembler-times "vfnmsub\[123\]+ss" 64 } } */

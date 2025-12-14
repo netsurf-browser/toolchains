@@ -1,4 +1,5 @@
-// { dg-options "-std=c++0x" }
+// { dg-do compile { target c++11 } }
+// { dg-additional-options "-Wno-deprecated-declarations" { target c++2a } }
 
 // [basic.types]/10:
 // Scalar types, standard-layout class types (Clause 9), arrays of such
@@ -22,13 +23,13 @@
 #define TRY(expr) static_assert (expr, #expr)
 #define YES(type) TRY(std::is_standard_layout<type>::value); \
   TRY(std::is_standard_layout<type[]>::value); \
-  TRY(std::is_standard_layout<const volatile type>::value);
+  TRY(std::is_standard_layout<const volatile type>::value)
 #define NO(type) TRY(!std::is_standard_layout<type>::value); \
   TRY(!std::is_standard_layout<type[]>::value); \
-  TRY(!std::is_standard_layout<const volatile type>::value);
+  TRY(!std::is_standard_layout<const volatile type>::value)
 #define NONPOD(type) TRY(!std::is_pod<type>::value); \
   TRY(!std::is_pod<type[]>::value); \
-  TRY(!std::is_pod<const volatile type>::value);
+  TRY(!std::is_pod<const volatile type>::value)
 
 struct A;
 

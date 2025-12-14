@@ -6,7 +6,7 @@
 --                                                                          --
 --                                 S p e c                                  --
 --                                                                          --
---          Copyright (C) 1992-2011, Free Software Foundation, Inc.         --
+--          Copyright (C) 1992-2019, Free Software Foundation, Inc.         --
 --                                                                          --
 -- GNAT is free software;  you can  redistribute it  and/or modify it under --
 -- terms of the  GNU General Public License as published  by the Free Soft- --
@@ -34,6 +34,7 @@ with Rident;  use Rident;
 with Table;
 with Types;   use Types;
 
+with GNAT.Dynamic_Tables;
 with GNAT.HTable; use GNAT.HTable;
 
 package ALI is
@@ -42,33 +43,62 @@ package ALI is
    -- Id Types --
    --------------
 
-   --  The various entries are stored in tables with distinct subscript ranges.
-   --  The following type definitions show the ranges used for the subscripts
-   --  (Id values) for the various tables.
-
-   type ALI_Id is range 0 .. 999_999;
+   type ALI_Id is range 0 .. 99_999_999;
    --  Id values used for ALIs table entries
 
-   type Unit_Id is range 1_000_000 .. 1_999_999;
+   type Unit_Id is range 0 .. 99_999_999;
    --  Id values used for Unit table entries
 
-   type With_Id is range 2_000_000 .. 2_999_999;
+   type With_Id is range 0 .. 99_999_999;
    --  Id values used for Withs table entries
 
-   type Arg_Id is range 3_000_000 .. 3_999_999;
+   type Arg_Id is range 0 .. 99_999_999;
    --  Id values used for argument table entries
 
-   type Sdep_Id is range 4_000_000 .. 4_999_999;
+   type Sdep_Id is range 0 .. 99_999_999;
    --  Id values used for Sdep table entries
 
-   type Source_Id is range 5_000_000 .. 5_999_999;
+   type Source_Id is range 0 .. 99_999_999;
    --  Id values used for Source table entries
 
-   type Interrupt_State_Id is range 6_000_000 .. 6_999_999;
+   type Interrupt_State_Id is range 0 .. 99_999_999;
    --  Id values used for Interrupt_State table entries
 
-   type Priority_Specific_Dispatching_Id is range 7_000_000 .. 7_999_999;
+   type Priority_Specific_Dispatching_Id is range 0 .. 99_999_999;
    --  Id values used for Priority_Specific_Dispatching table entries
+
+   type Invocation_Construct_Id is range 0 .. 99_999_999;
+   --  Id values used for Invocation_Constructs table entries
+
+   type Invocation_Relation_Id is range 0 .. 99_999_999;
+   --  Id values used for Invocation_Relations table entries
+
+   type Invocation_Signature_Id is range 0 .. 99_999_999;
+   --  Id values used for Invocation_Signatures table entries
+
+   function Present (IC_Id : Invocation_Construct_Id) return Boolean;
+   pragma Inline (Present);
+   --  Determine whether invocation construct IC_Id exists
+
+   function Present (IR_Id : Invocation_Relation_Id) return Boolean;
+   pragma Inline (Present);
+   --  Determine whether invocation relation IR_Id exists
+
+   function Present (IS_Id : Invocation_Signature_Id) return Boolean;
+   pragma Inline (Present);
+   --  Determine whether invocation signature IS_Id exists
+
+   function Present (Dep : Sdep_Id) return Boolean;
+   pragma Inline (Present);
+   --  Determine whether dependant Dep exists
+
+   function Present (U_Id : Unit_Id) return Boolean;
+   pragma Inline (Present);
+   --  Determine whether unit U_Id exists
+
+   function Present (W_Id : With_Id) return Boolean;
+   pragma Inline (Present);
+   --  Determine whether with W_Id exists
 
    --------------------
    -- ALI File Table --
@@ -82,11 +112,24 @@ package ALI is
    First_ALI_Entry : constant ALI_Id := No_ALI_Id + 1;
    --  Id of first actual entry in table
 
+   --  The following type enumerates all possible invocation-graph encoding
+   --  kinds.
+
+   type Invocation_Graph_Encoding_Kind is
+     (Endpoints_Encoding,
+      --  The invocation construct and relation lines contain information for
+      --  the start construct and end target found on an invocation-graph path.
+
+      Full_Path_Encoding,
+      --  The invocation construct and relation lines contain information for
+      --  all constructs and targets found on a invocation-graph path.
+
+      No_Encoding);
+
    type Main_Program_Type is (None, Proc, Func);
    --  Indicator of whether unit can be used as main program
 
    type ALIs_Record is record
-
       Afile : File_Name_Type;
       --  Name of ALI file
 
@@ -142,10 +185,6 @@ package ALI is
       --  line. A value of -1 indicates that no T=xxx parameter was found, or
       --  no M line was present. Not set if 'M' appears in Ignore_Lines.
 
-      Allocator_In_Body : Boolean;
-      --  Set True if an AB switch appears on the main program line. False
-      --  if no M line, or AB not present, or 'M appears in Ignore_Lines.
-
       WC_Encoding : Character;
       --  Wide character encoding if main procedure. Otherwise not relevant.
       --  Not set if 'M' appears in Ignore_Lines.
@@ -153,6 +192,12 @@ package ALI is
       Locking_Policy : Character;
       --  Indicates locking policy for units in this file. Space means tasking
       --  was not used, or that no Locking_Policy pragma was present or that
+      --  this is a language defined unit. Otherwise set to first character
+      --  (upper case) of policy name. Not set if 'P' appears in Ignore_Lines.
+
+      Partition_Elaboration_Policy : Character;
+      --  Indicates partition elaboration policy for units in this file. Space
+      --  means that no Partition_Elaboration_Policy pragma was present or that
       --  this is a language defined unit. Otherwise set to first character
       --  (upper case) of policy name. Not set if 'P' appears in Ignore_Lines.
 
@@ -174,9 +219,15 @@ package ALI is
       --  always be set as well in this case. Not set if 'P' appears in
       --  Ignore_Lines.
 
-      Float_Format : Character;
-      --  Set to float format (set to I if no float-format given). Not set if
-      --  'P' appears in Ignore_Lines.
+      GNATprove_Mode : Boolean;
+      --  Set to True if ALI and object file produced in GNATprove_Mode as
+      --  signalled by GP appearing on the P line. Not set if 'P' appears in
+      --  Ignore_Lines.
+
+      No_Component_Reordering : Boolean;
+      --  Set to True if file was compiled with a configuration pragma file
+      --  containing pragma No_Component_Reordering. Not set if 'P' appears
+      --  in Ignore_Lines.
 
       No_Object : Boolean;
       --  Set to True if no object file generated. Not set if 'P' appears in
@@ -186,9 +237,19 @@ package ALI is
       --  Set to True if file was compiled with Normalize_Scalars. Not set if
       --  'P' appears in Ignore_Lines.
 
+      SSO_Default : Character;
+      --  Set to 'H' or 'L' if file was compiled with a configuration pragma
+      --  file containing Default_Scalar_Storage_Order (High/Low_Order_First).
+      --  Set to ' ' if neither pragma was present. Not set if 'P' appears in
+      --  Ignore_Lines.
+
       Unit_Exception_Table : Boolean;
       --  Set to True if unit exception table pointer generated. Not set if 'P'
       --  appears in Ignore_Lines.
+
+      Frontend_Exceptions : Boolean;
+      --  Set to True if file was compiled with front-end exceptions. Not set
+      --  if 'P' appears in Ignore_Lines.
 
       Zero_Cost_Exceptions : Boolean;
       --  Set to True if file was compiled with zero cost exceptions. Not set
@@ -213,6 +274,10 @@ package ALI is
       --  is why the 'Base reference is there, it can be one less than the
       --  lower bound of the subtype. Not set if 'S' appears in Ignore_Lines.
 
+      Invocation_Graph_Encoding : Invocation_Graph_Encoding_Kind;
+      --  The encoding format used to capture information about the invocation
+      --  constructs and relations within the corresponding ALI file of this
+      --  unit.
    end record;
 
    No_Main_Priority : constant Int := -1;
@@ -251,7 +316,6 @@ package ALI is
    --  Version string, taken from unit record
 
    type Unit_Record is record
-
       My_ALI : ALI_Id;
       --  Corresponding ALI entry
 
@@ -283,7 +347,7 @@ package ALI is
       Set_Elab_Entity : Boolean;
       --  Indicates presence of EE parameter for a unit which has an
       --  elaboration entity which must be set true as part of the
-      --  elaboration of the entity.
+      --  elaboration of the unit.
 
       Has_RACW : Boolean;
       --  Indicates presence of RA parameter for a package that declares at
@@ -292,6 +356,10 @@ package ALI is
       Remote_Types : Boolean;
       --  Indicates presence of RT parameter for a package which has a
       --  pragma Remote_Types.
+
+      Serious_Errors : Boolean;
+      --  Indicates presence of SE parameter indicating that compilation of
+      --  the unit encountered as serious error.
 
       Shared_Passive : Boolean;
       --  Indicates presence of SP parameter for a package which has a pragma
@@ -319,6 +387,18 @@ package ALI is
       Last_Arg : Arg_Id;
       --  Id of last args table entry for this file
 
+      First_Invocation_Construct : Invocation_Construct_Id;
+      --  Id of the first invocation construct for this unit
+
+      Last_Invocation_Construct : Invocation_Construct_Id;
+      --  Id of the last invocation construct for this unit
+
+      First_Invocation_Relation : Invocation_Relation_Id;
+      --  Id of the first invocation relation for this unit
+
+      Last_Invocation_Relation : Invocation_Relation_Id;
+      --  Id of the last invocation relation for this unit
+
       Utype : Unit_Type;
       --  Type of entry
 
@@ -343,7 +423,7 @@ package ALI is
       --  used for informational output, and also for constructing the main
       --  unit if it is being built in Ada.
 
-      Elab_Position : aliased Natural;
+      Elab_Position : Nat;
       --  Initialized to zero. Set non-zero when a unit is chosen and
       --  placed in the elaboration order. The value represents the
       --  ordinal position in the elaboration order.
@@ -370,11 +450,19 @@ package ALI is
       --  together as possible.
 
       Optimize_Alignment : Character;
-      --  Optimize_Alignment setting. Set to L/S/T/O for OL/OS/OT/OO present
+      --  Optimize_Alignment setting. Set to L/S/T/O for OL/OS/OT/OO present.
 
       Has_Finalizer : Boolean;
       --  Indicates whether a package body or a spec has a library-level
       --  finalization routine.
+
+      Primary_Stack_Count : Int;
+      --  Indicates the number of task objects declared in this unit that have
+      --  default sized primary stacks.
+
+      Sec_Stack_Count : Int;
+      --  Indicates the number of task objects declared in this unit that have
+      --  default sized secondary stacks.
    end record;
 
    package Units is new Table.Table (
@@ -384,6 +472,16 @@ package ALI is
      Table_Initial        => 100,
      Table_Increment      => 200,
      Table_Name           => "Unit");
+
+   package Unit_Id_Tables is new GNAT.Dynamic_Tables
+     (Table_Component_Type => Unit_Id,
+      Table_Index_Type     => Nat,
+      Table_Low_Bound      => 1,
+      Table_Initial        => 500,
+      Table_Increment      => 200);
+
+   subtype Unit_Id_Table is Unit_Id_Tables.Instance;
+   subtype Unit_Id_Array is Unit_Id_Tables.Table_Type;
 
    ---------------------------
    -- Interrupt State Table --
@@ -461,10 +559,12 @@ package ALI is
    --  Set to False by Initialize_ALI. Set to True if Scan_ALI reads
    --  a unit for which dynamic elaboration checking is enabled.
 
-   Float_Format_Specified : Character := ' ';
-   --  Set to blank by Initialize_ALI. Set to appropriate float format
-   --  character (V or I, see Opt.Float_Format) if an ali file that
-   --  is read contains an F line setting the floating point format.
+   Frontend_Exceptions_Specified : Boolean := False;
+   --  Set to False by Initialize_ALI. Set to True if an ali file is read that
+   --  has a P line specifying the generation of front-end exceptions.
+
+   GNATprove_Mode_Specified : Boolean := False;
+   --  Set to True if an ali file was produced in GNATprove mode.
 
    Initialize_Scalars_Used : Boolean := False;
    --  Set True if an ali file contains the Initialize_Scalars flag
@@ -477,6 +577,10 @@ package ALI is
    --  Set to False by Initialize_ALI. Set to True if an ali file indicates
    --  that the file was compiled without normalize scalars.
 
+   No_Component_Reordering_Specified : Boolean := False;
+   --  Set to False by Initialize_ALI. Set to True if an ali file contains
+   --  the No_Component_Reordering flag.
+
    No_Object_Specified : Boolean := False;
    --  Set to False by Initialize_ALI. Set to True if an ali file contains
    --  the No_Object flag.
@@ -484,6 +588,11 @@ package ALI is
    Normalize_Scalars_Specified : Boolean := False;
    --  Set to False by Initialize_ALI. Set to True if an ali file indicates
    --  that the file was compiled in Normalize_Scalars mode.
+
+   Partition_Elaboration_Policy_Specified : Character := ' ';
+   --  Set to blank by Initialize_ALI. Set to the appropriate partition
+   --  elaboration policy character if an ali file contains a P line setting
+   --  the policy.
 
    Queuing_Policy_Specified : Character := ' ';
    --  Set to blank by Initialize_ALI. Set to the appropriate queuing policy
@@ -494,14 +603,14 @@ package ALI is
    --  ali files, showing whether a restriction pragma exists anywhere, and
    --  accumulating the aggregate knowledge of violations.
 
+   SSO_Default_Specified : Boolean := False;
+   --  Set to True if at least one ALI file contains an OH/OL flag indicating
+   --  that it was compiled with a configuration pragmas file containing the
+   --  pragma Default_Scalar_Storage_Order (OH/OL present in ALI file P line).
+
    Stack_Check_Switch_Set : Boolean := False;
    --  Set to True if at least one ALI file contains '-fstack-check' in its
    --  argument list.
-
-   Static_Elaboration_Model_Used : Boolean := False;
-   --  Set to False by Initialize_ALI. Set to True if any ALI file for a
-   --  non-internal unit compiled with the static elaboration model is
-   --  encountered.
 
    Task_Dispatching_Policy_Specified : Character := ' ';
    --  Set to blank by Initialize_ALI. Set to the appropriate task dispatching
@@ -531,7 +640,6 @@ package ALI is
    --  Id of first actual entry in table
 
    type With_Record is record
-
       Uname : Unit_Name_Type;
       --  Name of Unit
 
@@ -550,14 +658,17 @@ package ALI is
       Elab_All_Desirable : Boolean;
       --  Indicates presence of AD parameter
 
-      Elab_Desirable     : Boolean;
+      Elab_Desirable : Boolean;
       --  Indicates presence of ED parameter
 
       SAL_Interface : Boolean := False;
       --  True if the Unit is an Interface of a Stand-Alone Library
 
+      Implicit_With : Boolean := False;
+      --  True if this is an implicit with generated by the compiler
+
       Limited_With : Boolean := False;
-      --  True if unit is named in a limited_with_clause
+      --  True if this is a limited_with_clause
    end record;
 
    package Withs is new Table.Table (
@@ -614,15 +725,11 @@ package ALI is
       --  Set True if the linker options are from an internal file. This is
       --  used to insert certain standard entries after all the user entries
       --  but before the entries from the run-time.
-
-      Original_Pos : Positive;
-      --  Keep track of original position in the linker options table. This
-      --  is used to implement a stable sort when we sort the linker options
-      --  table.
    end record;
 
-   --  The indexes of active entries in this table range from 1 to the
-   --  value of Linker_Options.Last. The zero'th element is for sort call.
+   --  The indexes of active entries in this table range from 1 to the value of
+   --  Linker_Options.Last. The zeroth element is for convenience if the table
+   --  needs to be sorted.
 
    package Linker_Options is new Table.Table (
      Table_Component_Type => Linker_Option_Record,
@@ -648,8 +755,8 @@ package ALI is
       Pragma_Col : Nat;
       --  Column number of pragma
 
-      Unit : Unit_Id;
-      --  Unit_Id for the entry
+      Pragma_Source_File : File_Name_Type;
+      --  Source file of pragma
 
       Pragma_Args : Name_Id;
       --  Pragma arguments. No_Name if no arguments, otherwise a single
@@ -658,9 +765,9 @@ package ALI is
       --  location to the last character on the line.
    end record;
 
-   --  The indexes of active entries in this table range from 1 to the
-   --  value of Linker_Options.Last. The zero'th element is for convenience
-   --  if the table needs to be sorted.
+   --  The indexes of active entries in this table range from 1 to the value of
+   --  Notes.Last. The zeroth element is for convenience if the table needs to
+   --  be sorted.
 
    package Notes is new Table.Table (
      Table_Component_Type => Notes_Record,
@@ -738,7 +845,6 @@ package ALI is
    --  successive ALI files are scanned.
 
    type Sdep_Record is record
-
       Sfile : File_Name_Type;
       --  Name of source file
 
@@ -756,6 +862,9 @@ package ALI is
 
       Subunit_Name : Name_Id;
       --  Name_Id for subunit name if present, else No_Name
+
+      Unit_Name : Name_Id;
+      --  Name_Id for the unit name if not a subunit (No_Name for a subunit)
 
       Rfile : File_Name_Type;
       --  Reference file name. Same as Sfile unless a Source_Reference pragma
@@ -989,6 +1098,287 @@ package ALI is
      Table_Increment      => 300,
      Table_Name           => "Xref");
 
+   ----------------------------
+   -- Invocation Graph Types --
+   ----------------------------
+
+   --  The following type identifies an invocation construct
+
+   No_Invocation_Construct    : constant Invocation_Construct_Id :=
+                                  Invocation_Construct_Id'First;
+   First_Invocation_Construct : constant Invocation_Construct_Id :=
+                                  No_Invocation_Construct + 1;
+
+   --  The following type identifies an invocation relation
+
+   No_Invocation_Relation    : constant Invocation_Relation_Id :=
+                                 Invocation_Relation_Id'First;
+   First_Invocation_Relation : constant Invocation_Relation_Id :=
+                                 No_Invocation_Relation + 1;
+
+   --  The following type identifies an invocation signature
+
+   No_Invocation_Signature    : constant Invocation_Signature_Id :=
+                                  Invocation_Signature_Id'First;
+   First_Invocation_Signature : constant Invocation_Signature_Id :=
+                                  No_Invocation_Signature + 1;
+
+   --  The following type enumerates all possible placements of an invocation
+   --  construct's spec and body with respect to the unit it is declared in.
+
+   type Declaration_Placement_Kind is
+     (In_Body,
+      --  The declaration of the invocation construct is within the body of the
+      --  unit it is declared in.
+
+      In_Spec,
+      --  The declaration of the invocation construct is within the spec of the
+      --  unit it is declared in.
+
+      No_Declaration_Placement);
+      --  The invocation construct does not have a declaration
+
+   --  The following type enumerates all possible invocation construct kinds
+
+   type Invocation_Construct_Kind is
+     (Elaborate_Body_Procedure,
+      --  The invocation construct denotes the procedure which elaborates a
+      --  package body.
+
+      Elaborate_Spec_Procedure,
+      --  The invocation construct denotes the procedure which elaborates a
+      --  package spec.
+
+      Regular_Construct);
+      --  The invocation construct is a normal invocation construct
+
+   --  The following type enumerates all possible invocation kinds
+
+   type Invocation_Kind is
+     (Accept_Alternative,
+      Access_Taken,
+      Call,
+      Controlled_Adjustment,
+      Controlled_Finalization,
+      Controlled_Initialization,
+      Default_Initial_Condition_Verification,
+      Initial_Condition_Verification,
+      Instantiation,
+      Internal_Controlled_Adjustment,
+      Internal_Controlled_Finalization,
+      Internal_Controlled_Initialization,
+      Invariant_Verification,
+      Postcondition_Verification,
+      Protected_Entry_Call,
+      Protected_Subprogram_Call,
+      Task_Activation,
+      Task_Entry_Call,
+      Type_Initialization,
+      No_Invocation);
+
+   subtype Internal_Controlled_Invocation_Kind is Invocation_Kind range
+       Internal_Controlled_Adjustment ..
+   --  Internal_Controlled_Finalization
+       Internal_Controlled_Initialization;
+
+   --  The following type enumerates all possible invocation-graph ALI lines
+
+   type Invocation_Graph_Line_Kind is
+     (Invocation_Construct_Line,
+      Invocation_Graph_Attributes_Line,
+      Invocation_Relation_Line);
+
+   ----------------------------------
+   -- Invocation Graph Subprograms --
+   ----------------------------------
+
+   procedure Add_Invocation_Construct
+     (Body_Placement : Declaration_Placement_Kind;
+      Kind           : Invocation_Construct_Kind;
+      Signature      : Invocation_Signature_Id;
+      Spec_Placement : Declaration_Placement_Kind;
+      Update_Units   : Boolean := True);
+   pragma Inline (Add_Invocation_Construct);
+   --  Add a new invocation construct described by its attributes. Update_Units
+   --  should be set when this addition must be reflected in the attributes of
+   --  the current unit.
+
+   procedure Add_Invocation_Relation
+     (Extra        : Name_Id;
+      Invoker      : Invocation_Signature_Id;
+      Kind         : Invocation_Kind;
+      Target       : Invocation_Signature_Id;
+      Update_Units : Boolean := True);
+   pragma Inline (Add_Invocation_Relation);
+   --  Add a new invocation relation described by its attributes. Update_Units
+   --  should be set when this addition must be reflected in the attributes of
+   --  the current unit.
+
+   function Body_Placement
+     (IC_Id : Invocation_Construct_Id) return Declaration_Placement_Kind;
+   pragma Inline (Body_Placement);
+   --  Obtain the location of invocation construct IC_Id's body with respect to
+   --  the unit where it is declared.
+
+   function Code_To_Declaration_Placement_Kind
+     (Code : Character) return Declaration_Placement_Kind;
+   pragma Inline (Code_To_Declaration_Placement_Kind);
+   --  Obtain the declaration placement kind of character encoding Code
+
+   function Code_To_Invocation_Construct_Kind
+     (Code : Character) return Invocation_Construct_Kind;
+   pragma Inline (Code_To_Invocation_Construct_Kind);
+   --  Obtain the invocation construct kind of character encoding Code
+
+   function Code_To_Invocation_Graph_Encoding_Kind
+     (Code : Character) return Invocation_Graph_Encoding_Kind;
+   pragma Inline (Code_To_Invocation_Graph_Encoding_Kind);
+   --  Obtain the invocation-graph encoding kind of character encoding Code
+
+   function Code_To_Invocation_Kind
+     (Code : Character) return Invocation_Kind;
+   pragma Inline (Code_To_Invocation_Kind);
+   --  Obtain the invocation kind of character encoding Code
+
+   function Code_To_Invocation_Graph_Line_Kind
+     (Code : Character) return Invocation_Graph_Line_Kind;
+   pragma Inline (Code_To_Invocation_Graph_Line_Kind);
+   --  Obtain the invocation-graph line kind of character encoding Code
+
+   function Column (IS_Id : Invocation_Signature_Id) return Nat;
+   pragma Inline (Column);
+   --  Obtain the column number of invocation signature IS_Id
+
+   function Declaration_Placement_Kind_To_Code
+     (Kind : Declaration_Placement_Kind) return Character;
+   pragma Inline (Declaration_Placement_Kind_To_Code);
+   --  Obtain the character encoding of declaration placement kind Kind
+
+   function Extra (IR_Id : Invocation_Relation_Id) return Name_Id;
+   pragma Inline (Extra);
+   --  Obtain the name of the additional entity used in error diagnostics for
+   --  invocation relation IR_Id.
+
+   type Invocation_Construct_Processor_Ptr is
+     access procedure (IC_Id : Invocation_Construct_Id);
+
+   procedure For_Each_Invocation_Construct
+     (Processor : Invocation_Construct_Processor_Ptr);
+   pragma Inline (For_Each_Invocation_Construct);
+   --  Invoke Processor on each invocation construct
+
+   procedure For_Each_Invocation_Construct
+     (U_Id      : Unit_Id;
+      Processor : Invocation_Construct_Processor_Ptr);
+   pragma Inline (For_Each_Invocation_Construct);
+   --  Invoke Processor on each invocation construct of unit U_Id
+
+   type Invocation_Relation_Processor_Ptr is
+     access procedure (IR_Id : Invocation_Relation_Id);
+
+   procedure For_Each_Invocation_Relation
+     (Processor : Invocation_Relation_Processor_Ptr);
+   pragma Inline (For_Each_Invocation_Relation);
+   --  Invoke Processor on each invocation relation
+
+   procedure For_Each_Invocation_Relation
+     (U_Id      : Unit_Id;
+      Processor : Invocation_Relation_Processor_Ptr);
+   pragma Inline (For_Each_Invocation_Relation);
+   --  Invoke Processor on each invocation relation of unit U_Id
+
+   function Invocation_Construct_Kind_To_Code
+     (Kind : Invocation_Construct_Kind) return Character;
+   pragma Inline (Invocation_Construct_Kind_To_Code);
+   --  Obtain the character encoding of invocation kind Kind
+
+   function Invocation_Graph_Encoding return Invocation_Graph_Encoding_Kind;
+   pragma Inline (Invocation_Graph_Encoding);
+   --  Obtain the encoding format used to capture information about the
+   --  invocation constructs and relations within the ALI file of the main
+   --  unit.
+
+   function Invocation_Graph_Encoding_Kind_To_Code
+     (Kind : Invocation_Graph_Encoding_Kind) return Character;
+   pragma Inline (Invocation_Graph_Encoding_Kind_To_Code);
+   --  Obtain the character encoding for invocation-graph encoding kind Kind
+
+   function Invocation_Graph_Line_Kind_To_Code
+     (Kind : Invocation_Graph_Line_Kind) return Character;
+   pragma Inline (Invocation_Graph_Line_Kind_To_Code);
+   --  Obtain the character encoding for invocation line kind Kind
+
+   function Invocation_Kind_To_Code
+     (Kind : Invocation_Kind) return Character;
+   pragma Inline (Invocation_Kind_To_Code);
+   --  Obtain the character encoding of invocation kind Kind
+
+   function Invocation_Signature_Of
+     (Column    : Nat;
+      Line      : Nat;
+      Locations : Name_Id;
+      Name      : Name_Id;
+      Scope     : Name_Id) return Invocation_Signature_Id;
+   pragma Inline (Invocation_Signature_Of);
+   --  Obtain the invocation signature that corresponds to the input attributes
+
+   function Invoker
+     (IR_Id : Invocation_Relation_Id) return Invocation_Signature_Id;
+   pragma Inline (Invoker);
+   --  Obtain the signature of the invocation relation IR_Id's invoker
+
+   function Kind
+     (IC_Id : Invocation_Construct_Id) return Invocation_Construct_Kind;
+   pragma Inline (Kind);
+   --  Obtain the nature of invocation construct IC_Id
+
+   function Kind
+     (IR_Id : Invocation_Relation_Id) return Invocation_Kind;
+   pragma Inline (Kind);
+   --  Obtain the nature of invocation relation IR_Id
+
+   function Line (IS_Id : Invocation_Signature_Id) return Nat;
+   pragma Inline (Line);
+   --  Obtain the line number of invocation signature IS_Id
+
+   function Locations (IS_Id : Invocation_Signature_Id) return Name_Id;
+   pragma Inline (Locations);
+   --  Obtain the sequence of column and line numbers within nested instances
+   --  of invocation signature IS_Id
+
+   function Name (IS_Id : Invocation_Signature_Id) return Name_Id;
+   pragma Inline (Name);
+   --  Obtain the name of invocation signature IS_Id
+
+   function Scope (IS_Id : Invocation_Signature_Id) return Name_Id;
+   pragma Inline (Scope);
+   --  Obtain the scope of invocation signature IS_Id
+
+   procedure Set_Invocation_Graph_Encoding
+     (Kind         : Invocation_Graph_Encoding_Kind;
+      Update_Units : Boolean := True);
+   pragma Inline (Set_Invocation_Graph_Encoding);
+   --  Set the encoding format used to capture information about the invocation
+   --  constructs and relations within the ALI file of the main unit to Kind.
+   --  Update_Units should be set when this action must be reflected in the
+   --  attributes of the current unit.
+
+   function Signature
+     (IC_Id : Invocation_Construct_Id) return Invocation_Signature_Id;
+   pragma Inline (Signature);
+   --  Obtain the signature of invocation construct IC_Id
+
+   function Spec_Placement
+     (IC_Id : Invocation_Construct_Id) return Declaration_Placement_Kind;
+   pragma Inline (Spec_Placement);
+   --  Obtain the location of invocation construct IC_Id's spec with respect to
+   --  the unit where it is declared.
+
+   function Target
+     (IR_Id : Invocation_Relation_Id) return Invocation_Signature_Id;
+   pragma Inline (Target);
+   --  Obtain the signature of the invocation relation IR_Id's target
+
    --------------------------------------
    -- Subprograms for Reading ALI File --
    --------------------------------------
@@ -1039,7 +1429,7 @@ package ALI is
    --    both. If both are provided then only the Read_Lines value is used,
    --    and the Ignore_Lines parameter is ignored.
    --
-   --    Read_XREF is set True to read and acquire the cross-reference
+   --    Read_Xref is set True to read and acquire the cross-reference
    --    information. If Read_XREF is set to True, then the effect is to ignore
    --    all lines other than U, W, D and X lines and the Ignore_Lines and
    --    Read_Lines parameters are ignored (i.e. the use of True for Read_XREF

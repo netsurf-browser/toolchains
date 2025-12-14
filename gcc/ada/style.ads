@@ -6,7 +6,7 @@
 --                                                                          --
 --                                 S p e c                                  --
 --                                                                          --
---          Copyright (C) 1992-2010, Free Software Foundation, Inc.         --
+--          Copyright (C) 1992-2019, Free Software Foundation, Inc.         --
 --                                                                          --
 -- GNAT is free software;  you can  redistribute it  and/or modify it under --
 -- terms of the  GNU General Public License as published  by the Free Soft- --
@@ -79,7 +79,7 @@ package Style is
      renames Style_Inst.Check_Apostrophe;
    --  Called after scanning an apostrophe to check spacing
 
-   procedure Check_Arrow
+   procedure Check_Arrow (Inside_Depends : Boolean := False)
      renames Style_Inst.Check_Arrow;
    --  Called after scanning out an arrow to check spacing
 
@@ -125,6 +125,9 @@ package Style is
    --  Called with Scan_Ptr pointing to the first minus sign of a comment.
    --  Intended for checking any specific rules for comment placement/format.
 
+   procedure Check_Defining_Identifier_Casing
+     renames Style_Inst.Check_Defining_Identifier_Casing;
+
    procedure Check_Dot_Dot
      renames Style_Inst.Check_Dot_Dot;
    --  Called after scanning out dot dot to check spacing
@@ -155,6 +158,11 @@ package Style is
    --  check the line length (Len is the length of the current line). Note that
    --  the terminator may be the EOF character.
 
+   procedure Check_Not_In
+     renames Style_Inst.Check_Not_In;
+   --  Called with Scan_Ptr pointing to an IN token, and Prev_Token_Ptr
+   --  pointing to a NOT token. Used to check proper layout of NOT IN.
+
    procedure Check_Pragma_Name
      renames Style_Inst.Check_Pragma_Name;
    --  The current token is a pragma identifier. Check that it is spelled
@@ -175,7 +183,7 @@ package Style is
    --  procedure is called only if THEN appears at the start of a line with
    --  Token_Ptr pointing to the THEN keyword.
 
-   procedure Check_Unary_Plus_Or_Minus
+   procedure Check_Unary_Plus_Or_Minus (Inside_Depends : Boolean := False)
      renames Style_Inst.Check_Unary_Plus_Or_Minus;
    --  Called after scanning a unary plus or minus to check spacing
 
@@ -185,8 +193,8 @@ package Style is
 
    procedure Check_Xtra_Parens (Loc : Source_Ptr)
      renames Style_Inst.Check_Xtra_Parens;
-   --  Called after scanning a conditional expression that has at least one
-   --  level of parentheses around the entire expression.
+   --  Called after scanning an if, case or quantified expression that has at
+   --  least one level of parentheses around the entire expression.
 
    function Mode_In_Check return Boolean
      renames Style_Inst.Mode_In_Check;
@@ -214,4 +222,5 @@ package Style is
    --  lower case letters. On entry Token_Ptr points to the keyword token.
    --  This is not used for keywords appearing as attribute designators,
    --  where instead Check_Attribute_Name (True) is called.
+
 end Style;

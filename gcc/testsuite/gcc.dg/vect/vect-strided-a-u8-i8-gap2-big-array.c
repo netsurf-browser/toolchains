@@ -45,8 +45,7 @@ main1 ()
       check_res[i].h = arr[i].f;
       check_res[i].g = arr[i].f - arr[i].a;
 
-      if (arr[i].a == 178)
-         abort ();
+      asm volatile ("" ::: "memory");
     }
 
   for (i = 0; i < N; i++)
@@ -88,5 +87,4 @@ int main (void)
 }
 
 /* { dg-final { scan-tree-dump-times "vectorized 1 loops" 1 "vect" { target vect_strided8 } } } */
-/* { dg-final { cleanup-tree-dump "vect" } } */
 

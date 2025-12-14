@@ -3,7 +3,7 @@
 /* { dg-skip-if "" { *-*-* } { "-O0" "-fno-fat-lto-objects" } { "" } } */
 
 extern void abort (void);
-int *glob;
+int *g;
 int dummy;
 
 int * __attribute__((noinline,const))
@@ -13,7 +13,7 @@ int * __attribute__((noinline,pure))
 foo_pure(int *p) { return p + dummy; }
 
 int * __attribute__((noinline))
-foo_normal(int *p) { glob = p; return p; }
+foo_normal(int *p) { g = p; return p; }
 
 void test_const(void)
 {
@@ -56,7 +56,6 @@ int main()
   return 0;
 }
 
-/* { dg-final { scan-tree-dump "q_const_., points-to non-local, points-to vars: { i }" "alias" } } */
-/* { dg-final { scan-tree-dump "q_pure_., points-to non-local, points-to escaped, points-to vars: { i }" "alias" } } */
-/* { dg-final { scan-tree-dump "q_normal_., points-to non-local, points-to escaped, points-to vars: { }" "alias" } } */
-/* { dg-final { cleanup-tree-dump "alias" } } */
+/* { dg-final { scan-tree-dump "q_const_. = { NONLOCAL i }" "alias" } } */
+/* { dg-final { scan-tree-dump "q_pure_. = { ESCAPED NONLOCAL i }" "alias" } } */
+/* { dg-final { scan-tree-dump "q_normal_. = { ESCAPED NONLOCAL }" "alias" } } */

@@ -6,7 +6,7 @@
 --                                                                          --
 --                                 B o d y                                  --
 --                                                                          --
---          Copyright (C) 1992-2010, Free Software Foundation, Inc.         --
+--          Copyright (C) 1992-2019, Free Software Foundation, Inc.         --
 --                                                                          --
 -- GNAT is free software;  you can  redistribute it  and/or modify it under --
 -- terms of the  GNU General Public License as published  by the Free Soft- --
@@ -29,7 +29,6 @@ with Debug;    use Debug;
 with Einfo;    use Einfo;
 with Errout;   use Errout;
 with Fname;    use Fname;
-with Hostparm;
 with Lib;      use Lib;
 with Opt;      use Opt;
 with Osint;    use Osint;
@@ -38,13 +37,13 @@ with Prep;     use Prep;
 with Prepcomp; use Prepcomp;
 with Scans;    use Scans;
 with Scn;      use Scn;
+with Sem_Aux;  use Sem_Aux;
+with Sem_Util; use Sem_Util;
 with Sinfo;    use Sinfo;
 with Snames;   use Snames;
 with System;   use System;
 
 with System.OS_Lib; use System.OS_Lib;
-
-with Unchecked_Conversion;
 
 package body Sinput.L is
 
@@ -90,7 +89,10 @@ package body Sinput.L is
    -- Adjust_Instantiation_Sloc --
    -------------------------------
 
-   procedure Adjust_Instantiation_Sloc (N : Node_Id; A : Sloc_Adjustment) is
+   procedure Adjust_Instantiation_Sloc
+     (N      : Node_Id;
+      Factor : Sloc_Adjustment)
+   is
       Loc : constant Source_Ptr := Sloc (N);
 
    begin
@@ -99,8 +101,8 @@ package body Sinput.L is
       --  case, but in practice there seem to be some nodes that get copied
       --  twice, and this is a defence against that happening.
 
-      if A.Lo <= Loc and then Loc <= A.Hi then
-         Set_Sloc (N, Loc + A.Adjust);
+      if Loc in Factor.Lo .. Factor.Hi then
+         Set_Sloc (N, Loc + Factor.Adjust);
       end if;
    end Adjust_Instantiation_Sloc;
 
@@ -110,7 +112,6 @@ package body Sinput.L is
 
    procedure Complete_Source_File_Entry is
       CSF : constant Source_File_Index := Current_Source_File;
-
    begin
       Trim_Lines_Table (CSF);
       Source_File.Table (CSF).Source_Checksum := Checksum;
@@ -121,144 +122,205 @@ package body Sinput.L is
    ---------------------------------
 
    procedure Create_Instantiation_Source
-     (Inst_Node    : Entity_Id;
-      Template_Id  : Entity_Id;
-      Inlined_Body : Boolean;
-      A            : out Sloc_Adjustment)
+     (Inst_Node        : Entity_Id;
+      Template_Id      : Entity_Id;
+      Factor           : out Sloc_Adjustment;
+      Inlined_Body     : Boolean := False;
+      Inherited_Pragma : Boolean := False)
    is
       Dnod : constant Node_Id := Declaration_Node (Template_Id);
       Xold : Source_File_Index;
       Xnew : Source_File_Index;
 
    begin
-      Xold := Get_Source_File_Index (Sloc (Template_Id));
-      A.Lo := Source_File.Table (Xold).Source_First;
-      A.Hi := Source_File.Table (Xold).Source_Last;
+      Xold      := Get_Source_File_Index (Sloc (Template_Id));
+      Factor.Lo := Source_File.Table (Xold).Source_First;
+      Factor.Hi := Source_File.Table (Xold).Source_Last;
 
       Source_File.Append (Source_File.Table (Xold));
       Xnew := Source_File.Last;
 
-      Source_File.Table (Xnew).Inlined_Body  := Inlined_Body;
-      Source_File.Table (Xnew).Instantiation := Sloc (Inst_Node);
-      Source_File.Table (Xnew).Template      := Xold;
-
-      --  Now we need to compute the new values of Source_First, Source_Last
-      --  and adjust the source file pointer to have the correct virtual
-      --  origin for the new range of values.
-
-      Source_File.Table (Xnew).Source_First :=
-        Source_File.Table (Xnew - 1).Source_Last + 1;
-      A.Adjust := Source_File.Table (Xnew).Source_First - A.Lo;
-      Source_File.Table (Xnew).Source_Last := A.Hi + A.Adjust;
-
-      Set_Source_File_Index_Table (Xnew);
-
-      Source_File.Table (Xnew).Sloc_Adjust :=
-        Source_File.Table (Xold).Sloc_Adjust - A.Adjust;
-
       if Debug_Flag_L then
          Write_Eol;
-         Write_Str ("*** Create instantiation source for ");
+         Write_Str ("*** Create_Instantiation_Source: created source ");
+         Write_Int (Int (Xnew));
+         Write_Line ("");
+      end if;
 
-         if Nkind (Dnod) in N_Proper_Body
-           and then Was_Originally_Stub (Dnod)
-         then
-            Write_Str ("subunit ");
+      declare
+         Sold : Source_File_Record renames Source_File.Table (Xold);
+         Snew : Source_File_Record renames Source_File.Table (Xnew);
 
-         elsif Ekind (Template_Id) = E_Generic_Package then
-            if Nkind (Dnod) = N_Package_Body then
-               Write_Str ("body of package ");
+         Inst_Spec : Node_Id;
+
+      begin
+         Snew.Index            := Xnew;
+         Snew.Inlined_Body     := Inlined_Body;
+         Snew.Inherited_Pragma := Inherited_Pragma;
+         Snew.Template         := Xold;
+
+         --  For a genuine generic instantiation, assign new instance id. For
+         --  inlined bodies or inherited pragmas, we retain that of the
+         --  template, but we save the call location.
+
+         if Inlined_Body or Inherited_Pragma then
+            Snew.Inlined_Call := Sloc (Inst_Node);
+
+         else
+            --  If the spec has been instantiated already, and we are now
+            --  creating the instance source for the corresponding body now,
+            --  retrieve the instance id that was assigned to the spec, which
+            --  corresponds to the same instantiation sloc.
+
+            Inst_Spec := Instance_Spec (Inst_Node);
+            if Present (Inst_Spec) then
+               declare
+                  Inst_Spec_Ent : Entity_Id;
+                  --  Instance spec entity
+
+                  Inst_Spec_Sloc : Source_Ptr;
+                  --  Virtual sloc of the spec instance source
+
+                  Inst_Spec_Inst_Id : Instance_Id;
+                  --  Instance id assigned to the instance spec
+
+               begin
+                  Inst_Spec_Ent := Defining_Entity (Inst_Spec);
+
+                  --  For a subprogram instantiation, we want the subprogram
+                  --  instance, not the wrapper package.
+
+                  if Present (Related_Instance (Inst_Spec_Ent)) then
+                     Inst_Spec_Ent := Related_Instance (Inst_Spec_Ent);
+                  end if;
+
+                  --  The specification of the instance entity has a virtual
+                  --  sloc within the instance sloc range.
+
+                  --  ??? But the Unit_Declaration_Node has the sloc of the
+                  --  instantiation, which is somewhat of an oddity.
+
+                  Inst_Spec_Sloc :=
+                    Sloc
+                      (Specification (Unit_Declaration_Node (Inst_Spec_Ent)));
+                  Inst_Spec_Inst_Id :=
+                    Source_File.Table
+                      (Get_Source_File_Index (Inst_Spec_Sloc)).Instance;
+
+                  pragma Assert
+                    (Sloc (Inst_Node) = Instances.Table (Inst_Spec_Inst_Id));
+                  Snew.Instance := Inst_Spec_Inst_Id;
+               end;
+
             else
-               Write_Str ("spec of package ");
-            end if;
-
-         elsif Ekind (Template_Id) = E_Function then
-            Write_Str ("body of function ");
-
-         elsif Ekind (Template_Id) = E_Procedure then
-            Write_Str ("body of procedure ");
-
-         elsif Ekind (Template_Id) = E_Generic_Function then
-            Write_Str ("spec of function ");
-
-         elsif Ekind (Template_Id) = E_Generic_Procedure then
-            Write_Str ("spec of procedure ");
-
-         elsif Ekind (Template_Id) = E_Package_Body then
-            Write_Str ("body of package ");
-
-         else pragma Assert (Ekind (Template_Id) = E_Subprogram_Body);
-
-            if Nkind (Dnod) = N_Procedure_Specification then
-               Write_Str ("body of procedure ");
-            else
-               Write_Str ("body of function ");
+               Instances.Append (Sloc (Inst_Node));
+               Snew.Instance := Instances.Last;
             end if;
          end if;
 
-         Write_Name (Chars (Template_Id));
-         Write_Eol;
+         --  Now compute the new values of Source_First and Source_Last and
+         --  adjust the source file pointer to have the correct bounds for the
+         --  new range of values.
 
-         Write_Str ("  new source index = ");
-         Write_Int (Int (Xnew));
-         Write_Eol;
+         --  Source_First must be greater than the last Source_Last value and
+         --  also must be a multiple of Source_Align.
 
-         Write_Str ("  copying from file name = ");
-         Write_Name (File_Name (Xold));
-         Write_Eol;
+         Snew.Source_First :=
+           ((Source_File.Table (Xnew - 1).Source_Last + Source_Align) /
+              Source_Align) * Source_Align;
+         Factor.Adjust := Snew.Source_First - Factor.Lo;
+         Snew.Source_Last := Factor.Hi + Factor.Adjust;
 
-         Write_Str ("  old source index = ");
-         Write_Int (Int (Xold));
-         Write_Eol;
+         Set_Source_File_Index_Table (Xnew);
 
-         Write_Str ("  old lo = ");
-         Write_Int (Int (A.Lo));
-         Write_Eol;
+         Snew.Sloc_Adjust := Sold.Sloc_Adjust - Factor.Adjust;
 
-         Write_Str ("  old hi = ");
-         Write_Int (Int (A.Hi));
-         Write_Eol;
+         --  Modify the Dope of the instance Source_Text to use the
+         --  above-computed bounds.
 
-         Write_Str ("  new lo = ");
-         Write_Int (Int (Source_File.Table (Xnew).Source_First));
-         Write_Eol;
+         declare
+            Dope : constant Dope_Ptr :=
+              new Dope_Rec'(Snew.Source_First, Snew.Source_Last);
+         begin
+            Snew.Source_Text := Sold.Source_Text;
+            Set_Dope (Snew.Source_Text'Address, Dope);
+            pragma Assert (Snew.Source_Text'First = Snew.Source_First);
+            pragma Assert (Snew.Source_Text'Last = Snew.Source_Last);
+         end;
 
-         Write_Str ("  new hi = ");
-         Write_Int (Int (Source_File.Table (Xnew).Source_Last));
-         Write_Eol;
+         if Debug_Flag_L then
+            Write_Str ("  for ");
 
-         Write_Str ("  adjustment factor = ");
-         Write_Int (Int (A.Adjust));
-         Write_Eol;
+            if Nkind (Dnod) in N_Proper_Body
+              and then Was_Originally_Stub (Dnod)
+            then
+               Write_Str ("subunit ");
 
-         Write_Str ("  instantiation location: ");
-         Write_Location (Sloc (Inst_Node));
-         Write_Eol;
-      end if;
+            elsif Ekind (Template_Id) = E_Generic_Package then
+               if Nkind (Dnod) = N_Package_Body then
+                  Write_Str ("body of package ");
+               else
+                  Write_Str ("spec of package ");
+               end if;
 
-      --  For a given character in the source, a higher subscript will be used
-      --  to access the instantiation, which means that the virtual origin must
-      --  have a corresponding lower value. We compute this new origin by
-      --  taking the address of the appropriate adjusted element in the old
-      --  array. Since this adjusted element will be at a negative subscript,
-      --  we must suppress checks.
+            elsif Ekind (Template_Id) = E_Function then
+               Write_Str ("body of function ");
 
-      declare
-         pragma Suppress (All_Checks);
+            elsif Ekind (Template_Id) = E_Procedure then
+               Write_Str ("body of procedure ");
 
-         pragma Warnings (Off);
-         --  This unchecked conversion is aliasing safe, since it is never used
-         --  to create improperly aliased pointer values.
+            elsif Ekind (Template_Id) = E_Generic_Function then
+               Write_Str ("spec of function ");
 
-         function To_Source_Buffer_Ptr is new
-           Unchecked_Conversion (Address, Source_Buffer_Ptr);
+            elsif Ekind (Template_Id) = E_Generic_Procedure then
+               Write_Str ("spec of procedure ");
 
-         pragma Warnings (On);
+            elsif Ekind (Template_Id) = E_Package_Body then
+               Write_Str ("body of package ");
 
-      begin
-         Source_File.Table (Xnew).Source_Text :=
-           To_Source_Buffer_Ptr
-             (Source_File.Table (Xold).Source_Text (-A.Adjust)'Address);
+            else pragma Assert (Ekind (Template_Id) = E_Subprogram_Body);
+               if Nkind (Dnod) = N_Procedure_Specification then
+                  Write_Str ("body of procedure ");
+               else
+                  Write_Str ("body of function ");
+               end if;
+            end if;
+
+            Write_Name (Chars (Template_Id));
+            Write_Eol;
+
+            Write_Str ("  copying from file name = ");
+            Write_Name (File_Name (Xold));
+            Write_Eol;
+
+            Write_Str ("  old source index = ");
+            Write_Int (Int (Xold));
+            Write_Eol;
+
+            Write_Str ("  old lo = ");
+            Write_Int (Int (Factor.Lo));
+            Write_Eol;
+
+            Write_Str ("  old hi = ");
+            Write_Int (Int (Factor.Hi));
+            Write_Eol;
+
+            Write_Str ("  new lo = ");
+            Write_Int (Int (Snew.Source_First));
+            Write_Eol;
+
+            Write_Str ("  new hi = ");
+            Write_Int (Int (Snew.Source_Last));
+            Write_Eol;
+
+            Write_Str ("  adjustment factor = ");
+            Write_Int (Int (Factor.Adjust));
+            Write_Eol;
+
+            Write_Str ("  instantiation location: ");
+            Write_Location (Sloc (Inst_Node));
+            Write_Eol;
+         end if;
       end;
    end Create_Instantiation_Source;
 
@@ -292,10 +354,11 @@ package body Sinput.L is
      (N : File_Name_Type;
       T : Osint.File_Type) return Source_File_Index
    is
+      FD  : File_Descriptor;
+      Hi  : Source_Ptr;
+      Lo  : Source_Ptr;
       Src : Source_Buffer_Ptr;
       X   : Source_File_Index;
-      Lo  : Source_Ptr;
-      Hi  : Source_Ptr;
 
       Preprocessing_Needed : Boolean := False;
 
@@ -332,18 +395,33 @@ package body Sinput.L is
       Source_File.Increment_Last;
       X := Source_File.Last;
 
+      if Debug_Flag_L then
+         Write_Eol;
+         Write_Str ("Sinput.L.Load_File: created source ");
+         Write_Int (Int (X));
+         Write_Str (" for ");
+         Write_Str (Get_Name_String (N));
+      end if;
+
+      --  Compute starting index, respecting alignment requirement
+
       if X = Source_File.First then
          Lo := First_Source_Ptr;
       else
-         Lo := Source_File.Table (X - 1).Source_Last + 1;
+         Lo := ((Source_File.Table (X - 1).Source_Last + Source_Align) /
+                  Source_Align) * Source_Align;
       end if;
 
-      Osint.Read_Source_File (N, Lo, Hi, Src, T);
+      Osint.Read_Source_File (N, Lo, Hi, Src, FD, T);
 
-      if Src = null then
+      if Null_Source_Buffer_Ptr (Src) then
          Source_File.Decrement_Last;
-         return No_Source_File;
 
+         if FD = Null_FD then
+            return No_Source_File;
+         else
+            return No_Access_To_Source_File;
+         end if;
       else
          if Debug_Flag_L then
             Write_Eol;
@@ -433,9 +511,11 @@ package body Sinput.L is
                   Full_Debug_Name     => Osint.Full_Source_Name,
                   Full_File_Name      => Osint.Full_Source_Name,
                   Full_Ref_Name       => Osint.Full_Source_Name,
+                  Instance            => No_Instance_Id,
                   Identifier_Casing   => Unknown,
+                  Inlined_Call        => No_Location,
                   Inlined_Body        => False,
-                  Instantiation       => No_Location,
+                  Inherited_Pragma    => False,
                   Keyword_Casing      => Unknown,
                   Last_Source_Line    => 1,
                   License             => Unknown,
@@ -451,7 +531,8 @@ package body Sinput.L is
                   Source_Text         => Src,
                   Template            => No_Source_File,
                   Unit                => No_Unit,
-                  Time_Stamp          => Osint.Current_Source_File_Stamp);
+                  Time_Stamp          => Osint.Current_Source_File_Stamp,
+                  Index               => X);
 
             Alloc_Line_Tables (S, Opt.Table_Factor * Alloc.Lines_Initial);
             S.Lines_Table (1) := Lo;
@@ -572,12 +653,7 @@ package body Sinput.L is
 
                      begin
                         Get_Name_String (N);
-
-                        if Hostparm.OpenVMS then
-                           Add_Str_To_Name_Buffer ("_prep");
-                        else
-                           Add_Str_To_Name_Buffer (".prep");
-                        end if;
+                        Add_Str_To_Name_Buffer (Prep_Suffix);
 
                         Delete_File (Name_Buffer (1 .. Name_Len), Status);
 
@@ -601,7 +677,7 @@ package body Sinput.L is
 
                         if not Status then
                            Errout.Error_Msg
-                             ("?could not write processed file """ &
+                             ("??could not write processed file """ &
                               Name_Buffer (1 .. Name_Len) & '"',
                               Lo);
                         end if;
@@ -615,54 +691,28 @@ package body Sinput.L is
                   --  Create the new source buffer
 
                   declare
-                     subtype Actual_Source_Buffer is Source_Buffer (Lo .. Hi);
-                     --  Physical buffer allocated
-
-                     type Actual_Source_Ptr is access Actual_Source_Buffer;
-                     --  Pointer type for the physical buffer allocated
-
-                     Actual_Ptr : constant Actual_Source_Ptr :=
-                                    new Actual_Source_Buffer;
-                     --  Actual physical buffer
+                     Var_Ptr : constant Source_Buffer_Ptr_Var :=
+                       new Source_Buffer (Lo .. Hi);
+                     --  Allocate source buffer, allowing extra character at
+                     --  end for EOF.
 
                   begin
-                     Actual_Ptr (Lo .. Hi - 1) :=
+                     Var_Ptr (Lo .. Hi - 1) :=
                        Prep_Buffer (1 .. Prep_Buffer_Last);
-                     Actual_Ptr (Hi) := EOF;
-
-                     --  Now we need to work out the proper virtual origin
-                     --  pointer to return. This is Actual_Ptr (0)'Address, but
-                     --  we have to be careful to suppress checks to compute
-                     --  this address.
-
-                     declare
-                        pragma Suppress (All_Checks);
-
-                        pragma Warnings (Off);
-                        --  This unchecked conversion is aliasing safe, since
-                        --  it is never used to create improperly aliased
-                        --  pointer values.
-
-                        function To_Source_Buffer_Ptr is new
-                          Unchecked_Conversion (Address, Source_Buffer_Ptr);
-
-                        pragma Warnings (On);
-
-                     begin
-                        Src := To_Source_Buffer_Ptr (Actual_Ptr (0)'Address);
-
-                        --  Record in the table the new source buffer and the
-                        --  new value of Hi.
-
-                        Source_File.Table (X).Source_Text := Src;
-                        Source_File.Table (X).Source_Last := Hi;
-
-                        --  Reset Last_Line to 1, because the lines do not
-                        --  have necessarily the same starts and lengths.
-
-                        Source_File.Table (X).Last_Source_Line := 1;
-                     end;
+                     Var_Ptr (Hi) := EOF;
+                     Src := Var_Ptr.all'Access;
                   end;
+
+                  --  Record in the table the new source buffer and the
+                  --  new value of Hi.
+
+                  Source_File.Table (X).Source_Text := Src;
+                  Source_File.Table (X).Source_Last := Hi;
+
+                  --  Reset Last_Line to 1, because the lines do not
+                  --  have necessarily the same starts and lengths.
+
+                  Source_File.Table (X).Last_Source_Line := 1;
                end if;
             end;
          end if;
@@ -727,9 +777,113 @@ package body Sinput.L is
       Prep_Buffer (Prep_Buffer_Last) := C;
    end Put_Char_In_Prep_Buffer;
 
-   -----------------------------------
-   -- Source_File_Is_Pragma_No_Body --
-   -----------------------------------
+   -------------------------
+   -- Source_File_Is_Body --
+   -------------------------
+
+   function Source_File_Is_Body (X : Source_File_Index) return Boolean is
+      Pcount : Natural;
+
+   begin
+      Initialize_Scanner (No_Unit, X);
+
+      --  Loop to look for subprogram or package body
+
+      loop
+         case Token is
+
+            --  PRAGMA, WITH, USE (which can appear before a body)
+
+            when Tok_Pragma
+               | Tok_Use
+               | Tok_With
+            =>
+               --  We just want to skip any of these, do it by skipping to a
+               --  semicolon, but check for EOF, in case we have bad syntax.
+
+               loop
+                  if Token = Tok_Semicolon then
+                     Scan;
+                     exit;
+                  elsif Token = Tok_EOF then
+                     return False;
+                  else
+                     Scan;
+                  end if;
+               end loop;
+
+            --  PACKAGE
+
+            when Tok_Package =>
+               Scan; -- Past PACKAGE
+
+               --  We have a body if and only if BODY follows
+
+               return Token = Tok_Body;
+
+            --  FUNCTION or PROCEDURE
+
+            when Tok_Function
+               | Tok_Procedure
+            =>
+               Pcount := 0;
+
+               --  Loop through tokens following PROCEDURE or FUNCTION
+
+               loop
+                  Scan;
+
+                  case Token is
+
+                     --  For parens, count paren level (note that paren level
+                     --  can get greater than 1 if we have default parameters).
+
+                     when Tok_Left_Paren =>
+                        Pcount := Pcount + 1;
+
+                     when Tok_Right_Paren =>
+                        Pcount := Pcount - 1;
+
+                     --  EOF means something weird, probably no body
+
+                     when Tok_EOF =>
+                        return False;
+
+                     --  BEGIN or IS or END definitely means body is present
+
+                     when Tok_Begin
+                        | Tok_End
+                        | Tok_Is
+                     =>
+                        return True;
+
+                     --  Semicolon means no body present if at outside any
+                     --  parens. If within parens, ignore, since it could be
+                     --  a parameter separator.
+
+                     when Tok_Semicolon =>
+                        if Pcount = 0 then
+                           return False;
+                        end if;
+
+                     --  Skip anything else
+
+                     when others =>
+                        null;
+                  end case;
+               end loop;
+
+            --  Anything else in main scan means we don't have a body
+
+            when others =>
+               return False;
+         end case;
+      end loop;
+   end Source_File_Is_Body;
+
+   ----------------------------
+   -- Source_File_Is_No_Body --
+   ----------------------------
 
    function Source_File_Is_No_Body (X : Source_File_Index) return Boolean is
    begin
@@ -757,28 +911,5 @@ package body Sinput.L is
 
       return Token = Tok_EOF;
    end Source_File_Is_No_Body;
-
-   ----------------------------
-   -- Source_File_Is_Subunit --
-   ----------------------------
-
-   function Source_File_Is_Subunit (X : Source_File_Index) return Boolean is
-   begin
-      Initialize_Scanner (No_Unit, X);
-
-      --  We scan past junk to the first interesting compilation unit token, to
-      --  see if it is SEPARATE. We ignore WITH keywords during this and also
-      --  PRIVATE. The reason for ignoring PRIVATE is that it handles some
-      --  error situations, and also to handle PRIVATE WITH in Ada 2005 mode.
-
-      while Token = Tok_With
-        or else Token = Tok_Private
-        or else (Token not in Token_Class_Cunit and then Token /= Tok_EOF)
-      loop
-         Scan;
-      end loop;
-
-      return Token = Tok_Separate;
-   end Source_File_Is_Subunit;
 
 end Sinput.L;

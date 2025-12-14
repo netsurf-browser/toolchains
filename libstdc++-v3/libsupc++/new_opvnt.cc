@@ -1,7 +1,6 @@
 // Boilerplate support routines for -*- C++ -*- dynamic memory management.
 
-// Copyright (C) 1997, 1998, 1999, 2000, 2004, 2009, 2010, 2011
-// Free Software Foundation
+// Copyright (C) 1997-2020 Free Software Foundation, Inc.
 //
 // This file is part of GCC.
 //
@@ -28,8 +27,17 @@
 #include "new"
  
 _GLIBCXX_WEAK_DEFINITION void*
-operator new[] (std::size_t sz, const std::nothrow_t& nothrow)
-  _GLIBCXX_USE_NOEXCEPT
+operator new[] (std::size_t sz, const std::nothrow_t&) noexcept
 {
-  return ::operator new(sz, nothrow);
+  // _GLIBCXX_RESOLVE_LIB_DEFECTS
+  // 206. operator new(size_t, nothrow) may become unlinked to ordinary
+  // operator new if ordinary version replaced
+  __try
+    {
+      return ::operator new[](sz);
+    }
+  __catch (...)
+    {
+      return nullptr;
+    }
 }

@@ -2,9 +2,12 @@
 /* { dg-options "-O2" } */
 
 /* On MIPS, disable generating hints (R_MIPS_JALR) for PIC calls.  In addition
-   to the load from the GOT this also contains the name of the funtion so for
+   to the load from the GOT this also contains the name of the function so for
    each call the function name would appear twice.  */
 /* { dg-options "-O2 -mno-relax-pic-calls" { target mips*-*-* } } */
+/* For epiphany, use -mshort-calls to avoid loading the address in two
+   steps using lowpart and highpart.  */
+/* { dg-options "-O2 -mshort-calls" { target epiphany-*-* } } */ 
 
 extern void *memset (void *, int, __SIZE_TYPE__);
 extern __SIZE_TYPE__ strlen (const char *);
@@ -16,7 +19,7 @@ main (int argc, char **argv)
   memset (x, argc, strlen (x));
   return 0;
 }
-/* { dg-final { scan-assembler-not "(?n)strlen\(.*\n\)+.*strlen" { target { ! { powerpc*-*-darwin* hppa*-*-hpux* ia64-*-hpux* alpha*-*-* spu-*-* tic6x-*-* } } } } } */
+/* { dg-final { scan-assembler-not "(?n)strlen\(.*\n\)+.*strlen" { target { ! { powerpc*-*-darwin* hppa*-*-hpux* ia64-*-hpux* alpha*-*-* tic6x-*-* } } } } } */
 /* hppa*-*-hpux* has an IMPORT statement for strlen (plus the branch). */
 /* *-*-darwin* has something similar. */
 /* tic6x emits a comment at the point where the delayed branch happens.  */
@@ -26,5 +29,3 @@ main (int argc, char **argv)
 /* { dg-final { scan-assembler-not "(?n)strlen\(.*\n\)+.*strlen\(.*\n\)+.*strlen\(.*\n\)+.*strlen" { target ia64-*-hpux* } } } */
 /* alpha-*-* has a GOT load and the call.  */
 /* { dg-final { scan-assembler-not "(?n)jsr .*,strlen\(.*\n\)+.*jsr .*,strlen" { target alpha*-*-* } } } */
-/* spu-*-* has a branch hint and the call.  */
-/* { dg-final { scan-assembler-not "(?n)brsl.*,strlen\(.*\n\)+.*brsl.*,strlen" { target spu-*-* } } } */

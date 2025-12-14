@@ -1,5 +1,5 @@
 # Process this file with autoreconf to produce a configure script.
-#   Copyright (C) 2011, 2012 Free Software Foundation, Inc.
+#   Copyright (C) 2011-2020 Free Software Foundation, Inc.
 
 # This program is free software; you can redistribute it and/or modify
 # it under the terms of the GNU General Public License as published by
@@ -15,7 +15,6 @@
 # along with this program; if not, write to the Free Software
 # Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301, USA.  
 
-AC_PREREQ(2.59)
 AC_INIT([GNU TM Runtime Library], 1.0,,[libitm])
 AC_CONFIG_HEADER(config.h)
 
@@ -79,6 +78,8 @@ target_alias=${target_alias-$host_alias}
 AM_INIT_AUTOMAKE([1.9.0 foreign no-dist -Wall -Wno-portability -Wno-override])
 AM_ENABLE_MULTILIB(, ..)
 
+GCC_WITH_TOOLEXECLIBDIR
+
 # Calculate toolexeclibdir
 # Also toolexecdir, though it's only used in toolexeclibdir
 case ${enable_version_specific_runtime_libs} in
@@ -94,7 +95,14 @@ case ${enable_version_specific_runtime_libs} in
        test x"$with_cross_host" != x"no"; then
       # Install a library built with a cross compiler in tooldir, not libdir.
       toolexecdir='$(exec_prefix)/$(target_alias)'
-      toolexeclibdir='$(toolexecdir)/lib'
+      case ${with_toolexeclibdir} in
+	no)
+	  toolexeclibdir='$(toolexecdir)/lib'
+	  ;;
+	*)
+	  toolexeclibdir=${with_toolexeclibdir}
+	  ;;
+      esac
     else
       toolexecdir='$(libdir)/gcc-lib/$(target_alias)'
       toolexeclibdir='$(libdir)'
@@ -160,7 +168,7 @@ AC_SUBST(libtool_VERSION)
 AC_STDC_HEADERS
 AC_HEADER_TIME
 ACX_HEADER_STRING
-AC_CHECK_HEADERS(unistd.h semaphore.h sys/time.h malloc.h)
+AC_CHECK_HEADERS(unistd.h semaphore.h sys/time.h sys/auxv.h malloc.h)
 
 GCC_HEADER_STDINT(gstdint.h)
 
@@ -193,7 +201,7 @@ AC_LINK_IFELSE(
    [AC_MSG_ERROR([Pthreads are required to build libitm])])])
 
 # Check for functions needed.
-AC_CHECK_FUNCS(strtoull memalign posix_memalign)
+AC_CHECK_FUNCS(strtoull memalign posix_memalign getauxval)
 
 # Check for broken semaphore implementation on darwin.
 # sem_init returns: sem_init error: Function not implemented.
@@ -215,7 +223,7 @@ LIBITM_CHECK_ATTRIBUTE_DLLEXPORT
 LIBITM_CHECK_ATTRIBUTE_ALIAS
 
 # Check linker hardware capability support.
-LIBITM_CHECK_LINKER_HWCAP
+GCC_CHECK_LINKER_HWCAP
 # If defaulting to -mavx, don't clear hwcaps.
 AC_CHECK_DECL([__AVX__], [HWCAP_LDFLAGS=''])
 
@@ -244,6 +252,8 @@ CFLAGS="$save_CFLAGS $XCFLAGS"
 LIBITM_CHECK_SYNC_BUILTINS
 LIBITM_CHECK_64BIT_SYNC_BUILTINS
 LIBITM_CHECK_AS_AVX
+LIBITM_CHECK_AS_RTM
+LIBITM_CHECK_AS_HTM
 
 GCC_CHECK_ELF_STYLE_WEAKREF
 
@@ -257,6 +267,10 @@ if test "x$GCC" = "xyes"; then
 fi
 
 XCFLAGS="$XCFLAGS $XPCFLAGS"
+
+# Add CET specific flags if CET is enabled
+GCC_CET_FLAGS(CET_FLAGS)
+XCFLAGS="$XCFLAGS $CET_FLAGS"
 
 AC_SUBST(config_path)
 AC_SUBST(XCFLAGS)
@@ -283,6 +297,9 @@ AM_CONDITIONAL([ARCH_ARM], [test "$ARCH" = arm])
 AM_CONDITIONAL([ARCH_X86], [test "$ARCH" = x86])
 AM_CONDITIONAL([ARCH_X86_AVX], [test "$libitm_cv_as_avx" = yes])
 AM_CONDITIONAL([ARCH_FUTEX], [test $enable_linux_futex = yes])
+
+# Determine what GCC version number to use in filesystem paths.
+GCC_BASE_VER
 
 AC_CONFIG_FILES(Makefile testsuite/Makefile libitm.spec)
 AC_OUTPUT

@@ -13,13 +13,21 @@
  * ====================================================
  */
 
+#if defined(LIBM_SCCS) && !defined(lint)
+static char rcsid[] = "$NetBSD: $";
+#endif
+
+/*
+ * finiteq(x) returns 1 is x is finite, else 0;
+ * no branching!
+ */
+
 #include "quadmath-imp.h"
 
-int
-finiteq (const __float128 x)
+int finiteq(__float128 x)
 {
-  int64_t hx;
-  GET_FLT128_MSW64(hx,x);
-  return (int)((uint64_t)((hx&0x7fffffffffffffffLL)
-			   -0x7fff000000000000LL)>>63);
+	int64_t hx;
+	GET_FLT128_MSW64(hx,x);
+	return (int)((uint64_t)((hx&0x7fff000000000000LL)
+				-0x7fff000000000000LL)>>63);
 }

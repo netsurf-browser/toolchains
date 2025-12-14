@@ -60,7 +60,7 @@ typedef unsigned int UHWtype;
 #define attribute_hidden
 #endif
 
-#include "../../libgcc/longlong.h"
+#include "longlong.h"
 
 /* Copy NLIMBS *limbs* from SRC to DST.  */
 #define MPN_COPY_INCR(DST, SRC, NLIMBS) \
@@ -91,7 +91,7 @@ typedef unsigned int UHWtype;
       impn_mul_n_basecase (prodp, up, vp, size);			\
     else								\
       impn_mul_n (prodp, up, vp, size, tspace);			\
-  } while (0);
+  } while (0)
 
 #define __MPN(x) __quadmath_mpn_##x
 

@@ -6,7 +6,7 @@
  *                                                                          *
  *                              C Header File                               *
  *                                                                          *
- *         Copyright (C) 2004-2011, Free Software Foundation, Inc.          *
+ *         Copyright (C) 2004-2019, Free Software Foundation, Inc.          *
  *                                                                          *
  * GNAT is free software;  you can  redistribute it  and/or modify it under *
  * terms of the  GNU General Public License as published  by the Free Soft- *
@@ -29,9 +29,9 @@
  *                                                                          *
  ****************************************************************************/
 
-#if defined(__nucleus__) || defined(VTHREADS)
+#if defined(VTHREADS) || defined(__PikeOS__) || defined(__DJGPP__)
 
-#warning Sockets not supported on these platforms
+/* Sockets not supported on these platforms.  */
 #undef HAVE_SOCKETS
 
 #else
@@ -53,11 +53,6 @@
 /* For AIX */
 #endif
 
-#ifndef _OSF_SOURCE
-#define _OSF_SOURCE 1
-/* For Tru64 */
-#endif
-
 /** No system header may be included prior to this point since on some targets
  ** we need to redefine FD_SETSIZE.
  **/
@@ -68,9 +63,18 @@
 #include <vxWorks.h>
 #include <ioLib.h>
 #include <hostLib.h>
+
 #define SHUT_RD		0
 #define SHUT_WR		1
 #define SHUT_RDWR	2
+
+#ifndef IPV6_ADD_MEMBERSHIP
+#define IPV6_ADD_MEMBERSHIP IPV6_JOIN_GROUP
+#endif
+
+#ifndef IPV6_DROP_MEMBERSHIP
+#define IPV6_DROP_MEMBERSHIP IPV6_LEAVE_GROUP
+#endif
 
 #elif defined (WINNT)
 #define FD_SETSIZE 1024
@@ -78,6 +82,7 @@
 #ifdef __MINGW32__
 #include <winsock2.h>
 #include <ws2tcpip.h>
+#include <versionhelpers.h>
 
 #undef  EACCES
 #define EACCES          WSAEACCES
@@ -181,11 +186,17 @@
 
 #include <limits.h>
 #include <errno.h>
+#include <stddef.h>
 
 #if defined (__vxworks) && ! defined (__RTP__)
 #include <sys/times.h>
 #else
 #include <sys/time.h>
+#endif
+
+#if defined(__rtems__)
+#include <unistd.h>
+/* Required, for read(), write(), and close() */
 #endif
 
 /*
@@ -197,19 +208,27 @@
  */
 #if !(defined (VMS) || defined (__MINGW32__))
 #include <sys/socket.h>
+#include <sys/un.h>
 #include <netinet/in.h>
 #include <netinet/tcp.h>
 #include <sys/ioctl.h>
 #include <netdb.h>
+#include <unistd.h>
+#endif
+
+#ifdef __ANDROID__
+#include <unistd.h>
+#include <sys/select.h>
 #endif
 
 #if defined (_AIX) || defined (__FreeBSD__) || defined (__hpux__) || \
-    defined (__osf__) || defined (_WIN32) || defined (__APPLE__)
+    defined (_WIN32) || defined (__APPLE__) || defined (__ANDROID__) || \
+    defined (__DragonFly__) || defined (__NetBSD__) || defined (__OpenBSD__)
 # define HAVE_THREAD_SAFE_GETxxxBYyyy 1
 
-#elif defined (sgi) || defined (linux) || defined (__GLIBC__) || \
-     (defined (sun) && defined (__SVR4) && !defined (__vxworks)) || \
-      defined(__rtems__)
+#elif defined (__linux__) || defined (__GLIBC__) || \
+     (defined (__sun__) && !defined (__vxworks)) || \
+      defined (__rtems__)
 # define HAVE_GETxxxBYyyy_R 1
 #endif
 
@@ -236,14 +255,11 @@
 # endif
 #endif
 
-#if defined (__FreeBSD__) || defined (__vxworks) || defined(__rtems__)
-# define Has_Sockaddr_Len 1
-#else
-# define Has_Sockaddr_Len 0
-#endif
+# define Has_Sockaddr_Len (offsetof(struct sockaddr_in, sin_family) != 0)
 
-#if !(defined (__vxworks) || defined (_WIN32) || defined (__hpux__) || defined (VMS))
+#if !(defined (_WIN32) || defined (__hpux__) || defined (VMS))
 # define HAVE_INET_PTON
+# define HAVE_INET_NTOP
 #endif
 
-#endif /* defined(__nucleus__) */
+#endif /* defined(VTHREADS) */

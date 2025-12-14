@@ -1,6 +1,5 @@
 ;; Machine description for Tilera TILE-Gx chip for GCC.
-;; Copyright (C) 2011, 2012
-;; Free Software Foundation, Inc.
+;; Copyright (C) 2011-2020 Free Software Foundation, Inc.
 ;; Contributed by Walter Lee (walt@tilera.com)
 ;;
 ;; This file is part of GCC.
@@ -150,42 +149,43 @@
 
   ;; Insns generating difference of two labels
   (UNSPEC_MOV_PCREL_STEP3              204)
+  (UNSPEC_MOV_LARGE_PCREL_STEP4        205)
 
   ;; Latency specifying loads.
-  (UNSPEC_LATENCY_L2                   205)
-  (UNSPEC_LATENCY_MISS                 206)
+  (UNSPEC_LATENCY_L2                   206)
+  (UNSPEC_LATENCY_MISS                 207)
 
   ;; A pseudo-op that prevents network operations from being ordered.
-  (UNSPEC_NETWORK_BARRIER              207)
+  (UNSPEC_NETWORK_BARRIER              208)
 
   ;; Operations that access network registers.
-  (UNSPEC_NETWORK_RECEIVE              208)
-  (UNSPEC_NETWORK_SEND                 209)
+  (UNSPEC_NETWORK_RECEIVE              209)
+  (UNSPEC_NETWORK_SEND                 210)
 
   ;; Stack protector operations
-  (UNSPEC_SP_SET                       210)
-  (UNSPEC_SP_TEST                      211)
+  (UNSPEC_SP_SET                       211)
+  (UNSPEC_SP_TEST                      212)
 
   ;; This is used to move a value to a SPR.
-  (UNSPEC_SPR_MOVE                     212)
+  (UNSPEC_SPR_MOVE                     213)
 
   ;; A call to __tls_get_addr
-  (UNSPEC_TLS_GD_CALL                  213)
+  (UNSPEC_TLS_GD_CALL                  214)
 
   ;; An opaque TLS "add" operation for TLS general dynamic model
   ;; access.
-  (UNSPEC_TLS_GD_ADD                   214)
+  (UNSPEC_TLS_GD_ADD                   215)
 
   ;; An opaque TLS "load" operation for TLS initial exec model access.
-  (UNSPEC_TLS_IE_LOAD                  215)
+  (UNSPEC_TLS_IE_LOAD                  216)
 
   ;; An opaque TLS "add" operation for TLS access.
-  (UNSPEC_TLS_ADD                      216)
+  (UNSPEC_TLS_ADD                      217)
 
   ;; Atomics
-  (UNSPEC_ATOMIC                       217)
-  (UNSPEC_CMPXCHG                      218)
-  (UNSPEC_XCHG                         219)
+  (UNSPEC_ATOMIC                       218)
+  (UNSPEC_CMPXCHG                      219)
+  (UNSPEC_XCHG                         220)
 
   ;;
   ;; The following are operands.
@@ -199,24 +199,32 @@
   (UNSPEC_HW2_LAST                     306)
 
   (UNSPEC_HW0_PCREL                    307)
-  (UNSPEC_HW1_LAST_PCREL               308)
+  (UNSPEC_HW1_PCREL                    308)
+  (UNSPEC_HW1_LAST_PCREL               309)
+  (UNSPEC_HW2_LAST_PCREL               310)
 
-  (UNSPEC_HW0_GOT                      309)
-  (UNSPEC_HW0_LAST_GOT                 310)
-  (UNSPEC_HW1_LAST_GOT                 311)
+  (UNSPEC_HW0_GOT                      311)
+  (UNSPEC_HW0_LAST_GOT                 312)
+  (UNSPEC_HW1_LAST_GOT                 313)
 
-  (UNSPEC_HW0_TLS_GD                   312)
-  (UNSPEC_HW1_LAST_TLS_GD              313)
+  (UNSPEC_HW0_TLS_GD                   314)
+  (UNSPEC_HW1_LAST_TLS_GD              315)
 
-  (UNSPEC_HW0_TLS_IE                   314)
-  (UNSPEC_HW1_LAST_TLS_IE              315)
+  (UNSPEC_HW0_TLS_IE                   316)
+  (UNSPEC_HW1_LAST_TLS_IE              317)
 
-  (UNSPEC_HW0_TLS_LE                   316)
-  (UNSPEC_HW1_LAST_TLS_LE              317)
+  (UNSPEC_HW0_TLS_LE                   318)
+  (UNSPEC_HW1_LAST_TLS_LE              319)
+
+  (UNSPEC_HW0_PLT_PCREL                320)
+  (UNSPEC_HW1_PLT_PCREL                321)
+
+  (UNSPEC_HW1_LAST_PLT_PCREL           322)
+  (UNSPEC_HW2_LAST_PLT_PCREL           323)
 
   ;; This is used to wrap around the addresses of non-temporal load/store
   ;; intrinsics.
-  (UNSPEC_NON_TEMPORAL                 318)
+  (UNSPEC_NON_TEMPORAL                 324)
 ])
 
 ;; Mark the last instruction of various latencies, used to
@@ -816,6 +824,12 @@
       bit_width = INTVAL (operands[2]);
       bit_offset = INTVAL (operands[3]);
 
+      /* NOTE: bit_offset is relative to the mode of operand
+         1 (QImode).  It will be negative in big-endian mode
+         here.  Convert that back to the real offset.  */
+      if (BYTES_BIG_ENDIAN)
+        bit_offset = GET_MODE_BITSIZE (QImode) - bit_width - bit_offset;
+
       /* Reject bitfields that can be done with a normal load.  */
       if (MEM_ALIGN (operands[1]) >= bit_offset + bit_width)
         FAIL;
@@ -852,6 +866,12 @@
       if (GET_MODE (operands[1]) != QImode)
         FAIL;
 
+      /* NOTE: bit_offset is relative to the mode of operand
+         1 (QImode).  It will be negative in big-endian mode
+         here. */
+      if (BYTES_BIG_ENDIAN)
+        bit_offset = GET_MODE_BITSIZE (QImode) - bit_width - bit_offset;
+ 
       /* Reject bitfields that can be done with a normal load.  */
       if (MEM_ALIGN (operands[1]) >= bit_offset + bit_width)
         FAIL;
@@ -884,15 +904,15 @@
 ;; Addresses
 ;;
 
-;; First step of the 3-insn sequence to materialize a symbolic
-;; address.
+;; The next three patterns are used to materialize a position
+;; independent address by adding the difference of two labels to a base
+;; label in the text segment, assuming that the difference fits in 32
+;; signed bits.
 (define_expand "mov_address_step1"
   [(set (match_operand:DI 0 "register_operand" "")
 	(const:DI (unspec:DI [(match_operand:DI 1 "symbolic_operand" "")]
 			     UNSPEC_HW2_LAST)))])
 
-;; Second step of the 3-insn sequence to materialize a symbolic
-;; address.
 (define_expand "mov_address_step2"
   [(set (match_operand:DI 0 "register_operand" "")
 	(unspec:DI
@@ -901,8 +921,6 @@
 			       UNSPEC_HW1))]
 	 UNSPEC_INSN_ADDR_SHL16INSLI))])
   
-;; Third step of the 3-insn sequence to materialize a symbolic
-;; address.
 (define_expand "mov_address_step3"
   [(set (match_operand:DI 0 "register_operand" "")
 	(unspec:DI
@@ -946,7 +964,7 @@
   "%1 = . + 8\n\tlnk\t%0"
   [(set_attr "type" "Y1")])
 
-;; The next three patterns are used to to materialize a position
+;; The next three patterns are used to materialize a position
 ;; independent address by adding the difference of two labels to a
 ;; base label in the text segment, assuming that the difference fits
 ;; in 32 signed bits.
@@ -978,6 +996,106 @@
                         UNSPEC_MOV_PCREL_STEP3))]
   "flag_pic"
   "add<x>\t%0, %r1, %r2")
+
+;; The next three patterns are used to materialize a position
+;; independent 64-bit address by adding the difference of two labels to
+;; a base label in the text segment, without any limitation on the size
+;; of the difference.
+(define_expand "mov_large_pcrel_step1"
+  [(set (match_operand:DI 0 "register_operand" "")
+	(const:DI (unspec:DI
+		   [(match_operand:DI 1 "symbolic_operand" "")
+		    (match_operand:DI 2 "symbolic_operand" "")]
+		   UNSPEC_HW2_LAST_PCREL)))]
+  "flag_pic")
+  
+(define_expand "mov_large_pcrel_step2"
+  [(set (match_operand:DI 0 "register_operand" "")
+	(unspec:DI
+	 [(match_operand:DI 1 "reg_or_0_operand" "")
+	  (const:DI
+	   (unspec:DI [(match_operand:DI 2 "symbolic_operand" "")
+		       (match_operand:DI 3 "symbolic_operand" "")]
+		      UNSPEC_HW1_PCREL))]
+	 UNSPEC_INSN_ADDR_SHL16INSLI))]
+  "flag_pic")
+
+;; Note: step 3 is same as move_pcrel_step2.
+(define_expand "mov_large_pcrel_step3"
+  [(set (match_operand:DI 0 "register_operand" "")
+	(unspec:DI
+	 [(match_operand:DI 1 "reg_or_0_operand" "")
+	  (const:DI
+	   (unspec:DI [(match_operand:DI 2 "symbolic_operand" "")
+		       (match_operand:DI 3 "symbolic_operand" "")]
+		      UNSPEC_HW0_PCREL))]
+	 UNSPEC_INSN_ADDR_SHL16INSLI))]
+  "flag_pic")
+
+(define_insn "mov_large_pcrel_step4"
+  [(set (match_operand:DI 0 "register_operand" "=r")
+        (unspec:DI [(match_operand:DI 1 "reg_or_0_operand" "rO")
+		    (match_operand:DI 2 "reg_or_0_operand" "rO")
+			 (match_operand:DI 3 "symbolic_operand" "in")
+			 (match_operand:DI 4 "symbolic_operand" "in")]
+		   UNSPEC_MOV_LARGE_PCREL_STEP4))]
+  "flag_pic"
+  "add\t%0, %r1, %r2")
+
+;; The next three patterns are used to materialize a position
+;; independent 64-bit plt address by adding the difference of two
+;; labels to a base label in the text segment.
+(define_expand "mov_plt_pcrel_step1"
+  [(set (match_operand:DI 0 "register_operand" "")
+	(const:DI (unspec:DI
+			[(match_operand:DI 1 "symbolic_operand" "")
+			 (match_operand:DI 2 "symbolic_operand" "")]
+                        UNSPEC_HW2_LAST_PLT_PCREL)))]
+  "flag_pic")
+  
+(define_expand "mov_plt_pcrel_step2"
+  [(set (match_operand:DI 0 "register_operand" "")
+	(unspec:DI
+	 [(match_operand:DI 1 "reg_or_0_operand" "")
+	  (const:DI
+	   (unspec:DI [(match_operand:DI 2 "symbolic_operand" "")
+			    (match_operand:DI 3 "symbolic_operand" "")]
+		      UNSPEC_HW1_PLT_PCREL))]
+	 UNSPEC_INSN_ADDR_SHL16INSLI))]
+  "flag_pic")
+
+(define_expand "mov_plt_pcrel_step3"
+  [(set (match_operand:DI 0 "register_operand" "")
+	(unspec:DI
+	 [(match_operand:DI 1 "reg_or_0_operand" "")
+	  (const:DI
+	   (unspec:DI [(match_operand:DI 2 "symbolic_operand" "")
+			    (match_operand:DI 3 "symbolic_operand" "")]
+		      UNSPEC_HW0_PLT_PCREL))]
+	 UNSPEC_INSN_ADDR_SHL16INSLI))]
+  "flag_pic")
+
+;; The next two patterns are used to materialize a position independent
+;; 32-bit plt address by adding the difference of two labels to a base
+;; label in the text segment.
+(define_expand "mov_plt_pcrel_step1_32bit"
+  [(set (match_operand:SI 0 "register_operand" "")
+	(const:SI (unspec:SI
+			[(match_operand:SI 1 "symbolic_operand" "")
+			 (match_operand:SI 2 "symbolic_operand" "")]
+                        UNSPEC_HW1_LAST_PLT_PCREL)))]
+  "flag_pic")
+  
+(define_expand "mov_plt_pcrel_step2_32bit"
+  [(set (match_operand:SI 0 "register_operand" "")
+	(unspec:SI
+	 [(match_operand:SI 1 "reg_or_0_operand" "")
+	  (const:SI
+	   (unspec:SI [(match_operand:SI 2 "symbolic_operand" "")
+			    (match_operand:SI 3 "symbolic_operand" "")]
+		      UNSPEC_HW0_PLT_PCREL))]
+	 UNSPEC_INSN_ADDR_SHL16INSLI))]
+  "flag_pic")
 
 (define_expand "add_got16<bitsuffix>"
   [(set (match_operand:I48MODE 0 "register_operand" "")
@@ -1119,7 +1237,7 @@
   "ld<four_s_if_si>_tls\t%0, %1, tls_ie_load(%2)"
   [(set_attr "type" "X1_2cycle")])
 
-(define_insn "*zero_extract<mode>"
+(define_insn_and_split "*zero_extract<mode>"
   [(set (match_operand:I48MODE 0 "register_operand" "=r")
 	(zero_extract:I48MODE
          (match_operand:I48MODE 1 "reg_or_0_operand" "r")
@@ -1127,6 +1245,18 @@
          (match_operand:I48MODE 3 "u6bit_cint_operand" "n")))]
   ""
   "bfextu\t%0, %r1, %3, %3+%2-1"
+  "&& reload_completed"
+  [(set (match_dup 0) (zero_extract:I48MODE
+                       (match_dup 1)
+                       (match_dup 2)
+                       (match_dup 3)))]
+{
+  HOST_WIDE_INT bit_width = INTVAL (operands[2]);
+  HOST_WIDE_INT bit_offset = INTVAL (operands[3]);
+
+  if (bit_offset + bit_width > 64)
+    operands[2] = GEN_INT (64 - bit_offset);
+}
   [(set_attr "type" "X0")])
 
 (define_insn "*sign_extract_low32"
@@ -1138,7 +1268,7 @@
   "INTVAL (operands[3]) == 0 && INTVAL (operands[2]) == 32"
   "addxi\t%0, %r1, 0")
 
-(define_insn "*sign_extract"
+(define_insn_and_split "*sign_extract"
   [(set (match_operand:I48MODE 0 "register_operand" "=r")
 	(sign_extract:I48MODE
          (match_operand:I48MODE 1 "reg_or_0_operand" "r")
@@ -1146,6 +1276,18 @@
          (match_operand:I48MODE 3 "u6bit_cint_operand" "n")))]
   ""
   "bfexts\t%0, %r1, %3, %3+%2-1"
+  "&& reload_completed"
+  [(set (match_dup 0) (sign_extract:I48MODE
+                       (match_dup 1)
+                       (match_dup 2)
+                       (match_dup 3)))]
+{
+  HOST_WIDE_INT bit_width = INTVAL (operands[2]);
+  HOST_WIDE_INT bit_offset = INTVAL (operands[3]);
+
+  if (bit_offset + bit_width > 64)
+    operands[2] = GEN_INT (64 - bit_offset);
+}
   [(set_attr "type" "X0")])
 
 
@@ -1680,16 +1822,20 @@
   [(set_attr "type" "Y0")])
 
 (define_expand "clzsi2"
-  [(set (match_dup 2)
-        (ashift:DI (match_operand:SI 1 "reg_or_0_operand" "")
-                   (const_int 32)))
-   (set (subreg:DI (match_operand:SI 0 "register_operand" "") 0)
-	(clz:DI (match_dup 2)))]
-   ""
-   {
-     operands[1] = simplify_gen_subreg (DImode, operands[1], SImode, 0);
-     operands[2] = gen_reg_rtx (DImode);
-   })
+  [(set (match_operand:SI 0 "register_operand" "=r")
+       (clz:SI (match_operand:SI 1 "reg_or_0_operand" "rO")))]
+  ""
+  {
+    rtx tmp1 = gen_reg_rtx (DImode);
+    rtx tmp2 = gen_reg_rtx (DImode);
+    rtx tmp3 = gen_reg_rtx (DImode);
+
+    emit_insn (gen_zero_extendsidi2 (tmp1, operands[1]));
+    emit_insn (gen_ashldi3 (tmp2, tmp1, (GEN_INT (32))));
+    emit_insn (gen_clzdi2 (tmp3, tmp2));
+    emit_move_insn (operands[0], gen_lowpart (SImode, tmp3));
+    DONE;
+  })
 
 (define_insn "ctz<mode>2"
   [(set (match_operand:I48MODE 0 "register_operand" "=r")
@@ -1858,8 +2004,8 @@
    ld2s_add\t%0, %I1, %i1"
   [(set_attr "type" "X0,Y2_2cycle,X1_2cycle")])
 
-;; All SImode integer registers should already be in sign-extended
-;; form (see TRULY_NOOP_TRUNCATION and truncdisi2).  We can therefore
+;; All SImode integer registers should already be in sign-extended form
+;; (see TARGET_TRULY_NOOP_TRUNCATION and truncdisi2).  We can therefore
 ;; get rid of register->register instructions if we constrain the
 ;; source to be in the same register as the destination.
 (define_insn_and_split "extendsidi2"
@@ -1882,7 +2028,7 @@
 ;; modes is a no-op, as it is for most other GCC ports.  Truncating
 ;; DImode values to SImode is not a no-op since we
 ;; need to make sure that the lower 32 bits are properly sign-extended
-;; (see TRULY_NOOP_TRUNCATION).  Truncating DImode values into modes
+;; (see TARGET_TRULY_NOOP_TRUNCATION).  Truncating DImode values into modes
 ;; smaller than SImode is equivalent to two separate truncations:
 ;;
 ;;                        A       B
@@ -2023,6 +2169,108 @@
   ""
   "rotl\t%0, %r1, %r2")
 
+;; Integer to floating point conversions
+
+(define_expand "floatsisf2"
+  [(set (match_operand:SF 0 "register_operand" "")
+	(float:SI (match_operand:SI 1 "register_operand" "")))]
+  ""
+{
+  rtx result = gen_lowpart (DImode, operands[0]);
+  rtx a = operands[1];
+
+  rtx nega = gen_reg_rtx (SImode);
+  rtx exp = gen_reg_rtx (DImode);
+  rtx sign = gen_reg_rtx (DImode);
+  rtx abs = gen_reg_rtx (DImode);
+  rtx flags = gen_reg_rtx (DImode);
+  rtx tmp1 = gen_reg_rtx (DImode);
+  rtx tmp2 = gen_reg_rtx (DImode);
+
+  emit_move_insn (exp, GEN_INT (0x9e));
+
+  emit_insn (gen_negsi2 (nega, a));
+
+  emit_insn (gen_insn_cmplts_sisi (gen_lowpart (SImode, sign), a, const0_rtx));
+  emit_insn (gen_insn_cmoveqz (abs, gen_lowpart (DImode, nega), sign,
+			       gen_lowpart (DImode, a)));
+
+  emit_insn (gen_insn_bfins (tmp1, exp, sign, GEN_INT (10), GEN_INT (10)));
+  emit_insn (gen_insn_bfins (tmp2, tmp1, abs, GEN_INT (32), GEN_INT (63)));
+  emit_insn (gen_insn_fsingle_pack1 (flags, tmp2));
+  emit_insn (gen_insn_fsingle_pack2 (result, tmp2, flags));
+  DONE;
+})
+  
+(define_expand "floatunssisf2"
+  [(set (match_operand:SF 0 "register_operand" "")
+	(float:SI (match_operand:SI 1 "register_operand" "")))]
+  ""
+{
+  rtx result = gen_lowpart (DImode, operands[0]);
+  rtx a = operands[1];
+
+  rtx exp = gen_reg_rtx (DImode);
+  rtx flags = gen_reg_rtx (DImode);
+  rtx tmp = gen_reg_rtx (DImode);
+
+  emit_move_insn (exp, GEN_INT (0x9e));
+  emit_insn (gen_insn_bfins (tmp, exp, gen_lowpart (DImode, a),
+                             GEN_INT (32), GEN_INT (63)));
+  emit_insn (gen_insn_fsingle_pack1 (flags, tmp));
+  emit_insn (gen_insn_fsingle_pack2 (result, tmp, flags));
+  DONE;
+})
+
+(define_expand "floatsidf2"
+  [(set (match_operand:DF 0 "register_operand" "")
+	(float:SI (match_operand:SI 1 "register_operand" "")))]
+  ""
+{
+  rtx result = gen_lowpart (DImode, operands[0]);
+  rtx a = gen_lowpart (DImode, operands[1]);
+
+  rtx nega = gen_reg_rtx (DImode);
+  rtx exp = gen_reg_rtx (DImode);
+  rtx sign = gen_reg_rtx (DImode);
+  rtx abs = gen_reg_rtx (DImode);
+  rtx tmp1 = gen_reg_rtx (DImode);
+  rtx tmp2 = gen_reg_rtx (DImode);
+  rtx tmp3 = gen_reg_rtx (DImode);
+
+  emit_move_insn (exp, GEN_INT (0x21b00));
+
+  emit_insn (gen_negdi2 (nega, a));
+
+  emit_insn (gen_insn_cmplts_didi (sign, a, const0_rtx));
+  emit_insn (gen_insn_cmovnez (abs, a, sign, nega));
+
+  emit_insn (gen_ashldi3 (tmp1, abs, GEN_INT (4)));
+  emit_insn (gen_insn_bfins (tmp2, exp, sign, GEN_INT (20), GEN_INT (20)));
+  emit_insn (gen_insn_fdouble_pack1 (tmp3, tmp1, tmp2));
+  emit_insn (gen_insn_fdouble_pack2 (result, tmp3, tmp1, const0_rtx));
+  DONE;
+})
+  
+(define_expand "floatunssidf2"
+  [(set (match_operand:DF 0 "register_operand" "")
+	(float:SI (match_operand:SI 1 "register_operand" "")))]
+  ""
+{
+  rtx result = gen_lowpart (DImode, operands[0]);
+  rtx a = gen_lowpart (DImode, operands[1]);
+
+  rtx exp = gen_reg_rtx (DImode);
+  rtx tmp1 = gen_reg_rtx (DImode);
+  rtx tmp2 = gen_reg_rtx (DImode);
+
+  emit_move_insn (exp, GEN_INT (0x21b00));
+  emit_insn (gen_insn_bfins (tmp1, const0_rtx, a, GEN_INT (4), GEN_INT (35)));
+  emit_insn (gen_insn_fdouble_pack1 (tmp2, tmp1, exp));
+  emit_insn (gen_insn_fdouble_pack2 (result, tmp2, tmp1, const0_rtx));
+  DONE;
+})
+  
 
 ;;
 ;; Multiplies
@@ -2206,10 +2454,7 @@
 ;; generate.
 (define_expand "doloop_end"
   [(use (match_operand 0 "" ""))    ;; loop pseudo
-   (use (match_operand 1 "" ""))    ;; iterations; zero if unknown
-   (use (match_operand 2 "" ""))    ;; max iterations
-   (use (match_operand 3 "" ""))    ;; loop level
-   (use (match_operand 4 "" ""))]   ;; label
+   (use (match_operand 1 "" ""))]   ;; label
    ""
 {
   if (optimize > 0 && flag_modulo_sched)
@@ -2217,11 +2462,8 @@
      rtx s0;
      rtx bcomp;
      rtx loc_ref;
-     enum machine_mode mode = GET_MODE (operands[0]);
+     machine_mode mode = GET_MODE (operands[0]);
 
-     /* only do inner loop  */
-     if (INTVAL (operands[3]) > 1)
-       FAIL;
      /* only deal with loop counters in SImode or DImode  */
      if (mode != SImode && mode != DImode)
        FAIL;
@@ -2229,8 +2471,8 @@
      s0 = operands [0];
      emit_move_insn (s0, gen_rtx_PLUS (mode, s0, GEN_INT (-1)));
      bcomp = gen_rtx_NE(mode, s0, const0_rtx);
-     loc_ref = gen_rtx_LABEL_REF (VOIDmode, operands [4]);
-     emit_jump_insn (gen_rtx_SET (VOIDmode, pc_rtx,
+     loc_ref = gen_rtx_LABEL_REF (VOIDmode, operands [1]);
+     emit_jump_insn (gen_rtx_SET (pc_rtx,
                                   gen_rtx_IF_THEN_ELSE (VOIDmode, bcomp,
                                                         loc_ref, pc_rtx)));
      DONE;
@@ -2290,7 +2532,29 @@
               (use (reg:DI 54))
 	      (clobber (reg:DI 55))])]
   ""
-  "")
+{
+  rtx orig_addr = XEXP (operands[0], 0);
+  rtx addr;
+  if (GET_CODE (orig_addr) == SYMBOL_REF)
+    {
+      if (tilegx_cmodel == CM_LARGE)
+        {
+          addr = gen_reg_rtx (Pmode);
+          tilegx_expand_set_const64 (addr, orig_addr);
+          operands[0] = gen_rtx_MEM (DImode, addr);
+        }
+      else if (tilegx_cmodel == CM_LARGE_PIC)
+        {
+          crtl->uses_pic_offset_table = 1;
+          addr = gen_reg_rtx (Pmode);
+	  if (SYMBOL_REF_LOCAL_P (orig_addr))
+	    tilegx_compute_pcrel_address (addr, orig_addr);
+	  else
+	    tilegx_compute_pcrel_plt_address (addr, orig_addr);
+          operands[0] = gen_rtx_MEM (DImode, addr);
+        }
+    }
+})
 
 (define_insn "*call_insn"
   [(call (mem:DI (match_operand:I48MODE 0 "call_address_operand" "rO,i"))
@@ -2309,7 +2573,30 @@
 			 (match_operand 2 "" "")))
               (use (reg:DI 54))
 	      (clobber (reg:DI 55))])]
-  "")
+  ""
+{
+  rtx orig_addr = XEXP (operands[1], 0);
+  rtx addr;
+  if (GET_CODE (orig_addr) == SYMBOL_REF)
+    {
+      if (tilegx_cmodel == CM_LARGE)
+        {
+          addr = gen_reg_rtx (Pmode);
+          tilegx_expand_set_const64 (addr, orig_addr);
+          operands[1] = gen_rtx_MEM (DImode, addr);
+        }
+      else if (tilegx_cmodel == CM_LARGE_PIC)
+        {
+          crtl->uses_pic_offset_table = 1;
+          addr = gen_reg_rtx (Pmode);
+	  if (SYMBOL_REF_LOCAL_P (orig_addr))
+	    tilegx_compute_pcrel_address (addr, orig_addr);
+	  else
+	    tilegx_compute_pcrel_plt_address (addr, orig_addr);
+          operands[1] = gen_rtx_MEM (DImode, addr);
+        }
+    }
+})
 
 (define_insn "*call_value_insn"
   [(set (match_operand 0 "register_operand" "=r,r")
@@ -2411,7 +2698,7 @@
 {
   int i;
 
-  emit_call_insn (GEN_CALL (operands[0], const0_rtx, NULL, const0_rtx));
+  emit_call_insn (gen_call (operands[0], const0_rtx));
 
   for (i = 0; i < XVECLEN (operands[2], 0); i++)
     {
@@ -2485,6 +2772,12 @@
   ""
   "nop"
   [(set_attr "type" "Y01")])
+
+(define_insn "trap"
+  [(trap_if (const_int 1) (const_int 0))]
+  ""
+  "raise; moveli zero, 6"
+  [(set_attr "type" "cannot_bundle")])
 
 
 ;;
@@ -3037,9 +3330,9 @@
   "")
 
 (define_insn "insn_ld_add<bitsuffix>"
-  [(set (match_operand:I48MODE 1 "pointer_operand" "=r")
-        (plus:I48MODE (match_operand 3 "pointer_operand" "1")
-		      (match_operand 2 "s8bit_cint_operand" "i")))
+  [(set (match_operand:I48MODE 1 "register_operand" "=r")
+        (plus:I48MODE (match_operand:I48MODE 3 "register_operand" "1")
+		      (match_operand:I48MODE 2 "s8bit_cint_operand" "i")))
    (set (match_operand:DI 0 "register_operand" "=r")
         (mem:DI (match_dup 3)))]
   ""
@@ -3055,9 +3348,9 @@
   [(set_attr "type" "X1_2cycle")])
 
 (define_insn "insn_ldna_add<bitsuffix>"
-  [(set (match_operand:I48MODE 1 "pointer_operand" "=r")
-        (plus:I48MODE (match_operand 3 "pointer_operand" "1")
-		      (match_operand 2 "s8bit_cint_operand" "i")))
+  [(set (match_operand:I48MODE 1 "register_operand" "=r")
+        (plus:I48MODE (match_operand:I48MODE 3 "register_operand" "1")
+		      (match_operand:I48MODE 2 "s8bit_cint_operand" "i")))
    (set (match_operand:DI 0 "register_operand" "=r")
         (mem:DI (and:DI (match_dup 3) (const_int -8))))]
   ""
@@ -3071,9 +3364,9 @@
   "")
 
 (define_insn "insn_ld<I124MODE:n><s>_add<I48MODE:bitsuffix>"
-  [(set (match_operand:I48MODE 1 "pointer_operand" "=r")
-        (plus:I48MODE (match_operand 3 "pointer_operand" "1")
-		      (match_operand 2 "s8bit_cint_operand" "i")))
+  [(set (match_operand:I48MODE 1 "register_operand" "=r")
+        (plus:I48MODE (match_operand:I48MODE 3 "register_operand" "1")
+		      (match_operand:I48MODE 2 "s8bit_cint_operand" "i")))
    (set (match_operand:DI 0 "register_operand" "=r")
         (any_extend:DI (mem:I124MODE (match_dup 3))))]
   ""
@@ -3091,9 +3384,9 @@
   [(set_attr "type" "X1_2cycle")])
 
 (define_insn "insn_ldnt_add<bitsuffix>"
-  [(set (match_operand:I48MODE 1 "pointer_operand" "=r")
-        (plus:I48MODE (match_operand 3 "pointer_operand" "1")
-		      (match_operand 2 "s8bit_cint_operand" "i")))
+  [(set (match_operand:I48MODE 1 "register_operand" "=r")
+        (plus:I48MODE (match_operand:I48MODE 3 "register_operand" "1")
+		      (match_operand:I48MODE 2 "s8bit_cint_operand" "i")))
    (set (match_operand:DI 0 "register_operand" "=r")
         (unspec:DI [(mem:DI (match_dup 3))]
                    UNSPEC_NON_TEMPORAL))]
@@ -3112,9 +3405,9 @@
   [(set_attr "type" "X1_2cycle")])
 
 (define_insn "insn_ldnt<I124MODE:n><s>_add<I48MODE:bitsuffix>"
-  [(set (match_operand:I48MODE 1 "pointer_operand" "=r")
-        (plus:I48MODE (match_operand 3 "pointer_operand" "1")
-		      (match_operand 2 "s8bit_cint_operand" "i")))
+  [(set (match_operand:I48MODE 1 "register_operand" "=r")
+        (plus:I48MODE (match_operand:I48MODE 3 "register_operand" "1")
+		      (match_operand:I48MODE 2 "s8bit_cint_operand" "i")))
    (set (match_operand:DI 0 "register_operand" "=r")
         (any_extend:DI (unspec:I124MODE [(mem:I124MODE (match_dup 3))]
 					UNSPEC_NON_TEMPORAL)))]
@@ -3133,9 +3426,9 @@
   [(set_attr "type" "Y2_L2")])
 
 (define_insn "insn_ld_add_L2<bitsuffix>"
-  [(set (match_operand:I48MODE 1 "pointer_operand" "=r")
-        (plus:I48MODE (match_operand 3 "pointer_operand" "1")
-		      (match_operand 2 "s8bit_cint_operand" "i")))
+  [(set (match_operand:I48MODE 1 "register_operand" "=r")
+        (plus:I48MODE (match_operand:I48MODE 3 "register_operand" "1")
+		      (match_operand:I48MODE 2 "s8bit_cint_operand" "i")))
    (set (match_operand:DI 0 "register_operand" "=r")
         (unspec:DI [(mem:DI (match_dup 3))]
 		   UNSPEC_LATENCY_L2))]
@@ -3153,9 +3446,9 @@
   [(set_attr "type" "X1_L2")])
 
 (define_insn "insn_ldna_add_L2<bitsuffix>"
-  [(set (match_operand:I48MODE 1 "pointer_operand" "=r")
-        (plus:I48MODE (match_operand 3 "pointer_operand" "1")
-		      (match_operand 2 "s8bit_cint_operand" "i")))
+  [(set (match_operand:I48MODE 1 "register_operand" "=r")
+        (plus:I48MODE (match_operand:I48MODE 3 "register_operand" "1")
+		      (match_operand:I48MODE 2 "s8bit_cint_operand" "i")))
    (set (match_operand:DI 0 "register_operand" "=r")
         (unspec:DI [(mem:DI (and:DI (match_dup 3) (const_int -8)))]
 		   UNSPEC_LATENCY_L2))]
@@ -3174,9 +3467,9 @@
   [(set_attr "type" "Y2_L2")])
 
 (define_insn "insn_ld<I124MODE:n><s>_add_L2<I48MODE:bitsuffix>"
-  [(set (match_operand:I48MODE 1 "pointer_operand" "=r")
-        (plus:I48MODE (match_operand 3 "pointer_operand" "1")
-		      (match_operand 2 "s8bit_cint_operand" "i")))
+  [(set (match_operand:I48MODE 1 "register_operand" "=r")
+        (plus:I48MODE (match_operand:I48MODE 3 "register_operand" "1")
+		      (match_operand:I48MODE 2 "s8bit_cint_operand" "i")))
    (set (match_operand:DI 0 "register_operand" "=r")
         (any_extend:DI (unspec:I124MODE [(mem:I124MODE (match_dup 3))]
 					UNSPEC_LATENCY_L2)))]
@@ -3197,9 +3490,9 @@
   [(set_attr "type" "X1_L2")])
 
 (define_insn "insn_ldnt_add_L2<bitsuffix>"
-  [(set (match_operand:I48MODE 1 "pointer_operand" "=r")
-        (plus:I48MODE (match_operand 3 "pointer_operand" "1")
-		      (match_operand 2 "s8bit_cint_operand" "i")))
+  [(set (match_operand:I48MODE 1 "register_operand" "=r")
+        (plus:I48MODE (match_operand:I48MODE 3 "register_operand" "1")
+		      (match_operand:I48MODE 2 "s8bit_cint_operand" "i")))
    (set (match_operand:DI 0 "register_operand" "=r")
         (unspec:DI [(unspec:DI
                      [(mem:DI (match_dup 3))]
@@ -3222,9 +3515,9 @@
   [(set_attr "type" "X1_L2")])
 
 (define_insn "insn_ldnt<I124MODE:n><s>_add_L2<I48MODE:bitsuffix>"
-  [(set (match_operand:I48MODE 1 "pointer_operand" "=r")
-        (plus:I48MODE (match_operand 3 "pointer_operand" "1")
-		      (match_operand 2 "s8bit_cint_operand" "i")))
+  [(set (match_operand:I48MODE 1 "register_operand" "=r")
+        (plus:I48MODE (match_operand:I48MODE 3 "register_operand" "1")
+		      (match_operand:I48MODE 2 "s8bit_cint_operand" "i")))
    (set (match_operand:DI 0 "register_operand" "=r")
         (any_extend:DI
 	 (unspec:I124MODE [(unspec:I124MODE
@@ -3246,9 +3539,9 @@
   [(set_attr "type" "Y2_miss")])
 
 (define_insn "insn_ld_add_miss<bitsuffix>"
-  [(set (match_operand:I48MODE 1 "pointer_operand" "=r")
-        (plus:I48MODE (match_operand 3 "pointer_operand" "1")
-		      (match_operand 2 "s8bit_cint_operand" "i")))
+  [(set (match_operand:I48MODE 1 "register_operand" "=r")
+        (plus:I48MODE (match_operand:I48MODE 3 "register_operand" "1")
+		      (match_operand:I48MODE 2 "s8bit_cint_operand" "i")))
    (set (match_operand:DI 0 "register_operand" "=r")
         (unspec:DI [(mem:DI (match_dup 3))]
 		   UNSPEC_LATENCY_MISS))]
@@ -3266,9 +3559,9 @@
   [(set_attr "type" "X1_miss")])
 
 (define_insn "insn_ldna_add_miss<bitsuffix>"
-  [(set (match_operand:I48MODE 1 "pointer_operand" "=r")
-        (plus:I48MODE (match_operand 3 "pointer_operand" "1")
-		      (match_operand 2 "s8bit_cint_operand" "i")))
+  [(set (match_operand:I48MODE 1 "register_operand" "=r")
+        (plus:I48MODE (match_operand:I48MODE 3 "register_operand" "1")
+		      (match_operand:I48MODE 2 "s8bit_cint_operand" "i")))
    (set (match_operand:DI 0 "register_operand" "=r")
         (unspec:DI [(mem:DI (and:DI (match_dup 3) (const_int -8)))]
 		   UNSPEC_LATENCY_MISS))]
@@ -3287,9 +3580,9 @@
   [(set_attr "type" "Y2_miss")])
 
 (define_insn "insn_ld<I124MODE:n><s>_add_miss<I48MODE:bitsuffix>"
-  [(set (match_operand:I48MODE 1 "pointer_operand" "=r")
-        (plus:I48MODE (match_operand 3 "pointer_operand" "1")
-		      (match_operand 2 "s8bit_cint_operand" "i")))
+  [(set (match_operand:I48MODE 1 "register_operand" "=r")
+        (plus:I48MODE (match_operand:I48MODE 3 "register_operand" "1")
+		      (match_operand:I48MODE 2 "s8bit_cint_operand" "i")))
    (set (match_operand:DI 0 "register_operand" "=r")
         (any_extend:DI (unspec:I124MODE [(mem:I124MODE (match_dup 3))]
 					UNSPEC_LATENCY_MISS)))]
@@ -3310,9 +3603,9 @@
   [(set_attr "type" "X1_miss")])
 
 (define_insn "insn_ldnt_add_miss<bitsuffix>"
-  [(set (match_operand:I48MODE 1 "pointer_operand" "=r")
-        (plus:I48MODE (match_operand 3 "pointer_operand" "1")
-		      (match_operand 2 "s8bit_cint_operand" "i")))
+  [(set (match_operand:I48MODE 1 "register_operand" "=r")
+        (plus:I48MODE (match_operand:I48MODE 3 "register_operand" "1")
+		      (match_operand:I48MODE 2 "s8bit_cint_operand" "i")))
    (set (match_operand:DI 0 "register_operand" "=r")
         (unspec:DI [(unspec:DI
                      [(mem:DI (match_dup 3))]
@@ -3335,9 +3628,9 @@
   [(set_attr "type" "X1_miss")])
 
 (define_insn "insn_ldnt<I124MODE:n><s>_add_miss<I48MODE:bitsuffix>"
-  [(set (match_operand:I48MODE 1 "pointer_operand" "=r")
-        (plus:I48MODE (match_operand 3 "pointer_operand" "1")
-		      (match_operand 2 "s8bit_cint_operand" "i")))
+  [(set (match_operand:I48MODE 1 "register_operand" "=r")
+        (plus:I48MODE (match_operand:I48MODE 3 "register_operand" "1")
+		      (match_operand:I48MODE 2 "s8bit_cint_operand" "i")))
    (set (match_operand:DI 0 "register_operand" "=r")
         (any_extend:DI
 	 (unspec:I124MODE [(unspec:I124MODE
@@ -3722,9 +4015,9 @@
   "")
 
 (define_insn "insn_st_add<bitsuffix>"
-  [(set (match_operand:I48MODE 0 "pointer_operand" "=r")
-        (plus:I48MODE (match_operand 3 "pointer_operand" "0")
-		      (match_operand 2 "s8bit_cint_operand" "i")))
+  [(set (match_operand:I48MODE 0 "register_operand" "=r")
+        (plus:I48MODE (match_operand:I48MODE 3 "register_operand" "0")
+		      (match_operand:I48MODE 2 "s8bit_cint_operand" "i")))
    (set (mem:DI (match_dup 3))
         (match_operand:DI 1 "reg_or_0_operand" "rO"))]
   ""
@@ -3736,26 +4029,30 @@
         (match_operand:DI 1 "reg_or_0_operand" ""))]
   ""
 {
-  operands[1] = simplify_gen_subreg (<MODE>mode, operands[1], DImode, 0);
+  operands[1] = simplify_gen_subreg (<MODE>mode, operands[1], DImode,
+                                     BYTES_BIG_ENDIAN
+				     ? UNITS_PER_WORD - <n>  : 0);
 })
 
 (define_expand "insn_st<I124MODE:n>_add<I48MODE:bitsuffix>"
   [(parallel
-    [(set (match_operand:I48MODE 0 "pointer_operand" "")
-	  (plus:I48MODE (match_operand 3 "pointer_operand" "")
-			(match_operand 2 "s8bit_cint_operand" "")))
+    [(set (match_operand:I48MODE 0 "register_operand" "")
+	  (plus:I48MODE (match_operand:I48MODE 3 "register_operand" "")
+			(match_operand:I48MODE 2 "s8bit_cint_operand" "")))
      (set (mem:I124MODE (match_dup 3))
 	  (match_operand:DI 1 "reg_or_0_operand" ""))])]
   ""
 {
   operands[1] = simplify_gen_subreg (<I124MODE:MODE>mode, operands[1],
-				     DImode, 0);
+				     DImode,
+				     BYTES_BIG_ENDIAN
+				     ? UNITS_PER_WORD - <I124MODE:n> : 0);
 })
 
 (define_insn "*insn_st<I124MODE:n>_add<I48MODE:bitsuffix>"
-  [(set (match_operand:I48MODE 0 "pointer_operand" "=r")
-        (plus:I48MODE (match_operand 3 "pointer_operand" "0")
-		      (match_operand 2 "s8bit_cint_operand" "i")))
+  [(set (match_operand:I48MODE 0 "register_operand" "=r")
+        (plus:I48MODE (match_operand:I48MODE 3 "register_operand" "0")
+		      (match_operand:I48MODE 2 "s8bit_cint_operand" "i")))
    (set (mem:I124MODE (match_dup 3))
         (match_operand:I124MODE 1 "reg_or_0_operand" "rO"))]
   ""
@@ -3773,9 +4070,9 @@
   [(set_attr "type" "X1")])
 
 (define_insn "insn_stnt_add<bitsuffix>"
-  [(set (match_operand:I48MODE 0 "pointer_operand" "=r")
-        (plus:I48MODE (match_operand 3 "pointer_operand" "0")
-		      (match_operand 2 "s8bit_cint_operand" "i")))
+  [(set (match_operand:I48MODE 0 "register_operand" "=r")
+        (plus:I48MODE (match_operand:I48MODE 3 "register_operand" "0")
+		      (match_operand:I48MODE 2 "s8bit_cint_operand" "i")))
    (set (mem:DI (unspec:I48MODE [(match_dup 3)] UNSPEC_NON_TEMPORAL))
         (match_operand:DI 1 "reg_or_0_operand" "rO"))]
   ""
@@ -3788,7 +4085,9 @@
         (match_operand:DI 1 "reg_or_0_operand" ""))]
   ""
 {
-  operands[1] = simplify_gen_subreg (<MODE>mode, operands[1], DImode, 0);
+  operands[1] = simplify_gen_subreg (<MODE>mode, operands[1], DImode,
+                                     BYTES_BIG_ENDIAN
+				     ? UNITS_PER_WORD - <n> : 0);
 })
 
 (define_insn "*insn_stnt<n>"
@@ -3801,21 +4100,23 @@
 
 (define_expand "insn_stnt<I124MODE:n>_add<I48MODE:bitsuffix>"
   [(parallel
-    [(set (match_operand:I48MODE 0 "pointer_operand" "")
-	  (plus:I48MODE (match_operand 3 "pointer_operand" "")
-			(match_operand 2 "s8bit_cint_operand" "")))
+    [(set (match_operand:I48MODE 0 "register_operand" "")
+	  (plus:I48MODE (match_operand:I48MODE 3 "register_operand" "")
+			(match_operand:I48MODE 2 "s8bit_cint_operand" "")))
      (set (mem:I124MODE (unspec:I48MODE [(match_dup 3)] UNSPEC_NON_TEMPORAL))
 	  (match_operand:DI 1 "reg_or_0_operand" "rO"))])]
   ""
 {
   operands[1] = simplify_gen_subreg (<I124MODE:MODE>mode, operands[1],
-				     DImode, 0);
+				     DImode,
+				     BYTES_BIG_ENDIAN
+				     ? UNITS_PER_WORD - <I124MODE:n> : 0);
 })
 
 (define_insn "*insn_stnt<I124MODE:n>_add<I48MODE:bitsuffix>"
-  [(set (match_operand:I48MODE 0 "pointer_operand" "=r")
-        (plus:I48MODE (match_operand 3 "pointer_operand" "0")
-		      (match_operand 2 "s8bit_cint_operand" "i")))
+  [(set (match_operand:I48MODE 0 "register_operand" "=r")
+        (plus:I48MODE (match_operand:I48MODE 3 "register_operand" "0")
+		      (match_operand:I48MODE 2 "s8bit_cint_operand" "i")))
    (set (mem:I124MODE (unspec:I48MODE [(match_dup 3)] UNSPEC_NON_TEMPORAL))
         (match_operand:I124MODE 1 "reg_or_0_operand" "rO"))]
   ""
@@ -4165,11 +4466,46 @@
   DONE;
 })
 
+;; Byte ordering of these vectors is endian dependent.  gcc concats
+;; right-to-left for little endian, and left-to-right for big endian.
+;; So we need different patterns that depend on endianness.  Our
+;; instructions concat and interleave the way a big-endian target would
+;; work in gcc, so for little endian, we need to reverse the source
+;; operands.
+
 ;; insn_v1int_h
 ;;    {B7,B6,B5,B4,B3,B2,B1,B0} {A7,A6,A5,A4,A3,A2,A1,A0}
 ;; => {A7,A6,A5,A4,A3,A2,A1,A0,B7,B6,B5,B4,B3,B2,B1,B0}
 ;; => {A7,B7,A6,B6,A5,B5,A4,B4}
-(define_insn "vec_interleave_highv8qi"
+(define_expand "vec_interleave_highv8qi"
+  [(match_operand:V8QI 0 "register_operand" "")
+   (match_operand:V8QI 1 "reg_or_0_operand" "")
+   (match_operand:V8QI 2 "reg_or_0_operand" "")]
+  ""
+{
+  if (BYTES_BIG_ENDIAN)
+    emit_insn (gen_vec_interleave_highv8qi_be (operands[0], operands[1],
+					       operands[2]));
+  else
+    emit_insn (gen_vec_interleave_highv8qi_le (operands[0], operands[1],
+					       operands[2]));
+  DONE;
+})
+
+(define_insn "vec_interleave_highv8qi_be"
+  [(set (match_operand:V8QI 0 "register_operand" "=r")
+	(vec_select:V8QI
+	 (vec_concat:V16QI (match_operand:V8QI 1 "reg_or_0_operand" "rO")
+			   (match_operand:V8QI 2 "reg_or_0_operand" "rO"))
+	 (parallel [(const_int 0) (const_int 8)
+		    (const_int 1) (const_int 9)
+		    (const_int 2) (const_int 10)
+		    (const_int 3) (const_int 11)])))]
+  "BYTES_BIG_ENDIAN"
+  "v1int_h\t%0, %r1, %r2"
+  [(set_attr "type" "X01")])
+
+(define_insn "vec_interleave_highv8qi_le"
   [(set (match_operand:V8QI 0 "register_operand" "=r")
 	(vec_select:V8QI
 	 (vec_concat:V16QI (match_operand:V8QI 1 "reg_or_0_operand" "rO")
@@ -4178,7 +4514,7 @@
 		    (const_int 5) (const_int 13) 
 		    (const_int 6) (const_int 14) 
 		    (const_int 7) (const_int 15)])))]
-  ""
+  "!BYTES_BIG_ENDIAN"
   "v1int_h\t%0, %r2, %r1"
   [(set_attr "type" "X01")])
 
@@ -4188,11 +4524,14 @@
    (match_operand:DI 2 "reg_or_0_operand" "")]
   ""
 {
-  /* Our instruction interleaves opposite of the way vec_interleave
-     works, so we need to reverse the source operands.  */
+  /* For little endian, our instruction interleaves opposite of the
+     way vec_interleave works, so we need to reverse the source
+     operands.  */
+  rtx opnd1 = BYTES_BIG_ENDIAN ? operands[1] : operands[2];
+  rtx opnd2 = BYTES_BIG_ENDIAN ? operands[2] : operands[1];
   tilegx_expand_builtin_vector_binop (gen_vec_interleave_highv8qi, V8QImode,
-				      operands[0], V8QImode, operands[2],
-				      operands[1], true);
+				      operands[0], V8QImode, opnd1, opnd2,
+				      true);
   DONE;
 })
 
@@ -4200,7 +4539,35 @@
 ;;    {B7,B6,B5,B4,B3,B2,B1,B0} {A7,A6,A5,A4,A3,A2,A1,A0}
 ;; => {A7,A6,A5,A4,A3,A2,A1,A0,B7,B6,B5,B4,B3,B2,B1,B0}
 ;; => {A3,B3,A2,B2,A1,B1,A0,B0}
-(define_insn "vec_interleave_lowv8qi"
+(define_expand "vec_interleave_lowv8qi"
+  [(match_operand:V8QI 0 "register_operand" "")
+   (match_operand:V8QI 1 "reg_or_0_operand" "")
+   (match_operand:V8QI 2 "reg_or_0_operand" "")]
+  ""
+{
+  if (BYTES_BIG_ENDIAN)
+    emit_insn (gen_vec_interleave_lowv8qi_be (operands[0], operands[1],
+					      operands[2]));
+  else
+    emit_insn (gen_vec_interleave_lowv8qi_le (operands[0], operands[1],
+					      operands[2]));
+  DONE;
+})
+
+(define_insn "vec_interleave_lowv8qi_be"
+  [(set (match_operand:V8QI 0 "register_operand" "=r")
+	(vec_select:V8QI
+	 (vec_concat:V16QI (match_operand:V8QI 1 "reg_or_0_operand" "rO")
+			   (match_operand:V8QI 2 "reg_or_0_operand" "rO"))
+	 (parallel [(const_int 4) (const_int 12)
+		    (const_int 5) (const_int 13)
+		    (const_int 6) (const_int 14)
+		    (const_int 7) (const_int 15)])))]
+  "BYTES_BIG_ENDIAN"
+  "v1int_l\t%0, %r1, %r2"
+  [(set_attr "type" "X01")])
+
+(define_insn "vec_interleave_lowv8qi_le"
   [(set (match_operand:V8QI 0 "register_operand" "=r")
 	(vec_select:V8QI
 	 (vec_concat:V16QI (match_operand:V8QI 1 "reg_or_0_operand" "rO")
@@ -4209,7 +4576,7 @@
 		    (const_int 1) (const_int 9)
 		    (const_int 2) (const_int 10)
 		    (const_int 3) (const_int 11)])))]
-  ""
+  "!BYTES_BIG_ENDIAN"
   "v1int_l\t%0, %r2, %r1"
   [(set_attr "type" "X01")])
 
@@ -4219,11 +4586,14 @@
    (match_operand:DI 2 "reg_or_0_operand" "")]
   ""
 {
-  /* Our instruction interleaves opposite of the way vec_interleave
-     works, so we need to reverse the source operands.  */
+  /* For little endian, our instruction interleaves opposite of the
+     way vec_interleave works, so we need to reverse the source
+     operands.  */
+  rtx opnd1 = BYTES_BIG_ENDIAN ? operands[1] : operands[2];
+  rtx opnd2 = BYTES_BIG_ENDIAN ? operands[2] : operands[1];
   tilegx_expand_builtin_vector_binop (gen_vec_interleave_lowv8qi, V8QImode,
-				      operands[0], V8QImode, operands[2],
-				      operands[1], true);
+				      operands[0], V8QImode, opnd1, opnd2,
+				      true);
   DONE;
 })
 
@@ -4231,14 +4601,40 @@
 ;;    {B3,B2,B1,B0} {A3,A2,A1,A0}
 ;; => {A3,A2,A1,A0,B3,B2,B1,B0}
 ;; => {A3,B3,A2,B2}
-(define_insn "vec_interleave_highv4hi"
+(define_expand "vec_interleave_highv4hi"
+  [(match_operand:V4HI 0 "register_operand" "")
+   (match_operand:V4HI 1 "reg_or_0_operand" "")
+   (match_operand:V4HI 2 "reg_or_0_operand" "")]
+  ""
+{
+  if (BYTES_BIG_ENDIAN)
+    emit_insn (gen_vec_interleave_highv4hi_be (operands[0], operands[1],
+					       operands[2]));
+  else
+    emit_insn (gen_vec_interleave_highv4hi_le (operands[0], operands[1],
+					       operands[2]));
+  DONE;
+})
+
+(define_insn "vec_interleave_highv4hi_be"
+  [(set (match_operand:V4HI 0 "register_operand" "=r")
+	(vec_select:V4HI
+	 (vec_concat:V8HI (match_operand:V4HI 1 "reg_or_0_operand" "rO")
+			  (match_operand:V4HI 2 "reg_or_0_operand" "rO"))
+	 (parallel [(const_int 0) (const_int 4)
+		    (const_int 1) (const_int 5)])))]
+  "BYTES_BIG_ENDIAN"
+  "v2int_h\t%0, %r1, %r2"
+  [(set_attr "type" "X01")])
+
+(define_insn "vec_interleave_highv4hi_le"
   [(set (match_operand:V4HI 0 "register_operand" "=r")
 	(vec_select:V4HI
 	 (vec_concat:V8HI (match_operand:V4HI 1 "reg_or_0_operand" "rO")
 			  (match_operand:V4HI 2 "reg_or_0_operand" "rO"))
 	 (parallel [(const_int 2) (const_int 6)
 		    (const_int 3) (const_int 7)])))]
-  ""
+  "!BYTES_BIG_ENDIAN"
   "v2int_h\t%0, %r2, %r1"
   [(set_attr "type" "X01")])
 
@@ -4248,11 +4644,14 @@
    (match_operand:DI 2 "reg_or_0_operand" "")]
   ""
 {
-  /* Our instruction interleaves opposite of the way vec_interleave
-     works, so we need to reverse the source operands.  */
+  /* For little endian, our instruction interleaves opposite of the
+     way vec_interleave works, so we need to reverse the source
+     operands.  */
+  rtx opnd1 = BYTES_BIG_ENDIAN ? operands[1] : operands[2];
+  rtx opnd2 = BYTES_BIG_ENDIAN ? operands[2] : operands[1];
   tilegx_expand_builtin_vector_binop (gen_vec_interleave_highv4hi, V4HImode,
-                                      operands[0], V4HImode, operands[2],
-				      operands[1], true);
+                                      operands[0], V4HImode, opnd1, opnd2,
+				      true);
   DONE;
 })
 
@@ -4260,14 +4659,40 @@
 ;;    {B3,B2,B1,B0} {A3,A2,A1,A0}
 ;; => {A3,A2,A1,A0,B3,B2,B1,B0}
 ;; => {A1,B1,A0,B0}
-(define_insn "vec_interleave_lowv4hi"
+(define_expand "vec_interleave_lowv4hi"
+  [(match_operand:V4HI 0 "register_operand" "")
+   (match_operand:V4HI 1 "reg_or_0_operand" "")
+   (match_operand:V4HI 2 "reg_or_0_operand" "")]
+  ""
+{
+  if (BYTES_BIG_ENDIAN)
+    emit_insn (gen_vec_interleave_lowv4hi_be (operands[0], operands[1],
+					      operands[2]));
+  else
+    emit_insn (gen_vec_interleave_lowv4hi_le (operands[0], operands[1],
+					      operands[2]));
+  DONE;
+})
+
+(define_insn "vec_interleave_lowv4hi_be"
+  [(set (match_operand:V4HI 0 "register_operand" "=r")
+	(vec_select:V4HI
+	 (vec_concat:V8HI (match_operand:V4HI 1 "reg_or_0_operand" "rO")
+			  (match_operand:V4HI 2 "reg_or_0_operand" "rO"))
+	 (parallel [(const_int 2) (const_int 6)
+		    (const_int 3) (const_int 7)])))]
+  "BYTES_BIG_ENDIAN"
+  "v2int_l\t%0, %r1, %r2"
+  [(set_attr "type" "X01")])
+
+(define_insn "vec_interleave_lowv4hi_le"
   [(set (match_operand:V4HI 0 "register_operand" "=r")
 	(vec_select:V4HI
 	 (vec_concat:V8HI (match_operand:V4HI 1 "reg_or_0_operand" "rO")
 			  (match_operand:V4HI 2 "reg_or_0_operand" "rO"))
 	 (parallel [(const_int 0) (const_int 4)
 		    (const_int 1) (const_int 5)])))]
-  ""
+  "!BYTES_BIG_ENDIAN"
   "v2int_l\t%0, %r2, %r1"
   [(set_attr "type" "X01")])
 
@@ -4277,9 +4702,14 @@
    (match_operand:DI 2 "reg_or_0_operand" "")]
   ""
 {
+  /* For little endian, our instruction interleaves opposite of the
+     way vec_interleave works, so we need to reverse the source
+     operands.  */
+  rtx opnd1 = BYTES_BIG_ENDIAN ? operands[1] : operands[2];
+  rtx opnd2 = BYTES_BIG_ENDIAN ? operands[2] : operands[1];
   tilegx_expand_builtin_vector_binop (gen_vec_interleave_lowv4hi, V4HImode,
-                                      operands[0], V4HImode, operands[2],
-				      operands[1], true);
+                                      operands[0], V4HImode, opnd1, opnd2,
+				      true);
   DONE;
 })
 
@@ -4287,13 +4717,38 @@
 ;;    {B1,B0} {A1,A0}
 ;; => {A1,A0,B1,B0}
 ;; => {A1,B1}
-(define_insn "vec_interleave_highv2si"
+(define_expand "vec_interleave_highv2si"
+  [(match_operand:V2SI 0 "register_operand" "")
+   (match_operand:V2SI 1 "reg_or_0_operand" "")
+   (match_operand:V2SI 2 "reg_or_0_operand" "")]
+  ""
+{
+  if (BYTES_BIG_ENDIAN)
+    emit_insn (gen_vec_interleave_highv2si_be (operands[0], operands[1],
+					       operands[2]));
+  else
+    emit_insn (gen_vec_interleave_highv2si_le (operands[0], operands[1],
+					       operands[2]));
+  DONE;
+})
+
+(define_insn "vec_interleave_highv2si_be"
+  [(set (match_operand:V2SI 0 "register_operand" "=r")
+	(vec_select:V2SI
+	 (vec_concat:V4SI (match_operand:V2SI 1 "reg_or_0_operand" "rO")
+			  (match_operand:V2SI 2 "reg_or_0_operand" "rO"))
+	 (parallel [(const_int 0) (const_int 2)])))]
+  "BYTES_BIG_ENDIAN"
+  "v4int_h\t%0, %r1, %r2"
+  [(set_attr "type" "X01")])
+
+(define_insn "vec_interleave_highv2si_le"
   [(set (match_operand:V2SI 0 "register_operand" "=r")
 	(vec_select:V2SI
 	 (vec_concat:V4SI (match_operand:V2SI 1 "reg_or_0_operand" "rO")
 			  (match_operand:V2SI 2 "reg_or_0_operand" "rO"))
 	 (parallel [(const_int 1) (const_int 3)])))]
-  ""
+  "!BYTES_BIG_ENDIAN"
   "v4int_h\t%0, %r2, %r1"
   [(set_attr "type" "X01")])
 
@@ -4303,11 +4758,14 @@
    (match_operand:DI 2 "reg_or_0_operand" "")]
   ""
 {
-  /* Our instruction interleaves opposite of the way vec_interleave
-     works, so we need to reverse the source operands.  */
+  /* For little endian, our instruction interleaves opposite of the
+     way vec_interleave works, so we need to reverse the source
+     operands.  */
+  rtx opnd1 = BYTES_BIG_ENDIAN ? operands[1] : operands[2];
+  rtx opnd2 = BYTES_BIG_ENDIAN ? operands[2] : operands[1];
   tilegx_expand_builtin_vector_binop (gen_vec_interleave_highv2si, V2SImode,
-                                      operands[0], V2SImode, operands[2],
-				      operands[1], true);
+                                      operands[0], V2SImode, opnd1, opnd2,
+				      true);
   DONE;
 })
 
@@ -4315,13 +4773,38 @@
 ;;    {B1,B0} {A1,A0}
 ;; => {A1,A0,B1,B0}
 ;; => {A0,B0}
-(define_insn "vec_interleave_lowv2si"
+(define_expand "vec_interleave_lowv2si"
+  [(match_operand:V2SI 0 "register_operand" "")
+   (match_operand:V2SI 1 "reg_or_0_operand" "")
+   (match_operand:V2SI 2 "reg_or_0_operand" "")]
+  ""
+{
+  if (BYTES_BIG_ENDIAN)
+    emit_insn (gen_vec_interleave_lowv2si_be (operands[0], operands[1],
+					      operands[2]));
+  else
+    emit_insn (gen_vec_interleave_lowv2si_le (operands[0], operands[1],
+					      operands[2]));
+  DONE;
+})
+
+(define_insn "vec_interleave_lowv2si_be"
+  [(set (match_operand:V2SI 0 "register_operand" "=r")
+	(vec_select:V2SI
+	 (vec_concat:V4SI (match_operand:V2SI 1 "reg_or_0_operand" "rO")
+			  (match_operand:V2SI 2 "reg_or_0_operand" "rO"))
+	 (parallel [(const_int 1) (const_int 3)])))]
+  "BYTES_BIG_ENDIAN"
+  "v4int_l\t%0, %r1, %r2"
+  [(set_attr "type" "X01")])
+
+(define_insn "vec_interleave_lowv2si_le"
   [(set (match_operand:V2SI 0 "register_operand" "=r")
 	(vec_select:V2SI
 	 (vec_concat:V4SI (match_operand:V2SI 1 "reg_or_0_operand" "rO")
 			  (match_operand:V2SI 2 "reg_or_0_operand" "rO"))
 	 (parallel [(const_int 0) (const_int 2)])))]
-  ""
+  "!BYTES_BIG_ENDIAN"
   "v4int_l\t%0, %r2, %r1"
   [(set_attr "type" "X01")])
 
@@ -4331,11 +4814,14 @@
    (match_operand:DI 2 "reg_or_0_operand" "")]
   ""
 {
-  /* Our instruction interleaves opposite of the way vec_interleave
-     works, so we need to reverse the source operands.  */
+  /* For little endian, our instruction interleaves opposite of the
+     way vec_interleave works, so we need to reverse the source
+     operands.  */
+  rtx opnd1 = BYTES_BIG_ENDIAN ? operands[1] : operands[2];
+  rtx opnd2 = BYTES_BIG_ENDIAN ? operands[2] : operands[1];
   tilegx_expand_builtin_vector_binop (gen_vec_interleave_lowv2si, V2SImode,
-                                      operands[0], V2SImode, operands[2],
-				      operands[1], true);
+                                      operands[0], V2SImode, opnd1, opnd2,
+				      true);
   DONE;
 })
 
@@ -4581,7 +5067,7 @@
 ;;    {B3,B2,B1,B0} {A3,A2,A1,A0}
 ;; => {A3,A2,A1,A0,B3,B2,B1,B0}
 (define_insn "vec_pack_<pack_optab>_v4hi"
-  [(set (match_operand:V8QI 0 "reg_or_0_operand" "=r")
+  [(set (match_operand:V8QI 0 "register_operand" "=r")
 	(vec_concat:V8QI
 	 (v2pack:V4QI (match_operand:V4HI 1 "reg_or_0_operand" "rO"))
 	 (v2pack:V4QI (match_operand:V4HI 2 "reg_or_0_operand" "rO"))))]
@@ -4590,7 +5076,7 @@
   [(set_attr "type" "X01")])
 
 (define_expand "insn_v2<pack_insn>"
-  [(set (match_operand:DI 0 "reg_or_0_operand" "")
+  [(set (match_operand:DI 0 "register_operand" "")
 	(vec_concat:V8QI
 	 (v2pack:V4QI (match_operand:DI 2 "reg_or_0_operand" ""))
 	 (v2pack:V4QI (match_operand:DI 1 "reg_or_0_operand" ""))))]
@@ -4608,7 +5094,7 @@
 ;;    {B3,B2,B1,B0} {A3,A2,A1,A0}
 ;; => {A3_hi,A2_hi,A1_hi,A0_hi,B3_hi,B2_hi,B1_hi,B0_hi}
 (define_insn "vec_pack_hipart_v4hi"
-  [(set (match_operand:V8QI 0 "reg_or_0_operand" "=r")
+  [(set (match_operand:V8QI 0 "register_operand" "=r")
 	(vec_concat:V8QI
 	 (truncate:V4QI
 	  (ashiftrt:V4HI (match_operand:V4HI 1 "reg_or_0_operand" "rO")
@@ -4621,7 +5107,7 @@
   [(set_attr "type" "X01")])
 
 (define_expand "insn_v2packh"
-  [(set (match_operand:DI 0 "reg_or_0_operand" "")
+  [(set (match_operand:DI 0 "register_operand" "")
 	(vec_concat:V8QI
 	 (truncate:V4QI
 	  (ashiftrt:V4HI (match_operand:DI 2 "reg_or_0_operand" "")
@@ -4643,7 +5129,7 @@
 ;;    {B1,B0} {A1,A0}
 ;; => {A1,A0,B1,B0}
 (define_insn "vec_pack_ssat_v2si"
-  [(set (match_operand:V4HI 0 "reg_or_0_operand" "=r")
+  [(set (match_operand:V4HI 0 "register_operand" "=r")
 	(vec_concat:V4HI
 	 (us_truncate:V2HI (match_operand:V2SI 1 "reg_or_0_operand" "rO"))
 	 (us_truncate:V2HI (match_operand:V2SI 2 "reg_or_0_operand" "rO"))))]
@@ -4652,7 +5138,7 @@
   [(set_attr "type" "X01")])
 
 (define_expand "insn_v4packsc"
-  [(set (match_operand:DI 0 "reg_or_0_operand" "")
+  [(set (match_operand:DI 0 "register_operand" "")
 	(vec_concat:V4HI
 	 (us_truncate:V2HI (match_operand:DI 2 "reg_or_0_operand" ""))
 	 (us_truncate:V2HI (match_operand:DI 1 "reg_or_0_operand" ""))))]
@@ -5081,7 +5567,7 @@
   rtx ssp_addr = gen_rtx_PLUS (Pmode, tp, GEN_INT (TARGET_THREAD_SSP_OFFSET));
   rtx ssp = gen_reg_rtx (Pmode);
   
-  emit_insn (gen_rtx_SET (VOIDmode, ssp, ssp_addr));
+  emit_insn (gen_rtx_SET (ssp, ssp_addr));
 
   operands[1] = gen_rtx_MEM (Pmode, ssp);
 #endif
@@ -5128,7 +5614,7 @@
   rtx ssp_addr = gen_rtx_PLUS (Pmode, tp, GEN_INT (TARGET_THREAD_SSP_OFFSET));
   rtx ssp = gen_reg_rtx (Pmode);
   
-  emit_insn (gen_rtx_SET (VOIDmode, ssp, ssp_addr));
+  emit_insn (gen_rtx_SET (ssp, ssp_addr));
 
   operands[1] = gen_rtx_MEM (Pmode, ssp);
 #endif
@@ -5146,7 +5632,7 @@
 
   loc_ref = gen_rtx_LABEL_REF (VOIDmode, operands[2]);
 
-  emit_jump_insn (gen_rtx_SET (VOIDmode, pc_rtx,
+  emit_jump_insn (gen_rtx_SET (pc_rtx,
 			       gen_rtx_IF_THEN_ELSE (VOIDmode, bcomp,
 						     loc_ref, pc_rtx)));
 

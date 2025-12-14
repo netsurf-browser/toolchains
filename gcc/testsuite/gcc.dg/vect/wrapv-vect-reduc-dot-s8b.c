@@ -1,3 +1,5 @@
+/* Disabling epilogues until we find a better way to deal with scans.  */
+/* { dg-additional-options "--param vect-epilogues-nomask=0" } */
 /* { dg-require-effective-target vect_int } */
 
 #include <stdarg.h>
@@ -54,4 +56,3 @@ dg-final { scan-tree-dump-times "vectorized 1 loops" 1 "vect" { target vect_sdot
 /* In the meantime expect: */
 /* { dg-final { scan-tree-dump-times "vectorized 1 loops" 1 "vect" { target { vect_widen_mult_qi_to_hi || vect_unpack } } } } */
 
-/* { dg-final { cleanup-tree-dump "vect" } } */

@@ -6,7 +6,7 @@
  *                                                                          *
  *                          C Implementation File                           *
  *                                                                          *
- *          Copyright (C) 2003-2010, Free Software Foundation, Inc.         *
+ *          Copyright (C) 2003-2019, Free Software Foundation, Inc.         *
  *                                                                          *
  * GNAT is free software;  you can  redistribute it  and/or modify it under *
  * terms of the  GNU General Public License as published  by the Free Soft- *
@@ -31,40 +31,21 @@
 
 /*  This file provides a portable binding to the sockets API                */
 
+#define ATTRIBUTE_UNUSED __attribute__((unused))
+
+/* Ensure access to errno is thread safe.  */
+#ifndef _REENTRANT
+#define _REENTRANT
+#endif
+#define _THREAD_SAFE
+
 #include "gsocket.h"
 
-#ifdef VMS
-/*
- * For VMS, gsocket.h can't include sockets-related DEC C header files
- * when building the runtime (because these files are in a DEC C text library
- * (DECC$RTLDEF.TLB) not accessible to GCC). So, we generate a separate header
- * file along with s-oscons.ads and include it here.
- */
-# include "s-oscons.h"
-
-/*
- * We also need the declaration of struct hostent/servent, which s-oscons
- * can't provide, so we copy it manually here. This needs to be kept in synch
- * with the definition of that structure in the DEC C headers, which
- * hopefully won't change frequently.
- */
-typedef char *__netdb_char_ptr __attribute__ (( mode (SI) ));
-typedef __netdb_char_ptr *__netdb_char_ptr_ptr __attribute__ (( mode (SI) ));
-
-struct hostent {
-  __netdb_char_ptr     h_name;
-  __netdb_char_ptr_ptr h_aliases;
-  int                  h_addrtype;
-  int                  h_length;
-  __netdb_char_ptr_ptr h_addr_list;
-};
-
-struct servent {
-  __netdb_char_ptr     s_name;
-  __netdb_char_ptr_ptr s_aliases;
-  int                  s_port;
-  __netdb_char_ptr     s_proto;
-};
+#if defined (__FreeBSD__) || defined (__DragonFly__) \
+ || defined (__NetBSD__) || defined (__OpenBSD__)
+typedef unsigned int IOCTL_Req_T;
+#else
+typedef int IOCTL_Req_T;
 #endif
 
 #if defined(HAVE_SOCKETS)
@@ -98,7 +79,7 @@ extern fd_set *__gnat_new_socket_set (fd_set *);
 extern void __gnat_remove_socket_from_set (fd_set *, int);
 extern void __gnat_reset_socket_set (fd_set *);
 extern int  __gnat_get_h_errno (void);
-extern int  __gnat_socket_ioctl (int, int, int *);
+extern int  __gnat_socket_ioctl (int, IOCTL_Req_T, int *);
 
 extern char * __gnat_servent_s_name (struct servent *);
 extern char * __gnat_servent_s_alias (struct servent *, int index);
@@ -111,14 +92,31 @@ extern int __gnat_hostent_h_addrtype (struct hostent *);
 extern int __gnat_hostent_h_length (struct hostent *);
 extern char * __gnat_hostent_h_addr (struct hostent *, int);
 
+extern int __gnat_getaddrinfo(
+  const char *node,
+  const char *service,
+  const struct addrinfo *hints,
+  struct addrinfo **res);
+int __gnat_getnameinfo(
+  const struct sockaddr *sa, socklen_t salen,
+  char *host, size_t hostlen,
+  char *serv, size_t servlen, int flags);
+extern void __gnat_freeaddrinfo(struct addrinfo *res);
+extern const char * __gnat_gai_strerror(int errcode);
+
 #ifndef HAVE_INET_PTON
 extern int  __gnat_inet_pton (int, const char *, void *);
 #endif
-
+
+#ifndef HAVE_INET_NTOP
+extern const char *
+__gnat_inet_ntop(int, const void *, char *, socklen_t);
+#endif
+
 /* Disable the sending of SIGPIPE for writes on a broken stream */
 
 void
-__gnat_disable_sigpipe (int fd)
+__gnat_disable_sigpipe (int fd ATTRIBUTE_UNUSED)
 {
 #ifdef SO_NOSIGPIPE
   int val = 1;
@@ -133,8 +131,8 @@ __gnat_disable_all_sigpipes (void)
   (void) signal (SIGPIPE, SIG_IGN);
 #endif
 }
-
-#if defined (_WIN32) || defined (__vxworks) || defined (VMS)
+
+#if defined (_WIN32) || defined (__vxworks)
 /*
  * Signalling FDs operations are implemented in Ada for these platforms
  * (see subunit GNAT.Sockets.Thin.Signalling_Fds).
@@ -149,7 +147,7 @@ int
 __gnat_create_signalling_fds (int *fds) {
   return pipe (fds);
 }
-
+
 /*
  * Read one byte of data from rsig, the read end of a pair of signalling fds
  * created by __gnat_create_signalling_fds.
@@ -159,7 +157,7 @@ __gnat_read_signalling_fd (int rsig) {
   char c;
   return read (rsig, &c, 1);
 }
-
+
 /*
  * Write one byte of data to wsig, the write end of a pair of signalling fds
  * created by __gnat_create_signalling_fds.
@@ -169,7 +167,7 @@ __gnat_write_signalling_fd (int wsig) {
   char c = 0;
   return write (wsig, &c, 1);
 }
-
+
 /*
  * Close one end of a pair of signalling fds
  */
@@ -178,7 +176,7 @@ __gnat_close_signalling_fd (int sig) {
   (void) close (sig);
 }
 #endif
-
+
 /*
  * Handling of gethostbyname, gethostbyaddr, getservbyname and getservbyport
  * =========================================================================
@@ -208,7 +206,7 @@ __gnat_gethostbyname (const char *name,
   struct hostent *rh;
   int ri;
 
-#if defined(__linux__) || defined(__GLIBC__)
+#if defined(__linux__) || defined(__GLIBC__) || defined(__rtems__)
   (void) gethostbyname_r (name, ret, buf, buflen, &rh, h_errnop);
 #else
   rh = gethostbyname_r (name, ret, buf, buflen, h_errnop);
@@ -225,7 +223,7 @@ __gnat_gethostbyaddr (const char *addr, int len, int type,
   struct hostent *rh;
   int ri;
 
-#if defined(__linux__) || defined(__GLIBC__)
+#if defined(__linux__) || defined(__GLIBC__) || defined(__rtems__)
   (void) gethostbyaddr_r (addr, len, type, ret, buf, buflen, &rh, h_errnop);
 #else
   rh = gethostbyaddr_r (addr, len, type, ret, buf, buflen, h_errnop);
@@ -390,7 +388,7 @@ __gnat_getservbyport (int port, const char *proto,
   return 0;
 }
 #endif
-
+
 /* Find the largest socket in the socket set SET. This is needed for
    `select'.  LAST is the maximum value for the largest socket. This hint is
    used to avoid scanning very large socket sets.  On return, LAST is the
@@ -501,15 +499,6 @@ __gnat_get_h_errno (void) {
       return -1;
   }
 
-#elif defined (VMS)
-  /* h_errno is defined as follows in OpenVMS' version of <netdb.h>.
-   * However this header file is not available when building the GNAT
-   * runtime library using GCC, so we are hardcoding the definition
-   * directly. Note that the returned address is thread-specific.
-   */
-  extern int *decc$h_errno_get_addr ();
-  return *decc$h_errno_get_addr ();
-
 #elif defined (__rtems__)
   /* At this stage in the tool build, no networking .h files are available.
    * Newlib does not provide networking .h files and RTEMS is not built yet.
@@ -526,7 +515,7 @@ __gnat_get_h_errno (void) {
 /* Wrapper for ioctl(2), which is a variadic function */
 
 int
-__gnat_socket_ioctl (int fd, int req, int *arg) {
+__gnat_socket_ioctl (int fd, IOCTL_Req_T req, int *arg) {
 #if defined (_WIN32)
   return ioctlsocket (fd, req, arg);
 #elif defined (__APPLE__)
@@ -541,11 +530,6 @@ __gnat_socket_ioctl (int fd, int req, int *arg) {
 }
 
 #ifndef HAVE_INET_PTON
-
-#ifdef VMS
-# define in_addr_t int
-# define inet_addr decc$inet_addr
-#endif
 
 int
 __gnat_inet_pton (int af, const char *src, void *dst) {
@@ -584,7 +568,7 @@ __gnat_inet_pton (int af, const char *src, void *dst) {
   }
   return (rc == 0);
 
-#elif defined (__hpux__) || defined (VMS)
+#elif defined (__hpux__)
   in_addr_t addr;
   int rc = -1;
 
@@ -603,6 +587,41 @@ __gnat_inet_pton (int af, const char *src, void *dst) {
     *(in_addr_t *)dst = addr;
   }
   return rc;
+#endif
+}
+#endif
+
+#ifndef HAVE_INET_NTOP
+
+const char *
+__gnat_inet_ntop(int af, const void *src, char *dst, socklen_t size)
+{
+#ifdef _WIN32
+  struct sockaddr_storage ss;
+  int sslen = sizeof ss;
+  memset(&ss, 0, sslen);
+  ss.ss_family = af;
+
+  switch (af) {
+    case AF_INET6:
+      ((struct sockaddr_in6 *)&ss)->sin6_addr = *(struct in6_addr *)src;
+      break;
+    case AF_INET:
+      ((struct sockaddr_in *)&ss)->sin_addr = *(struct in_addr *)src;
+      break;
+    default:
+      errno = EAFNOSUPPORT;
+      return NULL;
+  }
+
+  DWORD sz = size;
+
+  if (WSAAddressToStringA((struct sockaddr*)&ss, sslen, 0, dst, &sz) != 0) {
+     return NULL;
+  }
+  return dst;
+#else
+  return NULL;
 #endif
 }
 #endif
@@ -685,6 +704,110 @@ __gnat_servent_s_proto (struct servent * s)
   return s->s_proto;
 }
 
+#if defined(AF_INET6) && !defined(__rtems__)
+
+int __gnat_getaddrinfo(
+  const char *node,
+  const char *service,
+  const struct addrinfo *hints,
+  struct addrinfo **res)
+{
+  return getaddrinfo(node, service, hints, res);
+}
+
+int __gnat_getnameinfo(
+  const struct sockaddr *sa, socklen_t salen,
+  char *host, size_t hostlen,
+  char *serv, size_t servlen, int flags)
+{
+  return getnameinfo(sa, salen, host, hostlen, serv, servlen, flags);
+}
+
+void __gnat_freeaddrinfo(struct addrinfo *res) {
+   freeaddrinfo(res);
+}
+
+const char * __gnat_gai_strerror(int errcode) {
+#if defined(_WIN32) ||  defined(__vxworks)
+  // gai_strerror thread usafe on Windows and is not available on some vxWorks
+  // versions
+
+  switch (errcode) {
+    case EAI_AGAIN:
+      return "Temporary failure in name resolution.";
+    case EAI_BADFLAGS:
+      return "Invalid value for ai_flags.";
+    case EAI_FAIL:
+      return "Nonrecoverable failure in name resolution.";
+    case EAI_FAMILY:
+      return "The ai_family member is not supported.";
+    case EAI_MEMORY:
+      return "Memory allocation failure.";
+#ifdef EAI_NODATA
+    // Could be not defined under the vxWorks
+    case EAI_NODATA:
+      return "No address associated with nodename.";
+#endif
+#if EAI_NODATA != EAI_NONAME
+    /* with mingw64 runtime EAI_NODATA and EAI_NONAME have the same value.
+       This applies to both win32 and win64 */
+    case EAI_NONAME:
+      return "Neither nodename nor servname provided, or not known.";
+#endif
+    case EAI_SERVICE:
+      return "The servname parameter is not supported for ai_socktype.";
+    case EAI_SOCKTYPE:
+      return "The ai_socktype member is not supported.";
+#ifdef EAI_SYSTEM
+    // Could be not defined, at least on Windows
+    case EAI_SYSTEM:
+      return "System error returned in errno";
+#endif
+    default:
+      return "Unknown error.";
+    }
 #else
-# warning Sockets are not supported on this platform
+   return gai_strerror(errcode);
+#endif
+}
+
+#else
+
+int __gnat_getaddrinfo(
+  const char *node,
+  const char *service,
+  const struct addrinfo *hints,
+  struct addrinfo **res)
+{
+  return -1;
+}
+
+int __gnat_getnameinfo(
+  const struct sockaddr *sa, socklen_t salen,
+  char *host, size_t hostlen,
+  char *serv, size_t servlen, int flags)
+{
+  return -1;
+}
+
+void __gnat_freeaddrinfo(struct addrinfo *res) {
+}
+
+const char * __gnat_gai_strerror(int errcode) {
+   return "getaddinfo functions family is not supported";
+}
+
+#endif
+
+int __gnat_minus_500ms() {
+#if defined (_WIN32)
+  // Windows Server 2019 and Windows 8.0 do not need 500 millisecond socket
+  // timeout correction.
+  return !(IsWindows8OrGreater() && !IsWindowsServer()
+           || IsWindowsVersionOrGreater(10, 0, 17763));
+#else
+   return 0;
+#endif
+}
+
 #endif /* defined(HAVE_SOCKETS) */

@@ -1,5 +1,4 @@
 ! { dg-do compile }
-! { dg-options "-fwhole-file" }
 ! Test the fix for pr40011 comment #42, in which the subroutine
 ! would just get lost with -fwhole-file.
 !
@@ -22,4 +21,3 @@ END MODULE
 USE M
 CALL b()
 END
-! { dg-final { cleanup-modules "m" } }

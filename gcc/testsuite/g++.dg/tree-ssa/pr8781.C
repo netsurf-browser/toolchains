@@ -1,5 +1,5 @@
 /* { dg-do compile } */
-/* { dg-options "-O -fno-tree-sra -fdump-tree-fre1-details" } */
+/* { dg-options "-O -fno-tree-sra -fdump-tree-fre1 --param early-inlining-insns=14" } */
 
 int f();
 
@@ -13,7 +13,7 @@ public:
 };
 
 template<typename predicate>
-inline noop_t<predicate> noop(const predicate pred) {
+inline noop_t<predicate> noop(const predicate &pred) {
     return noop_t<predicate>(pred);
 }
 
@@ -24,5 +24,4 @@ int x()
 
 /* We should optimize this to a direct call.  */
 
-/* { dg-final { scan-tree-dump "Replacing call target with f" "fre1" } } */
-/* { dg-final { cleanup-tree-dump "fre1" } } */
+/* { dg-final { scan-tree-dump-times "= f \\(\\);" 1 "fre1" } } */

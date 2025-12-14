@@ -1,5 +1,5 @@
 ! { dg-do run }
-! { dg-options "-fwhole-file -O3" }
+! { dg-options "-O3" }
 ! Check that the derived types are correctly substituted when
 ! whole file compiling.
 !
@@ -25,4 +25,3 @@ contains
     j%this => base                      !to one another
   end subroutine check                  !take j out of scope
 end program test_equi
-! { dg-final { cleanup-modules "global" } }

@@ -1,7 +1,5 @@
 /* Read and write coverage files, and associated functionality.
-   Copyright (C) 1990, 1991, 1992, 1993, 1994, 1996, 1997, 1998, 1999,
-   2000, 2001, 2003, 2004, 2005, 2007, 2008, 2009, 2010, 2011, 2012
-   Free Software Foundation, Inc.
+   Copyright (C) 1990-2020 Free Software Foundation, Inc.
    Contributed by James E. Wilson, UC Berkeley/Cygnus Support;
    based on some ideas from Dain Samples of UC Berkeley.
    Further mangling by Bob Manson, Cygnus Support.
@@ -29,30 +27,30 @@ along with GCC; see the file COPYING3.  If not see
 #include "config.h"
 #include "system.h"
 #include "coretypes.h"
-#include "tm.h"
+#include "backend.h"
+#include "target.h"
 #include "rtl.h"
 #include "tree.h"
-#include "flags.h"
-#include "output.h"
-#include "regs.h"
-#include "expr.h"
-#include "function.h"
-#include "basic-block.h"
-#include "toplev.h"
-#include "tm_p.h"
-#include "ggc.h"
-#include "coverage.h"
-#include "langhooks.h"
-#include "hashtab.h"
-#include "tree-iterator.h"
-#include "cgraph.h"
 #include "tree-pass.h"
+#include "memmodel.h"
+#include "tm_p.h"
+#include "stringpool.h"
+#include "cgraph.h"
+#include "coverage.h"
 #include "diagnostic-core.h"
+#include "fold-const.h"
+#include "stor-layout.h"
+#include "output.h"
+#include "toplev.h"
+#include "langhooks.h"
+#include "tree-iterator.h"
+#include "context.h"
+#include "pass_manager.h"
 #include "intl.h"
-#include "filenames.h"
-#include "target.h"
+#include "auto-profile.h"
+#include "profile.h"
+#include "diagnostic.h"
 
-#include "gcov-io.h"
 #include "gcov-io.c"
 
 struct GTY((chain_next ("%h.next"))) coverage_data
@@ -66,7 +64,7 @@ struct GTY((chain_next ("%h.next"))) coverage_data
 };
 
 /* Counts information for a function.  */
-typedef struct counts_entry
+struct counts_entry : pointer_hash <counts_entry>
 {
   /* We hash by  */
   unsigned ident;
@@ -76,8 +74,13 @@ typedef struct counts_entry
   unsigned lineno_checksum;
   unsigned cfg_checksum;
   gcov_type *counts;
-  struct gcov_ctr_summary summary;
-} counts_entry_t;
+  unsigned n_counts;
+
+  /* hash_table support.  */
+  static inline hashval_t hash (const counts_entry *);
+  static int equal (const counts_entry *, const counts_entry *);
+  static void remove (counts_entry *);
+};
 
 static GTY(()) struct coverage_data *functions_head = 0;
 static struct coverage_data **functions_tail = &functions_head;
@@ -97,24 +100,34 @@ static GTY(()) tree gcov_info_var;
 static GTY(()) tree gcov_fn_info_type;
 static GTY(()) tree gcov_fn_info_ptr_type;
 
-/* Name of the output file for coverage output file.  If this is NULL
-   we're not writing to the notes file.  */
+/* Name of the notes (gcno) output file.  The "bbg" prefix is for
+   historical reasons, when the notes file contained only the
+   basic block graph notes.
+   If this is NULL we're not writing to the notes file.  */
 static char *bbg_file_name;
 
-/* Name of the count data file.  */
+/* File stamp for notes file.  */
+static unsigned bbg_file_stamp;
+
+/* Name of the count data (gcda) file.  */
 static char *da_file_name;
 
-/* Hash table of count data.  */
-static htab_t counts_hash = NULL;
-
 /* The names of merge functions for counters.  */
-static const char *const ctr_merge_functions[GCOV_COUNTERS] = GCOV_MERGE_FUNCTIONS;
-static const char *const ctr_names[GCOV_COUNTERS] = GCOV_COUNTER_NAMES;
+#define STR(str) #str
+#define DEF_GCOV_COUNTER(COUNTER, NAME, FN_TYPE) STR(__gcov_merge ## FN_TYPE),
+static const char *const ctr_merge_functions[GCOV_COUNTERS] = {
+#include "gcov-counter.def"
+};
+#undef DEF_GCOV_COUNTER
+#undef STR
+
+#define DEF_GCOV_COUNTER(COUNTER, NAME, FN_TYPE) NAME,
+static const char *const ctr_names[GCOV_COUNTERS] = {
+#include "gcov-counter.def"
+};
+#undef DEF_GCOV_COUNTER
 
 /* Forward declarations.  */
-static hashval_t htab_counts_entry_hash (const void *);
-static int htab_counts_entry_eq (const void *, const void *);
-static void htab_counts_entry_del (void *);
 static void read_counts_file (void);
 static tree build_var (tree, tree, int);
 static void build_fn_info_type (tree, unsigned, tree);
@@ -122,16 +135,18 @@ static void build_info_type (tree, tree);
 static tree build_fn_info (const struct coverage_data *, tree, tree);
 static tree build_info (tree, tree);
 static bool coverage_obj_init (void);
-static VEC(constructor_elt,gc) *coverage_obj_fn
-(VEC(constructor_elt,gc) *, tree, struct coverage_data const *);
-static void coverage_obj_finish (VEC(constructor_elt,gc) *);
+static vec<constructor_elt, va_gc> *coverage_obj_fn
+(vec<constructor_elt, va_gc> *, tree, struct coverage_data const *);
+static void coverage_obj_finish (vec<constructor_elt, va_gc> *);
 
 /* Return the type node for gcov_type.  */
 
 tree
 get_gcov_type (void)
 {
-  return lang_hooks.types.type_for_size (GCOV_TYPE_SIZE, false);
+  scalar_int_mode mode
+    = smallest_int_mode_for_size (LONG_LONG_TYPE_SIZE > 32 ? 64 : 32);
+  return lang_hooks.types.type_for_mode (mode, false);
 }
 
 /* Return the type node for gcov_unsigned_t.  */
@@ -139,34 +154,31 @@ get_gcov_type (void)
 static tree
 get_gcov_unsigned_t (void)
 {
-  return lang_hooks.types.type_for_size (32, true);
+  scalar_int_mode mode = smallest_int_mode_for_size (32);
+  return lang_hooks.types.type_for_mode (mode, true);
 }
 
-static hashval_t
-htab_counts_entry_hash (const void *of)
+inline hashval_t
+counts_entry::hash (const counts_entry *entry)
 {
-  const counts_entry_t *const entry = (const counts_entry_t *) of;
-
   return entry->ident * GCOV_COUNTERS + entry->ctr;
 }
 
-static int
-htab_counts_entry_eq (const void *of1, const void *of2)
+inline int
+counts_entry::equal (const counts_entry *entry1, const counts_entry *entry2)
 {
-  const counts_entry_t *const entry1 = (const counts_entry_t *) of1;
-  const counts_entry_t *const entry2 = (const counts_entry_t *) of2;
-
   return entry1->ident == entry2->ident && entry1->ctr == entry2->ctr;
 }
 
-static void
-htab_counts_entry_del (void *of)
+inline void
+counts_entry::remove (counts_entry *entry)
 {
-  counts_entry_t *const entry = (counts_entry_t *) of;
-
   free (entry->counts);
   free (entry);
 }
+
+/* Hash table of count data.  */
+static hash_table<counts_entry> *counts_hash;
 
 /* Read in the counts file, if available.  */
 
@@ -174,8 +186,6 @@ static void
 read_counts_file (void)
 {
   gcov_unsigned_t fn_ident = 0;
-  struct gcov_summary summary;
-  unsigned new_summary = 1;
   gcov_unsigned_t tag;
   int is_error = 0;
   unsigned lineno_checksum = 0;
@@ -203,12 +213,11 @@ read_counts_file (void)
       return;
     }
 
-  /* Read and discard the stamp.  */
-  gcov_read_unsigned ();
+  /* Read the stamp, used for creating a generation count.  */
+  tag = gcov_read_unsigned ();
+  bbg_file_stamp = crc32_unsigned (bbg_file_stamp, tag);
 
-  counts_hash = htab_create (10,
-			     htab_counts_entry_hash, htab_counts_entry_eq,
-			     htab_counts_entry_del);
+  counts_hash = new hash_table<counts_entry> (10);
   while ((tag = gcov_read_unsigned ()))
     {
       gcov_unsigned_t length;
@@ -226,91 +235,57 @@ read_counts_file (void)
 	    }
 	  else
 	    fn_ident = lineno_checksum = cfg_checksum = 0;
-	  new_summary = 1;
 	}
-      else if (tag == GCOV_TAG_PROGRAM_SUMMARY)
+      else if (tag == GCOV_TAG_OBJECT_SUMMARY)
 	{
-	  struct gcov_summary sum;
-	  unsigned ix;
-
-	  if (new_summary)
-	    memset (&summary, 0, sizeof (summary));
-
-	  gcov_read_summary (&sum);
-	  for (ix = 0; ix != GCOV_COUNTERS_SUMMABLE; ix++)
-	    {
-	      summary.ctrs[ix].runs += sum.ctrs[ix].runs;
-	      summary.ctrs[ix].sum_all += sum.ctrs[ix].sum_all;
-	      if (summary.ctrs[ix].run_max < sum.ctrs[ix].run_max)
-		summary.ctrs[ix].run_max = sum.ctrs[ix].run_max;
-	      summary.ctrs[ix].sum_max += sum.ctrs[ix].sum_max;
-	    }
-	  new_summary = 0;
+	  profile_info = XCNEW (gcov_summary);
+	  profile_info->runs = gcov_read_unsigned ();
+	  profile_info->sum_max = gcov_read_unsigned ();
 	}
       else if (GCOV_TAG_IS_COUNTER (tag) && fn_ident)
 	{
-	  counts_entry_t **slot, *entry, elt;
+	  counts_entry **slot, *entry, elt;
 	  unsigned n_counts = GCOV_TAG_COUNTER_NUM (length);
 	  unsigned ix;
 
 	  elt.ident = fn_ident;
 	  elt.ctr = GCOV_COUNTER_FOR_TAG (tag);
 
-	  slot = (counts_entry_t **) htab_find_slot
-	    (counts_hash, &elt, INSERT);
+	  slot = counts_hash->find_slot (&elt, INSERT);
 	  entry = *slot;
 	  if (!entry)
 	    {
-	      *slot = entry = XCNEW (counts_entry_t);
+	      *slot = entry = XCNEW (counts_entry);
 	      entry->ident = fn_ident;
 	      entry->ctr = elt.ctr;
 	      entry->lineno_checksum = lineno_checksum;
 	      entry->cfg_checksum = cfg_checksum;
-	      entry->summary = summary.ctrs[elt.ctr];
-	      entry->summary.num = n_counts;
 	      entry->counts = XCNEWVEC (gcov_type, n_counts);
+	      entry->n_counts = n_counts;
 	    }
 	  else if (entry->lineno_checksum != lineno_checksum
 		   || entry->cfg_checksum != cfg_checksum)
 	    {
-	      error ("Profile data for function %u is corrupted", fn_ident);
+	      error ("profile data for function %u is corrupted", fn_ident);
 	      error ("checksum is (%x,%x) instead of (%x,%x)",
 		     entry->lineno_checksum, entry->cfg_checksum,
 		     lineno_checksum, cfg_checksum);
-	      htab_delete (counts_hash);
+	      delete counts_hash;
+	      counts_hash = NULL;
 	      break;
-	    }
-	  else if (entry->summary.num != n_counts)
-	    {
-	      error ("Profile data for function %u is corrupted", fn_ident);
-	      error ("number of counters is %d instead of %d", entry->summary.num, n_counts);
-	      htab_delete (counts_hash);
-	      break;
-	    }
-	  else if (elt.ctr >= GCOV_COUNTERS_SUMMABLE)
-	    {
-	      error ("cannot merge separate %s counters for function %u",
-		     ctr_names[elt.ctr], fn_ident);
-	      goto skip_merge;
-	    }
-	  else
-	    {
-	      entry->summary.runs += summary.ctrs[elt.ctr].runs;
-	      entry->summary.sum_all += summary.ctrs[elt.ctr].sum_all;
-	      if (entry->summary.run_max < summary.ctrs[elt.ctr].run_max)
-		entry->summary.run_max = summary.ctrs[elt.ctr].run_max;
-	      entry->summary.sum_max += summary.ctrs[elt.ctr].sum_max;
 	    }
 	  for (ix = 0; ix != n_counts; ix++)
 	    entry->counts[ix] += gcov_read_counter ();
-	skip_merge:;
 	}
       gcov_sync (offset, length);
       if ((is_error = gcov_is_error ()))
 	{
-	  error (is_error < 0 ? "%qs has overflowed" : "%qs is corrupted",
+	  error (is_error < 0
+		 ? G_("%qs has overflowed")
+		 : G_("%qs is corrupted"),
 		 da_file_name);
-	  htab_delete (counts_hash);
+	  delete counts_hash;
+	  counts_hash = NULL;
 	  break;
 	}
     }
@@ -321,11 +296,10 @@ read_counts_file (void)
 /* Returns the counters for a particular tag.  */
 
 gcov_type *
-get_coverage_counts (unsigned counter, unsigned expected,
-                     unsigned cfg_checksum, unsigned lineno_checksum,
-		     const struct gcov_ctr_summary **summary)
+get_coverage_counts (unsigned counter, unsigned cfg_checksum,
+		     unsigned lineno_checksum, unsigned int n_counts)
 {
-  counts_entry_t *entry, elt;
+  counts_entry *entry, elt;
 
   /* No hash table, no counts.  */
   if (!counts_hash)
@@ -333,48 +307,87 @@ get_coverage_counts (unsigned counter, unsigned expected,
       static int warned = 0;
 
       if (!warned++)
-	inform (input_location, (flag_guess_branch_prob
-		 ? "file %s not found, execution counts estimated"
-		 : "file %s not found, execution counts assumed to be zero"),
-		da_file_name);
+	{
+	  warning (OPT_Wmissing_profile,
+		   "%qs profile count data file not found",
+		   da_file_name);
+	  if (dump_enabled_p ())
+	    {
+	      dump_user_location_t loc
+		= dump_user_location_t::from_location_t (input_location);
+	      dump_printf_loc (MSG_MISSED_OPTIMIZATION, loc,
+			       "file %s not found, %s\n", da_file_name,
+			       (flag_guess_branch_prob
+				? "execution counts estimated"
+				: "execution counts assumed to be zero"));
+	    }
+	}
       return NULL;
     }
-
-  elt.ident = current_function_funcdef_no + 1;
+  if (param_profile_func_internal_id)
+    elt.ident = current_function_funcdef_no + 1;
+  else
+    {
+      gcc_assert (coverage_node_map_initialized_p ());
+      elt.ident = cgraph_node::get (current_function_decl)->profile_id;
+    }
   elt.ctr = counter;
-  entry = (counts_entry_t *) htab_find (counts_hash, &elt);
-  if (!entry || !entry->summary.num)
-    /* The function was not emitted, or is weak and not chosen in the
-       final executable.  Silently fail, because there's nothing we
-       can do about it.  */
-    return NULL;
+  entry = counts_hash->find (&elt);
+  if (!entry)
+    {
+      if (counter == GCOV_COUNTER_ARCS)
+	warning_at (DECL_SOURCE_LOCATION (current_function_decl),
+		    OPT_Wmissing_profile,
+		    "profile for function %qD not found in profile data",
+		    current_function_decl);
+      /* The function was not emitted, or is weak and not chosen in the
+	 final executable.  Silently fail, because there's nothing we
+	 can do about it.  */
+      return NULL;
+    }
   
-  if (entry->cfg_checksum != cfg_checksum
-      || entry->summary.num != expected)
+  if (entry->cfg_checksum != cfg_checksum || entry->n_counts != n_counts)
     {
       static int warned = 0;
       bool warning_printed = false;
-      tree id = DECL_ASSEMBLER_NAME (current_function_decl);
 
-      warning_printed =
-	warning_at (input_location, OPT_Wcoverage_mismatch,
-		    "the control flow of function %qE does not match "
-		    "its profile data (counter %qs)", id, ctr_names[counter]);
-      if (warning_printed)
+      if (entry->n_counts != n_counts)
+	warning_printed =
+	  warning_at (DECL_SOURCE_LOCATION (current_function_decl),
+		      OPT_Wcoverage_mismatch,
+		      "number of counters in profile data for function %qD "
+		      "does not match "
+		      "its profile data (counter %qs, expected %i and have %i)",
+		      current_function_decl,
+		      ctr_names[counter], entry->n_counts, n_counts);
+      else
+	warning_printed =
+	  warning_at (DECL_SOURCE_LOCATION (current_function_decl),
+		      OPT_Wcoverage_mismatch,
+		      "the control flow of function %qD does not match "
+		      "its profile data (counter %qs)", current_function_decl,
+		      ctr_names[counter]);
+      if (warning_printed && dump_enabled_p ())
 	{
-	 inform (input_location, "use -Wno-error=coverage-mismatch to tolerate "
-	 	 "the mismatch but performance may drop if the function is hot");
+	  dump_user_location_t loc
+	    = dump_user_location_t::from_function_decl (current_function_decl);
+          dump_printf_loc (MSG_MISSED_OPTIMIZATION, loc,
+                           "use -Wno-error=coverage-mismatch to tolerate "
+                           "the mismatch but performance may drop if the "
+                           "function is hot\n");
 	  
 	  if (!seen_error ()
 	      && !warned++)
 	    {
-	      inform (input_location, "coverage mismatch ignored");
-	      inform (input_location, flag_guess_branch_prob
-		      ? G_("execution counts estimated")
-		      : G_("execution counts assumed to be zero"));
+	      dump_printf_loc (MSG_MISSED_OPTIMIZATION, loc,
+                               "coverage mismatch ignored\n");
+	      dump_printf (MSG_MISSED_OPTIMIZATION,
+                           flag_guess_branch_prob
+                           ? G_("execution counts estimated\n")
+                           : G_("execution counts assumed to be zero\n"));
 	      if (!flag_guess_branch_prob)
-		inform (input_location,
-			"this can result in poorly optimized code");
+		dump_printf (MSG_MISSED_OPTIMIZATION,
+                             "this can result in poorly optimized code\n");
 	    }
 	}
 
@@ -382,13 +395,12 @@ get_coverage_counts (unsigned counter, unsigned expected,
     }
   else if (entry->lineno_checksum != lineno_checksum)
     {
-      warning (0, "source locations for function %qE have changed,"
-	       " the profile data may be out of date",
-	       DECL_ASSEMBLER_NAME (current_function_decl));
+      warning_at (DECL_SOURCE_LOCATION (current_function_decl),
+		  OPT_Wcoverage_mismatch,
+		  "source locations for function %qD have changed,"
+		  " the profile data may be out of date",
+		  current_function_decl);
     }
-
-  if (summary)
-    *summary = &entry->summary;
 
   return entry->counts;
 }
@@ -523,14 +535,52 @@ coverage_compute_lineno_checksum (void)
     = expand_location (DECL_SOURCE_LOCATION (current_function_decl));
   unsigned chksum = xloc.line;
 
-  chksum = coverage_checksum_string (chksum, xloc.file);
+  if (xloc.file)
+    chksum = coverage_checksum_string (chksum, xloc.file);
   chksum = coverage_checksum_string
     (chksum, IDENTIFIER_POINTER (DECL_ASSEMBLER_NAME (current_function_decl)));
 
   return chksum;
 }
 
-/* Compute cfg checksum for the current function.
+/* Compute profile ID.  This is better to be unique in whole program.  */
+
+unsigned
+coverage_compute_profile_id (struct cgraph_node *n)
+{
+  unsigned chksum;
+
+  /* Externally visible symbols have unique name.  */
+  if (TREE_PUBLIC (n->decl) || DECL_EXTERNAL (n->decl) || n->unique_name)
+    {
+      chksum = coverage_checksum_string
+	(0, IDENTIFIER_POINTER (DECL_ASSEMBLER_NAME (n->decl)));
+    }
+  else
+    {
+      expanded_location xloc
+	= expand_location (DECL_SOURCE_LOCATION (n->decl));
+      bool use_name_only = (param_profile_func_internal_id == 0);
+
+      chksum = (use_name_only ? 0 : xloc.line);
+      if (xloc.file)
+	chksum = coverage_checksum_string (chksum, xloc.file);
+      chksum = coverage_checksum_string
+	(chksum, IDENTIFIER_POINTER (DECL_ASSEMBLER_NAME (n->decl)));
+      if (!use_name_only && first_global_object_name)
+	chksum = coverage_checksum_string
+	  (chksum, first_global_object_name);
+      chksum = coverage_checksum_string
+	(chksum, aux_base_name);
+    }
+
+  /* Non-negative integers are hopefully small enough to fit in all targets.
+     Gcov file formats wants non-zero function IDs.  */
+  chksum = chksum & 0x7fffffff;
+  return chksum + (!chksum);
+}
+
+/* Compute cfg checksum for the function FN given as argument.
    The checksum is calculated carefully so that
    source code changes that doesn't affect the control flow graph
    won't change the checksum.
@@ -541,12 +591,12 @@ coverage_compute_lineno_checksum (void)
    but the compiler won't detect the change and use the wrong profile data.  */
 
 unsigned
-coverage_compute_cfg_checksum (void)
+coverage_compute_cfg_checksum (struct function *fn)
 {
   basic_block bb;
-  unsigned chksum = n_basic_blocks;
+  unsigned chksum = n_basic_blocks_for_fn (fn);
 
-  FOR_EACH_BB (bb)
+  FOR_EACH_BB_FN (bb, fn)
     {
       edge e;
       edge_iterator ei;
@@ -560,7 +610,7 @@ coverage_compute_cfg_checksum (void)
   return chksum;
 }
 
-/* Begin output to the graph file for the current function.
+/* Begin output to the notes file for the current function.
    Writes the function header. Returns nonzero if data should be output.  */
 
 int
@@ -578,13 +628,34 @@ coverage_begin_function (unsigned lineno_checksum, unsigned cfg_checksum)
 
   /* Announce function */
   offset = gcov_write_tag (GCOV_TAG_FUNCTION);
-  gcov_write_unsigned (current_function_funcdef_no + 1);
+  if (param_profile_func_internal_id)
+    gcov_write_unsigned (current_function_funcdef_no + 1);
+  else
+    {
+      gcc_assert (coverage_node_map_initialized_p ());
+      gcov_write_unsigned (
+        cgraph_node::get (current_function_decl)->profile_id);
+    }
+
   gcov_write_unsigned (lineno_checksum);
   gcov_write_unsigned (cfg_checksum);
   gcov_write_string (IDENTIFIER_POINTER
 		     (DECL_ASSEMBLER_NAME (current_function_decl)));
-  gcov_write_string (xloc.file);
+  gcov_write_unsigned (DECL_ARTIFICIAL (current_function_decl)
+		       && !DECL_FUNCTION_VERSIONED (current_function_decl)
+		       && !DECL_LAMBDA_FUNCTION_P (current_function_decl));
+  gcov_write_filename (xloc.file);
   gcov_write_unsigned (xloc.line);
+  gcov_write_unsigned (xloc.column);
+
+  expanded_location endloc = expand_location (cfun->function_end_locus);
+
+  /* Function can start in a single file and end in another one.  */
+  int end_line = endloc.file == xloc.file ? endloc.line : xloc.line;
+  int end_column = endloc.file == xloc.file ? endloc.column: xloc.column;
+  gcc_assert (xloc.line <= end_line);
+  gcov_write_unsigned (end_line);
+  gcov_write_unsigned (end_column);
   gcov_write_length (offset);
 
   return !gcov_is_error ();
@@ -609,22 +680,23 @@ coverage_end_function (unsigned lineno_checksum, unsigned cfg_checksum)
     {
       struct coverage_data *item = 0;
 
-      /* If the function is extern (i.e. extern inline), then we won't
-	 be outputting it, so don't chain it onto the function
-	 list.  */
-      if (!DECL_EXTERNAL (current_function_decl))
-	{
-	  item = ggc_alloc_coverage_data ();
-	  
-	  item->ident = current_function_funcdef_no + 1;
-	  item->lineno_checksum = lineno_checksum;
-	  item->cfg_checksum = cfg_checksum;
+      item = ggc_alloc<coverage_data> ();
 
-	  item->fn_decl = current_function_decl;
-	  item->next = 0;
-	  *functions_tail = item;
-	  functions_tail = &item->next;
+      if (param_profile_func_internal_id)
+	item->ident = current_function_funcdef_no + 1;
+      else
+	{
+	  gcc_assert (coverage_node_map_initialized_p ());
+	  item->ident = cgraph_node::get (cfun->decl)->profile_id;
 	}
+
+      item->lineno_checksum = lineno_checksum;
+      item->cfg_checksum = cfg_checksum;
+
+      item->fn_decl = current_function_decl;
+      item->next = 0;
+      *functions_tail = item;
+      functions_tail = &item->next;
 
       for (i = 0; i != GCOV_COUNTERS; i++)
 	{
@@ -639,7 +711,7 @@ coverage_end_function (unsigned lineno_checksum, unsigned cfg_checksum)
 	      TREE_TYPE (var) = array_type;
 	      DECL_SIZE (var) = TYPE_SIZE (array_type);
 	      DECL_SIZE_UNIT (var) = TYPE_SIZE_UNIT (array_type);
-	      varpool_finalize_decl (var);
+	      varpool_node::finalize_decl (var);
 	    }
 	  
 	  fn_b_ctrs[i] = fn_n_ctrs[i] = 0;
@@ -647,6 +719,18 @@ coverage_end_function (unsigned lineno_checksum, unsigned cfg_checksum)
 	}
       prg_ctr_mask |= fn_ctr_mask;
       fn_ctr_mask = 0;
+    }
+}
+
+/* Remove coverage file if opened.  */
+
+void
+coverage_remove_note_file (void)
+{
+  if (bbg_file_name)
+    {
+      gcov_close ();
+      unlink (bbg_file_name);
     }
 }
 
@@ -670,16 +754,13 @@ build_var (tree fn_decl, tree type, int counter)
   else
     sprintf (buf, "__gcov%u_", counter);
   len = strlen (buf);
-#ifndef NO_DOT_IN_LABEL
-  buf[len - 1] = '.';
-#elif !defined NO_DOLLAR_IN_LABEL
-  buf[len - 1] = '$';
-#endif
+  buf[len - 1] = symbol_table::symbol_suffix_separator ();
   memcpy (buf + len, fn_name, fn_name_len + 1);
   DECL_NAME (var) = get_identifier (buf);
   TREE_STATIC (var) = 1;
   TREE_ADDRESSABLE (var) = 1;
-  DECL_ALIGN (var) = TYPE_ALIGN (type);
+  DECL_NONALIASED (var) = 1;
+  SET_DECL_ALIGN (var, TYPE_ALIGN (type));
 
   return var;
 }
@@ -753,8 +834,8 @@ build_fn_info (const struct coverage_data *data, tree type, tree key)
   tree fields = TYPE_FIELDS (type);
   tree ctr_type;
   unsigned ix;
-  VEC(constructor_elt,gc) *v1 = NULL;
-  VEC(constructor_elt,gc) *v2 = NULL;
+  vec<constructor_elt, va_gc> *v1 = NULL;
+  vec<constructor_elt, va_gc> *v2 = NULL;
 
   /* key */
   CONSTRUCTOR_APPEND_ELT (v1, fields,
@@ -784,13 +865,13 @@ build_fn_info (const struct coverage_data *data, tree type, tree key)
   for (ix = 0; ix != GCOV_COUNTERS; ix++)
     if (prg_ctr_mask & (1 << ix))
       {
-	VEC(constructor_elt,gc) *ctr = NULL;
+	vec<constructor_elt, va_gc> *ctr = NULL;
 	tree var = data->ctr_vars[ix];
 	unsigned count = 0;
 
 	if (var)
 	  count
-	    = tree_low_cst (TYPE_MAX_VALUE (TYPE_DOMAIN (TREE_TYPE (var))), 0)
+	    = tree_to_shwi (TYPE_MAX_VALUE (TYPE_DOMAIN (TREE_TYPE (var))))
 	    + 1;
 
 	CONSTRUCTOR_APPEND_ELT (ctr, TYPE_FIELDS (ctr_type),
@@ -887,8 +968,8 @@ build_info (tree info_type, tree fn_ary)
   unsigned ix;
   tree filename_string;
   int da_file_name_len;
-  VEC(constructor_elt,gc) *v1 = NULL;
-  VEC(constructor_elt,gc) *v2 = NULL;
+  vec<constructor_elt, va_gc> *v1 = NULL;
+  vec<constructor_elt, va_gc> *v2 = NULL;
 
   /* Version ident */
   CONSTRUCTOR_APPEND_ELT (v1, info_fields,
@@ -903,7 +984,7 @@ build_info (tree info_type, tree fn_ary)
   /* stamp */
   CONSTRUCTOR_APPEND_ELT (v1, info_fields,
 			  build_int_cstu (TREE_TYPE (info_fields),
-					  local_tick));
+					  bbg_file_stamp));
   info_fields = DECL_CHAIN (info_fields);
 
   /* Filename */
@@ -958,6 +1039,58 @@ build_info (tree info_type, tree fn_ary)
   return build_constructor (info_type, v1);
 }
 
+/* Generate the constructor function to call __gcov_init.  */
+
+static void
+build_init_ctor (tree gcov_info_type)
+{
+  tree ctor, stmt, init_fn;
+
+  /* Build a decl for __gcov_init.  */
+  init_fn = build_pointer_type (gcov_info_type);
+  init_fn = build_function_type_list (void_type_node, init_fn, NULL);
+  init_fn = build_decl (BUILTINS_LOCATION, FUNCTION_DECL,
+			get_identifier ("__gcov_init"), init_fn);
+  TREE_PUBLIC (init_fn) = 1;
+  DECL_EXTERNAL (init_fn) = 1;
+  DECL_ASSEMBLER_NAME (init_fn);
+
+  /* Generate a call to __gcov_init(&gcov_info).  */
+  ctor = NULL;
+  stmt = build_fold_addr_expr (gcov_info_var);
+  stmt = build_call_expr (init_fn, 1, stmt);
+  append_to_statement_list (stmt, &ctor);
+
+  /* Generate a constructor to run it.  */
+  int priority = SUPPORTS_INIT_PRIORITY
+    ? MAX_RESERVED_INIT_PRIORITY: DEFAULT_INIT_PRIORITY;
+  cgraph_build_static_cdtor ('I', ctor, priority);
+}
+
+/* Generate the destructor function to call __gcov_exit.  */
+
+static void
+build_gcov_exit_decl (void)
+{
+  tree init_fn = build_function_type_list (void_type_node, NULL);
+  init_fn = build_decl (BUILTINS_LOCATION, FUNCTION_DECL,
+			get_identifier ("__gcov_exit"), init_fn);
+  TREE_PUBLIC (init_fn) = 1;
+  DECL_EXTERNAL (init_fn) = 1;
+  DECL_ASSEMBLER_NAME (init_fn);
+
+  /* Generate a call to __gcov_exit ().  */
+  tree dtor = NULL;
+  tree stmt = build_call_expr (init_fn, 0);
+  append_to_statement_list (stmt, &dtor);
+
+  /* Generate a destructor to run it.  */
+  int priority = SUPPORTS_INIT_PRIORITY
+    ? MAX_RESERVED_INIT_PRIORITY: DEFAULT_INIT_PRIORITY;
+
+  cgraph_build_static_cdtor ('D', dtor, priority);
+}
+
 /* Create the gcov_info types and object.  Generate the constructor
    function to call __gcov_init.  Does not generate the initializer
    for the object.  Returns TRUE if coverage data is being emitted.  */
@@ -965,7 +1098,7 @@ build_info (tree info_type, tree fn_ary)
 static bool
 coverage_obj_init (void)
 {
-  tree gcov_info_type, ctor, stmt, init_fn;
+  tree gcov_info_type;
   unsigned n_counters = 0;
   unsigned ix;
   struct coverage_data *fn;
@@ -977,8 +1110,8 @@ coverage_obj_init (void)
   if (!prg_ctr_mask)
     return false;
 
-  if (cgraph_dump_file)
-    fprintf (cgraph_dump_file, "Using data file %s\n", da_file_name);
+  if (symtab->dump_file)
+    fprintf (symtab->dump_file, "Using data file %s\n", da_file_name);
 
   /* Prune functions.  */
   for (fn_prev = &functions_head; (fn = *fn_prev);)
@@ -998,9 +1131,10 @@ coverage_obj_init (void)
   /* Build the info and fn_info types.  These are mutually recursive.  */
   gcov_info_type = lang_hooks.types.make_type (RECORD_TYPE);
   gcov_fn_info_type = lang_hooks.types.make_type (RECORD_TYPE);
+  build_fn_info_type (gcov_fn_info_type, n_counters, gcov_info_type);
+  gcov_info_type = lang_hooks.types.make_type (RECORD_TYPE);
   gcov_fn_info_ptr_type = build_pointer_type
     (build_qualified_type (gcov_fn_info_type, TYPE_QUAL_CONST));
-  build_fn_info_type (gcov_fn_info_type, n_counters, gcov_info_type);
   build_info_type (gcov_info_type, gcov_fn_info_ptr_type);
   
   /* Build the gcov info var, this is referred to in its own
@@ -1011,23 +1145,8 @@ coverage_obj_init (void)
   ASM_GENERATE_INTERNAL_LABEL (name_buf, "LPBX", 0);
   DECL_NAME (gcov_info_var) = get_identifier (name_buf);
 
-  /* Build a decl for __gcov_init.  */
-  init_fn = build_pointer_type (gcov_info_type);
-  init_fn = build_function_type_list (void_type_node, init_fn, NULL);
-  init_fn = build_decl (BUILTINS_LOCATION, FUNCTION_DECL,
-			get_identifier ("__gcov_init"), init_fn);
-  TREE_PUBLIC (init_fn) = 1;
-  DECL_EXTERNAL (init_fn) = 1;
-  DECL_ASSEMBLER_NAME (init_fn);
-
-  /* Generate a call to __gcov_init(&gcov_info).  */
-  ctor = NULL;
-  stmt = build_fold_addr_expr (gcov_info_var);
-  stmt = build_call_expr (init_fn, 1, stmt);
-  append_to_statement_list (stmt, &ctor);
-
-  /* Generate a constructor to run it.  */
-  cgraph_build_static_cdtor ('I', ctor, DEFAULT_INIT_PRIORITY);
+  build_init_ctor (gcov_info_type);
+  build_gcov_exit_decl ();
 
   return true;
 }
@@ -1035,15 +1154,15 @@ coverage_obj_init (void)
 /* Generate the coverage function info for FN and DATA.  Append a
    pointer to that object to CTOR and return the appended CTOR.  */
 
-static VEC(constructor_elt,gc) *
-coverage_obj_fn (VEC(constructor_elt,gc) *ctor, tree fn,
+static vec<constructor_elt, va_gc> *
+coverage_obj_fn (vec<constructor_elt, va_gc> *ctor, tree fn,
 		 struct coverage_data const *data)
 {
   tree init = build_fn_info (data, gcov_fn_info_type, gcov_info_var);
   tree var = build_var (fn, gcov_fn_info_type, -1);
   
   DECL_INITIAL (var) = init;
-  varpool_finalize_decl (var);
+  varpool_node::finalize_decl (var);
       
   CONSTRUCTOR_APPEND_ELT (ctor, NULL,
 			  build1 (ADDR_EXPR, gcov_fn_info_ptr_type, var));
@@ -1054,9 +1173,9 @@ coverage_obj_fn (VEC(constructor_elt,gc) *ctor, tree fn,
    function objects from CTOR.  Generate the gcov_info initializer.  */
 
 static void
-coverage_obj_finish (VEC(constructor_elt,gc) *ctor)
+coverage_obj_finish (vec<constructor_elt, va_gc> *ctor)
 {
-  unsigned n_functions = VEC_length(constructor_elt, ctor);
+  unsigned n_functions = vec_safe_length (ctor);
   tree fn_info_ary_type = build_array_type
     (build_qualified_type (gcov_fn_info_ptr_type, TYPE_QUAL_CONST),
      build_index_type (size_int (n_functions - 1)));
@@ -1068,24 +1187,60 @@ coverage_obj_finish (VEC(constructor_elt,gc) *ctor)
   ASM_GENERATE_INTERNAL_LABEL (name_buf, "LPBX", 1);
   DECL_NAME (fn_info_ary) = get_identifier (name_buf);
   DECL_INITIAL (fn_info_ary) = build_constructor (fn_info_ary_type, ctor);
-  varpool_finalize_decl (fn_info_ary);
+  varpool_node::finalize_decl (fn_info_ary);
   
   DECL_INITIAL (gcov_info_var)
     = build_info (TREE_TYPE (gcov_info_var), fn_info_ary);
-  varpool_finalize_decl (gcov_info_var);
+  varpool_node::finalize_decl (gcov_info_var);
 }
 
 /* Perform file-level initialization. Read in data file, generate name
-   of graph file.  */
+   of notes file.  */
 
 void
 coverage_init (const char *filename)
 {
+#if HAVE_DOS_BASED_FILE_SYSTEM
+  const char *separator = "\\";
+#else
+  const char *separator = "/";
+#endif
   int len = strlen (filename);
   int prefix_len = 0;
 
-  if (!profile_data_prefix && !IS_ABSOLUTE_PATH (filename))
-    profile_data_prefix = getpwd ();
+  /* Since coverage_init is invoked very early, before the pass
+     manager, we need to set up the dumping explicitly. This is
+     similar to the handling in finish_optimization_passes.  */
+  int profile_pass_num =
+    g->get_passes ()->get_pass_profile ()->static_pass_number;
+  g->get_dumps ()->dump_start (profile_pass_num, NULL);
+
+  if (!IS_ABSOLUTE_PATH (filename))
+    {
+      /* When a profile_data_prefix is provided, then mangle full path
+	 of filename in order to prevent file path clashing.  */
+      if (profile_data_prefix)
+	{
+	  filename = concat (getpwd (), separator, filename, NULL);
+	  if (profile_prefix_path)
+	    {
+	      if (!strncmp (filename, profile_prefix_path,
+			    strlen (profile_prefix_path)))
+		{
+		  filename += strlen (profile_prefix_path);
+		  while (*filename == *separator)
+		    filename++;
+		}
+	      else
+		warning (0, "filename %qs does not start with profile "
+			 "prefix %qs", filename, profile_prefix_path);
+	    }
+	  filename = mangle_path (filename);
+	  len = strlen (filename);
+	}
+      else
+	profile_data_prefix = getpwd ();
+    }
 
   if (profile_data_prefix)
     prefix_len = strlen (profile_data_prefix);
@@ -1097,20 +1252,29 @@ coverage_init (const char *filename)
   if (profile_data_prefix)
     {
       memcpy (da_file_name, profile_data_prefix, prefix_len);
-      da_file_name[prefix_len++] = '/';
+      da_file_name[prefix_len++] = *separator;
     }
   memcpy (da_file_name + prefix_len, filename, len);
   strcpy (da_file_name + prefix_len + len, GCOV_DATA_SUFFIX);
 
-  if (flag_branch_probabilities)
+  bbg_file_stamp = local_tick;
+  
+  if (flag_auto_profile)
+    read_autofdo_file ();
+  else if (flag_branch_probabilities)
     read_counts_file ();
 
   /* Name of bbg file.  */
   if (flag_test_coverage && !flag_compare_debug)
     {
-      bbg_file_name = XNEWVEC (char, len + strlen (GCOV_NOTE_SUFFIX) + 1);
-      memcpy (bbg_file_name, filename, len);
-      strcpy (bbg_file_name + len, GCOV_NOTE_SUFFIX);
+      if (profile_note_location)
+	bbg_file_name = xstrdup (profile_note_location);
+      else
+	{
+	  bbg_file_name = XNEWVEC (char, len + strlen (GCOV_NOTE_SUFFIX) + 1);
+	  memcpy (bbg_file_name, filename, len);
+	  strcpy (bbg_file_name + len, GCOV_NOTE_SUFFIX);
+	}
 
       if (!gcov_open (bbg_file_name, -1))
 	{
@@ -1121,12 +1285,18 @@ coverage_init (const char *filename)
 	{
 	  gcov_write_unsigned (GCOV_NOTE_MAGIC);
 	  gcov_write_unsigned (GCOV_VERSION);
-	  gcov_write_unsigned (local_tick);
+	  gcov_write_unsigned (bbg_file_stamp);
+	  gcov_write_string (getpwd ());
+
+	  /* Do not support has_unexecuted_blocks for Ada.  */
+	  gcov_write_unsigned (strcmp (lang_hooks.name, "GNU Ada") != 0);
 	}
     }
+
+  g->get_dumps ()->dump_finish (profile_pass_num);
 }
 
-/* Performs file-level cleanup.  Close graph file, generate coverage
+/* Performs file-level cleanup.  Close notes file, generate coverage
    variables and constructor.  */
 
 void
@@ -1134,21 +1304,25 @@ coverage_finish (void)
 {
   if (bbg_file_name && gcov_close ())
     unlink (bbg_file_name);
-  
-  if (!local_tick || local_tick == (unsigned)-1)
-    /* Only remove the da file, if we cannot stamp it.  If we can
-       stamp it, libgcov will DTRT.  */
+
+  if (!flag_branch_probabilities && flag_test_coverage
+      && (!local_tick || local_tick == (unsigned)-1))
+    /* Only remove the da file, if we're emitting coverage code and
+       cannot uniquely stamp it.  If we can stamp it, libgcov will DTRT.  */
     unlink (da_file_name);
 
   if (coverage_obj_init ())
     {
-      VEC(constructor_elt,gc) *fn_ctor = NULL;
+      vec<constructor_elt, va_gc> *fn_ctor = NULL;
       struct coverage_data *fn;
       
       for (fn = functions_head; fn; fn = fn->next)
 	fn_ctor = coverage_obj_fn (fn_ctor, fn->fn_decl, fn);
       coverage_obj_finish (fn_ctor);
     }
+
+  XDELETEVEC (da_file_name);
+  da_file_name = NULL;
 }
 
 #include "gt-coverage.h"

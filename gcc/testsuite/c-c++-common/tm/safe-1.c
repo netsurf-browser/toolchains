@@ -35,12 +35,12 @@ foo(void)
   /* tu(); */
 
   (*ps)();
-  (*pc)();		/* { dg-error "unsafe function call" } */
-  (*pi)();		/* { dg-error "unsafe function call" } */
-  (*pu)();		/* { dg-error "unsafe function call" } */
+  (*pc)();		/* { dg-error "unsafe indirect function call" } */
+  (*pi)();		/* { dg-error "unsafe indirect function call" } */
+  (*pu)();		/* { dg-error "unsafe indirect function call" } */
 
-  asm("");		/* { dg-error "asm not allowed" } */
-  asm("" : "=g"(i));	/* { dg-error "asm not allowed" } */
+  asm("");		/* { dg-error "'asm' not allowed" } */
+  asm("" : "=g"(i));	/* { dg-error "'asm' not allowed" } */
 
   return fc(i);
 }
@@ -57,13 +57,13 @@ bar(void)
   tm();
 
   (*ps)();
-  (*pc)();		/* { dg-error "unsafe function call" } */
-  (*pi)();		/* { dg-error "unsafe function call" } */
+  (*pc)();		/* { dg-error "unsafe indirect function call" } */
+  (*pi)();		/* { dg-error "unsafe indirect function call" } */
   (*pm)();
-  (*pu)();		/* { dg-error "unsafe function call" } */
+  (*pu)();		/* { dg-error "unsafe indirect function call" } */
 
-  asm("");		/* { dg-error "asm not allowed" } */
-  asm("" : "=g"(i));	/* { dg-error "asm not allowed" } */
+  asm("");		/* { dg-error "'asm' not allowed" } */
+  asm("" : "=g"(i));	/* { dg-error "'asm' not allowed" } */
 
   return fc(i);
 }

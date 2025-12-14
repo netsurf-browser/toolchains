@@ -1,5 +1,4 @@
-// { dg-do compile }
-// { dg-options "-std=gnu++0x" }
+// { dg-do compile { target c++11 } }
 
 // From N2235
 
@@ -16,15 +15,15 @@ constexpr A1 a1 = A1();
 extern constexpr int i2; // { dg-error "definition" }
 
 // error: missing initializer
-constexpr A1 a2; // { dg-error "uninitialized const" }
+constexpr A1 a2; // { dg-error "uninitialized 'const" }
 
 const constexpr A1 a3 = A1();
 
-volatile constexpr A1 a4 = A1(); // { dg-error "both .volatile. and .constexpr. cannot" }
+volatile constexpr A1 a4 = A1(); // { dg-bogus "both .volatile. and .constexpr. cannot" }
 
 // error: on type declaration
-constexpr struct pixel
+constexpr struct pixel // { dg-error "cannot be used for type declarations" }
 {
   int x;
   int y;
-};		     // { dg-error "cannot be used for type declarations" }
+};

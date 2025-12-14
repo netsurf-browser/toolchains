@@ -1,7 +1,5 @@
 /* Subroutines used for code generation on the DEC Alpha.
-   Copyright (C) 1992, 1993, 1994, 1995, 1996, 1997, 1998, 1999, 2000, 2001,
-   2002, 2003, 2004, 2005, 2006, 2007, 2008, 2009, 2010, 2011
-   Free Software Foundation, Inc.
+   Copyright (C) 1992-2020 Free Software Foundation, Inc.
    Contributed by Richard Kenner (kenner@vlsi1.ultra.nyu.edu)
 
 This file is part of GCC.
@@ -21,44 +19,58 @@ along with GCC; see the file COPYING3.  If not see
 <http://www.gnu.org/licenses/>.  */
 
 
+#define IN_TARGET_CODE 1
+
 #include "config.h"
 #include "system.h"
 #include "coretypes.h"
-#include "tm.h"
+#include "backend.h"
+#include "target.h"
 #include "rtl.h"
 #include "tree.h"
+#include "stringpool.h"
+#include "attribs.h"
+#include "memmodel.h"
+#include "gimple.h"
+#include "df.h"
+#include "predict.h"
+#include "tm_p.h"
+#include "ssa.h"
+#include "expmed.h"
+#include "optabs.h"
 #include "regs.h"
-#include "hard-reg-set.h"
-#include "insn-config.h"
-#include "conditions.h"
+#include "emit-rtl.h"
+#include "recog.h"
+#include "diagnostic-core.h"
+#include "alias.h"
+#include "fold-const.h"
+#include "stor-layout.h"
+#include "calls.h"
+#include "varasm.h"
 #include "output.h"
 #include "insn-attr.h"
-#include "flags.h"
-#include "recog.h"
+#include "explow.h"
 #include "expr.h"
-#include "optabs.h"
 #include "reload.h"
-#include "obstack.h"
 #include "except.h"
-#include "function.h"
-#include "diagnostic-core.h"
-#include "ggc.h"
-#include "integrate.h"
-#include "tm_p.h"
-#include "target.h"
-#include "target-def.h"
 #include "common/common-target.h"
 #include "debug.h"
 #include "langhooks.h"
-#include "splay-tree.h"
-#include "cfglayout.h"
-#include "gimple.h"
-#include "tree-flow.h"
+#include "cfgrtl.h"
+#include "tree-pass.h"
+#include "context.h"
+#include "gimple-iterator.h"
+#include "gimplify.h"
 #include "tree-stdarg.h"
 #include "tm-constrs.h"
-#include "df.h"
 #include "libfuncs.h"
+#include "builtins.h"
+#include "rtl-iter.h"
+#include "flags.h"
 #include "opts.h"
+
+/* This file should be included last.  */
+#include "target-def.h"
 
 /* Specify which cpu to schedule for.  */
 enum processor_type alpha_tune;
@@ -90,7 +102,7 @@ static int inside_function = FALSE;
 
 /* The number of cycles of latency we should assume on memory reads.  */
 
-int alpha_memory_latency = 3;
+static int alpha_memory_latency = 3;
 
 /* Whether the function needs the GP.  */
 
@@ -194,14 +206,124 @@ static struct alpha_rtx_cost_data const alpha_rtx_cost_size =
 /* Declarations of static functions.  */
 static struct machine_function *alpha_init_machine_status (void);
 static rtx alpha_emit_xfloating_compare (enum rtx_code *, rtx, rtx);
+static void alpha_handle_trap_shadows (void);
+static void alpha_align_insns (void);
+static void alpha_override_options_after_change (void);
 
 #if TARGET_ABI_OPEN_VMS
 static void alpha_write_linkage (FILE *, const char *);
-static bool vms_valid_pointer_mode (enum machine_mode);
+static bool vms_valid_pointer_mode (scalar_int_mode);
 #else
 #define vms_patch_builtins()  gcc_unreachable()
 #endif
 
+static unsigned int
+rest_of_handle_trap_shadows (void)
+{
+  alpha_handle_trap_shadows ();
+  return 0;
+}
+
+namespace {
+
+const pass_data pass_data_handle_trap_shadows =
+{
+  RTL_PASS,
+  "trap_shadows",			/* name */
+  OPTGROUP_NONE,			/* optinfo_flags */
+  TV_NONE,				/* tv_id */
+  0,					/* properties_required */
+  0,					/* properties_provided */
+  0,					/* properties_destroyed */
+  0,					/* todo_flags_start */
+  TODO_df_finish,			/* todo_flags_finish */
+};
+
+class pass_handle_trap_shadows : public rtl_opt_pass
+{
+public:
+  pass_handle_trap_shadows(gcc::context *ctxt)
+    : rtl_opt_pass(pass_data_handle_trap_shadows, ctxt)
+  {}
+
+  /* opt_pass methods: */
+  virtual bool gate (function *)
+    {
+      return alpha_tp != ALPHA_TP_PROG || flag_exceptions;
+    }
+
+  virtual unsigned int execute (function *)
+    {
+      return rest_of_handle_trap_shadows ();
+    }
+
+}; // class pass_handle_trap_shadows
+
+} // anon namespace
+
+rtl_opt_pass *
+make_pass_handle_trap_shadows (gcc::context *ctxt)
+{
+  return new pass_handle_trap_shadows (ctxt);
+}
+
+static unsigned int
+rest_of_align_insns (void)
+{
+  alpha_align_insns ();
+  return 0;
+}
+
+namespace {
+
+const pass_data pass_data_align_insns =
+{
+  RTL_PASS,
+  "align_insns",			/* name */
+  OPTGROUP_NONE,			/* optinfo_flags */
+  TV_NONE,				/* tv_id */
+  0,					/* properties_required */
+  0,					/* properties_provided */
+  0,					/* properties_destroyed */
+  0,					/* todo_flags_start */
+  TODO_df_finish,			/* todo_flags_finish */
+};
+
+class pass_align_insns : public rtl_opt_pass
+{
+public:
+  pass_align_insns(gcc::context *ctxt)
+    : rtl_opt_pass(pass_data_align_insns, ctxt)
+  {}
+
+  /* opt_pass methods: */
+  virtual bool gate (function *)
+    {
+      /* Due to the number of extra trapb insns, don't bother fixing up
+	 alignment when trap precision is instruction.  Moreover, we can
+	 only do our job when sched2 is run.  */
+      return ((alpha_tune == PROCESSOR_EV4
+	       || alpha_tune == PROCESSOR_EV5)
+	      && optimize && !optimize_size
+	      && alpha_tp != ALPHA_TP_INSN
+	      && flag_schedule_insns_after_reload);
+    }
+
+  virtual unsigned int execute (function *)
+    {
+      return rest_of_align_insns ();
+    }
+
+}; // class pass_align_insns
+
+} // anon namespace
+
+rtl_opt_pass *
+make_pass_align_insns (gcc::context *ctxt)
+{
+  return new pass_align_insns (ctxt);
+}
+
 #ifdef TARGET_ALTERNATE_LONG_DOUBLE_MANGLING
 /* Implement TARGET_MANGLE_TYPE.  */
 
@@ -226,24 +348,40 @@ alpha_option_override (void)
     const char *const name;
     const enum processor_type processor;
     const int flags;
+    const unsigned short line_size; /* in bytes */
+    const unsigned short l1_size;   /* in kb.  */
+    const unsigned short l2_size;   /* in kb.  */
   } cpu_table[] = {
-    { "ev4",	PROCESSOR_EV4, 0 },
-    { "ev45",	PROCESSOR_EV4, 0 },
-    { "21064",	PROCESSOR_EV4, 0 },
-    { "ev5",	PROCESSOR_EV5, 0 },
-    { "21164",	PROCESSOR_EV5, 0 },
-    { "ev56",	PROCESSOR_EV5, MASK_BWX },
-    { "21164a",	PROCESSOR_EV5, MASK_BWX },
-    { "pca56",	PROCESSOR_EV5, MASK_BWX|MASK_MAX },
-    { "21164PC",PROCESSOR_EV5, MASK_BWX|MASK_MAX },
-    { "21164pc",PROCESSOR_EV5, MASK_BWX|MASK_MAX },
-    { "ev6",	PROCESSOR_EV6, MASK_BWX|MASK_MAX|MASK_FIX },
-    { "21264",	PROCESSOR_EV6, MASK_BWX|MASK_MAX|MASK_FIX },
-    { "ev67",	PROCESSOR_EV6, MASK_BWX|MASK_MAX|MASK_FIX|MASK_CIX },
-    { "21264a",	PROCESSOR_EV6, MASK_BWX|MASK_MAX|MASK_FIX|MASK_CIX }
+    /* EV4/LCA45 had 8k L1 caches; EV45 had 16k L1 caches.
+       EV4/EV45 had 128k to 16M 32-byte direct Bcache.  LCA45
+       had 64k to 8M 8-byte direct Bcache.  */
+    { "ev4",	PROCESSOR_EV4, 0, 32, 8, 8*1024 },
+    { "21064",	PROCESSOR_EV4, 0, 32, 8, 8*1024 },
+    { "ev45",	PROCESSOR_EV4, 0, 32, 16, 16*1024 },
+
+    /* EV5 or EV56 had 8k 32 byte L1, 96k 32 or 64 byte L2,
+       and 1M to 16M 64 byte L3 (not modeled).
+       PCA56 had 16k 64-byte cache; PCA57 had 32k Icache.
+       PCA56 had 8k 64-byte cache; PCA57 had 16k Dcache.  */
+    { "ev5",	PROCESSOR_EV5, 0, 32, 8, 96 },
+    { "21164",	PROCESSOR_EV5, 0, 32, 8, 96 },
+    { "ev56",	PROCESSOR_EV5, MASK_BWX, 32, 8, 96 },
+    { "21164a",	PROCESSOR_EV5, MASK_BWX, 32, 8, 96 },
+    { "pca56",	PROCESSOR_EV5, MASK_BWX|MASK_MAX, 64, 16, 4*1024 },
+    { "21164PC",PROCESSOR_EV5, MASK_BWX|MASK_MAX, 64, 16, 4*1024 },
+    { "21164pc",PROCESSOR_EV5, MASK_BWX|MASK_MAX, 64, 16, 4*1024 },
+
+    /* EV6 had 64k 64 byte L1, 1M to 16M Bcache.  */
+    { "ev6",	PROCESSOR_EV6, MASK_BWX|MASK_MAX|MASK_FIX, 64, 64, 16*1024 },
+    { "21264",	PROCESSOR_EV6, MASK_BWX|MASK_MAX|MASK_FIX, 64, 64, 16*1024 },
+    { "ev67",	PROCESSOR_EV6, MASK_BWX|MASK_MAX|MASK_FIX|MASK_CIX,
+      64, 64, 16*1024 },
+    { "21264a",	PROCESSOR_EV6, MASK_BWX|MASK_MAX|MASK_FIX|MASK_CIX,
+      64, 64, 16*1024 }
   };
 
   int const ct_size = ARRAY_SIZE (cpu_table);
+  int line_size = 0, l1_size = 0, l2_size = 0;
   int i;
 
 #ifdef SUBTARGET_OVERRIDE_OPTIONS
@@ -279,7 +417,8 @@ alpha_option_override (void)
       else if (! strcmp (alpha_tp_string, "i"))
 	alpha_tp = ALPHA_TP_INSN;
       else
-	error ("bad value %qs for -mtrap-precision switch", alpha_tp_string);
+	error ("bad value %qs for %<-mtrap-precision%> switch",
+	       alpha_tp_string);
     }
 
   if (alpha_fprm_string)
@@ -293,7 +432,7 @@ alpha_option_override (void)
       else if (! strcmp (alpha_fprm_string,"d"))
 	alpha_fprm = ALPHA_FPRM_DYN;
       else
-	error ("bad value %qs for -mfp-rounding-mode switch",
+	error ("bad value %qs for %<-mfp-rounding-mode%> switch",
 	       alpha_fprm_string);
     }
 
@@ -308,7 +447,8 @@ alpha_option_override (void)
       else if (strcmp (alpha_fptm_string, "sui") == 0)
 	alpha_fptm = ALPHA_FPTM_SUI;
       else
-	error ("bad value %qs for -mfp-trap-mode switch", alpha_fptm_string);
+	error ("bad value %qs for %<-mfp-trap-mode%> switch",
+	       alpha_fptm_string);
     }
 
   if (alpha_cpu_string)
@@ -316,13 +456,16 @@ alpha_option_override (void)
       for (i = 0; i < ct_size; i++)
 	if (! strcmp (alpha_cpu_string, cpu_table [i].name))
 	  {
-	    alpha_tune = alpha_cpu = cpu_table [i].processor;
+	    alpha_tune = alpha_cpu = cpu_table[i].processor;
+	    line_size = cpu_table[i].line_size;
+	    l1_size = cpu_table[i].l1_size;
+	    l2_size = cpu_table[i].l2_size;
 	    target_flags &= ~ (MASK_BWX | MASK_MAX | MASK_FIX | MASK_CIX);
-	    target_flags |= cpu_table [i].flags;
+	    target_flags |= cpu_table[i].flags;
 	    break;
 	  }
       if (i == ct_size)
-	error ("bad value %qs for -mcpu switch", alpha_cpu_string);
+	error ("bad value %qs for %<-mcpu%> switch", alpha_cpu_string);
     }
 
   if (alpha_tune_string)
@@ -330,19 +473,32 @@ alpha_option_override (void)
       for (i = 0; i < ct_size; i++)
 	if (! strcmp (alpha_tune_string, cpu_table [i].name))
 	  {
-	    alpha_tune = cpu_table [i].processor;
+	    alpha_tune = cpu_table[i].processor;
+	    line_size = cpu_table[i].line_size;
+	    l1_size = cpu_table[i].l1_size;
+	    l2_size = cpu_table[i].l2_size;
 	    break;
 	  }
       if (i == ct_size)
-	error ("bad value %qs for -mtune switch", alpha_tune_string);
+	error ("bad value %qs for %<-mtune%> switch", alpha_tune_string);
     }
+
+  if (line_size)
+    SET_OPTION_IF_UNSET (&global_options, &global_options_set,
+			 param_l1_cache_line_size, line_size);
+  if (l1_size)
+    SET_OPTION_IF_UNSET (&global_options, &global_options_set,
+			 param_l1_cache_size, l1_size);
+  if (l2_size)
+    SET_OPTION_IF_UNSET (&global_options, &global_options_set,
+			 param_l2_cache_size, l2_size);
 
   /* Do some sanity checks on the above options.  */
 
   if ((alpha_fptm == ALPHA_FPTM_SU || alpha_fptm == ALPHA_FPTM_SUI)
       && alpha_tp != ALPHA_TP_INSN && alpha_cpu != PROCESSOR_EV6)
     {
-      warning (0, "fp software completion requires -mtrap-precision=i");
+      warning (0, "fp software completion requires %<-mtrap-precision=i%>");
       alpha_tp = ALPHA_TP_INSN;
     }
 
@@ -367,7 +523,7 @@ alpha_option_override (void)
 	  alpha_fptm = ALPHA_FPTM_SU;
 	}
       if (target_flags_explicit & MASK_LONG_DOUBLE_128)
-	warning (0, "128-bit long double not supported for VAX floats");
+	warning (0, "128-bit %<long double%> not supported for VAX floats");
       target_flags &= ~MASK_LONG_DOUBLE_128;
     }
 
@@ -410,7 +566,8 @@ alpha_option_override (void)
       }
     else
       {
-	warning (0, "bad value %qs for -mmemory-latency", alpha_mlat_string);
+	warning (0, "bad value %qs for %<-mmemory-latency%>",
+		 alpha_mlat_string);
 	lat = 3;
       }
 
@@ -427,18 +584,7 @@ alpha_option_override (void)
   else if (flag_pic == 2)
     target_flags &= ~MASK_SMALL_DATA;
 
-  /* Align labels and loops for optimal branching.  */
-  /* ??? Kludge these by not doing anything if we don't optimize and also if
-     we are writing ECOFF symbols to work around a bug in DEC's assembler.  */
-  if (optimize > 0 && write_symbols != SDB_DEBUG)
-    {
-      if (align_loops <= 0)
-	align_loops = 16;
-      if (align_jumps <= 0)
-	align_jumps = 16;
-    }
-  if (align_functions <= 0)
-    align_functions = 16;
+  alpha_override_options_after_change ();
 
   /* Register variables and functions with the garbage collector.  */
 
@@ -457,6 +603,25 @@ alpha_option_override (void)
   if (!(target_flags_explicit & MASK_LONG_DOUBLE_128))
     target_flags |= MASK_LONG_DOUBLE_128;
 #endif
+
+}
+
+/* Implement targetm.override_options_after_change.  */
+
+static void
+alpha_override_options_after_change (void)
+{
+  /* Align labels and loops for optimal branching.  */
+  /* ??? Kludge these by not doing anything if we don't optimize.  */
+  if (optimize > 0)
+    {
+      if (flag_align_loops && !str_align_loops)
+	str_align_loops = "16";
+      if (flag_align_jumps && !str_align_jumps)
+	str_align_jumps = "16";
+    }
+  if (flag_align_functions && !str_align_functions)
+    str_align_functions = "16";
 }
 
 /* Returns 1 if VALUE is a mask that contains full bytes of zero or ones.  */
@@ -511,7 +676,7 @@ resolve_reload_operand (rtx op)
   if (reload_in_progress)
     {
       rtx tmp = op;
-      if (GET_CODE (tmp) == SUBREG)
+      if (SUBREG_P (tmp))
 	tmp = SUBREG_REG (tmp);
       if (REG_P (tmp)
 	  && REGNO (tmp) >= FIRST_PSEUDO_REGISTER)
@@ -529,22 +694,22 @@ resolve_reload_operand (rtx op)
    indicates only DFmode.  */
 
 static bool
-alpha_scalar_mode_supported_p (enum machine_mode mode)
+alpha_scalar_mode_supported_p (scalar_mode mode)
 {
   switch (mode)
     {
-    case QImode:
-    case HImode:
-    case SImode:
-    case DImode:
-    case TImode: /* via optabs.c */
+    case E_QImode:
+    case E_HImode:
+    case E_SImode:
+    case E_DImode:
+    case E_TImode: /* via optabs.c */
       return true;
 
-    case SFmode:
-    case DFmode:
+    case E_SFmode:
+    case E_DFmode:
       return true;
 
-    case TFmode:
+    case E_TFmode:
       return TARGET_HAS_XFLOATING_LIBS;
 
     default:
@@ -558,22 +723,9 @@ alpha_scalar_mode_supported_p (enum machine_mode mode)
    or when expand_vector_operations can do something useful.  */
 
 static bool
-alpha_vector_mode_supported_p (enum machine_mode mode)
+alpha_vector_mode_supported_p (machine_mode mode)
 {
   return mode == V8QImode || mode == V4HImode || mode == V2SImode;
-}
-
-/* Return 1 if this function can directly return via $26.  */
-
-int
-direct_return (void)
-{
-  return (TARGET_ABI_OSF
-	  && reload_completed
-	  && alpha_sa_size () == 0
-	  && get_frame_size () == 0
-	  && crtl->outgoing_args_size == 0
-	  && crtl->args.pretend_args_size == 0);
 }
 
 /* Return the TLS model to use for SYMBOL.  */
@@ -631,9 +783,13 @@ alpha_in_small_data_p (const_tree exp)
   if (TREE_CODE (exp) == FUNCTION_DECL)
     return false;
 
+  /* COMMON symbols are never small data.  */
+  if (TREE_CODE (exp) == VAR_DECL && DECL_COMMON (exp))
+    return false;
+
   if (TREE_CODE (exp) == VAR_DECL && DECL_SECTION_NAME (exp))
     {
-      const char *section = TREE_STRING_POINTER (DECL_SECTION_NAME (exp));
+      const char *section = DECL_SECTION_NAME (exp);
       if (strcmp (section, ".sdata") == 0
 	  || strcmp (section, ".sbss") == 0)
 	return true;
@@ -653,7 +809,7 @@ alpha_in_small_data_p (const_tree exp)
 
 #if TARGET_ABI_OPEN_VMS
 static bool
-vms_valid_pointer_mode (enum machine_mode mode)
+vms_valid_pointer_mode (scalar_int_mode mode)
 {
   return (mode == SImode || mode == DImode);
 }
@@ -688,7 +844,7 @@ alpha_linkage_symbol_p (const char *symname)
    low-order three bits; this is an "unaligned" access.  */
 
 static bool
-alpha_legitimate_address_p (enum machine_mode mode, rtx x, bool strict)
+alpha_legitimate_address_p (machine_mode mode, rtx x, bool strict)
 {
   /* If this is an ldq_u type address, discard the outer AND.  */
   if (mode == DImode
@@ -698,7 +854,7 @@ alpha_legitimate_address_p (enum machine_mode mode, rtx x, bool strict)
     x = XEXP (x, 0);
 
   /* Discard non-paradoxical subregs.  */
-  if (GET_CODE (x) == SUBREG
+  if (SUBREG_P (x)
       && (GET_MODE_SIZE (GET_MODE (x))
 	  < GET_MODE_SIZE (GET_MODE (SUBREG_REG (x)))))
     x = SUBREG_REG (x);
@@ -726,7 +882,7 @@ alpha_legitimate_address_p (enum machine_mode mode, rtx x, bool strict)
       x = XEXP (x, 0);
 
       /* Discard non-paradoxical subregs.  */
-      if (GET_CODE (x) == SUBREG
+      if (SUBREG_P (x)
           && (GET_MODE_SIZE (GET_MODE (x))
 	      < GET_MODE_SIZE (GET_MODE (SUBREG_REG (x)))))
 	x = SUBREG_REG (x);
@@ -760,7 +916,7 @@ alpha_legitimate_address_p (enum machine_mode mode, rtx x, bool strict)
 	  x = XEXP (x, 0);
 
 	  /* Discard non-paradoxical subregs.  */
-	  if (GET_CODE (x) == SUBREG
+	  if (SUBREG_P (x)
 	      && (GET_MODE_SIZE (GET_MODE (x))
 		  < GET_MODE_SIZE (GET_MODE (SUBREG_REG (x)))))
 	    x = SUBREG_REG (x);
@@ -799,7 +955,7 @@ get_tls_get_addr (void)
    to be legitimate.  If we find one, return the new, valid address.  */
 
 static rtx
-alpha_legitimize_address_1 (rtx x, rtx scratch, enum machine_mode mode)
+alpha_legitimize_address_1 (rtx x, rtx scratch, machine_mode mode)
 {
   HOST_WIDE_INT addend;
 
@@ -854,7 +1010,8 @@ alpha_legitimize_address_1 (rtx x, rtx scratch, enum machine_mode mode)
       && GET_MODE_SIZE (mode) <= UNITS_PER_WORD
       && symbolic_operand (x, Pmode))
     {
-      rtx r0, r16, eqv, tga, tp, insn, dest, seq;
+      rtx r0, r16, eqv, tga, tp, dest, seq;
+      rtx_insn *insn;
 
       switch (tls_symbolic_operand_type (x))
 	{
@@ -862,66 +1019,70 @@ alpha_legitimize_address_1 (rtx x, rtx scratch, enum machine_mode mode)
 	  break;
 
 	case TLS_MODEL_GLOBAL_DYNAMIC:
-	  start_sequence ();
+	  {
+	    start_sequence ();
 
-	  r0 = gen_rtx_REG (Pmode, 0);
-	  r16 = gen_rtx_REG (Pmode, 16);
-	  tga = get_tls_get_addr ();
-	  dest = gen_reg_rtx (Pmode);
-	  seq = GEN_INT (alpha_next_sequence_number++);
+	    r0 = gen_rtx_REG (Pmode, 0);
+	    r16 = gen_rtx_REG (Pmode, 16);
+	    tga = get_tls_get_addr ();
+	    dest = gen_reg_rtx (Pmode);
+	    seq = GEN_INT (alpha_next_sequence_number++);
 
-	  emit_insn (gen_movdi_er_tlsgd (r16, pic_offset_table_rtx, x, seq));
-	  insn = gen_call_value_osf_tlsgd (r0, tga, seq);
-	  insn = emit_call_insn (insn);
-	  RTL_CONST_CALL_P (insn) = 1;
-	  use_reg (&CALL_INSN_FUNCTION_USAGE (insn), r16);
+	    emit_insn (gen_movdi_er_tlsgd (r16, pic_offset_table_rtx, x, seq));
+	    rtx val = gen_call_value_osf_tlsgd (r0, tga, seq);
+	    insn = emit_call_insn (val);
+	    RTL_CONST_CALL_P (insn) = 1;
+	    use_reg (&CALL_INSN_FUNCTION_USAGE (insn), r16);
 
-          insn = get_insns ();
-	  end_sequence ();
+	    insn = get_insns ();
+	    end_sequence ();
 
-	  emit_libcall_block (insn, dest, r0, x);
-	  return dest;
+	    emit_libcall_block (insn, dest, r0, x);
+	    return dest;
+	  }
 
 	case TLS_MODEL_LOCAL_DYNAMIC:
-	  start_sequence ();
+	  {
+	    start_sequence ();
 
-	  r0 = gen_rtx_REG (Pmode, 0);
-	  r16 = gen_rtx_REG (Pmode, 16);
-	  tga = get_tls_get_addr ();
-	  scratch = gen_reg_rtx (Pmode);
-	  seq = GEN_INT (alpha_next_sequence_number++);
+	    r0 = gen_rtx_REG (Pmode, 0);
+	    r16 = gen_rtx_REG (Pmode, 16);
+	    tga = get_tls_get_addr ();
+	    scratch = gen_reg_rtx (Pmode);
+	    seq = GEN_INT (alpha_next_sequence_number++);
 
-	  emit_insn (gen_movdi_er_tlsldm (r16, pic_offset_table_rtx, seq));
-	  insn = gen_call_value_osf_tlsldm (r0, tga, seq);
-	  insn = emit_call_insn (insn);
-	  RTL_CONST_CALL_P (insn) = 1;
-	  use_reg (&CALL_INSN_FUNCTION_USAGE (insn), r16);
+	    emit_insn (gen_movdi_er_tlsldm (r16, pic_offset_table_rtx, seq));
+	    rtx val = gen_call_value_osf_tlsldm (r0, tga, seq);
+	    insn = emit_call_insn (val);
+	    RTL_CONST_CALL_P (insn) = 1;
+	    use_reg (&CALL_INSN_FUNCTION_USAGE (insn), r16);
 
-          insn = get_insns ();
-	  end_sequence ();
+	    insn = get_insns ();
+	    end_sequence ();
 
-	  eqv = gen_rtx_UNSPEC (Pmode, gen_rtvec (1, const0_rtx),
-				UNSPEC_TLSLDM_CALL);
-	  emit_libcall_block (insn, scratch, r0, eqv);
+	    eqv = gen_rtx_UNSPEC (Pmode, gen_rtvec (1, const0_rtx),
+				  UNSPEC_TLSLDM_CALL);
+	    emit_libcall_block (insn, scratch, r0, eqv);
 
-	  eqv = gen_rtx_UNSPEC (Pmode, gen_rtvec (1, x), UNSPEC_DTPREL);
-	  eqv = gen_rtx_CONST (Pmode, eqv);
+	    eqv = gen_rtx_UNSPEC (Pmode, gen_rtvec (1, x), UNSPEC_DTPREL);
+	    eqv = gen_rtx_CONST (Pmode, eqv);
 
-	  if (alpha_tls_size == 64)
-	    {
-	      dest = gen_reg_rtx (Pmode);
-	      emit_insn (gen_rtx_SET (VOIDmode, dest, eqv));
-	      emit_insn (gen_adddi3 (dest, dest, scratch));
-	      return dest;
-	    }
-	  if (alpha_tls_size == 32)
-	    {
-	      insn = gen_rtx_HIGH (Pmode, eqv);
-	      insn = gen_rtx_PLUS (Pmode, scratch, insn);
-	      scratch = gen_reg_rtx (Pmode);
-	      emit_insn (gen_rtx_SET (VOIDmode, scratch, insn));
-	    }
-	  return gen_rtx_LO_SUM (Pmode, scratch, eqv);
+	    if (alpha_tls_size == 64)
+	      {
+		dest = gen_reg_rtx (Pmode);
+		emit_insn (gen_rtx_SET (dest, eqv));
+		emit_insn (gen_adddi3 (dest, dest, scratch));
+		return dest;
+	      }
+	    if (alpha_tls_size == 32)
+	      {
+		rtx temp = gen_rtx_HIGH (Pmode, eqv);
+		temp = gen_rtx_PLUS (Pmode, scratch, temp);
+		scratch = gen_reg_rtx (Pmode);
+		emit_insn (gen_rtx_SET (scratch, temp));
+	      }
+	    return gen_rtx_LO_SUM (Pmode, scratch, eqv);
+	  }
 
 	case TLS_MODEL_INITIAL_EXEC:
 	  eqv = gen_rtx_UNSPEC (Pmode, gen_rtvec (1, x), UNSPEC_TPREL);
@@ -930,8 +1091,8 @@ alpha_legitimize_address_1 (rtx x, rtx scratch, enum machine_mode mode)
 	  scratch = gen_reg_rtx (Pmode);
 	  dest = gen_reg_rtx (Pmode);
 
-	  emit_insn (gen_load_tp (tp));
-	  emit_insn (gen_rtx_SET (VOIDmode, scratch, eqv));
+	  emit_insn (gen_get_thread_pointerdi (tp));
+	  emit_insn (gen_rtx_SET (scratch, eqv));
 	  emit_insn (gen_adddi3 (dest, tp, scratch));
 	  return dest;
 
@@ -940,13 +1101,13 @@ alpha_legitimize_address_1 (rtx x, rtx scratch, enum machine_mode mode)
 	  eqv = gen_rtx_CONST (Pmode, eqv);
 	  tp = gen_reg_rtx (Pmode);
 
-	  emit_insn (gen_load_tp (tp));
+	  emit_insn (gen_get_thread_pointerdi (tp));
 	  if (alpha_tls_size == 32)
 	    {
-	      insn = gen_rtx_HIGH (Pmode, eqv);
-	      insn = gen_rtx_PLUS (Pmode, tp, insn);
+	      rtx temp = gen_rtx_HIGH (Pmode, eqv);
+	      temp = gen_rtx_PLUS (Pmode, tp, temp);
 	      tp = gen_reg_rtx (Pmode);
-	      emit_insn (gen_rtx_SET (VOIDmode, tp, insn));
+	      emit_insn (gen_rtx_SET (tp, temp));
 	    }
 	  return gen_rtx_LO_SUM (Pmode, tp, eqv);
 
@@ -962,8 +1123,7 @@ alpha_legitimize_address_1 (rtx x, rtx scratch, enum machine_mode mode)
 	    {
 	      if (can_create_pseudo_p ())
 	        scratch = gen_reg_rtx (Pmode);
-	      emit_insn (gen_rtx_SET (VOIDmode, scratch,
-				      gen_rtx_HIGH (Pmode, x)));
+	      emit_insn (gen_rtx_SET (scratch, gen_rtx_HIGH (Pmode, x)));
 	      return gen_rtx_LO_SUM (Pmode, scratch, x);
 	    }
 	}
@@ -989,7 +1149,7 @@ alpha_legitimize_address_1 (rtx x, rtx scratch, enum machine_mode mode)
 			       (!can_create_pseudo_p () ? scratch : NULL_RTX),
 			       1, OPTAB_LIB_WIDEN);
 
-    return plus_constant (x, low);
+    return plus_constant (Pmode, x, low);
   }
 }
 
@@ -999,10 +1159,21 @@ alpha_legitimize_address_1 (rtx x, rtx scratch, enum machine_mode mode)
 
 static rtx
 alpha_legitimize_address (rtx x, rtx oldx ATTRIBUTE_UNUSED,
-			  enum machine_mode mode)
+			  machine_mode mode)
 {
   rtx new_x = alpha_legitimize_address_1 (x, NULL_RTX, mode);
   return new_x ? new_x : x;
+}
+
+/* Return true if ADDR has an effect that depends on the machine mode it
+   is used for.  On the Alpha this is true only for the unaligned modes.
+   We can simplify the test since we know that the address must be valid.  */
+
+static bool
+alpha_mode_dependent_address_p (const_rtx addr,
+				addr_space_t as ATTRIBUTE_UNUSED)
+{
+  return GET_CODE (addr) == AND;
 }
 
 /* Primarily this is required for TLS symbols, but given that our move
@@ -1010,7 +1181,7 @@ alpha_legitimize_address (rtx x, rtx oldx ATTRIBUTE_UNUSED,
    should never be spilling symbolic operands to the constant pool, ever.  */
 
 static bool
-alpha_cannot_force_const_mem (enum machine_mode mode ATTRIBUTE_UNUSED, rtx x)
+alpha_cannot_force_const_mem (machine_mode mode ATTRIBUTE_UNUSED, rtx x)
 {
   enum rtx_code code = GET_CODE (x);
   return code == SYMBOL_REF || code == LABEL_REF || code == CONST;
@@ -1033,42 +1204,40 @@ alpha_function_ok_for_sibcall (tree decl, tree exp ATTRIBUTE_UNUSED)
   return decl_has_samegp (decl);
 }
 
-int
-some_small_symbolic_operand_int (rtx *px, void *data ATTRIBUTE_UNUSED)
+bool
+some_small_symbolic_operand_int (rtx x)
 {
-  rtx x = *px;
-
-  /* Don't re-split.  */
-  if (GET_CODE (x) == LO_SUM)
-    return -1;
-
-  return small_symbolic_operand (x, Pmode) != 0;
-}
-
-static int
-split_small_symbolic_operand_1 (rtx *px, void *data ATTRIBUTE_UNUSED)
-{
-  rtx x = *px;
-
-  /* Don't re-split.  */
-  if (GET_CODE (x) == LO_SUM)
-    return -1;
-
-  if (small_symbolic_operand (x, Pmode))
+  subrtx_var_iterator::array_type array;
+  FOR_EACH_SUBRTX_VAR (iter, array, x, ALL)
     {
-      x = gen_rtx_LO_SUM (Pmode, pic_offset_table_rtx, x);
-      *px = x;
-      return -1;
+      rtx x = *iter;
+      /* Don't re-split.  */
+      if (GET_CODE (x) == LO_SUM)
+	iter.skip_subrtxes ();
+      else if (small_symbolic_operand (x, Pmode))
+	return true;
     }
-
-  return 0;
+  return false;
 }
 
 rtx
 split_small_symbolic_operand (rtx x)
 {
   x = copy_insn (x);
-  for_each_rtx (&x, split_small_symbolic_operand_1, NULL);
+  subrtx_ptr_iterator::array_type array;
+  FOR_EACH_SUBRTX_PTR (iter, array, &x, ALL)
+    {
+      rtx *ptr = *iter;
+      rtx x = *ptr;
+      /* Don't re-split.  */
+      if (GET_CODE (x) == LO_SUM)
+	iter.skip_subrtxes ();
+      else if (small_symbolic_operand (x, Pmode))
+	{
+	  *ptr = gen_rtx_LO_SUM (Pmode, pic_offset_table_rtx, x);
+	  iter.skip_subrtxes ();
+	}
+    }
   return x;
 }
 
@@ -1087,7 +1256,7 @@ split_small_symbolic_operand (rtx x)
    containing the call and branch to the block containing the ldgp.  */
 
 static bool
-alpha_cannot_copy_insn_p (rtx insn)
+alpha_cannot_copy_insn_p (rtx_insn *insn)
 {
   if (!reload_completed || !TARGET_EXPLICIT_RELOCS)
     return false;
@@ -1103,7 +1272,7 @@ alpha_cannot_copy_insn_p (rtx insn)
 
 rtx
 alpha_legitimize_reload_address (rtx x,
-				 enum machine_mode mode ATTRIBUTE_UNUSED,
+				 machine_mode mode ATTRIBUTE_UNUSED,
 				 int opnum, int type,
 				 int ind_levels ATTRIBUTE_UNUSED)
 {
@@ -1127,7 +1296,7 @@ alpha_legitimize_reload_address (rtx x,
       && REG_P (XEXP (x, 0))
       && REGNO (XEXP (x, 0)) < FIRST_PSEUDO_REGISTER
       && REGNO_OK_FOR_BASE_P (REGNO (XEXP (x, 0)))
-      && GET_CODE (XEXP (x, 1)) == CONST_INT)
+      && CONST_INT_P (XEXP (x, 1)))
     {
       HOST_WIDE_INT val = INTVAL (XEXP (x, 1));
       HOST_WIDE_INT low = ((val & 0xffff) ^ 0x8000) - 0x8000;
@@ -1154,15 +1323,45 @@ alpha_legitimize_reload_address (rtx x,
   return NULL_RTX;
 }
 
+/* Return the cost of moving between registers of various classes.  Moving
+   between FLOAT_REGS and anything else except float regs is expensive.
+   In fact, we make it quite expensive because we really don't want to
+   do these moves unless it is clearly worth it.  Optimizations may
+   reduce the impact of not being able to allocate a pseudo to a
+   hard register.  */
+
+static int
+alpha_register_move_cost (machine_mode /*mode*/,
+			  reg_class_t from, reg_class_t to)
+{
+  if ((from == FLOAT_REGS) == (to == FLOAT_REGS))
+    return 2;
+
+  if (TARGET_FIX)
+    return (from == FLOAT_REGS) ? 6 : 8;
+
+  return 4 + 2 * alpha_memory_latency;
+}
+
+/* Return the cost of moving data of MODE from a register to
+   or from memory.  On the Alpha, bump this up a bit.  */
+
+static int
+alpha_memory_move_cost (machine_mode /*mode*/, reg_class_t /*regclass*/,
+			bool /*in*/)
+{
+  return 2 * alpha_memory_latency;
+}
+
 /* Compute a (partial) cost for rtx X.  Return true if the complete
    cost has been computed, and false if subexpressions should be
    scanned.  In either case, *TOTAL contains the cost result.  */
 
 static bool
-alpha_rtx_costs (rtx x, int code, int outer_code, int opno, int *total,
+alpha_rtx_costs (rtx x, machine_mode mode, int outer_code, int opno, int *total,
 		 bool speed)
 {
-  enum machine_mode mode = GET_MODE (x);
+  int code = GET_CODE (x);
   bool float_mode_p = FLOAT_MODE_P (mode);
   const struct alpha_rtx_cost_data *cost_data;
 
@@ -1187,6 +1386,7 @@ alpha_rtx_costs (rtx x, int code, int outer_code, int opno, int *total,
       /* FALLTHRU */
 
     case CONST_DOUBLE:
+    case CONST_WIDE_INT:
       if (x == CONST0_RTX (mode))
 	*total = 0;
       else if ((outer_code == PLUS && add_operand (x, VOIDmode))
@@ -1223,12 +1423,12 @@ alpha_rtx_costs (rtx x, int code, int outer_code, int opno, int *total,
     case MINUS:
       if (float_mode_p)
 	*total = cost_data->fp_add;
-      else if (GET_CODE (XEXP (x, 0)) == MULT
-	       && const48_operand (XEXP (XEXP (x, 0), 1), VOIDmode))
+      else if (GET_CODE (XEXP (x, 0)) == ASHIFT
+	       && const23_operand (XEXP (XEXP (x, 0), 1), VOIDmode))
 	{
-	  *total = (rtx_cost (XEXP (XEXP (x, 0), 0),
+	  *total = (rtx_cost (XEXP (XEXP (x, 0), 0), mode,
 			      (enum rtx_code) outer_code, opno, speed)
-		    + rtx_cost (XEXP (x, 1),
+		    + rtx_cost (XEXP (x, 1), mode,
 				(enum rtx_code) outer_code, opno, speed)
 		    + COSTS_N_INSNS (1));
 	  return true;
@@ -1330,8 +1530,7 @@ get_aligned_mem (rtx ref, rtx *paligned_mem, rtx *pbitnum)
 
   gcc_assert (MEM_P (ref));
 
-  if (reload_in_progress
-      && ! memory_address_p (GET_MODE (ref), XEXP (ref, 0)))
+  if (reload_in_progress)
     {
       base = find_replacement (&XEXP (ref, 0));
       gcc_assert (memory_address_p (GET_MODE (ref), base));
@@ -1376,11 +1575,9 @@ get_unaligned_address (rtx ref)
 
   gcc_assert (MEM_P (ref));
 
-  if (reload_in_progress
-      && ! memory_address_p (GET_MODE (ref), XEXP (ref, 0)))
+  if (reload_in_progress)
     {
       base = find_replacement (&XEXP (ref, 0));
-
       gcc_assert (memory_address_p (GET_MODE (ref), base));
     }
   else
@@ -1389,7 +1586,7 @@ get_unaligned_address (rtx ref)
   if (GET_CODE (base) == PLUS)
     offset += INTVAL (XEXP (base, 1)), base = XEXP (base, 0);
 
-  return plus_constant (base, offset);
+  return plus_constant (Pmode, base, offset);
 }
 
 /* Compute a value X, such that X & 7 == (ADDR + OFS) & 7.
@@ -1421,8 +1618,8 @@ alpha_preferred_reload_class(rtx x, enum reg_class rclass)
     return rclass;
 
   /* These sorts of constants we can easily drop to memory.  */
-  if (CONST_INT_P (x)
-      || GET_CODE (x) == CONST_DOUBLE
+  if (CONST_SCALAR_INT_P (x)
+      || CONST_DOUBLE_P (x)
       || GET_CODE (x) == CONST_VECTOR)
     {
       if (rclass == FLOAT_REGS)
@@ -1447,7 +1644,7 @@ alpha_preferred_reload_class(rtx x, enum reg_class rclass)
 
 static reg_class_t
 alpha_secondary_reload (bool in_p, rtx x, reg_class_t rclass_i,
-			enum machine_mode mode, secondary_reload_info *sri)
+			machine_mode mode, secondary_reload_info *sri)
 {
   enum reg_class rclass = (enum reg_class) rclass_i;
 
@@ -1481,31 +1678,36 @@ alpha_secondary_reload (bool in_p, rtx x, reg_class_t rclass_i,
 
   return NO_REGS;
 }
-
-/* Subfunction of the following function.  Update the flags of any MEM
-   found in part of X.  */
 
-static int
-alpha_set_memflags_1 (rtx *xp, void *data)
+/* Implement TARGET_SECONDARY_MEMORY_NEEDED.
+
+   If we are copying between general and FP registers, we need a memory
+   location unless the FIX extension is available.  */
+
+static bool
+alpha_secondary_memory_needed (machine_mode, reg_class_t class1,
+			       reg_class_t class2)
 {
-  rtx x = *xp, orig = (rtx) data;
-
-  if (!MEM_P (x))
-    return 0;
-
-  MEM_VOLATILE_P (x) = MEM_VOLATILE_P (orig);
-  MEM_NOTRAP_P (x) = MEM_NOTRAP_P (orig);
-  MEM_READONLY_P (x) = MEM_READONLY_P (orig);
-
-  /* Sadly, we cannot use alias sets because the extra aliasing
-     produced by the AND interferes.  Given that two-byte quantities
-     are the only thing we would be able to differentiate anyway,
-     there does not seem to be any point in convoluting the early
-     out of the alias check.  */
-
-  return -1;
+  return (!TARGET_FIX
+	  && ((class1 == FLOAT_REGS && class2 != FLOAT_REGS)
+	      || (class2 == FLOAT_REGS && class1 != FLOAT_REGS)));
 }
 
+/* Implement TARGET_SECONDARY_MEMORY_NEEDED_MODE.  If MODE is
+   floating-point, use it.  Otherwise, widen to a word like the default.
+   This is needed because we always store integers in FP registers in
+   quadword format.  This whole area is very tricky!  */
+
+static machine_mode
+alpha_secondary_memory_needed_mode (machine_mode mode)
+{
+  if (GET_MODE_CLASS (mode) == MODE_FLOAT)
+    return mode;
+  if (GET_MODE_SIZE (mode) >= 4)
+    return mode;
+  return mode_for_size (BITS_PER_WORD, GET_MODE_CLASS (mode), 0).require ();
+}
+
 /* Given SEQ, which is an INSN list, look for any MEMs in either
    a SET_DEST or a SET_SRC and copy the in-struct, unchanging, and
    volatile flags from REF into each of the MEMs found.  If REF is not
@@ -1514,7 +1716,7 @@ alpha_set_memflags_1 (rtx *xp, void *data)
 void
 alpha_set_memflags (rtx seq, rtx ref)
 {
-  rtx insn;
+  rtx_insn *insn;
 
   if (!MEM_P (ref))
     return;
@@ -1527,14 +1729,31 @@ alpha_set_memflags (rtx seq, rtx ref)
       && !MEM_READONLY_P (ref))
     return;
 
-  for (insn = seq; insn; insn = NEXT_INSN (insn))
+  subrtx_var_iterator::array_type array;
+  for (insn = as_a <rtx_insn *> (seq); insn; insn = NEXT_INSN (insn))
     if (INSN_P (insn))
-      for_each_rtx (&PATTERN (insn), alpha_set_memflags_1, (void *) ref);
+      FOR_EACH_SUBRTX_VAR (iter, array, PATTERN (insn), NONCONST)
+	{
+	  rtx x = *iter;
+	  if (MEM_P (x))
+	    {
+	      MEM_VOLATILE_P (x) = MEM_VOLATILE_P (ref);
+	      MEM_NOTRAP_P (x) = MEM_NOTRAP_P (ref);
+	      MEM_READONLY_P (x) = MEM_READONLY_P (ref);
+	      /* Sadly, we cannot use alias sets because the extra
+		 aliasing produced by the AND interferes.  Given that
+		 two-byte quantities are the only thing we would be
+		 able to differentiate anyway, there does not seem to
+		 be any point in convoluting the early out of the
+		 alias check.  */
+	      iter.skip_subrtxes ();
+	    }
+	}
     else
       gcc_unreachable ();
 }
 
-static rtx alpha_emit_set_const (rtx, enum machine_mode, HOST_WIDE_INT,
+static rtx alpha_emit_set_const (rtx, machine_mode, HOST_WIDE_INT,
 				 int, bool);
 
 /* Internal routine for alpha_emit_set_const to check for N or below insns.
@@ -1542,7 +1761,7 @@ static rtx alpha_emit_set_const (rtx, enum machine_mode, HOST_WIDE_INT,
    and return pc_rtx if successful.  */
 
 static rtx
-alpha_emit_set_const_1 (rtx target, enum machine_mode mode,
+alpha_emit_set_const_1 (rtx target, machine_mode mode,
 			HOST_WIDE_INT c, int n, bool no_output)
 {
   HOST_WIDE_INT new_const;
@@ -1553,11 +1772,9 @@ alpha_emit_set_const_1 (rtx target, enum machine_mode mode,
   rtx temp, insn;
 
   /* If this is a sign-extended 32-bit constant, we can do this in at most
-     three insns, so do it if we have enough insns left.  We always have
-     a sign-extended 32-bit constant when compiling on a narrow machine.  */
+     three insns, so do it if we have enough insns left.  */
 
-  if (HOST_BITS_PER_WIDE_INT != 64
-      || c >> 31 == -1 || c >> 31 == 0)
+  if (c >> 31 == -1 || c >> 31 == 0)
     {
       HOST_WIDE_INT low = ((c & 0xffff) ^ 0x8000) - 0x8000;
       HOST_WIDE_INT tmp1 = c - low;
@@ -1586,7 +1803,7 @@ alpha_emit_set_const_1 (rtx target, enum machine_mode mode,
 	    return pc_rtx;
 	  if (target == NULL)
 	    target = gen_reg_rtx (mode);
-	  emit_insn (gen_rtx_SET (VOIDmode, target, GEN_INT (c)));
+	  emit_insn (gen_rtx_SET (target, GEN_INT (c)));
 	  return target;
 	}
       else if (n >= 2 + (extra != 0))
@@ -1595,7 +1812,7 @@ alpha_emit_set_const_1 (rtx target, enum machine_mode mode,
 	    return pc_rtx;
 	  if (!can_create_pseudo_p ())
 	    {
-	      emit_insn (gen_rtx_SET (VOIDmode, target, GEN_INT (high << 16)));
+	      emit_insn (gen_rtx_SET (target, GEN_INT (high << 16)));
 	      temp = target;
 	    }
 	  else
@@ -1613,7 +1830,7 @@ alpha_emit_set_const_1 (rtx target, enum machine_mode mode,
 	      if (! subtarget)
 		subtarget = gen_reg_rtx (mode);
 	      insn = gen_rtx_PLUS (mode, temp, GEN_INT (extra << 16));
-	      insn = gen_rtx_SET (VOIDmode, subtarget, insn);
+	      insn = gen_rtx_SET (subtarget, insn);
 	      emit_insn (insn);
 	      temp = subtarget;
 	    }
@@ -1621,7 +1838,7 @@ alpha_emit_set_const_1 (rtx target, enum machine_mode mode,
 	  if (target == NULL)
 	    target = gen_reg_rtx (mode);
 	  insn = gen_rtx_PLUS (mode, temp, GEN_INT (low));
-	  insn = gen_rtx_SET (VOIDmode, target, insn);
+	  insn = gen_rtx_SET (target, insn);
 	  emit_insn (insn);
 	  return target;
 	}
@@ -1699,11 +1916,9 @@ alpha_emit_set_const_1 (rtx target, enum machine_mode mode,
       /* Now try high-order zero bits.  Here we try the shifted-in bits as
 	 all zero and all ones.  Be careful to avoid shifting outside the
 	 mode and to avoid shifting outside the host wide int size.  */
-      /* On narrow hosts, don't shift a 1 into the high bit, since we'll
-	 confuse the recursive call and set all of the high 32 bits.  */
 
       bits = (MIN (HOST_BITS_PER_WIDE_INT, GET_MODE_SIZE (mode) * 8)
-	      - floor_log2 (c) - 1 - (HOST_BITS_PER_WIDE_INT < 64));
+	      - floor_log2 (c) - 1);
       if (bits > 0)
 	for (; bits > 0; bits--)
 	  {
@@ -1711,7 +1926,7 @@ alpha_emit_set_const_1 (rtx target, enum machine_mode mode,
 	    temp = alpha_emit_set_const (subtarget, mode, new_const, i, no_output);
 	    if (!temp)
 	      {
-		new_const = (c << bits) | (((HOST_WIDE_INT) 1 << bits) - 1);
+		new_const = (c << bits) | ((HOST_WIDE_INT_1U << bits) - 1);
 	        temp = alpha_emit_set_const (subtarget, mode, new_const,
 					     i, no_output);
 	      }
@@ -1737,7 +1952,7 @@ alpha_emit_set_const_1 (rtx target, enum machine_mode mode,
 	    temp = alpha_emit_set_const (subtarget, mode, new_const, i, no_output);
 	    if (!temp)
 	      {
-		new_const = (c << bits) | (((HOST_WIDE_INT) 1 << bits) - 1);
+		new_const = (c << bits) | ((HOST_WIDE_INT_1U << bits) - 1);
 	        temp = alpha_emit_set_const (subtarget, mode, new_const,
 					     i, no_output);
 	      }
@@ -1751,7 +1966,6 @@ alpha_emit_set_const_1 (rtx target, enum machine_mode mode,
 	  }
     }
 
-#if HOST_BITS_PER_WIDE_INT == 64
   /* Finally, see if can load a value into the target that is the same as the
      constant except that all bytes that are 0 are changed to be 0xff.  If we
      can, then we can do a ZAPNOT to obtain the desired constant.  */
@@ -1778,7 +1992,6 @@ alpha_emit_set_const_1 (rtx target, enum machine_mode mode,
 			       target, 0, OPTAB_WIDEN);
 	}
     }
-#endif
 
   return 0;
 }
@@ -1790,10 +2003,10 @@ alpha_emit_set_const_1 (rtx target, enum machine_mode mode,
    insns and emitted.  */
 
 static rtx
-alpha_emit_set_const (rtx target, enum machine_mode mode,
+alpha_emit_set_const (rtx target, machine_mode mode,
 		      HOST_WIDE_INT c, int n, bool no_output)
 {
-  enum machine_mode orig_mode = mode;
+  machine_mode orig_mode = mode;
   rtx orig_target = target;
   rtx result = 0;
   int i;
@@ -1822,7 +2035,8 @@ alpha_emit_set_const (rtx target, enum machine_mode mode,
       result = alpha_emit_set_const_1 (target, mode, c, i, no_output);
       if (result)
 	{
-	  rtx insn, set;
+	  rtx_insn *insn;
+	  rtx set;
 
 	  if (no_output)
 	    return result;
@@ -1853,13 +2067,12 @@ alpha_emit_set_const (rtx target, enum machine_mode mode,
    with alpha_emit_set_const.  */
 
 static rtx
-alpha_emit_set_long_const (rtx target, HOST_WIDE_INT c1, HOST_WIDE_INT c2)
+alpha_emit_set_long_const (rtx target, HOST_WIDE_INT c1)
 {
   HOST_WIDE_INT d1, d2, d3, d4;
 
   /* Decompose the entire word */
-#if HOST_BITS_PER_WIDE_INT >= 64
-  gcc_assert (c2 == -(c1 < 0));
+
   d1 = ((c1 & 0xffff) ^ 0x8000) - 0x8000;
   c1 -= d1;
   d2 = ((c1 & 0xffffffff) ^ 0x80000000) - 0x80000000;
@@ -1868,17 +2081,6 @@ alpha_emit_set_long_const (rtx target, HOST_WIDE_INT c1, HOST_WIDE_INT c2)
   c1 -= d3;
   d4 = ((c1 & 0xffffffff) ^ 0x80000000) - 0x80000000;
   gcc_assert (c1 == d4);
-#else
-  d1 = ((c1 & 0xffff) ^ 0x8000) - 0x8000;
-  c1 -= d1;
-  d2 = ((c1 & 0xffffffff) ^ 0x80000000) - 0x80000000;
-  gcc_assert (c1 == d2);
-  c2 += (d2 < 0);
-  d3 = ((c2 & 0xffff) ^ 0x8000) - 0x8000;
-  c2 -= d3;
-  d4 = ((c2 & 0xffffffff) ^ 0x80000000) - 0x80000000;
-  gcc_assert (c2 == d4);
-#endif
 
   /* Construct the high word */
   if (d4)
@@ -1902,36 +2104,17 @@ alpha_emit_set_long_const (rtx target, HOST_WIDE_INT c1, HOST_WIDE_INT c2)
   return target;
 }
 
-/* Given an integral CONST_INT, CONST_DOUBLE, or CONST_VECTOR, return 
-   the low 64 bits.  */
+/* Given an integral CONST_INT or CONST_VECTOR, return the low 64 bits.  */
 
-static void
-alpha_extract_integer (rtx x, HOST_WIDE_INT *p0, HOST_WIDE_INT *p1)
+static HOST_WIDE_INT
+alpha_extract_integer (rtx x)
 {
-  HOST_WIDE_INT i0, i1;
-
   if (GET_CODE (x) == CONST_VECTOR)
     x = simplify_subreg (DImode, x, GET_MODE (x), 0);
 
+  gcc_assert (CONST_INT_P (x));
 
-  if (CONST_INT_P (x))
-    {
-      i0 = INTVAL (x);
-      i1 = -(i0 < 0);
-    }
-  else if (HOST_BITS_PER_WIDE_INT >= 64)
-    {
-      i0 = CONST_DOUBLE_LOW (x);
-      i1 = -(i0 < 0);
-    }
-  else
-    {
-      i0 = CONST_DOUBLE_LOW (x);
-      i1 = CONST_DOUBLE_HIGH (x);
-    }
-
-  *p0 = i0;
-  *p1 = i1;
+  return INTVAL (x);
 }
 
 /* Implement TARGET_LEGITIMATE_CONSTANT_P.  This is all constants for which
@@ -1940,9 +2123,9 @@ alpha_extract_integer (rtx x, HOST_WIDE_INT *p0, HOST_WIDE_INT *p1)
    take three or fewer instructions, and floating-point zero.  */
 
 bool
-alpha_legitimate_constant_p (enum machine_mode mode, rtx x)
+alpha_legitimate_constant_p (machine_mode mode, rtx x)
 {
-  HOST_WIDE_INT i0, i1;
+  HOST_WIDE_INT i0;
 
   switch (GET_CODE (x))
     {
@@ -1952,26 +2135,36 @@ alpha_legitimate_constant_p (enum machine_mode mode, rtx x)
 
     case CONST:
       if (GET_CODE (XEXP (x, 0)) == PLUS
-	  && GET_CODE (XEXP (XEXP (x, 0), 1)) == CONST_INT)
+	  && CONST_INT_P (XEXP (XEXP (x, 0), 1)))
 	x = XEXP (XEXP (x, 0), 0);
       else
 	return true;
 
       if (GET_CODE (x) != SYMBOL_REF)
 	return true;
-
       /* FALLTHRU */
 
     case SYMBOL_REF:
       /* TLS symbols are never valid.  */
       return SYMBOL_REF_TLS_MODEL (x) == 0;
 
+    case CONST_WIDE_INT:
+      if (TARGET_BUILD_CONSTANTS)
+	return true;
+      if (x == CONST0_RTX (mode))
+	return true;
+      mode = DImode;
+      gcc_assert (CONST_WIDE_INT_NUNITS (x) == 2);
+      i0 = CONST_WIDE_INT_ELT (x, 1);
+      if (alpha_emit_set_const_1 (NULL_RTX, mode, i0, 3, true) == NULL)
+	return false;
+      i0 = CONST_WIDE_INT_ELT (x, 0);
+      goto do_integer;
+
     case CONST_DOUBLE:
       if (x == CONST0_RTX (mode))
 	return true;
-      if (FLOAT_MODE_P (mode))
-	return false;
-      goto do_integer;
+      return false;
 
     case CONST_VECTOR:
       if (x == CONST0_RTX (mode))
@@ -1980,16 +2173,14 @@ alpha_legitimate_constant_p (enum machine_mode mode, rtx x)
 	return false;
       if (GET_MODE_SIZE (mode) != 8)
 	return false;
-      goto do_integer;
+      /* FALLTHRU */
 
     case CONST_INT:
-    do_integer:
       if (TARGET_BUILD_CONSTANTS)
 	return true;
-      alpha_extract_integer (x, &i0, &i1);
-      if (HOST_BITS_PER_WIDE_INT >= 64 || i1 == (-i0 < 0))
-        return alpha_emit_set_const_1 (x, mode, i0, 3, true) != NULL;
-      return false;
+      i0 = alpha_extract_integer (x);
+    do_integer:
+      return alpha_emit_set_const_1 (NULL_RTX, mode, i0, 3, true) != NULL;
 
     default:
       return false;
@@ -2000,18 +2191,17 @@ alpha_legitimate_constant_p (enum machine_mode mode, rtx x)
    instruction to load.  Emit that multi-part load.  */
 
 bool
-alpha_split_const_mov (enum machine_mode mode, rtx *operands)
+alpha_split_const_mov (machine_mode mode, rtx *operands)
 {
-  HOST_WIDE_INT i0, i1;
+  HOST_WIDE_INT i0;
   rtx temp = NULL_RTX;
 
-  alpha_extract_integer (operands[1], &i0, &i1);
+  i0 = alpha_extract_integer (operands[1]);
 
-  if (HOST_BITS_PER_WIDE_INT >= 64 || i1 == -(i0 < 0))
-    temp = alpha_emit_set_const (operands[0], mode, i0, 3, false);
+  temp = alpha_emit_set_const (operands[0], mode, i0, 3, false);
 
   if (!temp && TARGET_BUILD_CONSTANTS)
-    temp = alpha_emit_set_long_const (operands[0], i0, i1);
+    temp = alpha_emit_set_long_const (operands[0], i0);
 
   if (temp)
     {
@@ -2027,7 +2217,7 @@ alpha_split_const_mov (enum machine_mode mode, rtx *operands)
    We don't handle non-bwx subword loads here.  */
 
 bool
-alpha_expand_mov (enum machine_mode mode, rtx *operands)
+alpha_expand_mov (machine_mode mode, rtx *operands)
 {
   rtx tmp;
 
@@ -2055,7 +2245,6 @@ alpha_expand_mov (enum machine_mode mode, rtx *operands)
 
   /* Split large integers.  */
   if (CONST_INT_P (operands[1])
-      || GET_CODE (operands[1]) == CONST_DOUBLE
       || GET_CODE (operands[1]) == CONST_VECTOR)
     {
       if (alpha_split_const_mov (mode, operands))
@@ -2082,7 +2271,7 @@ alpha_expand_mov (enum machine_mode mode, rtx *operands)
    return true if all work is done.  */
 
 bool
-alpha_expand_mov_nobwx (enum machine_mode mode, rtx *operands)
+alpha_expand_mov_nobwx (machine_mode mode, rtx *operands)
 {
   rtx seq;
 
@@ -2100,10 +2289,7 @@ alpha_expand_mov_nobwx (enum machine_mode mode, rtx *operands)
 	{
 	  if (reload_in_progress)
 	    {
-	      if (mode == QImode)
-		seq = gen_reload_inqi_aligned (operands[0], operands[1]);
-	      else
-		seq = gen_reload_inhi_aligned (operands[0], operands[1]);
+	      seq = gen_reload_in_aligned (mode, operands[0], operands[1]);
 	      emit_insn (seq);
 	    }
 	  else
@@ -2186,10 +2372,8 @@ alpha_expand_mov_nobwx (enum machine_mode mode, rtx *operands)
 	  rtx temp3 = gen_reg_rtx (DImode);
 	  rtx ua = get_unaligned_address (operands[0]);
 
-	  if (mode == QImode)
-	    seq = gen_unaligned_storeqi (ua, operands[1], temp1, temp2, temp3);
-	  else
-	    seq = gen_unaligned_storehi (ua, operands[1], temp1, temp2, temp3);
+	  seq = gen_unaligned_store
+	    (mode, ua, operands[1], temp1, temp2, temp3);
 
 	  alpha_set_memflags (seq, operands[0]);
 	  emit_insn (seq);
@@ -2204,7 +2388,7 @@ alpha_expand_mov_nobwx (enum machine_mode mode, rtx *operands)
    that is not naturally aligned.  Emit instructions to load it.  */
 
 void
-alpha_expand_movmisalign (enum machine_mode mode, rtx *operands)
+alpha_expand_movmisalign (machine_mode mode, rtx *operands)
 {
   /* Honor misaligned loads, for those we promised to do so.  */
   if (MEM_P (operands[1]))
@@ -2284,7 +2468,7 @@ void
 alpha_emit_floatuns (rtx operands[2])
 {
   rtx neglab, donelab, i0, i1, f0, in, out;
-  enum machine_mode mode;
+  machine_mode mode;
 
   out = operands[0];
   in = force_reg (DImode, operands[1]);
@@ -2297,7 +2481,7 @@ alpha_emit_floatuns (rtx operands[2])
 
   emit_cmp_and_jump_insns (in, const0_rtx, LT, const0_rtx, DImode, 0, neglab);
 
-  emit_insn (gen_rtx_SET (VOIDmode, out, gen_rtx_FLOAT (mode, in)));
+  emit_insn (gen_rtx_SET (out, gen_rtx_FLOAT (mode, in)));
   emit_jump_insn (gen_jump (donelab));
   emit_barrier ();
 
@@ -2306,8 +2490,8 @@ alpha_emit_floatuns (rtx operands[2])
   emit_insn (gen_lshrdi3 (i0, in, const1_rtx));
   emit_insn (gen_anddi3 (i1, in, const1_rtx));
   emit_insn (gen_iordi3 (i0, i0, i1));
-  emit_insn (gen_rtx_SET (VOIDmode, f0, gen_rtx_FLOAT (mode, i0)));
-  emit_insn (gen_rtx_SET (VOIDmode, out, gen_rtx_PLUS (mode, f0, f0)));
+  emit_insn (gen_rtx_SET (f0, gen_rtx_FLOAT (mode, i0)));
+  emit_insn (gen_rtx_SET (out, gen_rtx_PLUS (mode, f0, f0)));
 
   emit_label (donelab);
 }
@@ -2315,10 +2499,10 @@ alpha_emit_floatuns (rtx operands[2])
 /* Generate the comparison for a conditional branch.  */
 
 void
-alpha_emit_conditional_branch (rtx operands[], enum machine_mode cmp_mode)
+alpha_emit_conditional_branch (rtx operands[], machine_mode cmp_mode)
 {
   enum rtx_code cmp_code, branch_code;
-  enum machine_mode branch_mode = VOIDmode;
+  machine_mode branch_mode = VOIDmode;
   enum rtx_code code = GET_CODE (operands[0]);
   rtx op0 = operands[1], op1 = operands[2];
   rtx tem;
@@ -2352,7 +2536,7 @@ alpha_emit_conditional_branch (rtx operands[], enum machine_mode cmp_mode)
 	{
 	  cmp_code = swap_condition (code);
 	  branch_code = NE;
-	  tem = op0, op0 = op1, op1 = tem;
+	  std::swap (op0, op1);
 	}
       else
 	{
@@ -2376,7 +2560,7 @@ alpha_emit_conditional_branch (rtx operands[], enum machine_mode cmp_mode)
 	  else if (op0 == CONST0_RTX (DFmode))
 	    {
 	      /* Undo the swap we probably did just above.  */
-	      tem = op0, op0 = op1, op1 = tem;
+	      std::swap (op0, op1);
 	      branch_code = swap_condition (cmp_code);
 	      cmp_code = UNKNOWN;
 	    }
@@ -2433,7 +2617,7 @@ alpha_emit_conditional_branch (rtx operands[], enum machine_mode cmp_mode)
     }
 
   /* Emit the branch instruction.  */
-  tem = gen_rtx_SET (VOIDmode, pc_rtx,
+  tem = gen_rtx_SET (pc_rtx,
 		     gen_rtx_IF_THEN_ELSE (VOIDmode,
 					   gen_rtx_fmt_ee (branch_code,
 							   branch_mode, tem,
@@ -2448,7 +2632,7 @@ alpha_emit_conditional_branch (rtx operands[], enum machine_mode cmp_mode)
    valid.  Return the final comparison, or NULL if we can't work.  */
 
 bool
-alpha_emit_setcc (rtx operands[], enum machine_mode cmp_mode)
+alpha_emit_setcc (rtx operands[], machine_mode cmp_mode)
 {
   enum rtx_code cmp_code;
   enum rtx_code code = GET_CODE (operands[1]);
@@ -2496,7 +2680,7 @@ alpha_emit_setcc (rtx operands[], enum machine_mode cmp_mode)
       code = swap_condition (code);
       if (cmp_mode == DFmode)
 	cmp_code = code, code = NE;
-      tmp = op0, op0 = op1, op1 = tmp;
+      std::swap (op0, op1);
       break;
 
     default:
@@ -2515,16 +2699,16 @@ alpha_emit_setcc (rtx operands[], enum machine_mode cmp_mode)
   if (cmp_code != UNKNOWN)
     {
       tmp = gen_reg_rtx (cmp_mode);
-      emit_insn (gen_rtx_SET (VOIDmode, tmp,
-			      gen_rtx_fmt_ee (cmp_code, cmp_mode, op0, op1)));
+      emit_insn (gen_rtx_SET (tmp, gen_rtx_fmt_ee (cmp_code, cmp_mode,
+						   op0, op1)));
 
       op0 = cmp_mode != DImode ? gen_lowpart (DImode, tmp) : tmp;
       op1 = const0_rtx;
     }
 
   /* Emit the setcc instruction.  */
-  emit_insn (gen_rtx_SET (VOIDmode, operands[0],
-			  gen_rtx_fmt_ee (code, DImode, op0, op1)));
+  emit_insn (gen_rtx_SET (operands[0], gen_rtx_fmt_ee (code, DImode,
+						       op0, op1)));
   return true;
 }
 
@@ -2537,15 +2721,15 @@ alpha_emit_setcc (rtx operands[], enum machine_mode cmp_mode)
    the conditional move).  */
 
 rtx
-alpha_emit_conditional_move (rtx cmp, enum machine_mode mode)
+alpha_emit_conditional_move (rtx cmp, machine_mode mode)
 {
   enum rtx_code code = GET_CODE (cmp);
   enum rtx_code cmov_code = NE;
   rtx op0 = XEXP (cmp, 0);
   rtx op1 = XEXP (cmp, 1);
-  enum machine_mode cmp_mode
+  machine_mode cmp_mode
     = (GET_MODE (op0) == VOIDmode ? DImode : GET_MODE (op0));
-  enum machine_mode cmov_mode = VOIDmode;
+  machine_mode cmov_mode = VOIDmode;
   int local_fast_math = flag_unsafe_math_optimizations;
   rtx tem;
 
@@ -2593,7 +2777,7 @@ alpha_emit_conditional_move (rtx cmp, enum machine_mode mode)
 	    {
 	      cmp_code = swap_condition (code);
 	      code = NE;
-	      tem = op0, op0 = op1, op1 = tem;
+	      std::swap (op0, op1);
 	    }
 	  break;
 
@@ -2610,11 +2794,10 @@ alpha_emit_conditional_move (rtx cmp, enum machine_mode mode)
 	}
 
       tem = gen_reg_rtx (cmp_mode);
-      emit_insn (gen_rtx_SET (VOIDmode, tem,
-			      gen_rtx_fmt_ee (cmp_code, cmp_mode,
-					      op0, op1)));
+      emit_insn (gen_rtx_SET (tem, gen_rtx_fmt_ee (cmp_code, cmp_mode,
+						   op0, op1)));
 
-      cmp_mode = cmp_mode == DImode ? DFmode : DImode;
+      cmp_mode = cmp_mode == DImode ? E_DFmode : E_DImode;
       op0 = gen_lowpart (cmp_mode, tem);
       op1 = CONST0_RTX (cmp_mode);
       cmp = gen_rtx_fmt_ee (code, VOIDmode, op0, op1);
@@ -2664,7 +2847,7 @@ alpha_emit_conditional_move (rtx cmp, enum machine_mode mode)
       if (cmp_mode == DImode && op1 == const0_rtx)
 	break;
       code = swap_condition (code);
-      tem = op0, op0 = op1, op1 = tem;
+      std::swap (op0, op1);
       break;
 
     default:
@@ -2700,7 +2883,7 @@ alpha_split_conditional_move (enum rtx_code code, rtx dest, rtx cond,
 			      rtx t_rtx, rtx f_rtx)
 {
   HOST_WIDE_INT t, f, diff;
-  enum machine_mode mode;
+  machine_mode mode;
   rtx target, subtarget, tmp;
 
   mode = GET_MODE (dest);
@@ -2712,8 +2895,8 @@ alpha_split_conditional_move (enum rtx_code code, rtx dest, rtx cond,
       || (code == GE || code == GT))
     {
       code = reverse_condition (code);
-      diff = t, t = f, f = diff;
-      diff = t - f;
+      std::swap (t, f);
+      diff = -diff;
     }
 
   subtarget = target = dest;
@@ -2736,16 +2919,16 @@ alpha_split_conditional_move (enum rtx_code code, rtx dest, rtx cond,
       && (diff <= 8 || alpha_tune == PROCESSOR_EV6))
     {
       tmp = gen_rtx_fmt_ee (code, DImode, cond, const0_rtx);
-      emit_insn (gen_rtx_SET (VOIDmode, copy_rtx (subtarget), tmp));
+      emit_insn (gen_rtx_SET (copy_rtx (subtarget), tmp));
 
       tmp = gen_rtx_ASHIFT (DImode, copy_rtx (subtarget),
 			    GEN_INT (exact_log2 (t)));
-      emit_insn (gen_rtx_SET (VOIDmode, target, tmp));
+      emit_insn (gen_rtx_SET (target, tmp));
     }
   else if (f == 0 && t == -1)
     {
       tmp = gen_rtx_fmt_ee (code, DImode, cond, const0_rtx);
-      emit_insn (gen_rtx_SET (VOIDmode, copy_rtx (subtarget), tmp));
+      emit_insn (gen_rtx_SET (copy_rtx (subtarget), tmp));
 
       emit_insn (gen_negdi2 (target, copy_rtx (subtarget)));
     }
@@ -2754,7 +2937,7 @@ alpha_split_conditional_move (enum rtx_code code, rtx dest, rtx cond,
       rtx add_op;
 
       tmp = gen_rtx_fmt_ee (code, DImode, cond, const0_rtx);
-      emit_insn (gen_rtx_SET (VOIDmode, copy_rtx (subtarget), tmp));
+      emit_insn (gen_rtx_SET (copy_rtx (subtarget), tmp));
 
       if (diff == 1)
 	emit_insn (gen_adddi3 (target, copy_rtx (subtarget), GEN_INT (f)));
@@ -2763,10 +2946,10 @@ alpha_split_conditional_move (enum rtx_code code, rtx dest, rtx cond,
 	  add_op = GEN_INT (f);
 	  if (sext_add_operand (add_op, mode))
 	    {
-	      tmp = gen_rtx_MULT (DImode, copy_rtx (subtarget),
-				  GEN_INT (diff));
+	      tmp = gen_rtx_ASHIFT (DImode, copy_rtx (subtarget),
+				    GEN_INT (exact_log2 (diff)));
 	      tmp = gen_rtx_PLUS (DImode, tmp, add_op);
-	      emit_insn (gen_rtx_SET (VOIDmode, target, tmp));
+	      emit_insn (gen_rtx_SET (target, tmp));
 	    }
 	  else
 	    return 0;
@@ -2898,7 +3081,7 @@ static void
 alpha_emit_xfloating_libcall (rtx func, rtx target, rtx operands[],
 			      int noperands, rtx equiv)
 {
-  rtx usage = NULL_RTX, tmp, reg;
+  rtx usage = NULL_RTX, reg;
   int regno = 16, i;
 
   start_sequence ();
@@ -2907,20 +3090,20 @@ alpha_emit_xfloating_libcall (rtx func, rtx target, rtx operands[],
     {
       switch (GET_MODE (operands[i]))
 	{
-	case TFmode:
+	case E_TFmode:
 	  reg = gen_rtx_REG (TFmode, regno);
 	  regno += 2;
 	  break;
 
-	case DFmode:
+	case E_DFmode:
 	  reg = gen_rtx_REG (DFmode, regno + 32);
 	  regno += 1;
 	  break;
 
-	case VOIDmode:
+	case E_VOIDmode:
 	  gcc_assert (CONST_INT_P (operands[i]));
 	  /* FALLTHRU */
-	case DImode:
+	case E_DImode:
 	  reg = gen_rtx_REG (DImode, regno);
 	  regno += 1;
 	  break;
@@ -2935,22 +3118,22 @@ alpha_emit_xfloating_libcall (rtx func, rtx target, rtx operands[],
 
   switch (GET_MODE (target))
     {
-    case TFmode:
+    case E_TFmode:
       reg = gen_rtx_REG (TFmode, 16);
       break;
-    case DFmode:
+    case E_DFmode:
       reg = gen_rtx_REG (DFmode, 32);
       break;
-    case DImode:
+    case E_DImode:
       reg = gen_rtx_REG (DImode, 0);
       break;
     default:
       gcc_unreachable ();
     }
 
-  tmp = gen_rtx_MEM (QImode, func);
-  tmp = emit_call_insn (GEN_CALL_VALUE (reg, tmp, const0_rtx,
-					const0_rtx, const0_rtx));
+  rtx mem = gen_rtx_MEM (QImode, func);
+  rtx_insn *tmp = emit_call_insn (gen_call_value (reg, mem, const0_rtx,
+						  const0_rtx, const0_rtx));
   CALL_INSN_FUNCTION_USAGE (tmp) = usage;
   RTL_CONST_CALL_P (tmp) = 1;
 
@@ -3082,7 +3265,7 @@ alpha_emit_xfloating_cvt (enum rtx_code orig_code, rtx operands[])
    This is used by *movtf_internal and *movti_internal.  */
   
 void
-alpha_split_tmode_pair (rtx operands[4], enum machine_mode mode,
+alpha_split_tmode_pair (rtx operands[4], machine_mode mode,
 			bool fixup_overlap)
 {
   switch (GET_CODE (operands[1]))
@@ -3097,7 +3280,7 @@ alpha_split_tmode_pair (rtx operands[4], enum machine_mode mode,
       operands[2] = adjust_address (operands[1], DImode, 0);
       break;
 
-    case CONST_INT:
+    CASE_CONST_SCALAR_INT:
     case CONST_DOUBLE:
       gcc_assert (operands[1] == CONST0_RTX (mode));
       operands[2] = operands[3] = const0_rtx;
@@ -3125,9 +3308,8 @@ alpha_split_tmode_pair (rtx operands[4], enum machine_mode mode,
 
   if (fixup_overlap && reg_overlap_mentioned_p (operands[0], operands[3]))
     {
-      rtx tmp;
-      tmp = operands[0], operands[0] = operands[1], operands[1] = tmp;
-      tmp = operands[2], operands[2] = operands[3], operands[3] = tmp;
+      std::swap (operands[0], operands[1]);
+      std::swap (operands[2], operands[3]);
     }
 }
 
@@ -3207,7 +3389,7 @@ alpha_expand_unaligned_load (rtx tgt, rtx mem, HOST_WIDE_INT size,
 			     HOST_WIDE_INT ofs, int sign)
 {
   rtx meml, memh, addr, extl, exth, tmp, mema;
-  enum machine_mode mode;
+  machine_mode mode;
 
   if (TARGET_BWX && size == 2)
     {
@@ -3252,21 +3434,22 @@ alpha_expand_unaligned_load (rtx tgt, rtx mem, HOST_WIDE_INT size,
 
   tmp = change_address (mem, DImode,
 			gen_rtx_AND (DImode,
-				     plus_constant (mema, ofs),
+				     plus_constant (DImode, mema, ofs),
 				     GEN_INT (-8)));
   set_mem_alias_set (tmp, 0);
   emit_move_insn (meml, tmp);
 
   tmp = change_address (mem, DImode,
 			gen_rtx_AND (DImode,
-				     plus_constant (mema, ofs + size - 1),
+				     plus_constant (DImode, mema,
+						    ofs + size - 1),
 				     GEN_INT (-8)));
   set_mem_alias_set (tmp, 0);
   emit_move_insn (memh, tmp);
 
   if (sign && size == 2)
     {
-      emit_move_insn (addr, plus_constant (mema, ofs+2));
+      emit_move_insn (addr, plus_constant (Pmode, mema, ofs+2));
 
       emit_insn (gen_extql (extl, meml, addr));
       emit_insn (gen_extqh (exth, memh, addr));
@@ -3280,7 +3463,7 @@ alpha_expand_unaligned_load (rtx tgt, rtx mem, HOST_WIDE_INT size,
     }
   else
     {
-      emit_move_insn (addr, plus_constant (mema, ofs));
+      emit_move_insn (addr, plus_constant (Pmode, mema, ofs));
       emit_insn (gen_extxl (extl, meml, GEN_INT (size*8), addr));
       switch ((int) size)
 	{
@@ -3352,20 +3535,21 @@ alpha_expand_unaligned_store (rtx dst, rtx src,
 
   meml = change_address (dst, DImode,
 			 gen_rtx_AND (DImode,
-				      plus_constant (dsta, ofs),
+				      plus_constant (DImode, dsta, ofs),
 				      GEN_INT (-8)));
   set_mem_alias_set (meml, 0);
 
   memh = change_address (dst, DImode,
 			 gen_rtx_AND (DImode,
-				      plus_constant (dsta, ofs + size - 1),
+				      plus_constant (DImode, dsta,
+						     ofs + size - 1),
 				      GEN_INT (-8)));
   set_mem_alias_set (memh, 0);
 
   emit_move_insn (dsth, memh);
   emit_move_insn (dstl, meml);
 
-  addr = copy_addr_to_reg (plus_constant (dsta, ofs));
+  addr = copy_addr_to_reg (plus_constant (Pmode, dsta, ofs));
 
   if (src != CONST0_RTX (GET_MODE (src)))
     {
@@ -3455,7 +3639,7 @@ alpha_expand_unaligned_load_words (rtx *out_regs, rtx smem,
     {
       tmp = change_address (smem, DImode,
 			    gen_rtx_AND (DImode,
-					 plus_constant (smema, 8*i),
+					 plus_constant (DImode, smema, 8*i),
 					 im8));
       set_mem_alias_set (tmp, 0);
       emit_move_insn (data_regs[i], tmp);
@@ -3463,7 +3647,8 @@ alpha_expand_unaligned_load_words (rtx *out_regs, rtx smem,
 
   tmp = change_address (smem, DImode,
 			gen_rtx_AND (DImode,
-				     plus_constant (smema, 8*words - 1),
+				     plus_constant (DImode, smema,
+						    8*words - 1),
 				     im8));
   set_mem_alias_set (tmp, 0);
   emit_move_insn (data_regs[words], tmp);
@@ -3479,7 +3664,7 @@ alpha_expand_unaligned_load_words (rtx *out_regs, rtx smem,
     {
       emit_insn (gen_extql (data_regs[i], data_regs[i], sreg));
       emit_insn (gen_extqh (ext_tmps[i], data_regs[i+1], sreg));
-      emit_insn (gen_rtx_SET (VOIDmode, ext_tmps[i],
+      emit_insn (gen_rtx_SET (ext_tmps[i],
 			      gen_rtx_IF_THEN_ELSE (DImode,
 						    gen_rtx_EQ (DImode, areg,
 								const0_rtx),
@@ -3523,8 +3708,9 @@ alpha_expand_unaligned_store_words (rtx *data_regs, rtx dmem,
 
   st_addr_2 = change_address (dmem, DImode,
 			      gen_rtx_AND (DImode,
-					   plus_constant (dmema, words*8 - 1),
-				       im8));
+					   plus_constant (DImode, dmema,
+							  words*8 - 1),
+					   im8));
   set_mem_alias_set (st_addr_2, 0);
 
   st_addr_1 = change_address (dmem, DImode,
@@ -3570,7 +3756,8 @@ alpha_expand_unaligned_store_words (rtx *data_regs, rtx dmem,
     {
       rtx tmp = change_address (dmem, DImode,
 				gen_rtx_AND (DImode,
-					     plus_constant (dmema, i*8),
+					     plus_constant (DImode,
+							    dmema, i*8),
 					     im8));
       set_mem_alias_set (tmp, 0);
       emit_move_insn (tmp, data_regs ? ins_tmps[i-1] : const0_rtx);
@@ -3877,7 +4064,6 @@ alpha_expand_block_clear (rtx operands[])
 
   if (alignofs > 0)
     {
-#if HOST_BITS_PER_WIDE_INT >= 64
       /* Given that alignofs is bounded by align, the only time BWX could
 	 generate three stores is for a 7 byte fill.  Prefer two individual
 	 stores over a load/mask/store sequence.  */
@@ -3885,7 +4071,7 @@ alpha_expand_block_clear (rtx operands[])
 	       && align >= 32
 	       && !(alignofs == 4 && bytes >= 4))
 	{
-	  enum machine_mode mode = (align >= 64 ? DImode : SImode);
+	  machine_mode mode = (align >= 64 ? DImode : SImode);
 	  int inv_alignofs = (align >= 64 ? 8 : 4) - alignofs;
 	  rtx mem, tmp;
 	  HOST_WIDE_INT mask;
@@ -3893,10 +4079,10 @@ alpha_expand_block_clear (rtx operands[])
 	  mem = adjust_address (orig_dst, mode, ofs - inv_alignofs);
 	  set_mem_alias_set (mem, 0);
 
-	  mask = ~(~(HOST_WIDE_INT)0 << (inv_alignofs * 8));
+	  mask = ~(HOST_WIDE_INT_M1U << (inv_alignofs * 8));
 	  if (bytes < alignofs)
 	    {
-	      mask |= ~(HOST_WIDE_INT)0 << ((inv_alignofs + bytes) * 8);
+	      mask |= HOST_WIDE_INT_M1U << ((inv_alignofs + bytes) * 8);
 	      ofs += bytes;
 	      bytes = 0;
 	    }
@@ -3912,7 +4098,6 @@ alpha_expand_block_clear (rtx operands[])
 
 	  emit_move_insn (mem, tmp);
 	}
-#endif
 
       if (TARGET_BWX && (alignofs & 1) && bytes >= 1)
 	{
@@ -3980,7 +4165,8 @@ alpha_expand_block_clear (rtx operands[])
 	  rtx mem
 	    = change_address (orig_dst, DImode,
 			      gen_rtx_AND (DImode,
-					   plus_constant (orig_dsta, ofs + i*8),
+					   plus_constant (DImode, orig_dsta,
+							  ofs + i*8),
 					   GEN_INT (-8)));
 	  set_mem_alias_set (mem, 0);
 	  emit_move_insn (mem, const0_rtx);
@@ -4023,7 +4209,6 @@ alpha_expand_block_clear (rtx operands[])
 
   /* Next clean up any trailing pieces.  */
 
-#if HOST_BITS_PER_WIDE_INT >= 64
   /* Count the number of bits in BYTES for which aligned stores could
      be emitted.  */
   words = 0;
@@ -4043,7 +4228,7 @@ alpha_expand_block_clear (rtx operands[])
 	  mem = adjust_address (orig_dst, DImode, ofs);
 	  set_mem_alias_set (mem, 0);
 
-	  mask = ~(HOST_WIDE_INT)0 << (bytes * 8);
+	  mask = HOST_WIDE_INT_M1U << (bytes * 8);
 
 	  tmp = expand_binop (DImode, and_optab, mem, GEN_INT (mask),
 			      NULL_RTX, 1, OPTAB_WIDEN);
@@ -4059,7 +4244,7 @@ alpha_expand_block_clear (rtx operands[])
 	  mem = adjust_address (orig_dst, SImode, ofs);
 	  set_mem_alias_set (mem, 0);
 
-	  mask = ~(HOST_WIDE_INT)0 << (bytes * 8);
+	  mask = HOST_WIDE_INT_M1U << (bytes * 8);
 
 	  tmp = expand_binop (SImode, and_optab, mem, GEN_INT (mask),
 			      NULL_RTX, 1, OPTAB_WIDEN);
@@ -4068,7 +4253,6 @@ alpha_expand_block_clear (rtx operands[])
 	  return 1;
 	}
     }
-#endif
 
   if (!TARGET_BWX && bytes >= 4)
     {
@@ -4113,49 +4297,22 @@ alpha_expand_zap_mask (HOST_WIDE_INT value)
 {
   rtx result;
   int i;
+  HOST_WIDE_INT mask = 0;
 
-  if (HOST_BITS_PER_WIDE_INT >= 64)
+  for (i = 7; i >= 0; --i)
     {
-      HOST_WIDE_INT mask = 0;
-
-      for (i = 7; i >= 0; --i)
-	{
-	  mask <<= 8;
-	  if (!((value >> i) & 1))
-	    mask |= 0xff;
-	}
-
-      result = gen_int_mode (mask, DImode);
-    }
-  else
-    {
-      HOST_WIDE_INT mask_lo = 0, mask_hi = 0;
-
-      gcc_assert (HOST_BITS_PER_WIDE_INT == 32);
-      
-      for (i = 7; i >= 4; --i)
-	{
-	  mask_hi <<= 8;
-	  if (!((value >> i) & 1))
-	    mask_hi |= 0xff;
-	}
-
-      for (i = 3; i >= 0; --i)
-	{
-	  mask_lo <<= 8;
-	  if (!((value >> i) & 1))
-	    mask_lo |= 0xff;
-	}
-
-      result = immed_double_const (mask_lo, mask_hi, DImode);
+      mask <<= 8;
+      if (!((value >> i) & 1))
+	mask |= 0xff;
     }
 
+  result = gen_int_mode (mask, DImode);
   return result;
 }
 
 void
 alpha_expand_builtin_vector_binop (rtx (*gen) (rtx, rtx, rtx),
-				   enum machine_mode mode,
+				   machine_mode mode,
 				   rtx op0, rtx op1, rtx op2)
 {
   op0 = gen_lowpart (mode, op0);
@@ -4179,40 +4336,9 @@ alpha_expand_builtin_vector_binop (rtx (*gen) (rtx, rtx, rtx),
 static void
 emit_unlikely_jump (rtx cond, rtx label)
 {
-  rtx very_unlikely = GEN_INT (REG_BR_PROB_BASE / 100 - 1);
-  rtx x;
-
-  x = gen_rtx_IF_THEN_ELSE (VOIDmode, cond, label, pc_rtx);
-  x = emit_jump_insn (gen_rtx_SET (VOIDmode, pc_rtx, x));
-  add_reg_note (x, REG_BR_PROB, very_unlikely);
-}
-
-/* A subroutine of the atomic operation splitters.  Emit a load-locked
-   instruction in MODE.  */
-
-static void
-emit_load_locked (enum machine_mode mode, rtx reg, rtx mem)
-{
-  rtx (*fn) (rtx, rtx) = NULL;
-  if (mode == SImode)
-    fn = gen_load_locked_si;
-  else if (mode == DImode)
-    fn = gen_load_locked_di;
-  emit_insn (fn (reg, mem));
-}
-
-/* A subroutine of the atomic operation splitters.  Emit a store-conditional
-   instruction in MODE.  */
-
-static void
-emit_store_conditional (enum machine_mode mode, rtx res, rtx mem, rtx val)
-{
-  rtx (*fn) (rtx, rtx, rtx) = NULL;
-  if (mode == SImode)
-    fn = gen_store_conditional_si;
-  else if (mode == DImode)
-    fn = gen_store_conditional_di;
-  emit_insn (fn (res, mem, val));
+  rtx x = gen_rtx_IF_THEN_ELSE (VOIDmode, cond, label, pc_rtx);
+  rtx_insn *insn = emit_jump_insn (gen_rtx_SET (pc_rtx, x));
+  add_reg_br_prob_note (insn, profile_probability::very_unlikely ());
 }
 
 /* Subroutines of the atomic operation splitters.  Emit barriers
@@ -4221,62 +4347,38 @@ emit_store_conditional (enum machine_mode mode, rtx res, rtx mem, rtx val)
 static void
 alpha_pre_atomic_barrier (enum memmodel model)
 {
-  switch (model)
-    {
-    case MEMMODEL_RELAXED:
-    case MEMMODEL_CONSUME:
-    case MEMMODEL_ACQUIRE:
-      break;
-    case MEMMODEL_RELEASE:
-    case MEMMODEL_ACQ_REL:
-    case MEMMODEL_SEQ_CST:
-      emit_insn (gen_memory_barrier ());
-      break;
-    default:
-      gcc_unreachable ();
-    }
+  if (need_atomic_barrier_p (model, true))
+    emit_insn (gen_memory_barrier ());
 }
 
 static void
 alpha_post_atomic_barrier (enum memmodel model)
 {
-  switch (model)
-    {
-    case MEMMODEL_RELAXED:
-    case MEMMODEL_CONSUME:
-    case MEMMODEL_RELEASE:
-      break;
-    case MEMMODEL_ACQUIRE:
-    case MEMMODEL_ACQ_REL:
-    case MEMMODEL_SEQ_CST:
-      emit_insn (gen_memory_barrier ());
-      break;
-    default:
-      gcc_unreachable ();
-    }
+  if (need_atomic_barrier_p (model, false))
+    emit_insn (gen_memory_barrier ());
 }
 
 /* A subroutine of the atomic operation splitters.  Emit an insxl
    instruction in MODE.  */
 
 static rtx
-emit_insxl (enum machine_mode mode, rtx op1, rtx op2)
+emit_insxl (machine_mode mode, rtx op1, rtx op2)
 {
   rtx ret = gen_reg_rtx (DImode);
   rtx (*fn) (rtx, rtx, rtx);
 
   switch (mode)
     {
-    case QImode:
+    case E_QImode:
       fn = gen_insbl;
       break;
-    case HImode:
+    case E_HImode:
       fn = gen_inswl;
       break;
-    case SImode:
+    case E_SImode:
       fn = gen_insll;
       break;
-    case DImode:
+    case E_DImode:
       fn = gen_insql;
       break;
     default:
@@ -4299,7 +4401,7 @@ void
 alpha_split_atomic_op (enum rtx_code code, rtx mem, rtx val, rtx before,
 		       rtx after, rtx scratch, enum memmodel model)
 {
-  enum machine_mode mode = GET_MODE (mem);
+  machine_mode mode = GET_MODE (mem);
   rtx label, x, cond = gen_rtx_REG (DImode, REGNO (scratch));
 
   alpha_pre_atomic_barrier (model);
@@ -4310,22 +4412,22 @@ alpha_split_atomic_op (enum rtx_code code, rtx mem, rtx val, rtx before,
 
   if (before == NULL)
     before = scratch;
-  emit_load_locked (mode, before, mem);
+  emit_insn (gen_load_locked (mode, before, mem));
 
   if (code == NOT)
     {
       x = gen_rtx_AND (mode, before, val);
-      emit_insn (gen_rtx_SET (VOIDmode, val, x));
+      emit_insn (gen_rtx_SET (val, x));
 
       x = gen_rtx_NOT (mode, val);
     }
   else
     x = gen_rtx_fmt_ee (code, mode, before, val);
   if (after)
-    emit_insn (gen_rtx_SET (VOIDmode, after, copy_rtx (x)));
-  emit_insn (gen_rtx_SET (VOIDmode, scratch, x));
+    emit_insn (gen_rtx_SET (after, copy_rtx (x)));
+  emit_insn (gen_rtx_SET (scratch, x));
 
-  emit_store_conditional (mode, cond, mem, scratch);
+  emit_insn (gen_store_conditional (mode, cond, mem, scratch));
 
   x = gen_rtx_EQ (DImode, cond, const0_rtx);
   emit_unlikely_jump (x, label);
@@ -4341,7 +4443,7 @@ alpha_split_compare_and_swap (rtx operands[])
   rtx cond, retval, mem, oldval, newval;
   bool is_weak;
   enum memmodel mod_s, mod_f;
-  enum machine_mode mode;
+  machine_mode mode;
   rtx label1, label2, x;
 
   cond = operands[0];
@@ -4350,8 +4452,8 @@ alpha_split_compare_and_swap (rtx operands[])
   oldval = operands[3];
   newval = operands[4];
   is_weak = (operands[5] != const0_rtx);
-  mod_s = (enum memmodel) INTVAL (operands[6]);
-  mod_f = (enum memmodel) INTVAL (operands[7]);
+  mod_s = memmodel_from_int (INTVAL (operands[6]));
+  mod_f = memmodel_from_int (INTVAL (operands[7]));
   mode = GET_MODE (mem);
 
   alpha_pre_atomic_barrier (mod_s);
@@ -4364,7 +4466,7 @@ alpha_split_compare_and_swap (rtx operands[])
     }
   label2 = gen_rtx_LABEL_REF (DImode, gen_label_rtx ());
 
-  emit_load_locked (mode, retval, mem);
+  emit_insn (gen_load_locked (mode, retval, mem));
 
   x = gen_lowpart (DImode, retval);
   if (oldval == const0_rtx)
@@ -4375,13 +4477,14 @@ alpha_split_compare_and_swap (rtx operands[])
   else
     {
       x = gen_rtx_EQ (DImode, x, oldval);
-      emit_insn (gen_rtx_SET (VOIDmode, cond, x));
+      emit_insn (gen_rtx_SET (cond, x));
       x = gen_rtx_EQ (DImode, cond, const0_rtx);
     }
   emit_unlikely_jump (x, label2);
 
   emit_move_insn (cond, newval);
-  emit_store_conditional (mode, cond, mem, gen_lowpart (mode, cond));
+  emit_insn (gen_store_conditional
+	     (mode, cond, mem, gen_lowpart (mode, cond)));
 
   if (!is_weak)
     {
@@ -4389,12 +4492,12 @@ alpha_split_compare_and_swap (rtx operands[])
       emit_unlikely_jump (x, label1);
     }
 
-  if (mod_f != MEMMODEL_RELAXED)
+  if (!is_mm_relaxed (mod_f))
     emit_label (XEXP (label2, 0));
 
   alpha_post_atomic_barrier (mod_s);
 
-  if (mod_f == MEMMODEL_RELAXED)
+  if (is_mm_relaxed (mod_f))
     emit_label (XEXP (label2, 0));
 }
 
@@ -4402,9 +4505,8 @@ void
 alpha_expand_compare_and_swap_12 (rtx operands[])
 {
   rtx cond, dst, mem, oldval, newval, is_weak, mod_s, mod_f;
-  enum machine_mode mode;
+  machine_mode mode;
   rtx addr, align, wdst;
-  rtx (*gen) (rtx, rtx, rtx, rtx, rtx, rtx, rtx, rtx, rtx);
 
   cond = operands[0];
   dst = operands[1];
@@ -4429,12 +4531,9 @@ alpha_expand_compare_and_swap_12 (rtx operands[])
     newval = emit_insxl (mode, newval, addr);
 
   wdst = gen_reg_rtx (DImode);
-  if (mode == QImode)
-    gen = gen_atomic_compare_and_swapqi_1;
-  else
-    gen = gen_atomic_compare_and_swaphi_1;
-  emit_insn (gen (cond, wdst, mem, oldval, newval, align,
-		  is_weak, mod_s, mod_f));
+  emit_insn (gen_atomic_compare_and_swap_1
+	     (mode, cond, wdst, mem, oldval, newval, align,
+	      is_weak, mod_s, mod_f));
 
   emit_move_insn (dst, gen_lowpart (mode, wdst));
 }
@@ -4443,7 +4542,7 @@ void
 alpha_split_compare_and_swap_12 (rtx operands[])
 {
   rtx cond, dest, orig_mem, oldval, newval, align, scratch;
-  enum machine_mode mode;
+  machine_mode mode;
   bool is_weak;
   enum memmodel mod_s, mod_f;
   rtx label1, label2, mem, addr, width, mask, x;
@@ -4455,8 +4554,8 @@ alpha_split_compare_and_swap_12 (rtx operands[])
   newval = operands[4];
   align = operands[5];
   is_weak = (operands[6] != const0_rtx);
-  mod_s = (enum memmodel) INTVAL (operands[7]);
-  mod_f = (enum memmodel) INTVAL (operands[8]);
+  mod_s = memmodel_from_int (INTVAL (operands[7]));
+  mod_f = memmodel_from_int (INTVAL (operands[8]));
   scratch = operands[9];
   mode = GET_MODE (orig_mem);
   addr = XEXP (orig_mem, 0);
@@ -4476,7 +4575,7 @@ alpha_split_compare_and_swap_12 (rtx operands[])
     }
   label2 = gen_rtx_LABEL_REF (DImode, gen_label_rtx ());
 
-  emit_load_locked (DImode, scratch, mem);
+  emit_insn (gen_load_locked (DImode, scratch, mem));
   
   width = GEN_INT (GET_MODE_BITSIZE (mode));
   mask = GEN_INT (mode == QImode ? 0xff : 0xffff);
@@ -4490,7 +4589,7 @@ alpha_split_compare_and_swap_12 (rtx operands[])
   else
     {
       x = gen_rtx_EQ (DImode, dest, oldval);
-      emit_insn (gen_rtx_SET (VOIDmode, cond, x));
+      emit_insn (gen_rtx_SET (cond, x));
       x = gen_rtx_EQ (DImode, cond, const0_rtx);
     }
   emit_unlikely_jump (x, label2);
@@ -4500,7 +4599,7 @@ alpha_split_compare_and_swap_12 (rtx operands[])
   if (newval != const0_rtx)
     emit_insn (gen_iordi3 (cond, cond, newval));
 
-  emit_store_conditional (DImode, cond, mem, cond);
+  emit_insn (gen_store_conditional (DImode, cond, mem, cond));
 
   if (!is_weak)
     {
@@ -4508,12 +4607,12 @@ alpha_split_compare_and_swap_12 (rtx operands[])
       emit_unlikely_jump (x, label1);
     }
 
-  if (mod_f != MEMMODEL_RELAXED)
+  if (!is_mm_relaxed (mod_f))
     emit_label (XEXP (label2, 0));
 
   alpha_post_atomic_barrier (mod_s);
 
-  if (mod_f == MEMMODEL_RELAXED)
+  if (is_mm_relaxed (mod_f))
     emit_label (XEXP (label2, 0));
 }
 
@@ -4524,7 +4623,7 @@ alpha_split_atomic_exchange (rtx operands[])
 {
   rtx retval, mem, val, scratch;
   enum memmodel model;
-  enum machine_mode mode;
+  machine_mode mode;
   rtx label, x, cond;
 
   retval = operands[0];
@@ -4540,9 +4639,9 @@ alpha_split_atomic_exchange (rtx operands[])
   label = gen_rtx_LABEL_REF (DImode, gen_label_rtx ());
   emit_label (XEXP (label, 0));
 
-  emit_load_locked (mode, retval, mem);
+  emit_insn (gen_load_locked (mode, retval, mem));
   emit_move_insn (scratch, val);
-  emit_store_conditional (mode, cond, mem, scratch);
+  emit_insn (gen_store_conditional (mode, cond, mem, scratch));
 
   x = gen_rtx_EQ (DImode, cond, const0_rtx);
   emit_unlikely_jump (x, label);
@@ -4554,9 +4653,8 @@ void
 alpha_expand_atomic_exchange_12 (rtx operands[])
 {
   rtx dst, mem, val, model;
-  enum machine_mode mode;
+  machine_mode mode;
   rtx addr, align, wdst;
-  rtx (*gen) (rtx, rtx, rtx, rtx, rtx);
 
   dst = operands[0];
   mem = operands[1];
@@ -4576,11 +4674,7 @@ alpha_expand_atomic_exchange_12 (rtx operands[])
     val = emit_insxl (mode, val, addr);
 
   wdst = gen_reg_rtx (DImode);
-  if (mode == QImode)
-    gen = gen_atomic_exchangeqi_1;
-  else
-    gen = gen_atomic_exchangehi_1;
-  emit_insn (gen (wdst, mem, val, align, model));
+  emit_insn (gen_atomic_exchange_1 (mode, wdst, mem, val, align, model));
 
   emit_move_insn (dst, gen_lowpart (mode, wdst));
 }
@@ -4590,7 +4684,7 @@ alpha_split_atomic_exchange_12 (rtx operands[])
 {
   rtx dest, orig_mem, addr, val, align, scratch;
   rtx label, mem, width, mask, x;
-  enum machine_mode mode;
+  machine_mode mode;
   enum memmodel model;
 
   dest = operands[0];
@@ -4612,7 +4706,7 @@ alpha_split_atomic_exchange_12 (rtx operands[])
   label = gen_rtx_LABEL_REF (DImode, gen_label_rtx ());
   emit_label (XEXP (label, 0));
 
-  emit_load_locked (DImode, scratch, mem);
+  emit_insn (gen_load_locked (DImode, scratch, mem));
   
   width = GEN_INT (GET_MODE_BITSIZE (mode));
   mask = GEN_INT (mode == QImode ? 0xff : 0xffff);
@@ -4621,7 +4715,7 @@ alpha_split_atomic_exchange_12 (rtx operands[])
   if (val != const0_rtx)
     emit_insn (gen_iordi3 (scratch, scratch, val));
 
-  emit_store_conditional (DImode, scratch, mem, scratch);
+  emit_insn (gen_store_conditional (DImode, scratch, mem, scratch));
 
   x = gen_rtx_EQ (DImode, scratch, const0_rtx);
   emit_unlikely_jump (x, label);
@@ -4633,14 +4727,15 @@ alpha_split_atomic_exchange_12 (rtx operands[])
    a dependency LINK or INSN on DEP_INSN.  COST is the current cost.  */
 
 static int
-alpha_adjust_cost (rtx insn, rtx link, rtx dep_insn, int cost)
+alpha_adjust_cost (rtx_insn *insn, int dep_type, rtx_insn *dep_insn, int cost,
+		   unsigned int)
 {
   enum attr_type dep_insn_type;
 
   /* If the dependence is an anti-dependence, there is no cost.  For an
      output dependence, there is sometimes a cost, but it doesn't seem
      worth handling those few cases.  */
-  if (REG_NOTE_KIND (link) != 0)
+  if (dep_type != 0)
     return cost;
 
   /* If we can't recognize the insns, we can't really do anything.  */
@@ -4688,18 +4783,18 @@ struct GTY(()) alpha_links;
 
 struct GTY(()) machine_function
 {
-  /* For OSF.  */
-  const char *some_ld_name;
+  unsigned HOST_WIDE_INT sa_mask;
+  HOST_WIDE_INT sa_size;
+  HOST_WIDE_INT frame_size;
 
-  /* For TARGET_LD_BUGGY_LDGP.  */
+  /* For flag_reorder_blocks_and_partition.  */
   rtx gp_save_rtx;
 
   /* For VMS condition handlers.  */
   bool uses_condition_handler;
 
   /* Linkage entries.  */
-  splay_tree GTY ((param1_is (char *), param2_is (struct alpha_links *)))
-    links;
+  hash_map<nofree_string_hash, alpha_links *> *links;
 };
 
 /* How to allocate a 'struct machine_function'.  */
@@ -4707,7 +4802,7 @@ struct GTY(()) machine_function
 static struct machine_function *
 alpha_init_machine_status (void)
 {
-  return ggc_alloc_cleared_machine_function ();
+  return ggc_cleared_alloc<machine_function> ();
 }
 
 /* Support for frame based VMS condition handlers.  */
@@ -4737,8 +4832,8 @@ alpha_init_machine_status (void)
 void
 alpha_expand_builtin_establish_vms_condition_handler (rtx target, rtx handler)
 {
-  rtx handler_slot_address
-    = plus_constant (hard_frame_pointer_rtx, VMS_COND_HANDLER_FP_OFFSET);
+  rtx handler_slot_address = plus_constant (Pmode, hard_frame_pointer_rtx,
+					    VMS_COND_HANDLER_FP_OFFSET);
 
   rtx handler_slot
     = gen_rtx_MEM (DImode, handler_slot_address);
@@ -4786,7 +4881,8 @@ alpha_return_addr (int count, rtx frame ATTRIBUTE_UNUSED)
 rtx
 alpha_gp_save_rtx (void)
 {
-  rtx seq, m = cfun->machine->gp_save_rtx;
+  rtx_insn *seq;
+  rtx m = cfun->machine->gp_save_rtx;
 
   if (m == NULL)
     {
@@ -4805,7 +4901,8 @@ alpha_gp_save_rtx (void)
 	 label.  Emit the sequence properly on the edge.  We are only
 	 invoked from dw2_build_landing_pads and finish_eh_generation
 	 will call commit_edge_insertions thanks to a kludge.  */
-      insert_insn_on_edge (seq, single_succ_edge (ENTRY_BLOCK_PTR));
+      insert_insn_on_edge (seq,
+			   single_succ_edge (ENTRY_BLOCK_PTR_FOR_FN (cfun)));
 
       cfun->machine->gp_save_rtx = m;
     }
@@ -4823,7 +4920,7 @@ alpha_instantiate_decls (void)
 static int
 alpha_ra_ever_killed (void)
 {
-  rtx top;
+  rtx_insn *top;
 
   if (!has_hard_reg_initial_val (Pmode, REG_RA))
     return (int)df_regs_ever_live_p (REG_RA);
@@ -4832,7 +4929,7 @@ alpha_ra_ever_killed (void)
   top = get_insns ();
   pop_topmost_sequence ();
 
-  return reg_set_between_p (gen_rtx_REG (Pmode, REG_RA), top, NULL_RTX);
+  return reg_set_between_p (gen_rtx_REG (Pmode, REG_RA), top, NULL);
 }
 
 
@@ -4948,44 +5045,20 @@ get_round_mode_suffix (void)
   gcc_unreachable ();
 }
 
-/* Locate some local-dynamic symbol still in use by this function
-   so that we can print its name in some movdi_er_tlsldm pattern.  */
+/* Implement TARGET_PRINT_OPERAND_PUNCT_VALID_P.  */
 
-static int
-get_some_local_dynamic_name_1 (rtx *px, void *data ATTRIBUTE_UNUSED)
+static bool
+alpha_print_operand_punct_valid_p (unsigned char code)
 {
-  rtx x = *px;
-
-  if (GET_CODE (x) == SYMBOL_REF
-      && SYMBOL_REF_TLS_MODEL (x) == TLS_MODEL_LOCAL_DYNAMIC)
-    {
-      cfun->machine->some_ld_name = XSTR (x, 0);
-      return 1;
-    }
-
-  return 0;
+  return (code == '/' || code == ',' || code == '-' || code == '~'
+	  || code == '#' || code == '*' || code == '&');
 }
 
-static const char *
-get_some_local_dynamic_name (void)
-{
-  rtx insn;
+/* Implement TARGET_PRINT_OPERAND.  The alpha-specific
+   operand codes are documented below.  */
 
-  if (cfun->machine->some_ld_name)
-    return cfun->machine->some_ld_name;
-
-  for (insn = get_insns (); insn ; insn = NEXT_INSN (insn))
-    if (INSN_P (insn)
-	&& for_each_rtx (&PATTERN (insn), get_some_local_dynamic_name_1, 0))
-      return cfun->machine->some_ld_name;
-
-  gcc_unreachable ();
-}
-
-/* Print an operand.  Recognize special options, documented below.  */
-
-void
-print_operand (FILE *file, rtx x, int code)
+static void
+alpha_print_operand (FILE *file, rtx x, int code)
 {
   int i;
 
@@ -4997,27 +5070,34 @@ print_operand (FILE *file, rtx x, int code)
       break;
 
     case '&':
-      assemble_name (file, get_some_local_dynamic_name ());
+      if (const char *name = get_some_local_dynamic_name ())
+	assemble_name (file, name);
+      else
+	output_operand_lossage ("'%%&' used without any "
+				"local dynamic TLS references");
       break;
 
     case '/':
+      /* Generates the instruction suffix.  The TRAP_SUFFIX and ROUND_SUFFIX
+	 attributes are examined to determine what is appropriate.  */
       {
 	const char *trap = get_trap_mode_suffix ();
 	const char *round = get_round_mode_suffix ();
 
 	if (trap || round)
-	  fprintf (file, (TARGET_AS_SLASH_BEFORE_SUFFIX ? "/%s%s" : "%s%s"),
-		   (trap ? trap : ""), (round ? round : ""));
+	  fprintf (file, "/%s%s", (trap ? trap : ""), (round ? round : ""));
 	break;
       }
 
     case ',':
-      /* Generates single precision instruction suffix.  */
+      /* Generates single precision suffix for floating point
+	 instructions (s for IEEE, f for VAX).  */
       fputc ((TARGET_FLOAT_VAX ? 'f' : 's'), file);
       break;
 
     case '-':
-      /* Generates double precision instruction suffix.  */
+      /* Generates double precision suffix for floating point
+	 instructions (t for IEEE, g for VAX).  */
       fputc ((TARGET_FLOAT_VAX ? 'g' : 't'), file);
       break;
 
@@ -5031,13 +5111,6 @@ print_operand (FILE *file, rtx x, int code)
       if (alpha_this_gpdisp_sequence_number == 0)
 	alpha_this_gpdisp_sequence_number = alpha_next_sequence_number++;
       fprintf (file, "%d", alpha_this_gpdisp_sequence_number);
-      break;
-
-    case 'H':
-      if (GET_CODE (x) == HIGH)
-	output_addr_const (file, XEXP (x, 0));
-      else
-	output_operand_lossage ("invalid %%H value");
       break;
 
     case 'J':
@@ -5114,7 +5187,7 @@ print_operand (FILE *file, rtx x, int code)
       if (!CONST_INT_P (x))
 	output_operand_lossage ("invalid %%P value");
 
-      fprintf (file, HOST_WIDE_INT_PRINT_DEC, (HOST_WIDE_INT) 1 << INTVAL (x));
+      fprintf (file, HOST_WIDE_INT_PRINT_DEC, HOST_WIDE_INT_1 << INTVAL (x));
       break;
 
     case 'h':
@@ -5136,27 +5209,7 @@ print_operand (FILE *file, rtx x, int code)
 
     case 'm':
       /* Write mask for ZAP insn.  */
-      if (GET_CODE (x) == CONST_DOUBLE)
-	{
-	  HOST_WIDE_INT mask = 0;
-	  HOST_WIDE_INT value;
-
-	  value = CONST_DOUBLE_LOW (x);
-	  for (i = 0; i < HOST_BITS_PER_WIDE_INT / HOST_BITS_PER_CHAR;
-	       i++, value >>= 8)
-	    if (value & 0xff)
-	      mask |= (1 << i);
-
-	  value = CONST_DOUBLE_HIGH (x);
-	  for (i = 0; i < HOST_BITS_PER_WIDE_INT / HOST_BITS_PER_CHAR;
-	       i++, value >>= 8)
-	    if (value & 0xff)
-	      mask |= (1 << (i + sizeof (int)));
-
-	  fprintf (file, HOST_WIDE_INT_PRINT_DEC, mask & 0xff);
-	}
-
-      else if (CONST_INT_P (x))
+      if (CONST_INT_P (x))
 	{
 	  HOST_WIDE_INT mask = 0, value = INTVAL (x);
 
@@ -5172,9 +5225,7 @@ print_operand (FILE *file, rtx x, int code)
 
     case 'M':
       /* 'b', 'w', 'l', or 'q' as the value of the constant.  */
-      if (!CONST_INT_P (x)
-	  || (INTVAL (x) != 8 && INTVAL (x) != 16
-	      && INTVAL (x) != 32 && INTVAL (x) != 64))
+      if (!mode_width_operand (x, VOIDmode))
 	output_operand_lossage ("invalid %%M value");
 
       fprintf (file, "%s",
@@ -5211,14 +5262,7 @@ print_operand (FILE *file, rtx x, int code)
 	      break;
 	    }
 	}
-      else if (HOST_BITS_PER_WIDE_INT == 32
-	       && GET_CODE (x) == CONST_DOUBLE
-	       && CONST_DOUBLE_LOW (x) == 0xffffffff
-	       && CONST_DOUBLE_HIGH (x) == 0)
-	{
-	  fputc ('l', file);
-	  break;
-	}
+
       output_operand_lossage ("invalid %%U value");
       break;
 
@@ -5230,17 +5274,6 @@ print_operand (FILE *file, rtx x, int code)
 	output_operand_lossage ("invalid %%s value");
 
       fprintf (file, HOST_WIDE_INT_PRINT_DEC, INTVAL (x) / 8);
-      break;
-
-    case 'S':
-      /* Same, except compute (64 - c) / 8 */
-
-      if (!CONST_INT_P (x)
-	  && (unsigned HOST_WIDE_INT) INTVAL (x) >= 64
-	  && (INTVAL (x) & 7) != 8)
-	output_operand_lossage ("invalid %%s value");
-
-      fprintf (file, HOST_WIDE_INT_PRINT_DEC, (64 - INTVAL (x)) / 8);
       break;
 
     case 'C': case 'D': case 'c': case 'd':
@@ -5301,7 +5334,7 @@ print_operand (FILE *file, rtx x, int code)
       if (REG_P (x))
 	fprintf (file, "%s", reg_names[REGNO (x)]);
       else if (MEM_P (x))
-	output_address (XEXP (x, 0));
+	output_address (GET_MODE (x), XEXP (x, 0));
       else if (GET_CODE (x) == CONST && GET_CODE (XEXP (x, 0)) == UNSPEC)
 	{
 	  switch (XINT (XEXP (x, 0), 1))
@@ -5324,8 +5357,10 @@ print_operand (FILE *file, rtx x, int code)
     }
 }
 
-void
-print_operand_address (FILE *file, rtx addr)
+/* Implement TARGET_PRINT_OPERAND_ADDRESS.  */
+
+static void
+alpha_print_operand_address (FILE *file, machine_mode /*mode*/, rtx addr)
 {
   int basereg = 31;
   HOST_WIDE_INT offset = 0;
@@ -5409,22 +5444,23 @@ print_operand_address (FILE *file, rtx addr)
       offset = INTVAL (addr);
       break;
 
-#if TARGET_ABI_OPEN_VMS
     case SYMBOL_REF:
+      gcc_assert(TARGET_ABI_OPEN_VMS || this_is_asm_operands);
       fprintf (file, "%s", XSTR (addr, 0));
       return;
 
     case CONST:
+      gcc_assert(TARGET_ABI_OPEN_VMS || this_is_asm_operands);
       gcc_assert (GET_CODE (XEXP (addr, 0)) == PLUS
 		  && GET_CODE (XEXP (XEXP (addr, 0), 0)) == SYMBOL_REF);
       fprintf (file, "%s+" HOST_WIDE_INT_PRINT_DEC,
 	       XSTR (XEXP (XEXP (addr, 0), 0), 0),
 	       INTVAL (XEXP (XEXP (addr, 0), 1)));
       return;
-    
-#endif
+
     default:
-      gcc_unreachable ();
+      output_operand_lossage ("invalid operand address");
+      return;
     }
 
   fprintf (file, HOST_WIDE_INT_PRINT_DEC "($%d)", offset, basereg);
@@ -5463,7 +5499,9 @@ alpha_trampoline_init (rtx m_tramp, tree fndecl, rtx chain_value)
 	 the function's procedure descriptor with certain fields zeroed IAW
 	 the VMS calling standard. This is stored in the first quadword.  */
       word1 = force_reg (DImode, gen_const_mem (DImode, fnaddr));
-      word1 = expand_and (DImode, word1, GEN_INT (0xffff0fff0000fff0), NULL);
+      word1 = expand_and (DImode, word1,
+			  GEN_INT (HOST_WIDE_INT_C (0xffff0fff0000fff0)),
+			  NULL);
     }
   else
     {
@@ -5474,8 +5512,8 @@ alpha_trampoline_init (rtx m_tramp, tree fndecl, rtx chain_value)
 	    nop
 	 We don't bother setting the HINT field of the jump; the nop
 	 is merely there for padding.  */
-      word1 = GEN_INT (0xa77b0010a43b0018);
-      word2 = GEN_INT (0x47ff041f6bfb0000);
+      word1 = GEN_INT (HOST_WIDE_INT_C (0xa77b0010a43b0018));
+      word2 = GEN_INT (HOST_WIDE_INT_C (0x47ff041f6bfb0000));
     }
 
   /* Store the first two words, as computed above.  */
@@ -5495,7 +5533,7 @@ alpha_trampoline_init (rtx m_tramp, tree fndecl, rtx chain_value)
       emit_insn (gen_imb ());
 #ifdef HAVE_ENABLE_EXECUTE_STACK
       emit_library_call (init_one_libfunc ("__enable_execute_stack"),
-			 LCT_NORMAL, VOIDmode, 1, XEXP (m_tramp, 0), Pmode);
+			 LCT_NORMAL, VOIDmode, XEXP (m_tramp, 0), Pmode);
 #endif
     }
 }
@@ -5504,40 +5542,32 @@ alpha_trampoline_init (rtx m_tramp, tree fndecl, rtx chain_value)
    Value is zero to push the argument on the stack,
    or a hard register in which to store the argument.
 
-   MODE is the argument's machine mode.
-   TYPE is the data type of the argument (as a tree).
-    This is null for libcalls where that information may
-    not be available.
    CUM is a variable of type CUMULATIVE_ARGS which gives info about
     the preceding args and about the function being called.
-   NAMED is nonzero if this argument is a named parameter
-    (otherwise it is an extra parameter matching an ellipsis).
+   ARG is a description of the argument.
 
    On Alpha the first 6 words of args are normally in registers
    and the rest are pushed.  */
 
 static rtx
-alpha_function_arg (cumulative_args_t cum_v, enum machine_mode mode,
-		    const_tree type, bool named ATTRIBUTE_UNUSED)
+alpha_function_arg (cumulative_args_t cum_v, const function_arg_info &arg)
 {
   CUMULATIVE_ARGS *cum = get_cumulative_args (cum_v);
   int basereg;
   int num_args;
 
   /* Don't get confused and pass small structures in FP registers.  */
-  if (type && AGGREGATE_TYPE_P (type))
+  if (arg.aggregate_type_p ())
     basereg = 16;
   else
     {
-#ifdef ENABLE_CHECKING
       /* With alpha_split_complex_arg, we shouldn't see any raw complex
 	 values here.  */
-      gcc_assert (!COMPLEX_MODE_P (mode));
-#endif
+      gcc_checking_assert (!COMPLEX_MODE_P (arg.mode));
 
       /* Set up defaults for FP operands passed in FP registers, and
 	 integral operands passed in integer registers.  */
-      if (TARGET_FPREGS && GET_MODE_CLASS (mode) == MODE_FLOAT)
+      if (TARGET_FPREGS && GET_MODE_CLASS (arg.mode) == MODE_FLOAT)
 	basereg = 32 + 16;
       else
 	basereg = 16;
@@ -5547,12 +5577,12 @@ alpha_function_arg (cumulative_args_t cum_v, enum machine_mode mode,
      the two platforms, so we can't avoid conditional compilation.  */
 #if TARGET_ABI_OPEN_VMS
     {
-      if (mode == VOIDmode)
+      if (arg.end_marker_p ())
 	return alpha_arg_info_reg_val (*cum);
 
       num_args = cum->num_args;
       if (num_args >= 6
-	  || targetm.calls.must_pass_in_stack (mode, type))
+	  || targetm.calls.must_pass_in_stack (arg))
 	return NULL_RTX;
     }
 #elif TARGET_ABI_OSF
@@ -5561,55 +5591,49 @@ alpha_function_arg (cumulative_args_t cum_v, enum machine_mode mode,
 	return NULL_RTX;
       num_args = *cum;
 
-      /* VOID is passed as a special flag for "last argument".  */
-      if (type == void_type_node)
+      if (arg.end_marker_p ())
 	basereg = 16;
-      else if (targetm.calls.must_pass_in_stack (mode, type))
+      else if (targetm.calls.must_pass_in_stack (arg))
 	return NULL_RTX;
     }
 #else
 #error Unhandled ABI
 #endif
 
-  return gen_rtx_REG (mode, num_args + basereg);
+  return gen_rtx_REG (arg.mode, num_args + basereg);
 }
 
-/* Update the data in CUM to advance over an argument
-   of mode MODE and data type TYPE.
-   (TYPE is null for libcalls where that information may not be available.)  */
+/* Update the data in CUM to advance over argument ARG.  */
 
 static void
-alpha_function_arg_advance (cumulative_args_t cum_v, enum machine_mode mode,
-			    const_tree type, bool named ATTRIBUTE_UNUSED)
+alpha_function_arg_advance (cumulative_args_t cum_v,
+			    const function_arg_info &arg)
 {
   CUMULATIVE_ARGS *cum = get_cumulative_args (cum_v);
-  bool onstack = targetm.calls.must_pass_in_stack (mode, type);
-  int increment = onstack ? 6 : ALPHA_ARG_SIZE (mode, type, named);
+  bool onstack = targetm.calls.must_pass_in_stack (arg);
+  int increment = onstack ? 6 : ALPHA_ARG_SIZE (arg.mode, arg.type);
 
 #if TARGET_ABI_OSF
   *cum += increment;
 #else
   if (!onstack && cum->num_args < 6)
-    cum->atypes[cum->num_args] = alpha_arg_type (mode);
+    cum->atypes[cum->num_args] = alpha_arg_type (arg.mode);
   cum->num_args += increment;
 #endif
 }
 
 static int
-alpha_arg_partial_bytes (cumulative_args_t cum_v,
-			 enum machine_mode mode ATTRIBUTE_UNUSED,
-			 tree type ATTRIBUTE_UNUSED,
-			 bool named ATTRIBUTE_UNUSED)
+alpha_arg_partial_bytes (cumulative_args_t cum_v, const function_arg_info &arg)
 {
   int words = 0;
   CUMULATIVE_ARGS *cum ATTRIBUTE_UNUSED = get_cumulative_args (cum_v);
 
 #if TARGET_ABI_OPEN_VMS
   if (cum->num_args < 6
-      && 6 < cum->num_args + ALPHA_ARG_SIZE (mode, type, named))
+      && 6 < cum->num_args + ALPHA_ARG_SIZE (arg.mode, arg.type))
     words = 6 - cum->num_args;
 #elif TARGET_ABI_OSF
-  if (*cum < 6 && 6 < *cum + ALPHA_ARG_SIZE (mode, type, named))
+  if (*cum < 6 && 6 < *cum + ALPHA_ARG_SIZE (arg.mode, arg.type))
     words = 6 - *cum;
 #else
 #error Unhandled ABI
@@ -5624,7 +5648,7 @@ alpha_arg_partial_bytes (cumulative_args_t cum_v,
 static bool
 alpha_return_in_memory (const_tree type, const_tree fndecl ATTRIBUTE_UNUSED)
 {
-  enum machine_mode mode = VOIDmode;
+  machine_mode mode = VOIDmode;
   int size;
 
   if (type)
@@ -5674,15 +5698,33 @@ alpha_return_in_memory (const_tree type, const_tree fndecl ATTRIBUTE_UNUSED)
   return size > UNITS_PER_WORD;
 }
 
-/* Return true if TYPE should be passed by invisible reference.  */
+/* Return true if ARG should be passed by invisible reference.  */
 
 static bool
-alpha_pass_by_reference (cumulative_args_t ca ATTRIBUTE_UNUSED,
-			 enum machine_mode mode,
-			 const_tree type ATTRIBUTE_UNUSED,
-			 bool named ATTRIBUTE_UNUSED)
+alpha_pass_by_reference (cumulative_args_t, const function_arg_info &arg)
 {
-  return mode == TFmode || mode == TCmode;
+  /* Pass float and _Complex float variable arguments by reference.
+     This avoids 64-bit store from a FP register to a pretend args save area
+     and subsequent 32-bit load from the saved location to a FP register.
+
+     Note that 32-bit loads and stores to/from a FP register on alpha reorder
+     bits to form a canonical 64-bit value in the FP register.  This fact
+     invalidates compiler assumption that 32-bit FP value lives in the lower
+     32-bits of the passed 64-bit FP value, so loading the 32-bit value from
+     the stored 64-bit location using 32-bit FP load is invalid on alpha.
+
+     This introduces sort of ABI incompatibility, but until _Float32 was
+     introduced, C-family languages promoted 32-bit float variable arg to
+     a 64-bit double, and it was not allowed to pass float as a varible
+     argument.  Passing _Complex float as a variable argument never
+     worked on alpha.  Thus, we have no backward compatibility issues
+     to worry about, and passing unpromoted _Float32 and _Complex float
+     as a variable argument will actually work in the future.  */
+
+  if (arg.mode == SFmode || arg.mode == SCmode)
+    return !arg.named;
+
+  return arg.mode == TFmode || arg.mode == TCmode;
 }
 
 /* Define how to find the value returned by a function.  VALTYPE is the
@@ -5693,9 +5735,9 @@ alpha_pass_by_reference (cumulative_args_t ca ATTRIBUTE_UNUSED,
    On Alpha the value is found in $0 for integer functions and
    $f0 for floating-point functions.  */
 
-rtx
-function_value (const_tree valtype, const_tree func ATTRIBUTE_UNUSED,
-		enum machine_mode mode)
+static rtx
+alpha_function_value_1 (const_tree valtype, const_tree func ATTRIBUTE_UNUSED,
+			machine_mode mode)
 {
   unsigned int regnum, dummy ATTRIBUTE_UNUSED;
   enum mode_class mclass;
@@ -5726,7 +5768,7 @@ function_value (const_tree valtype, const_tree func ATTRIBUTE_UNUSED,
 
     case MODE_COMPLEX_FLOAT:
       {
-	enum machine_mode cmode = GET_MODE_INNER (mode);
+	machine_mode cmode = GET_MODE_INNER (mode);
 
 	return gen_rtx_PARALLEL
 	  (VOIDmode,
@@ -5748,6 +5790,33 @@ function_value (const_tree valtype, const_tree func ATTRIBUTE_UNUSED,
     }
 
   return gen_rtx_REG (mode, regnum);
+}
+
+/* Implement TARGET_FUNCTION_VALUE.  */
+
+static rtx
+alpha_function_value (const_tree valtype, const_tree fn_decl_or_type,
+		      bool /*outgoing*/)
+{
+  return alpha_function_value_1 (valtype, fn_decl_or_type, VOIDmode);
+}
+
+/* Implement TARGET_LIBCALL_VALUE.  */
+
+static rtx
+alpha_libcall_value (machine_mode mode, const_rtx /*fun*/)
+{
+  return alpha_function_value_1 (NULL_TREE, NULL_TREE, mode);
+}
+
+/* Implement TARGET_FUNCTION_VALUE_REGNO_P.
+
+   On the Alpha, $0 $1 and $f0 $f1 are the only register thus used.  */
+
+static bool
+alpha_function_value_regno_p (const unsigned int regno)
+{
+  return (regno == 0 || regno == 1 || regno == 32 || regno == 33);
 }
 
 /* TCmode complex values are passed by invisible reference.  We
@@ -5787,10 +5856,6 @@ alpha_build_builtin_va_list (void)
 		    integer_type_node);
   DECL_FIELD_CONTEXT (ofs) = record;
   DECL_CHAIN (ofs) = space;
-  /* ??? This is a hack, __offset is marked volatile to prevent
-     DCE that confuses stdarg optimization and results in
-     gcc.c-torture/execute/stdarg-1.c failure.  See PR 41089.  */
-  TREE_THIS_VOLATILE (ofs) = 1;
 
   base = build_decl (BUILTINS_LOCATION,
 		     FIELD_DECL, get_identifier ("__base"),
@@ -5809,10 +5874,10 @@ alpha_build_builtin_va_list (void)
 /* Helper function for alpha_stdarg_optimize_hook.  Skip over casts
    and constant additions.  */
 
-static gimple
+static gimple *
 va_list_skip_additions (tree lhs)
 {
-  gimple stmt;
+  gimple  *stmt;
 
   for (;;)
     {
@@ -5833,7 +5898,7 @@ va_list_skip_additions (tree lhs)
       if (!CONVERT_EXPR_CODE_P (code)
 	  && ((code != PLUS_EXPR && code != POINTER_PLUS_EXPR)
 	      || TREE_CODE (gimple_assign_rhs2 (stmt)) != INTEGER_CST
-	      || !host_integerp (gimple_assign_rhs2 (stmt), 1)))
+	      || !tree_fits_uhwi_p (gimple_assign_rhs2 (stmt))))
 	return stmt;
 
       lhs = gimple_assign_rhs1 (stmt);
@@ -5859,11 +5924,11 @@ va_list_skip_additions (tree lhs)
    current statement.  */
 
 static bool
-alpha_stdarg_optimize_hook (struct stdarg_info *si, const_gimple stmt)
+alpha_stdarg_optimize_hook (struct stdarg_info *si, const gimple *stmt)
 {
   tree base, offset, rhs;
   int offset_arg = 1;
-  gimple base_stmt;
+  gimple *base_stmt;
 
   if (get_gimple_rhs_class (gimple_assign_rhs_code (stmt))
       != GIMPLE_SINGLE_RHS)
@@ -5914,19 +5979,19 @@ alpha_stdarg_optimize_hook (struct stdarg_info *si, const_gimple stmt)
 
   base = get_base_address (base);
   if (TREE_CODE (base) != VAR_DECL
-      || !bitmap_bit_p (si->va_list_vars, DECL_UID (base)))
+      || !bitmap_bit_p (si->va_list_vars, DECL_UID (base) + num_ssa_names))
     return false;
 
   offset = gimple_op (stmt, 1 + offset_arg);
   if (TREE_CODE (offset) == SSA_NAME)
     {
-      gimple offset_stmt = va_list_skip_additions (offset);
+      gimple *offset_stmt = va_list_skip_additions (offset);
 
       if (offset_stmt
 	  && gimple_code (offset_stmt) == GIMPLE_PHI)
 	{
 	  HOST_WIDE_INT sub;
-	  gimple arg1_stmt, arg2_stmt;
+	  gimple *arg1_stmt, *arg2_stmt;
 	  tree arg1, arg2;
 	  enum tree_code code1, code2;
 
@@ -5951,18 +6016,16 @@ alpha_stdarg_optimize_hook (struct stdarg_info *si, const_gimple stmt)
 	  else if (code2 == COMPONENT_REF
 		   && (code1 == MINUS_EXPR || code1 == PLUS_EXPR))
 	    {
-	      gimple tem = arg1_stmt;
+	      std::swap (arg1_stmt, arg2_stmt);
 	      code2 = code1;
-	      arg1_stmt = arg2_stmt;
-	      arg2_stmt = tem;
 	    }
 	  else
 	    goto escapes;
 
-	  if (!host_integerp (gimple_assign_rhs2 (arg2_stmt), 0))
+	  if (!tree_fits_shwi_p (gimple_assign_rhs2 (arg2_stmt)))
 	    goto escapes;
 
-	  sub = tree_low_cst (gimple_assign_rhs2 (arg2_stmt), 0);
+	  sub = tree_to_shwi (gimple_assign_rhs2 (arg2_stmt));
 	  if (code2 == MINUS_EXPR)
 	    sub = -sub;
 	  if (sub < -48 || sub > -32)
@@ -6015,14 +6078,14 @@ escapes:
    variable number of arguments.  */
 
 static void
-alpha_setup_incoming_varargs (cumulative_args_t pcum, enum machine_mode mode,
-			      tree type, int *pretend_size, int no_rtl)
+alpha_setup_incoming_varargs (cumulative_args_t pcum,
+			      const function_arg_info &arg,
+			      int *pretend_size, int no_rtl)
 {
   CUMULATIVE_ARGS cum = *get_cumulative_args (pcum);
 
   /* Skip the current argument.  */
-  targetm.calls.function_arg_advance (pack_cumulative_args (&cum), mode, type,
-				      true);
+  targetm.calls.function_arg_advance (pack_cumulative_args (&cum), arg);
 
 #if TARGET_ABI_OPEN_VMS
   /* For VMS, we allocate space for all 6 arg registers plus a count.
@@ -6075,7 +6138,7 @@ alpha_setup_incoming_varargs (cumulative_args_t pcum, enum machine_mode mode,
       if (cfun->va_list_fpr_size & 1)
 	{
 	  tmp = gen_rtx_MEM (BLKmode,
-			     plus_constant (virtual_incoming_args_rtx,
+			     plus_constant (Pmode, virtual_incoming_args_rtx,
 					    (cum + 6) * UNITS_PER_WORD));
 	  MEM_NOTRAP_P (tmp) = 1;
 	  set_mem_alias_set (tmp, set);
@@ -6085,7 +6148,7 @@ alpha_setup_incoming_varargs (cumulative_args_t pcum, enum machine_mode mode,
       if (cfun->va_list_fpr_size & 2)
 	{
 	  tmp = gen_rtx_MEM (BLKmode,
-			     plus_constant (virtual_incoming_args_rtx,
+			     plus_constant (Pmode, virtual_incoming_args_rtx,
 					    cum * UNITS_PER_WORD));
 	  MEM_NOTRAP_P (tmp) = 1;
 	  set_mem_alias_set (tmp, set);
@@ -6162,7 +6225,7 @@ alpha_gimplify_va_arg_1 (tree type, tree base, tree offset,
 
   /* If the type could not be passed in registers, skip the block
      reserved for the registers.  */
-  if (targetm.calls.must_pass_in_stack (TYPE_MODE (type), type))
+  if (must_pass_va_arg_in_stack (type))
     {
       t = build_int_cst (TREE_TYPE (offset), 6*8);
       gimplify_assign (offset,
@@ -6246,12 +6309,44 @@ alpha_gimplify_va_arg (tree valist, tree type, gimple_seq *pre_p,
      offset field so that it's the proper width for pointer arithmetic.  */
   base = get_formal_tmp_var (base_field, pre_p);
 
-  t = fold_convert (lang_hooks.types.type_for_size (64, 0), offset_field);
+  t = fold_convert (build_nonstandard_integer_type (64, 0), offset_field);
   offset = get_initialized_tmp_var (t, pre_p, NULL);
 
-  indirect = pass_by_reference (NULL, TYPE_MODE (type), type, false);
+  indirect = pass_va_arg_by_reference (type);
+
   if (indirect)
-    type = build_pointer_type_for_mode (type, ptr_mode, true);
+    {
+      if (TREE_CODE (type) == COMPLEX_TYPE
+	  && targetm.calls.split_complex_arg (type))
+	{
+	  tree real_part, imag_part, real_temp;
+
+	  tree ptr_type = build_pointer_type_for_mode (TREE_TYPE (type),
+						       ptr_mode, true);
+
+	  real_part = alpha_gimplify_va_arg_1 (ptr_type, base,
+					       offset, pre_p);
+	  real_part = build_va_arg_indirect_ref (real_part);
+
+	  /* Copy the value into a new temporary, lest the formal temporary
+	     be reused out from under us.  */
+	  real_temp = get_initialized_tmp_var (real_part, pre_p, NULL);
+
+	  imag_part = alpha_gimplify_va_arg_1 (ptr_type, base,
+					       offset, pre_p);
+	  imag_part = build_va_arg_indirect_ref (imag_part);
+
+	  r = build2 (COMPLEX_EXPR, type, real_temp, imag_part);
+
+	  /* Stuff the offset temporary back into its field.  */
+	  gimplify_assign (unshare_expr (offset_field),
+			   fold_convert (TREE_TYPE (offset_field), offset),
+			   pre_p);
+	  return r;
+	}
+      else
+	type = build_pointer_type_for_mode (type, ptr_mode, true);
+    }
 
   /* Find the value.  Note that this will be a stable indirection, or
      a composite of stable indirections in the case of complex.  */
@@ -6299,8 +6394,6 @@ enum alpha_builtin
   ALPHA_BUILTIN_AMASK,
   ALPHA_BUILTIN_IMPLVER,
   ALPHA_BUILTIN_RPCC,
-  ALPHA_BUILTIN_THREAD_POINTER,
-  ALPHA_BUILTIN_SET_THREAD_POINTER,
   ALPHA_BUILTIN_ESTABLISH_VMS_CONDITION_HANDLER,
   ALPHA_BUILTIN_REVERT_VMS_CONDITION_HANDLER,
 
@@ -6356,8 +6449,6 @@ static enum insn_code const code_for_builtin[ALPHA_BUILTIN_max] = {
   CODE_FOR_builtin_amask,
   CODE_FOR_builtin_implver,
   CODE_FOR_builtin_rpcc,
-  CODE_FOR_load_tp,
-  CODE_FOR_set_tp,
   CODE_FOR_builtin_establish_vms_condition_handler,
   CODE_FOR_builtin_revert_vms_condition_handler,
 
@@ -6443,6 +6534,7 @@ static struct alpha_builtin_def const two_arg_builtins[] = {
   { "__builtin_alpha_perr",	ALPHA_BUILTIN_PERR,	MASK_MAX, true }
 };
 
+static GTY(()) tree alpha_dimode_u;
 static GTY(()) tree alpha_v8qi_u;
 static GTY(()) tree alpha_v8qi_s;
 static GTY(()) tree alpha_v4hi_u;
@@ -6496,33 +6588,23 @@ alpha_add_builtins (const struct alpha_builtin_def *p, size_t count,
 static void
 alpha_init_builtins (void)
 {
-  tree dimode_integer_type_node;
   tree ftype;
 
-  dimode_integer_type_node = lang_hooks.types.type_for_mode (DImode, 0);
+  alpha_dimode_u = lang_hooks.types.type_for_mode (DImode, 1);
+  alpha_v8qi_u = build_vector_type (unsigned_intQI_type_node, 8);
+  alpha_v8qi_s = build_vector_type (intQI_type_node, 8);
+  alpha_v4hi_u = build_vector_type (unsigned_intHI_type_node, 4);
+  alpha_v4hi_s = build_vector_type (intHI_type_node, 4);
 
-  ftype = build_function_type_list (dimode_integer_type_node, NULL_TREE);
-  alpha_add_builtins (zero_arg_builtins, ARRAY_SIZE (zero_arg_builtins),
-		      ftype);
+  ftype = build_function_type_list (alpha_dimode_u, NULL_TREE);
+  alpha_add_builtins (zero_arg_builtins, ARRAY_SIZE (zero_arg_builtins), ftype);
 
-  ftype = build_function_type_list (dimode_integer_type_node,
-				    dimode_integer_type_node, NULL_TREE);
-  alpha_add_builtins (one_arg_builtins, ARRAY_SIZE (one_arg_builtins),
-		      ftype);
+  ftype = build_function_type_list (alpha_dimode_u, alpha_dimode_u, NULL_TREE);
+  alpha_add_builtins (one_arg_builtins, ARRAY_SIZE (one_arg_builtins), ftype);
 
-  ftype = build_function_type_list (dimode_integer_type_node,
-				    dimode_integer_type_node,
-				    dimode_integer_type_node, NULL_TREE);
-  alpha_add_builtins (two_arg_builtins, ARRAY_SIZE (two_arg_builtins),
-		      ftype);
-
-  ftype = build_function_type_list (ptr_type_node, NULL_TREE);
-  alpha_builtin_function ("__builtin_thread_pointer", ftype,
-			  ALPHA_BUILTIN_THREAD_POINTER, ECF_NOTHROW);
-
-  ftype = build_function_type_list (void_type_node, ptr_type_node, NULL_TREE);
-  alpha_builtin_function ("__builtin_set_thread_pointer", ftype,
-			  ALPHA_BUILTIN_SET_THREAD_POINTER, ECF_NOTHROW);
+  ftype = build_function_type_list (alpha_dimode_u, alpha_dimode_u,
+				    alpha_dimode_u, NULL_TREE);
+  alpha_add_builtins (two_arg_builtins, ARRAY_SIZE (two_arg_builtins), ftype);
 
   if (TARGET_ABI_OPEN_VMS)
     {
@@ -6540,11 +6622,6 @@ alpha_init_builtins (void)
 
       vms_patch_builtins ();
     }
-
-  alpha_v8qi_u = build_vector_type (unsigned_intQI_type_node, 8);
-  alpha_v8qi_s = build_vector_type (intQI_type_node, 8);
-  alpha_v4hi_u = build_vector_type (unsigned_intHI_type_node, 4);
-  alpha_v4hi_s = build_vector_type (intHI_type_node, 4);
 }
 
 /* Expand an expression EXP that calls a built-in function,
@@ -6556,13 +6633,13 @@ alpha_init_builtins (void)
 static rtx
 alpha_expand_builtin (tree exp, rtx target,
 		      rtx subtarget ATTRIBUTE_UNUSED,
-		      enum machine_mode mode ATTRIBUTE_UNUSED,
+		      machine_mode mode ATTRIBUTE_UNUSED,
 		      int ignore ATTRIBUTE_UNUSED)
 {
 #define MAX_ARGS 2
 
   tree fndecl = TREE_OPERAND (CALL_EXPR_FN (exp), 0);
-  unsigned int fcode = DECL_FUNCTION_CODE (fndecl);
+  unsigned int fcode = DECL_MD_FUNCTION_CODE (fndecl);
   tree arg;
   call_expr_arg_iterator iter;
   enum insn_code icode;
@@ -6599,7 +6676,7 @@ alpha_expand_builtin (tree exp, rtx target,
 
   if (nonvoid)
     {
-      enum machine_mode tmode = insn_data[icode].operand[0].mode;
+      machine_mode tmode = insn_data[icode].operand[0].mode;
       if (!target
 	  || GET_MODE (target) != tmode
 	  || !(*insn_data[icode].operand[0].predicate) (target, tmode))
@@ -6633,13 +6710,6 @@ alpha_expand_builtin (tree exp, rtx target,
     return const0_rtx;
 }
 
-
-/* Several bits below assume HWI >= 64 bits.  This should be enforced
-   by config.gcc.  */
-#if HOST_BITS_PER_WIDE_INT < 64
-# error "HOST_WIDE_INT too small"
-#endif
-
 /* Fold the builtin for the CMPBGE instruction.  This is a vector comparison
    with an 8-bit output vector.  OPINT contains the integer operands; bit N
    of OP_CONST is set if OPINT[N] is valid.  */
@@ -6657,10 +6727,10 @@ alpha_fold_builtin_cmpbge (unsigned HOST_WIDE_INT opint[], long op_const)
 	  if (c0 >= c1)
 	    val |= 1 << i;
 	}
-      return build_int_cst (long_integer_type_node, val);
+      return build_int_cst (alpha_dimode_u, val);
     }
   else if (op_const == 2 && opint[1] == 0)
-    return build_int_cst (long_integer_type_node, 0xff);
+    return build_int_cst (alpha_dimode_u, 0xff);
   return NULL;
 }
 
@@ -6687,14 +6757,14 @@ alpha_fold_builtin_zapnot (tree *op, unsigned HOST_WIDE_INT opint[],
 	  mask |= (unsigned HOST_WIDE_INT)0xff << (i * 8);
 
       if (op_const & 1)
-	return build_int_cst (long_integer_type_node, opint[0] & mask);
+	return build_int_cst (alpha_dimode_u, opint[0] & mask);
 
       if (op)
-	return fold_build2 (BIT_AND_EXPR, long_integer_type_node, op[0],
-			    build_int_cst (long_integer_type_node, mask));
+	return fold_build2 (BIT_AND_EXPR, alpha_dimode_u, op[0],
+			    build_int_cst (alpha_dimode_u, mask));
     }
   else if ((op_const & 1) && opint[0] == 0)
-    return build_int_cst (long_integer_type_node, 0);
+    return build_int_cst (alpha_dimode_u, 0);
   return NULL;
 }
 
@@ -6744,7 +6814,7 @@ alpha_fold_builtin_insxx (tree op[], unsigned HOST_WIDE_INT opint[],
 			  bool is_high)
 {
   if ((op_const & 1) && opint[0] == 0)
-    return build_int_cst (long_integer_type_node, 0);
+    return build_int_cst (alpha_dimode_u, 0);
 
   if (op_const & 2)
     {
@@ -6803,43 +6873,12 @@ alpha_fold_builtin_mskxx (tree op[], unsigned HOST_WIDE_INT opint[],
 }
 
 static tree
-alpha_fold_builtin_umulh (unsigned HOST_WIDE_INT opint[], long op_const)
-{
-  switch (op_const)
-    {
-    case 3:
-      {
-	unsigned HOST_WIDE_INT l;
-	HOST_WIDE_INT h;
-
-	mul_double (opint[0], 0, opint[1], 0, &l, &h);
-
-#if HOST_BITS_PER_WIDE_INT > 64
-# error fixme
-#endif
-
-	return build_int_cst (long_integer_type_node, h);
-      }
-
-    case 1:
-      opint[1] = opint[0];
-      /* FALLTHRU */
-    case 2:
-      /* Note that (X*1) >> 64 == 0.  */
-      if (opint[1] == 0 || opint[1] == 1)
-	return build_int_cst (long_integer_type_node, 0);
-      break;
-    }
-  return NULL;
-}
-
-static tree
 alpha_fold_vector_minmax (enum tree_code code, tree op[], tree vtype)
 {
   tree op0 = fold_convert (vtype, op[0]);
   tree op1 = fold_convert (vtype, op[1]);
   tree val = fold_build2 (code, vtype, op0, op1);
-  return fold_build1 (VIEW_CONVERT_EXPR, long_integer_type_node, val);
+  return fold_build1 (VIEW_CONVERT_EXPR, alpha_dimode_u, val);
 }
 
 static tree
@@ -6861,7 +6900,7 @@ alpha_fold_builtin_perr (unsigned HOST_WIDE_INT opint[], long op_const)
 	temp += b - a;
     }
 
-  return build_int_cst (long_integer_type_node, temp);
+  return build_int_cst (alpha_dimode_u, temp);
 }
 
 static tree
@@ -6875,7 +6914,7 @@ alpha_fold_builtin_pklb (unsigned HOST_WIDE_INT opint[], long op_const)
   temp = opint[0] & 0xff;
   temp |= (opint[0] >> 24) & 0xff00;
 
-  return build_int_cst (long_integer_type_node, temp);
+  return build_int_cst (alpha_dimode_u, temp);
 }
 
 static tree
@@ -6891,7 +6930,7 @@ alpha_fold_builtin_pkwb (unsigned HOST_WIDE_INT opint[], long op_const)
   temp |= (opint[0] >> 16) & 0xff0000;
   temp |= (opint[0] >> 24) & 0xff000000;
 
-  return build_int_cst (long_integer_type_node, temp);
+  return build_int_cst (alpha_dimode_u, temp);
 }
 
 static tree
@@ -6905,7 +6944,7 @@ alpha_fold_builtin_unpkbl (unsigned HOST_WIDE_INT opint[], long op_const)
   temp = opint[0] & 0xff;
   temp |= (opint[0] & 0xff00) << 24;
 
-  return build_int_cst (long_integer_type_node, temp);
+  return build_int_cst (alpha_dimode_u, temp);
 }
 
 static tree
@@ -6921,7 +6960,7 @@ alpha_fold_builtin_unpkbw (unsigned HOST_WIDE_INT opint[], long op_const)
   temp |= (opint[0] & 0x00ff0000) << 16;
   temp |= (opint[0] & 0xff000000) << 24;
 
-  return build_int_cst (long_integer_type_node, temp);
+  return build_int_cst (alpha_dimode_u, temp);
 }
 
 static tree
@@ -6937,7 +6976,7 @@ alpha_fold_builtin_cttz (unsigned HOST_WIDE_INT opint[], long op_const)
   else
     temp = exact_log2 (opint[0] & -opint[0]);
 
-  return build_int_cst (long_integer_type_node, temp);
+  return build_int_cst (alpha_dimode_u, temp);
 }
 
 static tree
@@ -6953,7 +6992,7 @@ alpha_fold_builtin_ctlz (unsigned HOST_WIDE_INT opint[], long op_const)
   else
     temp = 64 - floor_log2 (opint[0]) - 1;
 
-  return build_int_cst (long_integer_type_node, temp);
+  return build_int_cst (alpha_dimode_u, temp);
 }
 
 static tree
@@ -6969,7 +7008,7 @@ alpha_fold_builtin_ctpop (unsigned HOST_WIDE_INT opint[], long op_const)
   while (op)
     temp++, op &= op - 1;
 
-  return build_int_cst (long_integer_type_node, temp);
+  return build_int_cst (alpha_dimode_u, temp);
 }
 
 /* Fold one of our builtin functions.  */
@@ -6982,7 +7021,7 @@ alpha_fold_builtin (tree fndecl, int n_args, tree *op,
   long op_const = 0;
   int i;
 
-  if (n_args >= MAX_ARGS)
+  if (n_args > MAX_ARGS)
     return NULL;
 
   for (i = 0; i < n_args; i++)
@@ -6999,7 +7038,7 @@ alpha_fold_builtin (tree fndecl, int n_args, tree *op,
 	}
     }
 
-  switch (DECL_FUNCTION_CODE (fndecl))
+  switch (DECL_MD_FUNCTION_CODE (fndecl))
     {
     case ALPHA_BUILTIN_CMPBGE:
       return alpha_fold_builtin_cmpbge (opint, op_const);
@@ -7049,9 +7088,6 @@ alpha_fold_builtin (tree fndecl, int n_args, tree *op,
     case ALPHA_BUILTIN_MSKQH:
       return alpha_fold_builtin_mskxx (op, opint, op_const, 0xff, true);
 
-    case ALPHA_BUILTIN_UMULH:
-      return alpha_fold_builtin_umulh (opint, op_const);
-
     case ALPHA_BUILTIN_ZAP:
       opint[1] ^= 0xff;
       /* FALLTHRU */
@@ -7096,12 +7132,50 @@ alpha_fold_builtin (tree fndecl, int n_args, tree *op,
     case ALPHA_BUILTIN_AMASK:
     case ALPHA_BUILTIN_IMPLVER:
     case ALPHA_BUILTIN_RPCC:
-    case ALPHA_BUILTIN_THREAD_POINTER:
-    case ALPHA_BUILTIN_SET_THREAD_POINTER:
       /* None of these are foldable at compile-time.  */
     default:
       return NULL;
     }
+}
+
+bool
+alpha_gimple_fold_builtin (gimple_stmt_iterator *gsi)
+{
+  bool changed = false;
+  gimple *stmt = gsi_stmt (*gsi);
+  tree call = gimple_call_fn (stmt);
+  gimple *new_stmt = NULL;
+
+  if (call)
+    {
+      tree fndecl = gimple_call_fndecl (stmt);
+
+      if (fndecl)
+	{
+	  tree arg0, arg1;
+
+	  switch (DECL_MD_FUNCTION_CODE (fndecl))
+	    {
+	    case ALPHA_BUILTIN_UMULH:
+	      arg0 = gimple_call_arg (stmt, 0);
+	      arg1 = gimple_call_arg (stmt, 1);
+
+	      new_stmt = gimple_build_assign (gimple_call_lhs (stmt),
+					      MULT_HIGHPART_EXPR, arg0, arg1);
+	      break;
+	    default:
+	      break;
+	    }
+	}
+    }
+
+  if (new_stmt)
+    {
+      gsi_replace (gsi, new_stmt, true);
+      changed = true;
+    }
+
+  return changed;
 }
 
 /* This page contains routines that are used to determine what the function
@@ -7129,83 +7203,59 @@ static int vms_save_fp_regno;
 /* Register number used to reference objects off our PV.  */
 static int vms_base_regno;
 
-/* Compute register masks for saved registers.  */
-
+/* Compute register masks for saved registers, register save area size,
+   and total frame size.  */
 static void
-alpha_sa_mask (unsigned long *imaskP, unsigned long *fmaskP)
+alpha_compute_frame_layout (void)
 {
-  unsigned long imask = 0;
-  unsigned long fmask = 0;
-  unsigned int i;
+  unsigned HOST_WIDE_INT sa_mask = 0;
+  HOST_WIDE_INT frame_size;
+  int sa_size;
 
   /* When outputting a thunk, we don't have valid register life info,
      but assemble_start_function wants to output .frame and .mask
      directives.  */
-  if (cfun->is_thunk)
+  if (!cfun->is_thunk)
     {
-      *imaskP = 0;
-      *fmaskP = 0;
-      return;
-    }
+      if (TARGET_ABI_OPEN_VMS && alpha_procedure_type == PT_STACK)
+	sa_mask |= HOST_WIDE_INT_1U << HARD_FRAME_POINTER_REGNUM;
 
-  if (TARGET_ABI_OPEN_VMS && alpha_procedure_type == PT_STACK)
-    imask |= (1UL << HARD_FRAME_POINTER_REGNUM);
+      /* One for every register we have to save.  */
+      for (unsigned i = 0; i < FIRST_PSEUDO_REGISTER; i++)
+	if (! call_used_or_fixed_reg_p (i)
+	    && df_regs_ever_live_p (i) && i != REG_RA)
+	  sa_mask |= HOST_WIDE_INT_1U << i;
 
-  /* One for every register we have to save.  */
-  for (i = 0; i < FIRST_PSEUDO_REGISTER; i++)
-    if (! fixed_regs[i] && ! call_used_regs[i]
-	&& df_regs_ever_live_p (i) && i != REG_RA)
-      {
-	if (i < 32)
-	  imask |= (1UL << i);
-	else
-	  fmask |= (1UL << (i - 32));
-      }
-
-  /* We need to restore these for the handler.  */
-  if (crtl->calls_eh_return)
-    {
-      for (i = 0; ; ++i)
+      /* We need to restore these for the handler.  */
+      if (crtl->calls_eh_return)
 	{
-	  unsigned regno = EH_RETURN_DATA_REGNO (i);
-	  if (regno == INVALID_REGNUM)
-	    break;
-	  imask |= 1UL << regno;
+	  for (unsigned i = 0; ; ++i)
+	    {
+	      unsigned regno = EH_RETURN_DATA_REGNO (i);
+	      if (regno == INVALID_REGNUM)
+		break;
+	      sa_mask |= HOST_WIDE_INT_1U << regno;
+	    }
 	}
+
+      /* If any register spilled, then spill the return address also.  */
+      /* ??? This is required by the Digital stack unwind specification
+	 and isn't needed if we're doing Dwarf2 unwinding.  */
+      if (sa_mask || alpha_ra_ever_killed ())
+	sa_mask |= HOST_WIDE_INT_1U << REG_RA;
     }
 
-  /* If any register spilled, then spill the return address also.  */
-  /* ??? This is required by the Digital stack unwind specification
-     and isn't needed if we're doing Dwarf2 unwinding.  */
-  if (imask || fmask || alpha_ra_ever_killed ())
-    imask |= (1UL << REG_RA);
-
-  *imaskP = imask;
-  *fmaskP = fmask;
-}
-
-int
-alpha_sa_size (void)
-{
-  unsigned long mask[2];
-  int sa_size = 0;
-  int i, j;
-
-  alpha_sa_mask (&mask[0], &mask[1]);
-
-  for (j = 0; j < 2; ++j)
-    for (i = 0; i < 32; ++i)
-      if ((mask[j] >> i) & 1)
-	sa_size++;
+  sa_size = popcount_hwi(sa_mask);
+  frame_size = get_frame_size ();
 
   if (TARGET_ABI_OPEN_VMS)
     {
       /* Start with a stack procedure if we make any calls (REG_RA used), or
 	 need a frame pointer, with a register procedure if we otherwise need
 	 at least a slot, and with a null procedure in other cases.  */
-      if ((mask[0] >> REG_RA) & 1 || frame_pointer_needed)
+      if ((sa_mask >> REG_RA) & 1 || frame_pointer_needed)
 	alpha_procedure_type = PT_STACK;
-      else if (get_frame_size() != 0)
+      else if (frame_size != 0)
 	alpha_procedure_type = PT_REGISTER;
       else
 	alpha_procedure_type = PT_NULL;
@@ -7229,12 +7279,15 @@ alpha_sa_size (void)
 
       /* If we want to copy PV into FP, we need to find some register
 	 in which to save FP.  */
-
       vms_save_fp_regno = -1;
       if (vms_base_regno == HARD_FRAME_POINTER_REGNUM)
-	for (i = 0; i < 32; i++)
-	  if (! fixed_regs[i] && call_used_regs[i] && ! df_regs_ever_live_p (i))
-	    vms_save_fp_regno = i;
+	for (unsigned i = 0; i < 32; i++)
+	  if (! fixed_regs[i] && call_used_or_fixed_reg_p (i)
+	      && ! df_regs_ever_live_p (i))
+	    {
+	      vms_save_fp_regno = i;
+	      break;
+	    }
 
       /* A VMS condition handler requires a stack procedure in our
 	 implementation. (not required by the calling standard).  */
@@ -7259,8 +7312,34 @@ alpha_sa_size (void)
       if (sa_size & 1)
 	sa_size++;
     }
+  sa_size *= 8;
 
-  return sa_size * 8;
+  if (TARGET_ABI_OPEN_VMS)
+    frame_size = ALPHA_ROUND (sa_size
+			      + (alpha_procedure_type == PT_STACK ? 8 : 0)
+			      + frame_size
+			      + crtl->args.pretend_args_size);
+  else
+    frame_size = (ALPHA_ROUND (crtl->outgoing_args_size)
+		  + sa_size
+		  + ALPHA_ROUND (frame_size + crtl->args.pretend_args_size));
+
+  cfun->machine->sa_mask = sa_mask;
+  cfun->machine->sa_size = sa_size;
+  cfun->machine->frame_size = frame_size;
+}
+
+#undef  TARGET_COMPUTE_FRAME_LAYOUT
+#define TARGET_COMPUTE_FRAME_LAYOUT  alpha_compute_frame_layout
+
+/* Return 1 if this function can directly return via $26.  */
+
+bool
+direct_return (void)
+{
+  return (TARGET_ABI_OSF
+	  && reload_completed
+	  && cfun->machine->frame_size == 0);
 }
 
 /* Define the offset between two registers, one to be eliminated,
@@ -7272,7 +7351,7 @@ alpha_initial_elimination_offset (unsigned int from,
 {
   HOST_WIDE_INT ret;
 
-  ret = alpha_sa_size ();
+  ret = cfun->machine->sa_size;
   ret += ALPHA_ROUND (crtl->outgoing_args_size);
 
   switch (from)
@@ -7300,9 +7379,6 @@ alpha_initial_elimination_offset (unsigned int from,
 static bool
 alpha_vms_can_eliminate (const int from ATTRIBUTE_UNUSED, const int to)
 {
-  /* We need the alpha_procedure_type to decide. Evaluate it now.  */
-  alpha_sa_size ();
-
   switch (alpha_procedure_type)
     {
     case PT_NULL:
@@ -7332,7 +7408,7 @@ alpha_vms_initial_elimination_offset (unsigned int from, unsigned int to)
      on the proper computations and will need the register save area size
      in most cases.  */
 
-  HOST_WIDE_INT sa_size = alpha_sa_size ();
+  HOST_WIDE_INT sa_size = cfun->machine->sa_size;
 
   /* PT_NULL procedures have no frame of their own and we only allow
      elimination to the stack pointer. This is the argument pointer and we
@@ -7401,10 +7477,11 @@ common_object_handler (tree *node, tree name ATTRIBUTE_UNUSED,
 
 static const struct attribute_spec vms_attribute_table[] =
 {
-  /* { name, min_len, max_len, decl_req, type_req, fn_type_req, handler,
-       affects_type_identity } */
-  { COMMON_OBJECT,   0, 1, true,  false, false, common_object_handler, false },
-  { NULL,            0, 0, false, false, false, NULL, false }
+  /* { name, min_len, max_len, decl_req, type_req, fn_type_req,
+       affects_type_identity, handler, exclude } */
+  { COMMON_OBJECT,   0, 1, true,  false, false, false, common_object_handler,
+    NULL },
+  { NULL,            0, 0, false, false, false, false, NULL, NULL }
 };
 
 void
@@ -7432,22 +7509,23 @@ vms_output_aligned_decl_common(FILE *file, tree decl, const char *name,
 
 #endif
 
-static int
-find_lo_sum_using_gp (rtx *px, void *data ATTRIBUTE_UNUSED)
-{
-  return GET_CODE (*px) == LO_SUM && XEXP (*px, 0) == pic_offset_table_rtx;
-}
-
-int
+bool
 alpha_find_lo_sum_using_gp (rtx insn)
 {
-  return for_each_rtx (&PATTERN (insn), find_lo_sum_using_gp, NULL) > 0;
+  subrtx_iterator::array_type array;
+  FOR_EACH_SUBRTX (iter, array, PATTERN (insn), NONCONST)
+    {
+      const_rtx x = *iter;
+      if (GET_CODE (x) == LO_SUM && XEXP (x, 0) == pic_offset_table_rtx)
+	return true;
+    }
+  return false;
 }
 
 static int
 alpha_does_function_need_gp (void)
 {
-  rtx insn;
+  rtx_insn *insn;
 
   /* The GP being variable is an OSF abi thing.  */
   if (! TARGET_ABI_OSF)
@@ -7478,7 +7556,6 @@ alpha_does_function_need_gp (void)
 
   for (; insn; insn = NEXT_INSN (insn))
     if (NONDEBUG_INSN_P (insn)
-	&& ! JUMP_TABLE_DATA_P (insn)
 	&& GET_CODE (PATTERN (insn)) != USE
 	&& GET_CODE (PATTERN (insn)) != CLOBBER
 	&& get_attr_usegp (insn))
@@ -7491,16 +7568,16 @@ alpha_does_function_need_gp (void)
 /* Helper function to set RTX_FRAME_RELATED_P on instructions, including
    sequences.  */
 
-static rtx
+static rtx_insn *
 set_frame_related_p (void)
 {
-  rtx seq = get_insns ();
-  rtx insn;
+  rtx_insn *seq = get_insns ();
+  rtx_insn *insn;
 
   end_sequence ();
 
   if (!seq)
-    return NULL_RTX;
+    return NULL;
 
   if (INSN_P (seq))
     {
@@ -7532,9 +7609,10 @@ static void
 emit_frame_store_1 (rtx value, rtx base_reg, HOST_WIDE_INT frame_bias,
 		    HOST_WIDE_INT base_ofs, rtx frame_reg)
 {
-  rtx addr, mem, insn;
+  rtx addr, mem;
+  rtx_insn *insn;
 
-  addr = plus_constant (base_reg, base_ofs);
+  addr = plus_constant (Pmode, base_reg, base_ofs);
   mem = gen_frame_mem (DImode, addr);
 
   insn = emit_move_insn (mem, value);
@@ -7544,12 +7622,13 @@ emit_frame_store_1 (rtx value, rtx base_reg, HOST_WIDE_INT frame_bias,
     {
       if (frame_bias)
 	{
-	  addr = plus_constant (stack_pointer_rtx, frame_bias + base_ofs);
+	  addr = plus_constant (Pmode, stack_pointer_rtx,
+			        frame_bias + base_ofs);
 	  mem = gen_rtx_MEM (DImode, addr);
 	}
 
       add_reg_note (insn, REG_FRAME_RELATED_EXPR,
-		    gen_rtx_SET (VOIDmode, mem, frame_reg));
+		    gen_rtx_SET (mem, frame_reg));
     }
 }
 
@@ -7559,24 +7638,6 @@ emit_frame_store (unsigned int regno, rtx base_reg,
 {
   rtx reg = gen_rtx_REG (DImode, regno);
   emit_frame_store_1 (reg, base_reg, frame_bias, base_ofs, reg);
-}
-
-/* Compute the frame size.  SIZE is the size of the "naked" frame
-   and SA_SIZE is the size of the register save area.  */
-
-static HOST_WIDE_INT
-compute_frame_size (HOST_WIDE_INT size, HOST_WIDE_INT sa_size)
-{
-  if (TARGET_ABI_OPEN_VMS)
-    return ALPHA_ROUND (sa_size 
-			+ (alpha_procedure_type == PT_STACK ? 8 : 0)
-			+ size
-			+ crtl->args.pretend_args_size);
-  else
-    return ALPHA_ROUND (crtl->outgoing_args_size)
-	   + sa_size
-	   + ALPHA_ROUND (size
-			  + crtl->args.pretend_args_size);
 }
 
 /* Write function prologue.  */
@@ -7600,22 +7661,17 @@ void
 alpha_expand_prologue (void)
 {
   /* Registers to save.  */
-  unsigned long imask = 0;
-  unsigned long fmask = 0;
+  unsigned HOST_WIDE_INT sa_mask = cfun->machine->sa_mask;
   /* Stack space needed for pushing registers clobbered by us.  */
-  HOST_WIDE_INT sa_size, sa_bias;
+  HOST_WIDE_INT sa_size = cfun->machine->sa_size;
   /* Complete stack size needed.  */
-  HOST_WIDE_INT frame_size;
+  HOST_WIDE_INT frame_size = cfun->machine->frame_size;
   /* Probed stack size; it additionally includes the size of
      the "reserve region" if any.  */
-  HOST_WIDE_INT probed_size;
+  HOST_WIDE_INT probed_size, sa_bias;
   /* Offset from base reg to register save area.  */
   HOST_WIDE_INT reg_offset;
   rtx sa_reg;
-  int i;
-
-  sa_size = alpha_sa_size ();
-  frame_size = compute_frame_size (get_frame_size (), sa_size);
 
   if (flag_stack_usage_info)
     current_function_static_stack_size = frame_size;
@@ -7624,8 +7680,6 @@ alpha_expand_prologue (void)
     reg_offset = 8 + 8 * cfun->machine->uses_condition_handler;
   else
     reg_offset = ALPHA_ROUND (crtl->outgoing_args_size);
-
-  alpha_sa_mask (&imask, &fmask);
 
   /* Emit an insn to reload GP, if needed.  */
   if (TARGET_ABI_OSF)
@@ -7652,8 +7706,8 @@ alpha_expand_prologue (void)
      Note that we are only allowed to adjust sp once in the prologue.  */
 
   probed_size = frame_size;
-  if (flag_stack_check)
-    probed_size += STACK_CHECK_PROTECT;
+  if (flag_stack_check || flag_stack_clash_protection)
+    probed_size += get_stack_check_protect ();
 
   if (probed_size <= 32768)
     {
@@ -7662,13 +7716,13 @@ alpha_expand_prologue (void)
 	  int probed;
 
 	  for (probed = 4096; probed < probed_size; probed += 8192)
-	    emit_insn (gen_probe_stack (GEN_INT (-probed)));
+	    emit_insn (gen_stack_probe_internal (GEN_INT (-probed)));
 
 	  /* We only have to do this probe if we aren't saving registers or
 	     if we are probing beyond the frame because of -fstack-check.  */
 	  if ((sa_size == 0 && probed_size > probed - 4096)
-	      || flag_stack_check)
-	    emit_insn (gen_probe_stack (GEN_INT (-probed_size)));
+	      || flag_stack_check || flag_stack_clash_protection)
+	    emit_insn (gen_stack_probe_internal (GEN_INT (-probed_size)));
 	}
 
       if (frame_size != 0)
@@ -7697,14 +7751,16 @@ alpha_expand_prologue (void)
 	 late in the compilation, generate the loop as a single insn.  */
       emit_insn (gen_prologue_stack_probe_loop (count, ptr));
 
-      if ((leftover > 4096 && sa_size == 0) || flag_stack_check)
+      if ((leftover > 4096 && sa_size == 0)
+	  || flag_stack_check || flag_stack_clash_protection)
 	{
-	  rtx last = gen_rtx_MEM (DImode, plus_constant (ptr, -leftover));
+	  rtx last = gen_rtx_MEM (DImode,
+				  plus_constant (Pmode, ptr, -leftover));
 	  MEM_VOLATILE_P (last) = 1;
 	  emit_move_insn (last, const0_rtx);
 	}
 
-      if (flag_stack_check)
+      if (flag_stack_check || flag_stack_clash_protection)
 	{
 	  /* If -fstack-check is specified we have to load the entire
 	     constant into a register and subtract from the sp in one go,
@@ -7729,8 +7785,8 @@ alpha_expand_prologue (void)
          note it looks at instead.  */
       RTX_FRAME_RELATED_P (seq) = 1;
       add_reg_note (seq, REG_FRAME_RELATED_EXPR,
-		    gen_rtx_SET (VOIDmode, stack_pointer_rtx,
-				 plus_constant (stack_pointer_rtx,
+		    gen_rtx_SET (stack_pointer_rtx,
+				 plus_constant (Pmode, stack_pointer_rtx,
 						-frame_size)));
     }
 
@@ -7763,36 +7819,23 @@ alpha_expand_prologue (void)
   if (TARGET_ABI_OPEN_VMS && alpha_procedure_type == PT_STACK)
     emit_frame_store (REG_PV, stack_pointer_rtx, 0, 0);
 
-  /* Save register RA next.  */
-  if (imask & (1UL << REG_RA))
+  /* Save register RA next, followed by any other registers
+     that need to be saved.  */
+  for (unsigned i = REG_RA; sa_mask != 0; i = ctz_hwi(sa_mask))
     {
-      emit_frame_store (REG_RA, sa_reg, sa_bias, reg_offset);
-      imask &= ~(1UL << REG_RA);
+      emit_frame_store (i, sa_reg, sa_bias, reg_offset);
       reg_offset += 8;
+      sa_mask &= ~(HOST_WIDE_INT_1U << i);
     }
-
-  /* Now save any other registers required to be saved.  */
-  for (i = 0; i < 31; i++)
-    if (imask & (1UL << i))
-      {
-	emit_frame_store (i, sa_reg, sa_bias, reg_offset);
-	reg_offset += 8;
-      }
-
-  for (i = 0; i < 31; i++)
-    if (fmask & (1UL << i))
-      {
-	emit_frame_store (i+32, sa_reg, sa_bias, reg_offset);
-	reg_offset += 8;
-      }
 
   if (TARGET_ABI_OPEN_VMS)
     {
       /* Register frame procedures save the fp.  */
       if (alpha_procedure_type == PT_REGISTER)
 	{
-	  rtx insn = emit_move_insn (gen_rtx_REG (DImode, vms_save_fp_regno),
-				     hard_frame_pointer_rtx);
+	  rtx_insn *insn =
+	    emit_move_insn (gen_rtx_REG (DImode, vms_save_fp_regno),
+			    hard_frame_pointer_rtx);
 	  add_reg_note (insn, REG_CFA_REGISTER, NULL);
 	  RTX_FRAME_RELATED_P (insn) = 1;
 	}
@@ -7808,10 +7851,10 @@ alpha_expand_prologue (void)
       /* If we have to allocate space for outgoing args, do it now.  */
       if (crtl->outgoing_args_size != 0)
 	{
-	  rtx seq
+	  rtx_insn *seq
 	    = emit_move_insn (stack_pointer_rtx,
 			      plus_constant
-			      (hard_frame_pointer_rtx,
+			      (Pmode, hard_frame_pointer_rtx,
 			       - (ALPHA_ROUND
 				  (crtl->outgoing_args_size))));
 
@@ -7871,16 +7914,11 @@ void
 alpha_start_function (FILE *file, const char *fnname,
 		      tree decl ATTRIBUTE_UNUSED)
 {
-  unsigned long imask = 0;
-  unsigned long fmask = 0;
-  /* Stack space needed for pushing registers clobbered by us.  */
-  HOST_WIDE_INT sa_size;
+  unsigned long imask, fmask;
   /* Complete stack size needed.  */
-  unsigned HOST_WIDE_INT frame_size;
-  /* The maximum debuggable frame size (512 Kbytes using Tru64 as).  */
-  unsigned HOST_WIDE_INT max_frame_size = TARGET_ABI_OSF && !TARGET_GAS
-					  ? 524288
-					  : 1UL << 31;
+  HOST_WIDE_INT frame_size = cfun->machine->frame_size;
+  /* The maximum debuggable frame size.  */
+  const HOST_WIDE_INT max_frame_size = HOST_WIDE_INT_1 << 31;
   /* Offset from base reg to register save area.  */
   HOST_WIDE_INT reg_offset;
   char *entry_label = (char *) alloca (strlen (fnname) + 6);
@@ -7888,47 +7926,18 @@ alpha_start_function (FILE *file, const char *fnname,
   int i;
 
 #if TARGET_ABI_OPEN_VMS
-  if (vms_debug_main
-      && strncmp (vms_debug_main, fnname, strlen (vms_debug_main)) == 0)
-    {
-      targetm.asm_out.globalize_label (asm_out_file, VMS_DEBUG_MAIN_POINTER);
-      ASM_OUTPUT_DEF (asm_out_file, VMS_DEBUG_MAIN_POINTER, fnname);
-      switch_to_section (text_section);
-      vms_debug_main = NULL;
-    }
+  vms_start_function (fnname);
 #endif
 
   alpha_fnname = fnname;
-  sa_size = alpha_sa_size ();
-  frame_size = compute_frame_size (get_frame_size (), sa_size);
 
   if (TARGET_ABI_OPEN_VMS)
     reg_offset = 8 + 8 * cfun->machine->uses_condition_handler;
   else
     reg_offset = ALPHA_ROUND (crtl->outgoing_args_size);
 
-  alpha_sa_mask (&imask, &fmask);
-
-  /* Ecoff can handle multiple .file directives, so put out file and lineno.
-     We have to do that before the .ent directive as we cannot switch
-     files within procedures with native ecoff because line numbers are
-     linked to procedure descriptors.
-     Outputting the lineno helps debugging of one line functions as they
-     would otherwise get no line number at all. Please note that we would
-     like to put out last_linenum from final.c, but it is not accessible.  */
-
-  if (write_symbols == SDB_DEBUG)
-    {
-#ifdef ASM_OUTPUT_SOURCE_FILENAME
-      ASM_OUTPUT_SOURCE_FILENAME (file,
-				  DECL_SOURCE_FILE (current_function_decl));
-#endif
-#ifdef SDB_OUTPUT_SOURCE_LINE
-      if (debug_info_level != DINFO_LEVEL_TERSE)
-        SDB_OUTPUT_SOURCE_LINE (file,
-				DECL_SOURCE_LINE (current_function_decl));
-#endif
-    }
+  imask = cfun->machine->sa_mask & 0xffffffffu;
+  fmask = cfun->machine->sa_mask >> 32;
 
   /* Issue function start and label.  */
   if (TARGET_ABI_OPEN_VMS || !flag_inhibit_size_directive)
@@ -7995,7 +8004,7 @@ alpha_start_function (FILE *file, const char *fnname,
     fprintf (file, "\t.frame $%d," HOST_WIDE_INT_PRINT_DEC ",$26,"
 	     HOST_WIDE_INT_PRINT_DEC "\n",
 	     vms_unwind_regno,
-	     frame_size >= (1UL << 31) ? 0 : frame_size,
+	     frame_size >= max_frame_size ? 0 : frame_size,
 	     reg_offset);
   else if (!flag_inhibit_size_directive)
     fprintf (file, "\t.frame $%d," HOST_WIDE_INT_PRINT_DEC ",$26,%d\n",
@@ -8075,12 +8084,11 @@ void
 alpha_expand_epilogue (void)
 {
   /* Registers to save.  */
-  unsigned long imask = 0;
-  unsigned long fmask = 0;
+  unsigned HOST_WIDE_INT sa_mask = cfun->machine->sa_mask;
   /* Stack space needed for pushing registers clobbered by us.  */
-  HOST_WIDE_INT sa_size;
+  HOST_WIDE_INT sa_size = cfun->machine->sa_size;
   /* Complete stack size needed.  */
-  HOST_WIDE_INT frame_size;
+  HOST_WIDE_INT frame_size = cfun->machine->frame_size;
   /* Offset from base reg to register save area.  */
   HOST_WIDE_INT reg_offset;
   int fp_is_frame_pointer, fp_offset;
@@ -8088,10 +8096,6 @@ alpha_expand_epilogue (void)
   rtx sp_adj1, sp_adj2, mem, reg, insn;
   rtx eh_ofs;
   rtx cfa_restores = NULL_RTX;
-  int i;
-
-  sa_size = alpha_sa_size ();
-  frame_size = compute_frame_size (get_frame_size (), sa_size);
 
   if (TARGET_ABI_OPEN_VMS)
     {
@@ -8102,8 +8106,6 @@ alpha_expand_epilogue (void)
     }
   else
     reg_offset = ALPHA_ROUND (crtl->outgoing_args_size);
-
-  alpha_sa_mask (&imask, &fmask);
 
   fp_is_frame_pointer
     = (TARGET_ABI_OPEN_VMS
@@ -8137,47 +8139,29 @@ alpha_expand_epilogue (void)
 	    bias = reg_offset, reg_offset = 0;
 
 	  sa_reg = gen_rtx_REG (DImode, 22);
-	  sa_reg_exp = plus_constant (stack_pointer_rtx, bias);
+	  sa_reg_exp = plus_constant (Pmode, stack_pointer_rtx, bias);
 
 	  emit_move_insn (sa_reg, sa_reg_exp);
 	}
 
       /* Restore registers in order, excepting a true frame pointer.  */
-
-      mem = gen_frame_mem (DImode, plus_constant (sa_reg, reg_offset));
-      reg = gen_rtx_REG (DImode, REG_RA);
-      emit_move_insn (reg, mem);
-      cfa_restores = alloc_reg_note (REG_CFA_RESTORE, reg, cfa_restores);
-
-      reg_offset += 8;
-      imask &= ~(1UL << REG_RA);
-
-      for (i = 0; i < 31; ++i)
-	if (imask & (1UL << i))
-	  {
-	    if (i == HARD_FRAME_POINTER_REGNUM && fp_is_frame_pointer)
-	      fp_offset = reg_offset;
-	    else
-	      {
-		mem = gen_frame_mem (DImode,
-				     plus_constant (sa_reg, reg_offset));
-		reg = gen_rtx_REG (DImode, i);
-		emit_move_insn (reg, mem);
-		cfa_restores = alloc_reg_note (REG_CFA_RESTORE, reg,
-					       cfa_restores);
-	      }
-	    reg_offset += 8;
-	  }
-
-      for (i = 0; i < 31; ++i)
-	if (fmask & (1UL << i))
-	  {
-	    mem = gen_frame_mem (DFmode, plus_constant (sa_reg, reg_offset));
-	    reg = gen_rtx_REG (DFmode, i+32);
-	    emit_move_insn (reg, mem);
-	    cfa_restores = alloc_reg_note (REG_CFA_RESTORE, reg, cfa_restores);
-	    reg_offset += 8;
-	  }
+      for (unsigned i = REG_RA; sa_mask != 0; i = ctz_hwi(sa_mask))
+	{
+	  if (i == HARD_FRAME_POINTER_REGNUM && fp_is_frame_pointer)
+	    fp_offset = reg_offset;
+	  else
+	    {
+	      mem = gen_frame_mem (DImode,
+				   plus_constant (Pmode, sa_reg,
+						  reg_offset));
+	      reg = gen_rtx_REG (DImode, i);
+	      emit_move_insn (reg, mem);
+	      cfa_restores = alloc_reg_note (REG_CFA_RESTORE, reg,
+					     cfa_restores);
+	    }
+	  reg_offset += 8;
+	  sa_mask &= ~(HOST_WIDE_INT_1U << i);
+	}
     }
 
   if (frame_size || eh_ofs)
@@ -8200,7 +8184,7 @@ alpha_expand_epilogue (void)
 	{
 	  int low = ((frame_size & 0xffff) ^ 0x8000) - 0x8000;
 
-	  sp_adj2 = plus_constant (sp_adj1, frame_size - low);
+	  sp_adj2 = plus_constant (Pmode, sp_adj1, frame_size - low);
 	  if (sa_reg_exp && rtx_equal_p (sa_reg_exp, sp_adj2))
 	    sp_adj1 = sa_reg;
 	  else
@@ -8218,8 +8202,7 @@ alpha_expand_epilogue (void)
 	    {
 	      /* We can't drop new things to memory this late, afaik,
 		 so build it up by pieces.  */
-	      sp_adj2 = alpha_emit_set_long_const (tmp, frame_size,
-						   -(frame_size < 0));
+	      sp_adj2 = alpha_emit_set_long_const (tmp, frame_size);
 	      gcc_assert (sp_adj2);
 	    }
 	}
@@ -8230,7 +8213,8 @@ alpha_expand_epilogue (void)
       if (fp_is_frame_pointer)
 	{
 	  emit_insn (gen_blockage ());
-	  mem = gen_frame_mem (DImode, plus_constant (sa_reg, fp_offset));
+	  mem = gen_frame_mem (DImode, plus_constant (Pmode, sa_reg,
+						      fp_offset));
 	  emit_move_insn (hard_frame_pointer_rtx, mem);
 	  cfa_restores = alloc_reg_note (REG_CFA_RESTORE,
 					 hard_frame_pointer_rtx, cfa_restores);
@@ -8275,7 +8259,7 @@ alpha_expand_epilogue (void)
 void
 alpha_end_function (FILE *file, const char *fnname, tree decl ATTRIBUTE_UNUSED)
 {
-  rtx insn;
+  rtx_insn *insn;
 
   /* We output a nop after noreturn calls at the very end of the function to
      ensure that the return address always remains in the caller's code range,
@@ -8317,8 +8301,10 @@ alpha_output_mi_thunk_osf (FILE *file, tree thunk_fndecl ATTRIBUTE_UNUSED,
 			   HOST_WIDE_INT delta, HOST_WIDE_INT vcall_offset,
 			   tree function)
 {
+  const char *fnname = IDENTIFIER_POINTER (DECL_ASSEMBLER_NAME (thunk_fndecl));
   HOST_WIDE_INT hi, lo;
-  rtx this_rtx, insn, funexp;
+  rtx this_rtx, funexp;
+  rtx_insn *insn;
 
   /* We always require a valid GP.  */
   emit_insn (gen_prologue_ldgp ());
@@ -8344,8 +8330,7 @@ alpha_output_mi_thunk_osf (FILE *file, tree thunk_fndecl ATTRIBUTE_UNUSED,
     }
   else
     {
-      rtx tmp = alpha_emit_set_long_const (gen_rtx_REG (Pmode, 0),
-					   delta, -(delta < 0));
+      rtx tmp = alpha_emit_set_long_const (gen_rtx_REG (Pmode, 0), delta);
       emit_insn (gen_adddi3 (this_rtx, this_rtx, tmp));
     }
 
@@ -8367,7 +8352,7 @@ alpha_output_mi_thunk_osf (FILE *file, tree thunk_fndecl ATTRIBUTE_UNUSED,
       else
 	{
 	  tmp2 = alpha_emit_set_long_const (gen_rtx_REG (Pmode, 1),
-					    vcall_offset, -(vcall_offset < 0));
+					    vcall_offset);
           emit_insn (gen_adddi3 (tmp, tmp, tmp2));
 	  lo = 0;
 	}
@@ -8393,25 +8378,20 @@ alpha_output_mi_thunk_osf (FILE *file, tree thunk_fndecl ATTRIBUTE_UNUSED,
 
   /* Run just enough of rest_of_compilation to get the insns emitted.
      There's not really enough bulk here to make other passes such as
-     instruction scheduling worth while.  Note that use_thunk calls
-     assemble_start_function and assemble_end_function.  */
+     instruction scheduling worth while.  */
   insn = get_insns ();
-  insn_locators_alloc ();
   shorten_branches (insn);
+  assemble_start_function (thunk_fndecl, fnname);
   final_start_function (insn, file, 1);
   final (insn, file, 1);
   final_end_function ();
+  assemble_end_function (thunk_fndecl, fnname);
 }
 #endif /* TARGET_ABI_OSF */
 
 /* Debugging support.  */
 
 #include "gstab.h"
-
-/* Count the number of sdb related labels are generated (to find block
-   start and end boundaries).  */
-
-int sdb_label_count = 0;
 
 /* Name of the file containing the current function.  */
 
@@ -8437,25 +8417,14 @@ alpha_output_filename (FILE *stream, const char *name)
       fprintf (stream, "\t.file\t%d ", num_source_filenames);
       output_quoted_string (stream, name);
       fprintf (stream, "\n");
-      if (!TARGET_GAS && write_symbols == DBX_DEBUG)
-	fprintf (stream, "\t#@stabs\n");
     }
-
-  else if (write_symbols == DBX_DEBUG)
-    /* dbxout.c will emit an appropriate .stabs directive.  */
-    return;
 
   else if (name != current_function_file
 	   && strcmp (name, current_function_file) != 0)
     {
-      if (inside_function && ! TARGET_GAS)
-	fprintf (stream, "\t#.file\t%d ", num_source_filenames);
-      else
-	{
-	  ++num_source_filenames;
-	  current_function_file = name;
-	  fprintf (stream, "\t.file\t%d ", num_source_filenames);
-	}
+      ++num_source_filenames;
+      current_function_file = name;
+      fprintf (stream, "\t.file\t%d ", num_source_filenames);
 
       output_quoted_string (stream, name);
       fprintf (stream, "\n");
@@ -8552,8 +8521,8 @@ summarize_insn (rtx x, struct shadow_summary *sum, int set)
       summarize_insn (XEXP (x, 0), sum, 0);
       break;
 
-    case CONST_INT:   case CONST_DOUBLE:
-    case SYMBOL_REF:  case LABEL_REF:     case CONST:
+    case CONST_INT:   case CONST_WIDE_INT:  case CONST_DOUBLE:
+    case SYMBOL_REF:  case LABEL_REF:       case CONST:
     case SCRATCH:     case ASM_INPUT:
       break;
 
@@ -8636,7 +8605,7 @@ alpha_handle_trap_shadows (void)
 {
   struct shadow_summary shadow;
   int trap_pending, exception_nesting;
-  rtx i, n;
+  rtx_insn *i, *n;
 
   trap_pending = 0;
   exception_nesting = 0;
@@ -8726,10 +8695,18 @@ alpha_handle_trap_shadows (void)
 			}
 		      break;
 
+		    case BARRIER:
+		      /* __builtin_unreachable can expand to no code at all,
+			 leaving (barrier) RTXes in the instruction stream.  */
+		      goto close_shadow_notrapb;
+
 		    case JUMP_INSN:
 		    case CALL_INSN:
 		    case CODE_LABEL:
 		      goto close_shadow;
+
+		    case DEBUG_INSN:
+		      break;
 
 		    default:
 		      gcc_unreachable ();
@@ -8741,6 +8718,7 @@ alpha_handle_trap_shadows (void)
 		  n = emit_insn_before (gen_trapb (), i);
 		  PUT_MODE (n, TImode);
 		  PUT_MODE (i, TImode);
+		close_shadow_notrapb:
 		  trap_pending = 0;
 		  shadow.used.i = 0;
 		  shadow.used.fp = 0;
@@ -8790,7 +8768,7 @@ enum alphaev5_pipe {
 };
 
 static enum alphaev4_pipe
-alphaev4_insn_pipe (rtx insn)
+alphaev4_insn_pipe (rtx_insn *insn)
 {
   if (recog_memoized (insn) < 0)
     return EV4_STOP;
@@ -8839,7 +8817,7 @@ alphaev4_insn_pipe (rtx insn)
 }
 
 static enum alphaev5_pipe
-alphaev5_insn_pipe (rtx insn)
+alphaev5_insn_pipe (rtx_insn *insn)
 {
   if (recog_memoized (insn) < 0)
     return EV5_STOP;
@@ -8899,8 +8877,8 @@ alphaev5_insn_pipe (rtx insn)
 
    LEN is, of course, the length of the group in bytes.  */
 
-static rtx
-alphaev4_next_group (rtx insn, int *pin_use, int *plen)
+static rtx_insn *
+alphaev4_next_group (rtx_insn *insn, int *pin_use, int *plen)
 {
   int len, in_use;
 
@@ -8997,8 +8975,8 @@ alphaev4_next_group (rtx insn, int *pin_use, int *plen)
 
    LEN is, of course, the length of the group in bytes.  */
 
-static rtx
-alphaev5_next_group (rtx insn, int *pin_use, int *plen)
+static rtx_insn *
+alphaev5_next_group (rtx_insn *insn, int *pin_use, int *plen)
 {
   int len, in_use;
 
@@ -9181,24 +9159,25 @@ alphaev5_next_nop (int *pin_use)
 /* The instruction group alignment main loop.  */
 
 static void
-alpha_align_insns (unsigned int max_align,
-		   rtx (*next_group) (rtx, int *, int *),
-		   rtx (*next_nop) (int *))
+alpha_align_insns_1 (unsigned int max_align,
+		     rtx_insn *(*next_group) (rtx_insn *, int *, int *),
+		     rtx (*next_nop) (int *))
 {
   /* ALIGN is the known alignment for the insn group.  */
   unsigned int align;
   /* OFS is the offset of the current insn in the insn group.  */
   int ofs;
   int prev_in_use, in_use, len, ldgp;
-  rtx i, next;
+  rtx_insn *i, *next;
 
   /* Let shorten branches care for assigning alignments to code labels.  */
   shorten_branches (get_insns ());
 
-  if (align_functions < 4)
+  unsigned int option_alignment = align_functions.levels[0].get_value ();
+  if (option_alignment < 4)
     align = 4;
-  else if ((unsigned int) align_functions < max_align)
-    align = align_functions;
+  else if ((unsigned int) option_alignment < max_align)
+    align = option_alignment;
   else
     align = max_align;
 
@@ -9216,7 +9195,8 @@ alpha_align_insns (unsigned int max_align,
       /* When we see a label, resync alignment etc.  */
       if (LABEL_P (i))
 	{
-	  unsigned int new_align = 1 << label_to_alignment (i);
+	  unsigned int new_align
+	    = label_to_alignment (i).levels[0].get_value ();
 
 	  if (new_align >= align)
 	    {
@@ -9248,7 +9228,7 @@ alpha_align_insns (unsigned int max_align,
       else if ((int) align < len)
 	{
 	  unsigned int new_log_align = len > 8 ? 4 : 3;
-	  rtx prev, where;
+	  rtx_insn *prev, *where;
 
 	  where = prev = prev_nonnote_insn (i);
 	  if (!where || !LABEL_P (where))
@@ -9277,7 +9257,7 @@ alpha_align_insns (unsigned int max_align,
       else if (ofs + len > (int) align)
 	{
 	  int nop_count = (align - ofs) / 4;
-	  rtx where;
+	  rtx_insn *where;
 
 	  /* Insert nops before labels, branches, and calls to truly merge
 	     the execution of the nops with the previous instruction group.  */
@@ -9286,7 +9266,7 @@ alpha_align_insns (unsigned int max_align,
 	    {
 	      if (LABEL_P (where))
 		{
-		  rtx where2 = prev_nonnote_insn (where);
+		  rtx_insn *where2 = prev_nonnote_insn (where);
 		  if (where2 && JUMP_P (where2))
 		    where = where2;
 		}
@@ -9308,32 +9288,32 @@ alpha_align_insns (unsigned int max_align,
     }
 }
 
+static void
+alpha_align_insns (void)
+{
+  if (alpha_tune == PROCESSOR_EV4)
+    alpha_align_insns_1 (8, alphaev4_next_group, alphaev4_next_nop);
+  else if (alpha_tune == PROCESSOR_EV5)
+    alpha_align_insns_1 (16, alphaev5_next_group, alphaev5_next_nop);
+  else
+    gcc_unreachable ();
+}
+
 /* Insert an unop between sibcall or noreturn function call and GP load.  */
 
 static void
 alpha_pad_function_end (void)
 {
-  rtx insn, next;
+  rtx_insn *insn, *next;
 
   for (insn = get_insns (); insn; insn = NEXT_INSN (insn))
     {
-      if (! (CALL_P (insn)
-	     && (SIBLING_CALL_P (insn)
-		 || find_reg_note (insn, REG_NORETURN, NULL_RTX))))
+      if (!CALL_P (insn)
+	  || !(SIBLING_CALL_P (insn)
+	       || find_reg_note (insn, REG_NORETURN, NULL_RTX)))
         continue;
 
-      /* Make sure we do not split a call and its corresponding
-	 CALL_ARG_LOCATION note.  */
-      if (CALL_P (insn))
-	{
-	  next = NEXT_INSN (insn);
-	  if (next && NOTE_P (next)
-	      && NOTE_KIND (next) == NOTE_INSN_CALL_ARG_LOCATION)
-	    insn = next;
-	}
-
       next = next_active_insn (insn);
-
       if (next)
 	{
 	  rtx pat = PATTERN (next);
@@ -9398,41 +9378,30 @@ And in the noreturn case:
   if (current_function_has_exception_handlers ())
     alpha_pad_function_end ();
 
-  if (alpha_tp != ALPHA_TP_PROG || flag_exceptions)
-    alpha_handle_trap_shadows ();
+  /* CALL_PAL that implements trap insn, updates program counter to point
+     after the insn.  In case trap is the last insn in the function,
+     emit NOP to guarantee that PC remains inside function boundaries.
+     This workaround is needed to get reliable backtraces.  */
+  
+  rtx_insn *insn = prev_active_insn (get_last_insn ());
 
-  /* Due to the number of extra trapb insns, don't bother fixing up
-     alignment when trap precision is instruction.  Moreover, we can
-     only do our job when sched2 is run.  */
-  if (optimize && !optimize_size
-      && alpha_tp != ALPHA_TP_INSN
-      && flag_schedule_insns_after_reload)
+  if (insn && NONJUMP_INSN_P (insn))
     {
-      if (alpha_tune == PROCESSOR_EV4)
-	alpha_align_insns (8, alphaev4_next_group, alphaev4_next_nop);
-      else if (alpha_tune == PROCESSOR_EV5)
-	alpha_align_insns (16, alphaev5_next_group, alphaev5_next_nop);
+      rtx pat = PATTERN (insn);
+      if (GET_CODE (pat) == PARALLEL)
+	{
+	  rtx vec = XVECEXP (pat, 0, 0);
+	  if (GET_CODE (vec) == TRAP_IF
+	      && XEXP (vec, 0) == const1_rtx)
+	    emit_insn_after (gen_unop (), insn);
+	}
     }
 }
 
-#ifdef HAVE_STAMP_H
-#include <stamp.h>
-#endif
-
 static void
 alpha_file_start (void)
 {
-#ifdef OBJECT_FORMAT_ELF
-  /* If emitting dwarf2 debug information, we cannot generate a .file
-     directive to start the file, as it will conflict with dwarf2out
-     file numbers.  So it's only useful when emitting mdebug output.  */
-  targetm.asm_file_start_file_directive = (write_symbols == DBX_DEBUG);
-#endif
-
   default_file_start ();
-#ifdef MS_STAMP
-  fprintf (asm_out_file, "\t.verstamp %d %d\n", MS_STAMP, LS_STAMP);
-#endif
 
   fputs ("\t.set noreorder\n", asm_out_file);
   fputs ("\t.set volatile\n", asm_out_file);
@@ -9459,7 +9428,6 @@ alpha_file_start (void)
     }
 }
 
-#ifdef OBJECT_FORMAT_ELF
 /* Since we don't have a .dynbss section, we should not allow global
    relocations in the .rodata section.  */
 
@@ -9473,7 +9441,7 @@ alpha_elf_reloc_rw_mask (void)
    honor small data.  */
 
 static section *
-alpha_elf_select_rtx_section (enum machine_mode mode, rtx x,
+alpha_elf_select_rtx_section (machine_mode mode, rtx x,
 			      unsigned HOST_WIDE_INT align)
 {
   if (TARGET_SMALL_DATA && GET_MODE_SIZE (mode) <= g_switch_value)
@@ -9499,7 +9467,6 @@ alpha_elf_section_type_flags (tree decl, const char *name, int reloc)
   flags |= default_section_type_flags (decl, name, reloc);
   return flags;
 }
-#endif /* OBJECT_FORMAT_ELF */
 
 /* Structure to collect function names for final output in link section.  */
 /* Note that items marked with GTY can't be ifdef'ed out.  */
@@ -9522,13 +9489,13 @@ struct GTY(()) alpha_links
 /* Return the VMS argument type corresponding to MODE.  */
 
 enum avms_arg_type
-alpha_arg_type (enum machine_mode mode)
+alpha_arg_type (machine_mode mode)
 {
   switch (mode)
     {
-    case SFmode:
+    case E_SFmode:
       return TARGET_FLOAT_VAX ? FF : FS;
-    case DFmode:
+    case E_DFmode:
       return TARGET_FLOAT_VAX ? FD : FT;
     default:
       return I64;
@@ -9565,18 +9532,14 @@ alpha_use_linkage (rtx func, bool lflag, bool rflag)
 
   if (cfun->machine->links)
     {
-      splay_tree_node lnode;
-
       /* Is this name already defined?  */
-      lnode = splay_tree_lookup (cfun->machine->links, (splay_tree_key) name);
-      if (lnode)
-	al = (struct alpha_links *) lnode->value;
+      alpha_links **slot = cfun->machine->links->get (name);
+      if (slot)
+	al = *slot;
     }
   else
-    cfun->machine->links = splay_tree_new_ggc
-      ((splay_tree_compare_fn) strcmp,
-       ggc_alloc_splay_tree_str_alpha_links_splay_tree_s,
-       ggc_alloc_splay_tree_str_alpha_links_splay_tree_node_s);
+    cfun->machine->links
+      = hash_map<nofree_string_hash, alpha_links *>::create_ggc (64);
 
   if (al == NULL)
     {
@@ -9600,30 +9563,24 @@ alpha_use_linkage (rtx func, bool lflag, bool rflag)
       linksym = (char *) alloca (buf_len);
       snprintf (linksym, buf_len, "$%d..%s..lk", cfun->funcdef_no, name);
 
-      al = ggc_alloc_alpha_links ();
+      al = ggc_alloc<alpha_links> ();
       al->func = func;
       al->linkage = gen_rtx_SYMBOL_REF (Pmode, ggc_strdup (linksym));
 
-      splay_tree_insert (cfun->machine->links,
-                         (splay_tree_key) ggc_strdup (name),
-			 (splay_tree_value) al);
+      cfun->machine->links->put (ggc_strdup (name), al);
     }
 
   al->rkind = rflag ? KIND_CODEADDR : KIND_LINKAGE;
 
   if (lflag)
-    return gen_rtx_MEM (Pmode, plus_constant (al->linkage, 8));
+    return gen_rtx_MEM (Pmode, plus_constant (Pmode, al->linkage, 8));
   else
     return al->linkage;
 }
 
 static int
-alpha_write_one_linkage (splay_tree_node node, void *data)
+alpha_write_one_linkage (const char *name, alpha_links *link, FILE *stream)
 {
-  const char *const name = (const char *) node->key;
-  struct alpha_links *link = (struct alpha_links *) node->value;
-  FILE *stream = (FILE *) data;
-
   ASM_OUTPUT_INTERNAL_LABEL (stream, XSTR (link->linkage, 0));
   if (link->rkind == KIND_CODEADDR)
     {
@@ -9673,8 +9630,10 @@ alpha_write_linkage (FILE *stream, const char *funname)
 
   if (cfun->machine->links)
     {
-      splay_tree_foreach (cfun->machine->links, alpha_write_one_linkage, stream);
-      /* splay_tree_delete (func->links); */
+      hash_map<nofree_string_hash, alpha_links *>::iterator iter
+	= cfun->machine->links->begin ();
+      for (; iter != cfun->machine->links->end (); ++iter)
+	alpha_write_one_linkage ((*iter).first, (*iter).second, stream);
     }
 }
 
@@ -9744,8 +9703,6 @@ alpha_init_libfuncs (void)
       set_optab_libfunc (smod_optab, DImode, "OTS$REM_L");
       set_optab_libfunc (umod_optab, SImode, "OTS$REM_UI");
       set_optab_libfunc (umod_optab, DImode, "OTS$REM_UL");
-      abort_libfunc = init_one_libfunc ("decc$abort");
-      memcmp_libfunc = init_one_libfunc ("decc$memcmp");
 #ifdef MEM_LIBFUNCS_INIT
       MEM_LIBFUNCS_INIT;
 #endif
@@ -9762,6 +9719,131 @@ alpha_conditional_register_usage (void)
   if (! TARGET_FPREGS)
     for (i = 32; i < 63; i++)
       fixed_regs[i] = call_used_regs[i] = 1;
+}
+
+/* Canonicalize a comparison from one we don't have to one we do have.  */
+
+static void
+alpha_canonicalize_comparison (int *code, rtx *op0, rtx *op1,
+			       bool op0_preserve_value)
+{
+  if (!op0_preserve_value
+      && (*code == GE || *code == GT || *code == GEU || *code == GTU)
+      && (REG_P (*op1) || *op1 == const0_rtx))
+    {
+      std::swap (*op0, *op1);
+      *code = (int)swap_condition ((enum rtx_code)*code);
+    }
+
+  if ((*code == LT || *code == LTU)
+      && CONST_INT_P (*op1) && INTVAL (*op1) == 256)
+    {
+      *code = *code == LT ? LE : LEU;
+      *op1 = GEN_INT (255);
+    }
+}
+
+/* Implement TARGET_ATOMIC_ASSIGN_EXPAND_FENV.  */
+
+static void
+alpha_atomic_assign_expand_fenv (tree *hold, tree *clear, tree *update)
+{
+  const unsigned HOST_WIDE_INT SWCR_STATUS_MASK = (0x3fUL << 17);
+
+  tree fenv_var, get_fpscr, set_fpscr, mask, ld_fenv, masked_fenv;
+  tree new_fenv_var, reload_fenv, restore_fnenv;
+  tree update_call, atomic_feraiseexcept, hold_fnclex;
+
+  /* Assume OSF/1 compatible interfaces.  */
+  if (!TARGET_ABI_OSF)
+    return;
+
+  /* Generate the equivalent of :
+       unsigned long fenv_var;
+       fenv_var = __ieee_get_fp_control ();
+
+       unsigned long masked_fenv;
+       masked_fenv = fenv_var & mask;
+
+       __ieee_set_fp_control (masked_fenv);  */
+
+  fenv_var = create_tmp_var_raw (long_unsigned_type_node);
+  get_fpscr
+    = build_fn_decl ("__ieee_get_fp_control",
+		     build_function_type_list (long_unsigned_type_node, NULL));
+  set_fpscr
+    = build_fn_decl ("__ieee_set_fp_control",
+		     build_function_type_list (void_type_node, NULL));
+  mask = build_int_cst (long_unsigned_type_node, ~SWCR_STATUS_MASK);
+  ld_fenv = build4 (TARGET_EXPR, long_unsigned_type_node, fenv_var,
+		    build_call_expr (get_fpscr, 0), NULL_TREE, NULL_TREE);
+  masked_fenv = build2 (BIT_AND_EXPR, long_unsigned_type_node, fenv_var, mask);
+  hold_fnclex = build_call_expr (set_fpscr, 1, masked_fenv);
+  *hold = build2 (COMPOUND_EXPR, void_type_node,
+		  build2 (COMPOUND_EXPR, void_type_node, masked_fenv, ld_fenv),
+		  hold_fnclex);
+
+  /* Store the value of masked_fenv to clear the exceptions:
+     __ieee_set_fp_control (masked_fenv);  */
+
+  *clear = build_call_expr (set_fpscr, 1, masked_fenv);
+
+  /* Generate the equivalent of :
+       unsigned long new_fenv_var;
+       new_fenv_var = __ieee_get_fp_control ();
+
+       __ieee_set_fp_control (fenv_var);
+
+       __atomic_feraiseexcept (new_fenv_var);  */
+
+  new_fenv_var = create_tmp_var_raw (long_unsigned_type_node);
+  reload_fenv = build4 (TARGET_EXPR, long_unsigned_type_node, new_fenv_var,
+			build_call_expr (get_fpscr, 0), NULL_TREE, NULL_TREE);
+  restore_fnenv = build_call_expr (set_fpscr, 1, fenv_var);
+  atomic_feraiseexcept = builtin_decl_implicit (BUILT_IN_ATOMIC_FERAISEEXCEPT);
+  update_call
+    = build_call_expr (atomic_feraiseexcept, 1,
+		       fold_convert (integer_type_node, new_fenv_var));
+  *update = build2 (COMPOUND_EXPR, void_type_node,
+		    build2 (COMPOUND_EXPR, void_type_node,
+			    reload_fenv, restore_fnenv), update_call);
+}
+
+/* Implement TARGET_HARD_REGNO_MODE_OK.  On Alpha, the integer registers
+   can hold any mode.  The floating-point registers can hold 64-bit
+   integers as well, but not smaller values.  */
+
+static bool
+alpha_hard_regno_mode_ok (unsigned int regno, machine_mode mode)
+{
+  if (IN_RANGE (regno, 32, 62))
+    return (mode == SFmode
+	    || mode == DFmode
+	    || mode == DImode
+	    || mode == SCmode
+	    || mode == DCmode);
+  return true;
+}
+
+/* Implement TARGET_MODES_TIEABLE_P.  This asymmetric test is true when
+   MODE1 could be put in an FP register but MODE2 could not.  */
+
+static bool
+alpha_modes_tieable_p (machine_mode mode1, machine_mode mode2)
+{
+  return (alpha_hard_regno_mode_ok (32, mode1)
+	  ? alpha_hard_regno_mode_ok (32, mode2)
+	  : true);
+}
+
+/* Implement TARGET_CAN_CHANGE_MODE_CLASS.  */
+
+static bool
+alpha_can_change_mode_class (machine_mode from, machine_mode to,
+			     reg_class_t rclass)
+{
+  return (GET_MODE_SIZE (from) == GET_MODE_SIZE (to)
+	  || !reg_classes_intersect_p (FLOAT_REGS, rclass));
 }
 
 /* Initialize the GCC target structure.  */
@@ -9782,7 +9864,7 @@ alpha_conditional_register_usage (void)
 
 /* Default unaligned ops are provided for ELF systems.  To get unaligned
    data for non-ELF systems, we have to turn off auto alignment.  */
-#if !defined (OBJECT_FORMAT_ELF) || TARGET_ABI_OPEN_VMS
+#if TARGET_ABI_OPEN_VMS
 #undef TARGET_ASM_UNALIGNED_HI_OP
 #define TARGET_ASM_UNALIGNED_HI_OP "\t.align 0\n\t.word\t"
 #undef TARGET_ASM_UNALIGNED_SI_OP
@@ -9791,14 +9873,12 @@ alpha_conditional_register_usage (void)
 #define TARGET_ASM_UNALIGNED_DI_OP "\t.align 0\n\t.quad\t"
 #endif
 
-#ifdef OBJECT_FORMAT_ELF
 #undef  TARGET_ASM_RELOC_RW_MASK
 #define TARGET_ASM_RELOC_RW_MASK  alpha_elf_reloc_rw_mask
 #undef	TARGET_ASM_SELECT_RTX_SECTION
 #define	TARGET_ASM_SELECT_RTX_SECTION  alpha_elf_select_rtx_section
 #undef  TARGET_SECTION_TYPE_FLAGS
 #define TARGET_SECTION_TYPE_FLAGS  alpha_elf_section_type_flags
-#endif
 
 #undef TARGET_ASM_FUNCTION_END_PROLOGUE
 #define TARGET_ASM_FUNCTION_END_PROLOGUE alpha_output_function_end_prologue
@@ -9808,11 +9888,11 @@ alpha_conditional_register_usage (void)
 
 #undef TARGET_LEGITIMIZE_ADDRESS
 #define TARGET_LEGITIMIZE_ADDRESS alpha_legitimize_address
+#undef TARGET_MODE_DEPENDENT_ADDRESS_P
+#define TARGET_MODE_DEPENDENT_ADDRESS_P alpha_mode_dependent_address_p
 
 #undef TARGET_ASM_FILE_START
 #define TARGET_ASM_FILE_START alpha_file_start
-#undef TARGET_ASM_FILE_START_FILE_DIRECTIVE
-#define TARGET_ASM_FILE_START_FILE_DIRECTIVE true
 
 #undef TARGET_SCHED_ADJUST_COST
 #define TARGET_SCHED_ADJUST_COST alpha_adjust_cost
@@ -9833,6 +9913,8 @@ alpha_conditional_register_usage (void)
 #define TARGET_EXPAND_BUILTIN alpha_expand_builtin
 #undef  TARGET_FOLD_BUILTIN
 #define TARGET_FOLD_BUILTIN alpha_fold_builtin
+#undef  TARGET_GIMPLE_FOLD_BUILTIN
+#define TARGET_GIMPLE_FOLD_BUILTIN alpha_gimple_fold_builtin
 
 #undef TARGET_FUNCTION_OK_FOR_SIBCALL
 #define TARGET_FUNCTION_OK_FOR_SIBCALL alpha_function_ok_for_sibcall
@@ -9852,6 +9934,13 @@ alpha_conditional_register_usage (void)
 #define TARGET_STDARG_OPTIMIZE_HOOK alpha_stdarg_optimize_hook
 #endif
 
+#undef TARGET_PRINT_OPERAND
+#define TARGET_PRINT_OPERAND alpha_print_operand
+#undef TARGET_PRINT_OPERAND_ADDRESS
+#define TARGET_PRINT_OPERAND_ADDRESS alpha_print_operand_address
+#undef TARGET_PRINT_OPERAND_PUNCT_VALID_P
+#define TARGET_PRINT_OPERAND_PUNCT_VALID_P alpha_print_operand_punct_valid_p
+
 /* Use 16-bits anchor.  */
 #undef TARGET_MIN_ANCHOR_OFFSET
 #define TARGET_MIN_ANCHOR_OFFSET -0x7fff - 1
@@ -9860,10 +9949,14 @@ alpha_conditional_register_usage (void)
 #undef TARGET_USE_BLOCKS_FOR_CONSTANT_P
 #define TARGET_USE_BLOCKS_FOR_CONSTANT_P hook_bool_mode_const_rtx_true
 
+#undef TARGET_REGISTER_MOVE_COST
+#define TARGET_REGISTER_MOVE_COST alpha_register_move_cost
+#undef TARGET_MEMORY_MOVE_COST
+#define TARGET_MEMORY_MOVE_COST alpha_memory_move_cost
 #undef TARGET_RTX_COSTS
 #define TARGET_RTX_COSTS alpha_rtx_costs
 #undef TARGET_ADDRESS_COST
-#define TARGET_ADDRESS_COST hook_int_rtx_bool_0
+#define TARGET_ADDRESS_COST hook_int_rtx_mode_as_bool_0
 
 #undef TARGET_MACHINE_DEPENDENT_REORG
 #define TARGET_MACHINE_DEPENDENT_REORG alpha_reorg
@@ -9872,6 +9965,13 @@ alpha_conditional_register_usage (void)
 #define TARGET_PROMOTE_FUNCTION_MODE default_promote_function_mode_always_promote
 #undef TARGET_PROMOTE_PROTOTYPES
 #define TARGET_PROMOTE_PROTOTYPES hook_bool_const_tree_false
+
+#undef TARGET_FUNCTION_VALUE
+#define TARGET_FUNCTION_VALUE alpha_function_value
+#undef TARGET_LIBCALL_VALUE
+#define TARGET_LIBCALL_VALUE alpha_libcall_value
+#undef TARGET_FUNCTION_VALUE_REGNO_P
+#define TARGET_FUNCTION_VALUE_REGNO_P alpha_function_value_regno_p
 #undef TARGET_RETURN_IN_MEMORY
 #define TARGET_RETURN_IN_MEMORY alpha_return_in_memory
 #undef TARGET_PASS_BY_REFERENCE
@@ -9900,6 +10000,10 @@ alpha_conditional_register_usage (void)
 
 #undef TARGET_SECONDARY_RELOAD
 #define TARGET_SECONDARY_RELOAD alpha_secondary_reload
+#undef TARGET_SECONDARY_MEMORY_NEEDED
+#define TARGET_SECONDARY_MEMORY_NEEDED alpha_secondary_memory_needed
+#undef TARGET_SECONDARY_MEMORY_NEEDED_MODE
+#define TARGET_SECONDARY_MEMORY_NEEDED_MODE alpha_secondary_memory_needed_mode
 
 #undef TARGET_SCALAR_MODE_SUPPORTED_P
 #define TARGET_SCALAR_MODE_SUPPORTED_P alpha_scalar_mode_supported_p
@@ -9912,25 +10016,41 @@ alpha_conditional_register_usage (void)
 #undef TARGET_EXPAND_BUILTIN_VA_START
 #define TARGET_EXPAND_BUILTIN_VA_START alpha_va_start
 
-/* The Alpha architecture does not require sequential consistency.  See
-   http://www.cs.umd.edu/~pugh/java/memoryModel/AlphaReordering.html
-   for an example of how it can be violated in practice.  */
-#undef TARGET_RELAXED_ORDERING
-#define TARGET_RELAXED_ORDERING true
-
 #undef TARGET_OPTION_OVERRIDE
 #define TARGET_OPTION_OVERRIDE alpha_option_override
+
+#undef TARGET_OVERRIDE_OPTIONS_AFTER_CHANGE
+#define TARGET_OVERRIDE_OPTIONS_AFTER_CHANGE \
+  alpha_override_options_after_change
 
 #ifdef TARGET_ALTERNATE_LONG_DOUBLE_MANGLING
 #undef TARGET_MANGLE_TYPE
 #define TARGET_MANGLE_TYPE alpha_mangle_type
 #endif
 
+#undef TARGET_LRA_P
+#define TARGET_LRA_P hook_bool_void_false
+
 #undef TARGET_LEGITIMATE_ADDRESS_P
 #define TARGET_LEGITIMATE_ADDRESS_P alpha_legitimate_address_p
 
 #undef TARGET_CONDITIONAL_REGISTER_USAGE
 #define TARGET_CONDITIONAL_REGISTER_USAGE alpha_conditional_register_usage
+
+#undef TARGET_CANONICALIZE_COMPARISON
+#define TARGET_CANONICALIZE_COMPARISON alpha_canonicalize_comparison
+
+#undef TARGET_ATOMIC_ASSIGN_EXPAND_FENV
+#define TARGET_ATOMIC_ASSIGN_EXPAND_FENV alpha_atomic_assign_expand_fenv
+
+#undef TARGET_HARD_REGNO_MODE_OK
+#define TARGET_HARD_REGNO_MODE_OK alpha_hard_regno_mode_ok
+
+#undef TARGET_MODES_TIEABLE_P
+#define TARGET_MODES_TIEABLE_P alpha_modes_tieable_p
+
+#undef TARGET_CAN_CHANGE_MODE_CLASS
+#define TARGET_CAN_CHANGE_MODE_CLASS alpha_can_change_mode_class
 
 struct gcc_target targetm = TARGET_INITIALIZER;
 

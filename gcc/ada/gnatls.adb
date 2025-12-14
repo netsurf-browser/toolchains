@@ -6,7 +6,7 @@
 --                                                                          --
 --                                 B o d y                                  --
 --                                                                          --
---          Copyright (C) 1992-2011, Free Software Foundation, Inc.         --
+--          Copyright (C) 1992-2019, Free Software Foundation, Inc.         --
 --                                                                          --
 -- GNAT is free software;  you can  redistribute it  and/or modify it under --
 -- terms of the  GNU General Public License as published  by the Free Soft- --
@@ -23,43 +23,52 @@
 --                                                                          --
 ------------------------------------------------------------------------------
 
+pragma Ada_2012;
+
 with ALI;         use ALI;
 with ALI.Util;    use ALI.Util;
 with Binderr;     use Binderr;
 with Butil;       use Butil;
-with Csets;       use Csets;
+with Csets;
 with Fname;       use Fname;
 with Gnatvsn;     use Gnatvsn;
-with GNAT.OS_Lib; use GNAT.OS_Lib;
+with Make_Util;   use Make_Util;
 with Namet;       use Namet;
 with Opt;         use Opt;
 with Osint;       use Osint;
 with Osint.L;     use Osint.L;
 with Output;      use Output;
-with Prj.Env;     use Prj.Env;
 with Rident;      use Rident;
 with Sdefault;
 with Snames;
+with Stringt;
 with Switch;      use Switch;
 with Types;       use Types;
 
-with GNAT.Case_Util; use GNAT.Case_Util;
+with GNAT.Case_Util;            use GNAT.Case_Util;
+with GNAT.Command_Line;         use GNAT.Command_Line;
+with GNAT.Directory_Operations; use GNAT.Directory_Operations;
+with GNAT.OS_Lib;               use GNAT.OS_Lib;
 
 procedure Gnatls is
    pragma Ident (Gnat_Static_Version_String);
 
-   --  NOTE : The following string may be used by other tools, such as GPS. So
-   --  it can only be modified if these other uses are checked and coordinated.
+   --  NOTE : The following string may be used by other tools, such as
+   --  GNAT Studio. So it can only be modified if these other uses are checked
+   --  and coordinated.
 
    Project_Search_Path : constant String := "Project Search Path:";
    --  Label displayed in verbose mode before the directories in the project
    --  search path. Do not modify without checking NOTE above.
 
-   Prj_Path : Prj.Env.Project_Search_Path;
+   Prj_Path : String_Access;
 
    Max_Column : constant := 80;
 
    No_Obj : aliased String := "<no_obj>";
+
+   No_Runtime : Boolean := False;
+   --  Set to True if there is no default runtime and --RTS= is not specified
 
    type File_Status is (
      OK,                  --  matching timestamp
@@ -124,6 +133,9 @@ procedure Gnatls is
    RTS_Specified : String_Access := null;
    --  Used to detect multiple use of --RTS= switch
 
+   Exit_Status : Exit_Code_Type := E_Success;
+   --  Reset to E_Fatal if bad error found
+
    -----------------------
    -- Local Subprograms --
    -----------------------
@@ -142,9 +154,9 @@ procedure Gnatls is
       Stamp    : Time_Stamp_Type;
       Checksum : Word;
       Status   : out File_Status);
-   --  Determine the file status (Status) of the file represented by FS
-   --  with the expected Stamp and checksum given as argument. FS will be
-   --  updated to the full file name if available.
+   --  Determine the file status (Status) of the file represented by FS with
+   --  the expected Stamp and checksum given as argument. FS will be updated
+   --  to the full file name if available.
 
    function Corresponding_Sdep_Entry (A : ALI_Id; U : Unit_Id) return Sdep_Id;
    --  Give the Sdep entry corresponding to the unit U in ali record A
@@ -167,7 +179,7 @@ procedure Gnatls is
    --  Reset Print flags properly when selective output is chosen
 
    procedure Scan_Ls_Arg (Argv : String);
-   --  Scan and process lser specific arguments. Argv is a single argument
+   --  Scan and process user specific arguments (Argv is a single argument)
 
    procedure Search_RTS (Name : String);
    --  Find include and objects path for the RTS name.
@@ -176,11 +188,15 @@ procedure Gnatls is
    --  Print usage message
 
    procedure Output_License_Information;
-   --  Output license statement, and if not found, output reference to
-   --  COPYING.
+   pragma No_Return (Output_License_Information);
+   --  Output license statement, and if not found, output reference to COPYING
 
    function Image (Restriction : Restriction_Id) return String;
    --  Returns the capitalized image of Restriction
+
+   function Normalize (Path : String) return String;
+   --  Returns a normalized path name. On Windows, the directory separators are
+   --  set to '\' in Normalize_Pathname.
 
    ------------------------------------------
    -- GNATDIST specific output subprograms --
@@ -198,6 +214,46 @@ procedure Gnatls is
       --  Comments required saying what this routine does ???
 
    end GNATDIST;
+
+   ------------------------------
+   -- Support for project path --
+   ------------------------------
+
+   package Prj_Env is
+
+      procedure Initialize_Default_Project_Path
+        (Self         : in out String_Access;
+         Target_Name  : String;
+         Runtime_Name : String := "");
+      --  Initialize Self. It will then contain the default project path on
+      --  the given target and runtime (including directories specified by the
+      --  environment variables GPR_PROJECT_PATH_FILE, GPR_PROJECT_PATH and
+      --  ADA_PROJECT_PATH). If one of the directory or Target_Name is "-",
+      --  then the path contains only those directories specified by the
+      --  environment variables (except "-"). This does nothing if Self has
+      --  already been initialized.
+
+      procedure Add_Directories
+        (Self    : in out String_Access;
+         Path    : String;
+         Prepend : Boolean := False);
+      --  Add one or more directories to the path. Directories added with this
+      --  procedure are added in order after the current directory and before
+      --  the path given by the environment variable GPR_PROJECT_PATH. A value
+      --  of "-" will remove the default project directory from the project
+      --  path.
+      --
+      --  Calls to this subprogram must be performed before the first call to
+      --  Find_Project below, or PATH will be added at the end of the search
+      --  path.
+
+      function Get_Runtime_Path
+        (Self : String_Access;
+         Path : String) return String_Access;
+      --  Compute the full path for the project-based runtime name.
+      --  Path is simply searched on the project path.
+
+   end Prj_Env;
 
    -----------------
    -- Add_Lib_Dir --
@@ -640,40 +696,38 @@ procedure Gnatls is
 
       procedure Output_Token (T : Token_Type) is
       begin
-         if T in T_No_ALI .. T_Flags then
-            for J in 1 .. N_Indents loop
-               Write_Str ("   ");
-            end loop;
+         case T is
+            when T_No_ALI .. T_Flags =>
+               for J in 1 .. N_Indents loop
+                  Write_Str ("   ");
+               end loop;
 
-            Write_Str (Image (T).all);
+               Write_Str (Image (T).all);
 
-            for J in Image (T)'Length .. 12 loop
-               Write_Char (' ');
-            end loop;
+               for J in Image (T)'Length .. 12 loop
+                  Write_Char (' ');
+               end loop;
 
-            Write_Str ("=>");
+               Write_Str ("=>");
 
-            if T in T_No_ALI .. T_With then
-               Write_Eol;
-            elsif T in T_Source .. T_Name then
-               Write_Char (' ');
-            end if;
-
-         elsif T in T_Preelaborated .. T_Body then
-            if T in T_Preelaborated .. T_Is_Generic then
-               if N_Flags = 0 then
-                  Output_Token (T_Flags);
+               if T in T_No_ALI .. T_With then
+                  Write_Eol;
+               elsif T in T_Source .. T_Name then
+                  Write_Char (' ');
                end if;
 
-               N_Flags := N_Flags + 1;
-            end if;
+            when T_Preelaborated .. T_Body =>
+               if T in T_Preelaborated .. T_Is_Generic then
+                  if N_Flags = 0 then
+                     Output_Token (T_Flags);
+                  end if;
 
-            Write_Char (' ');
-            Write_Str  (Image (T).all);
+                  N_Flags := N_Flags + 1;
+               end if;
 
-         else
-            Write_Str  (Image (T).all);
-         end if;
+               Write_Char (' ');
+               Write_Str  (Image (T).all);
+         end case;
       end Output_Token;
 
       -----------------
@@ -819,6 +873,15 @@ procedure Gnatls is
 
       return Result;
    end Image;
+
+   ---------------
+   -- Normalize --
+   ---------------
+
+   function Normalize (Path : String) return String is
+   begin
+      return Normalize_Pathname (Path);
+   end Normalize;
 
    --------------------------------
    -- Output_License_Information --
@@ -1165,6 +1228,418 @@ procedure Gnatls is
       end if;
    end Output_Unit;
 
+   package body Prj_Env is
+
+      Uninitialized_Prefix : constant String := '#' & Path_Separator;
+      --  Prefix to indicate that the project path has not been initialized
+      --  yet. Must be two characters long.
+
+      ---------------------
+      -- Add_Directories --
+      ---------------------
+
+      procedure Add_Directories
+        (Self    : in out String_Access;
+         Path    : String;
+         Prepend : Boolean := False)
+      is
+         Tmp : String_Access;
+
+      begin
+         if Self = null then
+            Self := new String'(Uninitialized_Prefix & Path);
+         else
+            Tmp := Self;
+            if Prepend then
+               Self := new String'(Path & Path_Separator & Tmp.all);
+            else
+               Self := new String'(Tmp.all & Path_Separator & Path);
+            end if;
+            Free (Tmp);
+         end if;
+      end Add_Directories;
+
+      -------------------------------------
+      -- Initialize_Default_Project_Path --
+      -------------------------------------
+
+      procedure Initialize_Default_Project_Path
+        (Self         : in out String_Access;
+         Target_Name  : String;
+         Runtime_Name : String := "")
+      is
+         Add_Default_Dir : Boolean := Target_Name /= "-";
+         First           : Positive;
+         Last            : Positive;
+
+         Ada_Project_Path      : constant String := "ADA_PROJECT_PATH";
+         Gpr_Project_Path      : constant String := "GPR_PROJECT_PATH";
+         Gpr_Project_Path_File : constant String := "GPR_PROJECT_PATH_FILE";
+         --  Names of alternate env. variables that contain path name(s) of
+         --  directories where project files may reside. They are taken into
+         --  account in this order: GPR_PROJECT_PATH_FILE, GPR_PROJECT_PATH,
+         --  ADA_PROJECT_PATH.
+
+         Gpr_Prj_Path_File : String_Access;
+         Gpr_Prj_Path      : String_Access;
+         Ada_Prj_Path      : String_Access;
+         --  The path name(s) of directories where project files may reside.
+         --  May be empty.
+
+         Prefix  : String_Ptr;
+         Runtime : String_Ptr;
+
+         procedure Add_Target (Suffix : String);
+         --  Add :<prefix>/<target>/Suffix to the project path
+
+         FD  : File_Descriptor;
+         Len : Integer;
+
+         ----------------
+         -- Add_Target --
+         ----------------
+
+         procedure Add_Target (Suffix : String) is
+            Extra_Sep : constant String :=
+               (if Target_Name (Target_Name'Last) = '/' then
+                  ""
+                else
+                  (1 => Directory_Separator));
+            --  Note: Target_Name has a trailing / when it comes from Sdefault
+
+         begin
+            Add_Str_To_Name_Buffer
+              (Path_Separator & Prefix.all & Target_Name & Extra_Sep & Suffix);
+         end Add_Target;
+
+      --  Start of processing for Initialize_Default_Project_Path
+
+      begin
+         if Self /= null
+           and then (Self'Length = 0
+                      or else Self (Self'First) /= '#')
+         then
+            return;
+         end if;
+
+         --  The current directory is always first in the search path. Since
+         --  the Project_Path currently starts with '#:' as a sign that it is
+         --  not initialized, we simply replace '#' with '.'
+
+         if Self = null then
+            Self := new String'('.' & Path_Separator);
+         else
+            Self (Self'First) := '.';
+         end if;
+
+         --  Then the reset of the project path (if any) currently contains the
+         --  directories added through Add_Search_Project_Directory
+
+         --  If environment variables are defined and not empty, add their
+         --  content
+
+         Gpr_Prj_Path_File := Getenv (Gpr_Project_Path_File);
+         Gpr_Prj_Path      := Getenv (Gpr_Project_Path);
+         Ada_Prj_Path      := Getenv (Ada_Project_Path);
+
+         if Gpr_Prj_Path_File.all /= "" then
+            FD := Open_Read (Gpr_Prj_Path_File.all, GNAT.OS_Lib.Text);
+
+            if FD = Invalid_FD then
+               Osint.Fail
+                 ("warning: could not read project path file """
+                  & Gpr_Prj_Path_File.all & """");
+            end if;
+
+            Len := Integer (File_Length (FD));
+
+            declare
+               Buffer : String (1 .. Len);
+               Index  : Positive := 1;
+               Last   : Positive;
+               Tmp    : String_Access;
+
+            begin
+               --  Read the file
+
+               Len := Read (FD, Buffer (1)'Address, Len);
+               Close (FD);
+
+               --  Scan the file line by line
+
+               while Index < Buffer'Last loop
+
+                  --  Find the end of line
+
+                  Last := Index;
+                  while Last <= Buffer'Last
+                    and then Buffer (Last) /= ASCII.LF
+                    and then Buffer (Last) /= ASCII.CR
+                  loop
+                     Last := Last + 1;
+                  end loop;
+
+                  --  Ignore empty lines
+
+                  if Last > Index then
+                     Tmp := Self;
+                     Self :=
+                       new String'
+                         (Tmp.all & Path_Separator &
+                          Buffer (Index .. Last - 1));
+                     Free (Tmp);
+                  end if;
+
+                  --  Find the beginning of the next line
+
+                  Index := Last;
+                  while Buffer (Index) = ASCII.CR or else
+                        Buffer (Index) = ASCII.LF
+                  loop
+                     Index := Index + 1;
+                  end loop;
+               end loop;
+            end;
+
+         end if;
+
+         if Gpr_Prj_Path.all /= "" then
+            Add_Directories (Self, Gpr_Prj_Path.all);
+         end if;
+
+         Free (Gpr_Prj_Path);
+
+         if Ada_Prj_Path.all /= "" then
+            Add_Directories (Self, Ada_Prj_Path.all);
+         end if;
+
+         Free (Ada_Prj_Path);
+
+         --  Copy to Name_Buffer, since we will need to manipulate the path
+
+         Name_Len := Self'Length;
+         Name_Buffer (1 .. Name_Len) := Self.all;
+
+         --  Scan the directory path to see if "-" is one of the directories.
+         --  Remove each occurrence of "-" and set Add_Default_Dir to False.
+         --  Also resolve relative paths and symbolic links.
+
+         First := 3;
+         loop
+            while First <= Name_Len
+              and then (Name_Buffer (First) = Path_Separator)
+            loop
+               First := First + 1;
+            end loop;
+
+            exit when First > Name_Len;
+
+            Last := First;
+
+            while Last < Name_Len
+              and then Name_Buffer (Last + 1) /= Path_Separator
+            loop
+               Last := Last + 1;
+            end loop;
+
+            --  If the directory is "-", set Add_Default_Dir to False and
+            --  remove from path.
+
+            if Name_Buffer (First .. Last) = "-" then
+               Add_Default_Dir := False;
+
+               for J in Last + 1 .. Name_Len loop
+                  Name_Buffer (J - 2) := Name_Buffer (J);
+               end loop;
+
+               Name_Len := Name_Len - 2;
+
+               --  After removing the '-', go back one character to get the
+               --  next directory correctly.
+
+               Last := Last - 1;
+
+            else
+               declare
+                  New_Dir : constant String :=
+                              Normalize_Pathname
+                                (Name_Buffer (First .. Last),
+                                 Resolve_Links => Opt.Follow_Links_For_Dirs);
+                  New_Len  : Positive;
+                  New_Last : Positive;
+
+               begin
+                  --  If the absolute path was resolved and is different from
+                  --  the original, replace original with the resolved path.
+
+                  if New_Dir /= Name_Buffer (First .. Last)
+                    and then New_Dir'Length /= 0
+                  then
+                     New_Len := Name_Len + New_Dir'Length - (Last - First + 1);
+                     New_Last := First + New_Dir'Length - 1;
+                     Name_Buffer (New_Last + 1 .. New_Len) :=
+                       Name_Buffer (Last + 1 .. Name_Len);
+                     Name_Buffer (First .. New_Last) := New_Dir;
+                     Name_Len := New_Len;
+                     Last := New_Last;
+                  end if;
+               end;
+            end if;
+
+            First := Last + 1;
+         end loop;
+
+         Free (Self);
+
+         --  Set the initial value of Current_Project_Path
+
+         if Add_Default_Dir then
+            if Sdefault.Search_Dir_Prefix = null then
+
+               --  gprbuild case
+
+               Prefix := new String'(Executable_Prefix_Path);
+
+            else
+               Prefix := new String'(Sdefault.Search_Dir_Prefix.all
+                                     & ".." & Dir_Separator
+                                     & ".." & Dir_Separator
+                                     & ".." & Dir_Separator
+                                     & ".." & Dir_Separator);
+            end if;
+
+            if Prefix.all /= "" then
+               if Target_Name /= "" then
+
+                  if Runtime_Name /= "" then
+                     if Base_Name (Runtime_Name) = Runtime_Name then
+
+                        --  $prefix/$target/$runtime/lib/gnat
+
+                        Add_Target
+                          (Runtime_Name & Directory_Separator &
+                           "lib" & Directory_Separator & "gnat");
+
+                        --  $prefix/$target/$runtime/share/gpr
+
+                        Add_Target
+                          (Runtime_Name & Directory_Separator &
+                             "share" & Directory_Separator & "gpr");
+
+                     else
+                        Runtime :=
+                          new String'(Normalize_Pathname (Runtime_Name));
+
+                        --  $runtime_dir/lib/gnat
+
+                        Add_Str_To_Name_Buffer
+                          (Path_Separator & Runtime.all & Directory_Separator &
+                           "lib" & Directory_Separator & "gnat");
+
+                        --  $runtime_dir/share/gpr
+
+                        Add_Str_To_Name_Buffer
+                          (Path_Separator & Runtime.all & Directory_Separator &
+                           "share" & Directory_Separator & "gpr");
+                     end if;
+                  end if;
+
+                  --  $prefix/$target/lib/gnat
+
+                  Add_Target
+                    ("lib" & Directory_Separator & "gnat");
+
+                  --  $prefix/$target/share/gpr
+
+                  Add_Target
+                    ("share" & Directory_Separator & "gpr");
+               end if;
+
+               --  $prefix/share/gpr
+
+               Add_Str_To_Name_Buffer
+                 (Path_Separator & Prefix.all & "share"
+                  & Directory_Separator & "gpr");
+
+               --  $prefix/lib/gnat
+
+               Add_Str_To_Name_Buffer
+                 (Path_Separator & Prefix.all & "lib"
+                  & Directory_Separator & "gnat");
+            end if;
+
+            Free (Prefix);
+         end if;
+
+         Self := new String'(Name_Buffer (1 .. Name_Len));
+      end Initialize_Default_Project_Path;
+
+      -----------------------
+      -- Get_Runtime_Path --
+      -----------------------
+
+      function Get_Runtime_Path
+        (Self : String_Access;
+         Path : String) return String_Access
+      is
+         First : Natural;
+         Last  : Natural;
+
+      begin
+
+         if Is_Absolute_Path (Path) then
+            if Is_Directory (Path) then
+               return new String'(Path);
+            else
+               return null;
+            end if;
+
+         else
+            --  Because we do not want to resolve symbolic links, we cannot
+            --  use Locate_Regular_File. Instead we try each possible path
+            --  successively.
+
+            First := Self'First;
+            while First <= Self'Last loop
+               while First <= Self'Last
+                 and then Self (First) = Path_Separator
+               loop
+                  First := First + 1;
+               end loop;
+
+               exit when First > Self'Last;
+
+               Last := First;
+               while Last < Self'Last
+                 and then Self (Last + 1) /= Path_Separator
+               loop
+                  Last := Last + 1;
+               end loop;
+
+               Name_Len := 0;
+
+               if not Is_Absolute_Path (Self (First .. Last)) then
+                  Add_Str_To_Name_Buffer (Get_Current_Dir);  -- ??? System call
+                  Add_Char_To_Name_Buffer (Directory_Separator);
+               end if;
+
+               Add_Str_To_Name_Buffer (Self (First .. Last));
+               Add_Char_To_Name_Buffer (Directory_Separator);
+               Add_Str_To_Name_Buffer (Path);
+
+               if Is_Directory (Name_Buffer (1 .. Name_Len)) then
+                  return new String'(Name_Buffer (1 .. Name_Len));
+               end if;
+
+               First := Last + 1;
+            end loop;
+         end if;
+
+         return null;
+      end Get_Runtime_Path;
+
+   end Prj_Env;
+
    -----------------
    -- Reset_Print --
    -----------------
@@ -1203,6 +1678,10 @@ procedure Gnatls is
       if Src_Path /= null and then Lib_Path /= null then
          Add_Search_Dirs (Src_Path, Include);
          Add_Search_Dirs (Lib_Path, Objects);
+         Prj_Env.Initialize_Default_Project_Path
+           (Prj_Path,
+            Target_Name  => Sdefault.Target_Name.all,
+            Runtime_Name => Name);
          return;
       end if;
 
@@ -1214,10 +1693,12 @@ procedure Gnatls is
 
       --  Try to find the RTS on the project path. First setup the project path
 
-      Initialize_Default_Project_Path
-        (Prj_Path, Target_Name => Sdefault.Target_Name.all);
+      Prj_Env.Initialize_Default_Project_Path
+        (Prj_Path,
+         Target_Name  => Sdefault.Target_Name.all,
+         Runtime_Name => Name);
 
-      Rts_Full_Path := Get_Runtime_Path (Prj_Path, Name);
+      Rts_Full_Path := Prj_Env.Get_Runtime_Path (Prj_Path, Name);
 
       if Rts_Full_Path /= null then
 
@@ -1252,6 +1733,7 @@ procedure Gnatls is
    procedure Scan_Ls_Arg (Argv : String) is
       FD  : File_Descriptor;
       Len : Integer;
+      OK  : Boolean;
 
    begin
       pragma Assert (Argv'First = 1);
@@ -1260,6 +1742,7 @@ procedure Gnatls is
          return;
       end if;
 
+      OK := True;
       if Argv (1) = '-' then
          if Argv'Length = 1 then
             Fail ("switch character cannot be followed by a blank");
@@ -1297,6 +1780,11 @@ procedure Gnatls is
          elsif Argv'Length >= 3 and then Argv (2 .. 3) = "aL" then
             Add_Lib_Dir (Argv (4 .. Argv'Last));
 
+         --  Processing for -aP<dir>
+
+         elsif Argv'Length > 3 and then Argv (1 .. 3) = "-aP" then
+            Prj_Env.Add_Directories (Prj_Path, Argv (4 .. Argv'Last));
+
          --  Processing for -nostdinc
 
          elsif Argv (2 .. Argv'Last) = "nostdinc" then
@@ -1316,7 +1804,7 @@ procedure Gnatls is
                when 'l' => License                   := True;
                when 'V' => Very_Verbose_Mode         := True;
 
-               when others => null;
+               when others => OK := False;
             end case;
 
          --  Processing for -files=file
@@ -1396,6 +1884,9 @@ procedure Gnatls is
                Opt.No_Stdinc := True;
                Opt.RTS_Switch := True;
             end if;
+
+         else
+            OK := False;
          end if;
 
       --  If not a switch, it must be a file name
@@ -1403,6 +1894,13 @@ procedure Gnatls is
       else
          Add_File (Argv);
       end if;
+
+      if not OK then
+         Write_Str ("warning: unknown switch """);
+         Write_Str (Argv);
+         Write_Line ("""");
+      end if;
+
    end Scan_Ls_Arg;
 
    -----------
@@ -1484,6 +1982,11 @@ procedure Gnatls is
       Write_Str ("  -aOdir     specify object files search path");
       Write_Eol;
 
+      --  Line for -aP switch
+
+      Write_Str ("  -aPdir     specify project search path");
+      Write_Eol;
+
       --  Line for -I switch
 
       Write_Str ("  -Idir      like -aIdir -aOdir");
@@ -1531,10 +2034,11 @@ begin
 
    Csets.Initialize;
    Snames.Initialize;
+   Stringt.Initialize;
 
    --  First check for --version or --help
 
-   Check_Version_And_Help ("GNATLS", "1997");
+   Check_Version_And_Help ("GNATLS", "1992");
 
    --  Loop to scan out arguments
 
@@ -1552,12 +2056,18 @@ begin
 
    --  If -l (output license information) is given, it must be the only switch
 
-   if License and then Arg_Count /= 2 then
-      Set_Standard_Error;
-      Write_Str ("Can't use -l with another switch");
-      Write_Eol;
-      Usage;
-      Exit_Program (E_Fatal);
+   if License then
+      if Arg_Count = 2 then
+         Output_License_Information;
+         Exit_Program (E_Success);
+
+      else
+         Set_Standard_Error;
+         Write_Str ("Can't use -l with another switch");
+         Write_Eol;
+         Try_Help;
+         Exit_Program (E_Fatal);
+      end if;
    end if;
 
    --  Handle --RTS switch
@@ -1579,14 +2089,43 @@ begin
       First_Lib_Dir := First_Lib_Dir.Next;
    end loop;
 
-   --  Finally, add the default directories and obtain target parameters
+   --  Finally, add the default directories
 
    Osint.Add_Default_Search_Dirs;
+
+   --  If --RTS= is not specified, check if there is a default runtime
+
+   if RTS_Specified = null then
+      declare
+         FD   : File_Descriptor;
+         Text : Source_Buffer_Ptr;
+         Hi   : Source_Ptr;
+
+      begin
+         Name_Buffer (1 .. 10) := "system.ads";
+         Name_Len := 10;
+
+         Read_Source_File (Name_Find, 0, Hi, Text, FD);
+
+         if Null_Source_Buffer_Ptr (Text) then
+            No_Runtime := True;
+         end if;
+      end;
+   end if;
 
    if Verbose_Mode then
       Write_Eol;
       Display_Version ("GNATLS", "1997");
       Write_Eol;
+
+      if No_Runtime then
+         Write_Str
+           ("Default runtime not available. Use --RTS= with a valid runtime");
+         Write_Eol;
+         Write_Eol;
+         Exit_Status := E_Warnings;
+      end if;
+
       Write_Str ("Source Search Path:");
       Write_Eol;
 
@@ -1595,12 +2134,15 @@ begin
 
          if Dir_In_Src_Search_Path (J)'Length = 0 then
             Write_Str ("<Current_Directory>");
-         else
-            Write_Str (To_Host_Dir_Spec
-              (Dir_In_Src_Search_Path (J).all, True).all);
-         end if;
+            Write_Eol;
 
-         Write_Eol;
+         elsif not No_Runtime then
+            Write_Str
+              (Normalize
+                 (To_Host_Dir_Spec
+                      (Dir_In_Src_Search_Path (J).all, True).all));
+            Write_Eol;
+         end if;
       end loop;
 
       Write_Eol;
@@ -1613,12 +2155,15 @@ begin
 
          if Dir_In_Obj_Search_Path (J)'Length = 0 then
             Write_Str ("<Current_Directory>");
-         else
-            Write_Str (To_Host_Dir_Spec
-              (Dir_In_Obj_Search_Path (J).all, True).all);
-         end if;
+            Write_Eol;
 
-         Write_Eol;
+         elsif not No_Runtime then
+            Write_Str
+              (Normalize
+                 (To_Host_Dir_Spec
+                      (Dir_In_Obj_Search_Path (J).all, True).all));
+            Write_Eol;
+         end if;
       end loop;
 
       Write_Eol;
@@ -1628,36 +2173,34 @@ begin
       Write_Str ("   <Current_Directory>");
       Write_Eol;
 
-      Initialize_Default_Project_Path
+      Prj_Env.Initialize_Default_Project_Path
         (Prj_Path, Target_Name => Sdefault.Target_Name.all);
 
       declare
-         Project_Path : String_Access;
          First        : Natural;
          Last         : Natural;
 
       begin
-         Get_Path (Prj_Path, Project_Path);
 
-         if Project_Path.all /= "" then
-            First := Project_Path'First;
+         if Prj_Path.all /= "" then
+            First := Prj_Path'First;
             loop
-               while First <= Project_Path'Last
-                 and then (Project_Path (First) = Path_Separator)
+               while First <= Prj_Path'Last
+                 and then (Prj_Path (First) = Path_Separator)
                loop
                   First := First + 1;
                end loop;
 
-               exit when First > Project_Path'Last;
+               exit when First > Prj_Path'Last;
 
                Last := First;
-               while Last < Project_Path'Last
-                 and then Project_Path (Last + 1) /= Path_Separator
+               while Last < Prj_Path'Last
+                 and then Prj_Path (Last + 1) /= Path_Separator
                loop
                   Last := Last + 1;
                end loop;
 
-               if First /= Last or else Project_Path (First) /= '.' then
+               if First /= Last or else Prj_Path (First) /= '.' then
 
                   --  If the directory is ".", skip it as it is the current
                   --  directory and it is already the first directory in the
@@ -1665,9 +2208,9 @@ begin
 
                   Write_Str ("   ");
                   Write_Str
-                    (Normalize_Pathname
+                    (Normalize
                       (To_Host_Dir_Spec
-                        (Project_Path (First .. Last), True).all));
+                        (Prj_Path (First .. Last), True).all));
                   Write_Eol;
                end if;
 
@@ -1685,25 +2228,23 @@ begin
       Usage;
    end if;
 
-   --  Output license information when requested
-
-   if License then
-      Output_License_Information;
-      Exit_Program (E_Success);
-   end if;
-
    if not More_Lib_Files then
       if not Print_Usage and then not Verbose_Mode then
-         Usage;
+         if Arg_Count = 1 then
+            Usage;
+         else
+            Try_Help;
+            Exit_Status := E_Fatal;
+         end if;
       end if;
 
-      Exit_Program (E_Fatal);
+      Exit_Program (Exit_Status);
    end if;
 
    Initialize_ALI;
    Initialize_ALI_Source;
 
-   --  Print out all library for which no ALI files can be located
+   --  Print out all libraries for which no ALI files can be located
 
    while More_Lib_Files loop
       Main_File := Next_Main_Lib_File;
@@ -1721,17 +2262,17 @@ begin
             Write_Str (Name_Buffer (1 .. Name_Len));
             Write_Char ('"'); -- "
             Write_Eol;
+            Exit_Status := E_Fatal;
          end if;
 
       else
          Ali_File := Strip_Directory (Ali_File);
 
-         if Get_Name_Table_Info (Ali_File) = 0 then
+         if Get_Name_Table_Int (Ali_File) = 0 then
             Text := Read_Library_Info (Ali_File, True);
 
             declare
                Discard : ALI_Id;
-               pragma Unreferenced (Discard);
             begin
                Discard :=
                  Scan_ALI
@@ -1845,5 +2386,5 @@ begin
    --  All done. Set proper exit status
 
    Namet.Finalize;
-   Exit_Program (E_Success);
+   Exit_Program (Exit_Status);
 end Gnatls;

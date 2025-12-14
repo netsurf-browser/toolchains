@@ -1,4 +1,4 @@
-/* { dg-do compile } */ 
+/* { dg-do compile { target { nonpic || pie_enabled } } } */
 /* { dg-options "-O2 -fdump-tree-pre-stats -fdump-tree-fre1" } */
 #include <stddef.h>
 
@@ -75,6 +75,4 @@ main (void)
 
 /* { dg-final { scan-tree-dump-not "= unexpanded_var_list;" "fre1" } } */
 /* { dg-final { scan-tree-dump-times "Eliminated: 1" 1 "pre" } } */
-/* { dg-final { scan-tree-dump-times "Insertions: 2" 1 "pre" } } */
-/* { dg-final { cleanup-tree-dump "fre1" } } */
-/* { dg-final { cleanup-tree-dump "pre" } } */
+/* { dg-final { scan-tree-dump-times "Insertions: 1" 1 "pre" } } */

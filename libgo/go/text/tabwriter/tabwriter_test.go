@@ -5,7 +5,10 @@
 package tabwriter_test
 
 import (
+	"bytes"
+	"fmt"
 	"io"
+	"io/ioutil"
 	"testing"
 	. "text/tabwriter"
 )
@@ -14,7 +17,7 @@ type buffer struct {
 	a []byte
 }
 
-func (b *buffer) init(n int) { b.a = make([]byte, n)[0:0] }
+func (b *buffer) init(n int) { b.a = make([]byte, 0, n) }
 
 func (b *buffer) clear() { b.a = b.a[0:0] }
 
@@ -611,5 +614,142 @@ var tests = []struct {
 func Test(t *testing.T) {
 	for _, e := range tests {
 		check(t, e.testname, e.minwidth, e.tabwidth, e.padding, e.padchar, e.flags, e.src, e.expected)
+	}
+}
+
+type panicWriter struct{}
+
+func (panicWriter) Write([]byte) (int, error) {
+	panic("cannot write")
+}
+
+func wantPanicString(t *testing.T, want string) {
+	if e := recover(); e != nil {
+		got, ok := e.(string)
+		switch {
+		case !ok:
+			t.Errorf("got %v (%T), want panic string", e, e)
+		case got != want:
+			t.Errorf("wrong panic message: got %q, want %q", got, want)
+		}
+	}
+}
+
+func TestPanicDuringFlush(t *testing.T) {
+	defer wantPanicString(t, "tabwriter: panic during Flush")
+	var p panicWriter
+	w := new(Writer)
+	w.Init(p, 0, 0, 5, ' ', 0)
+	io.WriteString(w, "a")
+	w.Flush()
+	t.Errorf("failed to panic during Flush")
+}
+
+func TestPanicDuringWrite(t *testing.T) {
+	defer wantPanicString(t, "tabwriter: panic during Write")
+	var p panicWriter
+	w := new(Writer)
+	w.Init(p, 0, 0, 5, ' ', 0)
+	io.WriteString(w, "a\n\n") // the second \n triggers a call to w.Write and thus a panic
+	t.Errorf("failed to panic during Write")
+}
+
+func BenchmarkTable(b *testing.B) {
+	for _, w := range [...]int{1, 10, 100} {
+		// Build a line with w cells.
+		line := bytes.Repeat([]byte("a\t"), w)
+		line = append(line, '\n')
+		for _, h := range [...]int{10, 1000, 100000} {
+			b.Run(fmt.Sprintf("%dx%d", w, h), func(b *testing.B) {
+				b.Run("new", func(b *testing.B) {
+					b.ReportAllocs()
+					for i := 0; i < b.N; i++ {
+						w := NewWriter(ioutil.Discard, 4, 4, 1, ' ', 0) // no particular reason for these settings
+						// Write the line h times.
+						for j := 0; j < h; j++ {
+							w.Write(line)
+						}
+						w.Flush()
+					}
+				})
+
+				b.Run("reuse", func(b *testing.B) {
+					b.ReportAllocs()
+					w := NewWriter(ioutil.Discard, 4, 4, 1, ' ', 0) // no particular reason for these settings
+					for i := 0; i < b.N; i++ {
+						// Write the line h times.
+						for j := 0; j < h; j++ {
+							w.Write(line)
+						}
+						w.Flush()
+					}
+				})
+			})
+		}
+	}
+}
+
+func BenchmarkPyramid(b *testing.B) {
+	for _, x := range [...]int{10, 100, 1000} {
+		// Build a line with x cells.
+		line := bytes.Repeat([]byte("a\t"), x)
+		b.Run(fmt.Sprintf("%d", x), func(b *testing.B) {
+			b.ReportAllocs()
+			for i := 0; i < b.N; i++ {
+				w := NewWriter(ioutil.Discard, 4, 4, 1, ' ', 0) // no particular reason for these settings
+				// Write increasing prefixes of that line.
+				for j := 0; j < x; j++ {
+					w.Write(line[:j*2])
+					w.Write([]byte{'\n'})
+				}
+				w.Flush()
+			}
+		})
+	}
+}
+
+func BenchmarkRagged(b *testing.B) {
+	var lines [8][]byte
+	for i, w := range [8]int{6, 2, 9, 5, 5, 7, 3, 8} {
+		// Build a line with w cells.
+		lines[i] = bytes.Repeat([]byte("a\t"), w)
+	}
+	for _, h := range [...]int{10, 100, 1000} {
+		b.Run(fmt.Sprintf("%d", h), func(b *testing.B) {
+			b.ReportAllocs()
+			for i := 0; i < b.N; i++ {
+				w := NewWriter(ioutil.Discard, 4, 4, 1, ' ', 0) // no particular reason for these settings
+				// Write the lines in turn h times.
+				for j := 0; j < h; j++ {
+					w.Write(lines[j%len(lines)])
+					w.Write([]byte{'\n'})
+				}
+				w.Flush()
+			}
+		})
+	}
+}
+
+const codeSnippet = `
+some command
+
+foo	# aligned
+barbaz	# comments
+
+but
+mostly
+single
+cell
+lines
+`
+
+func BenchmarkCode(b *testing.B) {
+	b.ReportAllocs()
+	for i := 0; i < b.N; i++ {
+		w := NewWriter(ioutil.Discard, 4, 4, 1, ' ', 0) // no particular reason for these settings
+		// The code is small, so it's reasonable for the tabwriter user
+		// to write it all at once, or buffer the writes.
+		w.Write([]byte(codeSnippet))
+		w.Flush()
 	}
 }

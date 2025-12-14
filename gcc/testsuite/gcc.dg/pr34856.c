@@ -2,8 +2,9 @@
 /* { dg-options "-O2" } */
 /* { dg-options "-O2 -msse2" { target { i?86-*-* x86_64-*-* } } } */
 /* { dg-options "-O2 -maltivec" { target { powerpc*-*-linux* && powerpc_altivec_ok } } } */
+/* { dg-skip-if "no vector type for PSImode" { msp430-*-* } { "-mlarge" } { "" } } */
 
-typedef unsigned __attribute__ ((__mode__ (__pointer__))) uintptr_t;
+typedef __UINTPTR_TYPE__ uintptr_t;
 
 #undef __vector
 #define __vector __attribute__ ((__vector_size__ (16)))

@@ -1,5 +1,7 @@
 /* { dg-do compile } */
 /* { dg-options "-O3 -mavx -mtune=generic -dp" } */
+/* Disabling epilogues until we find a better way to deal with scans.  */
+/* { dg-additional-options "--param vect-epilogues-nomask=0" } */
 
 void feat_s3_cep_dcep (int cepsize_used, float **mfc, float **feat)
 {
@@ -14,4 +16,4 @@ void feat_s3_cep_dcep (int cepsize_used, float **mfc, float **feat)
     f[i] = w[i] - _w[i];
 }
 
-/* { dg-final { scan-assembler-times "avx_vzeroupper" 1 } } */
+/* { dg-final { scan-assembler-times "avx_vzeroupper" 2 } } */

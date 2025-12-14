@@ -1,12 +1,12 @@
 // { dg-do compile }
 // GROUPS passed old-abort
-      extern int f(int); // { dg-error "ambiguates" }
+      extern int f(int); // { dg-message "old declaration" }
 
       int& f(int x)  // { dg-error "new declaration" }
       {
-          int local; // { dg-warning "reference to local" }
+          int local;
 
           local = x+2;
       
-          return local;
+          return local; // { dg-warning "reference to local" }
       }

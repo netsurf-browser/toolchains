@@ -1,17 +1,17 @@
 ## Process this file with automake to produce Makefile.in
 
+AUTOMAKE_OPTIONS = info-in-builddir
 ACLOCAL_AMFLAGS = -I .. -I ../config
 SUBDIRS = testsuite
 
 ## May be used by toolexeclibdir.
-gcc_version := $(shell cat $(top_srcdir)/../gcc/BASE-VER)
+gcc_version := $(shell @get_gcc_base_ver@ $(top_srcdir)/../gcc/BASE-VER)
 
 abi_version = -fabi-version=4
 
 config_path = @config_path@
 search_path = $(addprefix $(top_srcdir)/config/, $(config_path)) $(top_srcdir)
 
-fincludedir = $(libdir)/gcc/$(target_alias)/$(gcc_version)/finclude
 libsubincludedir = $(libdir)/gcc/$(target_alias)/$(gcc_version)/include
 
 vpath % $(strip $(search_path))
@@ -67,10 +67,12 @@ libitm_la_SOURCES += hwcap.cc
 endif
 if ARCH_X86
 libitm_la_SOURCES += x86_sse.cc x86_avx.cc
-x86_sse.lo : XCFLAGS += -msse
+# Make sure -msse is appended at the end.
+x86_sse.lo : override CXXFLAGS += -msse
 endif
 if ARCH_X86_AVX
-x86_avx.lo : XCFLAGS += -mavx
+# Make sure -mavx is appended at the end.
+x86_avx.lo : override CXXFLAGS += -mavx
 endif
 
 if ARCH_FUTEX
@@ -116,5 +118,7 @@ stamp-build-info: libitm.texi
 	@touch $@
 
 
-CLEANFILES = $(STAMP_GENINSRC) $(STAMP_BUILD_INFO) libitm.info
+CLEANFILES = $(STAMP_GENINSRC) $(STAMP_BUILD_INFO)
 MAINTAINERCLEANFILES = $(srcdir)/libitm.info
+
+include $(top_srcdir)/../multilib.am

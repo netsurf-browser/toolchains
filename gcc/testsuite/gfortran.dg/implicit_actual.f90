@@ -14,7 +14,7 @@ end module global
 
 program snafu
 !  use global
-  implicit type (t3) (z)
+  implicit type (t3) (z)  ! { dg-error "has not been declared" }
 
   call foo (zin) ! { dg-error "defined|Type mismatch" }
 
@@ -31,5 +31,3 @@ contains
 
   end subroutine foo
 end program snafu
-
-! { dg-final { cleanup-modules "global" } }

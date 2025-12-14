@@ -1,7 +1,6 @@
-// { dg-options "-std=gnu++0x" }
-// { dg-do compile }
+// { dg-do compile { target c++11 } }
 
-// Copyright (C) 2011 Free Software Foundation, Inc.
+// Copyright (C) 2011-2020 Free Software Foundation, Inc.
 //
 // This file is part of the GNU ISO C++ Library.  This library is free
 // software; you can redistribute it and/or modify it under the
@@ -22,7 +21,7 @@
 #include <initializer_list>
 #include <testsuite_tr1.h>
 
-using namespace __gnu_test::construct_destruct;
+using namespace __gnu_test::construct;
 
 static_assert(std::is_constructible<int, int>::value, "Error");
 static_assert(std::is_constructible<std::nullptr_t, std::nullptr_t>::value,
@@ -73,7 +72,7 @@ static_assert(!std::is_constructible<DelEllipsis, OpE>::value, "Error");
 static_assert(!std::is_constructible<DelEllipsis, OpSE>::value, "Error");
 static_assert(!std::is_constructible<DelEllipsis, void()>::value, "Error");
 static_assert(!std::is_constructible<DelEllipsis, void() const>::value,
-	      "Error");
+ 	      "Error");
 static_assert(!std::is_constructible<DelEllipsis, int[1]>::value, "Error");
 static_assert(!std::is_constructible<DelEllipsis, int[]>::value, "Error");
 static_assert(!std::is_constructible<DelEllipsis, int*>::value, "Error");
@@ -108,7 +107,9 @@ static_assert(!std::is_constructible<Abstract, std::nullptr_t>::value, "Error");
 static_assert(!std::is_constructible<std::nullptr_t, Abstract>::value, "Error");
 static_assert(!std::is_constructible<Abstract, int[]>::value, "Error");
 static_assert(std::is_constructible<B, D>::value, "Error");
+#ifndef __cpp_aggregate_paren_init
 static_assert(!std::is_constructible<D, B>::value, "Error");
+#endif
 static_assert(!std::is_constructible<int[], int[1]>::value, "Error");
 static_assert(!std::is_constructible<int[1], int[]>::value, "Error");
 static_assert(!std::is_constructible<int[], Empty>::value, "Error");
@@ -215,12 +216,20 @@ static_assert(std::is_constructible<const B&&, D&&>::value, "Error");
 static_assert(!std::is_constructible<B&, const D&>::value, "Error");
 static_assert(!std::is_constructible<B&&, const D&&>::value, "Error");
 
+#if __cpp_aggregate_bases && __cpp_aggregate_paren_init
+// In C++20 an rvalue reference or const lvalue reference can bind to a
+// temporary of aggregate type that is initialized from a base class value.
+constexpr bool v = true;
+#else
+constexpr bool v = false;
+#endif
+
 static_assert(!std::is_constructible<D&, B&>::value, "Error");
-static_assert(!std::is_constructible<D&&, B&&>::value, "Error");
+static_assert(v == std::is_constructible<D&&, B&&>::value, "Error");
 static_assert(!std::is_constructible<D&, const B&>::value, "Error");
-static_assert(!std::is_constructible<D&&, const B&&>::value, "Error");
-static_assert(!std::is_constructible<const D&, B&>::value, "Error");
-static_assert(!std::is_constructible<const D&&, B&&>::value, "Error");
+static_assert(v == std::is_constructible<D&&, const B&&>::value, "Error");
+static_assert(v == std::is_constructible<const D&, B&>::value, "Error");
+static_assert(v == std::is_constructible<const D&&, B&&>::value, "Error");
 
 static_assert(!std::is_constructible<B&&, B&>::value, "Error");
 static_assert(!std::is_constructible<B&&, D&>::value, "Error");
@@ -417,7 +426,9 @@ static_assert(!std::is_constructible<int(&)[1], int(&)[2]>::value, "Error");
 static_assert(!std::is_constructible<int(&)[1], int&>::value, "Error");
 static_assert(!std::is_constructible<int&, int(&)[1]>::value, "Error");
 
+#ifndef __cpp_aggregate_paren_init
 static_assert(!std::is_constructible<U, int>::value, "Error");
+#endif
 static_assert(!std::is_constructible<U, Empty>::value, "Error");
 
 static_assert(!std::is_constructible<void(), void()>::value, "Error");
@@ -462,11 +473,11 @@ static_assert(!std::is_constructible<int[], void()>::value, "Error");
 static_assert(!std::is_constructible<int[1], void()>::value, "Error");
 
 static_assert(!std::is_constructible<void(int) const,
-	      void() const>::value, "Error");
+      void() const>::value, "Error");
 static_assert(!std::is_constructible<int, void() const>::value, "Error");
 static_assert(!std::is_constructible<Abstract, void() const>::value, "Error");
 static_assert(!std::is_constructible<std::nullptr_t, void() const>::value,
-	      "Error");
+      "Error");
 static_assert(!std::is_constructible<Empty, void() const>::value, "Error");
 static_assert(!std::is_constructible<U, void() const>::value, "Error");
 static_assert(!std::is_constructible<E, void() const>::value, "Error");
@@ -657,7 +668,7 @@ static_assert(!std::is_constructible<void() const, void, void>::value, "Error");
 static_assert(!std::is_constructible<void() const, void() volatile,
 	      int>::value, "Error");
 static_assert(!std::is_constructible<void() const, void() volatile const,
-	      void() const>::value, "Error");
+ 	      void() const>::value, "Error");
 
 static_assert(!std::is_constructible<FromArgs<int>, int, int>::value, "Error");
 static_assert(!std::is_constructible<const FromArgs<int>, int, int>::value,
@@ -751,14 +762,21 @@ static_assert(!std::is_constructible<FromArgs<std::initializer_list<int>&,
 	      std::initializer_list<B>&>, std::initializer_list<int>,
 	      std::initializer_list<B>>::value, "Error");
 
+#if __cpp_aggregate_paren_init
+// In C++20 arrays can be initialized using parentheses.
+constexpr bool w = true;
+#else
+constexpr bool w = false;
+#endif
+
 static_assert(!std::is_constructible<FromArgs<std::initializer_list<int>>,
 	      int, int>::value, "Error");
-static_assert(!std::is_constructible<const 
+static_assert(!std::is_constructible<const
 	      FromArgs<std::initializer_list<int>>, int, int>::value, "Error");
-static_assert(!std::is_constructible<B[2], B, B>::value, "Error");
-static_assert(!std::is_constructible<const B[2], B, B>::value, "Error");
-static_assert(!std::is_constructible<U[2], U, U>::value, "Error");
-static_assert(!std::is_constructible<const U[2], U, U>::value, "Error");
+static_assert(w == std::is_constructible<B[2], B, B>::value, "Error");
+static_assert(w == std::is_constructible<const B[2], B, B>::value, "Error");
+static_assert(w == std::is_constructible<U[2], U, U>::value, "Error");
+static_assert(w == std::is_constructible<const U[2], U, U>::value, "Error");
 
 static_assert(!std::is_constructible<E, E, E>::value, "Error");
 static_assert(!std::is_constructible<const E, E, E>::value, "Error");
@@ -807,9 +825,11 @@ static_assert(!std::is_constructible<int&&, ExplicitTo<int>>::value, "Error");
 // Binding through reference-compatible type is required to perform
 // direct-initialization as described in [over.match.ref] p. 1 b. 1:
 static_assert(std::is_constructible<int&, ExplicitTo<int&>>::value, "Error");
-static_assert(std::is_constructible<const int&, ExplicitTo<int&&>>::value,
-	      "Error");
 static_assert(std::is_constructible<int&&, ExplicitTo<int&&>>::value, "Error");
+
+// But an xvalue doesn't count for direct binding.
+static_assert(!std::is_constructible<const int&, ExplicitTo<int&&>>::value,
+	      "Error");
 
 // Binding through temporary behaves like copy-initialization,
 // see [dcl.init.ref] p. 5, very last sub-bullet:

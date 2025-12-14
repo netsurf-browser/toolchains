@@ -1,6 +1,5 @@
 /* Target definitions for GCC for Intel 80386 running Solaris 2
-   Copyright (C) 1993, 1995, 1996, 1997, 1998, 1999, 2000, 2001, 2002, 2003,
-   2004, 2007, 2008, 2009, 2010, 2011 Free Software Foundation, Inc.
+   Copyright (C) 1993-2020 Free Software Foundation, Inc.
    Contributed by Fred Fish (fnf@cygnus.com).
 
 This file is part of GCC.
@@ -19,21 +18,24 @@ You should have received a copy of the GNU General Public License
 along with GCC; see the file COPYING3.  If not see
 <http://www.gnu.org/licenses/>.  */
 
-/* Augment i386/unix.h version to return 8-byte vectors in memory, matching
-   Sun Studio compilers until version 12, the only ones supported on
-   Solaris 8 and 9.  */
-#undef TARGET_SUBTARGET_DEFAULT
-#define TARGET_SUBTARGET_DEFAULT \
-	(MASK_80387 | MASK_IEEE_FP | MASK_FLOAT_RETURNS | MASK_VECT8_RETURNS)
+#define SUBTARGET_OPTIMIZATION_OPTIONS				\
+  { OPT_LEVELS_1_PLUS, OPT_momit_leaf_frame_pointer, NULL, 1 }
 
-/* Old versions of the Solaris assembler can not handle the difference of
-   labels in different sections, so force DW_EH_PE_datarel.  */
+/* 32-bit Solaris/x86 only guarantees 4-byte stack alignment as required by
+   the i386 psABI, so realign it as necessary for SSE instructions.  */
+#undef STACK_REALIGN_DEFAULT
+#define STACK_REALIGN_DEFAULT (TARGET_64BIT ? 0 : 1)
+
+/* Old versions of the Solaris assembler cannot handle the difference of
+   labels in different sections, so force DW_EH_PE_datarel if so.  */
+#ifndef HAVE_AS_IX86_DIFF_SECT_DELTA
 #undef ASM_PREFERRED_EH_DATA_FORMAT
 #define ASM_PREFERRED_EH_DATA_FORMAT(CODE,GLOBAL)			\
   (flag_pic ? ((GLOBAL ? DW_EH_PE_indirect : 0)				\
 	       | (TARGET_64BIT ? DW_EH_PE_pcrel | DW_EH_PE_sdata4	\
 		  : DW_EH_PE_datarel))					\
    : DW_EH_PE_absptr)
+#endif
 
 /* The Solaris linker will not merge a read-only .eh_frame section
    with a read-write .eh_frame section.  None of the encodings used
@@ -49,45 +51,66 @@ along with GCC; see the file COPYING3.  If not see
 #undef TARGET_SUN_TLS
 #define TARGET_SUN_TLS 1
 
-#undef  SIZE_TYPE
-#define SIZE_TYPE "unsigned int"
-
-#undef  PTRDIFF_TYPE
-#define PTRDIFF_TYPE "int"
-
-/* Solaris 2/Intel as chokes on #line directives before Solaris 10.  */
 #undef CPP_SPEC
-#define CPP_SPEC "%{,assembler-with-cpp:-P} %(cpp_subtarget)"
+#define CPP_SPEC "%(cpp_subtarget)"
 
-#define ASM_CPU_DEFAULT_SPEC ""
+#undef CC1_SPEC
+#define CC1_SPEC "%(cc1_cpu) " ASAN_CC1_SPEC \
+  " %{mx32:%e-mx32 is not supported on Solaris}"
 
-#define ASM_CPU_SPEC ""
- 
-/* Don't include ASM_PIC_SPEC.  While the Solaris 8 and 9 assembler accepts
-   -K PIC, it gives many warnings:
-	R_386_32 relocation is used for symbol "<symbol>"
+/* GNU as understands --32 and --64, but the native Solaris
+   assembler requires -xarch=generic or -xarch=generic64 instead.  */
+#ifdef USE_GAS
+#define ASM_CPU32_DEFAULT_SPEC "--32"
+#define ASM_CPU64_DEFAULT_SPEC "--64"
+#else
+#define ASM_CPU32_DEFAULT_SPEC "-xarch=generic"
+#define ASM_CPU64_DEFAULT_SPEC "-xarch=generic64"
+#endif
+
+/* Since Studio 12.6, as needs -xbrace_comment=no so its AVX512 syntax is
+   fully compatible with gas.  */
+#ifdef HAVE_AS_XBRACE_COMMENT_OPTION
+#define ASM_XBRACE_COMMENT_SPEC "-xbrace_comment=no"
+#else
+#define ASM_XBRACE_COMMENT_SPEC ""
+#endif
+
+#undef ASM_CPU_SPEC
+#define ASM_CPU_SPEC "%(asm_cpu_default) " ASM_XBRACE_COMMENT_SPEC
+
+/* Don't include ASM_PIC_SPEC.  While the Solaris 10+ assembler accepts -K PIC,
+   it gives many warnings: 
+	Absolute relocation is used for symbol "<symbol>"
    GNU as doesn't recognize -K at all.  */
 #undef ASM_SPEC
 #define ASM_SPEC ASM_SPEC_BASE
 
-#undef  ENDFILE_SPEC
-#define ENDFILE_SPEC \
-  "%{Ofast|ffast-math|funsafe-math-optimizations:crtfastmath.o%s} \
-   %{mpc32:crtprec32.o%s} \
+#define DEFAULT_ARCH32_P !TARGET_64BIT_DEFAULT
+
+#define ARCH64_SUBDIR "amd64"
+
+#ifdef USE_GLD
+/* Since binutils 2.21, GNU ld supports new *_sol2 emulations to strictly
+   follow the Solaris 2 ABI.  Prefer them if present.  */
+#ifdef HAVE_LD_SOL2_EMULATION
+#define ARCH32_EMULATION "elf_i386_sol2"
+#define ARCH64_EMULATION "elf_x86_64_sol2"
+#else
+#define ARCH32_EMULATION "elf_i386"
+#define ARCH64_EMULATION "elf_x86_64"
+#endif
+#endif
+
+#define ENDFILE_ARCH_SPEC \
+  "%{mpc32:crtprec32.o%s} \
    %{mpc64:crtprec64.o%s} \
-   %{mpc80:crtprec80.o%s} \
-   crtend.o%s crtn.o%s"
+   %{mpc80:crtprec80.o%s}"
 
 #define SUBTARGET_CPU_EXTRA_SPECS \
   { "cpp_subtarget",	 CPP_SUBTARGET_SPEC },		\
   { "asm_cpu",		 ASM_CPU_SPEC },		\
   { "asm_cpu_default",	 ASM_CPU_DEFAULT_SPEC },	\
-
-#undef SUBTARGET_EXTRA_SPECS
-#define SUBTARGET_EXTRA_SPECS \
-  { "startfile_arch",	STARTFILE_ARCH_SPEC },		\
-  { "link_arch",	LINK_ARCH_SPEC },		\
-  SUBTARGET_CPU_EXTRA_SPECS
 
 /* Register the Solaris-specific #pragma directives.  */
 #define REGISTER_SUBTARGET_PRAGMAS() solaris_register_pragmas ()
@@ -100,11 +123,29 @@ along with GCC; see the file COPYING3.  If not see
 #undef ASM_QUAD
 #endif
 
+/* The native Solaris assembler can't calculate the difference between
+   symbols in different sections, which causes problems for -fPIC jump
+   tables in .rodata.  */
+#ifndef HAVE_AS_IX86_DIFF_SECT_DELTA
+#undef JUMP_TABLES_IN_TEXT_SECTION
+#define JUMP_TABLES_IN_TEXT_SECTION 1
+
+/* The native Solaris assembler cannot handle the SYMBOL-. syntax, but
+   requires SYMBOL@rel/@rel64 instead.  */
+#define ASM_OUTPUT_DWARF_PCREL(FILE, SIZE, LABEL)	\
+  do {							\
+    fputs (integer_asm_op (SIZE, FALSE), FILE);		\
+    assemble_name (FILE, LABEL);			\
+    fputs (SIZE == 8 ? "@rel64" : "@rel", FILE);	\
+  } while (0)
+#endif
+
 /* The Solaris assembler wants a .local for non-exported aliases.  */
 #define ASM_OUTPUT_DEF_FROM_DECLS(FILE, DECL, TARGET)	\
   do {							\
-    const char *declname =				\
-      IDENTIFIER_POINTER (DECL_ASSEMBLER_NAME (DECL));	\
+    tree id = DECL_ASSEMBLER_NAME (DECL);		\
+    ultimate_transparent_alias_target (&id);		\
+    const char *declname = IDENTIFIER_POINTER (id);	\
     ASM_OUTPUT_DEF ((FILE), declname,			\
 		    IDENTIFIER_POINTER (TARGET));	\
     if (! TREE_PUBLIC (DECL))				\
@@ -147,6 +188,20 @@ along with GCC; see the file COPYING3.  If not see
   while (0)
 #endif /* !USE_GAS */
 
+/* As in sparc/sol2.h, override the default from i386/x86-64.h to work
+   around Sun as TLS bug.  */
+#undef  ASM_OUTPUT_ALIGNED_DECL_COMMON
+#define ASM_OUTPUT_ALIGNED_DECL_COMMON(FILE, DECL, NAME, SIZE, ALIGN)	\
+  do									\
+    {									\
+      if (TARGET_SUN_TLS						\
+	  && in_section							\
+	  && ((in_section->common.flags & SECTION_TLS) == SECTION_TLS))	\
+	switch_to_section (bss_section);				\
+      x86_elf_aligned_decl_common (FILE, DECL, NAME, SIZE, ALIGN);	\
+    }									\
+  while  (0)
+
 /* Output a simple call for .init/.fini.  */
 #define ASM_OUTPUT_CALL(FILE, FN)				\
   do								\
@@ -159,6 +214,14 @@ along with GCC; see the file COPYING3.  If not see
 
 #undef TARGET_ASM_NAMED_SECTION
 #define TARGET_ASM_NAMED_SECTION i386_solaris_elf_named_section
+
+/* Sun as requires "h" flag for large sections, GNU as can do without, but
+   accepts "l".  */
+#ifdef USE_GAS
+#define MACH_DEP_SECTION_ASM_FLAG 'l'
+#else
+#define MACH_DEP_SECTION_ASM_FLAG 'h'
+#endif
 
 #ifndef USE_GAS
 /* Emit COMDAT group signature symbols for Sun as.  */
@@ -173,18 +236,19 @@ along with GCC; see the file COPYING3.  If not see
 #define DTORS_SECTION_ASM_OP	"\t.section\t.dtors, \"aw\""
 #endif
 
+#ifndef USE_GAS
+#define LARGECOMM_SECTION_ASM_OP "\t.lbcomm\t"
+#endif
+
+/* -fsanitize=address is currently only supported for 32-bit.  */
+#define ASAN_REJECT_SPEC \
+  DEF_ARCH64_SPEC("%e-fsanitize=address is not supported in this configuration")
+
+#undef NO_PROFILE_COUNTERS
+
+#undef MCOUNT_NAME
+#define MCOUNT_NAME "_mcount"
+
 /* We do not need NT_VERSION notes.  */
 #undef X86_FILE_START_VERSION_DIRECTIVE
 #define X86_FILE_START_VERSION_DIRECTIVE false
-
-/* Only recent versions of Solaris 11 ld properly support hidden .gnu.linkonce
-   sections, so don't use them.  */
-#ifndef USE_GLD
-#define USE_HIDDEN_LINKONCE 0
-#endif
-
-/* Put all *tf routines in libgcc.  */
-#undef LIBGCC2_HAS_TF_MODE
-#define LIBGCC2_HAS_TF_MODE 1
-#define LIBGCC2_TF_CEXT q
-#define TF_SIZE 113

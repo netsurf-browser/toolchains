@@ -1,5 +1,5 @@
 /* Implementation of various C99 functions 
-   Copyright (C) 2004, 2009, 2010 Free Software Foundation, Inc.
+   Copyright (C) 2004-2020 Free Software Foundation, Inc.
 
 This file is part of the GNU Fortran 95 runtime library (libgfortran).
 
@@ -27,33 +27,6 @@ see the files COPYING3 and COPYING.RUNTIME respectively.  If not, see
 #define C99_PROTOS_H WE_DONT_WANT_PROTOS_NOW
 #include "libgfortran.h"
 
-/* IRIX's <math.h> declares a non-C99 compliant implementation of cabs,
-   which takes two floating point arguments instead of a single complex.
-   If <complex.h> is missing this prevents building of c99_functions.c.
-   To work around this we redirect cabs{,f,l} calls to __gfc_cabs{,f,l}.  */
-
-#if defined(__sgi__) && !defined(HAVE_COMPLEX_H)
-#undef HAVE_CABS
-#undef HAVE_CABSF
-#undef HAVE_CABSL
-#define cabs __gfc_cabs
-#define cabsf __gfc_cabsf
-#define cabsl __gfc_cabsl
-#endif
-        
-/* Tru64's <math.h> declares a non-C99 compliant implementation of cabs,
-   which takes two floating point arguments instead of a single complex.
-   To work around this we redirect cabs{,f,l} calls to __gfc_cabs{,f,l}.  */
-
-#ifdef __osf__
-#undef HAVE_CABS
-#undef HAVE_CABSF
-#undef HAVE_CABSL
-#define cabs __gfc_cabs
-#define cabsf __gfc_cabsf
-#define cabsl __gfc_cabsl
-#endif
-
 /* On a C99 system "I" (with I*I = -1) should be defined in complex.h;
    if not, we define a fallback version here.  */
 #ifndef I
@@ -65,6 +38,13 @@ see the files COPYING3 and COPYING.RUNTIME respectively.  If not, see
 #   define I (1.0fi)
 # endif
 #endif
+
+/* Macros to get real and imaginary parts of a complex, and set
+   a complex value.  */
+#define REALPART(z) (__real__(z))
+#define IMAGPART(z) (__imag__(z))
+#define COMPLEX_ASSIGN(z_, r_, i_) {__real__(z_) = (r_); __imag__(z_) = (i_);}
+
 
 /* Prototypes are included to silence -Wstrict-prototypes
    -Wmissing-prototypes.  */
@@ -249,6 +229,17 @@ ceilf (float x)
 }
 #endif
 
+#if !defined(HAVE_COPYSIGN) && defined(HAVE_INLINE_BUILTIN_COPYSIGN)
+#define HAVE_COPYSIGN 1
+double copysign (double x, double y);
+
+double
+copysign (double x, double y)
+{
+  return __builtin_copysign (x, y);
+}
+#endif
+
 #ifndef HAVE_COPYSIGNF
 #define HAVE_COPYSIGNF 1
 float copysignf (float x, float y);
@@ -257,6 +248,17 @@ float
 copysignf (float x, float y)
 {
   return (float) copysign (x, y);
+}
+#endif
+
+#if !defined(HAVE_COPYSIGNL) && defined(HAVE_INLINE_BUILTIN_COPYSIGNL)
+#define HAVE_COPYSIGNL 1
+long double copysignl (long double x, long double y);
+
+long double
+copysignl (long double x, long double y)
+{
+  return __builtin_copysignl (x, y);
 }
 #endif
 
@@ -293,6 +295,17 @@ expf (float x)
 }
 #endif
 
+#if !defined(HAVE_FABS) && defined(HAVE_INLINE_BUILTIN_FABS)
+#define HAVE_FABS 1
+double fabs (double x);
+
+double
+fabs (double x)
+{
+  return __builtin_fabs (x);
+}
+#endif
+
 #ifndef HAVE_FABSF
 #define HAVE_FABSF 1
 float fabsf (float x);
@@ -301,6 +314,17 @@ float
 fabsf (float x)
 {
   return (float) fabs (x);
+}
+#endif
+
+#if !defined(HAVE_FABSL) && defined(HAVE_INLINE_BUILTIN_FABSL)
+#define HAVE_FABSL 1
+long double fabsl (long double x);
+
+long double
+fabsl (long double x)
+{
+  return __builtin_fabsl (x);
 }
 #endif
 
@@ -545,10 +569,8 @@ nextafterf (float x, float y)
 #endif
 
 
-#if !defined(HAVE_POWF) || defined(HAVE_BROKEN_POWF)
 #ifndef HAVE_POWF
 #define HAVE_POWF 1
-#endif
 float powf (float x, float y);
 
 float
@@ -935,7 +957,7 @@ cexp (double complex z)
 }
 #endif
 
-#if !defined(HAVE_CEXPL) && defined(HAVE_COSL) && defined(HAVE_SINL) && defined(EXPL)
+#if !defined(HAVE_CEXPL) && defined(HAVE_COSL) && defined(HAVE_SINL) && defined(HAVE_EXPL)
 #define HAVE_CEXPL 1
 long double complex cexpl (long double complex z);
 
@@ -2132,5 +2154,38 @@ float
 lgammaf (float x)
 {
   return (float) lgamma ((double) x);
+}
+#endif
+
+#ifndef HAVE_FMA
+#define HAVE_FMA 1
+double fma (double, double, double);
+
+double
+fma (double x, double y, double z)
+{
+  return x * y + z;
+}
+#endif
+
+#ifndef HAVE_FMAF
+#define HAVE_FMAF 1
+float fmaf (float, float, float);
+
+float
+fmaf (float x, float y, float z)
+{
+  return fma (x, y, z);
+}
+#endif
+
+#ifndef HAVE_FMAL
+#define HAVE_FMAL 1
+long double fmal (long double, long double, long double);
+
+long double
+fmal (long double x, long double y, long double z)
+{
+  return x * y + z;
 }
 #endif

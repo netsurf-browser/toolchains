@@ -1,6 +1,5 @@
 /* Definitions of MCore target. 
-   Copyright (C) 1998, 1999, 2000, 2001, 2002, 2004, 2007, 2011
-   Free Software Foundation, Inc.
+   Copyright (C) 1998-2020 Free Software Foundation, Inc.
    Contributed by Cygnus Solutions.
 
 This file is part of GCC.
@@ -36,7 +35,7 @@ along with GCC; see the file COPYING3.  If not see
 	       (* targetm.strip_name_encoding) (NAME));	\
       in_section = NULL;				\
     }							\
-  while (0);
+  while (0)
 
 /* Write the extra assembler code needed to declare a function properly.
    Some svr4 assemblers need to also have something extra said about the

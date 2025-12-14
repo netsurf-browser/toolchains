@@ -1,8 +1,6 @@
 // Allocators -*- C++ -*-
 
-// Copyright (C) 2001, 2002, 2003, 2004, 2005, 2006, 2007, 2008, 2009,
-// 2010, 2011
-// Free Software Foundation, Inc.
+// Copyright (C) 2001-2020 Free Software Foundation, Inc.
 //
 // This file is part of the GNU ISO C++ Library.  This library is free
 // software; you can redistribute it and/or modify it under the
@@ -51,13 +49,13 @@
 #include <ext/atomicity.h>
 #include <ext/concurrence.h>
 #include <bits/move.h>
+#if __cplusplus >= 201103L
+#include <type_traits>
+#endif
 
 namespace __gnu_cxx _GLIBCXX_VISIBILITY(default)
 {
 _GLIBCXX_BEGIN_NAMESPACE_VERSION
-
-  using std::size_t;
-  using std::ptrdiff_t;
 
   /**
    *  @brief  Base class for __pool_alloc.
@@ -76,6 +74,7 @@ _GLIBCXX_BEGIN_NAMESPACE_VERSION
    */
     class __pool_alloc_base
     {
+      typedef std::size_t size_t;
     protected:
 
       enum { _S_align = 8 };
@@ -128,8 +127,8 @@ _GLIBCXX_BEGIN_NAMESPACE_VERSION
       static _Atomic_word	    _S_force_new;
 
     public:
-      typedef size_t     size_type;
-      typedef ptrdiff_t  difference_type;
+      typedef std::size_t     size_type;
+      typedef std::ptrdiff_t  difference_type;
       typedef _Tp*       pointer;
       typedef const _Tp* const_pointer;
       typedef _Tp&       reference;
@@ -139,6 +138,12 @@ _GLIBCXX_BEGIN_NAMESPACE_VERSION
       template<typename _Tp1>
         struct rebind
         { typedef __pool_alloc<_Tp1> other; };
+
+#if __cplusplus >= 201103L
+      // _GLIBCXX_RESOLVE_LIB_DEFECTS
+      // 2103. propagate_on_container_move_assignment
+      typedef std::true_type propagate_on_container_move_assignment;
+#endif
 
       __pool_alloc() _GLIBCXX_USE_NOEXCEPT { }
 
@@ -159,9 +164,9 @@ _GLIBCXX_BEGIN_NAMESPACE_VERSION
 
       size_type
       max_size() const _GLIBCXX_USE_NOEXCEPT 
-      { return size_t(-1) / sizeof(_Tp); }
+      { return std::size_t(-1) / sizeof(_Tp); }
 
-#ifdef __GXX_EXPERIMENTAL_CXX0X__
+#if __cplusplus >= 201103L
       template<typename _Up, typename... _Args>
         void
         construct(_Up* __p, _Args&&... __args)
@@ -181,7 +186,7 @@ _GLIBCXX_BEGIN_NAMESPACE_VERSION
       destroy(pointer __p) { __p->~_Tp(); }
 #endif
 
-      pointer
+      _GLIBCXX_NODISCARD pointer
       allocate(size_type __n, const void* = 0);
 
       void
@@ -193,24 +198,37 @@ _GLIBCXX_BEGIN_NAMESPACE_VERSION
     operator==(const __pool_alloc<_Tp>&, const __pool_alloc<_Tp>&)
     { return true; }
 
+#if __cpp_impl_three_way_comparison < 201907L
   template<typename _Tp>
     inline bool
     operator!=(const __pool_alloc<_Tp>&, const __pool_alloc<_Tp>&)
     { return false; }
+#endif
 
   template<typename _Tp>
     _Atomic_word
     __pool_alloc<_Tp>::_S_force_new;
 
   template<typename _Tp>
-    _Tp*
+    _GLIBCXX_NODISCARD _Tp*
     __pool_alloc<_Tp>::allocate(size_type __n, const void*)
     {
+      using std::size_t;
       pointer __ret = 0;
       if (__builtin_expect(__n != 0, true))
 	{
 	  if (__n > this->max_size())
 	    std::__throw_bad_alloc();
+
+	  const size_t __bytes = __n * sizeof(_Tp);
+
+#if __cpp_aligned_new
+	  if (alignof(_Tp) > __STDCPP_DEFAULT_NEW_ALIGNMENT__)
+	    {
+	      std::align_val_t __al = std::align_val_t(alignof(_Tp));
+	      return static_cast<_Tp*>(::operator new(__bytes, __al));
+	    }
+#endif
 
 	  // If there is a race through here, assume answer from getenv
 	  // will resolve in same direction.  Inspired by techniques
@@ -223,7 +241,6 @@ _GLIBCXX_BEGIN_NAMESPACE_VERSION
 		__atomic_add_dispatch(&_S_force_new, -1);
 	    }
 
-	  const size_t __bytes = __n * sizeof(_Tp);	      
 	  if (__bytes > size_t(_S_max_bytes) || _S_force_new > 0)
 	    __ret = static_cast<_Tp*>(::operator new(__bytes));
 	  else
@@ -250,8 +267,16 @@ _GLIBCXX_BEGIN_NAMESPACE_VERSION
     void
     __pool_alloc<_Tp>::deallocate(pointer __p, size_type __n)
     {
+      using std::size_t;
       if (__builtin_expect(__n != 0 && __p != 0, true))
 	{
+#if __cpp_aligned_new
+	  if (alignof(_Tp) > __STDCPP_DEFAULT_NEW_ALIGNMENT__)
+	    {
+	      ::operator delete(__p, std::align_val_t(alignof(_Tp)));
+	      return;
+	    }
+#endif
 	  const size_t __bytes = __n * sizeof(_Tp);
 	  if (__bytes > static_cast<size_t>(_S_max_bytes) || _S_force_new > 0)
 	    ::operator delete(__p);

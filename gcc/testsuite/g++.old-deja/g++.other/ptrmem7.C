@@ -21,7 +21,7 @@ void A::foo ()
 {
   int (A::*ptr1) (int) = &A::ns;
   int (A::*ptr2) (int) = A::ns;           // { dg-error "pointer to member" "err" }
-  // { dg-message "pointer to member" "note" { target *-*-* } 23 }
+  // { dg-message "pointer to member" "note" { target *-*-* } .-1 }
   int (A::*ptr3) (int) = &ns;             // { dg-error "pointer to member" "err" }
   int (A::*ptr4) (int) = ns;              // { dg-error "pointer to member" "err" }
 
@@ -36,7 +36,7 @@ void A::foo ()
   int (A::*ptr14) (int) = single;         // { dg-error "cannot convert" }
 
   int (A::*ptr20) (int) = &(A::ns);       // { dg-error "pointer to member" }
-  int (A::*ptr21) (int) = &(A::single);   // { dg-error "pointer to member" }
+  int (A::*ptr21) (int) = &(A::single);   // { dg-error "32:ISO C\\+\\+ forbids taking the address of an unqualified or parenthesized non-static member function to form a pointer to member" }
 
   int (*ptr31) (short) = &A::sole;
   int (*ptr32) (short) = A::sole;

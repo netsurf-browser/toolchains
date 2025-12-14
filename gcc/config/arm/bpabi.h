@@ -1,6 +1,5 @@
 /* Configuration file for ARM BPABI targets.
-   Copyright (C) 2004, 2005, 2007, 2008, 2009, 2010
-   Free Software Foundation, Inc.
+   Copyright (C) 2004-2020 Free Software Foundation, Inc.
    Contributed by CodeSourcery, LLC   
 
    This file is part of GCC.
@@ -15,23 +14,24 @@
    or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU General Public
    License for more details.
 
-   You should have received a copy of the GNU General Public License
-   along with GCC; see the file COPYING3.  If not see
+   Under Section 7 of GPL version 3, you are granted additional
+   permissions described in the GCC Runtime Library Exception, version
+   3.1, as published by the Free Software Foundation.
+
+   You should have received a copy of the GNU General Public License and
+   a copy of the GCC Runtime Library Exception along with this program;
+   see the files COPYING3 and COPYING.RUNTIME respectively.  If not, see
    <http://www.gnu.org/licenses/>.  */
 
 /* Use the AAPCS ABI by default.  */
 #define ARM_DEFAULT_ABI ARM_ABI_AAPCS
 
-/* Assume that AAPCS ABIs should adhere to the full BPABI.  */ 
+/* Assume that AAPCS ABIs should adhere to the full BPABI.  */
 #define TARGET_BPABI (TARGET_AAPCS_BASED)
 
 /* BPABI targets use EABI frame unwinding tables.  */
 #undef ARM_UNWIND_INFO
 #define ARM_UNWIND_INFO 1
-
-/* Section 4.1 of the AAPCS requires the use of VFP format.  */
-#undef  FPUTYPE_DEFAULT
-#define FPUTYPE_DEFAULT "vfp"
 
 /* TARGET_BIG_ENDIAN_DEFAULT is set in
    config.gcc for big endian configurations.  */
@@ -55,30 +55,33 @@
 #define TARGET_FIX_V4BX_SPEC " %{mcpu=arm8|mcpu=arm810|mcpu=strongarm*"\
   "|march=armv4|mcpu=fa526|mcpu=fa626:--fix-v4bx}"
 
-#define BE8_LINK_SPEC \
-  " %{mbig-endian:%{march=armv7-a|mcpu=cortex-a5	\
-   |mcpu=cortex-a7					\
-   |mcpu=cortex-a8|mcpu=cortex-a9|mcpu=cortex-a15	\
-   |mcpu=generic-armv7-a				\
-   |march=armv7-m|mcpu=cortex-m3			\
-   |march=armv7e-m|mcpu=cortex-m4			\
-   |march=armv6-m|mcpu=cortex-m0			\
-   :%{!r:--be8}}}"
+#define TARGET_FDPIC_ASM_SPEC ""
+
+#define BE8_LINK_SPEC							\
+  "%{!r:%{!mbe32:%:be8_linkopt(%{mlittle-endian:little}"		\
+  "			       %{mbig-endian:big}"			\
+  "			       %{mbe8:be8}"				\
+  "			       %{march=*:arch %*})}}"
 
 /* Tell the assembler to build BPABI binaries.  */
 #undef  SUBTARGET_EXTRA_ASM_SPEC
 #define SUBTARGET_EXTRA_ASM_SPEC \
-  "%{mabi=apcs-gnu|mabi=atpcs:-meabi=gnu;:-meabi=5}" TARGET_FIX_V4BX_SPEC
+  "%{mabi=apcs-gnu|mabi=atpcs:-meabi=gnu;:-meabi=5}" TARGET_FIX_V4BX_SPEC \
+  TARGET_FDPIC_ASM_SPEC
 
 #ifndef SUBTARGET_EXTRA_LINK_SPEC
 #define SUBTARGET_EXTRA_LINK_SPEC ""
 #endif
 
+/* Split out the EABI common values so other targets can use it.  */
+#define EABI_LINK_SPEC \
+  TARGET_FIX_V4BX_SPEC BE8_LINK_SPEC
+
 /* The generic link spec in elf.h does not support shared libraries.  */
 #define BPABI_LINK_SPEC \
   "%{mbig-endian:-EB} %{mlittle-endian:-EL} "		\
   "%{static:-Bstatic} %{shared:-shared} %{symbolic:-Bsymbolic} "	\
-  "-X" SUBTARGET_EXTRA_LINK_SPEC TARGET_FIX_V4BX_SPEC BE8_LINK_SPEC
+  "-X" SUBTARGET_EXTRA_LINK_SPEC EABI_LINK_SPEC
 
 #undef  LINK_SPEC
 #define LINK_SPEC BPABI_LINK_SPEC

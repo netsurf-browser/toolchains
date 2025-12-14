@@ -1,6 +1,6 @@
 // -*- C++ -*-
 
-// Copyright (C) 2005, 2006, 2009, 2011 Free Software Foundation, Inc.
+// Copyright (C) 2005-2020 Free Software Foundation, Inc.
 //
 // This file is part of the GNU ISO C++ Library.  This library is free
 // software; you can redistribute it and/or modify it under the terms
@@ -102,23 +102,23 @@ namespace __gnu_pbds
 
       typedef integral_constant<int, simple_value> 	no_throw_copies_t;
 
-      typedef typename _Alloc::template rebind<value_type>	__rebind_v;
-      typedef typename __rebind_v::other 		value_allocator;
+      typedef rebind_traits<_Alloc, value_type>		__rebind_v;
+      typedef typename __rebind_v::allocator_type 	value_allocator;
 
     public:
-      typedef typename value_allocator::pointer		pointer;
-      typedef typename value_allocator::const_pointer	const_pointer;
-      typedef typename value_allocator::reference	reference;
-      typedef typename value_allocator::const_reference	const_reference;
+      typedef typename __rebind_v::pointer		pointer;
+      typedef typename __rebind_v::const_pointer	const_pointer;
+      typedef typename __rebind_v::reference	reference;
+      typedef typename __rebind_v::const_reference	const_reference;
 
       typedef typename __conditional_type<simple_value,
 					  value_type, pointer>::__type
       							entry;
 
-      typedef typename _Alloc::template rebind<entry>::other
+      typedef typename rebind_traits<_Alloc, entry>::allocator_type
       							entry_allocator;
 
-      typedef typename entry_allocator::pointer 	entry_pointer;
+      typedef typename rebind_traits<_Alloc, entry>::pointer 	entry_pointer;
 
       typedef binary_heap_point_const_iterator_<value_type, entry,
 						simple_value, _Alloc>
@@ -144,7 +144,7 @@ namespace __gnu_pbds
 
       ~binary_heap();
 
-      inline bool
+      _GLIBCXX_NODISCARD inline bool
       empty() const;
 
       inline size_type
@@ -266,20 +266,14 @@ namespace __gnu_pbds
 	const entry_cmp& m_cmp = static_cast<entry_cmp&>(*this);
 	entry_pointer end = m_a_entries + m_size;
 	std::make_heap(m_a_entries, end, m_cmp);
-	_GLIBCXX_DEBUG_ASSERT(is_heap());
       }
 
       void
       push_heap()
       {
-	if (!is_heap())
-	  make_heap();
-	else
-	  {
-	    const entry_cmp& m_cmp = static_cast<entry_cmp&>(*this);
-	    entry_pointer end = m_a_entries + m_size;
-	    std::push_heap(m_a_entries, end, m_cmp);
-	  }
+	const entry_cmp& m_cmp = static_cast<entry_cmp&>(*this);
+	entry_pointer end = m_a_entries + m_size;
+	std::push_heap(m_a_entries, end, m_cmp);
       }
 
       void
@@ -288,15 +282,6 @@ namespace __gnu_pbds
 	const entry_cmp& m_cmp = static_cast<entry_cmp&>(*this);
 	entry_pointer end = m_a_entries + m_size;
 	std::pop_heap(m_a_entries, end, m_cmp);
-      }
-
-      bool
-      is_heap()
-      {
-	const entry_cmp& m_cmp = static_cast<entry_cmp&>(*this);
-	entry_pointer end = m_a_entries + m_size;
-	bool p = std::__is_heap(m_a_entries, end, m_cmp);
-	return p;
       }
 
 #ifdef _GLIBCXX_DEBUG

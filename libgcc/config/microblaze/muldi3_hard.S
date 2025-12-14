@@ -1,6 +1,6 @@
 ###################################- 
 # 
-#  Copyright 2009, 2010, 2011 Free Software Foundation, Inc.
+#  Copyright (C) 2009-2020 Free Software Foundation, Inc.
 #
 #  Contributed by Michael Eager <eager@eagercon.com>.
 #
@@ -47,6 +47,12 @@
 #
 #######################################
 
+/* An executable stack is *not* required for these functions.  */
+#ifdef __linux__
+.section .note.GNU-stack,"",%progbits
+.previous
+#endif
+
 	.globl	muldi3_hardproc
 	.ent	muldi3_hardproc
 muldi3_hardproc:
@@ -68,7 +74,7 @@ muldi3_hardproc:
 	swi	r26,r1,24
 	swi	r27,r1,28
 
-# Load all the 16 bit values for A thru H
+# Load all the 16 bit values for A through H
 	lhui	r20,r1,44   # A
 	lhui	r21,r1,46   # B
 	lhui	r22,r1,48   # C

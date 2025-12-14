@@ -8,12 +8,14 @@ package math
 	Hypot -- sqrt(p*p + q*q), but overflows only if the result does.
 */
 
-// Hypot computes Sqrt(p*p + q*q), taking care to avoid
+// Hypot returns Sqrt(p*p + q*q), taking care to avoid
 // unnecessary overflow and underflow.
 //
 // Special cases are:
-//	Hypot(p, q) = +Inf if p or q is infinite
-//	Hypot(p, q) = NaN if p or q is NaN
+//	Hypot(±Inf, q) = +Inf
+//	Hypot(p, ±Inf) = +Inf
+//	Hypot(NaN, q) = NaN
+//	Hypot(p, NaN) = NaN
 func Hypot(p, q float64) float64 {
 	return hypot(p, q)
 }
@@ -26,12 +28,7 @@ func hypot(p, q float64) float64 {
 	case IsNaN(p) || IsNaN(q):
 		return NaN()
 	}
-	if p < 0 {
-		p = -p
-	}
-	if q < 0 {
-		q = -q
-	}
+	p, q = Abs(p), Abs(q)
 	if p < q {
 		p, q = q, p
 	}

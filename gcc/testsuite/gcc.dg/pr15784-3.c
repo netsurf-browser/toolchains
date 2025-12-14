@@ -1,5 +1,4 @@
 /* { dg-do compile } */
-/* { dg-skip-if "No NaN support" { spu-*-* } } */
 /* SH4 without -mieee defaults to -ffinite-math-only.  */
 /* { dg-options "-fdump-tree-gimple -fno-finite-math-only" } */
 /* Test for folding abs(x) where appropriate.  */
@@ -11,4 +10,3 @@ int a (float x) {
 }
 
 /* { dg-final { scan-tree-dump-times "ABS_EXPR" 1 "gimple" } } */
-/* { dg-final { cleanup-tree-dump "gimple" } } */

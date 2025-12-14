@@ -1,7 +1,6 @@
 /* elfos.h  --  operating system specific defines to be used when
    targeting GCC for some generic ELF system
-   Copyright (C) 1991, 1994, 1995, 1999, 2000, 2001, 2002, 2003, 2004,
-   2007, 2009, 2010 Free Software Foundation, Inc.
+   Copyright (C) 1991-2020 Free Software Foundation, Inc.
    Based on svr4.h contributed by Ron Guilmette (rfg@netcom.com).
 
 This file is part of GCC.
@@ -83,10 +82,8 @@ see the files COPYING3 and COPYING.RUNTIME respectively.  If not, see
 
 /* Output #ident as a .ident.  */
 
-#define ASM_OUTPUT_IDENT(FILE, NAME) \
-  fprintf (FILE, "%s\"%s\"\n", IDENT_ASM_OP, NAME);
-
-#define IDENT_ASM_OP "\t.ident\t"
+#undef TARGET_ASM_OUTPUT_IDENT
+#define TARGET_ASM_OUTPUT_IDENT default_asm_output_ident_directive
 
 #undef  SET_ASM_OP
 #define SET_ASM_OP	"\t.set\t"
@@ -102,7 +99,7 @@ see the files COPYING3 and COPYING.RUNTIME respectively.  If not, see
 
 #undef  ASM_OUTPUT_SKIP
 #define ASM_OUTPUT_SKIP(FILE, SIZE) \
-   fprintf ((FILE), "%s"HOST_WIDE_INT_PRINT_UNSIGNED"\n",\
+   fprintf ((FILE), "%s" HOST_WIDE_INT_PRINT_UNSIGNED "\n",\
 	    SKIP_ASM_OP, (SIZE))
 
 /* This is how to store into the string LABEL
@@ -138,15 +135,15 @@ see the files COPYING3 and COPYING.RUNTIME respectively.  If not, see
 
 #ifndef ASM_OUTPUT_BEFORE_CASE_LABEL
 #define ASM_OUTPUT_BEFORE_CASE_LABEL(FILE, PREFIX, NUM, TABLE) \
-  ASM_OUTPUT_ALIGN ((FILE), 2);
+  ASM_OUTPUT_ALIGN ((FILE), 2)
 #endif
 
 #undef  ASM_OUTPUT_CASE_LABEL
 #define ASM_OUTPUT_CASE_LABEL(FILE, PREFIX, NUM, JUMPTABLE)		\
   do									\
     {									\
-      ASM_OUTPUT_BEFORE_CASE_LABEL (FILE, PREFIX, NUM, JUMPTABLE)	\
-	(*targetm.asm_out.internal_label) (FILE, PREFIX, NUM);			\
+      ASM_OUTPUT_BEFORE_CASE_LABEL (FILE, PREFIX, NUM, JUMPTABLE);	\
+      (*targetm.asm_out.internal_label) (FILE, PREFIX, NUM);		\
     }									\
   while (0)
 
@@ -170,7 +167,7 @@ see the files COPYING3 and COPYING.RUNTIME respectively.  If not, see
     {									\
       fprintf ((FILE), "%s", COMMON_ASM_OP);				\
       assemble_name ((FILE), (NAME));					\
-      fprintf ((FILE), ","HOST_WIDE_INT_PRINT_UNSIGNED",%u\n",		\
+      fprintf ((FILE), "," HOST_WIDE_INT_PRINT_UNSIGNED ",%u\n",		\
 	       (SIZE), (ALIGN) / BITS_PER_UNIT);			\
     }									\
   while (0)
@@ -251,6 +248,17 @@ see the files COPYING3 and COPYING.RUNTIME respectively.  If not, see
     }					\
   while (0)
 
+#define ASM_OUTPUT_SYMVER_DIRECTIVE(FILE, NAME, NAME2)		\
+  do								\
+    {								\
+      fputs ("\t.symver\t", (FILE));				\
+      assemble_name ((FILE), (NAME));				\
+      fputs (", ", (FILE));					\
+      assemble_name ((FILE), (NAME2));				\
+      fputc ('\n', (FILE));					\
+    }								\
+  while (0)
+
 /* The following macro defines the format used to output the second
    operand of the .type assembler directive.  Different svr4 assemblers
    expect various different forms for this operand.  The one given here
@@ -287,10 +295,26 @@ see the files COPYING3 and COPYING.RUNTIME respectively.  If not, see
   while (0)
 #endif
 
+/* Write the extra assembler code needed to declare the name of a
+   cold function partition properly. Some svr4 assemblers need to also
+   have something extra said about the function's return value.  We
+   allow for that here.  */
+
+#ifndef ASM_DECLARE_COLD_FUNCTION_NAME
+#define ASM_DECLARE_COLD_FUNCTION_NAME(FILE, NAME, DECL)	\
+  do								\
+    {								\
+      ASM_OUTPUT_TYPE_DIRECTIVE (FILE, NAME, "function");	\
+      ASM_DECLARE_RESULT (FILE, DECL_RESULT (DECL));		\
+      ASM_OUTPUT_FUNCTION_LABEL (FILE, NAME, DECL);		\
+    }								\
+  while (0)
+#endif
+
 /* Write the extra assembler code needed to declare an object properly.  */
 
 #ifdef HAVE_GAS_GNU_UNIQUE_OBJECT
-#define USE_GNU_UNIQUE_OBJECT 1
+#define USE_GNU_UNIQUE_OBJECT flag_gnu_unique
 #else
 #define USE_GNU_UNIQUE_OBJECT 0
 #endif
@@ -316,7 +340,7 @@ see the files COPYING3 and COPYING.RUNTIME respectively.  If not, see
 	  && (DECL) && DECL_SIZE (DECL))				\
 	{								\
 	  size_directive_output = 1;					\
-	  size = int_size_in_bytes (TREE_TYPE (DECL));			\
+	  size = tree_to_uhwi (DECL_SIZE_UNIT (DECL));			\
 	  ASM_OUTPUT_SIZE_DIRECTIVE (FILE, NAME, size);			\
 	}								\
 									\
@@ -344,7 +368,7 @@ see the files COPYING3 and COPYING.RUNTIME respectively.  If not, see
 	  && !size_directive_output)				\
 	{							\
 	  size_directive_output = 1;				\
-	  size = int_size_in_bytes (TREE_TYPE (DECL));		\
+	  size = tree_to_uhwi (DECL_SIZE_UNIT (DECL));		\
 	  ASM_OUTPUT_SIZE_DIRECTIVE (FILE, name, size);		\
 	}							\
     }								\
@@ -353,6 +377,17 @@ see the files COPYING3 and COPYING.RUNTIME respectively.  If not, see
 /* This is how to declare the size of a function.  */
 #ifndef ASM_DECLARE_FUNCTION_SIZE
 #define ASM_DECLARE_FUNCTION_SIZE(FILE, FNAME, DECL)		\
+  do								\
+    {								\
+      if (!flag_inhibit_size_directive)				\
+	ASM_OUTPUT_MEASURED_SIZE (FILE, FNAME);			\
+    }								\
+  while (0)
+#endif
+
+/* This is how to declare the size of a cold function partition.  */
+#ifndef ASM_DECLARE_COLD_FUNCTION_SIZE
+#define ASM_DECLARE_COLD_FUNCTION_SIZE(FILE, FNAME, DECL)	\
   do								\
     {								\
       if (!flag_inhibit_size_directive)				\
@@ -420,7 +455,7 @@ see the files COPYING3 and COPYING.RUNTIME respectively.  If not, see
 
 #undef  ASM_OUTPUT_ASCII
 #define ASM_OUTPUT_ASCII(FILE, STR, LENGTH)			\
-  default_elf_asm_output_ascii ((FILE), (STR), (LENGTH));
+  default_elf_asm_output_ascii ((FILE), (STR), (LENGTH))
 
 /* Allow the use of the -frecord-gcc-switches switch via the
    elf_record_gcc_switches function defined in varasm.c.  */
@@ -436,3 +471,6 @@ see the files COPYING3 and COPYING.RUNTIME respectively.  If not, see
 #define ASM_OUTPUT_EXTERNAL(FILE, DECL, NAME) \
   default_elf_asm_output_external (FILE, DECL, NAME)
 #endif
+
+#undef TARGET_LIBC_HAS_FUNCTION
+#define TARGET_LIBC_HAS_FUNCTION no_c99_libc_has_function

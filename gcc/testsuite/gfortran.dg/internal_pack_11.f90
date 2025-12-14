@@ -1,5 +1,5 @@
 ! { dg-do compile }
-! { dg-options "-fdump-tree-original" }
+! { dg-options "-O0 -fdump-tree-original" }
 !
 ! Test the fix for PR43173, where unnecessary calls to internal_pack/unpack
 ! were being produced below. These references are contiguous and so do not
@@ -15,4 +15,3 @@
   call foo (ot(0:time_steps)) ! Was an unnecessary temporary
   end
 ! { dg-final { scan-tree-dump-times "unpack" 0 "original" } }
-! { dg-final { cleanup-tree-dump "original" } }

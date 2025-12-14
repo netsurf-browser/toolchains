@@ -1,6 +1,6 @@
-// { dg-options "-std=gnu++0x" }
+// { dg-do run { target c++11 } }
 
-// Copyright (C) 2005, 2006, 2007, 2009, 2012 Free Software Foundation
+// Copyright (C) 2005-2020 Free Software Foundation, Inc.
 //
 // This file is part of the GNU ISO C++ Library.  This library is free
 // software; you can redistribute it and/or modify it under the
@@ -20,6 +20,7 @@
 // 20.6.6.2 Template class shared_ptr [util.smartptr.shared]
 
 #include <memory>
+#include <string>
 #include <testsuite_hooks.h>
 
 struct A { };
@@ -40,10 +41,11 @@ test01()
   {
     std::shared_ptr<A> a2(wa);
   }
-  catch (const std::bad_weak_ptr&)
+  catch (const std::bad_weak_ptr& e)
   {
     // Expected.
-    test = true;
+    if (e.what() == std::string("bad_weak_ptr"))
+      test = true;
   }
   VERIFY( test );
 

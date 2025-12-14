@@ -6,12 +6,13 @@
 
 #include "go-system.h"
 
-#include <gmp.h>
-
 #include "go-c.h"
+#include "go-diagnostics.h"
 #include "types.h"
 #include "expressions.h"
 #include "gogo.h"
+#include "export.h"
+#include "import.h"
 #include "runtime.h"
 #include "backend.h"
 #include "statements.h"
@@ -121,6 +122,51 @@ Statement::determine_types()
   this->do_determine_types();
 }
 
+// Read a statement from export data.
+
+Statement*
+Statement::import_statement(Import_function_body* ifb, Location loc)
+{
+  if (ifb->match_c_string("{"))
+    {
+      bool is_lowered_for_statement;
+      Block* block = Block_statement::do_import(ifb, loc,
+						&is_lowered_for_statement);
+      if (block == NULL)
+	return Statement::make_error_statement(loc);
+      Block_statement* s = Statement::make_block_statement(block, loc);
+      if (is_lowered_for_statement)
+	s->set_is_lowered_for_statement();
+      return s;
+    }
+  else if (ifb->match_c_string("return"))
+    {
+      // After lowering return statements have no expressions.  The
+      // return expressions are assigned to result parameters.
+      ifb->advance(6);
+      return Statement::make_return_statement(NULL, loc);
+    }
+  else if (ifb->match_c_string("var $t"))
+    return Temporary_statement::do_import(ifb, loc);
+  else if (ifb->match_c_string("var "))
+    return Variable_declaration_statement::do_import(ifb, loc);
+  else if (ifb->match_c_string("if "))
+    return If_statement::do_import(ifb, loc);
+  else if (ifb->match_c_string(":"))
+    return Label_statement::do_import(ifb, loc);
+  else if (ifb->match_c_string("goto "))
+    return Goto_statement::do_import(ifb, loc);
+
+  Expression* lhs = Expression::import_expression(ifb, loc);
+
+  if (ifb->match_c_string(" //"))
+    return Statement::make_statement(lhs, true);
+
+  ifb->require_c_string(" = ");
+  Expression* rhs = Expression::import_expression(ifb, loc);
+  return Statement::make_assignment(lhs, rhs, loc);
+}
+
 // If this is a thunk statement, return it.
 
 Thunk_statement*
@@ -165,7 +211,7 @@ Statement::set_is_error()
 void
 Statement::report_error(const char* msg)
 {
-  error_at(this->location_, "%s", msg);
+  go_error_at(this->location_, "%s", msg);
   this->set_is_error();
 }
 
@@ -191,6 +237,21 @@ class Error_statement : public Statement
   void
   do_dump_statement(Ast_dump_context*) const;
 };
+
+//
+// Helper to tack on available source position information
+// at the end of a statement.
+//
+static std::string
+dsuffix(Location location)
+{
+  std::string lstr = Linemap::location_to_string(location);
+  if (lstr == "")
+    return lstr;
+  std::string rval(" // ");
+  rval += lstr;
+  return rval;
+}
 
 // Dump the AST representation for an error statement.
 
@@ -248,21 +309,55 @@ Variable_declaration_statement::do_lower(Gogo* gogo, Named_object* function,
   return this;
 }
 
+// Flatten the variable's initialization expression.
+
+Statement*
+Variable_declaration_statement::do_flatten(Gogo* gogo, Named_object* function,
+                                           Block*, Statement_inserter* inserter)
+{
+  Variable* var = this->var_->var_value();
+  if (var->type()->is_error_type()
+      || (var->init() != NULL
+          && var->init()->is_error_expression()))
+    {
+      go_assert(saw_errors());
+      return Statement::make_error_statement(this->location());
+    }
+  this->var_->var_value()->flatten_init_expression(gogo, function, inserter);
+  return this;
+}
+
+// Add explicit type conversions.
+
+void
+Variable_declaration_statement::do_add_conversions()
+{
+  Variable* var = this->var_->var_value();
+  Expression* init = var->init();
+  if (init == NULL)
+    return;
+  Type* lt = var->type();
+  Type* rt = init->type();
+  if (!Type::are_identical(lt, rt, 0, NULL)
+      && lt->interface_type() != NULL)
+    var->set_init(Expression::make_cast(lt, init, this->location()));
+}
+
 // Convert a variable declaration to the backend representation.
 
 Bstatement*
 Variable_declaration_statement::do_get_backend(Translate_context* context)
 {
+  Bfunction* bfunction = context->function()->func_value()->get_decl();
   Variable* var = this->var_->var_value();
   Bvariable* bvar = this->var_->get_backend_variable(context->gogo(),
 						     context->function());
-  tree init = var->get_init_tree(context->gogo(), context->function());
-  Bexpression* binit = init == NULL ? NULL : tree_to_expr(init);
+  Bexpression* binit = var->get_init(context->gogo(), context->function());
 
   if (!var->is_in_heap())
     {
       go_assert(binit != NULL);
-      return context->backend()->init_statement(bvar, binit);
+      return context->backend()->init_statement(bfunction, bvar, binit);
     }
 
   // Something takes the address of this variable, so the value is
@@ -283,14 +378,15 @@ Variable_declaration_statement::do_get_backend(Translate_context* context)
   if (binit != NULL)
     {
       Expression* e = Expression::make_temporary_reference(temp, loc);
-      e = Expression::make_unary(OPERATOR_MULT, e, loc);
-      Bexpression* be = tree_to_expr(e->get_tree(context));
-      set = context->backend()->assignment_statement(be, binit, loc);
+      e = Expression::make_dereference(e, Expression::NIL_CHECK_NOT_NEEDED,
+                                       loc);
+      Bexpression* be = e->get_backend(context);
+      set = context->backend()->assignment_statement(bfunction, be, binit, loc);
     }
 
   Expression* ref = Expression::make_temporary_reference(temp, loc);
-  Bexpression* bref = tree_to_expr(ref->get_tree(context));
-  Bstatement* sinit = context->backend()->init_statement(bvar, bref);
+  Bexpression* bref = ref->get_backend(context);
+  Bstatement* sinit = context->backend()->init_statement(bfunction, bvar, bref);
 
   std::vector<Bstatement*> stats;
   stats.reserve(3);
@@ -322,7 +418,7 @@ Variable_declaration_statement::do_dump_statement(
       ast_dump_context->ostream() <<  "= ";
       ast_dump_context->dump_expression(var->init());
     }
-  ast_dump_context->ostream() << std::endl;
+  ast_dump_context->ostream() << dsuffix(location()) << std::endl;
 }
 
 // Make a variable declaration.
@@ -333,6 +429,55 @@ Statement::make_variable_declaration(Named_object* var)
   return new Variable_declaration_statement(var);
 }
 
+// Export a variable declaration.
+
+void
+Variable_declaration_statement::do_export_statement(Export_function_body* efb)
+{
+  efb->write_c_string("var ");
+  efb->write_string(Gogo::unpack_hidden_name(this->var_->name()));
+  efb->write_c_string(" ");
+  Variable* var = this->var_->var_value();
+  Type* type = var->type();
+  efb->write_type(type);
+  Expression* init = var->init();
+  if (init != NULL)
+    {
+      efb->write_c_string(" = ");
+
+      go_assert(efb->type_context() == NULL);
+      efb->set_type_context(type);
+
+      init->export_expression(efb);
+
+      efb->set_type_context(NULL);
+    }
+}
+
+// Import a variable declaration.
+
+Statement*
+Variable_declaration_statement::do_import(Import_function_body* ifb,
+					  Location loc)
+{
+  ifb->require_c_string("var ");
+  std::string id = ifb->read_identifier();
+  ifb->require_c_string(" ");
+  Type* type = ifb->read_type();
+  Expression* init = NULL;
+  if (ifb->match_c_string(" = "))
+    {
+      ifb->advance(3);
+      init = Expression::import_expression(ifb, loc);
+    }
+  Variable* var = new Variable(type, init, false, false, false, loc);
+  var->set_is_used();
+  // FIXME: The package we are importing does not yet exist, so we
+  // can't pass the correct package here.  It probably doesn't matter.
+  Named_object* no = ifb->block()->bindings()->add_variable(id, NULL, var);
+  return Statement::make_variable_declaration(no);
+}
+
 // Class Temporary_statement.
 
 // Return the type of the temporary variable.
@@ -340,7 +485,15 @@ Statement::make_variable_declaration(Named_object* var)
 Type*
 Temporary_statement::type() const
 {
-  return this->type_ != NULL ? this->type_ : this->init_->type();
+  Type* type = this->type_ != NULL ? this->type_ : this->init_->type();
+
+  // Temporary variables cannot have a void type.
+  if (type->is_void_type())
+    {
+      go_assert(saw_errors());
+      return Type::make_error_type();
+    }
+  return type;
 }
 
 // Traversal.
@@ -402,22 +555,62 @@ Temporary_statement::do_check_types(Gogo*)
   if (this->type_ != NULL && this->init_ != NULL)
     {
       std::string reason;
-      bool ok;
-      if (this->are_hidden_fields_ok_)
-	ok = Type::are_assignable_hidden_ok(this->type_, this->init_->type(),
-					    &reason);
-      else
-	ok = Type::are_assignable(this->type_, this->init_->type(), &reason);
-      if (!ok)
+      if (!Type::are_assignable(this->type_, this->init_->type(), &reason))
 	{
 	  if (reason.empty())
-	    error_at(this->location(), "incompatible types in assignment");
+	    go_error_at(this->location(), "incompatible types in assignment");
 	  else
-	    error_at(this->location(), "incompatible types in assignment (%s)",
+	    go_error_at(this->location(), "incompatible types in assignment (%s)",
 		     reason.c_str());
 	  this->set_is_error();
 	}
     }
+}
+
+// Flatten a temporary statement: add another temporary when it might
+// be needed for interface conversion.
+
+Statement*
+Temporary_statement::do_flatten(Gogo*, Named_object*, Block*,
+				Statement_inserter* inserter)
+{
+  if (this->type()->is_error_type()
+      || (this->init_ != NULL
+          && this->init_->is_error_expression()))
+    {
+      go_assert(saw_errors());
+      return Statement::make_error_statement(this->location());
+    }
+
+  if (this->type_ != NULL
+      && this->init_ != NULL
+      && !Type::are_identical(this->type_, this->init_->type(),
+			      Type::COMPARE_ERRORS | Type::COMPARE_TAGS,
+			      NULL)
+      && this->init_->type()->interface_type() != NULL
+      && !this->init_->is_variable())
+    {
+      Temporary_statement *temp =
+	Statement::make_temporary(NULL, this->init_, this->location());
+      inserter->insert(temp);
+      this->init_ = Expression::make_temporary_reference(temp,
+							 this->location());
+    }
+  return this;
+}
+
+// Add explicit type conversions.
+
+void
+Temporary_statement::do_add_conversions()
+{
+  if (this->init_ == NULL)
+    return;
+  Type* lt = this->type();
+  Type* rt = this->init_->type();
+  if (!Type::are_identical(lt, rt, 0, NULL)
+      && lt->interface_type() != NULL)
+    this->init_ = Expression::make_cast(lt, this->init_, this->location());
 }
 
 // Convert to backend representation.
@@ -427,29 +620,28 @@ Temporary_statement::do_get_backend(Translate_context* context)
 {
   go_assert(this->bvariable_ == NULL);
 
-  // FIXME: Permitting FUNCTION to be NULL here is a temporary measure
-  // until we have a better representation of the init function.
   Named_object* function = context->function();
-  Bfunction* bfunction;
-  if (function == NULL)
-    bfunction = NULL;
-  else
-    bfunction = tree_to_function(function->func_value()->get_decl());
-
+  go_assert(function != NULL);
+  Bfunction* bfunction = function->func_value()->get_decl();
   Btype* btype = this->type()->get_backend(context->gogo());
 
   Bexpression* binit;
   if (this->init_ == NULL)
     binit = NULL;
   else if (this->type_ == NULL)
-    binit = tree_to_expr(this->init_->get_tree(context));
+    binit = this->init_->get_backend(context);
   else
     {
-      Expression* init = Expression::make_cast(this->type_, this->init_,
-					       this->location());
-      context->gogo()->lower_expression(context->function(), NULL, &init);
-      binit = tree_to_expr(init->get_tree(context));
+      Expression* init = Expression::convert_for_assignment(context->gogo(),
+							    this->type_,
+							    this->init_,
+							    this->location());
+      binit = init->get_backend(context);
     }
+
+  if (binit != NULL)
+    binit = context->backend()->convert_expression(btype, binit,
+                                                   this->location());
 
   Bstatement* statement;
   this->bvariable_ =
@@ -490,7 +682,7 @@ Temporary_statement::do_dump_statement(Ast_dump_context* ast_dump_context) const
       ast_dump_context->ostream() << " = ";
       ast_dump_context->dump_expression(this->init_);
     }
-  ast_dump_context->ostream() << std::endl;
+  ast_dump_context->ostream() << dsuffix(location()) << std::endl;
 }
 
 // Make and initialize a temporary variable in BLOCK.
@@ -502,154 +694,85 @@ Statement::make_temporary(Type* type, Expression* init,
   return new Temporary_statement(type, init, location);
 }
 
-// An assignment statement.
-
-class Assignment_statement : public Statement
-{
- public:
-  Assignment_statement(Expression* lhs, Expression* rhs,
-		       Location location)
-    : Statement(STATEMENT_ASSIGNMENT, location),
-      lhs_(lhs), rhs_(rhs), are_hidden_fields_ok_(false)
-  { }
-
-  // Note that it is OK for this assignment statement to set hidden
-  // fields.
-  void
-  set_hidden_fields_are_ok()
-  { this->are_hidden_fields_ok_ = true; }
-
- protected:
-  int
-  do_traverse(Traverse* traverse);
-
-  bool
-  do_traverse_assignments(Traverse_assignments*);
-
-  void
-  do_determine_types();
-
-  void
-  do_check_types(Gogo*);
-
-  Bstatement*
-  do_get_backend(Translate_context*);
-
-  void
-  do_dump_statement(Ast_dump_context*) const;
-
- private:
-  // Left hand side--the lvalue.
-  Expression* lhs_;
-  // Right hand side--the rvalue.
-  Expression* rhs_;
-  // True if this statement may set hidden fields in the assignment
-  // statement.  This is used for generated method stubs.
-  bool are_hidden_fields_ok_;
-};
-
-// Traversal.
-
-int
-Assignment_statement::do_traverse(Traverse* traverse)
-{
-  if (this->traverse_expression(traverse, &this->lhs_) == TRAVERSE_EXIT)
-    return TRAVERSE_EXIT;
-  return this->traverse_expression(traverse, &this->rhs_);
-}
-
-bool
-Assignment_statement::do_traverse_assignments(Traverse_assignments* tassign)
-{
-  tassign->assignment(&this->lhs_, &this->rhs_);
-  return true;
-}
-
-// Set types for the assignment.
+// Export a temporary statement.
 
 void
-Assignment_statement::do_determine_types()
+Temporary_statement::do_export_statement(Export_function_body* efb)
 {
-  this->lhs_->determine_type_no_context();
-  Type_context context(this->lhs_->type(), false);
-  this->rhs_->determine_type(&context);
-}
-
-// Check types for an assignment.
-
-void
-Assignment_statement::do_check_types(Gogo*)
-{
-  // The left hand side must be either addressable, a map index
-  // expression, or the blank identifier.
-  if (!this->lhs_->is_addressable()
-      && this->lhs_->map_index_expression() == NULL
-      && !this->lhs_->is_sink_expression())
+  unsigned int idx = efb->record_temporary(this);
+  char buf[100];
+  snprintf(buf, sizeof buf, "var $t%u", idx);
+  efb->write_c_string(buf);
+  if (this->type_ != NULL)
     {
-      if (!this->lhs_->type()->is_error())
-	this->report_error(_("invalid left hand side of assignment"));
-      return;
+      efb->write_c_string(" ");
+      efb->write_type(this->type_);
     }
-
-  Type* lhs_type = this->lhs_->type();
-  Type* rhs_type = this->rhs_->type();
-  std::string reason;
-  bool ok;
-  if (this->are_hidden_fields_ok_)
-    ok = Type::are_assignable_hidden_ok(lhs_type, rhs_type, &reason);
-  else
-    ok = Type::are_assignable(lhs_type, rhs_type, &reason);
-  if (!ok)
+  if (this->init_ != NULL)
     {
-      if (reason.empty())
-	error_at(this->location(), "incompatible types in assignment");
-      else
-	error_at(this->location(), "incompatible types in assignment (%s)",
-		 reason.c_str());
-      this->set_is_error();
+      efb->write_c_string(" = ");
+
+      go_assert(efb->type_context() == NULL);
+      efb->set_type_context(this->type_);
+
+      this->init_->export_expression(efb);
+
+      efb->set_type_context(NULL);
     }
-
-  if (lhs_type->is_error() || rhs_type->is_error())
-    this->set_is_error();
 }
 
-// Convert an assignment statement to the backend representation.
-
-Bstatement*
-Assignment_statement::do_get_backend(Translate_context* context)
-{
-  tree rhs_tree = this->rhs_->get_tree(context);
-  if (this->lhs_->is_sink_expression())
-    return context->backend()->expression_statement(tree_to_expr(rhs_tree));
-  tree lhs_tree = this->lhs_->get_tree(context);
-  rhs_tree = Expression::convert_for_assignment(context, this->lhs_->type(),
-						this->rhs_->type(), rhs_tree,
-						this->location());
-  return context->backend()->assignment_statement(tree_to_expr(lhs_tree),
-						  tree_to_expr(rhs_tree),
-						  this->location());
-}
-
-// Dump the AST representation for an assignment statement.
-
-void
-Assignment_statement::do_dump_statement(Ast_dump_context* ast_dump_context)
-    const
-{
-  ast_dump_context->print_indent();
-  ast_dump_context->dump_expression(this->lhs_);
-  ast_dump_context->ostream() << " = " ;
-  ast_dump_context->dump_expression(this->rhs_);
-  ast_dump_context->ostream() << std::endl;
-}
-
-// Make an assignment statement.
+// Import a temporary statement.
 
 Statement*
-Statement::make_assignment(Expression* lhs, Expression* rhs,
-			   Location location)
+Temporary_statement::do_import(Import_function_body* ifb, Location loc)
 {
-  return new Assignment_statement(lhs, rhs, location);
+  ifb->require_c_string("var ");
+  std::string id = ifb->read_identifier();
+  go_assert(id[0] == '$' && id[1] == 't');
+  const char *p = id.c_str();
+  char *end;
+  long idx = strtol(p + 2, &end, 10);
+  if (*end != '\0' || idx > 0x7fffffff)
+    {
+      if (!ifb->saw_error())
+	go_error_at(loc,
+		    ("invalid export data for %qs: "
+		     "bad temporary statement index at %lu"),
+		    ifb->name().c_str(),
+		    static_cast<unsigned long>(ifb->off()));
+      ifb->set_saw_error();
+      return Statement::make_error_statement(loc);
+    }
+
+  Type* type = NULL;
+  if (!ifb->match_c_string(" = "))
+    {
+      ifb->require_c_string(" ");
+      type = ifb->read_type();
+    }
+  Expression* init = NULL;
+  if (ifb->match_c_string(" = "))
+    {
+      ifb->advance(3);
+      init = Expression::import_expression(ifb, loc);
+    }
+  if (type == NULL && init == NULL)
+    {
+      if (!ifb->saw_error())
+	go_error_at(loc,
+		    ("invalid export data for %qs: "
+		     "temporary statement has neither type nor init at %lu"),
+		    ifb->name().c_str(),
+		    static_cast<unsigned long>(ifb->off()));
+      ifb->set_saw_error();
+      return Statement::make_error_statement(loc);
+    }
+
+  Temporary_statement* temp = Statement::make_temporary(type, init, loc);
+
+  ifb->record_temporary(temp, static_cast<unsigned int>(idx));
+
+  return temp;
 }
 
 // The Move_subexpressions class is used to move all top-level
@@ -682,7 +805,9 @@ Move_subexpressions::expression(Expression** pexpr)
 {
   if (this->skip_ > 0)
     --this->skip_;
-  else if ((*pexpr)->temporary_reference_expression() == NULL)
+  else if ((*pexpr)->temporary_reference_expression() == NULL
+	   && !(*pexpr)->is_nil_expression()
+           && !(*pexpr)->is_constant())
     {
       Location loc = (*pexpr)->location();
       Temporary_statement* temp = Statement::make_temporary(NULL, *pexpr, loc);
@@ -731,12 +856,343 @@ Move_ordered_evals::expression(Expression** pexpr)
 
   if ((*pexpr)->must_eval_in_order())
     {
+      Call_expression* call = (*pexpr)->call_expression();
+      if (call != NULL && call->is_multi_value_arg())
+	{
+	  // A call expression which returns multiple results as an argument
+	  // to another call must be handled specially.  We can't create a
+	  // temporary because there is no type to give it.  Instead, group
+	  // the caller and this multi-valued call argument and use a temporary
+	  // variable to hold them.
+	  return TRAVERSE_SKIP_COMPONENTS;
+	}
+
       Location loc = (*pexpr)->location();
       Temporary_statement* temp = Statement::make_temporary(NULL, *pexpr, loc);
       this->block_->add_statement(temp);
       *pexpr = Expression::make_temporary_reference(temp, loc);
     }
   return TRAVERSE_SKIP_COMPONENTS;
+}
+
+// Class Assignment_statement.
+
+// Traversal.
+
+int
+Assignment_statement::do_traverse(Traverse* traverse)
+{
+  if (this->traverse_expression(traverse, &this->lhs_) == TRAVERSE_EXIT)
+    return TRAVERSE_EXIT;
+  return this->traverse_expression(traverse, &this->rhs_);
+}
+
+bool
+Assignment_statement::do_traverse_assignments(Traverse_assignments* tassign)
+{
+  tassign->assignment(&this->lhs_, &this->rhs_);
+  return true;
+}
+
+// Lower an assignment to a map index expression to a runtime function
+// call.  Mark some slice assignments as not requiring a write barrier.
+
+Statement*
+Assignment_statement::do_lower(Gogo* gogo, Named_object*, Block* enclosing,
+			       Statement_inserter*)
+{
+  Map_index_expression* mie = this->lhs_->map_index_expression();
+  if (mie != NULL)
+    {
+      Location loc = this->location();
+
+      Expression* map = mie->map();
+      Map_type* mt = map->type()->map_type();
+      if (mt == NULL)
+	{
+	  go_assert(saw_errors());
+	  return Statement::make_error_statement(loc);
+	}
+
+      Block* b = new Block(enclosing, loc);
+
+      // Move out any subexpressions on the left hand side to make
+      // sure that functions are called in the required order.
+      Move_ordered_evals moe(b);
+      mie->traverse_subexpressions(&moe);
+
+      // Copy the key into a temporary so that we can take its address
+      // without pushing the value onto the heap.
+
+      // var key_temp KEY_TYPE = MAP_INDEX
+      Temporary_statement* key_temp = Statement::make_temporary(mt->key_type(),
+								mie->index(),
+								loc);
+      b->add_statement(key_temp);
+
+      // Copy the value into a temporary to ensure that it is
+      // evaluated before we add the key to the map.  This may matter
+      // if the value is itself a reference to the map.
+
+      // var val_temp VAL_TYPE = RHS
+      Temporary_statement* val_temp = Statement::make_temporary(mt->val_type(),
+								this->rhs_,
+								loc);
+      b->add_statement(val_temp);
+
+      // *mapassign(TYPE, MAP, &key_temp) = RHS
+      Expression* a1 = Expression::make_type_descriptor(mt, loc);
+      Expression* a2 = mie->map();
+      Temporary_reference_expression* ref =
+	Expression::make_temporary_reference(key_temp, loc);
+      Expression* a3 = Expression::make_unary(OPERATOR_AND, ref, loc);
+      Runtime::Function code;
+      Map_type::Map_alg alg = mt->algorithm(gogo);
+      switch (alg)
+        {
+          case Map_type::MAP_ALG_FAST32:
+            {
+              code = Runtime::MAPASSIGN_FAST32;
+              Type* uint32_type = Type::lookup_integer_type("uint32");
+              Type* uint32_ptr_type = Type::make_pointer_type(uint32_type);
+              a3 = Expression::make_unsafe_cast(uint32_ptr_type, a3,
+                                                loc);
+              a3 = Expression::make_dereference(a3,
+                                                Expression::NIL_CHECK_NOT_NEEDED,
+                                                loc);
+              break;
+            }
+          case Map_type::MAP_ALG_FAST64:
+            {
+              code = Runtime::MAPASSIGN_FAST64;
+              Type* uint64_type = Type::lookup_integer_type("uint64");
+              Type* uint64_ptr_type = Type::make_pointer_type(uint64_type);
+              a3 = Expression::make_unsafe_cast(uint64_ptr_type, a3,
+                                                loc);
+              a3 = Expression::make_dereference(a3,
+                                                Expression::NIL_CHECK_NOT_NEEDED,
+                                                loc);
+              break;
+            }
+          case Map_type::MAP_ALG_FAST32PTR:
+          case Map_type::MAP_ALG_FAST64PTR:
+            {
+              code = (alg == Map_type::MAP_ALG_FAST32PTR
+                      ? Runtime::MAPASSIGN_FAST32PTR
+                      : Runtime::MAPASSIGN_FAST64PTR);
+              Type* ptr_type =
+                Type::make_pointer_type(Type::make_void_type());
+              Type* ptr_ptr_type = Type::make_pointer_type(ptr_type);
+              a3 = Expression::make_unsafe_cast(ptr_ptr_type, a3,
+                                                loc);
+              a3 = Expression::make_dereference(a3,
+                                                Expression::NIL_CHECK_NOT_NEEDED,
+                                                loc);
+              break;
+            }
+          case Map_type::MAP_ALG_FASTSTR:
+            code = Runtime::MAPASSIGN_FASTSTR;
+            a3 = ref;
+            break;
+          default:
+            code = Runtime::MAPASSIGN;
+            break;
+        }
+      Expression* call = Runtime::make_call(code, loc, 3,
+					    a1, a2, a3);
+      Type* ptrval_type = Type::make_pointer_type(mt->val_type());
+      call = Expression::make_cast(ptrval_type, call, loc);
+      Expression* indir =
+          Expression::make_dereference(call, Expression::NIL_CHECK_NOT_NEEDED,
+                                       loc);
+      ref = Expression::make_temporary_reference(val_temp, loc);
+      b->add_statement(Statement::make_assignment(indir, ref, loc));
+
+      return Statement::make_block_statement(b, loc);
+    }
+
+  // An assignment of the form s = s[:n] does not require a write
+  // barrier, because the pointer value will not change.
+  Array_index_expression* aie = this->rhs_->array_index_expression();
+  if (aie != NULL
+      && aie->end() != NULL
+      && Expression::is_same_variable(this->lhs_, aie->array()))
+    {
+      Numeric_constant nc;
+      unsigned long ival;
+      if (aie->start()->numeric_constant_value(&nc)
+	  && nc.to_unsigned_long(&ival) == Numeric_constant::NC_UL_VALID
+	  && ival == 0)
+	this->omit_write_barrier_ = true;
+    }
+  String_index_expression* sie = this->rhs_->string_index_expression();
+  if (sie != NULL
+      && sie->end() != NULL
+      && Expression::is_same_variable(this->lhs_, sie->string()))
+    {
+      Numeric_constant nc;
+      unsigned long ival;
+      if (sie->start()->numeric_constant_value(&nc)
+	  && nc.to_unsigned_long(&ival) == Numeric_constant::NC_UL_VALID
+	  && ival == 0)
+        this->omit_write_barrier_ = true;
+    }
+
+  return this;
+}
+
+// Set types for the assignment.
+
+void
+Assignment_statement::do_determine_types()
+{
+  this->lhs_->determine_type_no_context();
+  Type* rhs_context_type = this->lhs_->type();
+  if (rhs_context_type->is_sink_type())
+    rhs_context_type = NULL;
+  Type_context context(rhs_context_type, false);
+  this->rhs_->determine_type(&context);
+}
+
+// Check types for an assignment.
+
+void
+Assignment_statement::do_check_types(Gogo*)
+{
+  // The left hand side must be either addressable, a map index
+  // expression, or the blank identifier.
+  if (!this->lhs_->is_addressable()
+      && this->lhs_->map_index_expression() == NULL
+      && !this->lhs_->is_sink_expression())
+    {
+      if (!this->lhs_->type()->is_error())
+	this->report_error(_("invalid left hand side of assignment"));
+      return;
+    }
+
+  Type* lhs_type = this->lhs_->type();
+  Type* rhs_type = this->rhs_->type();
+
+  // Invalid assignment of nil to the blank identifier.
+  if (lhs_type->is_sink_type()
+      && rhs_type->is_nil_type())
+    {
+      this->report_error(_("use of untyped nil"));
+      return;
+    }
+
+  std::string reason;
+  if (!Type::are_assignable(lhs_type, rhs_type, &reason))
+    {
+      if (reason.empty())
+	go_error_at(this->location(), "incompatible types in assignment");
+      else
+	go_error_at(this->location(), "incompatible types in assignment (%s)",
+		    reason.c_str());
+      this->set_is_error();
+    }
+
+  if (lhs_type->is_error() || rhs_type->is_error())
+    this->set_is_error();
+}
+
+void
+Assignment_statement::do_export_statement(Export_function_body* efb)
+{
+  this->lhs_->export_expression(efb);
+  efb->write_c_string(" = ");
+  this->rhs_->export_expression(efb);
+}
+
+// Flatten an assignment statement.  We may need a temporary for
+// interface conversion.
+
+Statement*
+Assignment_statement::do_flatten(Gogo*, Named_object*, Block*,
+				 Statement_inserter* inserter)
+{
+  if (this->lhs_->is_error_expression()
+      || this->lhs_->type()->is_error_type()
+      || this->rhs_->is_error_expression()
+      || this->rhs_->type()->is_error_type())
+    {
+      go_assert(saw_errors());
+      return Statement::make_error_statement(this->location());
+    }
+
+  if (!this->lhs_->is_sink_expression()
+      && !Type::are_identical(this->lhs_->type(), this->rhs_->type(),
+			      Type::COMPARE_ERRORS | Type::COMPARE_TAGS,
+			      NULL)
+      && this->rhs_->type()->interface_type() != NULL
+      && !this->rhs_->is_variable())
+    {
+      Temporary_statement* temp =
+	Statement::make_temporary(NULL, this->rhs_, this->location());
+      inserter->insert(temp);
+      this->rhs_ = Expression::make_temporary_reference(temp,
+							this->location());
+    }
+  return this;
+}
+
+// Add explicit type conversions.
+
+void
+Assignment_statement::do_add_conversions()
+{
+  Type* lt = this->lhs_->type();
+  Type* rt = this->rhs_->type();
+  if (!Type::are_identical(lt, rt, 0, NULL)
+      && lt->interface_type() != NULL)
+    this->rhs_ = Expression::make_cast(lt, this->rhs_, this->location());
+}
+
+// Convert an assignment statement to the backend representation.
+
+Bstatement*
+Assignment_statement::do_get_backend(Translate_context* context)
+{
+  if (this->lhs_->is_sink_expression())
+    {
+      Bexpression* rhs = this->rhs_->get_backend(context);
+      Bfunction* bfunction = context->function()->func_value()->get_decl();
+      return context->backend()->expression_statement(bfunction, rhs);
+    }
+
+  Bexpression* lhs = this->lhs_->get_backend(context);
+  Expression* conv =
+      Expression::convert_for_assignment(context->gogo(), this->lhs_->type(),
+                                         this->rhs_, this->location());
+  Bexpression* rhs = conv->get_backend(context);
+  Bfunction* bfunction = context->function()->func_value()->get_decl();
+  return context->backend()->assignment_statement(bfunction, lhs, rhs,
+                                                  this->location());
+}
+
+// Dump the AST representation for an assignment statement.
+
+void
+Assignment_statement::do_dump_statement(Ast_dump_context* ast_dump_context)
+    const
+{
+  ast_dump_context->print_indent();
+  ast_dump_context->dump_expression(this->lhs_);
+  ast_dump_context->ostream() << " = " ;
+  ast_dump_context->dump_expression(this->rhs_);
+  ast_dump_context->ostream() << dsuffix(location()) << std::endl;
+}
+
+// Make an assignment statement.
+
+Assignment_statement*
+Statement::make_assignment(Expression* lhs, Expression* rhs,
+			   Location location)
+{
+  Temporary_reference_expression* tre = lhs->temporary_reference_expression();
+  if (tre != NULL)
+    tre->statement()->set_assigned();
+  return new Assignment_statement(lhs, rhs, location);
 }
 
 // An assignment operation statement.
@@ -868,7 +1324,7 @@ Assignment_operation_statement::do_dump_statement(
   ast_dump_context->dump_expression(this->lhs_);
   ast_dump_context->dump_operator(this->op_);
   ast_dump_context->dump_expression(this->rhs_);
-  ast_dump_context->ostream() << std::endl;
+  ast_dump_context->ostream() << dsuffix(location()) << std::endl;
 }
 
 // Make an assignment operation statement.
@@ -890,14 +1346,8 @@ class Tuple_assignment_statement : public Statement
   Tuple_assignment_statement(Expression_list* lhs, Expression_list* rhs,
 			     Location location)
     : Statement(STATEMENT_TUPLE_ASSIGNMENT, location),
-      lhs_(lhs), rhs_(rhs), are_hidden_fields_ok_(false)
+      lhs_(lhs), rhs_(rhs)
   { }
-
-  // Note that it is OK for this assignment statement to set hidden
-  // fields.
-  void
-  set_hidden_fields_are_ok()
-  { this->are_hidden_fields_ok_ = true; }
 
  protected:
   int
@@ -922,9 +1372,6 @@ class Tuple_assignment_statement : public Statement
   Expression_list* lhs_;
   // Right hand side--a list of rvalues.
   Expression_list* rhs_;
-  // True if this statement may set hidden fields in the assignment
-  // statement.  This is used for generated method stubs.
-  bool are_hidden_fields_ok_;
 };
 
 // Traversal.
@@ -974,14 +1421,15 @@ Tuple_assignment_statement::do_lower(Gogo*, Named_object*, Block* enclosing,
 
       if ((*plhs)->is_sink_expression())
 	{
-	  b->add_statement(Statement::make_statement(*prhs, true));
+          if ((*prhs)->type()->is_nil_type())
+            this->report_error(_("use of untyped nil"));
+          else
+            b->add_statement(Statement::make_statement(*prhs, true));
 	  continue;
 	}
 
       Temporary_statement* temp = Statement::make_temporary((*plhs)->type(),
 							    *prhs, loc);
-      if (this->are_hidden_fields_ok_)
-	temp->set_hidden_fields_are_ok();
       b->add_statement(temp);
       temps.push_back(temp);
 
@@ -1004,13 +1452,7 @@ Tuple_assignment_statement::do_lower(Gogo*, Named_object*, Block* enclosing,
 	continue;
 
       Expression* ref = Expression::make_temporary_reference(*ptemp, loc);
-      Statement* s = Statement::make_assignment(*plhs, ref, loc);
-      if (this->are_hidden_fields_ok_)
-	{
-	  Assignment_statement* as = static_cast<Assignment_statement*>(s);
-	  as->set_hidden_fields_are_ok();
-	}
-      b->add_statement(s);
+      b->add_statement(Statement::make_assignment(*plhs, ref, loc));
       ++ptemp;
     }
   go_assert(ptemp == temps.end() || saw_errors());
@@ -1028,7 +1470,7 @@ Tuple_assignment_statement::do_dump_statement(
   ast_dump_context->dump_expression_list(this->lhs_);
   ast_dump_context->ostream() << " = ";
   ast_dump_context->dump_expression_list(this->rhs_);
-  ast_dump_context->ostream()  << std::endl;
+  ast_dump_context->ostream()  << dsuffix(location()) << std::endl;
 }
 
 // Make a tuple assignment statement.
@@ -1094,7 +1536,7 @@ Tuple_map_assignment_statement::do_traverse(Traverse* traverse)
 // Lower a tuple map assignment.
 
 Statement*
-Tuple_map_assignment_statement::do_lower(Gogo*, Named_object*,
+Tuple_map_assignment_statement::do_lower(Gogo* gogo, Named_object*,
 					 Block* enclosing, Statement_inserter*)
 {
   Location loc = this->location();
@@ -1108,6 +1550,13 @@ Tuple_map_assignment_statement::do_lower(Gogo*, Named_object*,
   Map_type* map_type = map_index->get_map_type();
   if (map_type == NULL)
     return Statement::make_error_statement(loc);
+
+  // Avoid copy for string([]byte) conversions used in map keys.
+  // mapaccess doesn't keep the reference, so this is safe.
+  Type_conversion_expression* ce = map_index->index()->conversion_expression();
+  if (ce != NULL && ce->type()->is_string_type()
+      && ce->expr()->type()->is_slice_type())
+    ce->set_no_copy(true);
 
   Block* b = new Block(enclosing, loc);
 
@@ -1125,35 +1574,89 @@ Tuple_map_assignment_statement::do_lower(Gogo*, Named_object*,
     Statement::make_temporary(map_type->key_type(), map_index->index(), loc);
   b->add_statement(key_temp);
 
-  // var val_temp VAL_TYPE
-  Temporary_statement* val_temp =
-    Statement::make_temporary(map_type->val_type(), NULL, loc);
-  b->add_statement(val_temp);
+  // var val_ptr_temp *VAL_TYPE
+  Type* val_ptr_type = Type::make_pointer_type(map_type->val_type());
+  Temporary_statement* val_ptr_temp = Statement::make_temporary(val_ptr_type,
+								NULL, loc);
+  b->add_statement(val_ptr_temp);
 
   // var present_temp bool
   Temporary_statement* present_temp =
-    Statement::make_temporary(Type::lookup_bool_type(), NULL, loc);
+    Statement::make_temporary((this->present_->type()->is_sink_type())
+			      ? Type::make_boolean_type()
+			      : this->present_->type(),
+			      NULL, loc);
   b->add_statement(present_temp);
 
-  // present_temp = mapaccess2(DESCRIPTOR, MAP, &key_temp, &val_temp)
+  // val_ptr_temp, present_temp = mapaccess2(DESCRIPTOR, MAP, &key_temp)
   Expression* a1 = Expression::make_type_descriptor(map_type, loc);
   Expression* a2 = map_index->map();
   Temporary_reference_expression* ref =
     Expression::make_temporary_reference(key_temp, loc);
   Expression* a3 = Expression::make_unary(OPERATOR_AND, ref, loc);
-  ref = Expression::make_temporary_reference(val_temp, loc);
-  Expression* a4 = Expression::make_unary(OPERATOR_AND, ref, loc);
-  Expression* call = Runtime::make_call(Runtime::MAPACCESS2, loc, 4,
-					a1, a2, a3, a4);
-
+  Expression* a4 = map_type->fat_zero_value(gogo);
+  Call_expression* call;
+  if (a4 == NULL)
+    {
+      Runtime::Function code;
+      Map_type::Map_alg alg = map_type->algorithm(gogo);
+      switch (alg)
+        {
+          case Map_type::MAP_ALG_FAST32:
+          case Map_type::MAP_ALG_FAST32PTR:
+            {
+              code = Runtime::MAPACCESS2_FAST32;
+              Type* uint32_type = Type::lookup_integer_type("uint32");
+              Type* uint32_ptr_type = Type::make_pointer_type(uint32_type);
+              a3 = Expression::make_unsafe_cast(uint32_ptr_type, a3,
+                                                loc);
+              a3 = Expression::make_dereference(a3,
+                                                Expression::NIL_CHECK_NOT_NEEDED,
+                                                loc);
+              break;
+            }
+          case Map_type::MAP_ALG_FAST64:
+          case Map_type::MAP_ALG_FAST64PTR:
+            {
+              code = Runtime::MAPACCESS2_FAST64;
+              Type* uint64_type = Type::lookup_integer_type("uint64");
+              Type* uint64_ptr_type = Type::make_pointer_type(uint64_type);
+              a3 = Expression::make_unsafe_cast(uint64_ptr_type, a3,
+                                                loc);
+              a3 = Expression::make_dereference(a3,
+                                                Expression::NIL_CHECK_NOT_NEEDED,
+                                                loc);
+              break;
+            }
+          case Map_type::MAP_ALG_FASTSTR:
+            code = Runtime::MAPACCESS2_FASTSTR;
+            a3 = ref;
+            break;
+          default:
+            code = Runtime::MAPACCESS2;
+            break;
+        }
+      call = Runtime::make_call(code, loc, 3, a1, a2, a3);
+    }
+  else
+    call = Runtime::make_call(Runtime::MAPACCESS2_FAT, loc, 4, a1, a2, a3, a4);
+  ref = Expression::make_temporary_reference(val_ptr_temp, loc);
+  ref->set_is_lvalue();
+  Expression* res = Expression::make_call_result(call, 0);
+  res = Expression::make_unsafe_cast(val_ptr_type, res, loc);
+  Statement* s = Statement::make_assignment(ref, res, loc);
+  b->add_statement(s);
   ref = Expression::make_temporary_reference(present_temp, loc);
   ref->set_is_lvalue();
-  Statement* s = Statement::make_assignment(ref, call, loc);
+  res = Expression::make_call_result(call, 1);
+  s = Statement::make_assignment(ref, res, loc);
   b->add_statement(s);
 
-  // val = val_temp
-  ref = Expression::make_temporary_reference(val_temp, loc);
-  s = Statement::make_assignment(this->val_, ref, loc);
+  // val = *val__ptr_temp
+  ref = Expression::make_temporary_reference(val_ptr_temp, loc);
+  Expression* ind =
+      Expression::make_dereference(ref, Expression::NIL_CHECK_NOT_NEEDED, loc);
+  s = Statement::make_assignment(this->val_, ind, loc);
   b->add_statement(s);
 
   // present = present_temp
@@ -1176,7 +1679,7 @@ Tuple_map_assignment_statement::do_dump_statement(
   ast_dump_context->dump_expression(this->present_);
   ast_dump_context->ostream() << " = ";
   ast_dump_context->dump_expression(this->map_index_);
-  ast_dump_context->ostream() << std::endl;
+  ast_dump_context->ostream() << dsuffix(location()) << std::endl;
 }
 
 // Make a map assignment statement which returns a pair of values.
@@ -1187,140 +1690,6 @@ Statement::make_tuple_map_assignment(Expression* val, Expression* present,
 				     Location location)
 {
   return new Tuple_map_assignment_statement(val, present, map_index, location);
-}
-
-// Assign a pair of entries to a map.
-//   m[k] = v, p
-
-class Map_assignment_statement : public Statement
-{
- public:
-  Map_assignment_statement(Expression* map_index,
-			   Expression* val, Expression* should_set,
-			   Location location)
-    : Statement(STATEMENT_MAP_ASSIGNMENT, location),
-      map_index_(map_index), val_(val), should_set_(should_set)
-  { }
-
- protected:
-  int
-  do_traverse(Traverse* traverse);
-
-  bool
-  do_traverse_assignments(Traverse_assignments*)
-  { go_unreachable(); }
-
-  Statement*
-  do_lower(Gogo*, Named_object*, Block*, Statement_inserter*);
-
-  Bstatement*
-  do_get_backend(Translate_context*)
-  { go_unreachable(); }
-
-  void
-  do_dump_statement(Ast_dump_context*) const;
-
- private:
-  // A reference to the map index which should be set or deleted.
-  Expression* map_index_;
-  // The value to add to the map.
-  Expression* val_;
-  // Whether or not to add the value.
-  Expression* should_set_;
-};
-
-// Traverse a map assignment.
-
-int
-Map_assignment_statement::do_traverse(Traverse* traverse)
-{
-  if (this->traverse_expression(traverse, &this->map_index_) == TRAVERSE_EXIT
-      || this->traverse_expression(traverse, &this->val_) == TRAVERSE_EXIT)
-    return TRAVERSE_EXIT;
-  return this->traverse_expression(traverse, &this->should_set_);
-}
-
-// Lower a map assignment to a function call.
-
-Statement*
-Map_assignment_statement::do_lower(Gogo*, Named_object*, Block* enclosing,
-				   Statement_inserter*)
-{
-  Location loc = this->location();
-
-  Map_index_expression* map_index = this->map_index_->map_index_expression();
-  if (map_index == NULL)
-    {
-      this->report_error(_("expected map index on left hand side"));
-      return Statement::make_error_statement(loc);
-    }
-  Map_type* map_type = map_index->get_map_type();
-  if (map_type == NULL)
-    return Statement::make_error_statement(loc);
-
-  Block* b = new Block(enclosing, loc);
-
-  // Evaluate the map first to get order of evaluation right.
-  // map_temp := m // we are evaluating m[k] = v, p
-  Temporary_statement* map_temp = Statement::make_temporary(map_type,
-							    map_index->map(),
-							    loc);
-  b->add_statement(map_temp);
-
-  // var key_temp MAP_KEY_TYPE = k
-  Temporary_statement* key_temp =
-    Statement::make_temporary(map_type->key_type(), map_index->index(), loc);
-  b->add_statement(key_temp);
-
-  // var val_temp MAP_VAL_TYPE = v
-  Temporary_statement* val_temp =
-    Statement::make_temporary(map_type->val_type(), this->val_, loc);
-  b->add_statement(val_temp);
-
-  // var insert_temp bool = p
-  Temporary_statement* insert_temp =
-    Statement::make_temporary(Type::lookup_bool_type(), this->should_set_,
-			      loc);
-  b->add_statement(insert_temp);
-
-  // mapassign2(map_temp, &key_temp, &val_temp, p)
-  Expression* p1 = Expression::make_temporary_reference(map_temp, loc);
-  Expression* ref = Expression::make_temporary_reference(key_temp, loc);
-  Expression* p2 = Expression::make_unary(OPERATOR_AND, ref, loc);
-  ref = Expression::make_temporary_reference(val_temp, loc);
-  Expression* p3 = Expression::make_unary(OPERATOR_AND, ref, loc);
-  Expression* p4 = Expression::make_temporary_reference(insert_temp, loc);
-  Expression* call = Runtime::make_call(Runtime::MAPASSIGN2, loc, 4,
-					p1, p2, p3, p4);
-  Statement* s = Statement::make_statement(call, true);
-  b->add_statement(s);
-
-  return Statement::make_block_statement(b, loc);
-}
-
-// Dump the AST representation for a map assignment statement.
-
-void
-Map_assignment_statement::do_dump_statement(
-    Ast_dump_context* ast_dump_context) const
-{
-  ast_dump_context->print_indent();
-  ast_dump_context->dump_expression(this->map_index_);
-  ast_dump_context->ostream() << " = ";
-  ast_dump_context->dump_expression(this->val_);
-  ast_dump_context->ostream() << ", ";
-  ast_dump_context->dump_expression(this->should_set_);
-  ast_dump_context->ostream() << std::endl;
-}
-
-// Make a statement which assigns a pair of entries to a map.
-
-Statement*
-Statement::make_map_assignment(Expression* map_index,
-			       Expression* val, Expression* should_set,
-			       Location location)
-{
-  return new Map_assignment_statement(map_index, val, should_set, location);
 }
 
 // A tuple assignment from a receive statement.
@@ -1408,17 +1777,18 @@ Tuple_receive_assignment_statement::do_lower(Gogo*, Named_object*,
 
   // var closed_temp bool
   Temporary_statement* closed_temp =
-    Statement::make_temporary(Type::lookup_bool_type(), NULL, loc);
+    Statement::make_temporary((this->closed_->type()->is_sink_type())
+			      ? Type::make_boolean_type()
+			      : this->closed_->type(),
+			      NULL, loc);
   b->add_statement(closed_temp);
 
-  // closed_temp = chanrecv2(type, channel, &val_temp)
-  Expression* td = Expression::make_type_descriptor(this->channel_->type(),
-						    loc);
+  // closed_temp = chanrecv2(channel, &val_temp)
   Temporary_reference_expression* ref =
     Expression::make_temporary_reference(val_temp, loc);
   Expression* p2 = Expression::make_unary(OPERATOR_AND, ref, loc);
   Expression* call = Runtime::make_call(Runtime::CHANRECV2,
-					loc, 3, td, this->channel_, p2);
+					loc, 2, this->channel_, p2);
   ref = Expression::make_temporary_reference(closed_temp, loc);
   ref->set_is_lvalue();
   Statement* s = Statement::make_assignment(ref, call, loc);
@@ -1449,7 +1819,7 @@ Tuple_receive_assignment_statement::do_dump_statement(
   ast_dump_context->dump_expression(this->closed_);
   ast_dump_context->ostream() << " <- ";
   ast_dump_context->dump_expression(this->channel_);
-  ast_dump_context->ostream() << std::endl;
+  ast_dump_context->ostream() << dsuffix(location()) << std::endl;
 }
 
 // Make a nonblocking receive statement.
@@ -1643,7 +2013,7 @@ Tuple_type_guard_assignment_statement::do_dump_statement(
   ast_dump_context->dump_expression(this->expr_);
   ast_dump_context->ostream() << " . ";
   ast_dump_context->dump_type(this->type_);
-  ast_dump_context->ostream()  << std::endl;
+  ast_dump_context->ostream()  << dsuffix(location()) << std::endl;
 }
 
 // Make an assignment from a type guard to a pair of variables.
@@ -1657,46 +2027,23 @@ Statement::make_tuple_type_guard_assignment(Expression* val, Expression* ok,
 						   location);
 }
 
-// An expression statement.
+// Class Expression_statement.
 
-class Expression_statement : public Statement
+// Constructor.
+
+Expression_statement::Expression_statement(Expression* expr, bool is_ignored)
+  : Statement(STATEMENT_EXPRESSION, expr->location()),
+    expr_(expr), is_ignored_(is_ignored)
 {
- public:
-  Expression_statement(Expression* expr, bool is_ignored)
-    : Statement(STATEMENT_EXPRESSION, expr->location()),
-      expr_(expr), is_ignored_(is_ignored)
-  { }
+}
 
-  Expression*
-  expr()
-  { return this->expr_; }
+// Determine types.
 
- protected:
-  int
-  do_traverse(Traverse* traverse)
-  { return this->traverse_expression(traverse, &this->expr_); }
-
-  void
-  do_determine_types()
-  { this->expr_->determine_type_no_context(); }
-
-  void
-  do_check_types(Gogo*);
-
-  bool
-  do_may_fall_through() const;
-
-  Bstatement*
-  do_get_backend(Translate_context* context);
-
-  void
-  do_dump_statement(Ast_dump_context*) const;
-
- private:
-  Expression* expr_;
-  // Whether the value of this expression is being explicitly ignored.
-  bool is_ignored_;
-};
+void
+Expression_statement::do_determine_types()
+{
+  this->expr_->determine_type_no_context();
+}
 
 // Check the types of an expression statement.  The only check we do
 // is to possibly give an error about discarding the value of the
@@ -1709,8 +2056,8 @@ Expression_statement::do_check_types(Gogo*)
     this->expr_->discarding_value();
 }
 
-// An expression statement may fall through unless it is a call to a
-// function which does not return.
+// An expression statement is only a terminating statement if it is
+// a call to panic.
 
 bool
 Expression_statement::do_may_fall_through() const
@@ -1719,25 +2066,39 @@ Expression_statement::do_may_fall_through() const
   if (call != NULL)
     {
       const Expression* fn = call->fn();
-      const Func_expression* fe = fn->func_expression();
-      if (fe != NULL)
+      // panic is still an unknown named object.
+      const Unknown_expression* ue = fn->unknown_expression();
+      if (ue != NULL)
 	{
-	  const Named_object* no = fe->named_object();
+	  Named_object* no = ue->named_object();
 
-	  Function_type* fntype;
-	  if (no->is_function())
-	    fntype = no->func_value()->type();
-	  else if (no->is_function_declaration())
-	    fntype = no->func_declaration_value()->type();
-	  else
-	    fntype = NULL;
+          if (no->is_unknown())
+            no = no->unknown_value()->real_named_object();
+          if (no != NULL)
+            {
+              Function_type* fntype;
+              if (no->is_function())
+                fntype = no->func_value()->type();
+              else if (no->is_function_declaration())
+                fntype = no->func_declaration_value()->type();
+              else
+                fntype = NULL;
 
-	  // The builtin function panic does not return.
-	  if (fntype != NULL && fntype->is_builtin() && no->name() == "panic")
-	    return false;
+              // The builtin function panic does not return.
+              if (fntype != NULL && fntype->is_builtin() && no->name() == "panic")
+                return false;
+            }
 	}
     }
   return true;
+}
+
+// Export an expression statement.
+
+void
+Expression_statement::do_export_statement(Export_function_body* efb)
+{
+  this->expr_->export_expression(efb);
 }
 
 // Convert to backend representation.
@@ -1745,8 +2106,9 @@ Expression_statement::do_may_fall_through() const
 Bstatement*
 Expression_statement::do_get_backend(Translate_context* context)
 {
-  tree expr_tree = this->expr_->get_tree(context);
-  return context->backend()->expression_statement(tree_to_expr(expr_tree));
+  Bexpression* bexpr = this->expr_->get_backend(context);
+  Bfunction* bfunction = context->function()->func_value()->get_decl();
+  return context->backend()->expression_statement(bfunction, bexpr);
 }
 
 // Dump the AST representation for an expression statement
@@ -1757,7 +2119,7 @@ Expression_statement::do_dump_statement(Ast_dump_context* ast_dump_context)
 {
   ast_dump_context->print_indent();
   ast_dump_context->dump_expression(expr_);
-  ast_dump_context->ostream() << std::endl;
+  ast_dump_context->ostream() << dsuffix(location()) << std::endl;
 }
 
 // Make an expression statement from an Expression.
@@ -1768,39 +2130,72 @@ Statement::make_statement(Expression* expr, bool is_ignored)
   return new Expression_statement(expr, is_ignored);
 }
 
-// A block statement--a list of statements which may include variable
-// definitions.
+// Export data for a block.
 
-class Block_statement : public Statement
+void
+Block_statement::do_export_statement(Export_function_body* efb)
 {
- public:
-  Block_statement(Block* block, Location location)
-    : Statement(STATEMENT_BLOCK, location),
-      block_(block)
-  { }
+  Block_statement::export_block(efb, this->block_,
+				this->is_lowered_for_statement_);
+}
 
- protected:
-  int
-  do_traverse(Traverse* traverse)
-  { return this->block_->traverse(traverse); }
+void
+Block_statement::export_block(Export_function_body* efb, Block* block,
+			      bool is_lowered_for_statement)
+{
+  // We are already indented to the right position.
+  char buf[50];
+  efb->write_c_string("{");
+  if (is_lowered_for_statement)
+    efb->write_c_string(" /*for*/");
+  snprintf(buf, sizeof buf, " //%d\n",
+	   Linemap::location_to_line(block->start_location()));
+  efb->write_c_string(buf);
 
-  void
-  do_determine_types()
-  { this->block_->determine_types(); }
+  block->export_block(efb);
+  // The indentation is correct for the statements in the block, so
+  // subtract one for the closing curly brace.
+  efb->decrement_indent();
+  efb->indent();
+  efb->write_c_string("}");
+  // Increment back to the value the caller thinks it has.
+  efb->increment_indent();
+}
 
-  bool
-  do_may_fall_through() const
-  { return this->block_->may_fall_through(); }
+// Import a block statement, returning the block.
 
-  Bstatement*
-  do_get_backend(Translate_context* context);
-
-  void
-  do_dump_statement(Ast_dump_context*) const;
-
- private:
-  Block* block_;
-};
+Block*
+Block_statement::do_import(Import_function_body* ifb, Location loc,
+			   bool* is_lowered_for_statement)
+{
+  go_assert(ifb->match_c_string("{"));
+  *is_lowered_for_statement = false;
+  if (ifb->match_c_string(" /*for*/"))
+    {
+      ifb->advance(8);
+      *is_lowered_for_statement = true;
+    }
+  size_t nl = ifb->body().find('\n', ifb->off());
+  if (nl == std::string::npos)
+    {
+      if (!ifb->saw_error())
+	go_error_at(ifb->location(),
+		    "import error: no newline after %<{%> at %lu",
+		    static_cast<unsigned long>(ifb->off()));
+      ifb->set_saw_error();
+      return NULL;
+    }
+  ifb->set_off(nl + 1);
+  ifb->increment_indent();
+  Block* block = new Block(ifb->block(), loc);
+  ifb->begin_block(block);
+  bool ok = Block::import_block(block, ifb, loc);
+  ifb->finish_block();
+  ifb->decrement_indent();
+  if (!ok)
+    return NULL;
+  return block;
+}
 
 // Convert a block to the backend representation of a statement.
 
@@ -1821,7 +2216,7 @@ Block_statement::do_dump_statement(Ast_dump_context*) const
 
 // Make a block statement.
 
-Statement*
+Block_statement*
 Statement::make_block_statement(Block* block, Location location)
 {
   return new Block_statement(block, location);
@@ -1869,12 +2264,12 @@ Statement*
 Inc_dec_statement::do_lower(Gogo*, Named_object*, Block*, Statement_inserter*)
 {
   Location loc = this->location();
-
-  mpz_t oval;
-  mpz_init_set_ui(oval, 1UL);
-  Expression* oexpr = Expression::make_integer(&oval, NULL, loc);
-  mpz_clear(oval);
-
+  if (!this->expr_->type()->is_numeric_type())
+    {
+      this->report_error("increment or decrement of non-numeric type");
+      return Statement::make_error_statement(loc);
+    }
+  Expression* oexpr = Expression::make_integer_ul(1, this->expr_->type(), loc);
   Operator op = this->is_inc_ ? OPERATOR_PLUSEQ : OPERATOR_MINUSEQ;
   return Statement::make_assignment_operation(op, this->expr_, oexpr, loc);
 }
@@ -1886,7 +2281,7 @@ Inc_dec_statement::do_dump_statement(Ast_dump_context* ast_dump_context) const
 {
   ast_dump_context->print_indent();
   ast_dump_context->dump_expression(expr_);
-  ast_dump_context->ostream() << (is_inc_? "++": "--") << std::endl;
+  ast_dump_context->ostream() << (is_inc_? "++": "--") << dsuffix(location()) << std::endl;
 }
 
 // Make an increment statement.
@@ -1955,10 +2350,15 @@ Thunk_statement::is_simple(Function_type* fntype) const
 	      && results->begin()->type()->points_to() == NULL)))
     return false;
 
-  // If this calls something which is not a simple function, then we
+  // If this calls something that is not a simple function, then we
   // need a thunk.
   Expression* fn = this->call_->call_expression()->fn();
-  if (fn->interface_field_reference_expression() != NULL)
+  if (fn->func_expression() == NULL)
+    return false;
+
+  // If the function uses a closure, then we need a thunk.  FIXME: We
+  // could accept a zero argument function with a closure.
+  if (fn->func_expression()->closure() != NULL)
     return false;
 
   return true;
@@ -2145,7 +2545,16 @@ Thunk_statement::simplify_statement(Gogo* gogo, Named_object* function,
 
   Location location = this->location();
 
-  std::string thunk_name = Gogo::thunk_name();
+  bool is_constant_function = this->is_constant_function();
+  Temporary_statement* fn_temp = NULL;
+  if (!is_constant_function)
+    {
+      fn_temp = Statement::make_temporary(NULL, fn, location);
+      block->insert_statement_before(block->statements()->size() - 1, fn_temp);
+      fn = Expression::make_temporary_reference(fn_temp, location);
+    }
+
+  std::string thunk_name = gogo->thunk_name();
 
   // Build the thunk.
   this->build_thunk(gogo, thunk_name);
@@ -2156,7 +2565,7 @@ Thunk_statement::simplify_statement(Gogo* gogo, Named_object* function,
   // argument to the thunk.
 
   Expression_list* vals = new Expression_list();
-  if (!this->is_constant_function())
+  if (!is_constant_function)
     vals->push_back(fn);
 
   if (interface_method != NULL)
@@ -2167,7 +2576,11 @@ Thunk_statement::simplify_statement(Gogo* gogo, Named_object* function,
       for (Expression_list::const_iterator p = ce->args()->begin();
 	   p != ce->args()->end();
 	   ++p)
-	vals->push_back(*p);
+	{
+	  if ((*p)->is_constant())
+	    continue;
+	  vals->push_back(*p);
+	}
     }
 
   // Build the struct.
@@ -2176,7 +2589,27 @@ Thunk_statement::simplify_statement(Gogo* gogo, Named_object* function,
 					      location);
 
   // Allocate the initialized struct on the heap.
-  constructor = Expression::make_heap_composite(constructor, location);
+  constructor = Expression::make_heap_expression(constructor, location);
+  if ((Node::make_node(this)->encoding() & ESCAPE_MASK) == Node::ESCAPE_NONE)
+    constructor->heap_expression()->set_allocate_on_stack();
+
+  // Throw an error if the function is nil.  This is so that for `go
+  // nil` we get a backtrace from the go statement, rather than a
+  // useless backtrace from the brand new goroutine.
+  Expression* param = constructor;
+  if (!is_constant_function && this->classification() == STATEMENT_GO)
+    {
+      fn = Expression::make_temporary_reference(fn_temp, location);
+      Expression* nil = Expression::make_nil(location);
+      Expression* isnil = Expression::make_binary(OPERATOR_EQEQ, fn, nil,
+						  location);
+      Expression* crash = Runtime::make_call(Runtime::PANIC_GO_NIL,
+					     location, 0);
+      crash = Expression::make_conditional(isnil, crash,
+					   Expression::make_nil(location),
+					   location);
+      param = Expression::make_compound(crash, constructor, location);
+    }
 
   // Look up the thunk.
   Named_object* named_thunk = gogo->lookup(thunk_name, NULL);
@@ -2186,7 +2619,7 @@ Thunk_statement::simplify_statement(Gogo* gogo, Named_object* function,
   Expression* func = Expression::make_func_reference(named_thunk, NULL,
 						     location);
   Expression_list* params = new Expression_list();
-  params->push_back(constructor);
+  params->push_back(param);
   Call_expression* call = Expression::make_call(func, params, false, location);
 
   // Build the simple go or defer statement.
@@ -2194,7 +2627,11 @@ Thunk_statement::simplify_statement(Gogo* gogo, Named_object* function,
   if (this->classification() == STATEMENT_GO)
     s = Statement::make_go_statement(call, location);
   else if (this->classification() == STATEMENT_DEFER)
-    s = Statement::make_defer_statement(call, location);
+    {
+      s = Statement::make_defer_statement(call, location);
+      if ((Node::make_node(this)->encoding() & ESCAPE_MASK) == Node::ESCAPE_NONE)
+        s->defer_statement()->set_on_stack();
+    }
   else
     go_unreachable();
 
@@ -2270,6 +2707,9 @@ Thunk_statement::build_struct(Function_type* fntype)
 	   p != args->end();
 	   ++p, ++i)
 	{
+	  if ((*p)->is_constant())
+	    continue;
+
 	  char buf[50];
 	  this->thunk_field_param(i, buf, sizeof buf);
 	  fields->push_back(Struct_field(Typed_identifier(buf, (*p)->type(),
@@ -2277,7 +2717,9 @@ Thunk_statement::build_struct(Function_type* fntype)
 	}
     }
 
-  return Type::make_struct_type(fields, location);
+  Struct_type *st = Type::make_struct_type(fields, location);
+  st->set_is_struct_incomparable();
+  return st;
 }
 
 // Build the thunk we are going to call.  This is a brand new, albeit
@@ -2343,7 +2785,7 @@ Thunk_statement::build_thunk(Gogo* gogo, const std::string& thunk_name)
     {
       retaddr_label = gogo->add_label_reference("retaddr", location, false);
       Expression* arg = Expression::make_label_addr(retaddr_label, location);
-      Expression* call = Runtime::make_call(Runtime::SET_DEFER_RETADDR,
+      Expression* call = Runtime::make_call(Runtime::SETDEFERRETADDR,
 					    location, 1, arg);
 
       // This is a hack to prevent the middle-end from deleting the
@@ -2358,6 +2800,8 @@ Thunk_statement::build_thunk(Gogo* gogo, const std::string& thunk_name)
 						  location);
       s->determine_types();
       gogo->add_statement(s);
+
+      function->func_value()->set_calls_defer_retaddr();
     }
 
   // Get a reference to the parameter.
@@ -2368,8 +2812,10 @@ Thunk_statement::build_thunk(Gogo* gogo, const std::string& thunk_name)
   // ones used in build_struct.
   Expression* thunk_parameter = Expression::make_var_reference(named_parameter,
 							       location);
-  thunk_parameter = Expression::make_unary(OPERATOR_MULT, thunk_parameter,
-					   location);
+  thunk_parameter =
+      Expression::make_dereference(thunk_parameter,
+                                   Expression::NIL_CHECK_NOT_NEEDED,
+                                   location);
 
   Interface_field_reference_expression* interface_method =
     ce->fn()->interface_field_reference_expression();
@@ -2407,21 +2853,38 @@ Thunk_statement::build_thunk(Gogo* gogo, const std::string& thunk_name)
     ++p;
   bool is_recover_call = ce->is_recover_call();
   Expression* recover_arg = NULL;
-  for (; p != fields->end(); ++p, ++next_index)
+
+  const Expression_list* args = ce->args();
+  if (args != NULL)
     {
-      Expression* thunk_param = Expression::make_var_reference(named_parameter,
-							       location);
-      thunk_param = Expression::make_unary(OPERATOR_MULT, thunk_param,
-					   location);
-      Expression* param = Expression::make_field_reference(thunk_param,
-							   next_index,
-							   location);
-      if (!is_recover_call)
-	call_params->push_back(param);
-      else
+      for (Expression_list::const_iterator arg = args->begin();
+	   arg != args->end();
+	   ++arg)
 	{
-	  go_assert(call_params->empty());
-	  recover_arg = param;
+	  Expression* param;
+	  if ((*arg)->is_constant())
+	    param = *arg;
+	  else
+	    {
+	      Expression* thunk_param =
+		Expression::make_var_reference(named_parameter, location);
+             thunk_param =
+                 Expression::make_dereference(thunk_param,
+                                              Expression::NIL_CHECK_NOT_NEEDED,
+                                              location);
+	      param = Expression::make_field_reference(thunk_param,
+						       next_index,
+						       location);
+	      ++next_index;
+	    }
+
+	  if (!is_recover_call)
+	    call_params->push_back(param);
+	  else
+	    {
+	      go_assert(call_params->empty());
+	      recover_arg = param;
+	    }
 	}
     }
 
@@ -2465,24 +2928,32 @@ Thunk_statement::build_thunk(Gogo* gogo, const std::string& thunk_name)
   // just for the call statement now.  The other types are known.
   call_statement->determine_types();
 
-  if (may_call_recover || recover_arg != NULL)
+  gogo->add_conversions_in_block(b);
+
+  if (may_call_recover
+      || recover_arg != NULL
+      || this->classification() == STATEMENT_GO)
     {
       // Dig up the call expression, which may have been changed
       // during lowering.
       go_assert(call_statement->classification() == STATEMENT_EXPRESSION);
       Expression_statement* es =
 	static_cast<Expression_statement*>(call_statement);
-      Call_expression* ce = es->expr()->call_expression();
+      ce = es->expr()->call_expression();
       if (ce == NULL)
 	go_assert(saw_errors());
       else
 	{
 	  if (may_call_recover)
 	    ce->set_is_deferred();
+	  if (this->classification() == STATEMENT_GO)
+	    ce->set_is_concurrent();
 	  if (recover_arg != NULL)
 	    ce->set_recover_arg(recover_arg);
 	}
     }
+
+  gogo->flatten_block(function, b);
 
   // That is all the thunk has to do.
   gogo->finish_function(location);
@@ -2498,7 +2969,11 @@ Thunk_statement::get_fn_and_arg(Expression** pfn, Expression** parg)
 
   Call_expression* ce = this->call_->call_expression();
 
-  *pfn = ce->fn();
+  Expression* fn = ce->fn();
+  Func_expression* fe = fn->func_expression();
+  go_assert(fe != NULL);
+  *pfn = Expression::make_func_code_reference(fe->named_object(),
+					      fe->location());
 
   const Expression_list* args = ce->args();
   if (args == NULL || args->empty())
@@ -2524,9 +2999,9 @@ Go_statement::do_get_backend(Translate_context* context)
 
   Expression* call = Runtime::make_call(Runtime::GO, this->location(), 2,
 					fn, arg);
-  tree call_tree = call->get_tree(context);
-  Bexpression* call_bexpr = tree_to_expr(call_tree);
-  return context->backend()->expression_statement(call_bexpr);
+  Bexpression* bcall = call->get_backend(context);
+  Bfunction* bfunction = context->function()->func_value()->get_decl();
+  return context->backend()->expression_statement(bfunction, bcall);
 }
 
 // Dump the AST representation for go statement.
@@ -2537,7 +3012,7 @@ Go_statement::do_dump_statement(Ast_dump_context* ast_dump_context) const
   ast_dump_context->print_indent();
   ast_dump_context->ostream() << "go ";
   ast_dump_context->dump_expression(this->call());
-  ast_dump_context->ostream() << std::endl;
+  ast_dump_context->ostream() << dsuffix(location()) << std::endl;
 }
 
 // Make a go statement.
@@ -2561,11 +3036,43 @@ Defer_statement::do_get_backend(Translate_context* context)
   Location loc = this->location();
   Expression* ds = context->function()->func_value()->defer_stack(loc);
 
-  Expression* call = Runtime::make_call(Runtime::DEFER, loc, 3,
-					ds, fn, arg);
-  tree call_tree = call->get_tree(context);
-  Bexpression* call_bexpr = tree_to_expr(call_tree);
-  return context->backend()->expression_statement(call_bexpr);
+  Expression* call;
+  if (this->on_stack_)
+    {
+      if (context->gogo()->debug_optimization())
+        go_debug(loc, "stack allocated defer");
+
+      Type* defer_type = Defer_statement::defer_struct_type();
+      Expression* defer = Expression::make_allocation(defer_type, loc);
+      defer->allocation_expression()->set_allocate_on_stack();
+      defer->allocation_expression()->set_no_zero();
+      call = Runtime::make_call(Runtime::DEFERPROCSTACK, loc, 4,
+                                defer, ds, fn, arg);
+    }
+  else
+    call = Runtime::make_call(Runtime::DEFERPROC, loc, 3,
+                              ds, fn, arg);
+  Bexpression* bcall = call->get_backend(context);
+  Bfunction* bfunction = context->function()->func_value()->get_decl();
+  return context->backend()->expression_statement(bfunction, bcall);
+}
+
+Type*
+Defer_statement::defer_struct_type()
+{
+  Type* ptr_type = Type::make_pointer_type(Type::make_void_type());
+  Type* uintptr_type = Type::lookup_integer_type("uintptr");
+  Type* bool_type = Type::make_boolean_type();
+  return Type::make_builtin_struct_type(9,
+                                        "link", ptr_type,
+                                        "frame", ptr_type,
+                                        "panicStack", ptr_type,
+                                        "_panic", ptr_type,
+                                        "pfn", uintptr_type,
+                                        "arg", ptr_type,
+                                        "retaddr", uintptr_type,
+                                        "makefunccanrecover", bool_type,
+                                        "heap", bool_type);
 }
 
 // Dump the AST representation for defer statement.
@@ -2576,7 +3083,7 @@ Defer_statement::do_dump_statement(Ast_dump_context* ast_dump_context) const
   ast_dump_context->print_indent();
   ast_dump_context->ostream() << "defer ";
   ast_dump_context->dump_expression(this->call());
-  ast_dump_context->ostream() << std::endl;
+  ast_dump_context->ostream() << dsuffix(location()) << std::endl;
 }
 
 // Make a defer statement.
@@ -2655,6 +3162,7 @@ Return_statement::do_lower(Gogo*, Named_object* function, Block* enclosing,
       && vals->front()->call_expression() != NULL)
     {
       Call_expression* call = vals->front()->call_expression();
+      call->set_expected_result_count(results_count);
       delete vals;
       vals = new Expression_list;
       for (size_t i = 0; i < results_count; ++i)
@@ -2697,12 +3205,7 @@ Return_statement::do_lower(Gogo*, Named_object* function, Block* enclosing,
       e->determine_type(&type_context);
 
       std::string reason;
-      bool ok;
-      if (this->are_hidden_fields_ok_)
-	ok = Type::are_assignable_hidden_ok(rvtype, e->type(), &reason);
-      else
-	ok = Type::are_assignable(rvtype, e->type(), &reason);
-      if (ok)
+      if (Type::are_assignable(rvtype, e->type(), &reason))
 	{
 	  Expression* ve = Expression::make_var_reference(rv, e->location());
 	  lhs->push_back(ve);
@@ -2711,11 +3214,12 @@ Return_statement::do_lower(Gogo*, Named_object* function, Block* enclosing,
       else
 	{
 	  if (reason.empty())
-	    error_at(e->location(), "incompatible type for return value %d", i);
+	    go_error_at(e->location(),
+			"incompatible type for return value %d", i);
 	  else
-	    error_at(e->location(),
-		     "incompatible type for return value %d (%s)",
-		     i, reason.c_str());
+	    go_error_at(e->location(),
+			"incompatible type for return value %d (%s)",
+			i, reason.c_str());
 	}
     }
   go_assert(lhs->size() == rhs->size());
@@ -2724,28 +3228,13 @@ Return_statement::do_lower(Gogo*, Named_object* function, Block* enclosing,
     ;
   else if (lhs->size() == 1)
     {
-      Statement* s = Statement::make_assignment(lhs->front(), rhs->front(),
-						loc);
-      if (this->are_hidden_fields_ok_)
-	{
-	  Assignment_statement* as = static_cast<Assignment_statement*>(s);
-	  as->set_hidden_fields_are_ok();
-	}
-      b->add_statement(s);
+      b->add_statement(Statement::make_assignment(lhs->front(), rhs->front(),
+						  loc));
       delete lhs;
       delete rhs;
     }
   else
-    {
-      Statement* s = Statement::make_tuple_assignment(lhs, rhs, loc);
-      if (this->are_hidden_fields_ok_)
-	{
-	  Tuple_assignment_statement* tas =
-	    static_cast<Tuple_assignment_statement*>(s);
-	  tas->set_hidden_fields_are_ok();
-	}
-      b->add_statement(s);
-    }
+    b->add_statement(Statement::make_tuple_assignment(lhs, rhs, loc));
 
   b->add_statement(this);
 
@@ -2762,8 +3251,6 @@ Return_statement::do_get_backend(Translate_context* context)
   Location loc = this->location();
 
   Function* function = context->function()->func_value();
-  tree fndecl = function->get_decl();
-
   Function::Results* results = function->result_variables();
   std::vector<Bexpression*> retvals;
   if (results != NULL && !results->empty())
@@ -2774,12 +3261,22 @@ Return_statement::do_get_backend(Translate_context* context)
 	   p++)
 	{
 	  Expression* vr = Expression::make_var_reference(*p, loc);
-	  retvals.push_back(tree_to_expr(vr->get_tree(context)));
+	  retvals.push_back(vr->get_backend(context));
 	}
     }
 
-  return context->backend()->return_statement(tree_to_function(fndecl),
+  return context->backend()->return_statement(function->get_decl(),
 					      retvals, loc);
+}
+
+// Export a return statement.  At this point all the expressions have
+// been converted to assignments to the result variables, so this is
+// simple.
+
+void
+Return_statement::do_export_statement(Export_function_body* efb)
+{
+  efb->write_c_string("return");
 }
 
 // Dump the AST representation for a return statement.
@@ -2790,7 +3287,7 @@ Return_statement::do_dump_statement(Ast_dump_context* ast_dump_context) const
   ast_dump_context->print_indent();
   ast_dump_context->ostream() << "return " ;
   ast_dump_context->dump_expression_list(this->vals_);
-  ast_dump_context->ostream() << std::endl;
+  ast_dump_context->ostream() << dsuffix(location()) << std::endl;
 }
 
 // Make a return statement.
@@ -2800,6 +3297,28 @@ Statement::make_return_statement(Expression_list* vals,
 				 Location location)
 {
   return new Return_statement(vals, location);
+}
+
+// Make a statement that returns the result of a call expression.
+
+Statement*
+Statement::make_return_from_call(Call_expression* call, Location location)
+{
+  size_t rc = call->result_count();
+  if (rc == 0)
+    return Statement::make_statement(call, true);
+  else
+    {
+      Expression_list* vals = new Expression_list();
+      if (rc == 1)
+	vals->push_back(call);
+      else
+	{
+	  for (size_t i = 0; i < rc; ++i)
+	    vals->push_back(Expression::make_call_result(call, i));
+	}
+      return Statement::make_return_statement(vals, location);
+    }
 }
 
 // A break or continue statement.
@@ -2851,7 +3370,7 @@ Bc_statement::do_dump_statement(Ast_dump_context* ast_dump_context) const
       ast_dump_context->ostream() << " ";
       ast_dump_context->dump_label_name(this->label_);
     }
-  ast_dump_context->ostream() << std::endl;
+  ast_dump_context->ostream() << dsuffix(location()) << std::endl;
 }
 
 // Make a break statement.
@@ -2871,37 +3390,13 @@ Statement::make_continue_statement(Unnamed_label* label,
   return new Bc_statement(false, label, location);
 }
 
-// A goto statement.
+// Class Goto_statement.
 
-class Goto_statement : public Statement
+int
+Goto_statement::do_traverse(Traverse*)
 {
- public:
-  Goto_statement(Label* label, Location location)
-    : Statement(STATEMENT_GOTO, location),
-      label_(label)
-  { }
-
- protected:
-  int
-  do_traverse(Traverse*)
-  { return TRAVERSE_CONTINUE; }
-
-  void
-  do_check_types(Gogo*);
-
-  bool
-  do_may_fall_through() const
-  { return false; }
-
-  Bstatement*
-  do_get_backend(Translate_context*);
-
-  void
-  do_dump_statement(Ast_dump_context*) const;
-
- private:
-  Label* label_;
-};
+  return TRAVERSE_CONTINUE;
+}
 
 // Check types for a label.  There aren't any types per se, but we use
 // this to give an error if the label was never defined.
@@ -2911,8 +3406,8 @@ Goto_statement::do_check_types(Gogo*)
 {
   if (!this->label_->is_defined())
     {
-      error_at(this->location(), "reference to undefined label %qs",
-	       Gogo::message_name(this->label_->name()).c_str());
+      go_error_at(this->location(), "reference to undefined label %qs",
+		  Gogo::message_name(this->label_->name()).c_str());
       this->set_is_error();
     }
 }
@@ -2926,13 +3421,68 @@ Goto_statement::do_get_backend(Translate_context* context)
   return context->backend()->goto_statement(blabel, this->location());
 }
 
+// Export a goto statement.
+
+void
+Goto_statement::do_export_statement(Export_function_body *efb)
+{
+  efb->write_c_string("goto ");
+  efb->write_string(this->label_->name());
+}
+
+// Import a goto or goto unnamed statement.
+
+Statement*
+Goto_statement::do_import(Import_function_body* ifb, Location loc)
+{
+  ifb->require_c_string("goto ");
+  std::string id = ifb->read_identifier();
+  if (id[0] != '$')
+    {
+      Function* fn = ifb->function()->func_value();
+      Label* label = fn->add_label_reference(ifb->gogo(), id, loc, false);
+      return Statement::make_goto_statement(label, loc);
+    }
+  else
+    {
+      if (id[1] != 'l')
+	{
+	  if (!ifb->saw_error())
+	    go_error_at(loc,
+			("invalid export data for %qs: "
+			 "bad unnamed label at %lu"),
+			ifb->name().c_str(),
+			static_cast<unsigned long>(ifb->off()));
+	  ifb->set_saw_error();
+	  return Statement::make_error_statement(loc);
+	}
+      const char* p = id.c_str();
+      char* end;
+      long idx = strtol(p + 2, &end, 10);
+      if (*end != '\0' || idx > 0x7fffffff)
+	{
+	  if (!ifb->saw_error())
+	    go_error_at(loc,
+			("invalid export data for %qs: "
+			 "bad unnamed label index at %lu"),
+			ifb->name().c_str(),
+			static_cast<unsigned long>(ifb->off()));
+	  ifb->set_saw_error();
+	  return Statement::make_error_statement(loc);
+	}
+
+      Unnamed_label* label = ifb->unnamed_label(idx, loc);
+      return Statement::make_goto_unnamed_statement(label, loc);
+    }
+}
+
 // Dump the AST representation for a goto statement.
 
 void
 Goto_statement::do_dump_statement(Ast_dump_context* ast_dump_context) const
 {
   ast_dump_context->print_indent();
-  ast_dump_context->ostream() << "goto " << this->label_->name() << std::endl;
+  ast_dump_context->ostream() << "goto " << this->label_->name() << dsuffix(location()) << std::endl;
 }
 
 // Make a goto statement.
@@ -2943,35 +3493,32 @@ Statement::make_goto_statement(Label* label, Location location)
   return new Goto_statement(label, location);
 }
 
-// A goto statement to an unnamed label.
+// Class Goto_unnamed_statement.
 
-class Goto_unnamed_statement : public Statement
+int
+Goto_unnamed_statement::do_traverse(Traverse*)
 {
- public:
-  Goto_unnamed_statement(Unnamed_label* label, Location location)
-    : Statement(STATEMENT_GOTO_UNNAMED, location),
-      label_(label)
-  { }
+  return TRAVERSE_CONTINUE;
+}
 
- protected:
-  int
-  do_traverse(Traverse*)
-  { return TRAVERSE_CONTINUE; }
+// Convert the goto unnamed statement to the backend representation.
 
-  bool
-  do_may_fall_through() const
-  { return false; }
+Bstatement*
+Goto_unnamed_statement::do_get_backend(Translate_context* context)
+{
+  return this->label_->get_goto(context, this->location());
+}
 
-  Bstatement*
-  do_get_backend(Translate_context* context)
-  { return this->label_->get_goto(context, this->location()); }
+// Export a goto unnamed statement.
 
-  void
-  do_dump_statement(Ast_dump_context*) const;
-
- private:
-  Unnamed_label* label_;
-};
+void
+Goto_unnamed_statement::do_export_statement(Export_function_body *efb)
+{
+  unsigned int index = efb->unnamed_label_index(this->label_);
+  char buf[100];
+  snprintf(buf, sizeof buf, "goto $l%u", index);
+  efb->write_c_string(buf);
+}
 
 // Dump the AST representation for an unnamed goto statement
 
@@ -2982,7 +3529,7 @@ Goto_unnamed_statement::do_dump_statement(
   ast_dump_context->print_indent();
   ast_dump_context->ostream() << "goto ";
   ast_dump_context->dump_label_name(this->label_);
-  ast_dump_context->ostream() << std::endl;
+  ast_dump_context->ostream() << dsuffix(location()) << std::endl;
 }
 
 // Make a goto statement to an unnamed label.
@@ -3010,8 +3557,72 @@ Label_statement::do_traverse(Traverse*)
 Bstatement*
 Label_statement::do_get_backend(Translate_context* context)
 {
+  if (this->label_->is_dummy_label())
+    {
+      Bexpression* bce = context->backend()->boolean_constant_expression(false);
+      Bfunction* bfunction = context->function()->func_value()->get_decl();
+      return context->backend()->expression_statement(bfunction, bce);
+    }
   Blabel* blabel = this->label_->get_backend_label(context);
   return context->backend()->label_definition_statement(blabel);
+}
+
+// Export a label.
+
+void
+Label_statement::do_export_statement(Export_function_body* efb)
+{
+  if (this->label_->is_dummy_label())
+    return;
+  // We use a leading colon, not a trailing one, to simplify import.
+  efb->write_c_string(":");
+  efb->write_string(this->label_->name());
+}
+
+// Import a label or an unnamed label.
+
+Statement*
+Label_statement::do_import(Import_function_body* ifb, Location loc)
+{
+  ifb->require_c_string(":");
+  std::string id = ifb->read_identifier();
+  if (id[0] != '$')
+    {
+      Function* fn = ifb->function()->func_value();
+      Label* label = fn->add_label_definition(ifb->gogo(), id, loc);
+      return Statement::make_label_statement(label, loc);
+    }
+  else
+    {
+      if (id[1] != 'l')
+	{
+	  if (!ifb->saw_error())
+	    go_error_at(loc,
+			("invalid export data for %qs: "
+			 "bad unnamed label at %lu"),
+			ifb->name().c_str(),
+			static_cast<unsigned long>(ifb->off()));
+	  ifb->set_saw_error();
+	  return Statement::make_error_statement(loc);
+	}
+      const char* p = id.c_str();
+      char* end;
+      long idx = strtol(p + 2, &end, 10);
+      if (*end != '\0' || idx > 0x7fffffff)
+	{
+	  if (!ifb->saw_error())
+	    go_error_at(loc,
+			("invalid export data for %qs: "
+			 "bad unnamed label index at %lu"),
+			ifb->name().c_str(),
+			static_cast<unsigned long>(ifb->off()));
+	  ifb->set_saw_error();
+	  return Statement::make_error_statement(loc);
+	}
+
+      Unnamed_label* label = ifb->unnamed_label(idx, loc);
+      return Statement::make_unnamed_label_statement(label);
+    }
 }
 
 // Dump the AST for a label definition statement.
@@ -3020,7 +3631,7 @@ void
 Label_statement::do_dump_statement(Ast_dump_context* ast_dump_context) const
 {
   ast_dump_context->print_indent();
-  ast_dump_context->ostream() << this->label_->name() << ":" << std::endl;
+  ast_dump_context->ostream() << this->label_->name() << ":" << dsuffix(location()) << std::endl;
 }
 
 // Make a label statement.
@@ -3031,32 +3642,38 @@ Statement::make_label_statement(Label* label, Location location)
   return new Label_statement(label, location);
 }
 
-// An unnamed label statement.
+// Class Unnamed_label_statement.
 
-class Unnamed_label_statement : public Statement
+Unnamed_label_statement::Unnamed_label_statement(Unnamed_label* label)
+  : Statement(STATEMENT_UNNAMED_LABEL, label->location()),
+    label_(label)
+{ }
+
+int
+Unnamed_label_statement::do_traverse(Traverse*)
 {
- public:
-  Unnamed_label_statement(Unnamed_label* label)
-    : Statement(STATEMENT_UNNAMED_LABEL, label->location()),
-      label_(label)
-  { }
+  return TRAVERSE_CONTINUE;
+}
 
- protected:
-  int
-  do_traverse(Traverse*)
-  { return TRAVERSE_CONTINUE; }
+// Get the backend definition for this unnamed label statement.
 
-  Bstatement*
-  do_get_backend(Translate_context* context)
-  { return this->label_->get_definition(context); }
+Bstatement*
+Unnamed_label_statement::do_get_backend(Translate_context* context)
+{
+  return this->label_->get_definition(context);
+}
 
-  void
-  do_dump_statement(Ast_dump_context*) const;
+// Export an unnamed label.
 
- private:
-  // The label.
-  Unnamed_label* label_;
-};
+void
+Unnamed_label_statement::do_export_statement(Export_function_body* efb)
+{
+  unsigned int index = efb->unnamed_label_index(this->label_);
+  char buf[50];
+  // We use a leading colon, not a trailing one, to simplify import.
+  snprintf(buf, sizeof buf, ":$l%u", index);
+  efb->write_c_string(buf);
+}
 
 // Dump the AST representation for an unnamed label definition statement.
 
@@ -3066,7 +3683,7 @@ Unnamed_label_statement::do_dump_statement(Ast_dump_context* ast_dump_context)
 {
   ast_dump_context->print_indent();
   ast_dump_context->dump_label_name(this->label_);
-  ast_dump_context->ostream() << ":" << std::endl;
+  ast_dump_context->ostream() << ":" << dsuffix(location()) << std::endl;
 }
 
 // Make an unnamed label statement.
@@ -3077,41 +3694,7 @@ Statement::make_unnamed_label_statement(Unnamed_label* label)
   return new Unnamed_label_statement(label);
 }
 
-// An if statement.
-
-class If_statement : public Statement
-{
- public:
-  If_statement(Expression* cond, Block* then_block, Block* else_block,
-	       Location location)
-    : Statement(STATEMENT_IF, location),
-      cond_(cond), then_block_(then_block), else_block_(else_block)
-  { }
-
- protected:
-  int
-  do_traverse(Traverse*);
-
-  void
-  do_determine_types();
-
-  void
-  do_check_types(Gogo*);
-
-  bool
-  do_may_fall_through() const;
-
-  Bstatement*
-  do_get_backend(Translate_context*);
-
-  void
-  do_dump_statement(Ast_dump_context*) const;
-
- private:
-  Expression* cond_;
-  Block* then_block_;
-  Block* else_block_;
-};
+// Class If_statement.
 
 // Traversal.
 
@@ -3168,14 +3751,105 @@ If_statement::do_get_backend(Translate_context* context)
 {
   go_assert(this->cond_->type()->is_boolean_type()
 	     || this->cond_->type()->is_error());
-  tree cond_tree = this->cond_->get_tree(context);
-  Bexpression* cond_expr = tree_to_expr(cond_tree);
+  Bexpression* cond = this->cond_->get_backend(context);
   Bblock* then_block = this->then_block_->get_backend(context);
   Bblock* else_block = (this->else_block_ == NULL
 			? NULL
 			: this->else_block_->get_backend(context));
-  return context->backend()->if_statement(cond_expr, then_block,
-					  else_block, this->location());
+  Bfunction* bfunction = context->function()->func_value()->get_decl();
+  return context->backend()->if_statement(bfunction,
+                                          cond, then_block, else_block,
+					  this->location());
+}
+
+// Export an if statement.
+
+void
+If_statement::do_export_statement(Export_function_body* efb)
+{
+  efb->write_c_string("if ");
+  this->cond_->export_expression(efb);
+  efb->write_c_string(" ");
+  Block_statement::export_block(efb, this->then_block_, false);
+  if (this->else_block_ != NULL)
+    {
+      efb->write_c_string(" else ");
+      Block_statement::export_block(efb, this->else_block_, false);
+    }
+}
+
+// Import an if statement.
+
+Statement*
+If_statement::do_import(Import_function_body* ifb, Location loc)
+{
+  ifb->require_c_string("if ");
+
+  Expression* cond = Expression::import_expression(ifb, loc);
+  ifb->require_c_string(" ");
+
+  if (!ifb->match_c_string("{"))
+    {
+      if (!ifb->saw_error())
+	go_error_at(ifb->location(),
+		    "import error for %qs: no block for if statement at %lu",
+		    ifb->name().c_str(),
+		    static_cast<unsigned long>(ifb->off()));
+      ifb->set_saw_error();
+      return Statement::make_error_statement(loc);
+    }
+
+  bool is_lowered_for_statement;
+  Block* then_block = Block_statement::do_import(ifb, loc,
+						 &is_lowered_for_statement);
+  if (then_block == NULL)
+    return Statement::make_error_statement(loc);
+  if (is_lowered_for_statement)
+    {
+      if (!ifb->saw_error())
+	go_error_at(ifb->location(),
+		    ("import error for %qs: "
+		     "unexpected lowered for in if statement at %lu"),
+		    ifb->name().c_str(),
+		    static_cast<unsigned long>(ifb->off()));
+      ifb->set_saw_error();
+      return Statement::make_error_statement(loc);
+    }
+
+  Block* else_block = NULL;
+  if (ifb->match_c_string(" else "))
+    {
+      ifb->advance(6);
+      if (!ifb->match_c_string("{"))
+	{
+	  if (!ifb->saw_error())
+	    go_error_at(ifb->location(),
+			("import error for %qs: no else block "
+			 "for if statement at %lu"),
+			ifb->name().c_str(),
+			static_cast<unsigned long>(ifb->off()));
+	  ifb->set_saw_error();
+	  return Statement::make_error_statement(loc);
+	}
+
+      else_block = Block_statement::do_import(ifb, loc,
+					      &is_lowered_for_statement);
+      if (else_block == NULL)
+	return Statement::make_error_statement(loc);
+      if (is_lowered_for_statement)
+	{
+	  if (!ifb->saw_error())
+	    go_error_at(ifb->location(),
+			("import error for %qs: "
+			 "unexpected lowered for in if statement at %lu"),
+			ifb->name().c_str(),
+			static_cast<unsigned long>(ifb->off()));
+	  ifb->set_saw_error();
+	  return Statement::make_error_statement(loc);
+	}
+    }
+
+  return Statement::make_if_statement(cond, then_block, else_block, loc);
 }
 
 // Dump the AST representation for an if statement
@@ -3186,7 +3860,7 @@ If_statement::do_dump_statement(Ast_dump_context* ast_dump_context) const
   ast_dump_context->print_indent();
   ast_dump_context->ostream() << "if ";
   ast_dump_context->dump_expression(this->cond_);
-  ast_dump_context->ostream() << std::endl;
+  ast_dump_context->ostream() << dsuffix(location()) << std::endl;
   if (ast_dump_context->dump_subblocks())
     {
       ast_dump_context->dump_block(this->then_block_);
@@ -3385,8 +4059,8 @@ Case_clauses::Case_clause::check_types(Type* type)
 	  if (!Type::are_assignable(type, (*p)->type(), NULL)
 	      && !Type::are_assignable((*p)->type(), type, NULL))
 	    {
-	      error_at((*p)->location(),
-		       "type mismatch between switch value and case clause");
+	      go_error_at((*p)->location(),
+			  "type mismatch between switch value and case clause");
 	      return false;
 	    }
 	}
@@ -3440,7 +4114,7 @@ Case_clauses::Case_clause::get_backend(Translate_context* context,
 		  continue;
 		}
 	      go_assert(nc.type() != NULL);
-	      e = Expression::make_integer(&ival, nc.type(), e->location());
+	      e = Expression::make_integer_z(&ival, nc.type(), e->location());
 	      mpz_clear(ival);
 	    }
 
@@ -3449,13 +4123,10 @@ Case_clauses::Case_clause::get_backend(Translate_context* context,
 	  if (!ins.second)
 	    {
 	      // Value was already present.
-	      error_at(this->location_, "duplicate case in switch");
+	      go_error_at(this->location_, "duplicate case in switch");
 	      e = Expression::make_error(this->location_);
 	    }
-
-	  tree case_tree = e->get_tree(context);
-	  Bexpression* case_expr = tree_to_expr(case_tree);
-	  cases->push_back(case_expr);
+	  cases->push_back(e->get_backend(context));
 	}
     }
 
@@ -3503,7 +4174,7 @@ Case_clauses::Case_clause::dump_clause(Ast_dump_context* ast_dump_context)
   if (this->is_fallthrough_)
     {
       ast_dump_context->print_indent();
-      ast_dump_context->ostream() <<  " (fallthrough)" << std::endl;
+      ast_dump_context->ostream() <<  " (fallthrough)" << dsuffix(location()) << std::endl;
     }
 }
 
@@ -3663,6 +4334,12 @@ Case_clauses::get_backend(Translate_context* context,
       std::vector<Bexpression*> cases;
       Bstatement* stat = p->get_backend(context, break_label, &case_constants,
 					&cases);
+      // The final clause can't fall through.
+      if (i == c - 1 && p->is_fallthrough())
+        {
+          go_assert(saw_errors());
+          stat = context->backend()->error_statement();
+        }
       (*all_cases)[i].swap(cases);
       (*all_statements)[i] = stat;
     }
@@ -3701,9 +4378,6 @@ class Constant_switch_statement : public Statement
 
   void
   do_check_types(Gogo*);
-
-  bool
-  do_may_fall_through() const;
 
   Bstatement*
   do_get_backend(Translate_context*);
@@ -3748,29 +4422,12 @@ Constant_switch_statement::do_check_types(Gogo*)
     this->set_is_error();
 }
 
-// Return whether this switch may fall through.
-
-bool
-Constant_switch_statement::do_may_fall_through() const
-{
-  if (this->clauses_ == NULL)
-    return true;
-
-  // If we have a break label, then some case needed it.  That implies
-  // that the switch statement as a whole can fall through.
-  if (this->break_label_ != NULL)
-    return true;
-
-  return this->clauses_->may_fall_through();
-}
-
 // Convert to GENERIC.
 
 Bstatement*
 Constant_switch_statement::do_get_backend(Translate_context* context)
 {
-  tree switch_val_tree = this->val_->get_tree(context);
-  Bexpression* switch_val_expr = tree_to_expr(switch_val_tree);
+  Bexpression* switch_val_expr = this->val_->get_backend(context);
 
   Unnamed_label* break_label = this->break_label_;
   if (break_label == NULL)
@@ -3781,8 +4438,10 @@ Constant_switch_statement::do_get_backend(Translate_context* context)
   this->clauses_->get_backend(context, break_label, &all_cases,
 			      &all_statements);
 
+  Bfunction* bfunction = context->function()->func_value()->get_decl();
   Bstatement* switch_statement;
-  switch_statement = context->backend()->switch_statement(switch_val_expr,
+  switch_statement = context->backend()->switch_statement(bfunction,
+							  switch_val_expr,
 							  all_cases,
 							  all_statements,
 							  this->location());
@@ -3837,7 +4496,10 @@ Switch_statement::do_lower(Gogo*, Named_object*, Block* enclosing,
   if (this->val_ != NULL
       && (this->val_->is_error_expression()
 	  || this->val_->type()->is_error()))
-    return Statement::make_error_statement(loc);
+    {
+      go_assert(saw_errors());
+      return Statement::make_error_statement(loc);
+    }
 
   if (this->val_ != NULL
       && this->val_->type()->integer_type() != NULL
@@ -3851,8 +4513,8 @@ Switch_statement::do_lower(Gogo*, Named_object*, Block* enclosing,
       && !Type::are_compatible_for_comparison(true, this->val_->type(),
 					      Type::make_nil_type(), NULL))
     {
-      error_at(this->val_->location(),
-	       "cannot switch on value whose type that may not be compared");
+      go_error_at(this->val_->location(),
+		  "cannot switch on value whose type that may not be compared");
       return Statement::make_error_statement(loc);
     }
 
@@ -3870,7 +4532,11 @@ Switch_statement::do_lower(Gogo*, Named_object*, Block* enclosing,
   Expression* val = this->val_;
   if (val == NULL)
     val = Expression::make_boolean(true, loc);
-  Temporary_statement* val_temp = Statement::make_temporary(NULL, val, loc);
+
+  Type* type = val->type();
+  if (type->is_abstract())
+    type = type->make_non_abstract_type();
+  Temporary_statement* val_temp = Statement::make_temporary(type, val, loc);
   b->add_statement(val_temp);
 
   this->clauses_->lower(b, val_temp, this->break_label());
@@ -3905,12 +4571,28 @@ Switch_statement::do_dump_statement(Ast_dump_context* ast_dump_context) const
     }
   if (ast_dump_context->dump_subblocks())
     {
-      ast_dump_context->ostream() << " {" << std::endl;
+      ast_dump_context->ostream() << " {" << dsuffix(location()) << std::endl;
       this->clauses_->dump_clauses(ast_dump_context);
       ast_dump_context->print_indent();
       ast_dump_context->ostream() << "}";
     }
   ast_dump_context->ostream() << std::endl;
+}
+
+// Return whether this switch may fall through.
+
+bool
+Switch_statement::do_may_fall_through() const
+{
+  if (this->clauses_ == NULL)
+    return true;
+
+  // If we have a break label, then some case needed it.  That implies
+  // that the switch statement as a whole can fall through.
+  if (this->break_label_ != NULL)
+    return true;
+
+  return this->clauses_->may_fall_through();
 }
 
 // Make a switch statement.
@@ -3966,10 +4648,10 @@ Type_case_clauses::Type_case_clause::lower(Type* switch_val_type,
 								      &reason))
 	{
 	  if (reason.empty())
-	    error_at(this->location_, "impossible type switch case");
+	    go_error_at(this->location_, "impossible type switch case");
 	  else
-	    error_at(this->location_, "impossible type switch case (%s)",
-		     reason.c_str());
+	    go_error_at(this->location_, "impossible type switch case (%s)",
+			reason.c_str());
 	}
 
       Expression* ref = Expression::make_temporary_reference(descriptor_temp,
@@ -3983,11 +4665,12 @@ Type_case_clauses::Type_case_clause::lower(Type* switch_val_type,
 	cond = Expression::make_binary(OPERATOR_EQEQ, ref,
 				       Expression::make_nil(loc),
 				       loc);
+      else if (type->interface_type() == NULL)
+        cond = Expression::make_binary(OPERATOR_EQEQ, ref,
+                                       Expression::make_type_descriptor(type, loc),
+                                       loc);
       else
-	cond = Runtime::make_call((type->interface_type() == NULL
-				   ? Runtime::IFACETYPEEQ
-				   : Runtime::IFACEI2TP),
-				  loc, 2,
+	cond = Runtime::make_call(Runtime::IFACET2IP, loc, 2,
 				  Expression::make_type_descriptor(type, loc),
 				  ref);
 
@@ -4052,6 +4735,27 @@ Type_case_clauses::Type_case_clause::lower(Type* switch_val_type,
     }
 }
 
+// Return true if this type clause may fall through to the statements
+// following the switch.
+
+bool
+Type_case_clauses::Type_case_clause::may_fall_through() const
+{
+  if (this->is_fallthrough_)
+    {
+      // This case means that we automatically fall through to the
+      // next case (it's used for T1 in case T1, T2:).  It does not
+      // mean that we fall through to the end of the type switch as a
+      // whole.  There is sure to be a next case and that next case
+      // will determine whether we fall through to the statements
+      // after the type switch.
+      return false;
+    }
+  if (this->statements_ == NULL)
+    return true;
+  return this->statements_->may_fall_through();
+}
+
 // Dump the AST representation for a type case clause
 
 void
@@ -4113,7 +4817,7 @@ Type_case_clauses::check_duplicates() const
 	t = Type::make_nil_type();
       std::pair<Types_seen::iterator, bool> ins = types_seen.insert(t);
       if (!ins.second)
-	error_at(p->location(), "duplicate type in switch");
+	go_error_at(p->location(), "duplicate type in switch");
     }
 }
 
@@ -4150,6 +4854,25 @@ Type_case_clauses::lower(Type* switch_val_type, Block* b,
 			NULL);
 }
 
+// Return true if these clauses may fall through to the statements
+// following the switch statement.
+
+bool
+Type_case_clauses::may_fall_through() const
+{
+  bool found_default = false;
+  for (Type_clauses::const_iterator p = this->clauses_.begin();
+       p != this->clauses_.end();
+       ++p)
+    {
+      if (p->may_fall_through())
+	return true;
+      if (p->is_default())
+	found_default = true;
+    }
+  return !found_default;
+}
+
 // Dump the AST representation for case clauses (from a switch statement)
 
 void
@@ -4168,11 +4891,8 @@ Type_case_clauses::dump_clauses(Ast_dump_context* ast_dump_context) const
 int
 Type_switch_statement::do_traverse(Traverse* traverse)
 {
-  if (this->var_ == NULL)
-    {
-      if (this->traverse_expression(traverse, &this->expr_) == TRAVERSE_EXIT)
-	return TRAVERSE_EXIT;
-    }
+  if (this->traverse_expression(traverse, &this->expr_) == TRAVERSE_EXIT)
+    return TRAVERSE_EXIT;
   if (this->clauses_ != NULL)
     return this->clauses_->traverse(traverse);
   return TRAVERSE_CONTINUE;
@@ -4195,10 +4915,7 @@ Type_switch_statement::do_lower(Gogo*, Named_object*, Block* enclosing,
 
   Block* b = new Block(enclosing, loc);
 
-  Type* val_type = (this->var_ != NULL
-		    ? this->var_->var_value()->type()
-		    : this->expr_->type());
-
+  Type* val_type = this->expr_->type();
   if (val_type->interface_type() == NULL)
     {
       if (!val_type->is_error())
@@ -4206,28 +4923,23 @@ Type_switch_statement::do_lower(Gogo*, Named_object*, Block* enclosing,
       return Statement::make_error_statement(loc);
     }
 
+  Temporary_statement* val_temp =
+    Statement::make_temporary(NULL, this->expr_, loc);
+  b->add_statement(val_temp);
+
   // var descriptor_temp DESCRIPTOR_TYPE
   Type* descriptor_type = Type::make_type_descriptor_ptr_type();
   Temporary_statement* descriptor_temp =
     Statement::make_temporary(descriptor_type, NULL, loc);
   b->add_statement(descriptor_temp);
 
-  // descriptor_temp = ifacetype(val_temp) FIXME: This should be
-  // inlined.
-  bool is_empty = val_type->interface_type()->is_empty();
-  Expression* ref;
-  if (this->var_ == NULL)
-    ref = this->expr_;
-  else
-    ref = Expression::make_var_reference(this->var_, loc);
-  Expression* call = Runtime::make_call((is_empty
-					 ? Runtime::EFACETYPE
-					 : Runtime::IFACETYPE),
-					loc, 1, ref);
+  // descriptor_temp = ifacetype(val_temp)
+  Expression* ref = Expression::make_temporary_reference(val_temp, loc);
+  Expression* td = Expression::get_interface_type_descriptor(ref);
   Temporary_reference_expression* lhs =
     Expression::make_temporary_reference(descriptor_temp, loc);
   lhs->set_is_lvalue();
-  Statement* s = Statement::make_assignment(lhs, call, loc);
+  Statement* s = Statement::make_assignment(lhs, td, loc);
   b->add_statement(s);
 
   if (this->clauses_ != NULL)
@@ -4237,6 +4949,22 @@ Type_switch_statement::do_lower(Gogo*, Named_object*, Block* enclosing,
   b->add_statement(s);
 
   return Statement::make_block_statement(b, loc);
+}
+
+// Return whether this switch may fall through.
+
+bool
+Type_switch_statement::do_may_fall_through() const
+{
+  if (this->clauses_ == NULL)
+    return true;
+
+  // If we have a break label, then some case needed it.  That implies
+  // that the switch statement as a whole can fall through.
+  if (this->break_label_ != NULL)
+    return true;
+
+  return this->clauses_->may_fall_through();
 }
 
 // Return the break label for this type switch statement, creating it
@@ -4257,12 +4985,14 @@ Type_switch_statement::do_dump_statement(Ast_dump_context* ast_dump_context)
     const
 {
   ast_dump_context->print_indent();
-  ast_dump_context->ostream() << "switch " << this->var_->name() << " = ";
+  ast_dump_context->ostream() << "switch ";
+  if (!this->name_.empty())
+    ast_dump_context->ostream() << this->name_ << " = ";
   ast_dump_context->dump_expression(this->expr_);
   ast_dump_context->ostream() << " .(type)";
   if (ast_dump_context->dump_subblocks())
     {
-      ast_dump_context->ostream() << " {" << std::endl;
+      ast_dump_context->ostream() << " {" << dsuffix(location()) << std::endl;
       this->clauses_->dump_clauses(ast_dump_context);
       ast_dump_context->ostream() << "}";
     }
@@ -4272,10 +5002,10 @@ Type_switch_statement::do_dump_statement(Ast_dump_context* ast_dump_context)
 // Make a type switch statement.
 
 Type_switch_statement*
-Statement::make_type_switch_statement(Named_object* var, Expression* expr,
+Statement::make_type_switch_statement(const std::string& name, Expression* expr,
 				      Location location)
 {
-  return new Type_switch_statement(var, expr, location);
+  return new Type_switch_statement(name, expr, location);
 }
 
 // Class Send_statement.
@@ -4317,7 +5047,7 @@ Send_statement::do_check_types(Gogo*)
   Channel_type* channel_type = type->channel_type();
   if (channel_type == NULL)
     {
-      error_at(this->location(), "left operand of %<<-%> must be channel");
+      go_error_at(this->location(), "left operand of %<<-%> must be channel");
       this->set_is_error();
       return;
     }
@@ -4334,6 +5064,48 @@ Send_statement::do_check_types(Gogo*)
     }
 }
 
+// Flatten a send statement.  We may need a temporary for interface
+// conversion.
+
+Statement*
+Send_statement::do_flatten(Gogo*, Named_object*, Block*,
+			   Statement_inserter* inserter)
+{
+  if (this->channel_->is_error_expression()
+      || this->channel_->type()->is_error_type())
+    {
+      go_assert(saw_errors());
+      return Statement::make_error_statement(this->location());
+    }
+
+  Type* element_type = this->channel_->type()->channel_type()->element_type();
+  if (!Type::are_identical(element_type, this->val_->type(),
+			   Type::COMPARE_ERRORS | Type::COMPARE_TAGS,
+			   NULL)
+      && this->val_->type()->interface_type() != NULL
+      && !this->val_->is_variable())
+    {
+      Temporary_statement* temp =
+	Statement::make_temporary(NULL, this->val_, this->location());
+      inserter->insert(temp);
+      this->val_ = Expression::make_temporary_reference(temp,
+							this->location());
+    }
+  return this;
+}
+
+// Add explicit type conversions.
+
+void
+Send_statement::do_add_conversions()
+{
+  Type* lt = this->channel_->type()->channel_type()->element_type();
+  Type* rt = this->val_->type();
+  if (!Type::are_identical(lt, rt, 0, NULL)
+      && lt->interface_type() != NULL)
+    this->val_ = Expression::make_cast(lt, this->val_, this->location());
+}
+
 // Convert a send statement to the backend representation.
 
 Bstatement*
@@ -4343,9 +5115,10 @@ Send_statement::do_get_backend(Translate_context* context)
 
   Channel_type* channel_type = this->channel_->type()->channel_type();
   Type* element_type = channel_type->element_type();
-  Expression* val = Expression::make_cast(element_type, this->val_, loc);
+  Expression* val = Expression::convert_for_assignment(context->gogo(),
+						       element_type,
+						       this->val_, loc);
 
-  bool is_small;
   bool can_take_address;
   switch (element_type->base()->classification())
     {
@@ -4355,25 +5128,18 @@ Send_statement::do_get_backend(Translate_context* context)
     case Type::TYPE_POINTER:
     case Type::TYPE_MAP:
     case Type::TYPE_CHANNEL:
-      is_small = true;
-      can_take_address = false;
-      break;
-
     case Type::TYPE_FLOAT:
     case Type::TYPE_COMPLEX:
     case Type::TYPE_STRING:
     case Type::TYPE_INTERFACE:
-      is_small = false;
       can_take_address = false;
       break;
 
     case Type::TYPE_STRUCT:
-      is_small = false;
       can_take_address = true;
       break;
 
     case Type::TYPE_ARRAY:
-      is_small = false;
       can_take_address = !element_type->is_slice_type();
       break;
 
@@ -4396,31 +5162,19 @@ Send_statement::do_get_backend(Translate_context* context)
       && val->temporary_reference_expression() == NULL)
     can_take_address = false;
 
-  Expression* td = Expression::make_type_descriptor(this->channel_->type(),
-						    loc);
-
-  Runtime::Function code;
   Bstatement* btemp = NULL;
-  if (is_small)
-      {
-	// Type is small enough to handle as uint64.
-	code = Runtime::SEND_SMALL;
-	val = Expression::make_unsafe_cast(Type::lookup_integer_type("uint64"),
-					   val, loc);
-      }
-  else if (can_take_address)
+  if (can_take_address)
     {
-      // Must pass address of value.  The function doesn't change the
-      // value, so just take its address directly.
-      code = Runtime::SEND_BIG;
+      // The function doesn't change the value, so just take its
+      // address directly.
       val = Expression::make_unary(OPERATOR_AND, val, loc);
     }
   else
     {
-      // Must pass address of value, but the value is small enough
-      // that it might be in registers.  Copy value into temporary
-      // variable to take address.
-      code = Runtime::SEND_BIG;
+      // The value is not in a variable, or is small enough that it
+      // might be in a register, and taking the address would push it
+      // on the stack.  Copy it into a temporary variable to take the
+      // address.
       Temporary_statement* temp = Statement::make_temporary(element_type,
 							    val, loc);
       Expression* ref = Expression::make_temporary_reference(temp, loc);
@@ -4428,11 +5182,13 @@ Send_statement::do_get_backend(Translate_context* context)
       btemp = temp->get_backend(context);
     }
 
-  Expression* call = Runtime::make_call(code, loc, 3, td, this->channel_, val);
+  Expression* call = Runtime::make_call(Runtime::CHANSEND, loc, 2,
+					this->channel_, val);
 
   context->gogo()->lower_expression(context->function(), NULL, &call);
-  Bexpression* bcall = tree_to_expr(call->get_tree(context));
-  Bstatement* s = context->backend()->expression_statement(bcall);
+  Bexpression* bcall = call->get_backend(context);
+  Bfunction* bfunction = context->function()->func_value()->get_decl();
+  Bstatement* s = context->backend()->expression_statement(bfunction, bcall);
 
   if (btemp == NULL)
     return s;
@@ -4449,7 +5205,7 @@ Send_statement::do_dump_statement(Ast_dump_context* ast_dump_context) const
   ast_dump_context->dump_expression(this->channel_);
   ast_dump_context->ostream() << " <- ";
   ast_dump_context->dump_expression(this->val_);
-  ast_dump_context->ostream() << std::endl;
+  ast_dump_context->ostream() << dsuffix(location()) << std::endl;
 }
 
 // Make a send statement.
@@ -4501,21 +5257,19 @@ Select_clauses::Select_clause::traverse(Traverse* traverse)
 
 void
 Select_clauses::Select_clause::lower(Gogo* gogo, Named_object* function,
-				     Block* b, Temporary_statement* sel)
+				     Block* b, Temporary_statement* scases,
+				     size_t index, Temporary_statement* recvok)
 {
   Location loc = this->location_;
 
-  Expression* selref = Expression::make_temporary_reference(sel, loc);
-
-  mpz_t ival;
-  mpz_init_set_ui(ival, this->index_);
-  Expression* index_expr = Expression::make_integer(&ival, NULL, loc);
-  mpz_clear(ival);
+  Expression* scase = Expression::make_temporary_reference(scases, loc);
+  Expression* index_expr = Expression::make_integer_ul(index, NULL, loc);
+  scase = Expression::make_array_index(scase, index_expr, NULL, NULL, loc);
 
   if (this->is_default_)
     {
       go_assert(this->channel_ == NULL && this->val_ == NULL);
-      this->lower_default(b, selref, index_expr);
+      this->lower_default(b, scase);
       this->is_lowered_ = true;
       return;
     }
@@ -4529,35 +5283,30 @@ Select_clauses::Select_clause::lower(Gogo* gogo, Named_object* function,
 							     loc);
 
   if (this->is_send_)
-    this->lower_send(b, selref, chanref, index_expr);
+    this->lower_send(b, scase, chanref);
   else
-    this->lower_recv(gogo, function, b, selref, chanref, index_expr);
+    this->lower_recv(gogo, function, b, scase, chanref, recvok);
 
   // Now all references should be handled through the statements, not
   // through here.
   this->is_lowered_ = true;
   this->val_ = NULL;
-  this->var_ = NULL;
 }
 
 // Lower a default clause in a select statement.
 
 void
-Select_clauses::Select_clause::lower_default(Block* b, Expression* selref,
-					     Expression* index_expr)
+Select_clauses::Select_clause::lower_default(Block* b, Expression* scase)
 {
   Location loc = this->location_;
-  Expression* call = Runtime::make_call(Runtime::SELECTDEFAULT, loc, 2, selref,
-					index_expr);
-  b->add_statement(Statement::make_statement(call, true));
+  this->set_case(b, scase, Expression::make_nil(loc), NULL, caseDefault);
 }
 
 // Lower a send clause in a select statement.
 
 void
-Select_clauses::Select_clause::lower_send(Block* b, Expression* selref,
-					  Expression* chanref,
-					  Expression* index_expr)
+Select_clauses::Select_clause::lower_send(Block* b, Expression* scase,
+					  Expression* chanref)
 {
   Location loc = this->location_;
 
@@ -4571,23 +5320,29 @@ Select_clauses::Select_clause::lower_send(Block* b, Expression* selref,
   // evaluate the send values in the required order.
   Temporary_statement* val = Statement::make_temporary(valtype, this->val_,
 						       loc);
+  // The value here escapes, because it might be sent on a channel.
+  // We record that via the Temporary_statement, so that the escape
+  // analysis pass can pick it up.  The gc compiler lowers select
+  // statements after escape analysis, so it doesn't have to worry
+  // about this.
+  val->set_value_escapes();
   b->add_statement(val);
 
   Expression* valref = Expression::make_temporary_reference(val, loc);
   Expression* valaddr = Expression::make_unary(OPERATOR_AND, valref, loc);
+  Type* unsafe_pointer_type = Type::make_pointer_type(Type::make_void_type());
+  valaddr = Expression::make_cast(unsafe_pointer_type, valaddr, loc);
 
-  Expression* call = Runtime::make_call(Runtime::SELECTSEND, loc, 4, selref,
-					chanref, valaddr, index_expr);
-  b->add_statement(Statement::make_statement(call, true));
+  this->set_case(b, scase, chanref, valaddr, caseSend);
 }
 
 // Lower a receive clause in a select statement.
 
 void
 Select_clauses::Select_clause::lower_recv(Gogo* gogo, Named_object* function,
-					  Block* b, Expression* selref,
+					  Block* b, Expression* scase,
 					  Expression* chanref,
-					  Expression* index_expr)
+					  Temporary_statement* recvok)
 {
   Location loc = this->location_;
 
@@ -4601,26 +5356,10 @@ Select_clauses::Select_clause::lower_recv(Gogo* gogo, Named_object* function,
 
   Expression* valref = Expression::make_temporary_reference(val, loc);
   Expression* valaddr = Expression::make_unary(OPERATOR_AND, valref, loc);
+  Type* unsafe_pointer_type = Type::make_pointer_type(Type::make_void_type());
+  valaddr = Expression::make_cast(unsafe_pointer_type, valaddr, loc);
 
-  Temporary_statement* closed_temp = NULL;
-
-  Expression* call;
-  if (this->closed_ == NULL && this->closedvar_ == NULL)
-    call = Runtime::make_call(Runtime::SELECTRECV, loc, 4, selref, chanref,
-			      valaddr, index_expr);
-  else
-    {
-      closed_temp = Statement::make_temporary(Type::lookup_bool_type(), NULL,
-					      loc);
-      b->add_statement(closed_temp);
-      Expression* cref = Expression::make_temporary_reference(closed_temp,
-							      loc);
-      Expression* caddr = Expression::make_unary(OPERATOR_AND, cref, loc);
-      call = Runtime::make_call(Runtime::SELECTRECV2, loc, 5, selref, chanref,
-				valaddr, caddr, index_expr);
-    }
-
-  b->add_statement(Statement::make_statement(call, true));
+  this->set_case(b, scase, chanref, valaddr, caseRecv);
 
   // If the block of statements is executed, arrange for the received
   // value to move from VAL to the place where the statements expect
@@ -4645,16 +5384,14 @@ Select_clauses::Select_clause::lower_recv(Gogo* gogo, Named_object* function,
   if (this->closedvar_ != NULL)
     {
       go_assert(this->closed_ == NULL);
-      Expression* cref = Expression::make_temporary_reference(closed_temp,
-							      loc);
+      Expression* cref = Expression::make_temporary_reference(recvok, loc);
       this->closedvar_->var_value()->set_init(cref);
     }
   else if (this->closed_ != NULL && !this->closed_->is_sink_expression())
     {
       if (init == NULL)
 	init = new Block(b, loc);
-      Expression* cref = Expression::make_temporary_reference(closed_temp,
-							      loc);
+      Expression* cref = Expression::make_temporary_reference(recvok, loc);
       init->add_statement(Statement::make_assignment(this->closed_, cref,
 						     loc));
     }
@@ -4668,6 +5405,45 @@ Select_clauses::Select_clause::lower_recv(Gogo* gogo, Named_object* function,
 							    loc));
       this->statements_ = init;
     }
+}
+
+// Set the fields of an scase struct, an element in the array that we
+// pass to the runtime function selectgo.
+
+void
+Select_clauses::Select_clause::set_case(Block* b,
+					Expression* scase,
+					Expression* chanref,
+					Expression* elem,
+					int kind)
+{
+  Location loc = this->location_;
+  Struct_type* scase_type = scase->type()->struct_type();
+
+  int field_index = 0;
+  go_assert(scase_type->field(field_index)->is_field_name("c"));
+  Expression* ref = Expression::make_field_reference(scase, field_index, loc);
+  Type* unsafe_pointer_type = Type::make_pointer_type(Type::make_void_type());
+  chanref = Expression::make_unsafe_cast(unsafe_pointer_type, chanref, loc);
+  Statement* s = Statement::make_assignment(ref, chanref, loc);
+  b->add_statement(s);
+
+  if (elem != NULL)
+    {
+      field_index = 1;
+      go_assert(scase_type->field(field_index)->is_field_name("elem"));
+      ref = Expression::make_field_reference(scase->copy(), field_index, loc);
+      s = Statement::make_assignment(ref, elem, loc);
+      b->add_statement(s);
+    }
+
+  field_index = 2;
+  go_assert(scase_type->field(field_index)->is_field_name("kind"));
+  Type* uint16_type = Type::lookup_integer_type("uint16");
+  Expression* k = Expression::make_integer_ul(kind, uint16_type, loc);
+  ref = Expression::make_field_reference(scase->copy(), field_index, loc);
+  s = Statement::make_assignment(ref, k, loc);
+  b->add_statement(s);
 }
 
 // Determine types.
@@ -4691,14 +5467,14 @@ Select_clauses::Select_clause::check_types()
   Channel_type* ct = this->channel_->type()->channel_type();
   if (ct == NULL)
     {
-      error_at(this->channel_->location(), "expected channel");
+      go_error_at(this->channel_->location(), "expected channel");
       return;
     }
 
   if (this->is_send_ && !ct->may_send())
-    error_at(this->location(), "invalid send on receive-only channel");
+    go_error_at(this->location(), "invalid send on receive-only channel");
   else if (!this->is_send_ && !ct->may_receive())
-    error_at(this->location(), "invalid receive on send-only channel");
+    go_error_at(this->location(), "invalid receive on send-only channel");
 }
 
 // Whether this clause may fall through to the statement which follows
@@ -4789,12 +5565,13 @@ Select_clauses::traverse(Traverse* traverse)
 
 void
 Select_clauses::lower(Gogo* gogo, Named_object* function, Block* b,
-		      Temporary_statement* sel)
+		      Temporary_statement* scases, Temporary_statement* recvok)
 {
+  size_t i = 0;
   for (Clauses::iterator p = this->clauses_.begin();
        p != this->clauses_.end();
-       ++p)
-    p->lower(gogo, function, b, sel);
+       ++p, ++i)
+    p->lower(gogo, function, b, scases, i, recvok);
 }
 
 // Determine types.
@@ -4833,31 +5610,30 @@ Select_clauses::may_fall_through() const
   return false;
 }
 
-// Convert to the backend representation.  We have already accumulated
-// all the select information.  Now we call selectgo, which will
-// return the index of the clause to execute.
+// Convert to the backend representation.  Assemble the clauses and
+// build a switch statement on the index value returned by the call to
+// selectgo.
 
 Bstatement*
 Select_clauses::get_backend(Translate_context* context,
-			    Temporary_statement* sel,
+			    Temporary_statement* index,
 			    Unnamed_label *break_label,
 			    Location location)
 {
   size_t count = this->clauses_.size();
-  std::vector<std::vector<Bexpression*> > cases(count);
-  std::vector<Bstatement*> clauses(count);
+  std::vector<std::vector<Bexpression*> > cases(count + 1);
+  std::vector<Bstatement*> clauses(count + 1);
+
+  Type* int_type = Type::lookup_integer_type("int");
 
   int i = 0;
   for (Clauses::iterator p = this->clauses_.begin();
        p != this->clauses_.end();
        ++p, ++i)
     {
-      int index = p->index();
-      mpz_t ival;
-      mpz_init_set_ui(ival, index);
-      Expression* index_expr = Expression::make_integer(&ival, NULL, location);
-      mpz_clear(ival);
-      cases[i].push_back(tree_to_expr(index_expr->get_tree(context)));
+      Expression* index_expr = Expression::make_integer_ul(i, int_type,
+							   location);
+      cases[i].push_back(index_expr->get_backend(context));
 
       Bstatement* s = p->get_statements_backend(context);
       Location gloc = (p->statements() == NULL
@@ -4868,22 +5644,26 @@ Select_clauses::get_backend(Translate_context* context,
       if (s == NULL)
 	clauses[i] = g;
       else
-	clauses[i] = context->backend()->compound_statement(s, g);
+        clauses[i] = context->backend()->compound_statement(s, g);
     }
 
-  Expression* selref = Expression::make_temporary_reference(sel, location);
-  Expression* call = Runtime::make_call(Runtime::SELECTGO, location, 1,
-					selref);
-  context->gogo()->lower_expression(context->function(), NULL, &call);
-  Bexpression* bcall = tree_to_expr(call->get_tree(context));
+  Expression* ref = Expression::make_temporary_reference(index, location);
+  Bexpression* bindex = ref->get_backend(context);
+
+  Bfunction* bfunction = context->function()->func_value()->get_decl();
 
   if (count == 0)
-    return context->backend()->expression_statement(bcall);
+    return context->backend()->expression_statement(bfunction, bindex);
+
+  Expression* crash = Runtime::make_call(Runtime::UNREACHABLE, location, 0);
+  Bexpression* bcrash = crash->get_backend(context);
+  clauses[count] = context->backend()->expression_statement(bfunction, bcrash);
 
   std::vector<Bstatement*> statements;
   statements.reserve(2);
 
-  Bstatement* switch_stmt = context->backend()->switch_statement(bcall,
+  Bstatement* switch_stmt = context->backend()->switch_statement(bfunction,
+								 bindex,
 								 cases,
 								 clauses,
 								 location);
@@ -4894,6 +5674,7 @@ Select_clauses::get_backend(Translate_context* context,
 
   return context->backend()->statement_list(statements);
 }
+
 // Dump the AST representation for select clauses.
 
 void
@@ -4918,10 +5699,10 @@ Select_statement::break_label()
   return this->break_label_;
 }
 
-// Lower a select statement.  This will still return a select
-// statement, but it will be modified to implement the order of
-// evaluation rules, and to include the send and receive statements as
-// explicit statements in the clauses.
+// Lower a select statement.  This will return a block containing this
+// select statement.  The block will implement the order of evaluation
+// rules, include the send and receive statements as explicit
+// statements in the clauses, and call the runtime selectgo function.
 
 Statement*
 Select_statement::do_lower(Gogo* gogo, Named_object* function,
@@ -4934,23 +5715,325 @@ Select_statement::do_lower(Gogo* gogo, Named_object* function,
 
   Block* b = new Block(enclosing, loc);
 
-  go_assert(this->sel_ == NULL);
+  int ncases = this->clauses_->size();
 
-  mpz_t ival;
-  mpz_init_set_ui(ival, this->clauses_->size());
-  Expression* size_expr = Expression::make_integer(&ival, NULL, loc);
-  mpz_clear(ival);
+  // Zero-case select.  Just block the execution.
+  if (ncases == 0)
+    {
+      Expression* call = Runtime::make_call(Runtime::BLOCK, loc, 0);
+      Statement *s = Statement::make_statement(call, false);
+      b->add_statement(s);
+      this->is_lowered_ = true;
+      return Statement::make_block_statement(b, loc);
+    }
 
-  Expression* call = Runtime::make_call(Runtime::NEWSELECT, loc, 1, size_expr);
+  // One-case select.  It is mostly just to run the case.
+  if (ncases == 1)
+    return this->lower_one_case(b);
 
-  this->sel_ = Statement::make_temporary(NULL, call, loc);
-  b->add_statement(this->sel_);
+  // Two-case select with one default case.  It is a non-blocking
+  // send/receive.
+  if (ncases == 2
+      && (this->clauses_->at(0).is_default()
+          || this->clauses_->at(1).is_default()))
+    return this->lower_two_case(b);
 
-  this->clauses_->lower(gogo, function, b, this->sel_);
+  Type* scase_type = Channel_type::select_case_type();
+  Expression* ncases_expr =
+    Expression::make_integer_ul(ncases, NULL,
+				Linemap::predeclared_location());
+  Array_type* scases_type = Type::make_array_type(scase_type, ncases_expr);
+  scases_type->set_is_array_incomparable();
+
+  Temporary_statement* scases = Statement::make_temporary(scases_type, NULL,
+							  loc);
+  b->add_statement(scases);
+
+  Expression* ncases2_expr =
+    Expression::make_integer_ul(ncases * 2, NULL,
+				Linemap::predeclared_location());
+  Type* uint16_type = Type::lookup_integer_type("uint16");
+  Array_type* order_type = Type::make_array_type(uint16_type, ncases2_expr);
+  order_type->set_is_array_incomparable();
+
+  Temporary_statement* order = Statement::make_temporary(order_type, NULL,
+							 loc);
+  b->add_statement(order);
+
+  Type* int_type = Type::lookup_integer_type("int");
+  this->index_ = Statement::make_temporary(int_type, NULL, loc);
+  b->add_statement(this->index_);
+
+  Type* bool_type = Type::lookup_bool_type();
+  Temporary_statement* recvok = Statement::make_temporary(bool_type, NULL,
+							  loc);
+  b->add_statement(recvok);
+
+  // Initialize the scases array.
+  this->clauses_->lower(gogo, function, b, scases, recvok);
+
+  // Build the call to selectgo.  Later, in do_get_backend, we will
+  // build a switch on the result that branches to the various cases.
+
+  Expression* scases_ref = Expression::make_temporary_reference(scases, loc);
+  scases_ref = Expression::make_unary(OPERATOR_AND, scases_ref, loc);
+  Type* unsafe_pointer_type = Type::make_pointer_type(Type::make_void_type());
+  scases_ref = Expression::make_cast(unsafe_pointer_type, scases_ref, loc);
+
+  Expression* order_ref = Expression::make_temporary_reference(order, loc);
+  order_ref = Expression::make_unary(OPERATOR_AND, order_ref, loc);
+  order_ref = Expression::make_cast(unsafe_pointer_type, order_ref, loc);
+
+  Expression* count_expr = Expression::make_integer_ul(ncases, int_type, loc);
+
+  Call_expression* call = Runtime::make_call(Runtime::SELECTGO, loc, 3,
+					     scases_ref, order_ref,
+					     count_expr);
+
+  Expression* result = Expression::make_call_result(call, 0);
+  Expression* ref = Expression::make_temporary_reference(this->index_, loc);
+  Statement* s = Statement::make_assignment(ref, result, loc);
+  b->add_statement(s);
+
+  result = Expression::make_call_result(call, 1);
+  ref = Expression::make_temporary_reference(recvok, loc);
+  s = Statement::make_assignment(ref, result, loc);
+  b->add_statement(s);
+
   this->is_lowered_ = true;
   b->add_statement(this);
 
   return Statement::make_block_statement(b, loc);
+}
+
+// Lower a one-case select statement.
+
+Statement*
+Select_statement::lower_one_case(Block* b)
+{
+  Select_clauses::Select_clause& scase = this->clauses_->at(0);
+  Location loc = this->location();
+  Expression* chan = scase.channel();
+  if (chan != NULL)
+    {
+      // Lower this to
+      //   if chan == nil { block() }; send/recv; body
+      Temporary_statement* chantmp = Statement::make_temporary(NULL, chan, loc);
+      b->add_statement(chantmp);
+      Expression* chanref = Expression::make_temporary_reference(chantmp, loc);
+
+      Expression* nil = Expression::make_nil(loc);
+      Expression* cond = Expression::make_binary(OPERATOR_EQEQ, chanref, nil, loc);
+      Block* bnil = new Block(b, loc);
+      Expression* call = Runtime::make_call(Runtime::BLOCK, loc, 0);
+      Statement* s = Statement::make_statement(call, false);
+      bnil->add_statement(s);
+      Statement* ifs = Statement::make_if_statement(cond, bnil, NULL, loc);
+      b->add_statement(ifs);
+
+      chanref = chanref->copy();
+      Location cloc = scase.location();
+      if (scase.is_send())
+        {
+          s = Statement::make_send_statement(chanref, scase.val(), cloc);
+          b->add_statement(s);
+        }
+      else
+        {
+          if (scase.closed() == NULL && scase.closedvar() == NULL)
+            {
+              // Simple receive.
+              Expression* recv = Expression::make_receive(chanref, cloc);
+              if (scase.val() != NULL)
+                s = Statement::make_assignment(scase.val(), recv, cloc);
+              else if (scase.var() != NULL)
+                {
+                  Temporary_statement *ts =
+                    Statement::make_temporary(NULL, recv, cloc);
+                  Expression* ref =
+                    Expression::make_temporary_reference(ts, cloc);
+                  s = ts;
+                  scase.var()->var_value()->set_init(ref);
+                  scase.var()->var_value()->clear_type_from_chan_element();
+                }
+              else
+                s = Statement::make_statement(recv, false);
+              b->add_statement(s);
+            }
+          else
+            {
+              // Tuple receive.
+              Expression* lhs;
+              if (scase.val() != NULL)
+                lhs = scase.val();
+              else
+                {
+                  Type* valtype = chan->type()->channel_type()->element_type();
+                  Temporary_statement *ts =
+                    Statement::make_temporary(valtype, NULL, cloc);
+                  lhs = Expression::make_temporary_reference(ts, cloc);
+                  b->add_statement(ts);
+                }
+
+              Expression* lhs2;
+              if (scase.closed() != NULL)
+                lhs2 = scase.closed();
+              else
+                {
+                  Type* booltype = Type::make_boolean_type();
+                  Temporary_statement *ts =
+                    Statement::make_temporary(booltype, NULL, cloc);
+                  lhs2 = Expression::make_temporary_reference(ts, cloc);
+                  b->add_statement(ts);
+                }
+
+              s = Statement::make_tuple_receive_assignment(lhs, lhs2, chanref, cloc);
+              b->add_statement(s);
+
+              if (scase.var() != NULL)
+                {
+                  scase.var()->var_value()->set_init(lhs->copy());
+                  scase.var()->var_value()->clear_type_from_chan_element();
+                }
+
+              if (scase.closedvar() != NULL)
+                scase.closedvar()->var_value()->set_init(lhs2->copy());
+            }
+        }
+    }
+
+  Statement* bs =
+    Statement::make_block_statement(scase.statements(), scase.location());
+  b->add_statement(bs);
+
+  Statement* label =
+    Statement::make_unnamed_label_statement(this->break_label());
+  b->add_statement(label);
+
+  this->is_lowered_ = true;
+  return Statement::make_block_statement(b, loc);
+}
+
+// Lower a two-case select statement with one default case.
+
+Statement*
+Select_statement::lower_two_case(Block* b)
+{
+  Select_clauses::Select_clause& chancase =
+    (this->clauses_->at(0).is_default()
+     ? this->clauses_->at(1)
+     : this->clauses_->at(0));
+  Select_clauses::Select_clause& defcase =
+    (this->clauses_->at(0).is_default()
+     ? this->clauses_->at(0)
+     : this->clauses_->at(1));
+  Location loc = this->location();
+  Expression* chan = chancase.channel();
+  Type* valtype = chan->type()->channel_type()->element_type();
+
+  Temporary_statement* chantmp = Statement::make_temporary(NULL, chan, loc);
+  b->add_statement(chantmp);
+  Expression* chanref = Expression::make_temporary_reference(chantmp, loc);
+
+  Block* bchan;
+  Expression* call;
+  if (chancase.is_send())
+    {
+      // if selectnbsend(chan, &val) { body } else { default body }
+
+      Temporary_statement* ts =
+        Statement::make_temporary(valtype, chancase.val(), loc);
+      // Tell the escape analysis that the value escapes, as it may be sent
+      // to a channel.
+      ts->set_value_escapes();
+      b->add_statement(ts);
+
+      Expression* ref = Expression::make_temporary_reference(ts, loc);
+      Expression* addr = Expression::make_unary(OPERATOR_AND, ref, loc);
+      call = Runtime::make_call(Runtime::SELECTNBSEND, loc, 2, chanref, addr);
+      bchan = chancase.statements();
+    }
+  else
+    {
+      Temporary_statement* ts = Statement::make_temporary(valtype, NULL, loc);
+      b->add_statement(ts);
+
+      Expression* ref = Expression::make_temporary_reference(ts, loc);
+      Expression* addr = Expression::make_unary(OPERATOR_AND, ref, loc);
+      Expression* okref = NULL;
+      if (chancase.closed() == NULL && chancase.closedvar() == NULL)
+        {
+          // Simple receive.
+          // if selectnbrecv(&lhs, chan) { body } else { default body }
+          call = Runtime::make_call(Runtime::SELECTNBRECV, loc, 2, addr, chanref);
+        }
+      else
+        {
+          // Tuple receive.
+          // if selectnbrecv2(&lhs, &ok, chan) { body } else { default body }
+
+          Type* booltype = Type::make_boolean_type();
+          Temporary_statement* okts = Statement::make_temporary(booltype, NULL,
+                                                                loc);
+          b->add_statement(okts);
+
+          okref = Expression::make_temporary_reference(okts, loc);
+          Expression* okaddr = Expression::make_unary(OPERATOR_AND, okref, loc);
+          call = Runtime::make_call(Runtime::SELECTNBRECV2, loc, 3, addr, okaddr,
+                                    chanref);
+        }
+
+      Location cloc = chancase.location();
+      bchan = new Block(b, loc);
+      if (chancase.val() != NULL && !chancase.val()->is_sink_expression())
+        {
+          Statement* as = Statement::make_assignment(chancase.val(), ref->copy(),
+                                                     cloc);
+          bchan->add_statement(as);
+        }
+      else if (chancase.var() != NULL)
+        {
+          chancase.var()->var_value()->set_init(ref->copy());
+          chancase.var()->var_value()->clear_type_from_chan_element();
+        }
+
+      if (chancase.closed() != NULL && !chancase.closed()->is_sink_expression())
+        {
+          Statement* as = Statement::make_assignment(chancase.closed(),
+                                                     okref->copy(), cloc);
+          bchan->add_statement(as);
+        }
+      else if (chancase.closedvar() != NULL)
+        chancase.closedvar()->var_value()->set_init(okref->copy());
+
+      Statement* bs = Statement::make_block_statement(chancase.statements(),
+                                                      cloc);
+      bchan->add_statement(bs);
+    }
+
+  Statement* ifs =
+    Statement::make_if_statement(call, bchan, defcase.statements(), loc);
+  b->add_statement(ifs);
+
+  Statement* label =
+    Statement::make_unnamed_label_statement(this->break_label());
+  b->add_statement(label);
+
+  this->is_lowered_ = true;
+  return Statement::make_block_statement(b, loc);
+}
+
+// Whether the select statement itself may fall through to the following
+// statement.
+
+bool
+Select_statement::do_may_fall_through() const
+{
+  // A select statement is terminating if no break statement
+  // refers to it and all of its clauses are terminating.
+  if (this->break_label_ != NULL)
+    return true;
+  return this->clauses_->may_fall_through();
 }
 
 // Return the backend representation for a select statement.
@@ -4958,8 +6041,8 @@ Select_statement::do_lower(Gogo* gogo, Named_object* function,
 Bstatement*
 Select_statement::do_get_backend(Translate_context* context)
 {
-  return this->clauses_->get_backend(context, this->sel_, this->break_label(),
-				     this->location());
+  return this->clauses_->get_backend(context, this->index_,
+				     this->break_label(), this->location());
 }
 
 // Dump the AST representation for a select statement.
@@ -4971,8 +6054,9 @@ Select_statement::do_dump_statement(Ast_dump_context* ast_dump_context) const
   ast_dump_context->ostream() << "select";
   if (ast_dump_context->dump_subblocks())
     {
-      ast_dump_context->ostream() << " {" << std::endl;
+      ast_dump_context->ostream() << " {" << dsuffix(location()) << std::endl;
       this->clauses_->dump_clauses(ast_dump_context);
+      ast_dump_context->print_indent();
       ast_dump_context->ostream() << "}";
     }
   ast_dump_context->ostream() << std::endl;
@@ -5037,6 +6121,7 @@ For_statement::do_lower(Gogo*, Named_object*, Block* enclosing,
     }
 
   Unnamed_label* top = new Unnamed_label(this->location());
+  top->set_derived_from(this);
   b->add_statement(Statement::make_unnamed_label_statement(top));
 
   s = Statement::make_block_statement(this->statements_,
@@ -5078,7 +6163,9 @@ For_statement::do_lower(Gogo*, Named_object*, Block* enclosing,
 
   b->set_end_location(end_loc);
 
-  return Statement::make_block_statement(b, loc);
+  Statement* bs = Statement::make_block_statement(b, loc);
+  bs->block_statement()->set_is_lowered_for_statement();
+  return bs;
 }
 
 // Return the break label, creating it if necessary.
@@ -5111,6 +6198,20 @@ For_statement::set_break_continue_labels(Unnamed_label* break_label,
   go_assert(this->break_label_ == NULL && this->continue_label_ == NULL);
   this->break_label_ = break_label;
   this->continue_label_ = continue_label;
+}
+
+// Whether the overall statement may fall through.
+
+bool
+For_statement::do_may_fall_through() const
+{
+  // A for loop is terminating if it has no condition and
+  // no break statement.
+  if(this->cond_ != NULL)
+    return true;
+  if(this->break_label_ != NULL)
+    return true;
+  return false;
 }
 
 // Dump the AST representation for a for statement.
@@ -5147,7 +6248,7 @@ For_statement::do_dump_statement(Ast_dump_context* ast_dump_context) const
       ast_dump_context->ostream() << "}";
     }
 
-  ast_dump_context->ostream() << std::endl;
+  ast_dump_context->ostream() << dsuffix(location()) << std::endl;
 }
 
 // Make a for statement.
@@ -5166,8 +6267,12 @@ Statement::make_for_statement(Block* init, Expression* cond, Block* post,
 int
 For_range_statement::do_traverse(Traverse* traverse)
 {
-  if (this->traverse_expression(traverse, &this->index_var_) == TRAVERSE_EXIT)
-    return TRAVERSE_EXIT;
+  if (this->index_var_ != NULL)
+    {
+      if (this->traverse_expression(traverse, &this->index_var_)
+	  == TRAVERSE_EXIT)
+	return TRAVERSE_EXIT;
+    }
   if (this->value_var_ != NULL)
     {
       if (this->traverse_expression(traverse, &this->value_var_)
@@ -5203,7 +6308,7 @@ For_range_statement::do_lower(Gogo* gogo, Named_object*, Block* enclosing,
   else if (range_type->is_string_type())
     {
       index_type = Type::lookup_integer_type("int");
-      value_type = Type::lookup_integer_type("int32");
+      value_type = gogo->lookup_global("rune")->type_value();
     }
   else if (range_type->map_type() != NULL)
     {
@@ -5228,19 +6333,70 @@ For_range_statement::do_lower(Gogo* gogo, Named_object*, Block* enclosing,
       return Statement::make_error_statement(this->location());
     }
 
+  // If there is only one iteration variable, and len(this->range_) is
+  // constant, then we do not evaluate the range variable.  len(x) is
+  // a contant if x is a string constant or if x is an array.  If x is
+  // a constant then evaluating it won't make any difference, so the
+  // only case to consider is when x is an array whose length is constant.
+  bool eval = true;
+  if ((this->value_var_ == NULL || this->value_var_->is_sink_expression())
+      && range_type->array_type() != NULL
+      && !range_type->is_slice_type()
+      && Builtin_call_expression::array_len_is_constant(this->range_))
+    eval = false;
+
   Location loc = this->location();
   Block* temp_block = new Block(enclosing, loc);
 
+  Expression* orig_range_expr = this->range_;
   Named_object* range_object = NULL;
   Temporary_statement* range_temp = NULL;
-  Var_expression* ve = this->range_->var_expression();
-  if (ve != NULL)
-    range_object = ve->named_object();
-  else
+  if (eval)
     {
-      range_temp = Statement::make_temporary(NULL, this->range_, loc);
-      temp_block->add_statement(range_temp);
-      this->range_ = NULL;
+      Var_expression* ve = this->range_->var_expression();
+      if (ve != NULL)
+	range_object = ve->named_object();
+      else
+	{
+	  range_temp = Statement::make_temporary(NULL, this->range_, loc);
+	  temp_block->add_statement(range_temp);
+	  this->range_ = NULL;
+	}
+    }
+
+  // Try to match "range clear" patterns and rewrite to simple runtime
+  // calls.
+  if (range_type->map_type() != NULL)
+    {
+      Statement* clear = this->lower_map_range_clear(range_type,
+                                                     enclosing,
+                                                     orig_range_expr,
+                                                     range_object,
+                                                     range_temp, loc);
+      if (clear != NULL)
+        {
+          if (gogo->debug_optimization())
+            go_debug(loc, "map range clear");
+          temp_block->add_statement(clear);
+          return Statement::make_block_statement(temp_block, loc);
+        }
+    }
+  else if (range_type->array_type() != NULL)
+    {
+      // Slice or array.
+      Statement* clear = this->lower_array_range_clear(gogo,
+                                                       range_type,
+                                                       orig_range_expr,
+                                                       temp_block,
+                                                       range_object,
+                                                       range_temp, loc);
+      if (clear != NULL)
+        {
+          if (gogo->debug_optimization())
+            go_debug(loc, "array range clear");
+          temp_block->add_statement(clear);
+          return Statement::make_block_statement(temp_block, loc);
+        }
     }
 
   Temporary_statement* index_temp = Statement::make_temporary(index_type,
@@ -5248,7 +6404,7 @@ For_range_statement::do_lower(Gogo* gogo, Named_object*, Block* enclosing,
   temp_block->add_statement(index_temp);
 
   Temporary_statement* value_temp = NULL;
-  if (this->value_var_ != NULL)
+  if (this->value_var_ != NULL && !this->value_var_->is_sink_expression())
     {
       value_temp = Statement::make_temporary(value_type, NULL, loc);
       temp_block->add_statement(value_temp);
@@ -5282,9 +6438,9 @@ For_range_statement::do_lower(Gogo* gogo, Named_object*, Block* enclosing,
 			     index_temp, value_temp, &init, &cond, &iter_init,
 			     &post);
   else if (range_type->map_type() != NULL)
-    this->lower_range_map(gogo, temp_block, body, range_object, range_temp,
-			  index_temp, value_temp, &init, &cond, &iter_init,
-			  &post);
+    this->lower_range_map(gogo, range_type->map_type(), temp_block, body,
+			  range_object, range_temp, index_temp, value_temp,
+			  &init, &cond, &iter_init, &post);
   else if (range_type->channel_type() != NULL)
     this->lower_range_channel(gogo, temp_block, body, range_object, range_temp,
 			      index_temp, value_temp, &init, &cond, &iter_init,
@@ -5295,25 +6451,27 @@ For_range_statement::do_lower(Gogo* gogo, Named_object*, Block* enclosing,
   if (iter_init != NULL)
     body->add_statement(Statement::make_block_statement(iter_init, loc));
 
-  Statement* assign;
-  Expression* index_ref = Expression::make_temporary_reference(index_temp, loc);
-  if (this->value_var_ == NULL)
+  if (this->index_var_ != NULL)
     {
-      assign = Statement::make_assignment(this->index_var_, index_ref, loc);
-    }
-  else
-    {
-      Expression_list* lhs = new Expression_list();
-      lhs->push_back(this->index_var_);
-      lhs->push_back(this->value_var_);
+      Statement* assign;
+      Expression* index_ref =
+	Expression::make_temporary_reference(index_temp, loc);
+      if (this->value_var_ == NULL || this->value_var_->is_sink_expression())
+	assign = Statement::make_assignment(this->index_var_, index_ref, loc);
+      else
+	{
+	  Expression_list* lhs = new Expression_list();
+	  lhs->push_back(this->index_var_);
+	  lhs->push_back(this->value_var_);
 
-      Expression_list* rhs = new Expression_list();
-      rhs->push_back(index_ref);
-      rhs->push_back(Expression::make_temporary_reference(value_temp, loc));
+	  Expression_list* rhs = new Expression_list();
+	  rhs->push_back(index_ref);
+	  rhs->push_back(Expression::make_temporary_reference(value_temp, loc));
 
-      assign = Statement::make_tuple_assignment(lhs, rhs, loc);
+	  assign = Statement::make_tuple_assignment(lhs, rhs, loc);
+	}
+      body->add_statement(assign);
     }
-  body->add_statement(assign);
 
   body->add_statement(Statement::make_block_statement(this->statements_, loc));
 
@@ -5346,7 +6504,7 @@ For_range_statement::make_range_ref(Named_object* range_object,
 // Return a call to the predeclared function FUNCNAME passing a
 // reference to the temporary variable ARG.
 
-Expression*
+Call_expression*
 For_range_statement::call_builtin(Gogo* gogo, const char* funcname,
 				  Expression* arg,
 				  Location loc)
@@ -5378,8 +6536,9 @@ For_range_statement::lower_range_array(Gogo* gogo,
 
   // The loop we generate:
   //   len_temp := len(range)
+  //   range_temp := range
   //   for index_temp = 0; index_temp < len_temp; index_temp++ {
-  //           value_temp = range[index_temp]
+  //           value_temp = range_temp[index_temp]
   //           index = index_temp
   //           value = value_temp
   //           original body
@@ -5392,16 +6551,25 @@ For_range_statement::lower_range_array(Gogo* gogo,
 
   Block* init = new Block(enclosing, loc);
 
-  Expression* ref = this->make_range_ref(range_object, range_temp, loc);
-  Expression* len_call = this->call_builtin(gogo, "len", ref, loc);
+  Expression* len_arg;
+  if (range_object == NULL && range_temp == NULL)
+    {
+      // Don't evaluate this->range_, just get its length.
+      len_arg = this->range_;
+    }
+  else
+    {
+      Expression* ref = this->make_range_ref(range_object, range_temp, loc);
+      range_temp = Statement::make_temporary(NULL, ref, loc);
+      init->add_statement(range_temp);
+      len_arg = ref;
+    }
+  Expression* len_call = this->call_builtin(gogo, "len", len_arg, loc);
   Temporary_statement* len_temp = Statement::make_temporary(index_temp->type(),
 							    len_call, loc);
   init->add_statement(len_temp);
 
-  mpz_t zval;
-  mpz_init_set_ui(zval, 0UL);
-  Expression* zexpr = Expression::make_integer(&zval, NULL, loc);
-  mpz_clear(zval);
+  Expression* zexpr = Expression::make_integer_ul(0, NULL, loc);
 
   Temporary_reference_expression* tref =
     Expression::make_temporary_reference(index_temp, loc);
@@ -5414,7 +6582,7 @@ For_range_statement::lower_range_array(Gogo* gogo,
   // Set *PCOND to
   //   index_temp < len_temp
 
-  ref = Expression::make_temporary_reference(index_temp, loc);
+  Expression* ref = Expression::make_temporary_reference(index_temp, loc);
   Expression* ref2 = Expression::make_temporary_reference(len_temp, loc);
   Expression* lt = Expression::make_binary(OPERATOR_LT, ref, ref2, loc);
 
@@ -5428,9 +6596,9 @@ For_range_statement::lower_range_array(Gogo* gogo,
     {
       iter_init = new Block(body_block, loc);
 
-      ref = this->make_range_ref(range_object, range_temp, loc);
-      Expression* ref2 = Expression::make_temporary_reference(index_temp, loc);
-      Expression* index = Expression::make_index(ref, ref2, NULL, loc);
+      ref = Expression::make_temporary_reference(range_temp, loc);
+      ref2 = Expression::make_temporary_reference(index_temp, loc);
+      Expression* index = Expression::make_index(ref, ref2, NULL, NULL, loc);
 
       tref = Expression::make_temporary_reference(value_temp, loc);
       tref->set_is_lvalue();
@@ -5499,10 +6667,7 @@ For_range_statement::lower_range_slice(Gogo* gogo,
 							    len_call, loc);
   init->add_statement(len_temp);
 
-  mpz_t zval;
-  mpz_init_set_ui(zval, 0UL);
-  Expression* zexpr = Expression::make_integer(&zval, NULL, loc);
-  mpz_clear(zval);
+  Expression* zexpr = Expression::make_integer_ul(0, NULL, loc);
 
   Temporary_reference_expression* tref =
     Expression::make_temporary_reference(index_temp, loc);
@@ -5530,8 +6695,8 @@ For_range_statement::lower_range_slice(Gogo* gogo,
       iter_init = new Block(body_block, loc);
 
       ref = Expression::make_temporary_reference(for_temp, loc);
-      Expression* ref2 = Expression::make_temporary_reference(index_temp, loc);
-      Expression* index = Expression::make_index(ref, ref2, NULL, loc);
+      ref2 = Expression::make_temporary_reference(index_temp, loc);
+      Expression* index = Expression::make_index(ref, ref2, NULL, NULL, loc);
 
       tref = Expression::make_temporary_reference(value_temp, loc);
       tref->set_is_lvalue();
@@ -5555,7 +6720,7 @@ For_range_statement::lower_range_slice(Gogo* gogo,
 // Lower a for range over a string.
 
 void
-For_range_statement::lower_range_string(Gogo*,
+For_range_statement::lower_range_string(Gogo* gogo,
 					Block* enclosing,
 					Block* body_block,
 					Named_object* range_object,
@@ -5570,97 +6735,121 @@ For_range_statement::lower_range_string(Gogo*,
   Location loc = this->location();
 
   // The loop we generate:
+  //   len_temp := len(range)
   //   var next_index_temp int
-  //   for index_temp = 0; ; index_temp = next_index_temp {
-  //           next_index_temp, value_temp = stringiter2(range, index_temp)
-  //           if next_index_temp == 0 {
-  //                   break
+  //   for index_temp = 0; index_temp < len_temp; index_temp = next_index_temp {
+  //           value_temp = rune(range[index_temp])
+  //           if value_temp < utf8.RuneSelf {
+  //                   next_index_temp = index_temp + 1
+  //           } else {
+  //                   value_temp, next_index_temp = decoderune(range, index_temp)
   //           }
   //           index = index_temp
   //           value = value_temp
-  //           original body
+  //           // original body
   //   }
 
   // Set *PINIT to
+  //   len_temp := len(range)
   //   var next_index_temp int
   //   index_temp = 0
+  //   var value_temp rune // if value_temp not passed in
 
   Block* init = new Block(enclosing, loc);
+
+  Expression* ref = this->make_range_ref(range_object, range_temp, loc);
+  Call_expression* call = this->call_builtin(gogo, "len", ref, loc);
+  Temporary_statement* len_temp =
+    Statement::make_temporary(index_temp->type(), call, loc);
+  init->add_statement(len_temp);
 
   Temporary_statement* next_index_temp =
     Statement::make_temporary(index_temp->type(), NULL, loc);
   init->add_statement(next_index_temp);
 
-  mpz_t zval;
-  mpz_init_set_ui(zval, 0UL);
-  Expression* zexpr = Expression::make_integer(&zval, NULL, loc);
-
-  Temporary_reference_expression* ref =
+  Temporary_reference_expression* index_ref =
     Expression::make_temporary_reference(index_temp, loc);
-  ref->set_is_lvalue();
-  Statement* s = Statement::make_assignment(ref, zexpr, loc);
-
+  index_ref->set_is_lvalue();
+  Expression* zexpr = Expression::make_integer_ul(0, index_temp->type(), loc);
+  Statement* s = Statement::make_assignment(index_ref, zexpr, loc);
   init->add_statement(s);
+
+  Type* rune_type;
+  if (value_temp != NULL)
+    rune_type = value_temp->type();
+  else
+    {
+      rune_type = gogo->lookup_global("rune")->type_value();
+      value_temp = Statement::make_temporary(rune_type, NULL, loc);
+      init->add_statement(value_temp);
+    }
+
   *pinit = init;
 
-  // The loop has no condition.
+  // Set *PCOND to
+  //   index_temp < len_temp
 
-  *pcond = NULL;
+  index_ref = Expression::make_temporary_reference(index_temp, loc);
+  Expression* len_ref =
+    Expression::make_temporary_reference(len_temp, loc);
+  *pcond = Expression::make_binary(OPERATOR_LT, index_ref, len_ref, loc);
 
   // Set *PITER_INIT to
-  //   next_index_temp = runtime.stringiter(range, index_temp)
-  // or
-  //   next_index_temp, value_temp = runtime.stringiter2(range, index_temp)
-  // followed by
-  //   if next_index_temp == 0 {
-  //           break
+  //   value_temp = rune(range[index_temp])
+  //   if value_temp < utf8.RuneSelf {
+  //           next_index_temp = index_temp + 1
+  //   } else {
+  //           value_temp, next_index_temp = decoderune(range, index_temp)
   //   }
 
   Block* iter_init = new Block(body_block, loc);
 
-  Expression* p1 = this->make_range_ref(range_object, range_temp, loc);
-  Expression* p2 = Expression::make_temporary_reference(index_temp, loc);
-  Call_expression* call = Runtime::make_call((value_temp == NULL
-					      ? Runtime::STRINGITER
-					      : Runtime::STRINGITER2),
-					     loc, 2, p1, p2);
-
-  if (value_temp == NULL)
-    {
-      ref = Expression::make_temporary_reference(next_index_temp, loc);
-      ref->set_is_lvalue();
-      s = Statement::make_assignment(ref, call, loc);
-    }
-  else
-    {
-      Expression_list* lhs = new Expression_list();
-
-      ref = Expression::make_temporary_reference(next_index_temp, loc);
-      ref->set_is_lvalue();
-      lhs->push_back(ref);
-
-      ref = Expression::make_temporary_reference(value_temp, loc);
-      ref->set_is_lvalue();
-      lhs->push_back(ref);
-
-      Expression_list* rhs = new Expression_list();
-      rhs->push_back(Expression::make_call_result(call, 0));
-      rhs->push_back(Expression::make_call_result(call, 1));
-
-      s = Statement::make_tuple_assignment(lhs, rhs, loc);
-    }
+  ref = this->make_range_ref(range_object, range_temp, loc);
+  index_ref = Expression::make_temporary_reference(index_temp, loc);
+  ref = Expression::make_string_index(ref, index_ref, NULL, loc);
+  ref = Expression::make_cast(rune_type, ref, loc);
+  Temporary_reference_expression* value_ref =
+    Expression::make_temporary_reference(value_temp, loc);
+  value_ref->set_is_lvalue();
+  s = Statement::make_assignment(value_ref, ref, loc);
   iter_init->add_statement(s);
 
-  ref = Expression::make_temporary_reference(next_index_temp, loc);
-  zexpr = Expression::make_integer(&zval, NULL, loc);
-  mpz_clear(zval);
-  Expression* equals = Expression::make_binary(OPERATOR_EQEQ, ref, zexpr, loc);
+  value_ref = Expression::make_temporary_reference(value_temp, loc);
+  Expression* rune_self = Expression::make_integer_ul(0x80, rune_type, loc);
+  Expression* cond = Expression::make_binary(OPERATOR_LT, value_ref, rune_self,
+					     loc);
 
   Block* then_block = new Block(iter_init, loc);
-  s = Statement::make_break_statement(this->break_label(), loc);
+
+  Temporary_reference_expression* lhs =
+    Expression::make_temporary_reference(next_index_temp, loc);
+  lhs->set_is_lvalue();
+  index_ref = Expression::make_temporary_reference(index_temp, loc);
+  Expression* one = Expression::make_integer_ul(1, index_temp->type(), loc);
+  Expression* sum = Expression::make_binary(OPERATOR_PLUS, index_ref, one,
+					    loc);
+  s = Statement::make_assignment(lhs, sum, loc);
   then_block->add_statement(s);
 
-  s = Statement::make_if_statement(equals, then_block, NULL, loc);
+  Block* else_block = new Block(iter_init, loc);
+
+  ref = this->make_range_ref(range_object, range_temp, loc);
+  index_ref = Expression::make_temporary_reference(index_temp, loc);
+  call = Runtime::make_call(Runtime::DECODERUNE, loc, 2, ref, index_ref);
+
+  value_ref = Expression::make_temporary_reference(value_temp, loc);
+  value_ref->set_is_lvalue();
+  Expression* res = Expression::make_call_result(call, 0);
+  s = Statement::make_assignment(value_ref, res, loc);
+  else_block->add_statement(s);
+
+  lhs = Expression::make_temporary_reference(next_index_temp, loc);
+  lhs->set_is_lvalue();
+  res = Expression::make_call_result(call, 1);
+  s = Statement::make_assignment(lhs, res, loc);
+  else_block->add_statement(s);
+
+  s = Statement::make_if_statement(cond, then_block, else_block, loc);
   iter_init->add_statement(s);
 
   *piter_init = iter_init;
@@ -5670,11 +6859,10 @@ For_range_statement::lower_range_string(Gogo*,
 
   Block* post = new Block(enclosing, loc);
 
-  Temporary_reference_expression* lhs =
-    Expression::make_temporary_reference(index_temp, loc);
-  lhs->set_is_lvalue();
-  Expression* rhs = Expression::make_temporary_reference(next_index_temp, loc);
-  s = Statement::make_assignment(lhs, rhs, loc);
+  index_ref = Expression::make_temporary_reference(index_temp, loc);
+  index_ref->set_is_lvalue();
+  ref = Expression::make_temporary_reference(next_index_temp, loc);
+  s = Statement::make_assignment(index_ref, ref, loc);
 
   post->add_statement(s);
   *ppost = post;
@@ -5683,7 +6871,8 @@ For_range_statement::lower_range_string(Gogo*,
 // Lower a for range over a map.
 
 void
-For_range_statement::lower_range_map(Gogo*,
+For_range_statement::lower_range_map(Gogo* gogo,
+				     Map_type* map_type,
 				     Block* enclosing,
 				     Block* body_block,
 				     Named_object* range_object,
@@ -5698,13 +6887,13 @@ For_range_statement::lower_range_map(Gogo*,
   Location loc = this->location();
 
   // The runtime uses a struct to handle ranges over a map.  The
-  // struct is four pointers long.  The first pointer is NULL when we
-  // have completed the iteration.
+  // struct is built by Map_type::hiter_type for a specific map type.
 
   // The loop we generate:
   //   var hiter map_iteration_struct
-  //   for mapiterinit(range, &hiter); hiter[0] != nil; mapiternext(&hiter) {
-  //           mapiter2(hiter, &index_temp, &value_temp)
+  //   for mapiterinit(type, range, &hiter); hiter.key != nil; mapiternext(&hiter) {
+  //           index_temp = *hiter.key
+  //           value_temp = *hiter.val
   //           index = index_temp
   //           value = value_temp
   //           original body
@@ -5712,61 +6901,59 @@ For_range_statement::lower_range_map(Gogo*,
 
   // Set *PINIT to
   //   var hiter map_iteration_struct
-  //   runtime.mapiterinit(range, &hiter)
+  //   runtime.mapiterinit(type, range, &hiter)
 
   Block* init = new Block(enclosing, loc);
 
-  Type* map_iteration_type = Runtime::map_iteration_type();
+  Type* map_iteration_type = map_type->hiter_type(gogo);
   Temporary_statement* hiter = Statement::make_temporary(map_iteration_type,
 							 NULL, loc);
   init->add_statement(hiter);
 
-  Expression* p1 = this->make_range_ref(range_object, range_temp, loc);
+  Expression* p1 = Expression::make_type_descriptor(map_type, loc);
+  Expression* p2 = this->make_range_ref(range_object, range_temp, loc);
   Expression* ref = Expression::make_temporary_reference(hiter, loc);
-  Expression* p2 = Expression::make_unary(OPERATOR_AND, ref, loc);
-  Expression* call = Runtime::make_call(Runtime::MAPITERINIT, loc, 2, p1, p2);
+  Expression* p3 = Expression::make_unary(OPERATOR_AND, ref, loc);
+  Expression* call = Runtime::make_call(Runtime::MAPITERINIT, loc, 3,
+					p1, p2, p3);
   init->add_statement(Statement::make_statement(call, true));
 
   *pinit = init;
 
   // Set *PCOND to
-  //   hiter[0] != nil
+  //   hiter.key != nil
 
   ref = Expression::make_temporary_reference(hiter, loc);
-
-  mpz_t zval;
-  mpz_init_set_ui(zval, 0UL);
-  Expression* zexpr = Expression::make_integer(&zval, NULL, loc);
-  mpz_clear(zval);
-
-  Expression* index = Expression::make_index(ref, zexpr, NULL, loc);
-
-  Expression* ne = Expression::make_binary(OPERATOR_NOTEQ, index,
+  ref = Expression::make_field_reference(ref, 0, loc);
+  Expression* ne = Expression::make_binary(OPERATOR_NOTEQ, ref,
 					   Expression::make_nil(loc),
 					   loc);
-
   *pcond = ne;
 
   // Set *PITER_INIT to
-  //   mapiter1(hiter, &index_temp)
-  // or
-  //   mapiter2(hiter, &index_temp, &value_temp)
+  //   index_temp = *hiter.key
+  //   value_temp = *hiter.val
 
   Block* iter_init = new Block(body_block, loc);
 
-  ref = Expression::make_temporary_reference(hiter, loc);
-  p1 = Expression::make_unary(OPERATOR_AND, ref, loc);
-  ref = Expression::make_temporary_reference(index_temp, loc);
-  p2 = Expression::make_unary(OPERATOR_AND, ref, loc);
-  if (value_temp == NULL)
-    call = Runtime::make_call(Runtime::MAPITER1, loc, 2, p1, p2);
-  else
+  Expression* lhs = Expression::make_temporary_reference(index_temp, loc);
+  Expression* rhs = Expression::make_temporary_reference(hiter, loc);
+  rhs = Expression::make_field_reference(ref, 0, loc);
+  rhs = Expression::make_dereference(ref, Expression::NIL_CHECK_NOT_NEEDED,
+                                     loc);
+  Statement* set = Statement::make_assignment(lhs, rhs, loc);
+  iter_init->add_statement(set);
+
+  if (value_temp != NULL)
     {
-      ref = Expression::make_temporary_reference(value_temp, loc);
-      Expression* p3 = Expression::make_unary(OPERATOR_AND, ref, loc);
-      call = Runtime::make_call(Runtime::MAPITER2, loc, 3, p1, p2, p3);
+      lhs = Expression::make_temporary_reference(value_temp, loc);
+      rhs = Expression::make_temporary_reference(hiter, loc);
+      rhs = Expression::make_field_reference(rhs, 1, loc);
+      rhs = Expression::make_dereference(rhs, Expression::NIL_CHECK_NOT_NEEDED,
+                                         loc);
+      set = Statement::make_assignment(lhs, rhs, loc);
+      iter_init->add_statement(set);
     }
-  iter_init->add_statement(Statement::make_statement(call, true));
 
   *piter_init = iter_init;
 
@@ -5853,6 +7040,167 @@ For_range_statement::lower_range_channel(Gogo*,
   *piter_init = iter_init;
 }
 
+// Match
+//
+//   for k := range m { delete(m, k) }
+//
+// Lower it to runtime.mapclear(TYPE, m) on match, return the statement
+// containing the call.  Return NULL otherwise.
+
+Statement*
+For_range_statement::lower_map_range_clear(Type* map_type,
+                                           Block* enclosing,
+                                           Expression* orig_range_expr,
+                                           Named_object* range_object,
+                                           Temporary_statement* range_temp,
+                                           Location loc)
+{
+  if (this->value_var_ != NULL)
+    return NULL;
+  if (this->index_var_ == NULL)
+    return NULL;
+
+  // Require the loop index be a new variable.  We cannot rewrite
+  // if it is used outside of the loop.
+  Var_expression* index_ve = this->index_var_->var_expression();
+  if (index_ve == NULL)
+    return NULL;
+  Named_object* index_no = index_ve->named_object();
+  if (enclosing->bindings()->lookup_local(index_no->name()) != index_no)
+    return NULL;
+
+  // Match the body, a single call statement delete(m, k).
+  const std::vector<Statement*>* statements = this->statements_->statements();
+  if (statements->size() != 1)
+    return NULL;
+  Expression_statement* es = statements->at(0)->expression_statement();
+  if (es == NULL)
+    return NULL;
+  Call_expression* call = es->expr()->call_expression();
+  if (call == NULL || !call->is_builtin()
+      || call->builtin_call_expression()->code()
+         != Builtin_call_expression::BUILTIN_DELETE)
+    return NULL;
+  if (!Expression::is_same_variable(call->args()->at(0), orig_range_expr)
+      || !Expression::is_same_variable(call->args()->at(1), this->index_var_))
+    return NULL;
+
+  // Everything matches. Rewrite to mapclear(TYPE, MAP).
+  Expression* e1 = Expression::make_type_descriptor(map_type, loc);
+  Expression* e2 = this->make_range_ref(range_object, range_temp, loc);
+  call = Runtime::make_call(Runtime::MAPCLEAR, loc, 2, e1, e2);
+  return Statement::make_statement(call, true);
+}
+
+// Match
+//
+//   for i := range a { a[i] = zero }
+//
+// Lower it to call memclr on match, and return the statement.  Return
+// NULL otherwise.
+
+Statement*
+For_range_statement::lower_array_range_clear(Gogo* gogo,
+                                             Type* array_type,
+                                             Expression* orig_range_expr,
+                                             Block* temp_block,
+                                             Named_object* range_object,
+                                             Temporary_statement* range_temp,
+                                             Location loc)
+{
+  if (this->value_var_ != NULL)
+    return NULL;
+  if (this->index_var_ == NULL)
+    return NULL;
+
+  // Match the body, a single assignment statement a[i] = zero.
+  const std::vector<Statement*>* statements = this->statements_->statements();
+  if (statements->size() != 1)
+    return NULL;
+  Assignment_statement* as = statements->at(0)->assignment_statement();
+  if (as == NULL || !as->rhs()->is_zero_value())
+    return NULL;
+  if (as->lhs()->type()->interface_type() != NULL
+      && as->rhs()->type()->interface_type() == NULL
+      && !as->rhs()->type()->is_nil_type())
+    // Implicit type conversion may change a zero value to non-zero, like
+    // interface{}(0).
+    return NULL;
+  Array_index_expression* aie = as->lhs()->array_index_expression();
+  if (aie == NULL || aie->end() != NULL
+      || !Expression::is_same_variable(orig_range_expr, aie->array())
+      || !Expression::is_same_variable(this->index_var_, aie->start()))
+    return NULL;
+
+  // Everything matches. Rewrite to
+  //
+  //   if len(a) != 0 {
+  //     tmp1 = &a[0]
+  //     tmp2 = len(a)*sizeof(elem(a))
+  //     memclr{NoHeap,Has}Pointers(tmp1, tmp2)
+  //     i = len(a) - 1
+  //   }
+
+  Type* elem_type = array_type->array_type()->element_type();
+  int64_t elme_sz;
+  bool ok = elem_type->backend_type_size(gogo, &elme_sz);
+  if (!ok)
+    return NULL;
+
+  Block* b = new Block(temp_block, loc);
+
+  Expression* ref;
+  if (range_object == NULL && range_temp == NULL)
+    // is_same_variable implies no side effect, so it is ok to copy.
+    ref = orig_range_expr->copy();
+  else
+    ref = this->make_range_ref(range_object, range_temp, loc);
+  Expression* len = this->call_builtin(gogo, "len", ref, loc);
+  Temporary_statement* tslen = Statement::make_temporary(NULL, len, loc);
+  temp_block->add_statement(tslen);
+
+  Expression* zero = Expression::make_integer_ul(0, this->index_var_->type(), loc);
+  ref = ref->copy();
+  Expression* elem = Expression::make_array_index(ref, zero, NULL, NULL, loc);
+  elem->array_index_expression()->set_needs_bounds_check(false);
+  Expression* e1 = Expression::make_unary(OPERATOR_AND, elem, loc);
+  Temporary_statement* ts1 = Statement::make_temporary(NULL, e1, loc);
+  b->add_statement(ts1);
+
+  len = Expression::make_temporary_reference(tslen, loc);
+  Expression* sz = Expression::make_integer_int64(elme_sz, len->type(), loc);
+  Expression* e2 = Expression::make_binary(OPERATOR_MULT, len, sz, loc);
+  Temporary_statement* ts2 = Statement::make_temporary(NULL, e2, loc);
+  b->add_statement(ts2);
+
+  Expression* ptr_arg = Expression::make_temporary_reference(ts1, loc);
+  Expression* sz_arg = Expression::make_temporary_reference(ts2, loc);
+  Expression* call;
+  if (elem_type->has_pointer())
+    call = Runtime::make_call(Runtime::MEMCLRHASPTR, loc, 2, ptr_arg, sz_arg);
+  else
+    {
+      Type* int32_type = Type::lookup_integer_type("int32");
+      Expression* zero32 = Expression::make_integer_ul(0, int32_type, loc);
+      call = Runtime::make_call(Runtime::BUILTIN_MEMSET, loc, 3, ptr_arg,
+                                zero32, sz_arg);
+    }
+  Statement* cs3 = Statement::make_statement(call, true);
+  b->add_statement(cs3);
+
+  len = Expression::make_temporary_reference(tslen, loc);
+  Expression* one = Expression::make_integer_ul(1, len->type(), loc);
+  Expression* rhs = Expression::make_binary(OPERATOR_MINUS, len, one, loc);
+  Expression* lhs = this->index_var_->copy();
+  Statement* as4 = Statement::make_assignment(lhs, rhs, loc);
+  b->add_statement(as4);
+
+  len = Expression::make_temporary_reference(tslen, loc);
+  zero = zero->copy();
+  Expression* cond = Expression::make_binary(OPERATOR_NOTEQ, len, zero, loc);
+  return Statement::make_if_statement(cond, b, NULL, loc);
+}
+
 // Return the break LABEL_EXPR.
 
 Unnamed_label*
@@ -5902,7 +7250,7 @@ For_range_statement::do_dump_statement(Ast_dump_context* ast_dump_context) const
       ast_dump_context->print_indent();
       ast_dump_context->ostream() << "}";
     }
-  ast_dump_context->ostream() << std::endl;
+  ast_dump_context->ostream() << dsuffix(location()) << std::endl;
 }
 
 // Make a for statement with a range clause.

@@ -1,6 +1,5 @@
 /* Common hooks for Motorola MCore.
-   Copyright (C) 1993, 1999, 2000, 2001, 2002, 2003, 2004, 2005, 2007, 2008,
-   2009, 2010, 2011 Free Software Foundation, Inc.
+   Copyright (C) 1993-2020 Free Software Foundation, Inc.
 
    This file is part of GCC.
 
@@ -34,7 +33,6 @@
 static const struct default_options mcore_option_optimization_table[] =
   {
     { OPT_LEVELS_1_PLUS, OPT_ffunction_cse, NULL, 0 },
-    { OPT_LEVELS_1_PLUS, OPT_fomit_frame_pointer, NULL, 1 },
     { OPT_LEVELS_ALL, OPT_fcaller_saves, NULL, 0 },
     { OPT_LEVELS_ALL, OPT_fschedule_insns, NULL, 0 },
     { OPT_LEVELS_ALL, OPT_fschedule_insns2, NULL, 0 },

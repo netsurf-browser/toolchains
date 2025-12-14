@@ -1,21 +1,20 @@
 // PR c++/38698
-// { dg-options "-std=c++0x" }
-// { dg-prune-output "note" }
+// { dg-do compile { target c++11 } }
 
 struct A
 {
   int i;
 };
 
-A a({1,2});			// { dg-error "no match" }
+A a({1,2});			// { dg-error "no match|cannot convert" }
 
 union U
 {
   int i,j;
 };
 
-U u({1,2});			// { dg-error "no match" }
+U u({1,2});			// { dg-error "no match|cannot convert" }
 
 union V {};
 
-V v({1});			// { dg-error "no match" }
+V v({1});			// { dg-error "no match|too many initializers" }

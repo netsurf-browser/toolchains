@@ -1,6 +1,5 @@
 ;; GCC machine description for SPARC synchronization instructions.
-;; Copyright (C) 2005, 2007, 2009, 2010, 2011
-;; Free Software Foundation, Inc.
+;; Copyright (C) 2005-2020 Free Software Foundation, Inc.
 ;;
 ;; This file is part of GCC.
 ;;
@@ -44,7 +43,7 @@
 })
 
 ;; A compiler-only memory barrier.  Generic code, when checking for the
-;; existance of various named patterns, uses asm("":::"memory") when we
+;; existence of various named patterns, uses asm("":::"memory") when we
 ;; don't need an actual instruction.  Here, it's easiest to pretend that
 ;; membar 0 is such a barrier.  Further, this gives us a nice hook to 
 ;; ignore all such barriers on Sparc V7.
@@ -65,11 +64,19 @@
   "stbar"
   [(set_attr "type" "multi")])
 
+;; For LEON3, STB has the effect of membar #StoreLoad.
+(define_insn "*membar_storeload_leon3"
+  [(set (match_operand:BLK 0 "" "")
+	(unspec:BLK [(match_dup 0) (const_int 2)] UNSPEC_MEMBAR))]
+  "TARGET_LEON3"
+  "stb\t%%g0, [%%sp-1]"
+  [(set_attr "type" "store")])
+
 ;; For V8, LDSTUB has the effect of membar #StoreLoad.
 (define_insn "*membar_storeload"
   [(set (match_operand:BLK 0 "" "")
 	(unspec:BLK [(match_dup 0) (const_int 2)] UNSPEC_MEMBAR))]
-  "TARGET_V8"
+  "TARGET_V8 && !TARGET_LEON3"
   "ldstub\t[%%sp-1], %%g0"
   [(set_attr "type" "multi")])
 
@@ -94,6 +101,18 @@
   "membar\t%1"
   [(set_attr "type" "multi")])
 
+(define_peephole2
+  [(set (match_operand:BLK 0 "" "")
+	(unspec:BLK [(match_dup 0) (match_operand:SI 1 "const_int_operand")]
+		    UNSPEC_MEMBAR))
+   (set (match_operand:BLK 2 "" "")
+	(unspec:BLK [(match_dup 2) (match_operand:SI 3 "const_int_operand")]
+		    UNSPEC_MEMBAR))]
+  ""
+  [(set (match_operand:BLK 0 "" "")
+	(unspec:BLK [(match_dup 0) (match_dup 1)] UNSPEC_MEMBAR))]
+{ operands[1] = GEN_INT (UINTVAL (operands[1]) | UINTVAL (operands[3])); })
+
 (define_expand "atomic_load<mode>"
   [(match_operand:I 0 "register_operand" "")
    (match_operand:I 1 "memory_operand" "")
@@ -114,10 +133,10 @@
 })
 
 (define_insn "atomic_loaddi_1"
-  [(set (match_operand:DI 0 "register_operand" "=U,?*f")
-	(unspec:DI [(match_operand:DI 1 "memory_operand" "m,m")]
+  [(set (match_operand:DI 0 "register_operand" "=r,?*f")
+	(unspec:DI [(match_operand:DI 1 "memory_operand" "T,T")]
 		   UNSPEC_ATOMIC))]
-  "!TARGET_ARCH64"
+  "TARGET_ARCH32"
   "ldd\t%1, %0"
   [(set_attr "type" "load,fpload")])
 
@@ -141,11 +160,11 @@
 })
 
 (define_insn "atomic_storedi_1"
-  [(set (match_operand:DI 0 "memory_operand" "=m,m,m")
+  [(set (match_operand:DI 0 "memory_operand" "=T,T,T")
 	(unspec:DI
-	  [(match_operand:DI 1 "register_or_v9_zero_operand" "J,U,?*f")]
+	  [(match_operand:DI 1 "register_or_v9_zero_operand" "J,r,?*f")]
 	  UNSPEC_ATOMIC))]
-  "!TARGET_ARCH64"
+  "TARGET_ARCH32"
   "@
    stx\t%r1, %0
    std\t%1, %0
@@ -162,7 +181,8 @@
    (match_operand:SI 5 "const_int_operand" "")		;; is_weak
    (match_operand:SI 6 "const_int_operand" "")		;; mod_s
    (match_operand:SI 7 "const_int_operand" "")]		;; mod_f
-  "TARGET_V9 && (<MODE>mode != DImode || TARGET_ARCH64 || TARGET_V8PLUS)"
+  "(TARGET_V9 || TARGET_LEON3)
+   && (<MODE>mode != DImode || TARGET_ARCH64 || TARGET_V8PLUS)"
 {
   sparc_expand_compare_and_swap (operands);
   DONE;
@@ -177,7 +197,7 @@
 	     [(match_operand:I48MODE 2 "register_operand" "")
 	      (match_operand:I48MODE 3 "register_operand" "")]
 	     UNSPECV_CAS))])]
-  "TARGET_V9"
+  "TARGET_V9 || TARGET_LEON3"
   "")
 
 (define_insn "*atomic_compare_and_swap<mode>_1"
@@ -188,9 +208,30 @@
 	  [(match_operand:I48MODE 2 "register_operand" "r")
 	   (match_operand:I48MODE 3 "register_operand" "0")]
 	  UNSPECV_CAS))]
-  "TARGET_V9 && (<MODE>mode == SImode || TARGET_ARCH64)"
+  "TARGET_V9 && (<MODE>mode != DImode || TARGET_ARCH64)"
   "cas<modesuffix>\t%1, %2, %0"
   [(set_attr "type" "multi")])
+
+(define_insn "atomic_compare_and_swap_leon3_1"
+  [(set (match_operand:SI 0 "register_operand" "=r")
+	(match_operand:SI 1 "mem_noofs_operand" "+w"))
+   (set (match_dup 1)
+	(unspec_volatile:SI
+	  [(match_operand:SI 2 "register_operand" "r")
+	   (match_operand:SI 3 "register_operand" "0")]
+	  UNSPECV_CAS))]
+  "TARGET_LEON3"
+{
+  if (sparc_fix_gr712rc)
+    output_asm_insn (".align\t16", operands);
+  if (TARGET_SV_MODE)
+    return "casa\t%1 0xb, %2, %0"; /* ASI for supervisor data space.  */
+  else
+    return "casa\t%1 0xa, %2, %0"; /* ASI for user data space.  */
+}
+  [(set_attr "type" "multi")
+   (set (attr "length") (if_then_else (eq_attr "fix_gr712rc" "true")
+		      (const_int 4) (const_int 1)))])
 
 (define_insn "*atomic_compare_and_swapdi_v8plus"
   [(set (match_operand:DI 0 "register_operand" "=h")
@@ -221,7 +262,7 @@
    (match_operand:SI 1 "memory_operand" "")
    (match_operand:SI 2 "register_operand" "")
    (match_operand:SI 3 "const_int_operand" "")]
-  "TARGET_V8 || TARGET_V9"
+  "(TARGET_V8 || TARGET_V9) && !sparc_fix_ut699"
 {
   enum memmodel model = (enum memmodel) INTVAL (operands[3]);
 
@@ -237,15 +278,22 @@
 			    UNSPECV_SWAP))
    (set (match_dup 1)
 	(match_operand:SI 2 "register_operand" "0"))]
-  "TARGET_V8 || TARGET_V9"
-  "swap\t%1, %0"
-  [(set_attr "type" "multi")])
+  "(TARGET_V8 || TARGET_V9) && !sparc_fix_ut699"
+{
+  if (sparc_fix_gr712rc)
+    return ".align\t16\n\tswap\t%1, %0";
+  else
+    return "swap\t%1, %0";
+}
+  [(set_attr "type" "multi")
+   (set (attr "length") (if_then_else (eq_attr "fix_gr712rc" "true")
+		      (const_int 4) (const_int 1)))])
 
 (define_expand "atomic_test_and_set"
   [(match_operand:QI 0 "register_operand" "")
    (match_operand:QI 1 "memory_operand" "")
    (match_operand:SI 2 "const_int_operand" "")]
-  ""
+  "!sparc_fix_ut699"
 {
   enum memmodel model = (enum memmodel) INTVAL (operands[2]);
   rtx ret;
@@ -269,6 +317,13 @@
 	(unspec_volatile:QI [(match_operand:QI 1 "memory_operand" "+m")]
 			    UNSPECV_LDSTUB))
    (set (match_dup 1) (const_int -1))]
-  ""
-  "ldstub\t%1, %0"
-  [(set_attr "type" "multi")])
+  "!sparc_fix_ut699"
+{
+  if (sparc_fix_gr712rc)
+    return ".align\t16\n\tldstub\t%1, %0";
+  else
+    return "ldstub\t%1, %0";
+}
+  [(set_attr "type" "multi")
+   (set (attr "length") (if_then_else (eq_attr "fix_gr712rc" "true")
+		      (const_int 4) (const_int 1)))])

@@ -1,6 +1,5 @@
 /* DWARF2 EH unwinding support for AMD x86-64 and x86.
-   Copyright (C) 2004, 2005, 2006, 2009, 2010, 2011, 2012
-   Free Software Foundation, Inc.
+   Copyright (C) 2004-2020 Free Software Foundation, Inc.
 
 This file is part of GCC.
 
@@ -23,16 +22,27 @@ a copy of the GCC Runtime Library Exception along with this program;
 see the files COPYING3 and COPYING.RUNTIME respectively.  If not, see
 <http://www.gnu.org/licenses/>.  */
 
+/* Unwind shadow stack for -fcf-protection -mshstk.  */
+#if defined __SHSTK__ && defined __CET__ && (__CET__ & 2) != 0
+# include "config/i386/shadow-stack-unwind.h"
+#endif
+
 /* Do code reading to identify a signal frame, and set the frame
    state data appropriately.  See unwind-dw2.c for the structs.
    Don't use this at all if inhibit_libc is used.  */
 
 #ifndef inhibit_libc
 
-#ifdef __x86_64__
+/* There's no sys/ucontext.h for glibc 2.0, so no
+   signal-turned-exceptions for them.  There's also no configure-run for
+   the target, so we can't check on (e.g.) HAVE_SYS_UCONTEXT_H.  Using the
+   target libc version macro should be enough.  */
+#if defined __GLIBC__ && !(__GLIBC__ == 2 && __GLIBC_MINOR__ == 0)
 
 #include <signal.h>
 #include <sys/ucontext.h>
+
+#ifdef __x86_64__
 
 #define MD_FALLBACK_FRAME_STATE_FOR x86_64_fallback_frame_state
 
@@ -53,7 +63,7 @@ x86_64_fallback_frame_state (struct _Unwind_Context *context,
   if (*(unsigned char *)(pc+0) == 0x48
       && *(unsigned long long *)(pc+1) == RT_SIGRETURN_SYSCALL)
     {
-      struct ucontext *uc_ = context->cfa;
+      ucontext_t *uc_ = context->cfa;
       /* The void * cast is necessary to avoid an aliasing warning.
          The aliasing warning is correct, but should not be a problem
          because it does not alias anything.  */
@@ -108,15 +118,6 @@ x86_64_fallback_frame_state (struct _Unwind_Context *context,
 
 #else /* ifdef __x86_64__  */
 
-/* There's no sys/ucontext.h for glibc 2.0, so no
-   signal-turned-exceptions for them.  There's also no configure-run for
-   the target, so we can't check on (e.g.) HAVE_SYS_UCONTEXT_H.  Using the
-   target libc version macro should be enough.  */
-#if defined __GLIBC__ && !(__GLIBC__ == 2 && __GLIBC_MINOR__ == 0)
-
-#include <signal.h>
-#include <sys/ucontext.h>
-
 #define MD_FALLBACK_FRAME_STATE_FOR x86_fallback_frame_state
 
 static _Unwind_Reason_Code
@@ -142,7 +143,7 @@ x86_fallback_frame_state (struct _Unwind_Context *context,
 	siginfo_t *pinfo;
 	void *puc;
 	siginfo_t info;
-	struct ucontext uc;
+	ucontext_t uc;
       } *rt_ = context->cfa;
       /* The void * cast is necessary to avoid an aliasing warning.
          The aliasing warning is correct, but should not be a problem
@@ -197,6 +198,6 @@ x86_frob_update_context (struct _Unwind_Context *context,
     _Unwind_SetSignalFrame (context, 1);
 }
 
-#endif /* not glibc 2.0 */
 #endif /* ifdef __x86_64__  */
+#endif /* not glibc 2.0 */
 #endif /* ifdef inhibit_libc  */

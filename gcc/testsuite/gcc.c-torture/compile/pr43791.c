@@ -1,3 +1,5 @@
+/* { dg-require-effective-target indirect_calls } */
+
 int owner();
 int clear();
 
@@ -18,4 +20,3 @@ void fasttrylock(void (*slowfn)()) {
 void trylock(void) {
      fasttrylock(slowtrylock);
 }
-

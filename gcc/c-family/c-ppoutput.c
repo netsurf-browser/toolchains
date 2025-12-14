@@ -1,6 +1,5 @@
 /* Preprocess only, using cpplib.
-   Copyright (C) 1995, 1997, 1998, 1999, 2000, 2001, 2002, 2003, 2004, 2007,
-   2008, 2009, 2010 Free Software Foundation, Inc.
+   Copyright (C) 1995-2020 Free Software Foundation, Inc.
    Written by Per Bothner, 1994-95.
 
    This program is free software; you can redistribute it and/or modify it
@@ -20,11 +19,10 @@
 #include "config.h"
 #include "system.h"
 #include "coretypes.h"
-#include "cpplib.h"
-#include "../libcpp/internal.h"
-#include "tree.h"
 #include "c-common.h"		/* For flags.  */
+#include "../libcpp/internal.h"
 #include "c-pragma.h"		/* For parse_in.  */
+#include "file-prefix-map.h"    /* remap_macro_filename()  */
 
 /* Encapsulates state used to convert a stream of tokens into a text
    file.  */
@@ -34,20 +32,22 @@ static struct
   const cpp_token *prev;	/* Previous token.  */
   const cpp_token *source;	/* Source token for spacing.  */
   int src_line;			/* Line number currently being written.  */
-  unsigned char printed;	/* Nonzero if something output at line.  */
+  bool printed;			/* True if something output at line.  */
   bool first_time;		/* pp_file_change hasn't been called yet.  */
+  bool prev_was_system_token;	/* True if the previous token was a
+				   system token.*/
   const char *src_file;		/* Current source file.  */
 } print;
 
 /* Defined and undefined macros being queued for output with -dU at
    the next newline.  */
-typedef struct macro_queue
+struct macro_queue
 {
   struct macro_queue *next;	/* Next macro in the list.  */
   char *macro;			/* The name of the macro if not
 				   defined, the full definition if
 				   defined.  */
-} macro_queue;
+};
 static macro_queue *define_queue, *undef_queue;
 
 /* General output routines.  */
@@ -59,24 +59,24 @@ static void account_for_newlines (const unsigned char *, size_t);
 static int dump_macro (cpp_reader *, cpp_hashnode *, void *);
 static void dump_queued_macros (cpp_reader *);
 
-static void print_line_1 (source_location, const char*, FILE *);
-static void print_line (source_location, const char *);
-static void maybe_print_line_1 (source_location, FILE *);
-static void maybe_print_line (source_location);
-static void do_line_change (cpp_reader *, const cpp_token *,
-			    source_location, int);
+static bool print_line_1 (location_t, const char*, FILE *);
+static bool print_line (location_t, const char *);
+static bool maybe_print_line_1 (location_t, FILE *);
+static bool maybe_print_line (location_t);
+static bool do_line_change (cpp_reader *, const cpp_token *,
+			    location_t, int);
 
 /* Callback routines for the parser.   Most of these are active only
    in specific modes.  */
 static void cb_line_change (cpp_reader *, const cpp_token *, int);
-static void cb_define (cpp_reader *, source_location, cpp_hashnode *);
-static void cb_undef (cpp_reader *, source_location, cpp_hashnode *);
-static void cb_used_define (cpp_reader *, source_location, cpp_hashnode *);
-static void cb_used_undef (cpp_reader *, source_location, cpp_hashnode *);
-static void cb_include (cpp_reader *, source_location, const unsigned char *,
+static void cb_define (cpp_reader *, location_t, cpp_hashnode *);
+static void cb_undef (cpp_reader *, location_t, cpp_hashnode *);
+static void cb_used_define (cpp_reader *, location_t, cpp_hashnode *);
+static void cb_used_undef (cpp_reader *, location_t, cpp_hashnode *);
+static void cb_include (cpp_reader *, location_t, const unsigned char *,
 			const char *, int, const cpp_token **);
-static void cb_ident (cpp_reader *, source_location, const cpp_string *);
-static void cb_def_pragma (cpp_reader *, source_location);
+static void cb_ident (cpp_reader *, location_t, const cpp_string *);
+static void cb_def_pragma (cpp_reader *, location_t);
 static void cb_read_pch (cpp_reader *pfile, const char *name,
 			 int fd, const char *orig_name);
 
@@ -150,13 +150,19 @@ init_pp_output (FILE *out_stream)
       cb->used_undef = cb_used_undef;
     }
 
+  cb->has_attribute = c_common_has_attribute;
+  cb->has_builtin = c_common_has_builtin;
+  cb->get_source_date_epoch = cb_get_source_date_epoch;
+  cb->remap_filename = remap_macro_filename;
+
   /* Initialize the print structure.  */
   print.src_line = 1;
-  print.printed = 0;
+  print.printed = false;
   print.prev = 0;
   print.outf = out_stream;
   print.first_time = 1;
   print.src_file = "";
+  print.prev_was_system_token = false;
 }
 
 /* Writes out the preprocessed file, handling spacing and paste
@@ -169,11 +175,12 @@ scan_translation_unit (cpp_reader *pfile)
     = cpp_get_options (parse_in)->lang != CLK_ASM
       && !flag_no_line_commands;
   bool in_pragma = false;
+  bool line_marker_emitted = false;
 
   print.source = NULL;
   for (;;)
     {
-      source_location loc;
+      location_t loc;
       const cpp_token *token = cpp_get_token_with_location (pfile, &loc);
 
       if (token->type == CPP_PADDING)
@@ -201,14 +208,18 @@ scan_translation_unit (cpp_reader *pfile)
 	      && do_line_adjustments
 	      && !in_pragma)
 	    {
-	      do_line_change (pfile, token, loc, false);
+	      line_marker_emitted = do_line_change (pfile, token, loc, false);
 	      putc (' ', print.outf);
+	      print.printed = true;
 	    }
 	  else if (print.source->flags & PREV_WHITE
 		   || (print.prev
 		       && cpp_avoid_paste (pfile, print.prev, token))
 		   || (print.prev == NULL && token->type == CPP_HASH))
-	    putc (' ', print.outf);
+	    {
+	      putc (' ', print.outf);
+	      print.printed = true;
+	    }
 	}
       else if (token->flags & PREV_WHITE)
 	{
@@ -217,8 +228,9 @@ scan_translation_unit (cpp_reader *pfile)
 	  if (src_line != print.src_line
 	      && do_line_adjustments
 	      && !in_pragma)
-	    do_line_change (pfile, token, loc, false);
+	    line_marker_emitted = do_line_change (pfile, token, loc, false);
 	  putc (' ', print.outf);
+	  print.printed = true;
 	}
 
       avoid_paste = false;
@@ -229,14 +241,14 @@ scan_translation_unit (cpp_reader *pfile)
 	  const char *space;
 	  const char *name;
 
-	  maybe_print_line (token->src_loc);
+	  line_marker_emitted = maybe_print_line (token->src_loc);
 	  fputs ("#pragma ", print.outf);
 	  c_pp_lookup_pragma (token->val.pragma, &space, &name);
 	  if (space)
 	    fprintf (print.outf, "%s %s", space, name);
 	  else
 	    fprintf (print.outf, "%s", name);
-	  print.printed = 1;
+	  print.printed = true;
 	  in_pragma = true;
 	}
       else if (token->type == CPP_PRAGMA_EOL)
@@ -247,12 +259,30 @@ scan_translation_unit (cpp_reader *pfile)
       else
 	{
 	  if (cpp_get_options (parse_in)->debug)
-	      linemap_dump_location (line_table, token->src_loc,
-				     print.outf);
+	    linemap_dump_location (line_table, token->src_loc, print.outf);
+
+	  if (do_line_adjustments
+	      && !in_pragma
+	      && !line_marker_emitted
+	      && print.prev_was_system_token != !!in_system_header_at (loc)
+	      && !is_location_from_builtin_token (loc))
+	    /* The system-ness of this token is different from the one
+	       of the previous token.  Let's emit a line change to
+	       mark the new system-ness before we emit the token.  */
+	    {
+	      do_line_change (pfile, token, loc, false);
+	      print.prev_was_system_token = !!in_system_header_at (loc);
+	    }
 	  cpp_output_token (token, print.outf);
+	  line_marker_emitted = false;
+	  print.printed = true;
 	}
 
-      if (token->type == CPP_COMMENT)
+      /* CPP_COMMENT tokens and raw-string literal tokens can
+	 have embedded new-line characters.  Rather than enumerating
+	 all the possible token types just check if token uses
+	 val.str union member.  */
+      if (cpp_token_val_index (token) == CPP_TOKEN_FLD_STR)
 	account_for_newlines (token->val.str.text, token->val.str.len);
     }
 }
@@ -295,7 +325,7 @@ scan_translation_unit_trad (cpp_reader *pfile)
       size_t len = pfile->out.cur - pfile->out.base;
       maybe_print_line (pfile->out.first_line);
       fwrite (pfile->out.base, 1, len, print.outf);
-      print.printed = 1;
+      print.printed = true;
       if (!CPP_OPTION (pfile, discard_comments))
 	account_for_newlines (pfile->out.base, len);
     }
@@ -303,11 +333,13 @@ scan_translation_unit_trad (cpp_reader *pfile)
 
 /* If the token read on logical line LINE needs to be output on a
    different line to the current one, output the required newlines or
-   a line marker, and return 1.  Otherwise return 0.  */
+   a line marker.  If a line marker was emitted, return TRUE otherwise
+   return FALSE.  */
 
-static void
-maybe_print_line_1 (source_location src_loc, FILE *stream)
+static bool
+maybe_print_line_1 (location_t src_loc, FILE *stream)
 {
+  bool emitted_line_marker = false;
   int src_line = LOCATION_LINE (src_loc);
   const char *src_file = LOCATION_FILE (src_loc);
 
@@ -316,7 +348,7 @@ maybe_print_line_1 (source_location src_loc, FILE *stream)
     {
       putc ('\n', stream);
       print.src_line++;
-      print.printed = 0;
+      print.printed = false;
     }
 
   if (!flag_no_line_commands
@@ -331,33 +363,38 @@ maybe_print_line_1 (source_location src_loc, FILE *stream)
 	}
     }
   else
-    print_line_1 (src_loc, "", stream);
+    emitted_line_marker = print_line_1 (src_loc, "", stream);
 
+  return emitted_line_marker;
 }
 
 /* If the token read on logical line LINE needs to be output on a
    different line to the current one, output the required newlines or
-   a line marker, and return 1.  Otherwise return 0.  */
+   a line marker.  If a line marker was emitted, return TRUE otherwise
+   return FALSE.  */
 
-static void
-maybe_print_line (source_location src_loc)
+static bool
+maybe_print_line (location_t src_loc)
 {
   if (cpp_get_options (parse_in)->debug)
     linemap_dump_location (line_table, src_loc,
 			   print.outf);
-  maybe_print_line_1 (src_loc, print.outf);
+  return maybe_print_line_1 (src_loc, print.outf);
 }
 
 /* Output a line marker for logical line LINE.  Special flags are "1"
-   or "2" indicating entering or leaving a file.  */
+   or "2" indicating entering or leaving a file.  If the line marker
+   was effectively emitted, return TRUE otherwise return FALSE.  */
 
-static void
-print_line_1 (source_location src_loc, const char *special_flags, FILE *stream)
+static bool
+print_line_1 (location_t src_loc, const char *special_flags, FILE *stream)
 {
+  bool emitted_line_marker = false;
+
   /* End any previous line of text.  */
   if (print.printed)
     putc ('\n', stream);
-  print.printed = 0;
+  print.printed = false;
 
   if (!flag_no_line_commands)
     {
@@ -388,33 +425,39 @@ print_line_1 (source_location src_loc, const char *special_flags, FILE *stream)
 	fputs (" 3", stream);
 
       putc ('\n', stream);
+      emitted_line_marker = true;
     }
+
+  return emitted_line_marker;
 }
 
 /* Output a line marker for logical line LINE.  Special flags are "1"
-   or "2" indicating entering or leaving a file.  */
+   or "2" indicating entering or leaving a file.  Return TRUE if a
+   line marker was effectively emitted, FALSE otherwise.  */
 
-static void
-print_line (source_location src_loc, const char *special_flags)
+static bool
+print_line (location_t src_loc, const char *special_flags)
 {
     if (cpp_get_options (parse_in)->debug)
       linemap_dump_location (line_table, src_loc,
 			     print.outf);
-    print_line_1 (src_loc, special_flags, print.outf);
+    return print_line_1 (src_loc, special_flags, print.outf);
 }
 
-/* Helper function for cb_line_change and scan_translation_unit.  */
-static void
+/* Helper function for cb_line_change and scan_translation_unit.
+   Return TRUE if a line marker is emitted, FALSE otherwise.  */
+static bool
 do_line_change (cpp_reader *pfile, const cpp_token *token,
-		source_location src_loc, int parsing_args)
+		location_t src_loc, int parsing_args)
 {
+  bool emitted_line_marker = false;
   if (define_queue || undef_queue)
     dump_queued_macros (pfile);
 
   if (token->type == CPP_EOF || parsing_args)
-    return;
+    return false;
 
-  maybe_print_line (src_loc);
+  emitted_line_marker = maybe_print_line (src_loc);
   print.prev = 0;
   print.source = 0;
 
@@ -426,11 +469,13 @@ do_line_change (cpp_reader *pfile, const cpp_token *token,
   if (!CPP_OPTION (pfile, traditional))
     {
       int spaces = LOCATION_COLUMN (src_loc) - 2;
-      print.printed = 1;
+      print.printed = true;
 
       while (-- spaces >= 0)
 	putc (' ', print.outf);
     }
+
+  return emitted_line_marker;
 }
 
 /* Called when a line of output is started.  TOKEN is the first token
@@ -443,7 +488,7 @@ cb_line_change (cpp_reader *pfile, const cpp_token *token,
 }
 
 static void
-cb_ident (cpp_reader *pfile ATTRIBUTE_UNUSED, source_location line,
+cb_ident (cpp_reader *pfile ATTRIBUTE_UNUSED, location_t line,
 	  const cpp_string *str)
 {
   maybe_print_line (line);
@@ -452,9 +497,9 @@ cb_ident (cpp_reader *pfile ATTRIBUTE_UNUSED, source_location line,
 }
 
 static void
-cb_define (cpp_reader *pfile, source_location line, cpp_hashnode *node)
+cb_define (cpp_reader *pfile, location_t line, cpp_hashnode *node)
 {
-  const struct line_map *map;
+  const line_map_ordinary *map;
 
   maybe_print_line (line);
   fputs ("#define ", print.outf);
@@ -467,6 +512,7 @@ cb_define (cpp_reader *pfile, source_location line, cpp_hashnode *node)
     fputs ((const char *) NODE_NAME (node), print.outf);
 
   putc ('\n', print.outf);
+  print.printed = false;
   linemap_resolve_location (line_table, line,
 			    LRK_MACRO_DEFINITION_LOCATION,
 			    &map);
@@ -475,7 +521,7 @@ cb_define (cpp_reader *pfile, source_location line, cpp_hashnode *node)
 }
 
 static void
-cb_undef (cpp_reader *pfile ATTRIBUTE_UNUSED, source_location line,
+cb_undef (cpp_reader *pfile ATTRIBUTE_UNUSED, location_t line,
 	  cpp_hashnode *node)
 {
   maybe_print_line (line);
@@ -484,21 +530,22 @@ cb_undef (cpp_reader *pfile ATTRIBUTE_UNUSED, source_location line,
 }
 
 static void
-cb_used_define (cpp_reader *pfile, source_location line ATTRIBUTE_UNUSED,
+cb_used_define (cpp_reader *pfile, location_t line ATTRIBUTE_UNUSED,
 		cpp_hashnode *node)
 {
-  macro_queue *q;
-  if (node->flags & NODE_BUILTIN)
-    return;
-  q = XNEW (macro_queue);
-  q->macro = xstrdup ((const char *) cpp_macro_definition (pfile, node));
-  q->next = define_queue;
-  define_queue = q;
+  if (cpp_user_macro_p (node))
+    {
+      macro_queue *q;
+      q = XNEW (macro_queue);
+      q->macro = xstrdup ((const char *) cpp_macro_definition (pfile, node));
+      q->next = define_queue;
+      define_queue = q;
+    }
 }
 
 static void
 cb_used_undef (cpp_reader *pfile ATTRIBUTE_UNUSED,
-	       source_location line ATTRIBUTE_UNUSED,
+	       location_t line ATTRIBUTE_UNUSED,
 	       cpp_hashnode *node)
 {
   macro_queue *q;
@@ -518,7 +565,7 @@ dump_queued_macros (cpp_reader *pfile ATTRIBUTE_UNUSED)
     {
       putc ('\n', print.outf);
       print.src_line++;
-      print.printed = 0;
+      print.printed = false;
     }
 
   for (q = define_queue; q;)
@@ -527,6 +574,7 @@ dump_queued_macros (cpp_reader *pfile ATTRIBUTE_UNUSED)
       fputs ("#define ", print.outf);
       fputs (q->macro, print.outf);
       putc ('\n', print.outf);
+      print.printed = false;
       print.src_line++;
       oq = q;
       q = q->next;
@@ -548,7 +596,7 @@ dump_queued_macros (cpp_reader *pfile ATTRIBUTE_UNUSED)
 }
 
 static void
-cb_include (cpp_reader *pfile ATTRIBUTE_UNUSED, source_location line,
+cb_include (cpp_reader *pfile ATTRIBUTE_UNUSED, location_t line,
 	    const unsigned char *dir, const char *header, int angle_brackets,
 	    const cpp_token **comments)
 {
@@ -570,6 +618,7 @@ cb_include (cpp_reader *pfile ATTRIBUTE_UNUSED, source_location line,
     }
 
   putc ('\n', print.outf);
+  print.printed = false;
   print.src_line++;
 }
 
@@ -594,7 +643,7 @@ pp_dir_change (cpp_reader *pfile ATTRIBUTE_UNUSED, const char *dir)
    described in MAP.  */
 
 void
-pp_file_change (const struct line_map *map)
+pp_file_change (const line_map_ordinary *map)
 {
   const char *flags = "";
 
@@ -616,11 +665,9 @@ pp_file_change (const struct line_map *map)
 	  /* Bring current file to correct line when entering a new file.  */
 	  if (map->reason == LC_ENTER)
 	    {
-	      const struct line_map *from = INCLUDED_FROM (line_table, map);
-	      maybe_print_line (LAST_SOURCE_LINE_LOCATION (from));
+	      maybe_print_line (linemap_included_from (map));
+	      flags = " 1";
 	    }
-	  if (map->reason == LC_ENTER)
-	    flags = " 1";
 	  else if (map->reason == LC_LEAVE)
 	    flags = " 2";
 	  print_line (map->start_location, flags);
@@ -630,11 +677,12 @@ pp_file_change (const struct line_map *map)
 
 /* Copy a #pragma directive to the preprocessed output.  */
 static void
-cb_def_pragma (cpp_reader *pfile, source_location line)
+cb_def_pragma (cpp_reader *pfile, location_t line)
 {
   maybe_print_line (line);
   fputs ("#pragma ", print.outf);
   cpp_output_line (pfile, print.outf);
+  print.printed = false;
   print.src_line++;
 }
 
@@ -642,12 +690,13 @@ cb_def_pragma (cpp_reader *pfile, source_location line)
 static int
 dump_macro (cpp_reader *pfile, cpp_hashnode *node, void *v ATTRIBUTE_UNUSED)
 {
-  if (node->type == NT_MACRO && !(node->flags & NODE_BUILTIN))
+  if (cpp_user_macro_p (node))
     {
       fputs ("#define ", print.outf);
       fputs ((const char *) cpp_macro_definition (pfile, node),
 	     print.outf);
       putc ('\n', print.outf);
+      print.printed = false;
       print.src_line++;
     }
 

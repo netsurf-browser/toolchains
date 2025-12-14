@@ -61,6 +61,11 @@ var matchTests = []MatchTest{
 	{"[-x]", "a", false, ErrBadPattern},
 	{"\\", "a", false, ErrBadPattern},
 	{"[a-b-c]", "a", false, ErrBadPattern},
+	{"[", "a", false, ErrBadPattern},
+	{"[^", "a", false, ErrBadPattern},
+	{"[^bc", "a", false, ErrBadPattern},
+	{"a[", "a", false, nil},
+	{"a[", "ab", false, ErrBadPattern},
 	{"*x", "xxx", true, nil},
 }
 
@@ -68,7 +73,7 @@ func TestMatch(t *testing.T) {
 	for _, tt := range matchTests {
 		ok, err := Match(tt.pattern, tt.s)
 		if ok != tt.match || err != tt.err {
-			t.Errorf("Match(%#q, %#q) = %v, %v want %v, nil", tt.pattern, tt.s, ok, err, tt.match)
+			t.Errorf("Match(%#q, %#q) = %v, %v want %v, %v", tt.pattern, tt.s, ok, err, tt.match, tt.err)
 		}
 	}
 }

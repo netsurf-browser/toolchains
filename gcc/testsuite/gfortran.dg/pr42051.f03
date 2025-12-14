@@ -1,5 +1,4 @@
 ! { dg-do compile }
-! { dg-options "-fno-whole-file" }
 !
 ! PR fortran/42051
 ! PR fortran/44064
@@ -32,5 +31,3 @@ contains
 end module
 
 end
-
-! { dg-final { cleanup-modules "grid_module field_module" } }
