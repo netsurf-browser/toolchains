@@ -1,7 +1,7 @@
 /* Test file for mpfr_get_flt and mpfr_set_flt
 
-Copyright 2009, 2010, 2011 Free Software Foundation, Inc.
-Contributed by the Arenaire and Cacao projects, INRIA.
+Copyright 2009-2016 Free Software Foundation, Inc.
+Contributed by the AriC and Caramba projects, INRIA.
 
 This file is part of the GNU MPFR Library.
 
@@ -28,21 +28,36 @@ int
 main (void)
 {
   mpfr_t x, y;
-  float f, g, infp;
+  float f, g;
   int i;
-
-  infp = FLT_MAX + FLT_MAX;
+#if !defined(MPFR_ERRDIVZERO)
+  float infp;
+#endif
 
   tests_start_mpfr ();
+
+#if !defined(MPFR_ERRDIVZERO)
+  /* The definition of DBL_POS_INF involves a division by 0. This makes
+     "clang -O2 -fsanitize=undefined -fno-sanitize-recover" fail. */
+  infp = (float) DBL_POS_INF;
+  if (infp * 0.5 != infp)
+    {
+      fprintf (stderr, "Error, FLT_MAX + FLT_MAX does not yield INFP\n");
+      fprintf (stderr, "(this is probably a compiler bug, please report)\n");
+      exit (1);
+    }
+#endif
 
   mpfr_init2 (x, 24);
   mpfr_init2 (y, 24);
 
+#if !defined(MPFR_ERRDIVZERO)
   mpfr_set_nan (x);
   f = mpfr_get_flt (x, MPFR_RNDN);
-  if (f == f)
+  if (! DOUBLE_ISNAN (f))
     {
       printf ("Error for mpfr_get_flt(NaN)\n");
+      printf ("got f=%f\n", f);
       exit (1);
     }
   mpfr_set_flt (x, f, MPFR_RNDN);
@@ -73,6 +88,7 @@ main (void)
       printf ("got "); mpfr_dump (x);
       exit (1);
     }
+#endif
 
   mpfr_set_ui (x, 0, MPFR_RNDN);
   f = mpfr_get_flt (x, MPFR_RNDN);
@@ -83,6 +99,7 @@ main (void)
       exit (1);
     }
 
+#ifdef HAVE_SIGNEDZ
   mpfr_set_ui (x, 0, MPFR_RNDN);
   mpfr_neg (x, x, MPFR_RNDN);
   f = mpfr_get_flt (x, MPFR_RNDN);
@@ -92,6 +109,7 @@ main (void)
       printf ("Error for mpfr_set_flt(mpfr_get_flt(-0))\n");
       exit (1);
     }
+#endif  /* HAVE_SIGNEDZ */
 
   mpfr_set_ui (x, 17, MPFR_RNDN);
   f = mpfr_get_flt (x, MPFR_RNDN);
@@ -125,8 +143,8 @@ main (void)
       if (mpfr_cmp (x, y) != 0)
         {
           printf ("Error for mpfr_set_flt(mpfr_get_flt(x))\n");
-          mpfr_printf ("expected %Ra\n", x);
-          mpfr_printf ("got      %Ra\n", y);
+          printf ("expected "); mpfr_dump (x);
+          printf ("got      "); mpfr_dump (y);
           exit (1);
         }
       mpfr_mul_2exp (x, x, 1, MPFR_RNDN);
@@ -143,8 +161,8 @@ main (void)
       if (mpfr_cmp (x, y) != 0)
         {
           printf ("Error for mpfr_set_flt(mpfr_get_flt(x))\n");
-          mpfr_printf ("expected %Ra\n", x);
-          mpfr_printf ("got      %Ra\n", y);
+          printf ("expected "); mpfr_dump (x);
+          printf ("got      "); mpfr_dump (y);
           exit (1);
         }
       mpfr_mul_2exp (x, x, 1, MPFR_RNDN);
@@ -161,13 +179,14 @@ main (void)
       if (mpfr_cmp (x, y) != 0)
         {
           printf ("Error for mpfr_set_flt(mpfr_get_flt(x))\n");
-          mpfr_printf ("expected %Ra\n", x);
-          mpfr_printf ("got      %Ra\n", y);
+          printf ("expected "); mpfr_dump (x);
+          printf ("got      "); mpfr_dump (y);
           exit (1);
         }
       mpfr_mul_2exp (x, x, 1, MPFR_RNDN);
     }
 
+#ifdef HAVE_DENORMS
   mpfr_set_si_2exp (x, 1, -150, MPFR_RNDN);
   g = 0.0;
   f = mpfr_get_flt (x, MPFR_RNDN);
@@ -283,6 +302,7 @@ main (void)
       printf ("expected %.8e, got %.8e\n", g, f);
       exit (1);
     }
+#endif
 
   mpfr_set_si_2exp (x, 1, 128, MPFR_RNDN);
   g = FLT_MAX;
@@ -300,6 +320,7 @@ main (void)
       printf ("expected %.8e, got %.8e\n", g, f);
       exit (1);
     }
+#if !defined(MPFR_ERRDIVZERO)
   f = mpfr_get_flt (x, MPFR_RNDN); /* 2^128 rounds to itself with extended
                                       exponent range, we should get +Inf */
   g = infp;
@@ -323,6 +344,7 @@ main (void)
       printf ("expected %.8e, got %.8e\n", g, f);
       exit (1);
     }
+#endif
 
   /* corner case: take x with 25 bits just below 2^128 */
   mpfr_set_prec (x, 25);
@@ -343,6 +365,7 @@ main (void)
       printf ("expected %.8e, got %.8e\n", g, f);
       exit (1);
     }
+#if !defined(MPFR_ERRDIVZERO)
   f = mpfr_get_flt (x, MPFR_RNDN); /* first round to 2^128 (even rule),
                                       thus we should get +Inf */
   g = infp;
@@ -366,6 +389,7 @@ main (void)
       printf ("expected %.8e, got %.8e\n", g, f);
       exit (1);
     }
+#endif
 
   mpfr_clear (x);
   mpfr_clear (y);

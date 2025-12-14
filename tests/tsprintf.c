@@ -1,8 +1,10 @@
 /* tsprintf.c -- test file for mpfr_sprintf, mpfr_vsprintf, mpfr_snprintf,
    and mpfr_vsnprintf
 
-Copyright 2007, 2008, 2009, 2010, 2011 Free Software Foundation, Inc.
-Contributed by the Arenaire and Cacao projects, INRIA.
+Copyright 2007-2016 Free Software Foundation, Inc.
+Contributed by the AriC and Caramba projects, INRIA.
+
+This file is part of the GNU MPFR Library.
 
 The GNU MPFR Library is free software; you can redistribute it and/or modify
 it under the terms of the GNU Lesser General Public License as published by
@@ -390,6 +392,40 @@ decimal (void)
   check_sprintf ("1", "%.0RUf", x);
   check_sprintf ("1", "%.0RYf", x);
 
+  /* multiple of 10 with 'g' style */
+  mpfr_set_str (x, "10", 10, MPFR_RNDN);
+  check_sprintf ("10", "%Rg", x);
+  check_sprintf ("1e+01", "%.0Rg", x);
+  check_sprintf ("1e+01", "%.1Rg", x);
+  check_sprintf ("10", "%.2Rg", x);
+
+  mpfr_ui_div (x, 1, x, MPFR_RNDN);
+  check_sprintf ("0.1", "%Rg", x);
+  check_sprintf ("0.1", "%.0Rg", x);
+  check_sprintf ("0.1", "%.1Rg", x);
+
+  mpfr_set_str (x, "1000", 10, MPFR_RNDN);
+  check_sprintf ("1000", "%Rg", x);
+  check_sprintf ("1e+03", "%.0Rg", x);
+  check_sprintf ("1e+03", "%.3Rg", x);
+  check_sprintf ("1000", "%.4Rg", x);
+
+  mpfr_ui_div (x, 1, x, MPFR_RNDN);
+  check_sprintf ("0.001", "%Rg", x);
+  check_sprintf ("0.001", "%.0Rg", x);
+  check_sprintf ("0.001", "%.1Rg", x);
+
+  mpfr_set_str (x, "100000", 10, MPFR_RNDN);
+  check_sprintf ("100000", "%Rg", x);
+  check_sprintf ("1e+05", "%.0Rg", x);
+  check_sprintf ("1e+05", "%.5Rg", x);
+  check_sprintf ("100000", "%.6Rg", x);
+
+  mpfr_ui_div (x, 1, x, MPFR_RNDN);
+  check_sprintf ("1e-05", "%Rg", x);
+  check_sprintf ("1e-05", "%.0Rg", x);
+  check_sprintf ("1e-05", "%.1Rg", x);
+
   /* check rounding mode */
   mpfr_set_str (x, "0.0076", 10, MPFR_RNDN);
   check_sprintf ("0.007", "%.3RDF", x);
@@ -420,10 +456,16 @@ decimal (void)
   check_sprintf ("1.999900  ", "%-#10.7RG", x);
   check_sprintf ("1.9999    ", "%-10.7RG", x);
   mpfr_set_ui (x, 1, MPFR_RNDN);
+  check_sprintf ("1.", "%#.1Rg", x);
+  check_sprintf ("1.   ", "%-#5.1Rg", x);
+  check_sprintf ("  1.0", "%#5.2Rg", x);
   check_sprintf ("1.00000000000000000000000000000", "%#.30Rg", x);
   check_sprintf ("1", "%.30Rg", x);
   mpfr_set_ui (x, 0, MPFR_RNDN);
-  check_sprintf ("0.000000000000000000000000000000", "%#.30Rg", x);
+  check_sprintf ("0.", "%#.1Rg", x);
+  check_sprintf ("0.   ", "%-#5.1Rg", x);
+  check_sprintf ("  0.0", "%#5.2Rg", x);
+  check_sprintf ("0.00000000000000000000000000000", "%#.30Rg", x);
   check_sprintf ("0", "%.30Rg", x);
 
   /* following tests with precision 53 bits */
@@ -439,6 +481,18 @@ decimal (void)
   check_sprintf ("-1.", "%- #0.1RG", x);
 
   /* precision zero */
+  mpfr_set_d (x, 9.5, MPFR_RNDN);
+  check_sprintf ("9",    "%.0RDf", x);
+  check_sprintf ("10",    "%.0RUf", x);
+
+  mpfr_set_d (x, 19.5, MPFR_RNDN);
+  check_sprintf ("19",    "%.0RDf", x);
+  check_sprintf ("20",    "%.0RUf", x);
+
+  mpfr_set_d (x, 99.5, MPFR_RNDN);
+  check_sprintf ("99",    "%.0RDf", x);
+  check_sprintf ("100",   "%.0RUf", x);
+
   mpfr_set_d (x, -9.5, MPFR_RNDN);
   check_sprintf ("-10",    "%.0RDf", x);
   check_sprintf ("-10",    "%.0RYf", x);
@@ -733,7 +787,9 @@ mixed (void)
   int n1;
   int n2;
   int i = 121;
+#ifndef NPRINTF_L
   long double d = 1. / 31.;
+#endif
   mpf_t mpf;
   mpq_t mpq;
   mpz_t mpz;
@@ -780,6 +836,8 @@ mixed (void)
   return 0;
 }
 
+#if MPFR_LCONV_DPTS
+
 /* Check with locale "da_DK". On most platforms, decimal point is ','
    and thousands separator is '.'; the test is not performed if this
    is not the case or if the locale doesn't exist. */
@@ -825,6 +883,8 @@ locale_da_DK (void)
   mpfr_clear (x);
   return 0;
 }
+
+#endif  /* MPFR_LCONV_DPTS */
 
 /* check concordance between mpfr_asprintf result with a regular mpfr float
    and with a regular double float */
@@ -1040,6 +1100,23 @@ bug20081214 (void)
   mpfr_clear (x);
 }
 
+static void
+bug20111102 (void)
+{
+  mpfr_t t;
+  char s[100];
+
+  mpfr_init2 (t, 84);
+  mpfr_set_str (t, "999.99999999999999999999", 10, MPFR_RNDN);
+  mpfr_sprintf (s, "%.20RNg", t);
+  if (strcmp (s, "1000") != 0)
+    {
+      printf ("Error in bug20111102, expected 1000, got %s\n", s);
+      exit (1);
+    }
+  mpfr_clear (t);
+}
+
 /* In particular, the following test makes sure that the rounding
  * for %Ra and %Rb is not done on the MPFR number itself (as it
  * would overflow). Note: it has been reported on comp.std.c that
@@ -1069,7 +1146,11 @@ check_emax_aux (mpfr_exp_t e)
 
   if (strcmp (s1, s2) != 0)
     {
-      printf ("Error in check_emax_aux for emax = %ld\n", e);
+      printf ("Error in check_emax_aux for emax = ");
+      if (e > LONG_MAX)
+        printf ("(>LONG_MAX)\n");
+      else
+        printf ("%ld\n", (long) e);
       printf ("Expected %s\n", s2);
       printf ("Got      %s\n", s1);
       exit (1);
@@ -1084,7 +1165,11 @@ check_emax_aux (mpfr_exp_t e)
 
   if (strcmp (s1, s2) != 0)
     {
-      printf ("Error in check_emax_aux for emax = %ld\n", e);
+      printf ("Error in check_emax_aux for emax = ");
+      if (e > LONG_MAX)
+        printf ("(>LONG_MAX)\n");
+      else
+        printf ("%ld\n", (long) e);
       printf ("Expected %s\n", s2);
       printf ("Got      %s\n", s1);
       exit (1);
@@ -1103,6 +1188,69 @@ check_emax (void)
   check_emax_aux (MPFR_EMAX_MAX);
 }
 
+static void
+check_emin_aux (mpfr_exp_t e)
+{
+  mpfr_t x;
+  char *s1, s2[256];
+  int i;
+  mpfr_exp_t emin;
+  mpz_t ee;
+
+  MPFR_ASSERTN (e >= LONG_MIN);
+  emin = mpfr_get_emin ();
+  set_emin (e);
+
+  mpfr_init2 (x, 16);
+  mpz_init (ee);
+
+  mpfr_setmin (x, e);
+  mpz_set_si (ee, e);
+  mpz_sub_ui (ee, ee, 1);
+
+  i = mpfr_asprintf (&s1, "%Ra", x);
+  MPFR_ASSERTN (i > 0);
+
+  gmp_snprintf (s2, 256, "0x1p%Zd", ee);
+
+  if (strcmp (s1, s2) != 0)
+    {
+      printf ("Error in check_emin_aux for emin = %ld\n", (long) e);
+      printf ("Expected %s\n", s2);
+      printf ("Got      %s\n", s1);
+      exit (1);
+    }
+
+  mpfr_free_str (s1);
+
+  i = mpfr_asprintf (&s1, "%Rb", x);
+  MPFR_ASSERTN (i > 0);
+
+  gmp_snprintf (s2, 256, "1p%Zd", ee);
+
+  if (strcmp (s1, s2) != 0)
+    {
+      printf ("Error in check_emin_aux for emin = %ld\n", (long) e);
+      printf ("Expected %s\n", s2);
+      printf ("Got      %s\n", s1);
+      exit (1);
+    }
+
+  mpfr_free_str (s1);
+
+  mpfr_clear (x);
+  mpz_clear (ee);
+  set_emin (emin);
+}
+
+static void
+check_emin (void)
+{
+  check_emin_aux (-15);
+  check_emin_aux (mpfr_get_emin ());
+  check_emin_aux (MPFR_EMIN_MIN);
+}
+
 int
 main (int argc, char **argv)
 {
@@ -1115,16 +1263,20 @@ main (int argc, char **argv)
   locale = setlocale (LC_ALL, "C");
 #endif
 
+  bug20111102 ();
   native_types ();
   hexadecimal ();
   binary ();
   decimal ();
   mixed ();
   check_emax ();
+  check_emin ();
 
 #if defined(HAVE_LOCALE_H) && defined(HAVE_SETLOCALE)
+#if MPFR_LCONV_DPTS
   locale_da_DK ();
-
+  /* Avoid a warning by doing the setlocale outside of this #if */
+#endif
   setlocale (LC_ALL, locale);
 #endif
 
@@ -1157,7 +1309,7 @@ int
 main (void)
 {
   /* We have nothing to test. */
-  return 0;
+  return 77;
 }
 
 #endif  /* HAVE_STDARG */

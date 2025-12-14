@@ -1,7 +1,7 @@
 /* Test file for the various power functions
 
-Copyright 2008, 2009, 2010, 2011 Free Software Foundation, Inc.
-Contributed by the Arenaire and Cacao projects, INRIA.
+Copyright 2008-2016 Free Software Foundation, Inc.
+Contributed by the AriC and Caramba projects, INRIA.
 
 This file is part of the GNU MPFR Library.
 
@@ -43,7 +43,7 @@ static int all_cmpres_errors;
 /* Non-zero when extended exponent range */
 static int ext = 0;
 
-static char *val[] =
+static const char *val[] =
   { "min", "min+", "max", "@NaN@", "-@Inf@", "-4", "-3", "-2", "-1.5",
     "-1", "-0.5", "-0", "0", "0.5", "1", "1.5", "2", "3", "4", "@Inf@" };
 
@@ -109,16 +109,19 @@ cmpres (int spx, const void *px, const char *sy, mpfr_rnd_t rnd,
   printf ("Expected ");
   if (z1 == NULL)
     {
-      printf ("pure FP value, flags = %u\n", flags1);
+      printf ("pure FP value, flags =");
+      flags_out (flags1);
     }
   else
     {
       mpfr_out_str (stdout, 16, 0, z1, MPFR_RNDN);
-      printf (", inex = %d, flags = %u\n", SIGN (inex1), flags1);
+      printf (", inex = %d,\n         flags =", SIGN (inex1));
+      flags_out (flags1);
     }
   printf ("Got      ");
   mpfr_out_str (stdout, 16, 0, z2, MPFR_RNDN);
-  printf (", inex = %d, flags = %u\n", SIGN (inex2), flags2);
+  printf (", inex = %d,\n         flags =", SIGN (inex2));
+  flags_out (flags2);
   if (all_cmpres_errors != 0)
     all_cmpres_errors = -1;
   else

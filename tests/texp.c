@@ -1,7 +1,7 @@
 /* Test file for mpfr_exp.
 
-Copyright 1999, 2001, 2002, 2003, 2004, 2005, 2006, 2007, 2008, 2009, 2010, 2011 Free Software Foundation, Inc.
-Contributed by the Arenaire and Cacao projects, INRIA.
+Copyright 1999, 2001-2016 Free Software Foundation, Inc.
+Contributed by the AriC and Caramba projects, INRIA.
 
 This file is part of the GNU MPFR Library.
 
@@ -150,6 +150,22 @@ check_worst_cases (void)
       exit (1);
     }
 
+  mpfr_set_prec (x, 118);
+  mpfr_set_str_binary (x, "0.1110010100011101010000111110011000000000000000000000000000000000000000000000000000000000000000000000000000000000000000E-86");
+  mpfr_set_prec (y, 118);
+  mpfr_exp_2 (y, x, MPFR_RNDU);
+  mpfr_exp_3 (x, x, MPFR_RNDU);
+  if (mpfr_cmp (x, y))
+    {
+      printf ("mpfr_exp_2 and mpfr_exp_3 differ for prec=118\n");
+      printf ("mpfr_exp_2 gives ");
+      mpfr_out_str (stdout, 2, 0, y, MPFR_RNDN);
+      printf ("\nmpfr_exp_3 gives ");
+      mpfr_out_str (stdout, 2, 0, x, MPFR_RNDN);
+      printf ("\n");
+      exit (1);
+    }
+
   mpfr_clear (x);
   mpfr_clear (y);
   return 0;
@@ -170,7 +186,9 @@ compare_exp2_exp3 (mpfr_prec_t p0, mpfr_prec_t p1)
       mpfr_set_prec (x, prec);
       mpfr_set_prec (y, prec);
       mpfr_set_prec (z, prec);
-      mpfr_urandomb (x, RANDS);
+      do
+        mpfr_urandomb (x, RANDS);
+      while (MPFR_IS_ZERO (x));  /* 0 is handled by mpfr_exp only */
       rnd = RND_RAND ();
       mpfr_exp_2 (y, x, rnd);
       mpfr_exp_3 (z, x, rnd);

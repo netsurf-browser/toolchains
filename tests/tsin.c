@@ -1,7 +1,7 @@
 /* Test file for mpfr_sin.
 
-Copyright 2001, 2002, 2003, 2004, 2005, 2006, 2007, 2008, 2009, 2010, 2011 Free Software Foundation, Inc.
-Contributed by the Arenaire and Cacao projects, INRIA.
+Copyright 2001-2016 Free Software Foundation, Inc.
+Contributed by the AriC and Caramba projects, INRIA.
 
 This file is part of the GNU MPFR Library.
 
@@ -348,6 +348,17 @@ main (int argc, char *argv[])
       exit (1);
     }
 
+  mpfr_set_prec (s, 9);
+  mpfr_set_prec (x, 190);
+  mpfr_const_pi (x, MPFR_RNDN);
+  mpfr_sin (s, x, MPFR_RNDZ);
+  if (mpfr_cmp_str (s, "0.100000101e-196", 2, MPFR_RNDN))
+    {
+      printf ("Error for x ~= pi\n");
+      mpfr_dump (s);
+      exit (1);
+    }
+
   mpfr_clear (s2);
   mpfr_clear (c2);
   mpfr_clear (s);
@@ -355,6 +366,7 @@ main (int argc, char *argv[])
   mpfr_clear (x);
 
   test_generic (2, 100, 15);
+  test_generic (MPFR_SINCOS_THRESHOLD-1, MPFR_SINCOS_THRESHOLD+1, 2);
   test_sign ();
   check_tiny ();
 

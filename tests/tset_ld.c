@@ -1,7 +1,7 @@
 /* Test file for mpfr_set_ld and mpfr_get_ld.
 
-Copyright 2002, 2003, 2004, 2005, 2006, 2007, 2008, 2009, 2010, 2011 Free Software Foundation, Inc.
-Contributed by the Arenaire and Cacao projects, INRIA.
+Copyright 2002-2016 Free Software Foundation, Inc.
+Contributed by the AriC and Caramba projects, INRIA.
 
 This file is part of the GNU MPFR Library.
 
@@ -47,8 +47,11 @@ check_gcc33_bug (void)
 static int
 Isnan_ld (long double d)
 {
-  double e = (double) d;
-  if (DOUBLE_ISNAN (e))
+  /* Do not convert d to double as this can give an overflow, which
+     may confuse compilers without IEEE 754 support (such as clang
+     -fsanitize=undefined), or trigger a trap if enabled.
+     The DOUBLE_ISNAN macro should work fine on long double. */
+  if (DOUBLE_ISNAN (d))
     return 1;
   LONGDOUBLE_NAN_ACTION (d, goto yes);
   return 0;
@@ -72,9 +75,15 @@ check_set_get (long double d, mpfr_t x)
       inex = mpfr_set_ld (x, d, (mpfr_rnd_t) r);
       if (inex != 0)
         {
+          mpfr_exp_t emin, emax;
+          emin = mpfr_get_emin ();
+          emax = mpfr_get_emax ();
           printf ("Error: mpfr_set_ld should be exact\n");
           printf ("d=%1.30Le inex=%d\n", d, inex);
-          printf ("emin=%ld emax=%ld\n", mpfr_get_emin (), mpfr_get_emax ());
+          if (emin >= LONG_MIN)
+            printf ("emin=%ld\n", (long) emin);
+          if (emax <= LONG_MAX)
+            printf ("emax=%ld\n", (long) emax);
           mpfr_dump (x);
           exit (1);
         }
@@ -210,10 +219,12 @@ main (int argc, char *argv[])
 
   mpfr_init2 (x, MPFR_LDBL_MANT_DIG);
 
+#if !defined(MPFR_ERRDIVZERO)
   /* check NaN */
   mpfr_set_nan (x);
   d = mpfr_get_ld (x, MPFR_RNDN);
   check_set_get (d, x);
+#endif
 
   /* check +0.0 and -0.0 */
   d = 0.0;
@@ -226,12 +237,13 @@ main (int argc, char *argv[])
   if (MPFR_SIGN(x) > 0)
     {
       printf ("Error: sign of -0.0 is not set correctly\n");
-#ifdef _GMP_IEEE_FLOATS
+#if _GMP_IEEE_FLOATS
       exit (1);
       /* Non IEEE doesn't support negative zero yet */
 #endif
     }
 
+#if !defined(MPFR_ERRDIVZERO)
   /* check +Inf */
   mpfr_set_inf (x, 1);
   d = mpfr_get_ld (x, MPFR_RNDN);
@@ -241,6 +253,7 @@ main (int argc, char *argv[])
   mpfr_set_inf (x, -1);
   d = mpfr_get_ld (x, MPFR_RNDN);
   check_set_get (d, x);
+#endif
 
   /* check the largest power of two */
   d = 1.0; while (d < LDBL_MAX / 2.0) d += d;
