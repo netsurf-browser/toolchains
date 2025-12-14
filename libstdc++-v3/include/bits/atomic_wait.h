@@ -1,6 +1,6 @@
 // -*- C++ -*- header.
 
-// Copyright (C) 2020-2021 Free Software Foundation, Inc.
+// Copyright (C) 2020-2022 Free Software Foundation, Inc.
 //
 // This file is part of the GNU ISO C++ Library.  This library is free
 // software; you can redistribute it and/or modify it under the
@@ -142,8 +142,8 @@ _GLIBCXX_BEGIN_NAMESPACE_VERSION
 #endif
     }
 
-    constexpr auto __atomic_spin_count_1 = 12;
-    constexpr auto __atomic_spin_count_2 = 4;
+    constexpr auto __atomic_spin_count_relax = 12;
+    constexpr auto __atomic_spin_count = 16;
 
     struct __default_spin_policy
     {
@@ -157,18 +157,15 @@ _GLIBCXX_BEGIN_NAMESPACE_VERSION
       bool
       __atomic_spin(_Pred& __pred, _Spin __spin = _Spin{ }) noexcept
       {
-	for (auto __i = 0; __i < __atomic_spin_count_1; ++__i)
+	for (auto __i = 0; __i < __atomic_spin_count; ++__i)
 	  {
 	    if (__pred())
 	      return true;
-	    __detail::__thread_relax();
-	  }
 
-	for (auto __i = 0; __i < __atomic_spin_count_2; ++__i)
-	  {
-	    if (__pred())
-	      return true;
-	    __detail::__thread_yield();
+	    if (__i < __atomic_spin_count_relax)
+	      __detail::__thread_relax();
+	    else
+	      __detail::__thread_yield();
 	  }
 
 	while (__spin())
@@ -190,11 +187,9 @@ _GLIBCXX_BEGIN_NAMESPACE_VERSION
 
     struct __waiter_pool_base
     {
-#ifdef __cpp_lib_hardware_interference_size
-    static constexpr auto _S_align = hardware_destructive_interference_size;
-#else
-    static constexpr auto _S_align = 64;
-#endif
+      // Don't use std::hardware_destructive_interference_size here because we
+      // don't want the layout of library types to depend on compiler options.
+      static constexpr auto _S_align = 64;
 
       alignas(_S_align) __platform_wait_t _M_wait = 0;
 
