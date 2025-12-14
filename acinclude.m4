@@ -44,8 +44,10 @@ define(POWERPC64_PATTERN,
 [[powerpc64-*-* | powerpc64le-*-* | powerpc620-*-* | powerpc630-*-* | powerpc970-*-* | power[3-9]-*-*]])
 
 define(X86_PATTERN,
-[[i?86*-*-* | k[5-8]*-*-* | pentium*-*-* | athlon-*-* | viac3*-*-* | geode*-*-*]])
+[[i?86*-*-* | k[5-8]*-*-* | pentium*-*-* | athlon-*-* | viac3*-*-* | geode*-*-* | atom-*-*]])
 
+define(X86_64_PATTERN,
+[[athlon64-*-* | pentium4-*-* | atom-*-* | core2-*-* | corei-*-* | x86_64-*-* | nano-*-*]])
 
 dnl  GMP_FAT_SUFFIX(DSTVAR, DIRECTORY)
 dnl  ---------------------------------
@@ -110,13 +112,12 @@ dnl  Expand to the right way to #include gmp-h.in.  This must be used
 dnl  instead of gmp.h, since that file isn't generated until the end of the
 dnl  configure.
 dnl
-dnl  Dummy values for __GMP_BITS_PER_MP_LIMB and GMP_LIMB_BITS are enough
+dnl  Dummy value for GMP_LIMB_BITS is enough
 dnl  for all current configure-time uses of gmp.h.
 
 define(GMP_INCLUDE_GMP_H,
 [[#define __GMP_WITHIN_CONFIGURE 1   /* ignore template stuff */
 #define GMP_NAIL_BITS $GMP_NAIL_BITS
-#define __GMP_BITS_PER_MP_LIMB 123 /* dummy for GMP_NUMB_BITS etc */
 #define GMP_LIMB_BITS 123
 $DEFN_LONG_LONG_LIMB
 #include "$srcdir/gmp-h.in"]
@@ -3800,6 +3801,8 @@ dnl  GMP_C_FOR_BUILD_ANSI
 dnl  --------------------
 dnl  Determine whether CC_FOR_BUILD is ANSI, and establish U_FOR_BUILD
 dnl  accordingly.
+dnl
+dnl  FIXME: Use AC_PROG_CC sets ac_cv_prog_cc_c89 which could be used instead
 
 AC_DEFUN([GMP_C_FOR_BUILD_ANSI],
 [AC_REQUIRE([GMP_PROG_CC_FOR_BUILD])
