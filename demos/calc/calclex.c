@@ -2,13 +2,14 @@
 
 /* Scanner skeleton version:
  * $Header: /home/daffy/u0/vern/flex/RCS/flex.skl,v 2.91 96/09/10 16:58:48 vern Exp $
- * $FreeBSD: src/usr.bin/lex/flex.skl,v 1.8.26.1 2008/11/25 02:59:29 kensmith Exp $
+ * $FreeBSD: releng/9.3/usr.bin/lex/flex.skl 214272 2010-10-24 15:31:41Z uqs $
  */
 
 #if defined(__FreeBSD__)
 #include <sys/cdefs.h>
 #else
 #define __unused
+#define __dead2
 #endif
 
 #define FLEX_SCANNER
@@ -277,7 +278,7 @@ extern char *yytext;
 static yy_state_type yy_get_previous_state YY_PROTO(( void ));
 static yy_state_type yy_try_NUL_trans YY_PROTO(( yy_state_type current_state ));
 static int yy_get_next_buffer YY_PROTO(( void ));
-static void yy_fatal_error YY_PROTO(( yyconst char msg[] ));
+static void yy_fatal_error YY_PROTO(( yyconst char msg[] )) __dead2;
 
 /* Done after the current pattern has been matched and before the
  * corresponding action - sets up yytext.
@@ -388,11 +389,11 @@ static char *yy_last_accepting_cpos;
 #define YY_MORE_ADJ 0
 #define YY_RESTORE_YY_MORE_OFFSET
 char *yytext;
-#line 1 "calclex.l"
+#line 1 "../../../gmp/demos/calc/calclex.l"
 #define INITIAL 0
 /* Lexical analyzer for calc program.
 
-Copyright 2000, 2001, 2002 Free Software Foundation, Inc.
+Copyright 2000-2002 Free Software Foundation, Inc.
 
 This file is part of the GNU MP Library.
 
@@ -406,8 +407,8 @@ WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR A
 PARTICULAR PURPOSE.  See the GNU General Public License for more details.
 
 You should have received a copy of the GNU General Public License along with
-this program.  If not, see http://www.gnu.org/licenses/.  */
-#line 20 "calclex.l"
+this program.  If not, see https://www.gnu.org/licenses/.  */
+#line 20 "../../../gmp/demos/calc/calclex.l"
 #include <string.h>
 #include "calc-common.h"
 
@@ -443,7 +444,7 @@ const struct calc_keywords_t  calc_keywords[] = {
   { "sqrt",      SQRT },
   { NULL }
 };
-#line 447 "calclex.c"
+#line 448 "calclex.c"
 
 /* Macros after this point can all be overridden by user definitions in
  * section 1.
@@ -590,14 +591,14 @@ YY_MALLOC_DECL
 
 YY_DECL
 	{
-	register yy_state_type yy_current_state;
-	register char *yy_cp, *yy_bp;
-	register int yy_act;
+	yy_state_type yy_current_state;
+	char *yy_cp, *yy_bp;
+	int yy_act;
 
-#line 57 "calclex.l"
+#line 57 "../../../gmp/demos/calc/calclex.l"
 
 
-#line 601 "calclex.c"
+#line 602 "calclex.c"
 
 	if ( yy_init )
 		{
@@ -639,7 +640,7 @@ YY_DECL
 yy_match:
 		do
 			{
-			register YY_CHAR yy_c = yy_ec[YY_SC_TO_UI(*yy_cp)];
+			YY_CHAR yy_c = yy_ec[YY_SC_TO_UI(*yy_cp)];
 			if ( yy_accept[yy_current_state] )
 				{
 				yy_last_accepting_state = yy_current_state;
@@ -682,94 +683,94 @@ do_action:	/* This label is used only to access EOF actions. */
 
 case 1:
 YY_RULE_SETUP
-#line 59 "calclex.l"
+#line 59 "../../../gmp/demos/calc/calclex.l"
 { /* white space is skipped */ }
 	YY_BREAK
 case 2:
 YY_RULE_SETUP
-#line 61 "calclex.l"
+#line 61 "../../../gmp/demos/calc/calclex.l"
 { /* semicolon or newline separates statements */
           calc_more_input = 0;
           return EOS; }
 	YY_BREAK
 case 3:
 YY_RULE_SETUP
-#line 64 "calclex.l"
+#line 64 "../../../gmp/demos/calc/calclex.l"
 { /* escaped newlines are skipped */ }
 	YY_BREAK
 case 4:
 YY_RULE_SETUP
-#line 67 "calclex.l"
+#line 67 "../../../gmp/demos/calc/calclex.l"
 {
             /* comment through to escaped newline is skipped */ }
 	YY_BREAK
 case 5:
 YY_RULE_SETUP
-#line 69 "calclex.l"
+#line 69 "../../../gmp/demos/calc/calclex.l"
 { /* comment through to newline is a separator */
             calc_more_input = 0;
             return EOS; }
 	YY_BREAK
 case 6:
 YY_RULE_SETUP
-#line 72 "calclex.l"
+#line 72 "../../../gmp/demos/calc/calclex.l"
 {   /* comment through to EOF skipped */ }
 	YY_BREAK
 case 7:
 YY_RULE_SETUP
-#line 75 "calclex.l"
+#line 75 "../../../gmp/demos/calc/calclex.l"
 { return yytext[0]; }
 	YY_BREAK
 case 8:
 YY_RULE_SETUP
-#line 76 "calclex.l"
+#line 76 "../../../gmp/demos/calc/calclex.l"
 { return LE; }
 	YY_BREAK
 case 9:
 YY_RULE_SETUP
-#line 77 "calclex.l"
+#line 77 "../../../gmp/demos/calc/calclex.l"
 { return GE; }
 	YY_BREAK
 case 10:
 YY_RULE_SETUP
-#line 78 "calclex.l"
+#line 78 "../../../gmp/demos/calc/calclex.l"
 { return EQ; }
 	YY_BREAK
 case 11:
 YY_RULE_SETUP
-#line 79 "calclex.l"
+#line 79 "../../../gmp/demos/calc/calclex.l"
 { return NE; }
 	YY_BREAK
 case 12:
 YY_RULE_SETUP
-#line 80 "calclex.l"
+#line 80 "../../../gmp/demos/calc/calclex.l"
 { return LSHIFT; }
 	YY_BREAK
 case 13:
 YY_RULE_SETUP
-#line 81 "calclex.l"
+#line 81 "../../../gmp/demos/calc/calclex.l"
 { return RSHIFT; }
 	YY_BREAK
 case 14:
 YY_RULE_SETUP
-#line 82 "calclex.l"
+#line 82 "../../../gmp/demos/calc/calclex.l"
 { return LAND; }
 	YY_BREAK
 case 15:
 YY_RULE_SETUP
-#line 83 "calclex.l"
+#line 83 "../../../gmp/demos/calc/calclex.l"
 { return LOR; }
 	YY_BREAK
 case 16:
 YY_RULE_SETUP
-#line 85 "calclex.l"
+#line 85 "../../../gmp/demos/calc/calclex.l"
 {
         yylval.str = yytext;
         return NUMBER; }
 	YY_BREAK
 case 17:
 YY_RULE_SETUP
-#line 89 "calclex.l"
+#line 89 "../../../gmp/demos/calc/calclex.l"
 {
         int  i;
 
@@ -788,15 +789,15 @@ YY_RULE_SETUP
 	YY_BREAK
 case 18:
 YY_RULE_SETUP
-#line 105 "calclex.l"
+#line 105 "../../../gmp/demos/calc/calclex.l"
 { return BAD; }
 	YY_BREAK
 case 19:
 YY_RULE_SETUP
-#line 107 "calclex.l"
+#line 107 "../../../gmp/demos/calc/calclex.l"
 ECHO;
 	YY_BREAK
-#line 800 "calclex.c"
+#line 801 "calclex.c"
 case YY_STATE_EOF(INITIAL):
 	yyterminate();
 
@@ -938,11 +939,15 @@ case YY_STATE_EOF(INITIAL):
  *	EOB_ACT_END_OF_FILE - end of file
  */
 
+#ifdef YY_USE_PROTOS
+static int yy_get_next_buffer(void)
+#else
 static int yy_get_next_buffer()
+#endif
 	{
-	register char *dest = yy_current_buffer->yy_ch_buf;
-	register char *source = yytext_ptr;
-	register int number_to_move, i;
+	char *dest = yy_current_buffer->yy_ch_buf;
+	char *source = yytext_ptr;
+	int number_to_move, i;
 	int ret_val;
 
 	if ( yy_c_buf_p > &yy_current_buffer->yy_ch_buf[yy_n_chars + 1] )
@@ -1070,16 +1075,20 @@ static int yy_get_next_buffer()
 
 /* yy_get_previous_state - get the state just before the EOB char was reached */
 
+#ifdef YY_USE_PROTOS
+static yy_state_type yy_get_previous_state(void)
+#else
 static yy_state_type yy_get_previous_state()
+#endif
 	{
-	register yy_state_type yy_current_state;
-	register char *yy_cp;
+	yy_state_type yy_current_state;
+	char *yy_cp;
 
 	yy_current_state = yy_start;
 
 	for ( yy_cp = yytext_ptr + YY_MORE_ADJ; yy_cp < yy_c_buf_p; ++yy_cp )
 		{
-		register YY_CHAR yy_c = (*yy_cp ? yy_ec[YY_SC_TO_UI(*yy_cp)] : 1);
+		YY_CHAR yy_c = (*yy_cp ? yy_ec[YY_SC_TO_UI(*yy_cp)] : 1);
 		if ( yy_accept[yy_current_state] )
 			{
 			yy_last_accepting_state = yy_current_state;
@@ -1111,10 +1120,10 @@ static yy_state_type yy_try_NUL_trans( yy_current_state )
 yy_state_type yy_current_state;
 #endif
 	{
-	register int yy_is_jam;
-	register char *yy_cp = yy_c_buf_p;
+	int yy_is_jam;
+	char *yy_cp = yy_c_buf_p;
 
-	register YY_CHAR yy_c = 1;
+	YY_CHAR yy_c = 1;
 	if ( yy_accept[yy_current_state] )
 		{
 		yy_last_accepting_state = yy_current_state;
@@ -1135,14 +1144,14 @@ yy_state_type yy_current_state;
 
 #ifndef YY_NO_UNPUT
 #ifdef YY_USE_PROTOS
-static void yyunput( int c, register char *yy_bp )
+static void yyunput( int c, char *yy_bp )
 #else
 static void yyunput( c, yy_bp )
 int c;
-register char *yy_bp;
+char *yy_bp;
 #endif
 	{
-	register char *yy_cp = yy_c_buf_p;
+	char *yy_cp = yy_c_buf_p;
 
 	/* undo effects of setting up yytext */
 	*yy_cp = yy_hold_char;
@@ -1150,10 +1159,10 @@ register char *yy_bp;
 	if ( yy_cp < yy_current_buffer->yy_ch_buf + 2 )
 		{ /* need to shift things up to make room */
 		/* +2 for EOB chars. */
-		register int number_to_move = yy_n_chars + 2;
-		register char *dest = &yy_current_buffer->yy_ch_buf[
+		int number_to_move = yy_n_chars + 2;
+		char *dest = &yy_current_buffer->yy_ch_buf[
 					yy_current_buffer->yy_buf_size + 2];
-		register char *source =
+		char *source =
 				&yy_current_buffer->yy_ch_buf[number_to_move];
 
 		while ( source > yy_current_buffer->yy_ch_buf )
@@ -1178,10 +1187,15 @@ register char *yy_bp;
 #endif	/* ifndef YY_NO_UNPUT */
 
 
+#ifndef YY_NO_INPUT
 #ifdef __cplusplus
 static int yyinput()
 #else
+#ifdef YY_USE_PROTOS
+static int input(void)
+#else
 static int input()
+#endif
 #endif
 	{
 	int c;
@@ -1249,6 +1263,7 @@ static int input()
 
 	return c;
 	}
+#endif	/* ifndef YY_NO_INPUT */
 
 
 #ifdef YY_USE_PROTOS
@@ -1552,7 +1567,11 @@ int new_state;
 
 
 #ifndef YY_NO_POP_STATE
+#ifdef YY_USE_PROTOS
+static void yy_pop_state(void)
+#else
 static void yy_pop_state()
+#endif
 	{
 	if ( --yy_start_stack_ptr < 0 )
 		YY_FATAL_ERROR( "start-condition stack underflow" );
@@ -1563,7 +1582,11 @@ static void yy_pop_state()
 
 
 #ifndef YY_NO_TOP_STATE
+#ifdef YY_USE_PROTOS
+static int yy_top_state(void)
+#else
 static int yy_top_state()
+#endif
 	{
 	return yy_start_stack[yy_start_stack_ptr - 1];
 	}
@@ -1614,7 +1637,7 @@ yyconst char *s2;
 int n;
 #endif
 	{
-	register int i;
+	int i;
 	for ( i = 0; i < n; ++i )
 		s1[i] = s2[i];
 	}
@@ -1628,7 +1651,7 @@ static int yy_flex_strlen( s )
 yyconst char *s;
 #endif
 	{
-	register int n;
+	int n;
 	for ( n = 0; s[n]; ++n )
 		;
 
@@ -1682,7 +1705,7 @@ int main()
 	return 0;
 	}
 #endif
-#line 107 "calclex.l"
+#line 107 "../../../gmp/demos/calc/calclex.l"
 
 
 int

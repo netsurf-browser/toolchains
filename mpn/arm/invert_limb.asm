@@ -1,54 +1,61 @@
 dnl  ARM mpn_invert_limb -- Invert a normalized limb.
 
-dnl  Copyright 2001, 2009 Free Software Foundation, Inc.
+dnl  Copyright 2001, 2009, 2011, 2012 Free Software Foundation, Inc.
 
 dnl  This file is part of the GNU MP Library.
-
+dnl
 dnl  The GNU MP Library is free software; you can redistribute it and/or modify
-dnl  it under the terms of the GNU Lesser General Public License as published
-dnl  by the Free Software Foundation; either version 3 of the License, or (at
-dnl  your option) any later version.
-
+dnl  it under the terms of either:
+dnl
+dnl    * the GNU Lesser General Public License as published by the Free
+dnl      Software Foundation; either version 3 of the License, or (at your
+dnl      option) any later version.
+dnl
+dnl  or
+dnl
+dnl    * the GNU General Public License as published by the Free Software
+dnl      Foundation; either version 2 of the License, or (at your option) any
+dnl      later version.
+dnl
+dnl  or both in parallel, as here.
+dnl
 dnl  The GNU MP Library is distributed in the hope that it will be useful, but
 dnl  WITHOUT ANY WARRANTY; without even the implied warranty of MERCHANTABILITY
-dnl  or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU Lesser General Public
-dnl  License for more details.
-
-dnl  You should have received a copy of the GNU Lesser General Public License
-dnl  along with the GNU MP Library.  If not, see http://www.gnu.org/licenses/.
+dnl  or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU General Public License
+dnl  for more details.
+dnl
+dnl  You should have received copies of the GNU General Public License and the
+dnl  GNU Lesser General Public License along with the GNU MP Library.  If not,
+dnl  see https://www.gnu.org/licenses/.
 
 include(`../config.m4')
 
 ASM_START()
 PROLOGUE(mpn_invert_limb)
-	ldr	r2, L(4)
-L(2):	add	r2, pc, r2
+	LEA(	r2, approx_tab-512)
 	mov	r3, r0, lsr #23
 	mov	r3, r3, asl #1
 	ldrh	r3, [r3, r2]
 	mov	r1, r3, asl #17
-	mul	r3, r3, r3
-	umull	r12, r2, r3, r0
+	mul	r12, r3, r3
+	umull	r3, r2, r12, r0
 	sub	r1, r1, r2, asl #1
-	umull	r12, r2, r1, r1
-	umull	r3, r12, r0, r12
-	umull	r2, r3, r0, r2
-	adds	r2, r2, r12
-	adc	r3, r3, #0
-	rsb	r1, r3, r1
+	umull	r3, r2, r1, r1
+	umull	r12, r3, r0, r3
+	umull	r2, r12, r0, r2
+	adds	r2, r2, r3
+	adc	r12, r12, #0
+	rsb	r1, r12, r1
 	mvn	r2, r2, lsr #30
 	add	r2, r2, r1, asl #2
-	umull	r3, r12, r0, r2
-	adds	r1, r3, r0
-	adc	r12, r12, r0
-	rsb	r0, r12, r2
+	umull	r12, r3, r0, r2
+	adds	r1, r12, r0
+	adc	r3, r3, r0
+	rsb	r0, r3, r2
 	bx	lr
-
-	ALIGN(4)
-L(4):	.word	approx_tab-8-512-L(2)
 EPILOGUE()
 
-	.section .rodata
+	RODATA
 	ALIGN(2)
 approx_tab:
 	.short    0xffc0,0xfec0,0xfdc0,0xfcc0,0xfbc0,0xfac0,0xfa00,0xf900
