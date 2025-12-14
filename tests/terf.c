@@ -1,6 +1,6 @@
 /* Test file for mpfr_erf and mpfr_erfc.
 
-Copyright 2001-2017 Free Software Foundation, Inc.
+Copyright 2001-2023 Free Software Foundation, Inc.
 Contributed by the AriC and Caramba projects, INRIA.
 
 This file is part of the GNU MPFR Library.
@@ -17,12 +17,8 @@ License for more details.
 
 You should have received a copy of the GNU Lesser General Public License
 along with the GNU MPFR Library; see the file COPYING.LESSER.  If not, see
-http://www.gnu.org/licenses/ or write to the Free Software Foundation, Inc.,
+https://www.gnu.org/licenses/ or write to the Free Software Foundation, Inc.,
 51 Franklin St, Fifth Floor, Boston, MA 02110-1301, USA. */
-
-#include <math.h>
-#include <stdio.h>
-#include <stdlib.h>
 
 #include "mpfr-test.h"
 
@@ -78,7 +74,7 @@ special_erf (void)
   /* erf(+0) = +0 */
   mpfr_set_ui (x, 0, MPFR_RNDN);
   mpfr_erf (y, x, MPFR_RNDN);
-  if (mpfr_cmp_ui (y, 0) || mpfr_sgn (y) < 0)
+  if (MPFR_NOTZERO (y) || MPFR_IS_NEG (y))
     {
       printf ("mpfr_erf failed for x=+0\n");
       exit (1);
@@ -87,7 +83,7 @@ special_erf (void)
   /* erf(-0) = -0 */
   mpfr_neg (x, x, MPFR_RNDN);
   mpfr_erf (y, x, MPFR_RNDN);
-  if (mpfr_cmp_ui (y, 0) || mpfr_sgn (y) > 0)
+  if (MPFR_NOTZERO (y) || MPFR_IS_POS (y))
     {
       printf ("mpfr_erf failed for x=-0\n");
       exit (1);
@@ -235,7 +231,7 @@ special_erf (void)
   if (mpfr_cmp (x, y))
     {
       printf ("Error: erf for prec=32 (2)\n");
-      mpfr_print_binary (x); printf ("\n");
+      mpfr_dump (x);
       exit (1);
     }
 
@@ -479,7 +475,7 @@ large_arg (void)
   mpfr_set_prec (y, 85);
   mpfr_set_str_binary (x, "0.111110111111010011101011001100001010011110101010011111010010111101010001011E15");
   mpfr_erfc (y, x, MPFR_RNDN);
-  if (mpfr_cmp_ui (y, 0) || mpfr_sgn (y) < 0)
+  if (MPFR_NOTZERO (y) || MPFR_IS_NEG (y))
     {
       printf ("mpfr_erfc failed for large x (3b)\n");
       exit (1);
@@ -597,7 +593,7 @@ test_erfc (void)
       mpfr_set_si (x, 27282, MPFR_RNDN);
       mpfr_erfc (y, x, MPFR_RNDN);
       MPFR_ASSERTN(mpfr_cmp_ui (y, 0) != 0);
-      mpfr_set_emin (emin);
+      set_emin (emin);
     }
 
   mpfr_clears (x, y, z, (mpfr_ptr) 0);
@@ -613,7 +609,7 @@ reduced_expo_range (void)
   unsigned int flags, ex_flags;
 
   emax = mpfr_get_emax ();
-  mpfr_set_emax (3);
+  set_emax (3);
   mpfr_init2 (x, 33);
   mpfr_inits2 (110, y, ex_y, (mpfr_ptr) 0);
   mpfr_set_str_binary (x, "-0.111100110111111111011101010101110E3");
@@ -623,7 +619,7 @@ reduced_expo_range (void)
   mpfr_set_str (ex_y, "1.fffffffffffffffffffffe607440", 16, MPFR_RNDN);
   ex_inex = -1;
   ex_flags = MPFR_FLAGS_INEXACT;
-  if (SIGN (inex) != ex_inex || flags != ex_flags ||
+  if (VSIGN (inex) != ex_inex || flags != ex_flags ||
       ! mpfr_equal_p (y, ex_y))
     {
       printf ("Error in reduced_expo_range\non x = ");
@@ -633,11 +629,25 @@ reduced_expo_range (void)
       printf ("\n         inex = %d, flags = %u\n", ex_inex, ex_flags);
       printf ("Got      y = ");
       mpfr_out_str (stdout, 16, 0, y, MPFR_RNDN);
-      printf ("\n         inex = %d, flags = %u\n", SIGN (inex), flags);
+      printf ("\n         inex = %d, flags = %u\n", VSIGN (inex), flags);
       exit (1);
     }
   mpfr_clears (x, y, ex_y, (mpfr_ptr) 0);
-  mpfr_set_emax (emax);
+  set_emax (emax);
+}
+
+/* Similar to a bug reported by Naoki Shibata:
+   https://sympa.inria.fr/sympa/arc/mpfr/2018-07/msg00028.html
+*/
+static void
+bug20180723 (void)
+{
+  mpfr_t x;
+
+  mpfr_init2 (x, 256);
+  mpfr_set_ui (x, 28, MPFR_RNDN);
+  mpfr_erfc (x, x, MPFR_RNDN);
+  mpfr_clear (x);
 }
 
 int
@@ -650,9 +660,10 @@ main (int argc, char *argv[])
   large_arg ();
   test_erfc ();
   reduced_expo_range ();
+  bug20180723 ();
 
-  test_generic_erf (2, 100, 15);
-  test_generic_erfc (2, 100, 15);
+  test_generic_erf (MPFR_PREC_MIN, 300, 150);
+  test_generic_erfc (MPFR_PREC_MIN, 300, 150);
 
   data_check ("data/erf",  mpfr_erf,  "mpfr_erf");
   data_check ("data/erfc", mpfr_erfc, "mpfr_erfc");

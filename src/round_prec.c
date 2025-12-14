@@ -1,7 +1,7 @@
 /* mpfr_round_raw_generic, mpfr_round_raw2, mpfr_round_raw, mpfr_prec_round,
    mpfr_can_round, mpfr_can_round_raw -- various rounding functions
 
-Copyright 1999-2017 Free Software Foundation, Inc.
+Copyright 1999-2023 Free Software Foundation, Inc.
 Contributed by the AriC and Caramba projects, INRIA.
 
 This file is part of the GNU MPFR Library.
@@ -18,7 +18,7 @@ License for more details.
 
 You should have received a copy of the GNU Lesser General Public License
 along with the GNU MPFR Library; see the file COPYING.LESSER.  If not, see
-http://www.gnu.org/licenses/ or write to the Free Software Foundation, Inc.,
+https://www.gnu.org/licenses/ or write to the Free Software Foundation, Inc.,
 51 Franklin St, Fifth Floor, Boston, MA 02110-1301, USA. */
 
 #include "mpfr-impl.h"
@@ -28,6 +28,7 @@ http://www.gnu.org/licenses/ or write to the Free Software Foundation, Inc.,
 #define use_inexp 1
 #include "round_raw_generic.c"
 
+/* mpfr_round_raw_2 is called from mpfr_round_raw2 */
 #define mpfr_round_raw_generic mpfr_round_raw_2
 #define flag 1
 #define use_inexp 0
@@ -45,6 +46,9 @@ http://www.gnu.org/licenses/ or write to the Free Software Foundation, Inc.,
 #define use_inexp 0
 #include "round_raw_generic.c"
 
+/* Note: if the new prec is lower than the current one, a reallocation
+   must not be done (see exp_2.c). */
+
 int
 mpfr_prec_round (mpfr_ptr x, mpfr_prec_t prec, mpfr_rnd_t rnd_mode)
 {
@@ -53,7 +57,7 @@ mpfr_prec_round (mpfr_ptr x, mpfr_prec_t prec, mpfr_rnd_t rnd_mode)
   mpfr_prec_t nw, ow;
   MPFR_TMP_DECL(marker);
 
-  MPFR_ASSERTN(prec >= MPFR_PREC_MIN && prec <= MPFR_PREC_MAX);
+  MPFR_ASSERTN (MPFR_PREC_COND (prec));
 
   nw = MPFR_PREC2LIMBS (prec); /* needed allocated limbs */
 
@@ -61,15 +65,17 @@ mpfr_prec_round (mpfr_ptr x, mpfr_prec_t prec, mpfr_rnd_t rnd_mode)
   /* Get the number of limbs from the precision.
      (Compatible with all allocation methods) */
   ow = MPFR_LIMB_SIZE (x);
-  if (nw > ow)
+  if (MPFR_UNLIKELY (nw > ow))
     {
       /* FIXME: Variable can't be created using custom allocation,
          MPFR_DECL_INIT or GROUP_ALLOC: How to detect? */
       ow = MPFR_GET_ALLOC_SIZE(x);
       if (nw > ow)
        {
+         mpfr_size_limb_t *tmpx;
+
          /* Realloc significand */
-         mpfr_limb_ptr tmpx = (mpfr_limb_ptr) (*__gmp_reallocate_func)
+         tmpx = (mpfr_size_limb_t *) mpfr_reallocate_func
            (MPFR_GET_REAL_PTR(x), MPFR_MALLOC_SIZE(ow), MPFR_MALLOC_SIZE(nw));
          MPFR_SET_MANT_PTR(x, tmpx); /* mant ptr must be set
                                         before alloc size */
@@ -122,8 +128,32 @@ mpfr_prec_round (mpfr_ptr x, mpfr_prec_t prec, mpfr_rnd_t rnd_mode)
 /* assuming b is an approximation to x in direction rnd1 with error at
    most 2^(MPFR_EXP(b)-err), returns 1 if one is able to round exactly
    x to precision prec with direction rnd2, and 0 otherwise.
-
    Side effects: none.
+
+   rnd1 = RNDN and RNDF are similar: the sign of the error is unknown.
+
+   rnd2 = RNDF: assume that the user will round the approximation b
+   toward the direction of x, i.e. the opposite of rnd1 in directed
+   rounding modes, otherwise RNDN. Some details:
+
+                u   xinf        v xsup          w
+           -----|----+----------|--+------------|-----
+                     [----- x -----]
+     rnd1 = RNDD     b             |
+     rnd1 = RNDU                   b
+
+   where u, v and w are consecutive machine numbers.
+
+   * If [xinf,xsup] contains no machine numbers, then return 1.
+
+   * If [xinf,xsup] contains 2 machine numbers, then return 0.
+
+   * If [xinf,xsup] contains a single machine number, then return 1 iff
+     the rounding of b is this machine number.
+     With the above choice for the rounding of b, this will always be
+     the case if rnd1 is a directed rounding mode; said otherwise, for
+     rnd2 = RNDF and rnd1 being a directed rounding mode, return 1 iff
+     [xinf,xsup] contains at most 1 machine number.
 */
 
 int
@@ -136,6 +166,13 @@ mpfr_can_round (mpfr_srcptr b, mpfr_exp_t err, mpfr_rnd_t rnd1,
     return mpfr_can_round_raw (MPFR_MANT(b), MPFR_LIMB_SIZE(b),
                                MPFR_SIGN(b), err, rnd1, rnd2, prec);
 }
+
+/* TODO: mpfr_can_round_raw currently does a memory allocation and some
+   mpn operations. A bit inspection like for mpfr_round_p (round_p.c) may
+   be sufficient, though this would be more complex than the one done in
+   mpfr_round_p, and in particular, for some rnd1/rnd2 combinations, one
+   needs to take care of changes of binade when the value is close to a
+   power of 2. */
 
 int
 mpfr_can_round_raw (const mp_limb_t *bp, mp_size_t bn, int neg, mpfr_exp_t err,
@@ -158,17 +195,45 @@ mpfr_can_round_raw (const mp_limb_t *bp, mp_size_t bn, int neg, mpfr_exp_t err,
 
   MPFR_ASSERT_SIGN(neg);
   neg = MPFR_IS_NEG_SIGN(neg);
-
-  /* Transform RNDD and RNDU to Zero / Away */
   MPFR_ASSERTD (neg == 0 || neg == 1);
-  if (rnd1 != MPFR_RNDN)
+
+  /* For rnd1 and rnd2, transform RNDF / RNDD / RNDU to RNDN / RNDZ / RNDA
+     (with a special case for rnd1 directed rounding, rnd2 = RNDF). */
+
+  if (rnd1 == MPFR_RNDF)
+    rnd1 = MPFR_RNDN;  /* transform RNDF to RNDN */
+  else if (rnd1 != MPFR_RNDN)
     rnd1 = MPFR_IS_LIKE_RNDZ(rnd1, neg) ? MPFR_RNDZ : MPFR_RNDA;
-  if (rnd2 != MPFR_RNDN)
+
+  MPFR_ASSERTD (rnd1 == MPFR_RNDN ||
+                rnd1 == MPFR_RNDZ ||
+                rnd1 == MPFR_RNDA);
+
+  if (rnd2 == MPFR_RNDF)
+    {
+      if (rnd1 == MPFR_RNDN)
+        rnd2 = MPFR_RNDN;
+      else
+        {
+          rnd2 = MPFR_IS_LIKE_RNDZ(rnd1, neg) ? MPFR_RNDA : MPFR_RNDZ;
+          /* Warning: in this case (rnd1 directed rounding, rnd2 = RNDF),
+             the specification of mpfr_can_round says that we should
+             return non-zero (i.e., we can round) when {bp, bn} is
+             exactly representable in precision prec. */
+          if (mpfr_round_raw2 (bp, bn, neg, MPFR_RNDA, prec) == 0)
+            return 1;
+        }
+    }
+  else if (rnd2 != MPFR_RNDN)
     rnd2 = MPFR_IS_LIKE_RNDZ(rnd2, neg) ? MPFR_RNDZ : MPFR_RNDA;
+
+  MPFR_ASSERTD (rnd2 == MPFR_RNDN ||
+                rnd2 == MPFR_RNDZ ||
+                rnd2 == MPFR_RNDA);
 
   /* For err < prec (+1 for rnd1=RNDN), we can never round correctly, since
      the error is at least 2*ulp(b) >= ulp(round(b)).
-     However for err = prec (+1 for rnd1=RNDN), we can round correctly in some
+     However, for err = prec (+1 for rnd1=RNDN), we can round correctly in some
      rare cases where ulp(b) = 1/2*ulp(U) [see below for the definition of U],
      which implies rnd1 = RNDZ or RNDN, and rnd2 = RNDA or RNDN. */
 
@@ -282,24 +347,8 @@ mpfr_can_round_raw (const mp_limb_t *bp, mp_size_t bn, int neg, mpfr_exp_t err,
             }
           return 1;
         }
-      else if (rnd1 == rnd2)
-        {
-          if (rnd1 == MPFR_RNDN && prec < (mpfr_prec_t) bn * GMP_NUMB_BITS)
-            {
-              /* then rnd2 = RNDN, and for prec = bn * GMP_NUMB_BITS we cannot
-                 have b the middle of two representable numbers */
-              k1 = MPFR_PREC2LIMBS (prec + 1);
-              MPFR_UNSIGNED_MINUS_MODULO(s1, prec + 1);
-              if (((bp[bn - k1] >> s1) & 1) &&
-                  mpfr_round_raw2 (bp, bn, neg, MPFR_RNDA, prec + 1) == 0)
-                /* b is representable in precision prec+1 and ends with a 1 */
-                return 0;
-              else
-                return 1;
-            }
-          else
-            return 1;
-        }
+      else if (rnd1 == rnd2) /* cases RNDZ RNDZ or RNDA RNDA: ok */
+        return 1;
       else
         return mpfr_round_raw2 (bp, bn, neg, MPFR_RNDA, prec) != 0;
     }
@@ -334,7 +383,7 @@ mpfr_can_round_raw (const mp_limb_t *bp, mp_size_t bn, int neg, mpfr_exp_t err,
   k++; /* since we work with k+1 everywhere */
   tmp = MPFR_TMP_LIMBS_ALLOC (tn);
   if (bn > k)
-    MPN_COPY (tmp, bp, bn - k);
+    MPN_COPY (tmp, bp, bn - k); /* copy low bn-k limbs of b into tmp */
 
   MPFR_ASSERTD (k > 0);
 
@@ -342,7 +391,7 @@ mpfr_can_round_raw (const mp_limb_t *bp, mp_size_t bn, int neg, mpfr_exp_t err,
     {
     case MPFR_RNDZ:
       /* rnd1 = Round to Zero */
-      cc = (bp[bn - 1] >> s1) & 1;
+      cc = (bp[bn - 1] >> s1) & 1; /* cc is the least significant bit of b */
       /* mpfr_round_raw2 returns 1 if one should add 1 at ulp(b,prec),
          and 0 otherwise */
       cc ^= mpfr_round_raw2 (bp, bn, neg, rnd2, prec2);
@@ -352,7 +401,7 @@ mpfr_can_round_raw (const mp_limb_t *bp, mp_size_t bn, int neg, mpfr_exp_t err,
       cy = mpn_add_1 (tmp + bn - k, bp + bn - k, k, MPFR_LIMB_ONE << s);
       /* propagate carry up to most significant limb */
       for (tn = 0; tn + 1 < k1 && cy != 0; tn ++)
-        cy = ~bp[bn + tn] == 0;
+        cy = bp[bn + tn] == MPFR_LIMB_MAX;
       if (cy == 0 && err == prec)
         {
           res = 0;
@@ -382,7 +431,7 @@ mpfr_can_round_raw (const mp_limb_t *bp, mp_size_t bn, int neg, mpfr_exp_t err,
       cy = mpn_add_1 (tmp + bn - k, bp + bn - k, k, MPFR_LIMB_ONE << s);
       /* propagate carry up to most significant limb */
       for (tn = 0; tn + 1 < k1 && cy != 0; tn ++)
-        cy = ~bp[bn + tn] == 0;
+        cy = bp[bn + tn] == MPFR_LIMB_MAX;
       cc = (tmp[bn - 1] >> s1) & 1; /* gives 0 when cc=1 */
       cc ^= mpfr_round_raw2 (tmp, bn, neg, rnd2, prec2);
       /* cc is the new value of bit s1 in bp[bn-1]+eps after rounding 'rnd2' */

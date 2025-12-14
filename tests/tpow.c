@@ -1,6 +1,6 @@
 /* Test file for mpfr_pow, mpfr_pow_ui and mpfr_pow_si.
 
-Copyright 2000-2017 Free Software Foundation, Inc.
+Copyright 2000-2023 Free Software Foundation, Inc.
 Contributed by the AriC and Caramba projects, INRIA.
 
 This file is part of the GNU MPFR Library.
@@ -17,15 +17,11 @@ License for more details.
 
 You should have received a copy of the GNU Lesser General Public License
 along with the GNU MPFR Library; see the file COPYING.LESSER.  If not, see
-http://www.gnu.org/licenses/ or write to the Free Software Foundation, Inc.,
+https://www.gnu.org/licenses/ or write to the Free Software Foundation, Inc.,
 51 Franklin St, Fifth Floor, Boston, MA 02110-1301, USA. */
 
-#include <stdio.h>
-#include <stdlib.h>
-#include <float.h>
-#include <math.h>
-#include <limits.h>
-
+#define _MPFR_NO_DEPRECATED_ROOT
+#define MPFR_NEED_INTMAX_H
 #include "mpfr-test.h"
 
 #ifdef CHECK_EXTERNAL
@@ -56,20 +52,45 @@ test_pow (mpfr_ptr a, mpfr_srcptr b, mpfr_srcptr c, mpfr_rnd_t rnd_mode)
 
 #define TEST_FUNCTION test_pow
 #define TWO_ARGS
-#define TEST_RANDOM_POS 16
+#define TEST_RANDOM_POS 16 /* the 2nd argument is negative with prob. 16/512 */
 #define TGENERIC_NOWARNING 1
 #include "tgeneric.c"
 
 #define TEST_FUNCTION mpfr_pow_ui
 #define INTEGER_TYPE  unsigned long
 #define RAND_FUNCTION(x) mpfr_random2(x, MPFR_LIMB_SIZE (x), 1, RANDS)
+#define INT_RAND_FUNCTION() \
+  (randlimb () % 16 == 0 ? randulong () : (unsigned long) (randlimb () % 32))
 #include "tgeneric_ui.c"
 
 #define TEST_FUNCTION mpfr_pow_si
 #define INTEGER_TYPE  long
 #define RAND_FUNCTION(x) mpfr_random2(x, MPFR_LIMB_SIZE (x), 1, RANDS)
+#define INT_RAND_FUNCTION() \
+  (randlimb () % 16 == 0 ? randlong () : (long) (randlimb () % 31) - 15)
 #define test_generic_ui test_generic_si
 #include "tgeneric_ui.c"
+
+#define DEFN(N)                                                         \
+  static int powu##N (mpfr_ptr y, mpfr_srcptr x, mpfr_rnd_t rnd)        \
+  { return mpfr_pow_ui (y, x, N, rnd); }                                \
+  static int pows##N (mpfr_ptr y, mpfr_srcptr x, mpfr_rnd_t rnd)        \
+  { return mpfr_pow_si (y, x, N, rnd); }                                \
+  static int powm##N (mpfr_ptr y, mpfr_srcptr x, mpfr_rnd_t rnd)        \
+  { return mpfr_pow_si (y, x, -(N), rnd); }                             \
+  static int root##N (mpfr_ptr y, mpfr_srcptr x, mpfr_rnd_t rnd)        \
+  { return RAND_BOOL () ?                                               \
+      mpfr_root (y, x, N, rnd) : mpfr_rootn_ui (y, x, N, rnd); }        \
+  static int rootm##N (mpfr_ptr y, mpfr_srcptr x, mpfr_rnd_t rnd)       \
+  { return mpfr_rootn_si (y, x, -(N), rnd); }
+
+
+DEFN(2)
+DEFN(3)
+DEFN(4)
+DEFN(5)
+DEFN(17)
+DEFN(120)
 
 static void
 check_pow_ui (void)
@@ -123,7 +144,7 @@ check_pow_ui (void)
 
   mpfr_set_str_binary (a, "1E-10");
   res = mpfr_pow_ui (a, a, -mpfr_get_emin (), MPFR_RNDZ);
-  if (!MPFR_IS_ZERO (a))
+  if (MPFR_NOTZERO (a))
     {
       printf ("Error for (1e-10)^MPFR_EMAX_MAX\n");
       mpfr_dump (a);
@@ -133,7 +154,7 @@ check_pow_ui (void)
   /* Check overflow */
   mpfr_set_str_binary (a, "1E10");
   res = mpfr_pow_ui (a, a, ULONG_MAX, MPFR_RNDN);
-  if (!MPFR_IS_INF (a) || MPFR_SIGN (a) < 0)
+  if (!MPFR_IS_INF (a) || MPFR_IS_NEG (a))
     {
       printf ("Error for (1e10)^ULONG_MAX\n");
       exit (1);
@@ -146,7 +167,7 @@ check_pow_ui (void)
   mpfr_set_str_binary (a, "-1E10");
   n = (ULONG_MAX ^ (ULONG_MAX >> 1)) + 1;
   res = mpfr_pow_ui (a, a, n, MPFR_RNDN);
-  if (!MPFR_IS_INF (a) || MPFR_SIGN (a) > 0)
+  if (!MPFR_IS_INF (a) || MPFR_IS_POS (a))
     {
       printf ("Error for (-1e10)^%lu, expected -Inf,\ngot ", n);
       mpfr_dump (a);
@@ -270,15 +291,15 @@ check_pow_si (void)
 
   mpfr_set_inf (x, 1);
   mpfr_pow_si (x, x, -1, MPFR_RNDN);
-  MPFR_ASSERTN(mpfr_cmp_ui (x, 0) == 0 && MPFR_IS_POS(x));
+  MPFR_ASSERTN(MPFR_IS_ZERO (x) && MPFR_IS_POS (x));
 
   mpfr_set_inf (x, -1);
   mpfr_pow_si (x, x, -1, MPFR_RNDN);
-  MPFR_ASSERTN(mpfr_cmp_ui (x, 0) == 0 && MPFR_IS_NEG(x));
+  MPFR_ASSERTN(MPFR_IS_ZERO (x) && MPFR_IS_NEG (x));
 
   mpfr_set_inf (x, -1);
   mpfr_pow_si (x, x, -2, MPFR_RNDN);
-  MPFR_ASSERTN(mpfr_cmp_ui (x, 0) == 0 && MPFR_IS_POS(x));
+  MPFR_ASSERTN(MPFR_IS_ZERO (x) && MPFR_IS_POS (x));
 
   mpfr_set_ui (x, 0, MPFR_RNDN);
   mpfr_pow_si (x, x, -1, MPFR_RNDN);
@@ -346,6 +367,112 @@ check_pow_si (void)
   mpfr_clear (x);
 }
 
+/* check the IEEE 754-2019 special rules for pown */
+static void
+check_pown_ieee754_2019 (void)
+{
+#ifdef _MPFR_H_HAVE_INTMAX_T
+  mpfr_t x;
+
+  mpfr_init2 (x, 5); /* ensures 17 is exact */
+
+  /* pown (x, 0) is 1 if x is not a signaling NaN: in MPFR we decide to
+     return 1 for a NaN */
+  mpfr_set_nan (x);
+  mpfr_pown (x, x, 0, MPFR_RNDN);
+  MPFR_ASSERTN(mpfr_cmp_ui0 (x, 1) == 0);
+  mpfr_set_inf (x, 1);
+  mpfr_pown (x, x, 0, MPFR_RNDN);
+  MPFR_ASSERTN(mpfr_cmp_ui0 (x, 1) == 0);
+  mpfr_set_inf (x, -1);
+  mpfr_pown (x, x, 0, MPFR_RNDN);
+  MPFR_ASSERTN(mpfr_cmp_ui0 (x, 1) == 0);
+  mpfr_set_zero (x, 1);
+  mpfr_pown (x, x, 0, MPFR_RNDN);
+  MPFR_ASSERTN(mpfr_cmp_ui0 (x, 1) == 0);
+  mpfr_set_zero (x, -1);
+  mpfr_pown (x, x, 0, MPFR_RNDN);
+  MPFR_ASSERTN(mpfr_cmp_ui0 (x, 1) == 0);
+  mpfr_set_si (x, 17, MPFR_RNDN);
+  mpfr_pown (x, x, 0, MPFR_RNDN);
+  MPFR_ASSERTN(mpfr_cmp_ui0 (x, 1) == 0);
+  mpfr_set_si (x, -17, MPFR_RNDN);
+  mpfr_pown (x, x, 0, MPFR_RNDN);
+  MPFR_ASSERTN(mpfr_cmp_ui0 (x, 1) == 0);
+
+  /* pown (±0, n) is ±∞ and signals the divideByZero exception for odd n < 0 */
+  mpfr_set_zero (x, 1);
+  mpfr_clear_divby0 ();
+  mpfr_pown (x, x, -17, MPFR_RNDN);
+  MPFR_ASSERTN(mpfr_inf_p (x) && mpfr_sgn (x) > 0 && mpfr_divby0_p ());
+  mpfr_set_zero (x, -1);
+  mpfr_clear_divby0 ();
+  mpfr_pown (x, x, -17, MPFR_RNDN);
+  MPFR_ASSERTN(mpfr_inf_p (x) && mpfr_sgn (x) < 0 && mpfr_divby0_p ());
+
+  /* pown (±0, n) is +∞ and signals the divideByZero exception for even n < 0*/
+  mpfr_set_zero (x, 1);
+  mpfr_clear_divby0 ();
+  mpfr_pown (x, x, -42, MPFR_RNDN);
+  MPFR_ASSERTN(mpfr_inf_p (x) && mpfr_sgn (x) > 0 && mpfr_divby0_p ());
+  mpfr_set_zero (x, -1);
+  mpfr_clear_divby0 ();
+  mpfr_pown (x, x, -42, MPFR_RNDN);
+  MPFR_ASSERTN(mpfr_inf_p (x) && mpfr_sgn (x) > 0 && mpfr_divby0_p ());
+
+  /* pown (±0, n) is +0 for even n > 0 */
+  mpfr_set_zero (x, 1);
+  mpfr_pown (x, x, 42, MPFR_RNDN);
+  MPFR_ASSERTN(mpfr_zero_p (x) && mpfr_signbit (x) == 0);
+  mpfr_set_zero (x, -1);
+  mpfr_pown (x, x, 42, MPFR_RNDN);
+  MPFR_ASSERTN(mpfr_zero_p (x) && mpfr_signbit (x) == 0);
+
+  /* pown (±0, n) is ±0 for odd n > 0 */
+  mpfr_set_zero (x, 1);
+  mpfr_pown (x, x, 17, MPFR_RNDN);
+  MPFR_ASSERTN(mpfr_zero_p (x) && mpfr_signbit (x) == 0);
+  mpfr_set_zero (x, -1);
+  mpfr_pown (x, x, 17, MPFR_RNDN);
+  MPFR_ASSERTN(mpfr_zero_p (x) && mpfr_signbit (x) == 1);
+
+  /* pown (+∞, n) is +∞ for n > 0 */
+  mpfr_set_inf (x, 1);
+  mpfr_pown (x, x, 17, MPFR_RNDN);
+  MPFR_ASSERTN(mpfr_inf_p (x) && mpfr_sgn (x) > 0);
+
+  /* pown (−∞, n) is −∞ for odd n > 0 */
+  mpfr_set_inf (x, -1);
+  mpfr_pown (x, x, 17, MPFR_RNDN);
+  MPFR_ASSERTN(mpfr_inf_p (x) && mpfr_sgn (x) < 0);
+
+  /* pown (−∞, n) is +∞ for even n > 0 */
+  mpfr_set_inf (x, -1);
+  mpfr_pown (x, x, 42, MPFR_RNDN);
+  MPFR_ASSERTN(mpfr_inf_p (x) && mpfr_sgn (x) > 0);
+
+  /* pown (+∞, n) is +0 for n < 0 */
+  mpfr_set_inf (x, 1);
+  mpfr_pown (x, x, -17, MPFR_RNDN);
+  MPFR_ASSERTN(mpfr_zero_p (x) && mpfr_signbit (x) == 0);
+  mpfr_set_inf (x, 1);
+  mpfr_pown (x, x, -42, MPFR_RNDN);
+  MPFR_ASSERTN(mpfr_zero_p (x) && mpfr_signbit (x) == 0);
+
+  /* pown (−∞, n) is −0 for odd n < 0 */
+  mpfr_set_inf (x, -1);
+  mpfr_pown (x, x, -17, MPFR_RNDN);
+  MPFR_ASSERTN(mpfr_zero_p (x) && mpfr_signbit (x) != 0);
+
+  /* pown (−∞, n) is +0 for even n < 0 */
+  mpfr_set_inf (x, -1);
+  mpfr_pown (x, x, -42, MPFR_RNDN);
+  MPFR_ASSERTN(mpfr_zero_p (x) && mpfr_signbit (x) == 0);
+
+  mpfr_clear (x);
+#endif
+}
+
 static void
 check_special_pow_si (void)
 {
@@ -357,7 +484,7 @@ check_special_pow_si (void)
   mpfr_set_str (a, "2E100000000", 10, MPFR_RNDN);
   mpfr_set_si (b, -10, MPFR_RNDN);
   test_pow (b, a, b, MPFR_RNDN);
-  if (!MPFR_IS_ZERO(b))
+  if (MPFR_NOTZERO(b))
     {
       printf("Pow(2E10000000, -10) failed\n");
       mpfr_dump (a);
@@ -366,17 +493,17 @@ check_special_pow_si (void)
     }
 
   emin = mpfr_get_emin ();
-  mpfr_set_emin (-10);
+  set_emin (-10);
   mpfr_set_si (a, -2, MPFR_RNDN);
   mpfr_pow_si (b, a, -10000, MPFR_RNDN);
-  if (!MPFR_IS_ZERO (b))
+  if (MPFR_NOTZERO (b))
     {
       printf ("Pow_so (1, -10000) doesn't underflow if emin=-10.\n");
       mpfr_dump (a);
       mpfr_dump (b);
       exit (1);
     }
-  mpfr_set_emin (emin);
+  set_emin (emin);
   mpfr_clear (a);
   mpfr_clear (b);
 }
@@ -424,15 +551,19 @@ check_inexact (mpfr_prec_t p)
   mpfr_init (z);
   mpfr_init (t);
   mpfr_urandomb (x, RANDS);
-  u = randlimb () % 2;
-  for (q = 2; q <= p; q++)
-    for (rnd = 0; rnd < MPFR_RND_MAX; rnd++)
+  u = RAND_BOOL ();
+  for (q = MPFR_PREC_MIN; q <= p; q++)
+    RND_LOOP_NO_RNDF(rnd)
       {
         mpfr_set_prec (y, q);
         mpfr_set_prec (z, q + 10);
         mpfr_set_prec (t, q);
         inexact = mpfr_pow_ui (y, x, u, (mpfr_rnd_t) rnd);
         cmp = mpfr_pow_ui (z, x, u, (mpfr_rnd_t) rnd);
+        /* Note: that test makes no sense for RNDF, since according to the
+           reference manual, if the mpfr_can_round() call succeeds, one would
+           have to use RNDN in the mpfr_set() call below, which might give a
+           different value for t that the value y obtained above. */
         if (mpfr_can_round (z, q + 10, (mpfr_rnd_t) rnd, (mpfr_rnd_t) rnd, q))
           {
             cmp = mpfr_set (t, z, (mpfr_rnd_t) rnd) || cmp;
@@ -440,10 +571,10 @@ check_inexact (mpfr_prec_t p)
               {
                 printf ("results differ for u=%lu rnd=%s\n",
                         u, mpfr_print_rnd_mode ((mpfr_rnd_t) rnd));
-                printf ("x="); mpfr_print_binary (x); puts ("");
-                printf ("y="); mpfr_print_binary (y); puts ("");
-                printf ("t="); mpfr_print_binary (t); puts ("");
-                printf ("z="); mpfr_print_binary (z); puts ("");
+                printf ("x="); mpfr_dump (x);
+                printf ("y="); mpfr_dump (y);
+                printf ("t="); mpfr_dump (t);
+                printf ("z="); mpfr_dump (z);
                 exit (1);
               }
             if (((inexact == 0) && (cmp != 0)) ||
@@ -453,8 +584,8 @@ check_inexact (mpfr_prec_t p)
                         (unsigned int) p, (unsigned int) q,
                         mpfr_print_rnd_mode ((mpfr_rnd_t) rnd));
                 printf ("expected %d, got %d\n", cmp, inexact);
-                printf ("u=%lu x=", u); mpfr_print_binary (x); puts ("");
-                printf ("y="); mpfr_print_binary (y); puts ("");
+                printf ("u=%lu x=", u); mpfr_dump (x);
+                printf ("y="); mpfr_dump (y);
                 exit (1);
               }
           }
@@ -573,7 +704,7 @@ special (void)
       exit (1);
     }
 
-  /* From http://www.terra.es/personal9/ismaeljc/hall.htm */
+  /* From https://web.archive.org/web/20050824044408/http://www.terra.es/personal9/ismaeljc/hall.htm */
   mpfr_set_prec (x, 113);
   mpfr_set_prec (y, 2);
   mpfr_set_prec (z, 169);
@@ -621,7 +752,7 @@ special (void)
   mpfr_set_inf (x, -1);
   mpfr_set_prec (y, 2 * mp_bits_per_limb);
   mpfr_set_ui (y, 1, MPFR_RNDN);
-  mpfr_mul_2exp (y, y, mp_bits_per_limb - 1, MPFR_RNDN);
+  mpfr_mul_2ui (y, y, mp_bits_per_limb - 1, MPFR_RNDN);
   /* y = 2^(mp_bits_per_limb - 1) */
   test_pow (z, x, y, MPFR_RNDN);
   MPFR_ASSERTN(mpfr_inf_p (z) && MPFR_IS_POS(z));
@@ -630,7 +761,7 @@ special (void)
   /* y = 2^(mp_bits_per_limb - 1) + epsilon */
   MPFR_ASSERTN(mpfr_inf_p (z) && MPFR_IS_POS(z));
   mpfr_nextbelow (y);
-  mpfr_div_2exp (y, y, 1, MPFR_RNDN);
+  mpfr_div_2ui (y, y, 1, MPFR_RNDN);
   mpfr_nextabove (y);
   test_pow (z, x, y, MPFR_RNDN);
   /* y = 2^(mp_bits_per_limb - 2) + epsilon */
@@ -640,7 +771,7 @@ special (void)
   mpfr_set_prec (y, 2);
   mpfr_set_str_binary (y, "1E10");
   test_pow (z, x, y, MPFR_RNDN);
-  MPFR_ASSERTN(mpfr_cmp_ui (z, 1) == 0);
+  MPFR_ASSERTN(mpfr_cmp_ui0 (z, 1) == 0);
 
   /* Check (-0)^(17.0001) */
   mpfr_set_prec (x, 6);
@@ -653,8 +784,8 @@ special (void)
   /* Bugs reported by Kevin Rauch on 29 Oct 2007 */
   emin = mpfr_get_emin ();
   emax = mpfr_get_emax ();
-  mpfr_set_emin (-1000000);
-  mpfr_set_emax ( 1000000);
+  set_emin (-1000000);
+  set_emax ( 1000000);
   mpfr_set_prec (x, 64);
   mpfr_set_prec (y, 64);
   mpfr_set_prec (z, 64);
@@ -668,13 +799,13 @@ special (void)
   /* (-1)^(-n) = 1 for n even */
   mpfr_set_str (x, "-1", 10, MPFR_RNDN);
   inex = mpfr_pow (z, x, y, MPFR_RNDN);
-  MPFR_ASSERTN(mpfr_cmp_ui (z, 1) == 0 && inex == 0);
+  MPFR_ASSERTN(mpfr_cmp_ui0 (z, 1) == 0 && inex == 0);
 
   /* (-1)^n = 1 for n even */
   mpfr_set_str (x, "-1", 10, MPFR_RNDN);
   mpfr_neg (y, y, MPFR_RNDN);
   inex = mpfr_pow (z, x, y, MPFR_RNDN);
-  MPFR_ASSERTN(mpfr_cmp_ui (z, 1) == 0 && inex == 0);
+  MPFR_ASSERTN(mpfr_cmp_ui0 (z, 1) == 0 && inex == 0);
 
   /* (-1.5)^n = +Inf for n even */
   mpfr_set_str (x, "-1.5", 10, MPFR_RNDN);
@@ -694,8 +825,8 @@ special (void)
   inex = mpfr_pow (z, x, y, MPFR_RNDN);
   MPFR_ASSERTN(mpfr_nan_p (z));
 
-  mpfr_set_emin (emin);
-  mpfr_set_emax (emax);
+  set_emin (emin);
+  set_emax (emax);
   mpfr_clear (x);
   mpfr_clear (y);
   mpfr_clear (z);
@@ -773,7 +904,7 @@ particular_cases (void)
         mpfr_clear_flags ();
         test_pow (r, t[i], t[j], MPFR_RNDN);
         p = mpfr_nan_p (r) ? 0 : mpfr_inf_p (r) ? 1 :
-          mpfr_cmp_ui (r, 0) == 0 ? 2 :
+          mpfr_zero_p (r) ? 2 :
           (d = mpfr_get_d (r, MPFR_RNDN), (int) (ABS(d) * 128.0));
         if (p != 0 && MPFR_IS_NEG (r))
           p = -p;
@@ -789,7 +920,8 @@ particular_cases (void)
           {
             printf ("Error in mpfr_pow for (%s)^(%s) (%d,%d):\n"
                     "Flags = %u instead of expected %u\n",
-                    name[i], name[j], i, j, __gmpfr_flags, f[i][j]);
+                    name[i], name[j], i, j,
+                    (unsigned int) __gmpfr_flags, f[i][j]);
             mpfr_dump (r);
             error = 1;
           }
@@ -802,7 +934,7 @@ particular_cases (void)
             mpfr_get_z (z, t[j], MPFR_RNDN);
             mpfr_pow_z (r, t[i], z, MPFR_RNDN);
             p = mpfr_nan_p (r) ? 0 : mpfr_inf_p (r) ? 1 :
-              mpfr_cmp_ui (r, 0) == 0 ? 2 :
+              mpfr_zero_p (r) ? 2 :
               (d = mpfr_get_d (r, MPFR_RNDN), (int) (ABS(d) * 128.0));
             if (p != 0 && MPFR_IS_NEG (r))
               p = -p;
@@ -818,7 +950,8 @@ particular_cases (void)
               {
                 printf ("Error in mpfr_pow_z for (%s)^(%s) (%d,%d):\n"
                         "Flags = %u instead of expected %u\n",
-                        name[i], name[j], i, j, __gmpfr_flags, f[i][j]);
+                        name[i], name[j], i, j,
+                        (unsigned int) __gmpfr_flags, f[i][j]);
                 mpfr_dump (r);
                 error = 1;
               }
@@ -827,7 +960,7 @@ particular_cases (void)
             si = mpfr_get_si (t[j], MPFR_RNDN);
             mpfr_pow_si (r, t[i], si, MPFR_RNDN);
             p = mpfr_nan_p (r) ? 0 : mpfr_inf_p (r) ? 1 :
-              mpfr_cmp_ui (r, 0) == 0 ? 2 :
+              mpfr_zero_p (r) ? 2 :
               (d = mpfr_get_d (r, MPFR_RNDN), (int) (ABS(d) * 128.0));
             if (p != 0 && MPFR_IS_NEG (r))
               p = -p;
@@ -843,7 +976,8 @@ particular_cases (void)
               {
                 printf ("Error in mpfr_pow_si for (%s)^(%s) (%d,%d):\n"
                         "Flags = %u instead of expected %u\n",
-                        name[i], name[j], i, j, __gmpfr_flags, f[i][j]);
+                        name[i], name[j], i, j,
+                        (unsigned int) __gmpfr_flags, f[i][j]);
                 mpfr_dump (r);
                 error = 1;
               }
@@ -853,7 +987,7 @@ particular_cases (void)
                 mpfr_clear_flags ();
                 mpfr_pow_ui (r, t[i], si, MPFR_RNDN);
                 p = mpfr_nan_p (r) ? 0 : mpfr_inf_p (r) ? 1 :
-                  mpfr_cmp_ui (r, 0) == 0 ? 2 :
+                  mpfr_zero_p (r) ? 2 :
                   (d = mpfr_get_d (r, MPFR_RNDN), (int) (ABS(d) * 128.0));
                 if (p != 0 && MPFR_IS_NEG (r))
                   p = -p;
@@ -869,7 +1003,8 @@ particular_cases (void)
                   {
                     printf ("Error in mpfr_pow_ui for (%s)^(%s) (%d,%d):\n"
                             "Flags = %u instead of expected %u\n",
-                            name[i], name[j], i, j, __gmpfr_flags, f[i][j]);
+                            name[i], name[j], i, j,
+                            (unsigned int) __gmpfr_flags, f[i][j]);
                     mpfr_dump (r);
                     error = 1;
                   }
@@ -883,7 +1018,7 @@ particular_cases (void)
             si = mpfr_get_si (t[i], MPFR_RNDN);
             mpfr_ui_pow (r, si, t[j], MPFR_RNDN);
             p = mpfr_nan_p (r) ? 0 : mpfr_inf_p (r) ? 1 :
-              mpfr_cmp_ui (r, 0) == 0 ? 2 :
+              mpfr_zero_p (r) ? 2 :
               (d = mpfr_get_d (r, MPFR_RNDN), (int) (ABS(d) * 128.0));
             if (p != 0 && MPFR_IS_NEG (r))
               p = -p;
@@ -899,7 +1034,8 @@ particular_cases (void)
               {
                 printf ("Error in mpfr_ui_pow for (%s)^(%s) (%d,%d):\n"
                         "Flags = %u instead of expected %u\n",
-                        name[i], name[j], i, j, __gmpfr_flags, f[i][j]);
+                        name[i], name[j], i, j,
+                        (unsigned int) __gmpfr_flags, f[i][j]);
                 mpfr_dump (r);
                 error = 1;
               }
@@ -936,7 +1072,7 @@ underflows (void)
       mpfr_set_ui (y, i, MPFR_RNDN);
       mpfr_div_2ui (y, y, 1, MPFR_RNDN);
       test_pow (y, x, y, MPFR_RNDN);
-      if (!MPFR_IS_FP(y) || mpfr_cmp_ui (y, 0))
+      if (MPFR_NOTZERO (y))
         {
           printf ("Error in mpfr_pow for ");
           mpfr_out_str (stdout, 2, 0, x, MPFR_RNDN);
@@ -996,7 +1132,7 @@ underflows (void)
     }
 
   emin = mpfr_get_emin ();
-  mpfr_set_emin (-256);
+  set_emin (-256);
   mpfr_set_prec (x, 2);
   mpfr_set_prec (y, 2);
   mpfr_set_prec (z, 12);
@@ -1014,10 +1150,10 @@ underflows (void)
               MPFR_IS_ZERO (z) ? "yes" : "no", inexact);
       exit (1);
     }
-  mpfr_set_emin (emin);
+  set_emin (emin);
 
   emin = mpfr_get_emin ();
-  mpfr_set_emin (-256);
+  set_emin (-256);
   mpfr_set_prec (x, 2);
   mpfr_set_prec (y, 40);
   mpfr_set_prec (z, 12);
@@ -1048,7 +1184,7 @@ underflows (void)
       inexact = mpfr_sub_ui (y, y, 1, MPFR_RNDN);
       MPFR_ASSERTN (inexact == 0);
     }
-  mpfr_set_emin (emin);
+  set_emin (emin);
 
   mpfr_clears (x, y, z, (mpfr_ptr) 0);
 }
@@ -1109,7 +1245,7 @@ overflows2 (void)
       if (__gmpfr_flags != (MPFR_FLAGS_OVERFLOW | MPFR_FLAGS_INEXACT))
         {
           printf ("Error in overflows2 (e = %d): bad flags (%u)\n",
-                  e, __gmpfr_flags);
+                  e, (unsigned int) __gmpfr_flags);
           exit (1);
         }
     }
@@ -1158,7 +1294,7 @@ overflows3 (void)
           if (__gmpfr_flags != (MPFR_FLAGS_OVERFLOW | MPFR_FLAGS_INEXACT))
             {
               printf ("Error in overflows3 (RNDN, i = %d): bad flags (%u)\n",
-                      i, __gmpfr_flags);
+                      i, (unsigned int) __gmpfr_flags);
               exit (1);
             }
 
@@ -1239,8 +1375,8 @@ bug20071103 (void)
 
   emin = mpfr_get_emin ();
   emax = mpfr_get_emax ();
-  mpfr_set_emin (-1000000);
-  mpfr_set_emax ( 1000000);
+  set_emin (-1000000);
+  set_emax ( 1000000);
 
   mpfr_inits2 (64, x, y, z, (mpfr_ptr) 0);
   mpfr_set_si_2exp (x, -3, -1, MPFR_RNDN);  /* x = -1.5 */
@@ -1248,7 +1384,7 @@ bug20071103 (void)
   mpfr_set_exp (y, mpfr_get_emax ());
   mpfr_clear_flags ();
   mpfr_pow (z, x, y, MPFR_RNDN);
-  MPFR_ASSERTN (mpfr_zero_p (z) && MPFR_SIGN (z) > 0 &&
+  MPFR_ASSERTN (mpfr_zero_p (z) && MPFR_IS_POS (z) &&
                 __gmpfr_flags == (MPFR_FLAGS_UNDERFLOW | MPFR_FLAGS_INEXACT));
   mpfr_clears (x, y, z, (mpfr_ptr) 0);
 
@@ -1266,8 +1402,8 @@ bug20071104 (void)
 
   emin = mpfr_get_emin ();
   emax = mpfr_get_emax ();
-  mpfr_set_emin (-1000000);
-  mpfr_set_emax ( 1000000);
+  set_emin (-1000000);
+  set_emax ( 1000000);
 
   mpfr_inits2 (20, x, y, z, (mpfr_ptr) 0);
   mpfr_set_ui (x, 0, MPFR_RNDN);
@@ -1275,7 +1411,7 @@ bug20071104 (void)
   mpfr_set_si (y, -2, MPFR_RNDN);  /* y = -2 */
   mpfr_clear_flags ();
   inex = mpfr_pow (z, x, y, MPFR_RNDN);
-  if (! mpfr_inf_p (z) || MPFR_SIGN (z) < 0)
+  if (! mpfr_inf_p (z) || MPFR_IS_NEG (z))
     {
       printf ("Error in bug20071104: expected +Inf, got ");
       mpfr_dump (z);
@@ -1288,7 +1424,8 @@ bug20071104 (void)
     }
   if (__gmpfr_flags != (MPFR_FLAGS_OVERFLOW | MPFR_FLAGS_INEXACT))
     {
-      printf ("Error in bug20071104: bad flags (%u)\n", __gmpfr_flags);
+      printf ("Error in bug20071104: bad flags (%u)\n",
+              (unsigned int) __gmpfr_flags);
       exit (1);
     }
   mpfr_clears (x, y, z, (mpfr_ptr) 0);
@@ -1307,8 +1444,8 @@ bug20071127 (void)
 
   emin = mpfr_get_emin ();
   emax = mpfr_get_emax ();
-  mpfr_set_emin (-1000000);
-  mpfr_set_emax ( 1000000);
+  set_emin (-1000000);
+  set_emax ( 1000000);
 
   mpfr_init2 (x, 128);
   mpfr_init2 (y, 128);
@@ -1328,8 +1465,8 @@ bug20071127 (void)
   mpfr_clear (y);
   mpfr_clear (z);
 
-  mpfr_set_emin (emin);
-  mpfr_set_emax (emax);
+  set_emin (emin);
+  set_emax (emax);
 }
 
 /* Bug found by Kevin P. Rauch */
@@ -1342,8 +1479,8 @@ bug20071128 (void)
 
   emin = mpfr_get_emin ();
   emax = mpfr_get_emax ();
-  mpfr_set_emin (-1000000);
-  mpfr_set_emax ( 1000000);
+  set_emin (-1000000);
+  set_emax ( 1000000);
 
   mpfr_init2 (max_val, 64);
   mpfr_init2 (x, 64);
@@ -1370,7 +1507,7 @@ bug20071128 (void)
       mpfr_set_si_2exp (y, -1, i, MPFR_RNDN);
       mpfr_add_si (y, y, 1, MPFR_RNDN);
       tern = mpfr_pow (z, x, y, MPFR_RNDN);
-      MPFR_ASSERTN(mpfr_zero_p (z) && MPFR_SIGN(z) < 0);
+      MPFR_ASSERTN(mpfr_zero_p (z) && MPFR_IS_NEG (z));
     }
 
   mpfr_clear (x);
@@ -1378,8 +1515,8 @@ bug20071128 (void)
   mpfr_clear (z);
   mpfr_clear (max_val);
 
-  mpfr_set_emin (emin);
-  mpfr_set_emax (emax);
+  set_emin (emin);
+  set_emax (emax);
 }
 
 /* Bug found by Kevin P. Rauch */
@@ -1452,7 +1589,7 @@ bug20080721 (void)
   MPFR_ASSERTN (inex == 0);
   mpfr_set_str_binary (t[0], "-0.10101101e2");
   mpfr_set_str_binary (t[1], "-0.10101110e2");
-  RND_LOOP (rnd)
+  RND_LOOP_NO_RNDF (rnd)
     {
       int i, inex0;
 
@@ -1460,6 +1597,7 @@ bug20080721 (void)
       inex0 = i ? -1 : 1;
       mpfr_clear_flags ();
       inex = mpfr_pow (z, x, y, (mpfr_rnd_t) rnd);
+
       if (__gmpfr_flags != MPFR_FLAGS_INEXACT || ! SAME_SIGN (inex, inex0)
           || MPFR_IS_NAN (z) || mpfr_cmp (z, t[i]) != 0)
         {
@@ -1495,7 +1633,7 @@ bug20080820 (void)
   mpfr_t x, y, z1, z2;
 
   emin = mpfr_get_emin ();
-  mpfr_set_emin (MPFR_EMIN_MIN);
+  set_emin (MPFR_EMIN_MIN);
   mpfr_init2 (x, 80);
   mpfr_init2 (y, sizeof (mpfr_exp_t) * CHAR_BIT + 32);
   mpfr_init2 (z1, 2);
@@ -1527,7 +1665,7 @@ bug20110320 (void)
   unsigned int flags;
 
   emin = mpfr_get_emin ();
-  mpfr_set_emin (11);
+  set_emin (11);
   mpfr_inits2 (2, x, y, z1, z2, (mpfr_ptr) 0);
   mpfr_set_ui_2exp (x, 1, 215, MPFR_RNDN);
   mpfr_set_ui (y, 1024, MPFR_RNDN);
@@ -1548,6 +1686,197 @@ bug20110320 (void)
   set_emin (emin);
 }
 
+static void
+tst20140422 (void)
+{
+  mpfr_t x, y, z1, z2;
+  int inex, rnd;
+  unsigned int flags;
+
+  mpfr_inits2 (128, x, y, z1, z2, (mpfr_ptr) 0);
+  mpfr_set_ui (x, 1296, MPFR_RNDN);
+  mpfr_set_ui_2exp (y, 3, -2, MPFR_RNDN);
+  mpfr_set_ui (z2, 216, MPFR_RNDN);
+  RND_LOOP (rnd)
+    {
+      mpfr_clear_flags ();
+      inex = mpfr_pow (z1, x, y, (mpfr_rnd_t) rnd);
+      flags = __gmpfr_flags;
+      if (inex != 0 || flags != 0 || ! mpfr_equal_p (z1, z2))
+        {
+          printf ("Error in bug20140422 with %s\n",
+                  mpfr_print_rnd_mode ((mpfr_rnd_t) rnd));
+          printf ("Expected inex = 0, flags = 0, z = ");
+          mpfr_dump (z2);
+          printf ("Got      inex = %d, flags = %u, z = ", inex, flags);
+          mpfr_dump (z1);
+          exit (1);
+        }
+    }
+  mpfr_clears (x, y, z1, z2, (mpfr_ptr) 0);
+}
+
+static void
+coverage (void)
+{
+  mpfr_t x, y, z, t, u;
+  mpfr_exp_t emin;
+  int inex;
+  int i;
+
+  /* check a corner case with prec(z)=1 */
+  mpfr_init2 (x, 2);
+  mpfr_init2 (y, 8);
+  mpfr_init2 (z, 1);
+  mpfr_set_ui_2exp (x, 3, -2, MPFR_RNDN);   /* x = 3/4 */
+  emin = mpfr_get_emin ();
+  set_emin (-40);
+  mpfr_set_ui_2exp (y, 199, -1, MPFR_RNDN); /* y = 99.5 */
+  /* x^y ~ 0.81*2^-41 */
+  mpfr_clear_underflow ();
+  inex = mpfr_pow (z, x, y, MPFR_RNDN);
+  MPFR_ASSERTN(inex > 0);
+  MPFR_ASSERTN(mpfr_cmp_ui_2exp (z, 1, -41) == 0);
+  /* there should be no underflow, since with unbounded exponent range,
+     and a precision of 1 bit, x^y is rounded to 1.0*2^-41 */
+  MPFR_ASSERTN(!mpfr_underflow_p ());
+  mpfr_set_ui_2exp (y, 201, -1, MPFR_RNDN); /* y = 100.5 */
+  /* x^y ~ 0.61*2^-41 */
+  mpfr_clear_underflow ();
+  inex = mpfr_pow (z, x, y, MPFR_RNDN);
+  MPFR_ASSERTN(inex > 0);
+  MPFR_ASSERTN(mpfr_cmp_ui_2exp (z, 1, -41) == 0);
+  /* there should be an underflow, since with unbounded exponent range,
+     and a precision of 1 bit, x^y is rounded to 0.5*2^-41 */
+  MPFR_ASSERTN(mpfr_underflow_p ());
+  mpfr_set_ui_2exp (y, 203, -1, MPFR_RNDN); /* y = 101.5 */
+  /* x^y ~ 0.46*2^-41 */
+  mpfr_clear_underflow ();
+  inex = mpfr_pow (z, x, y, MPFR_RNDN);
+  MPFR_ASSERTN(inex < 0);
+  MPFR_ASSERTN(mpfr_zero_p (z) && mpfr_signbit (z) == 0);
+  MPFR_ASSERTN(mpfr_underflow_p ());
+  mpfr_clears (x, y, z, (mpfr_ptr) 0);
+  set_emin (emin);
+
+  /* test for x = -2, y an odd integer with EXP(y) > i */
+  mpfr_inits2 (10, t, u, (mpfr_ptr) 0);
+  mpfr_set_ui_2exp (t, 1, 1UL << 8, MPFR_RNDN);
+  for (i = 8; i <= 300; i++)
+    {
+      mpfr_flags_t flags, flags_u;
+      int inex_u;
+
+      mpfr_mul_si (u, t, -2, MPFR_RNDN);  /* u = (-2)^(2^i + 1) */
+      mpfr_init2 (x, 10);
+      mpfr_init2 (y, i+1);
+      mpfr_init2 (z, 10);
+      mpfr_set_si (x, -2, MPFR_RNDN);
+      mpfr_set_ui_2exp (y, 1, i, MPFR_RNDN);
+      mpfr_nextabove (y);  /* y = 2^i + 1 */
+      if (MPFR_IS_INF (u))
+        {
+          inex_u = -1;
+          flags_u = MPFR_FLAGS_OVERFLOW | MPFR_FLAGS_INEXACT;
+        }
+      else
+        {
+          inex_u = 0;
+          flags_u = 0;
+        }
+      mpfr_clear_flags ();
+      inex = mpfr_pow (z, x, y, MPFR_RNDN);
+      flags = __gmpfr_flags;
+      if (mpfr_cmp0 (z, u) != 0 ||
+          ! SAME_SIGN (inex, inex_u) ||
+          flags != flags_u)
+        {
+          printf ("Error in coverage for (-2)^(2^%d + 1):\n", i);
+          printf ("Expected ");
+          mpfr_dump (u);
+          printf ("  with inex = %d and flags:", inex_u);
+          flags_out (flags_u);
+          printf ("Got      ");
+          mpfr_dump (z);
+          printf ("  with inex = %d and flags:", inex);
+          flags_out (flags);
+          exit (1);
+        }
+      mpfr_sqr (t, t, MPFR_RNDN);
+      mpfr_clears (x, y, z, (mpfr_ptr) 0);
+    }
+  mpfr_clears (t, u, (mpfr_ptr) 0);
+
+#if _MPFR_EXP_FORMAT >= 3 && _MPFR_PREC_FORMAT == 3 && MPFR_PREC_BITS == 64
+  /* thus an unsigned long has at least 64 bits and x will be finite */
+  {
+    mpfr_exp_t emax;
+
+    emax = mpfr_get_emax ();
+    set_emax ((1UL << 62) - 1);
+    /* emax = 4611686018427387903 on a 64-bit machine */
+    mpfr_init2 (x, 65);
+    mpfr_init2 (y, 65);
+    mpfr_init2 (z, 64);
+    mpfr_set_ui_2exp (x, 512, 3074457345618258593UL, MPFR_RNDN);
+    mpfr_nextbelow (x);
+    mpfr_set_str_binary (y, "1.1"); /* y = 3/2 */
+    mpfr_nextabove (y);
+    inex = mpfr_pow (z, x, y, MPFR_RNDN);
+    MPFR_ASSERTN(inex > 0);
+    MPFR_ASSERTN(mpfr_inf_p (z));
+    mpfr_clears (x, y, z, (mpfr_ptr) 0);
+    set_emax (emax);
+  }
+#endif
+}
+
+static void
+check_binary128 (void)
+{
+  mpfr_t x, y, z, t;
+
+  mpfr_init2 (x, 113);
+  mpfr_init2 (y, 113);
+  mpfr_init2 (z, 113);
+  mpfr_init2 (t, 113);
+
+  /* x = 1-2^(-113) */
+  mpfr_set_ui (x, 1, MPFR_RNDN);
+  mpfr_nextbelow (x);
+  /* y = 1.125*2^126 = 9*2^123 */
+  mpfr_set_ui_2exp (y, 9, 123, MPFR_RNDN);
+  mpfr_pow (z, x, y, MPFR_RNDN);
+  /* x^y ~ 3.48e-4003 */
+  mpfr_set_str (t, "1.16afef53c30899a5c172bb302882p-13296", 16, MPFR_RNDN);
+  if (! mpfr_equal_p (z, t))
+    {
+      printf ("Error in check_binary128\n");
+      printf ("expected "); mpfr_dump (t);
+      printf ("got      "); mpfr_dump (z);
+      exit (1);
+    }
+
+  /* x = 5192296858534827628530496329220095/2^112 */
+  mpfr_set_str (x, "1.fffffffffffffffffffffffffffep-1", 16, MPFR_RNDN);
+  /* y = -58966440806378323534486035691038613504 */
+  mpfr_set_str (y, "-1.62e42fefa39ef35793c7673007e5p125", 16, MPFR_RNDN);
+  mpfr_pow (z, x, y, MPFR_RNDN);
+  mpfr_set_str (t, "1.fffffffffffffffffffffffff105p16383", 16, MPFR_RNDN);
+  if (! mpfr_equal_p (z, t))
+    {
+      printf ("Error in check_binary128 (2)\n");
+      printf ("expected "); mpfr_dump (t);
+      printf ("got      "); mpfr_dump (z);
+      exit (1);
+    }
+
+  mpfr_clear (x);
+  mpfr_clear (y);
+  mpfr_clear (z);
+  mpfr_clear (t);
+}
+
 int
 main (int argc, char **argv)
 {
@@ -1555,14 +1884,16 @@ main (int argc, char **argv)
 
   tests_start_mpfr ();
 
+  coverage ();
   bug20071127 ();
   special ();
   particular_cases ();
   check_pow_ui ();
   check_pow_si ();
+  check_pown_ieee754_2019 ();
   check_special_pow_si ();
   pow_si_long_min ();
-  for (p = 2; p < 100; p++)
+  for (p = MPFR_PREC_MIN; p < 100; p++)
     check_inexact (p);
   underflows ();
   overflows ();
@@ -1576,12 +1907,51 @@ main (int argc, char **argv)
   bug20080721 ();
   bug20080820 ();
   bug20110320 ();
+  tst20140422 ();
+  check_binary128 ();
 
-  test_generic (2, 100, 100);
-  test_generic_ui (2, 100, 100);
-  test_generic_si (2, 100, 100);
+  test_generic (MPFR_PREC_MIN, 100, 100);
+  test_generic_ui (MPFR_PREC_MIN, 100, 100);
+  test_generic_si (MPFR_PREC_MIN, 100, 100);
 
   data_check ("data/pow275", mpfr_pow275, "mpfr_pow275");
+
+  bad_cases (powu2, root2, "mpfr_pow_ui[2]",
+             8, -256, 255, 4, 128, 800, 40);
+  bad_cases (pows2, root2, "mpfr_pow_si[2]",
+             8, -256, 255, 4, 128, 800, 40);
+  bad_cases (powm2, rootm2, "mpfr_pow_si[-2]",
+             8, -256, 255, 4, 128, 800, 40);
+  bad_cases (powu3, root3, "mpfr_pow_ui[3]",
+             256, -256, 255, 4, 128, 800, 40);
+  bad_cases (pows3, root3, "mpfr_pow_si[3]",
+             256, -256, 255, 4, 128, 800, 40);
+  bad_cases (powm3, rootm3, "mpfr_pow_si[-3]",
+             256, -256, 255, 4, 128, 800, 40);
+  bad_cases (powu4, root4, "mpfr_pow_ui[4]",
+             8, -256, 255, 4, 128, 800, 40);
+  bad_cases (pows4, root4, "mpfr_pow_si[4]",
+             8, -256, 255, 4, 128, 800, 40);
+  bad_cases (powm4, rootm4, "mpfr_pow_si[-4]",
+             8, -256, 255, 4, 128, 800, 40);
+  bad_cases (powu5, root5, "mpfr_pow_ui[5]",
+             256, -256, 255, 4, 128, 800, 40);
+  bad_cases (pows5, root5, "mpfr_pow_si[5]",
+             256, -256, 255, 4, 128, 800, 40);
+  bad_cases (powm5, rootm5, "mpfr_pow_si[-5]",
+             256, -256, 255, 4, 128, 800, 40);
+  bad_cases (powu17, root17, "mpfr_pow_ui[17]",
+             256, -256, 255, 4, 128, 800, 40);
+  bad_cases (pows17, root17, "mpfr_pow_si[17]",
+             256, -256, 255, 4, 128, 800, 40);
+  bad_cases (powm17, rootm17, "mpfr_pow_si[-17]",
+             256, -256, 255, 4, 128, 800, 40);
+  bad_cases (powu120, root120, "mpfr_pow_ui[120]",
+             8, -256, 255, 4, 128, 800, 40);
+  bad_cases (pows120, root120, "mpfr_pow_si[120]",
+             8, -256, 255, 4, 128, 800, 40);
+  bad_cases (powm120, rootm120, "mpfr_pow_si[-120]",
+             8, -256, 255, 4, 128, 800, 40);
 
   tests_end_mpfr ();
   return 0;

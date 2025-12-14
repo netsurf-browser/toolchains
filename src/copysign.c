@@ -1,6 +1,6 @@
 /* mpfr_copysign -- Produce a value with the magnitude of x and sign bit of y
 
-Copyright 2001-2004, 2006-2017 Free Software Foundation, Inc.
+Copyright 2001-2004, 2006-2023 Free Software Foundation, Inc.
 Contributed by the AriC and Caramba projects, INRIA.
 
 This file is part of the GNU MPFR Library.
@@ -17,7 +17,7 @@ License for more details.
 
 You should have received a copy of the GNU Lesser General Public License
 along with the GNU MPFR Library; see the file COPYING.LESSER.  If not, see
-http://www.gnu.org/licenses/ or write to the Free Software Foundation, Inc.,
+https://www.gnu.org/licenses/ or write to the Free Software Foundation, Inc.,
 51 Franklin St, Fifth Floor, Boston, MA 02110-1301, USA. */
 
 #include "mpfr-impl.h"
@@ -34,5 +34,14 @@ http://www.gnu.org/licenses/ or write to the Free Software Foundation, Inc.,
 int
 mpfr_copysign (mpfr_ptr z, mpfr_srcptr x, mpfr_srcptr y, mpfr_rnd_t rnd_mode)
 {
-  return mpfr_set4 (z, x, rnd_mode, MPFR_SIGN (y));
+  if (MPFR_UNLIKELY (z != x))
+    return mpfr_set4 (z, x, rnd_mode, MPFR_SIGN (y));
+  else
+    {
+      MPFR_SET_SAME_SIGN (z, y);
+      if (MPFR_UNLIKELY (MPFR_IS_NAN (x)))
+        MPFR_RET_NAN;
+      else
+        MPFR_RET (0);
+    }
 }

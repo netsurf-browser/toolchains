@@ -1,6 +1,6 @@
 /* Test compatibility mpf-mpfr.
 
-Copyright 2003, 2005-2017 Free Software Foundation, Inc.
+Copyright 2003, 2005-2023 Free Software Foundation, Inc.
 Contributed by the AriC and Caramba projects, INRIA.
 
 This file is part of the GNU MPFR Library.
@@ -17,9 +17,23 @@ License for more details.
 
 You should have received a copy of the GNU Lesser General Public License
 along with the GNU MPFR Library; see the file COPYING.LESSER.  If not, see
-http://www.gnu.org/licenses/ or write to the Free Software Foundation, Inc.,
+https://www.gnu.org/licenses/ or write to the Free Software Foundation, Inc.,
 51 Franklin St, Fifth Floor, Boston, MA 02110-1301, USA. */
+
+#include "mpfr-test.h"
+
+#ifndef MPFR_USE_MINI_GMP
 
 #define MPFR
 #define mpf_free_str mpfr_free_str
 #include "mpf_compat.h"
+
+#else
+
+int
+main (void)
+{
+  return 77;
+}
+
+#endif

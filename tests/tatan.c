@@ -1,6 +1,6 @@
-/* Test file for mpfr_atan.
+/* Test file for mpfr_atan and mpfr_atan2.
 
-Copyright 2001-2017 Free Software Foundation, Inc.
+Copyright 2001-2023 Free Software Foundation, Inc.
 Contributed by the AriC and Caramba projects, INRIA.
 
 This file is part of the GNU MPFR Library.
@@ -17,11 +17,8 @@ License for more details.
 
 You should have received a copy of the GNU Lesser General Public License
 along with the GNU MPFR Library; see the file COPYING.LESSER.  If not, see
-http://www.gnu.org/licenses/ or write to the Free Software Foundation, Inc.,
+https://www.gnu.org/licenses/ or write to the Free Software Foundation, Inc.,
 51 Franklin St, Fifth Floor, Boston, MA 02110-1301, USA. */
-
-#include <stdio.h>
-#include <stdlib.h>
 
 #include "mpfr-test.h"
 
@@ -53,12 +50,12 @@ special (void)
     }
 
   /* atan(+Inf) = Pi/2 */
-  for (r = 0; r < MPFR_RND_MAX ; r++)
+  RND_LOOP (r)
     {
       mpfr_set_inf (x, 1);
       mpfr_atan (y, x, (mpfr_rnd_t) r);
       mpfr_const_pi (x, (mpfr_rnd_t) r);
-      mpfr_div_2exp (x, x, 1, (mpfr_rnd_t) r);
+      mpfr_div_2ui (x, x, 1, (mpfr_rnd_t) r);
       if (mpfr_cmp (x, y))
         {
           printf ("Error: mpfr_atan(+Inf), rnd=%s\n",
@@ -68,13 +65,13 @@ special (void)
     }
 
   /* atan(-Inf) = - Pi/2 */
-  for (r = 0; r < MPFR_RND_MAX ; r++)
+  RND_LOOP (r)
     {
       mpfr_set_inf (x, -1);
       mpfr_atan (y, x, (mpfr_rnd_t) r);
       mpfr_const_pi (x, MPFR_INVERT_RND((mpfr_rnd_t) r));
       mpfr_neg (x, x, (mpfr_rnd_t) r);
-      mpfr_div_2exp (x, x, 1, (mpfr_rnd_t) r);
+      mpfr_div_2ui (x, x, 1, (mpfr_rnd_t) r);
       if (mpfr_cmp (x, y))
         {
           printf ("Error: mpfr_atan(-Inf), rnd=%s\n",
@@ -142,8 +139,8 @@ special (void)
   if (mpfr_cmp (x, y))
     {
       printf ("Error in mpfr_atan (2)\n");
-      mpfr_print_binary (x); printf ("\n");
-      mpfr_print_binary (y); printf ("\n");
+      mpfr_dump (x);
+      mpfr_dump (y);
       exit (1);
     }
 
@@ -156,8 +153,8 @@ special (void)
   if (mpfr_cmp (z, y))
     {
       printf ("Error in mpfr_atan (3)\n");
-      printf ("Expected "); mpfr_print_binary (y); printf ("\n");
-      printf ("Got      "); mpfr_print_binary (z); printf ("\n");
+      printf ("Expected "); mpfr_dump (y);
+      printf ("Got      "); mpfr_dump (z);
       exit (1);
     }
 
@@ -446,7 +443,7 @@ smallvals_atan2 (void)
   mpfr_set_prec (y, 8);
   mpfr_set_prec (a, 8);
   old_emin = mpfr_get_emin ();
-  mpfr_set_emin (MPFR_EMIN_MIN);
+  set_emin (MPFR_EMIN_MIN);
 
   mpfr_set_si (y, 3, MPFR_RNDN);
   mpfr_set_exp (y, mpfr_get_emin ());
@@ -476,7 +473,7 @@ smallvals_atan2 (void)
   mpfr_atan2 (a, y, x, MPFR_RNDN);
   MPFR_ASSERTN (mpfr_zero_p (a));
 
-  mpfr_set_emin (old_emin);
+  set_emin (old_emin);
 
   mpfr_clears (a, x, y, (mpfr_ptr) 0);
 }
@@ -541,7 +538,7 @@ atan2_pow_of_2 (void)
   mpfr_t x, y, r, g;
   int i;
   int d[] = { 0, -1, 1 };
-  int ntests = sizeof (d) / sizeof (int);
+  int ntests = numberof (d);
 
   mpfr_init2 (x, 53);
   mpfr_init2 (y, 53);
@@ -560,8 +557,8 @@ atan2_pow_of_2 (void)
       if (mpfr_equal_p (r, g) == 0)
         {
           printf ("Error in mpfr_atan2 (5)\n");
-          printf ("Expected "); mpfr_print_binary (g); printf ("\n");
-          printf ("Got      "); mpfr_print_binary (r); printf ("\n");
+          printf ("Expected "); mpfr_dump (g);
+          printf ("Got      "); mpfr_dump (r);
           exit (1);
         }
     }
@@ -588,19 +585,19 @@ reduced_expo_range (void)
   mpfr_inits2 (12, x, y, ex_y, (mpfr_ptr) 0);
   mpfr_set_str (x, "0.1e-5", 2, MPFR_RNDN);
 
-  mpfr_set_emin (-5);
-  mpfr_set_emax (-5);
+  set_emin (-5);
+  set_emax (-5);
   mpfr_clear_flags ();
   inex = mpfr_atan (y, x, MPFR_RNDN);
   flags = __gmpfr_flags;
-  mpfr_set_emin (emin);
-  mpfr_set_emax (emax);
+  set_emin (emin);
+  set_emax (emax);
 
   mpfr_set_str (ex_y, "0.1e-5", 2, MPFR_RNDN);
   ex_inex = 1;
   ex_flags = MPFR_FLAGS_INEXACT;
 
-  if (SIGN (inex) != ex_inex || flags != ex_flags ||
+  if (VSIGN (inex) != ex_inex || flags != ex_flags ||
       ! mpfr_equal_p (y, ex_y))
     {
       printf ("Error in reduced_expo_range\non x = ");
@@ -610,7 +607,7 @@ reduced_expo_range (void)
       printf ("\n         inex = %d, flags = %u\n", ex_inex, ex_flags);
       printf ("Got      y = ");
       mpfr_out_str (stdout, 2, 0, y, MPFR_RNDN);
-      printf ("\n         inex = %d, flags = %u\n", SIGN (inex), flags);
+      printf ("\n         inex = %d, flags = %u\n", VSIGN (inex), flags);
       exit (1);
     }
 
@@ -630,9 +627,9 @@ main (int argc, char *argv[])
   atan2_different_prec ();
   reduced_expo_range ();
 
-  test_generic_atan  (2, 200, 17);
-  test_generic_atan2 (2, 200, 17);
-  test_generic_atan2_neg (2, 200, 17);
+  test_generic_atan  (MPFR_PREC_MIN, 200, 17);
+  test_generic_atan2 (MPFR_PREC_MIN, 200, 17);
+  test_generic_atan2_neg (MPFR_PREC_MIN, 200, 17);
 
   data_check ("data/atan", mpfr_atan, "mpfr_atan");
   bad_cases (mpfr_atan, mpfr_tan, "mpfr_atan", 256, -40, 1, 4, 128, 800, 40);

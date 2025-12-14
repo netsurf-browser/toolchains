@@ -1,6 +1,6 @@
 /* [Description]
 
-Copyright 2010-2017 Free Software Foundation, Inc.
+Copyright 2010-2023 Free Software Foundation, Inc.
 Contributed by the AriC and Caramba projects, INRIA.
 
 This file is part of the GNU MPFR Library.
@@ -17,7 +17,7 @@ License for more details.
 
 You should have received a copy of the GNU Lesser General Public License
 along with the GNU MPFR Library; see the file COPYING.LESSER.  If not, see
-http://www.gnu.org/licenses/ or write to the Free Software Foundation, Inc.,
+https://www.gnu.org/licenses/ or write to the Free Software Foundation, Inc.,
 51 Franklin St, Fifth Floor, Boston, MA 02110-1301, USA. */
 
 #include <stdlib.h>
@@ -32,7 +32,7 @@ http://www.gnu.org/licenses/ or write to the Free Software Foundation, Inc.,
 
 /* Let f be a function for which we have several implementations f1, f2... */
 /* We wish to have a quick overview of which implementation is the best    */
-/* in function of the point x where f(x) is computed and of the prectision */
+/* in function of the point x where f(x) is computed and of the precision */
 /* prec requested by the user.                                             */
 /* This is performed by drawing a 2D graphic with color indicating which   */
 /* method is the best.                                                     */

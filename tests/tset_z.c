@@ -1,6 +1,6 @@
 /* Test file for mpfr_set_z.
 
-Copyright 1999, 2001-2017 Free Software Foundation, Inc.
+Copyright 1999, 2001-2023 Free Software Foundation, Inc.
 Contributed by the AriC and Caramba projects, INRIA.
 
 This file is part of the GNU MPFR Library.
@@ -17,12 +17,8 @@ License for more details.
 
 You should have received a copy of the GNU Lesser General Public License
 along with the GNU MPFR Library; see the file COPYING.LESSER.  If not, see
-http://www.gnu.org/licenses/ or write to the Free Software Foundation, Inc.,
+https://www.gnu.org/licenses/ or write to the Free Software Foundation, Inc.,
 51 Franklin St, Fifth Floor, Boston, MA 02110-1301, USA. */
-
-#include <stdio.h>
-#include <stdlib.h>
-#include <limits.h>
 
 #include "mpfr-test.h"
 
@@ -36,7 +32,7 @@ static void check0(void)
   mpfr_init (x);
   mpz_init (y);
   mpz_set_si (y, 0);
-  for(r = 0; r < MPFR_RND_MAX; r++)
+  RND_LOOP (r)
     {
       inexact = mpfr_set_z (x, y, (mpfr_rnd_t) r);
       if (!MPFR_IS_ZERO(x) || !MPFR_IS_POS(x) || inexact)

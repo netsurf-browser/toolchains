@@ -1,6 +1,6 @@
 /* Test file for mpfr_d_sub
 
-Copyright 2007-2017 Free Software Foundation, Inc.
+Copyright 2007-2023 Free Software Foundation, Inc.
 Contributed by the AriC and Caramba projects, INRIA.
 
 This file is part of the GNU MPFR Library.
@@ -17,16 +17,12 @@ License for more details.
 
 You should have received a copy of the GNU Lesser General Public License
 along with the GNU MPFR Library; see the file COPYING.LESSER.  If not, see
-http://www.gnu.org/licenses/ or write to the Free Software Foundation, Inc.,
+https://www.gnu.org/licenses/ or write to the Free Software Foundation, Inc.,
 51 Franklin St, Fifth Floor, Boston, MA 02110-1301, USA. */
 
-#include <stdio.h>
-#include <stdlib.h>
 #include <float.h>
 
 #include "mpfr-test.h"
-
-#if MPFR_VERSION >= MPFR_VERSION_NUM(2,4,0)
 
 static void
 check_nans (void)
@@ -42,7 +38,7 @@ check_nans (void)
   mpfr_clear_flags ();
   inexact = mpfr_d_sub (y, 1.0, x, MPFR_RNDN);
   MPFR_ASSERTN (inexact == 0);
-  MPFR_ASSERTN ((__gmpfr_flags ^ MPFR_FLAGS_NAN) == 0);
+  MPFR_ASSERTN (__gmpfr_flags == MPFR_FLAGS_NAN);
   MPFR_ASSERTN (mpfr_nan_p (y));
 
   /* 1.0 - +inf == -inf */
@@ -111,19 +107,8 @@ main (void)
 
   check_nans ();
 
-  test_generic (2, 1000, 100);
+  test_generic (MPFR_PREC_MIN, 1000, 100);
 
   tests_end_mpfr ();
   return 0;
 }
-
-#else
-
-int
-main (void)
-{
-  printf ("Warning! Test disabled for this MPFR version.\n");
-  return 0;
-}
-
-#endif

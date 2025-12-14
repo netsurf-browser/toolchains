@@ -1,6 +1,6 @@
 /* Test mpfr_get_ld_2exp.
 
-Copyright 2006-2017 Free Software Foundation, Inc.
+Copyright 2006-2023 Free Software Foundation, Inc.
 Contributed by the AriC and Caramba projects, INRIA.
 
 This file is part of the GNU MPFR Library.
@@ -17,11 +17,9 @@ License for more details.
 
 You should have received a copy of the GNU Lesser General Public License
 along with the GNU MPFR Library; see the file COPYING.LESSER.  If not, see
-http://www.gnu.org/licenses/ or write to the Free Software Foundation, Inc.,
+https://www.gnu.org/licenses/ or write to the Free Software Foundation, Inc.,
 51 Franklin St, Fifth Floor, Boston, MA 02110-1301, USA. */
 
-#include <stdio.h>
-#include <stdlib.h>
 #include <float.h>
 
 #include "mpfr-test.h"
@@ -39,12 +37,12 @@ check_round (void)
 
   mpfr_init2 (f, 1024L);
 
-  for (rnd_mode = 0; rnd_mode < MPFR_RND_MAX ; rnd_mode++)
+  RND_LOOP (rnd_mode)
     {
       for (i = 0; i < (int) numberof (data); i++)
         {
           mpfr_set_ui (f, 1L, MPFR_RNDZ);
-          mpfr_mul_2exp (f, f, data[i], MPFR_RNDZ);
+          mpfr_mul_2ui (f, f, data[i], MPFR_RNDZ);
           mpfr_sub_ui (f, f, 1L, MPFR_RNDZ);
 
           for (neg = 0; neg <= 1; neg++)
@@ -62,7 +60,7 @@ check_round (void)
                   printf  ("   f    ");
                   mpfr_out_str (stdout, 2, 0, f, MPFR_RNDN);
                   printf  ("\n");
-                  d_trace ("   got  ", got);
+                  ld_trace ("   got  ", got);
                   printf  ("   got exp  %ld\n", got_exp);
                   exit(1);
                 }
@@ -79,8 +77,7 @@ check_round (void)
 static void
 check_inf_nan (void)
 {
-  /* only if nans and infs are available */
-#if _GMP_IEEE_FLOATS
+#if !defined(MPFR_ERRDIVZERO)
   mpfr_t  x;
   double  d;
   long    exp;
@@ -115,7 +112,7 @@ bug20090520 (void)
   mpfr_init (x);
   mpfr_set_ui (x, 1, MPFR_RNDN);
   d = 1.0;
-  mpfr_div_2exp (x, x, 16383, MPFR_RNDN);
+  mpfr_div_2ui (x, x, 16383, MPFR_RNDN);
   for (i = 0; i < 16383; i++)
     d *= 0.5;
   e = mpfr_get_ld (x, MPFR_RNDN);
@@ -129,12 +126,36 @@ bug20090520 (void)
   mpfr_clear (x);
 }
 
+static void
+bug20180904 (void)
+{
+#if defined(HAVE_LDOUBLE_IEEE_EXT_LITTLE) || \
+    defined(HAVE_LDOUBLE_IEEE_EXT_BIG)
+  mpfr_t x;
+  long double d = 5.450797408381041489264061250159e-4937L;
+  long double e;
+
+  mpfr_init2 (x, 64);
+  mpfr_set_str_binary (x, "0.1000100000000000000000000000000000000000000000000000000000000000E-16397");
+  e = mpfr_get_ld (x, MPFR_RNDN);
+  if (e != d)
+    {
+      printf ("Error in bug20180904:\n");
+      printf ("expected %.30Le\n", d);
+      printf ("got      %.30Le\n", e);
+      exit (1);
+    }
+  mpfr_clear (x);
+#endif
+}
+
 int
 main (void)
 {
   tests_start_mpfr ();
   mpfr_test_init ();
 
+  bug20180904 ();
   bug20090520 ();
 
   check_round ();

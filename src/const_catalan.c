@@ -1,6 +1,6 @@
 /* mpfr_const_catalan -- compute Catalan's constant.
 
-Copyright 2005-2017 Free Software Foundation, Inc.
+Copyright 2005-2023 Free Software Foundation, Inc.
 Contributed by the AriC and Caramba projects, INRIA.
 
 This file is part of the GNU MPFR Library.
@@ -17,7 +17,7 @@ License for more details.
 
 You should have received a copy of the GNU Lesser General Public License
 along with the GNU MPFR Library; see the file COPYING.LESSER.  If not, see
-http://www.gnu.org/licenses/ or write to the Free Software Foundation, Inc.,
+https://www.gnu.org/licenses/ or write to the Free Software Foundation, Inc.,
 51 Franklin St, Fifth Floor, Boston, MA 02110-1301, USA. */
 
 #define MPFR_NEED_LONGLONG_H
@@ -77,7 +77,7 @@ S (mpz_t T, mpz_t P, mpz_t Q, unsigned long n1, unsigned long n2)
    Catalan's constant is G = sum((-1)^k/(2*k+1)^2, k=0..infinity).
    We compute it using formula (31) of Victor Adamchik's page
    "33 representations for Catalan's constant"
-   http://www-2.cs.cmu.edu/~adamchik/articles/catalan/catalan.htm
+   https://web.archive.org/web/20090624123133/http://www-2.cs.cmu.edu/~adamchik/articles/catalan/catalan.htm
 
    G = Pi/8*log(2+sqrt(3)) + 3/8*sum(k!^2/(2k)!/(2k+1)^2,k=0..infinity)
 */

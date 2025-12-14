@@ -1,6 +1,6 @@
 /* tprintf.c -- test file for mpfr_printf and mpfr_vprintf
 
-Copyright 2008-2017 Free Software Foundation, Inc.
+Copyright 2008-2023 Free Software Foundation, Inc.
 Contributed by the AriC and Caramba projects, INRIA.
 
 This file is part of the GNU MPFR Library.
@@ -17,22 +17,33 @@ License for more details.
 
 You should have received a copy of the GNU Lesser General Public License
 along with the GNU MPFR Library; see the file COPYING.LESSER.  If not, see
-http://www.gnu.org/licenses/ or write to the Free Software Foundation, Inc.,
+https://www.gnu.org/licenses/ or write to the Free Software Foundation, Inc.,
 51 Franklin St, Fifth Floor, Boston, MA 02110-1301, USA. */
 
-#if HAVE_STDARG
+/* FIXME: The output is not tested (thus coverage data are meaningless);
+   only the return value is tested (output string length).
+   Knowing the implementation, we may need only some minimal checks:
+   all the formatted output functions are based on mpfr_vasnprintf_aux
+   and full checks are done via tsprintf. */
+
+/* Needed due to the tests on HAVE_STDARG and MPFR_USE_MINI_GMP */
+#ifdef HAVE_CONFIG_H
+# include "config.h"
+#endif
+
+#if defined(HAVE_STDARG) && !defined(MPFR_USE_MINI_GMP)
 #include <stdarg.h>
 
-#include <stdio.h>
-#include <stdlib.h>
 #include <stddef.h>
 #include <errno.h>
 
-#include "mpfr-intmax.h"
+#ifdef HAVE_LOCALE_H
+#include <locale.h>
+#endif
+
+#define MPFR_NEED_INTMAX_H
 #include "mpfr-test.h"
 #define STDOUT_FILENO 1
-
-#if MPFR_VERSION >= MPFR_VERSION_NUM(2,4,0)
 
 #define QUOTE(X) NAME(X)
 #define NAME(X) #X
@@ -63,11 +74,11 @@ const int prec_max_printf = 5000;
 int stdout_redirect;
 
 static void
-check (const char *fmt, mpfr_t x)
+check (const char *fmt, mpfr_ptr x)
 {
   if (mpfr_printf (fmt, x) == -1)
     {
-      fprintf (stderr, "Error in mpfr_printf(\"%s\", ...)\n", fmt);
+      fprintf (stderr, "Error 1 in mpfr_printf(\"%s\", ...)\n", fmt);
 
       exit (1);
     }
@@ -82,7 +93,7 @@ check_vprintf (const char *fmt, ...)
   va_start (ap, fmt);
   if (mpfr_vprintf (fmt, ap) == -1)
     {
-      fprintf (stderr, "Error in mpfr_vprintf(\"%s\", ...)\n", fmt);
+      fprintf (stderr, "Error 2 in mpfr_vprintf(\"%s\", ...)\n", fmt);
 
       va_end (ap);
       exit (1);
@@ -91,26 +102,8 @@ check_vprintf (const char *fmt, ...)
   va_end (ap);
 }
 
-static void
+static unsigned int
 check_vprintf_failure (const char *fmt, ...)
-{
-  va_list ap;
-
-  va_start (ap, fmt);
-  if (mpfr_vprintf (fmt, ap) != -1)
-   {
-      putchar ('\n');
-      fprintf (stderr, "Error in mpfr_vprintf(\"%s\", ...)\n", fmt);
-
-      va_end (ap);
-      exit (1);
-    }
-  putchar ('\n');
-  va_end (ap);
-}
-
-static void
-check_vprintf_overflow (const char *fmt, ...)
 {
   va_list ap;
   int r, e;
@@ -128,77 +121,104 @@ check_vprintf_overflow (const char *fmt, ...)
       )
     {
       putchar ('\n');
-      fprintf (stderr, "Error in mpfr_vprintf(\"%s\", ...)\n"
+      fprintf (stderr, "Error 3 in mpfr_vprintf(\"%s\", ...)\n"
                "Got r = %d, errno = %d\n", fmt, r, e);
-      exit (1);
+      return 1;
     }
 
   putchar ('\n');
+  return 0;
 }
 
-static void
-check_invalid_format (void)
-{
-  int i = 0;
-
-  /* format in disorder */
-  check_vprintf_failure ("blah %l2.1d blah", i);
-  check_vprintf_failure ("blah %2.1#d blah", i);
-
-  /* incomplete format */
-  check_vprintf_failure ("%", i);
-  check_vprintf_failure ("% (missing conversion specifier)", i);
-  check_vprintf_failure ("missing conversion specifier %h", i);
-  check_vprintf_failure ("this should fail %.l because of missing conversion specifier "
-                         "(or doubling %%)", i);
-  check_vprintf_failure ("%L", i);
-  check_vprintf_failure ("%hh. ", i);
-  check_vprintf_failure ("blah %j.");
-  check_vprintf_failure ("%ll blah");
-  check_vprintf_failure ("blah%t blah");
-  check_vprintf_failure ("%z ");
-  check_vprintf_failure ("%F (missing conversion specifier)");
-  check_vprintf_failure ("%Q (missing conversion specifier)");
-  check_vprintf_failure ("%M (missing conversion specifier)");
-  check_vprintf_failure ("%N (missing conversion specifier)");
-  check_vprintf_failure ("%Z (missing conversion specifier)");
-  check_vprintf_failure ("%R (missing conversion specifier)");
-  check_vprintf_failure ("%R");
-  check_vprintf_failure ("%P (missing conversion specifier)");
-
-  /* conversion specifier with wrong length specifier */
-  check_vprintf_failure ("%ha", i);
-  check_vprintf_failure ("%hhe", i);
-  check_vprintf_failure ("%jf", i);
-  check_vprintf_failure ("%lg", i);
-  check_vprintf_failure ("%tA", i);
-  check_vprintf_failure ("%zE", i);
-  check_vprintf_failure ("%Ld", i);
-  check_vprintf_failure ("%Qf", i);
-  check_vprintf_failure ("%MG", i);
-  check_vprintf_failure ("%Na", i);
-  check_vprintf_failure ("%ZE", i);
-  check_vprintf_failure ("%PG", i);
-  check_vprintf_failure ("%Fu", i);
-  check_vprintf_failure ("%Rx", i);
-}
-
+/* The goal of this test is to check cases where more INT_MAX characters
+   are output, in which case, it should be a failure, because like C's
+   *printf functions, the return type is int and the returned value must
+   be either the number of characters printed or a negative value. */
 static void
 check_long_string (void)
 {
   /* this test is VERY expensive both in time (~1 min on core2 @ 2.40GHz) and
      in memory (~2.5 GB) */
   mpfr_t x;
+  long large_prec = 2147483647;
+  size_t min_memory_limit, old_memory_limit;
 
-  mpfr_init2 (x, INT_MAX);
+  old_memory_limit = tests_memory_limit;
+
+  /* With a 32-bit (4GB) address space, a realloc failure has been noticed
+     with a 2G precision (though allocating up to 4GB is possible):
+       MPFR: Can't reallocate memory (old_size=4096 new_size=2147487744)
+     The implementation might be improved to use less memory and avoid
+     this problem. In the mean time, let's choose a smaller precision,
+     but this will generally have the effect to disable the test. */
+  if (sizeof (void *) == 4)
+    large_prec /= 2;
+
+  /* We assume that the precision won't be increased internally. */
+  if (large_prec > MPFR_PREC_MAX)
+    large_prec = MPFR_PREC_MAX;
+
+  /* Increase tests_memory_limit if need be in order to avoid an
+     obvious failure due to insufficient memory. Note that such an
+     increase is necessary, but is not guaranteed to be sufficient
+     in all cases (e.g. with logging activated). */
+  min_memory_limit = large_prec / MPFR_BYTES_PER_MP_LIMB;
+  if (min_memory_limit > (size_t) -1 / 32)
+    min_memory_limit = (size_t) -1;
+  else
+    min_memory_limit *= 32;
+  if (tests_memory_limit > 0 && tests_memory_limit < min_memory_limit)
+    tests_memory_limit = min_memory_limit;
+
+  mpfr_init2 (x, large_prec);
 
   mpfr_set_ui (x, 1, MPFR_RNDN);
   mpfr_nextabove (x);
 
-  check_vprintf_overflow ("%Rb", x);
-  check_vprintf_overflow ("%RA %RA %Ra %Ra", x, x, x, x);
+  if (large_prec >= INT_MAX - 512)
+    {
+      unsigned int err = 0;
+
+#define LS1 "%Rb %512d"
+#define LS2 "%RA %RA %Ra %Ra %512d"
+
+      err |= check_vprintf_failure (LS1, x, 1);
+      err |= check_vprintf_failure (LS2, x, x, x, x, 1);
+
+      if (sizeof (long) * CHAR_BIT > 40)
+        {
+          long n1, n2;
+
+          n1 = large_prec + 517;
+          n2 = -17;
+          err |= check_vprintf_failure (LS1 "%ln", x, 1, &n2);
+          if (n1 != n2)
+            {
+              fprintf (stderr, "Error in check_long_string(\"%s\", ...)\n"
+                       "Expected n = %ld\n"
+                       "Got      n = %ld\n",
+                       LS1 "%ln", n1, n2);
+              err = 1;
+            }
+          n1 = ((large_prec - 2) / 4) * 4 + 548;
+          n2 = -17;
+          err |= check_vprintf_failure (LS2 "%ln", x, x, x, x, 1, &n2);
+          if (n1 != n2)
+            {
+              fprintf (stderr, "Error in check_long_string(\"%s\", ...)\n"
+                       "Expected n = %ld\n"
+                       "Got      n = %ld\n",
+                       LS2 "%ln", n1, n2);
+              err = 1;
+            }
+        }
+
+      if (err)
+        exit (1);
+    }
 
   mpfr_clear (x);
+  tests_memory_limit = old_memory_limit;
 }
 
 static void
@@ -264,11 +284,11 @@ check_mixed (void)
   unsigned long ulo = 1;
   float f = -1.25;
   double d = -1.25;
-#if !defined(NPRINTF_T) || !defined(NPRINTF_L)
+#if defined(PRINTF_T) || defined(PRINTF_L)
   long double ld = -1.25;
 #endif
 
-#ifndef NPRINTF_T
+#ifdef PRINTF_T
   ptrdiff_t p = 1, saved_p;
 #endif
   size_t sz = 1;
@@ -296,33 +316,40 @@ check_mixed (void)
   check_vprintf ("a. %c, b. %Rb, c. %u, d. %li%ln", i, mpfr, i, lo, &ulo);
   check_length (2, ulo, 36, lu);
   check_vprintf ("a. %hi, b. %*f, c. %Re%hn", ush, 3, f, mpfr, &ush);
-  check_length (3, ush, 29, hu);
+  check_length (3, ush, 46, hu);
   check_vprintf ("a. %hi, b. %f, c. %#.2Rf%n", sh, d, mpfr, &i);
   check_length (4, i, 29, d);
   check_vprintf ("a. %R*A, b. %Fe, c. %i%zn", rnd, mpfr, mpf, sz, &sz);
-  check_length (5, (unsigned long) sz, 34, lu); /* no format specifier '%zu' in C89 */
+  check_length (5, (unsigned long) sz, 34, lu); /* no format specifier '%zu' in C90 */
   check_vprintf ("a. %Pu, b. %c, c. %RUG, d. %Zi%Zn", prec, ch, mpfr, mpz, &mpz);
   check_length_with_cmp (6, mpz, 24, mpz_cmp_ui (mpz, 24), Zi);
   check_vprintf ("%% a. %#.0RNg, b. %Qx%Rn c. %p",
                  mpfr, mpq, &mpfr, (void *) &i);
   check_length_with_cmp (7, mpfr, 15, mpfr_cmp_ui (mpfr, 15), Rg);
 
-#ifndef NPRINTF_T
+#ifdef PRINTF_T
   saved_p = p;
   check_vprintf ("%% a. %RNg, b. %Qx, c. %td%tn", mpfr, mpq, p, &p);
   if (p != 20)
-    mpfr_fprintf (stderr, "Error in test 8, got '%% a. %RNg, b. %Qx, c. %td'\n", mpfr, mpq, saved_p);
-  check_length (8, (long) p, 20, ld); /* no format specifier '%td' in C89 */
+    {
+      mpfr_fprintf (stderr, "Error in test 8, got '%% a. %RNg, b. %Qx, c. %td'\n", mpfr, mpq, saved_p);
+#if defined(__MINGW32__) || defined(__MINGW64__)
+      fprintf (stderr,
+               "Your MinGW may be too old, in which case compiling GMP\n"
+               "with -D__USE_MINGW_ANSI_STDIO might be required.\n");
+#endif
+    }
+  check_length (8, (long) p, 20, ld); /* no format specifier '%td' in C90 */
 #endif
 
-#ifndef NPRINTF_L
+#ifdef PRINTF_L
   check_vprintf ("a. %RA, b. %Lf, c. %QX%zn", mpfr, ld, mpq, &sz);
-  check_length (9, (unsigned long) sz, 30, lu); /* no format specifier '%zu' in C89 */
+  check_length (9, (unsigned long) sz, 30, lu); /* no format specifier '%zu' in C90 */
 #endif
 
 #ifndef NPRINTF_HH
   check_vprintf ("a. %hhi, b. %Ra, c. %hhu%hhn", sch, mpfr, uch, &uch);
-  check_length (10, (unsigned int) uch, 22, u); /* no format specifier '%hhu' in C89 */
+  check_length (10, (unsigned int) uch, 22, u); /* no format specifier '%hhu' in C90 */
 #endif
 
 #if defined(HAVE_LONG_LONG) && !defined(NPRINTF_LL)
@@ -331,7 +358,7 @@ check_mixed (void)
     unsigned long long ullo = 1;
 
     check_vprintf ("a. %Re, b. %llx%Qn", mpfr, ullo, &mpq);
-    check_length_with_cmp (11, mpq, 16, mpq_cmp_ui (mpq, 16, 1), Qu);
+    check_length_with_cmp (11, mpq, 31, mpq_cmp_ui (mpq, 31, 1), Qu);
     check_vprintf ("a. %lli, b. %Rf%lln", llo, mpfr, &ullo);
     check_length (12, ullo, 19, llu);
   }
@@ -345,7 +372,7 @@ check_mixed (void)
     check_vprintf ("a. %*RA, b. %ji%Fn", 10, mpfr, im, &mpf);
     check_length_with_cmp (31, mpf, 20, mpf_cmp_ui (mpf, 20), Fg);
     check_vprintf ("a. %.*Re, b. %jx%jn", 10, mpfr, uim, &im);
-    check_length (32, (long) im, 25, li); /* no format specifier "%ji" in C89 */
+    check_length (32, (long) im, 25, li); /* no format specifier "%ji" in C90 */
   }
 #endif
 
@@ -400,7 +427,7 @@ check_random (int nb_tests)
       spec = (int) (randlimb () % 5);
       jmax = (spec == 3 || spec == 4) ? 6 : 5; /* ' flag only with %f or %g */
       /* advantage small precision */
-      prec = (randlimb () % 2) ? 10 : prec_max_printf;
+      prec = RAND_BOOL () ? 10 : prec_max_printf;
       prec = (int) (randlimb () % prec);
       if (spec == 3
           && (mpfr_get_exp (x) > prec_max_printf
@@ -441,7 +468,7 @@ check_random (int nb_tests)
 
               if (stdout_redirect)
                 {
-                  if ((fflush (stdout) == EOF) || (fclose (stdout) == -1))
+                  if ((fflush (stdout) == EOF) || (fclose (stdout) == EOF))
                     {
                       perror ("check_random");
                       exit (1);
@@ -453,11 +480,116 @@ check_random (int nb_tests)
       putchar ('\n');
     }
 
-  mpfr_set_emin (old_emin);
-  mpfr_set_emax (old_emax);
+  set_emin (old_emin);
+  set_emax (old_emax);
 
   mpfr_clear (x);
 }
+
+#if defined(HAVE_LOCALE_H) && defined(HAVE_SETLOCALE)
+
+static void
+test_locale (void)
+{
+  const char * const tab_locale[] = {
+    "en_US",
+    "en_US.iso88591",
+    "en_US.iso885915",
+    "en_US.utf8"
+  };
+  int i;
+  mpfr_t x;
+  int count;
+  char v[] = "99999999999999999999999.5";
+
+  for (i = 0; i < numberof(tab_locale); i++)
+    {
+      char *s;
+
+      s = setlocale (LC_ALL, tab_locale[i]);
+
+      if (s != NULL && MPFR_THOUSANDS_SEPARATOR == ',')
+        break;
+    }
+
+  if (i == numberof(tab_locale))
+    {
+      if (getenv ("MPFR_CHECK_LOCALES") == NULL)
+        return;
+
+      fprintf (stderr, "Cannot find a locale with ',' thousands separator.\n"
+               "Please install one of the en_US based locales.\n");
+      exit (1);
+    }
+
+  mpfr_init2 (x, 113);
+  mpfr_set_ui (x, 10000, MPFR_RNDN);
+
+  count = mpfr_printf ("(1) 10000=%'Rg \n", x);
+  check_length (10000, count, 18, d);
+  count = mpfr_printf ("(2) 10000=%'Rf \n", x);
+  check_length (10001, count, 25, d);
+
+  mpfr_set_ui (x, 1000, MPFR_RNDN);
+  count = mpfr_printf ("(3) 1000=%'Rf \n", x);
+  check_length (10002, count, 23, d);
+
+  for (i = 1; i <= sizeof (v) - 3; i++)
+    {
+      mpfr_set_str (x, v + sizeof (v) - 3 - i, 10, MPFR_RNDN);
+      count = mpfr_printf ("(4) 10^i=%'.0Rf \n", x);
+      check_length (10002 + i, count, 12 + i + i/3, d);
+    }
+
+#define N0 20
+
+  for (i = 1; i <= N0; i++)
+    {
+      char s[N0+4];
+      int j, rnd;
+
+      s[0] = '1';
+      for (j = 1; j <= i; j++)
+        s[j] = '0';
+      s[i+1] = '\0';
+
+      mpfr_set_str (x, s, 10, MPFR_RNDN);
+
+      RND_LOOP (rnd)
+        {
+          count = mpfr_printf ("(5) 10^i=%'.0R*f \n", (mpfr_rnd_t) rnd, x);
+          check_length (11000 + 10 * i + rnd, count, 12 + i + i/3, d);
+        }
+
+      strcat (s + (i + 1), ".5");
+      count = mpfr_printf ("(5) 10^i=%'.0Rf \n", x);
+      check_length (11000 + 10 * i + 9, count, 12 + i + i/3, d);
+    }
+
+  mpfr_set_str (x, "1000", 10, MPFR_RNDN);
+  count = mpfr_printf ("%'012.3Rg\n", x);
+  check_length (12000, count, 13, d);
+  count = mpfr_printf ("%'012.4Rg\n", x);
+  check_length (12001, count, 13, d);
+  count = mpfr_printf ("%'013.4Rg\n", x);
+  check_length (12002, count, 14, d);
+
+  mpfr_clear (x);
+}
+
+#else
+
+static void
+test_locale (void)
+{
+  if (getenv ("MPFR_CHECK_LOCALES") != NULL)
+    {
+      fprintf (stderr, "Cannot test locales.\n");
+      exit (1);
+    }
+}
+
+#endif
 
 int
 main (int argc, char *argv[])
@@ -479,7 +611,7 @@ main (int argc, char *argv[])
             {
               /* Output the error message to stderr since it is not
                  a message about a wrong result in MPFR. Anyway the
-                 stdandard output may have changed. */
+                 standard output may have changed. */
               fprintf (stderr, "Can't open /dev/null or a temporary file\n");
               exit (1);
             }
@@ -491,7 +623,6 @@ main (int argc, char *argv[])
       N = atoi (argv[1]);
     }
 
-  check_invalid_format ();
   check_special ();
   check_mixed ();
 
@@ -501,25 +632,16 @@ main (int argc, char *argv[])
 
   check_random (N);
 
+  test_locale ();
+
   if (stdout_redirect)
     {
-      if ((fflush (stdout) == EOF) || (fclose (stdout) == -1))
+      if ((fflush (stdout) == EOF) || (fclose (stdout) == EOF))
         perror ("main");
     }
   tests_end_mpfr ();
   return 0;
 }
-
-#else  /* MPFR_VERSION */
-
-int
-main (void)
-{
-  printf ("Warning! Test disabled for this MPFR version.\n");
-  return 0;
-}
-
-#endif  /* MPFR_VERSION */
 
 #else  /* HAVE_STDARG */
 

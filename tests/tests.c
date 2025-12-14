@@ -1,6 +1,6 @@
 /* Miscellaneous support for test programs.
 
-Copyright 2001-2017 Free Software Foundation, Inc.
+Copyright 2001-2023 Free Software Foundation, Inc.
 Contributed by the AriC and Caramba projects, INRIA.
 
 This file is part of the GNU MPFR Library.
@@ -17,34 +17,37 @@ License for more details.
 
 You should have received a copy of the GNU Lesser General Public License
 along with the GNU MPFR Library; see the file COPYING.LESSER.  If not, see
-http://www.gnu.org/licenses/ or write to the Free Software Foundation, Inc.,
+https://www.gnu.org/licenses/ or write to the Free Software Foundation, Inc.,
 51 Franklin St, Fifth Floor, Boston, MA 02110-1301, USA. */
 
+/* NOTE. Some tests on macro definitions are already done in src/init2.c
+ * as static assertions (in general). This allows one to get a failure at
+ * build time in case of inconsistency (probably due to search path issues
+ * in header file inclusion). This does not need to be done again in the
+ * test suite.
+ */
+
 #ifdef HAVE_CONFIG_H
-# if HAVE_CONFIG_H
-#  include "config.h"     /* for a build within gmp */
-# endif
+# include "config.h"
 #endif
 
-#include <stdlib.h>
 #include <float.h>
-#include <errno.h>
 
 #ifdef HAVE_LOCALE_H
 #include <locale.h>
 #endif
 
-#ifdef MPFR_TEST_DIVBYZERO
+#ifdef MPFR_TESTS_FPE_DIV
+# ifdef MPFR_TESTS_FPE_TRAP
+#  define _GNU_SOURCE /* for feenableexcept */
+# endif
 # include <fenv.h>
 #endif
 
-#ifdef TIME_WITH_SYS_TIME
-# include <sys/time.h>  /* for struct timeval */
-# include <time.h>
-#elif defined HAVE_SYS_TIME_H
-#  include <sys/time.h>
+#ifdef HAVE_GETTIMEOFDAY
+# include <sys/time.h>
 #else
-#  include <time.h>
+# include <time.h>
 #endif
 
 /* <sys/fpu.h> is needed to have union fpc_csr defined under IRIX64
@@ -55,6 +58,10 @@ http://www.gnu.org/licenses/ or write to the Free Software Foundation, Inc.,
 
 #ifdef MPFR_TESTS_TIMEOUT
 #include <sys/resource.h>
+#endif
+
+#if defined(HAVE_SIGNAL) || defined(HAVE_SIGACTION)
+# include <signal.h>
 #endif
 
 #include "mpfr-test.h"
@@ -98,6 +105,20 @@ set_fpu_prec (void)
 
 #endif
 
+char             mpfr_rands_initialized = 0;
+gmp_randstate_t  mpfr_rands;
+
+char *locale = NULL;
+
+/* Programs that test GMP's mp_set_memory_functions() need to set
+   tests_memory_disabled = 2 before calling tests_start_mpfr(). */
+#ifdef MPFR_USE_MINI_GMP
+/* disable since mini-gmp does not keep track of old_size in realloc/free */
+int tests_memory_disabled = 1;
+#else
+int tests_memory_disabled = 0;
+#endif
+
 static mpfr_exp_t default_emin, default_emax;
 
 static void tests_rand_start (void);
@@ -119,7 +140,8 @@ void (*dummy_func)(mpfr_srcptr) = mpfr_dump;
    of "make check") but a different library that is already installed,
    i.e. any test result would be meaningless; in such a case, we exit
    immediately with an error (exit status = 1).
-   Return value: 0 for no errors, 1 in case of any non-fatal error. */
+   Return value: 0 for no errors, 1 in case of any non-fatal error.
+   Note: If the return value is 0, no data must be sent to stdout. */
 int
 test_version (void)
 {
@@ -127,6 +149,7 @@ test_version (void)
   char buffer[256];
   int err = 0;
 
+#ifndef MPFR_USE_MINI_GMP
   sprintf (buffer, "%d.%d.%d", __GNU_MP_VERSION, __GNU_MP_VERSION_MINOR,
            __GNU_MP_VERSION_PATCHLEVEL);
   if (strcmp (buffer, gmp_version) != 0 &&
@@ -153,7 +176,8 @@ test_version (void)
       printf ("  * A bad configuration in your include/library search paths.\n"
               "  * An inconsistency in the include/library search paths of\n"
               "    your development environment; an example:\n"
-              "      http://gcc.gnu.org/ml/gcc-help/2010-11/msg00359.html\n"
+              "      "
+              "https://gcc.gnu.org/legacy-ml/gcc-help/2010-11/msg00359.html\n"
               "  * GMP has been upgraded after the first \"make check\".\n"
               "    In such a case, try again after a \"make clean\".\n"
               "  * A new or non-standard version naming is used in GMP.\n"
@@ -163,15 +187,14 @@ test_version (void)
               " with MPFR.\nIf some other tests fail, please solve that"
               " problem first.\n");
     }
+#endif
 
   /* VL: I get the following error on an OpenSUSE machine, and changing
      the value of shlibpath_overrides_runpath in the libtool file from
      'no' to 'yes' fixes the problem. */
-
   version = mpfr_get_version ();
   if (strcmp (MPFR_VERSION_STRING, version) == 0)
     {
-      char buffer[16];
       int i;
 
       sprintf (buffer, "%d.%d.%d", MPFR_VERSION_MAJOR, MPFR_VERSION_MINOR,
@@ -197,9 +220,16 @@ test_version (void)
       "  * On some platforms such as Solaris, $LD_LIBRARY_PATH overrides\n"
       "    the rpath, and if the MPFR library is already installed in a\n"
       "    $LD_LIBRARY_PATH directory, you typically get this error.  Do\n"
-      "    not use $LD_LIBRARY_PATH on such platforms; it may also break\n"
-      "    other things.\n"
-      "  * Then look at http://www.mpfr.org/mpfr-current/ for any update.\n"
+      "    not use $LD_LIBRARY_PATH permanently on such platforms; it may\n"
+      "    also break other things.\n"
+      "  * You may have an ld option that specifies a library search path\n"
+      "    where MPFR can be found, taking the precedence over the path\n"
+      "    added by libtool.  Check your environment variables, such as\n"
+      "    LD_OPTIONS under Solaris.  Moreover, under Solaris, the run path\n"
+      "    generated by libtool 2.4.6 may be incorrect: the build directory\n"
+      "    may not appear first in the run path; set $LD_LIBRARY_PATH to\n"
+      "    /path/to/builddir/src/.libs for the tests as a workaround.\n"
+      "  * Then look at https://www.mpfr.org/mpfr-current/ for any update.\n"
       "  * Try again on a completely clean source (some errors might come\n"
       "    from a previous build or previous source changes).\n"
       "  * If the error still occurs, you can try to change the value of\n"
@@ -211,36 +241,63 @@ test_version (void)
   /* Note about $LD_LIBRARY_PATH under Solaris:
    *   https://en.wikipedia.org/wiki/Rpath#Solaris_ld.so
    * This cause has been confirmed by a user who got this error.
+   * And about the libtool 2.4.6 bug also concerning Solaris:
+   *   https://debbugs.gnu.org/cgi/bugreport.cgi?bug=30222
+   *   https://bugs.debian.org/cgi-bin/bugreport.cgi?bug=888059
    */
   exit (1);
 }
 
+/* The inexact exception occurs very often, and is normal.
+   The underflow exception also might occur, for example in test_generic
+   for mpfr_xxx_d functions. Same for overflow. Thus we only check for
+   the division-by-zero and invalid exceptions, which should not occur
+   inside MPFR. */
+#define FPE_FLAGS (FE_DIVBYZERO | FE_INVALID)
+
 void
 tests_start_mpfr (void)
 {
-  test_version ();
-
-  /* don't buffer, so output is not lost if a test causes a segv etc */
+  /* Don't buffer, so output is not lost if a test causes a segv, etc.
+     For stdout, this is important as it will typically be fully buffered
+     by default with "make check". For stderr, the C standard just says
+     that it is not fully buffered (it may be line buffered by default);
+     disabling buffering completely might be useful in some cases.
+     Warning! No operations must have already been done on stdout/stderr
+     (this is a requirement of ISO C, and this is important on AIX).
+     Thus tests_start_mpfr should be called at the beginning of main(),
+     possibly after some variable settings. */
   setbuf (stdout, NULL);
+  setbuf (stderr, NULL);
+
+  test_version ();
 
 #if defined HAVE_LOCALE_H && defined HAVE_SETLOCALE
   /* Added on 2005-07-09. This allows to test MPFR under various
      locales. New bugs will probably be found, in particular with
      LC_ALL="tr_TR.ISO8859-9" because of the i/I character... */
-  setlocale (LC_ALL, "");
+  locale = setlocale (LC_ALL, "");
 #endif
 
 #ifdef MPFR_FPU_PREC
   set_fpu_prec ();
 #endif
 
-#ifdef MPFR_TEST_DIVBYZERO
+#ifdef MPFR_TESTS_FPE_DIV
   /* Define to test the use of MPFR_ERRDIVZERO */
   feclearexcept (FE_ALL_EXCEPT);
+# ifdef MPFR_TESTS_FPE_TRAP
+  /* to trap the corresponding FP exceptions */
+  feenableexcept (FPE_FLAGS);
+# endif
 #endif
 
-  tests_memory_start ();
-  tests_rand_start ();
+  if (tests_memory_disabled != 2)
+    {
+      if (tests_memory_disabled == 0)
+        tests_memory_start ();
+      tests_rand_start ();
+    }
   tests_limit_start ();
 
   default_emin = mpfr_get_emin ();
@@ -265,20 +322,28 @@ tests_end_mpfr (void)
     }
 
   mpfr_free_cache ();
-  tests_rand_end ();
-  tests_memory_end ();
-
-#ifdef MPFR_TEST_DIVBYZERO
-  /* Define to test the use of MPFR_ERRDIVZERO */
-  if (fetestexcept (FE_DIVBYZERO|FE_INVALID))
+  mpfr_free_cache2 (MPFR_FREE_GLOBAL_CACHE);
+  if (tests_memory_disabled != 2)
     {
-      printf ("A floating-point division by 0 or an invalid operation"
-              " occurred!\n");
-#ifdef MPFR_ERRDIVZERO
-      /* This should never occur because the purpose of defining
-         MPFR_ERRDIVZERO is to avoid all the FP divisions by 0. */
+      tests_rand_end ();
+      if (tests_memory_disabled == 0)
+        tests_memory_end ();
+    }
+
+#ifdef MPFR_TESTS_FPE_DIV
+  /* Define to test the use of MPFR_ERRDIVZERO */
+  if (fetestexcept (FPE_FLAGS))
+    {
+      /* With MPFR_ERRDIVZERO, such exceptions should never occur
+         because the purpose of defining MPFR_ERRDIVZERO is to avoid
+         all the FP divisions by 0. */
+      printf ("Some floating-point exception(s) occurred:");
+      if (fetestexcept (FE_DIVBYZERO))
+        printf (" DIVBYZERO");  /* e.g. from 1.0 / 0.0 to generate an inf */
+      if (fetestexcept (FE_INVALID))
+        printf (" INVALID");    /* e.g. from 0.0 / 0.0 to generate a NaN */
+      printf ("\n");
       err = 1;
-#endif
     }
 #endif
 
@@ -324,16 +389,16 @@ tests_rand_start (void)
   char           *perform_seed;
   unsigned long  seed;
 
-  if (__gmp_rands_initialized)
+  if (mpfr_rands_initialized)
     {
       printf (
-        "Please let tests_start() initialize the global __gmp_rands, i.e.\n"
+        "Please let tests_start() initialize the global mpfr_rands, i.e.\n"
         "ensure that function is called before the first use of RANDS.\n");
       exit (1);
     }
 
-  gmp_randinit_default (__gmp_rands);
-  __gmp_rands_initialized = 1;
+  gmp_randinit_default (mpfr_rands);
+  mpfr_rands_initialized = 1;
 
   perform_seed = getenv ("GMP_CHECK_RANDOMIZE");
   if (perform_seed != NULL)
@@ -342,32 +407,58 @@ tests_rand_start (void)
       if (! (seed == 0 || seed == 1))
         {
           printf ("Re-seeding with GMP_CHECK_RANDOMIZE=%lu\n", seed);
-          gmp_randseed_ui (__gmp_rands, seed);
+          gmp_randseed_ui (mpfr_rands, seed);
         }
       else
         {
 #ifdef HAVE_GETTIMEOFDAY
           struct timeval  tv;
           gettimeofday (&tv, NULL);
-          seed = tv.tv_sec + tv.tv_usec;
+          /* Note: If time_t is a "floating type" (as allowed by ISO C99),
+             the cast below can yield undefined behavior. But this would
+             be uncommon (gettimeofday() is specified by POSIX only and
+             POSIX requires time_t to be an integer type) and this line
+             is not executed by default. So, this should be OK. Moreover,
+             gettimeofday() is marked obsolescent by POSIX.1-2008. */
+          seed = 1000000 * (unsigned long) tv.tv_sec + tv.tv_usec;
 #else
           time_t  tv;
           time (&tv);
           seed = tv;
 #endif
-          gmp_randseed_ui (__gmp_rands, seed);
+          gmp_randseed_ui (mpfr_rands, seed);
           printf ("Seed GMP_CHECK_RANDOMIZE=%lu "
                   "(include this in bug reports)\n", seed);
         }
     }
   else
-    gmp_randseed_ui (__gmp_rands, 0x2143FEDC);
+    gmp_randseed_ui (mpfr_rands, 0x2143FEDC);
 }
 
 static void
 tests_rand_end (void)
 {
   RANDS_CLEAR ();
+}
+
+/* true if subnormals are supported for double */
+int
+have_subnorm_dbl (void)
+{
+  volatile double x = DBL_MIN, y;
+
+  y = x / 2.0;
+  return 2.0 * y == x;
+}
+
+/* true if subnormals are supported for float */
+int
+have_subnorm_flt (void)
+{
+  volatile float x = FLT_MIN, y;
+
+  y = x / 2.0f;
+  return 2.0f * y == x;
 }
 
 /* initialization function for tests using the hardware floats
@@ -382,17 +473,6 @@ mpfr_test_init (void)
   exp.fc_word = get_fpc_csr();
   exp.fc_struct.flush = 0;
   set_fpc_csr(exp.fc_word);
-#endif
-
-#ifdef HAVE_DENORMS
-  {
-    double d = DBL_MIN;
-    if (2.0 * (d / 2.0) != d)
-      {
-        printf ("Error: HAVE_DENORMS defined, but no subnormals.\n");
-        exit (1);
-      }
-  }
 #endif
 
   /* generate DBL_EPSILON with a loop to avoid that the compiler
@@ -421,6 +501,36 @@ randlimb (void)
 
   mpfr_rand_raw (&limb, RANDS, GMP_NUMB_BITS);
   return limb;
+}
+
+unsigned long
+randulong (void)
+{
+#ifdef MPFR_LONG_WITHIN_LIMB
+
+  return randlimb ();
+
+#else
+
+  unsigned long u = 0, v = 0;
+
+  while (u |= randlimb (), v |= MPFR_LIMB_MAX, v != ULONG_MAX)
+    {
+      u <<= GMP_NUMB_BITS;
+      v <<= GMP_NUMB_BITS;
+    }
+
+  return u;
+
+#endif
+}
+
+long
+randlong (void)
+{
+  unsigned long u = randulong ();
+
+  return ULONG2LONG (u);
 }
 
 /* returns ulp(x) for x a 'normal' double-precision number */
@@ -483,22 +593,19 @@ Isnan (double d)
 void
 d_trace (const char *name, double d)
 {
-  union {
-    double         d;
-    unsigned char  b[sizeof(double)];
-  } u;
+  double x = d;
+  unsigned char *p = (unsigned char *) &x;
   int  i;
 
   if (name != NULL && name[0] != '\0')
-    printf ("%s=", name);
+    printf ("%s = ", name);
 
-  u.d = d;
   printf ("[");
-  for (i = 0; i < (int) sizeof (u.b); i++)
+  for (i = 0; i < (int) sizeof (double); i++)
     {
       if (i != 0)
         printf (" ");
-      printf ("%02X", (int) u.b[i]);
+      printf ("%02X", (unsigned int) p[i]);
     }
   printf ("] %.20g\n", d);
 }
@@ -506,27 +613,51 @@ d_trace (const char *name, double d)
 void
 ld_trace (const char *name, long double ld)
 {
-  union {
-    long double    ld;
-    unsigned char  b[sizeof(long double)];
-  } u;
+  long double x = ld;
+  unsigned char *p = (unsigned char *) &x;
   int  i;
 
   if (name != NULL && name[0] != '\0')
-    printf ("%s=", name);
+    printf ("%s = ", name);
 
-  u.ld = ld;
   printf ("[");
-  for (i = 0; i < (int) sizeof (u.b); i++)
+  for (i = 0; i < (int) sizeof (long double); i++)
     {
       if (i != 0)
         printf (" ");
-      printf ("%02X", (int) u.b[i]);
+      printf ("%02X", (unsigned int) p[i]);
     }
   printf ("] %.20Lg\n", ld);
 }
 
-/* Open a file in the src directory - can't use fopen directly */
+void
+n_trace (const char *name, mp_limb_t *p, mp_size_t n)
+{
+  unsigned char *buf;
+  size_t bufsize;
+  mp_size_t i, m;
+
+  if (name != NULL && name[0] != '\0')
+    printf ("%s=", name);
+
+  /* similar to gmp_printf ("%NX\n",...), which is not available
+     with mini-gmp */
+  bufsize = 2 + ((mpfr_prec_t) n * GMP_NUMB_BITS - 1) / 4;
+  buf = (unsigned char *) tests_allocate (bufsize);
+  m = mpn_get_str (buf, 16, p, n);
+  i = 0;
+  while (i < m - 1 && buf[i] == 0)
+    i++;  /* skip leading zeros (keeping at least one digit) */
+  while (i < m)
+    putchar ("0123456789ABCDEF"[buf[i++]]);
+  putchar ('\n');
+  tests_free (buf, bufsize);
+}
+
+/* Open a file in the SRCDIR directory, i.e. the "tests" source directory,
+   which is different from the current directory when objdir is different
+   from srcdir. One should generally use this function instead of fopen
+   directly. */
 FILE *
 src_fopen (const char *filename, const char *mode)
 {
@@ -557,7 +688,8 @@ set_emin (mpfr_exp_t exponent)
 {
   if (mpfr_set_emin (exponent))
     {
-      printf ("set_emin: setting emin to %ld failed\n", (long int) exponent);
+      printf ("set_emin: setting emin to %" MPFR_EXP_FSPEC "d failed\n",
+              (mpfr_eexp_t) exponent);
       exit (1);
     }
 }
@@ -567,7 +699,8 @@ set_emax (mpfr_exp_t exponent)
 {
   if (mpfr_set_emax (exponent))
     {
-      printf ("set_emax: setting emax to %ld failed\n", (long int) exponent);
+      printf ("set_emax: setting emax to %" MPFR_EXP_FSPEC "d failed\n",
+              (mpfr_eexp_t) exponent);
       exit (1);
     }
 }
@@ -585,24 +718,24 @@ tests_default_random (mpfr_ptr x, int pos, mpfr_exp_t emin, mpfr_exp_t emax,
   MPFR_ASSERTN (emax <= MPFR_EMAX_MAX);
   /* but it isn't required that emin and emax are in the current
      exponent range (see below), so that underflow/overflow checks
-     can be done on 64-bit machines. */
+     can be done on 64-bit machines without a manual change of the
+     exponent range (well, this is a bit ugly...). */
 
   mpfr_urandomb (x, RANDS);
-  if (MPFR_IS_PURE_FP (x) && (emin >= 1 || always_scale || (randlimb () & 1)))
+  if (MPFR_IS_PURE_FP (x) && (emin >= 1 || always_scale || RAND_BOOL ()))
     {
       mpfr_exp_t e;
-      e = MPFR_GET_EXP (x) +
-        (emin + (mpfr_exp_t) (randlimb () % (emax - emin + 1)));
+      e = emin + (mpfr_exp_t) (randlimb () % (emax - emin + 1));
       /* Note: There should be no overflow here because both terms are
-         between MPFR_EMIN_MIN and MPFR_EMAX_MAX, but the sum e isn't
-         necessarily between MPFR_EMIN_MIN and MPFR_EMAX_MAX. */
+         between MPFR_EMIN_MIN and MPFR_EMAX_MAX. */
+      MPFR_ASSERTD (e >= emin && e <= emax);
       if (mpfr_set_exp (x, e))
         {
           /* The random number doesn't fit in the current exponent range.
              In this case, test the function in the extended exponent range,
              which should be restored by the caller. */
-          mpfr_set_emin (MPFR_EMIN_MIN);
-          mpfr_set_emax (MPFR_EMAX_MAX);
+          set_emin (MPFR_EMIN_MIN);
+          set_emax (MPFR_EMAX_MAX);
           mpfr_set_exp (x, e);
         }
     }
@@ -610,28 +743,35 @@ tests_default_random (mpfr_ptr x, int pos, mpfr_exp_t emin, mpfr_exp_t emax,
     mpfr_neg (x, x, MPFR_RNDN);
 }
 
-/* The test_one argument is seen a boolean. If it is true and rnd is
-   a rounding mode toward infinity, then the function is tested in
-   only one rounding mode (the one provided in rnd) and the variable
-   rndnext is not used (due to the break). If it is true and rnd is a
-   rounding mode toward or away from zero, then the function is tested
-   twice, first with the provided rounding mode and second with the
-   rounding mode toward the corresponding infinity (determined by the
-   sign of the result). If it is false, then the function is tested
-   in the 5 rounding modes, and rnd must initially be MPFR_RNDZ; thus
-   rndnext will be initialized in the first iteration.
-   If the test_one argument is 2, then this means that y is exact, and
-   the ternary value is checked.
+/* If sb = -1, then the function is tested in only one rounding mode
+   (the one provided in rnd) and the ternary value is not checked.
+   Otherwise, the function is tested in the 5 rounding modes, rnd must
+   initially be MPFR_RNDZ, y = RNDZ(f(x)), and sb is 0 if f(x) is exact,
+   1 if f(x) is inexact (in which case, y must be a regular number,
+   i.e. not the result of an overflow or an underflow); the successive
+   rounding modes are:
+     * MPFR_RNDZ, MPFR_RNDD, MPFR_RNDA, MPFR_RNDU, MPFR_RNDN for positive y;
+     * MPFR_RNDZ, MPFR_RNDU, MPFR_RNDA, MPFR_RNDD, MPFR_RNDN for negative y;
+   for the last test MPFR_RNDN, the target precision is decreased by 1 in
+   order to be able to deduce the result (anyway, for a hard-to-round case
+   in directed rounding modes, if yprec is chosen to be minimum precision
+   preserving this hard-to-round case, then one has a hard-to-round case
+   in round-to-nearest for precision yprec-1). If the target precision was
+   MPFR_PREC_MIN, then skip the MPFR_RNDN test; thus to test exact special
+   cases, use a target precision larger than MPFR_PREC_MIN.
+   Note: if y is a regular number, sb corresponds to the sticky bit when
+   considering round-to-nearest with precision yprec-1.
    As examples of use, see the calls to test5rm from the data_check and
    bad_cases functions. */
 static void
 test5rm (int (*fct) (FLIST), mpfr_srcptr x, mpfr_ptr y, mpfr_ptr z,
-         mpfr_rnd_t rnd, int test_one, const char *name)
+         mpfr_rnd_t rnd, int sb, const char *name)
 {
   mpfr_prec_t yprec = MPFR_PREC (y);
   mpfr_rnd_t rndnext = MPFR_RND_MAX;  /* means uninitialized */
+  int expected_inex = INT_MIN;
 
-  MPFR_ASSERTN (test_one || rnd == MPFR_RNDZ);
+  MPFR_ASSERTN (sb == -1 || rnd == MPFR_RNDZ);
   mpfr_set_prec (z, yprec);
   while (1)
     {
@@ -639,9 +779,16 @@ test5rm (int (*fct) (FLIST), mpfr_srcptr x, mpfr_ptr y, mpfr_ptr z,
 
       MPFR_ASSERTN (rnd != MPFR_RND_MAX);
       inex = fct (z, x, rnd);
-      if (! (mpfr_equal_p (y, z) || (mpfr_nan_p (y) && mpfr_nan_p (z))))
+      if (sb == -1)
+        expected_inex = inex;  /* not checked */
+      else if (rnd != MPFR_RNDN)
+        expected_inex =
+          sb == 0 ? 0 : MPFR_IS_LIKE_RNDD (rnd, MPFR_SIGN (y)) ? -1 : 1;
+      MPFR_ASSERTN (expected_inex != INT_MIN);
+      if (!(SAME_VAL (y, z) && SAME_SIGN (inex, expected_inex)))
         {
-          printf ("Error for %s with xprec=%lu, yprec=%lu, rnd=%s\nx = ",
+          printf ("test5rm: error for %s with xprec=%lu, yprec=%lu, rnd=%s\n"
+                  "x = ",
                   name, (unsigned long) MPFR_PREC (x), (unsigned long) yprec,
                   mpfr_print_rnd_mode (rnd));
           mpfr_out_str (stdout, 16, 0, x, MPFR_RNDN);
@@ -650,30 +797,13 @@ test5rm (int (*fct) (FLIST), mpfr_srcptr x, mpfr_ptr y, mpfr_ptr z,
           printf ("\ngot      ");
           mpfr_out_str (stdout, 16, 0, z, MPFR_RNDN);
           printf ("\n");
+          if (sb != -1)
+            printf ("Expected inex = %d, got %d\n", expected_inex, inex);
           exit (1);
         }
-      if (test_one == 2 && inex != 0)
-        {
-          printf ("Error for %s with xprec=%lu, yprec=%lu, rnd=%s\nx = ",
-                  name, (unsigned long) MPFR_PREC (x), (unsigned long) yprec,
-                  mpfr_print_rnd_mode (rnd));
-          mpfr_out_str (stdout, 16, 0, x, MPFR_RNDN);
-          printf ("\nexact case, but non-zero ternary value (%d)\n", inex);
-          exit (1);
-        }
-      if (rnd == MPFR_RNDN)
+
+      if (sb == -1 || rnd == MPFR_RNDN)
         break;
-
-      if (test_one)
-        {
-          if (rnd == MPFR_RNDU || rnd == MPFR_RNDD)
-            break;
-
-          if (MPFR_IS_NEG (y))
-            rnd = (rnd == MPFR_RNDA) ? MPFR_RNDD : MPFR_RNDU;
-          else
-            rnd = (rnd == MPFR_RNDA) ? MPFR_RNDU : MPFR_RNDD;
-        }
       else if (rnd == MPFR_RNDZ)
         {
           rnd = MPFR_IS_NEG (y) ? MPFR_RNDU : MPFR_RNDD;
@@ -684,8 +814,9 @@ test5rm (int (*fct) (FLIST), mpfr_srcptr x, mpfr_ptr y, mpfr_ptr z,
           rnd = rndnext;
           if (rnd == MPFR_RNDA)
             {
-              mpfr_nexttoinf (y);
-              rndnext = (MPFR_IS_NEG (y)) ? MPFR_RNDD : MPFR_RNDU;
+              if (sb)
+                mpfr_nexttoinf (y);
+              rndnext = MPFR_IS_NEG (y) ? MPFR_RNDD : MPFR_RNDU;
             }
           else if (rndnext != MPFR_RNDN)
             rndnext = MPFR_RNDN;
@@ -693,7 +824,14 @@ test5rm (int (*fct) (FLIST), mpfr_srcptr x, mpfr_ptr y, mpfr_ptr z,
             {
               if (yprec == MPFR_PREC_MIN)
                 break;
-              mpfr_prec_round (y, --yprec, MPFR_RNDZ);
+              /* If sb = 1, then mpfr_nexttoinf was called on y for the
+                 MPFR_RNDA test, i.e. y = RNDA(yprec,f(x)); we use MPFR_RNDZ
+                 since one has the property RNDN(p,w) = RNDZ(p,RNDA(p+1,w))
+                 when w is not a midpoint in precision p. If sb = 0, then
+                 y = f(x), so that RNDN(yprec-1,f(x)) = RNDN(yprec-1,y). */
+              inex = mpfr_prec_round (y, --yprec, sb ? MPFR_RNDZ : MPFR_RNDN);
+              expected_inex = sb ?
+                MPFR_SIGN (y) * (inex == 0 ? 1 : -1) : inex;
               mpfr_set_prec (z, yprec);
             }
         }
@@ -713,14 +851,14 @@ test5rm (int (*fct) (FLIST), mpfr_srcptr x, mpfr_ptr y, mpfr_ptr z,
    x is the input (hexadecimal format)
    y is the expected output (hexadecimal format) for foo(x) with rounding rnd
 
-   If rnd is Z, y is the expected output in round-toward-zero, and the
-   four directed rounding modes are tested, then the round-to-nearest
-   mode is tested in precision yprec-1. This is useful for worst cases,
-   where yprec is the minimum value such that one has a worst case in a
-   directed rounding mode.
+   If rnd is Z, then y is the expected output in round-toward-zero and
+   it is assumed to be inexact; the four directed rounding modes are
+   tested, and the round-to-nearest mode is tested in precision yprec-1.
+   See details in the description of test5rm above.
 
-   If rnd is *, y must be an exact case. All the rounding modes are tested
-   and the ternary value is checked (it must be 0).
+   If rnd is *, y must be an exact case (possibly a special case).
+   All the rounding modes are tested and the ternary value is checked
+   (it must be 0).
  */
 void
 data_check (const char *f, int (*foo) (FLIST), const char *name)
@@ -795,8 +933,8 @@ data_check (const char *f, int (*foo) (FLIST), const char *name)
           ungetc (c, fp);
 
           c = fscanf (fp, "%ld %ld %c", &xprec, &yprec, &r);
-          MPFR_ASSERTN (xprec >= MPFR_PREC_MIN && xprec <= MPFR_PREC_MAX);
-          MPFR_ASSERTN (yprec >= MPFR_PREC_MIN && yprec <= MPFR_PREC_MAX);
+          MPFR_ASSERTN (MPFR_PREC_COND (xprec));
+          MPFR_ASSERTN (MPFR_PREC_COND (yprec));
           if (c == EOF)
             {
               perror ("data_check");
@@ -854,13 +992,9 @@ data_check (const char *f, int (*foo) (FLIST), const char *name)
               exit (1);
             }
           if (r == '*')
-            {
-              int rndint;
-              RND_LOOP (rndint)
-                test5rm (foo, x, y, z, (mpfr_rnd_t) rndint, 2, name);
-            }
+            test5rm (foo, x, y, z, MPFR_RNDZ, 0, name);
           else
-            test5rm (foo, x, y, z, rnd, r != 'Z', name);
+            test5rm (foo, x, y, z, rnd, r == 'Z' ? 1 : -1, name);
         }
     }
 
@@ -879,6 +1013,11 @@ data_check (const char *f, int (*foo) (FLIST), const char *name)
  * mode for some lower precision: see data_check).
  * fct, inv, name: data related to the function.
  * pos, emin, emax: arguments for tests_default_random.
+ * For debugging purpose (e.g. in case of crash or infinite loop),
+ * you can set the MPFR_DEBUG_BADCASES environment variable to 1 in
+ * order to output information about the tested worst cases. You can
+ * also enable logging (when supported), but this may give too much
+ * information.
  */
 void
 bad_cases (int (*fct)(FLIST), int (*inv)(FLIST), const char *name,
@@ -888,7 +1027,7 @@ bad_cases (int (*fct)(FLIST), int (*inv)(FLIST), const char *name,
 {
   mpfr_t x, y, z;
   char *dbgenv;
-  int i, dbg;
+  int cnt = 0, i, dbg;
   mpfr_exp_t old_emin, old_emax;
 
   old_emin = mpfr_get_emin ();
@@ -896,14 +1035,14 @@ bad_cases (int (*fct)(FLIST), int (*inv)(FLIST), const char *name,
 
   dbgenv = getenv ("MPFR_DEBUG_BADCASES");
   dbg = dbgenv != 0 ? atoi (dbgenv) : 0;  /* debug level */
-  mpfr_inits (x, y, z, (mpfr_ptr) 0);
+  mpfr_inits2 (MPFR_PREC_MIN, x, y, z, (mpfr_ptr) 0);
   for (i = 0; i < n; i++)
     {
       mpfr_prec_t px, py, pz;
-      int inex;
+      int inex_inv, inex, sb;
 
       if (dbg)
-        printf ("bad_cases: i = %d\n", i);
+        printf ("bad_cases: %s, i = %d\n", name, i);
       py = pymin + (randlimb () % (pymax - pymin + 1));
       mpfr_set_prec (y, py);
       tests_default_random (y, pos, emin, emax, 0);
@@ -915,8 +1054,10 @@ bad_cases (int (*fct)(FLIST), int (*inv)(FLIST), const char *name,
         }
       px = py + psup;
       mpfr_set_prec (x, px);
+      if (dbg)
+        printf ("bad_cases: xprec =%4ld\n", (long) px);
       mpfr_clear_flags ();
-      inv (x, y, MPFR_RNDN);
+      inex_inv = inv (x, y, MPFR_RNDN);
       if (mpfr_nanflag_p () || mpfr_overflow_p () || mpfr_underflow_p ())
         {
           if (dbg)
@@ -934,11 +1075,24 @@ bad_cases (int (*fct)(FLIST), int (*inv)(FLIST), const char *name,
         {
           pz += 32;
           mpfr_set_prec (z, pz);
-          if (fct (z, x, MPFR_RNDN) == 0)
+          sb = fct (z, x, MPFR_RNDN) != 0;
+          if (!sb)
             {
               if (dbg)
-                printf ("bad_cases: exact case\n");
-              goto next_i;
+                {
+                  printf ("bad_cases: exact case z = ");
+                  mpfr_out_str (stdout, 16, 0, z, MPFR_RNDN);
+                  printf ("\n");
+                }
+              if (inex_inv)
+                {
+                  printf ("bad_cases: f exact while f^(-1) inexact,\n"
+                          "due to a poor choice of the parameters.\n");
+                  exit (1);
+                  /* alternatively, goto next_i */
+                }
+              inex = 0;
+              break;
             }
           if (dbg)
             {
@@ -959,16 +1113,41 @@ bad_cases (int (*fct)(FLIST), int (*inv)(FLIST), const char *name,
               || ! mpfr_equal_p (z, y))
             {
               if (dbg)
-                printf ("bad_cases: inverse doesn't match\n");
+                {
+                  printf ("bad_cases: inverse doesn't match for %s\ny = ",
+                          name);
+                  mpfr_out_str (stdout, 16, 0, y, MPFR_RNDN);
+                  printf ("\nz = ");
+                  mpfr_out_str (stdout, 16, 0, z, MPFR_RNDN);
+                  printf ("\n");
+                }
               goto next_i;
             }
         }
       while (inex == 0);
-      /* We really have a bad case. */
-      do
-        py--;
-      while (py >= MPFR_PREC_MIN && mpfr_prec_round (z, py, MPFR_RNDZ) == 0);
-      py++;
+      /* We really have a bad case (or some special case). */
+      if (mpfr_zero_p (z))
+        {
+          /* This can occur on tlog (GMP_CHECK_RANDOMIZE=1630879377004032
+             in r14570, 2021-09-07):
+             y = -0, giving x = 1 and z = 0. We have y = z, but here,
+             y and z have different signs. Since test5rm will test f(x)
+             and its sign (in particular for 0), we need to take the
+             sign of f(x), i.e. of z.
+             Note: To avoid this special case, one might want to detect and
+             ignore y = 0 (of any sign) when taking the random number above,
+             as this case should be redundant with some other tests. */
+          mpfr_set (y, z, MPFR_RNDN);
+          py = MPFR_PREC_MIN;
+        }
+      else
+        {
+          do
+            py--;
+          while (py >= MPFR_PREC_MIN &&
+                 mpfr_prec_round (z, py, MPFR_RNDZ) == 0);
+          py++;
+        }
       /* py is now the smallest output precision such that we have
          a bad case in the directed rounding modes. */
       if (mpfr_prec_round (y, py, MPFR_RNDZ) != 0)
@@ -990,14 +1169,26 @@ bad_cases (int (*fct)(FLIST), int (*inv)(FLIST), const char *name,
           printf ("\n");
         }
       /* Note: y is now the expected result rounded toward zero. */
-      test5rm (fct, x, y, z, MPFR_RNDZ, 0, name);
+      test5rm (fct, x, y, z, MPFR_RNDZ, sb, name);
+      cnt++;
     next_i:
       /* In case the exponent range has been changed by
          tests_default_random()... */
-      mpfr_set_emin (old_emin);
-      mpfr_set_emax (old_emax);
+      set_emin (old_emin);
+      set_emax (old_emax);
     }
   mpfr_clears (x, y, z, (mpfr_ptr) 0);
+
+  if (dbg)
+    printf ("bad_cases: %d bad cases over %d generated values for %s\n",
+            cnt, n, name);
+
+  if (getenv ("MPFR_CHECK_BADCASES") && n - cnt > n/10)
+    {
+      printf ("bad_cases: too few bad cases (%d over %d generated values)"
+              " for %s\n", cnt, n, name);
+      exit (1);
+    }
 }
 
 void
@@ -1018,4 +1209,55 @@ flags_out (unsigned int flags)
   if (none)
     printf (" none");
   printf (" (%u)\n", flags);
+}
+
+static void
+abort_called (int x)
+{
+  /* Ok, abort has been called */
+  exit (0);
+}
+
+/* This function has to be called for a test
+   that will call the abort function */
+void
+tests_expect_abort (void)
+{
+#if defined(HAVE_SIGACTION)
+  struct sigaction act;
+  int ret;
+
+  memset (&act, 0, sizeof act);
+  act.sa_handler = abort_called;
+  ret = sigaction (SIGABRT, &act, NULL);
+  if (ret != 0)
+    {
+      /* Can't register error handler: Skip test */
+      exit (77);
+    }
+#elif defined(HAVE_SIGNAL)
+  signal (SIGABRT, abort_called);
+#else
+  /* Can't register error handler: Skip test */
+  exit (77);
+#endif
+}
+
+/* Guess whether the test runs within Valgrind.
+   Note: This should work at least under Linux and Solaris.
+   If need be, support for macOS (with DYLD_INSERT_LIBRARIES) and
+   i386 FreeBSD on amd64 (with LD_32_PRELOAD) could be added; thanks
+   to Paul Floyd for the information.
+   Up-to-date information should be found at
+   <https://stackoverflow.com/a/62364698/3782797>. */
+int
+tests_run_within_valgrind (void)
+{
+  char *p;
+
+  p = getenv ("LD_PRELOAD");
+  if (p == NULL)
+    return 0;
+  return (strstr (p, "/valgrind/") != NULL ||
+          strstr (p, "/vgpreload") != NULL);
 }

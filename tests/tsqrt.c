@@ -1,6 +1,6 @@
 /* Test file for mpfr_sqrt.
 
-Copyright 1999, 2001-2017 Free Software Foundation, Inc.
+Copyright 1999, 2001-2023 Free Software Foundation, Inc.
 Contributed by the AriC and Caramba projects, INRIA.
 
 This file is part of the GNU MPFR Library.
@@ -17,11 +17,8 @@ License for more details.
 
 You should have received a copy of the GNU Lesser General Public License
 along with the GNU MPFR Library; see the file COPYING.LESSER.  If not, see
-http://www.gnu.org/licenses/ or write to the Free Software Foundation, Inc.,
+https://www.gnu.org/licenses/ or write to the Free Software Foundation, Inc.,
 51 Franklin St, Fifth Floor, Boston, MA 02110-1301, USA. */
-
-#include <stdio.h>
-#include <stdlib.h>
 
 #include "mpfr-test.h"
 
@@ -69,20 +66,20 @@ check3 (const char *as, mpfr_rnd_t rnd_mode, const char *qs)
 }
 
 static void
-check4 (const char *as, mpfr_rnd_t rnd_mode, const char *Qs)
+check4 (const char *as, mpfr_rnd_t rnd_mode, const char *qs)
 {
   mpfr_t q;
 
   mpfr_init2 (q, 53);
   mpfr_set_str1 (q, as);
   test_sqrt (q, q, rnd_mode);
-  if (mpfr_cmp_str (q, Qs, 16, MPFR_RNDN))
+  if (mpfr_cmp_str (q, qs, 16, MPFR_RNDN))
     {
       printf ("mpfr_sqrt failed for a=%s, rnd_mode=%s\n",
-              as, mpfr_print_rnd_mode(rnd_mode));
-      printf ("expected ");
+              as, mpfr_print_rnd_mode (rnd_mode));
+      printf ("expected %s\ngot      ", qs);
       mpfr_out_str (stdout, 16, 0, q, MPFR_RNDN);
-      printf ("\ngot      %s\n", Qs);
+      printf ("\n");
       mpfr_clear (q);
       exit (1);
     }
@@ -178,7 +175,7 @@ check_float (void)
   check24("281474876047360.0", MPFR_RNDD, "1.6777212e7");
   check24("91214552498176.0", MPFR_RNDD, "9.550631e6");
 
-  /* check that rounding away is just rounding toward plus infinity */
+  /* check that rounding away is just rounding toward positive infinity */
   check24("91214552498176.0", MPFR_RNDA, "9.550632e6");
 }
 
@@ -255,7 +252,7 @@ special (void)
         {
           printf ("Error: sqrt(1+ulp(1), up) should give 1.5 (prec=%u)\n",
                   (unsigned int) p);
-          printf ("got "); mpfr_print_binary (x); puts ("");
+          printf ("got "); mpfr_dump (x);
           exit (1);
         }
     }
@@ -279,8 +276,7 @@ special (void)
   if (mpfr_cmp_ui (z, 0) < 0)
     {
       printf ("Error: square root of 1 gives ");
-      mpfr_print_binary(z);
-      putchar('\n');
+      mpfr_dump (z);
       exit (1);
     }
 
@@ -293,7 +289,7 @@ special (void)
 
   mpfr_set_prec (x, 53);
   mpfr_set_str (x, "8093416094703476.0", 10, MPFR_RNDN);
-  mpfr_div_2exp (x, x, 1075, MPFR_RNDN);
+  mpfr_div_2ui (x, x, 1075, MPFR_RNDN);
   test_sqrt (x, x, MPFR_RNDN);
   mpfr_set_str (z, "1e55596835b5ef@-141", 16, MPFR_RNDN);
   if (mpfr_cmp (x, z))
@@ -323,7 +319,7 @@ special (void)
 
   /* case prec(result) << prec(input) */
   mpfr_set_prec (z, 2);
-  for (p = 2; p < 1000; p++)
+  for (p = mpfr_get_prec (z); p < 1000; p++)
     {
       mpfr_set_prec (x, p);
       mpfr_set_ui (x, 1, MPFR_RNDN);
@@ -345,7 +341,7 @@ special (void)
   mpfr_set_prec (z, GMP_NUMB_BITS - 1);
   mpfr_set_prec (y, GMP_NUMB_BITS - 1);
   mpfr_set_ui (y, 1, MPFR_RNDN);
-  mpfr_mul_2exp (y, y, GMP_NUMB_BITS - 1, MPFR_RNDN);
+  mpfr_mul_2ui (y, y, GMP_NUMB_BITS - 1, MPFR_RNDN);
   mpfr_nextabove (y);
   for (p = 2 * GMP_NUMB_BITS - 1; p <= 1000; p++)
     {
@@ -354,11 +350,13 @@ special (void)
       mpfr_set_exp (x, GMP_NUMB_BITS);
       mpfr_add_ui (x, x, 1, MPFR_RNDN);
       /* now x = 2^(GMP_NUMB_BITS - 1) + 1 (GMP_NUMB_BITS bits) */
-      MPFR_ASSERTN (mpfr_mul (x, x, x, MPFR_RNDN) == 0); /* exact */
+      inexact = mpfr_sqr (x, x, MPFR_RNDN);
+      MPFR_ASSERTN (inexact == 0); /* exact */
       inexact = test_sqrt (z, x, MPFR_RNDN);
       /* even rule: z should be 2^(GMP_NUMB_BITS - 1) */
       MPFR_ASSERTN (inexact < 0);
-      MPFR_ASSERTN (mpfr_cmp_ui_2exp (z, 1, GMP_NUMB_BITS - 1) == 0);
+      inexact = mpfr_cmp_ui_2exp (z, 1, GMP_NUMB_BITS - 1);
+      MPFR_ASSERTN (inexact == 0);
       mpfr_nextbelow (x);
       /* now x is just below [2^(GMP_NUMB_BITS - 1) + 1]^2 */
       inexact = test_sqrt (z, x, MPFR_RNDN);
@@ -429,9 +427,9 @@ check_inexact (mpfr_prec_t p)
   mpfr_init2 (y, p);
   mpfr_init2 (z, 2*p);
   mpfr_urandomb (x, RANDS);
-  rnd = RND_RAND ();
+  rnd = RND_RAND_NO_RNDF ();
   inexact = test_sqrt (y, x, rnd);
-  if (mpfr_mul (z, y, y, rnd)) /* exact since prec(z) = 2*prec(y) */
+  if (mpfr_sqr (z, y, rnd)) /* exact since prec(z) = 2*prec(y) */
     {
       printf ("Error: multiplication should be exact\n");
       exit (1);
@@ -442,12 +440,12 @@ check_inexact (mpfr_prec_t p)
       ((inexact > 0) && (sign <= 0)) ||
       ((inexact < 0) && (sign >= 0)))
     {
-      printf ("Error: wrong inexact flag, expected %d, got %d\n",
-              sign, inexact);
+      printf ("Error with rnd=%s: wrong ternary value, expected %d, got %d\n",
+              mpfr_print_rnd_mode (rnd), sign, inexact);
       printf ("x=");
-      mpfr_print_binary (x);
-      printf (" rnd=%s\n", mpfr_print_rnd_mode (rnd));
-      printf ("y="); mpfr_print_binary (y); puts ("");
+      mpfr_dump (x);
+      printf ("y=");
+      mpfr_dump (y);
       exit (1);
     }
   mpfr_clear (x);
@@ -598,6 +596,332 @@ bug20160120 (void)
   mpfr_clear(y);
 }
 
+/* Bug in mpfr_sqrt2 when prec(u) = 2*GMP_NUMB_BITS and the exponent of u is
+   odd: the last bit of u is lost. */
+static void
+bug20160908 (void)
+{
+  mpfr_t r, u;
+  int n = GMP_NUMB_BITS, ret;
+
+  mpfr_init2 (r, 2*n - 1);
+  mpfr_init2 (u, 2 * n);
+  mpfr_set_ui_2exp (u, 1, 2*n-2, MPFR_RNDN); /* u=2^(2n-2) with exp(u)=2n-1 */
+  mpfr_nextabove (u);
+  /* now u = 2^(2n-2) + 1/2 */
+  ret = mpfr_sqrt (r, u, MPFR_RNDZ);
+  MPFR_ASSERTN(ret == -1 && mpfr_cmp_ui_2exp (r, 1, n-1) == 0);
+  mpfr_clear (r);
+  mpfr_clear (u);
+}
+
+static void
+testall_rndf (mpfr_prec_t pmax)
+{
+  mpfr_t a, b, d;
+  mpfr_prec_t pa, pb;
+
+  for (pa = MPFR_PREC_MIN; pa <= pmax; pa++)
+    {
+      mpfr_init2 (a, pa);
+      mpfr_init2 (d, pa);
+      for (pb = MPFR_PREC_MIN; pb <= pmax; pb++)
+        {
+          mpfr_init2 (b, pb);
+          mpfr_set_ui (b, 1, MPFR_RNDN);
+          while (mpfr_cmp_ui (b, 4) < 0)
+            {
+              mpfr_sqrt (a, b, MPFR_RNDF);
+              mpfr_sqrt (d, b, MPFR_RNDD);
+              if (!mpfr_equal_p (a, d))
+                {
+                  mpfr_sqrt (d, b, MPFR_RNDU);
+                  if (!mpfr_equal_p (a, d))
+                    {
+                      printf ("Error: mpfr_sqrt(a,b,RNDF) does not "
+                              "match RNDD/RNDU\n");
+                      printf ("b="); mpfr_dump (b);
+                      printf ("a="); mpfr_dump (a);
+                      exit (1);
+                    }
+                }
+              mpfr_nextabove (b);
+            }
+          mpfr_clear (b);
+        }
+      mpfr_clear (a);
+      mpfr_clear (d);
+    }
+}
+
+/* test the case prec = GMP_NUMB_BITS */
+static void
+test_sqrt1n (void)
+{
+  mpfr_t r, u;
+  int inex;
+
+  MPFR_ASSERTD(GMP_NUMB_BITS >= 8); /* so that 15^2 is exactly representable */
+
+  mpfr_init2 (r, GMP_NUMB_BITS);
+  mpfr_init2 (u, GMP_NUMB_BITS);
+
+  inex = mpfr_set_ui_2exp (u, 9 * 9, 2 * GMP_NUMB_BITS - 10, MPFR_RNDN);
+  MPFR_ASSERTN(inex == 0);
+  inex = mpfr_sqrt (r, u, MPFR_RNDN);
+  MPFR_ASSERTN(inex == 0);
+  MPFR_ASSERTN(mpfr_cmp_ui_2exp (r, 9, GMP_NUMB_BITS - 5) == 0);
+
+  inex = mpfr_set_ui_2exp (u, 15 * 15, 2 * GMP_NUMB_BITS - 10, MPFR_RNDN);
+  MPFR_ASSERTN(inex == 0);
+  inex = mpfr_sqrt (r, u, MPFR_RNDN);
+  MPFR_ASSERTN(inex == 0);
+  MPFR_ASSERTN(mpfr_cmp_ui_2exp (r, 15, GMP_NUMB_BITS - 5) == 0);
+
+  inex = mpfr_set_ui_2exp (u, 1, GMP_NUMB_BITS - 2, MPFR_RNDN);
+  MPFR_ASSERTN(inex == 0);
+  inex = mpfr_add_ui (u, u, 1, MPFR_RNDN);
+  MPFR_ASSERTN(inex == 0);
+  inex = mpfr_mul_2ui (u, u, GMP_NUMB_BITS, MPFR_RNDN);
+  MPFR_ASSERTN(inex == 0);
+  /* u = 2^(2*GMP_NUMB_BITS-2) + 2^GMP_NUMB_BITS, thus
+     u = r^2 + 2^GMP_NUMB_BITS with r = 2^(GMP_NUMB_BITS-1).
+     Should round to r+1 to nearest. */
+  inex = mpfr_sqrt (r, u, MPFR_RNDN);
+  MPFR_ASSERTN(inex > 0);
+  inex = mpfr_sub_ui (r, r, 1, MPFR_RNDN);
+  MPFR_ASSERTN(inex == 0);
+  MPFR_ASSERTN(mpfr_cmp_ui_2exp (r, 1, GMP_NUMB_BITS - 1) == 0);
+
+  mpfr_clear (r);
+  mpfr_clear (u);
+}
+
+static void
+check_overflow (void)
+{
+  mpfr_t r, u;
+  mpfr_prec_t p;
+  mpfr_exp_t emax;
+  int inex;
+
+  emax = mpfr_get_emax ();
+  for (p = MPFR_PREC_MIN; p <= 1024; p++)
+    {
+      mpfr_init2 (r, p);
+      mpfr_init2 (u, p);
+
+      set_emax (-1);
+      mpfr_set_ui_2exp (u, 1, mpfr_get_emax () - 1, MPFR_RNDN);
+      mpfr_nextbelow (u);
+      mpfr_mul_2ui (u, u, 1, MPFR_RNDN);
+      /* now u = (1 - 2^(-p))*2^emax is the largest number < +Inf,
+         it square root is near 0.707 and has exponent 0 > emax */
+      /* for RNDN, the result should be +Inf */
+      inex = mpfr_sqrt (r, u, MPFR_RNDN);
+      MPFR_ASSERTN(inex > 0);
+      MPFR_ASSERTN(mpfr_inf_p (r) && mpfr_sgn (r) > 0);
+      /* for RNDA, the result should be +Inf */
+      inex = mpfr_sqrt (r, u, MPFR_RNDA);
+      MPFR_ASSERTN(inex > 0);
+      MPFR_ASSERTN(mpfr_inf_p (r) && mpfr_sgn (r) > 0);
+      /* for RNDZ, the result should be u */
+      inex = mpfr_sqrt (r, u, MPFR_RNDZ);
+      MPFR_ASSERTN(inex < 0);
+      MPFR_ASSERTN(mpfr_equal_p (r, u));
+
+      set_emax (0);
+      mpfr_set_ui_2exp (u, 1, mpfr_get_emax () - 1, MPFR_RNDN);
+      mpfr_nextbelow (u);
+      mpfr_mul_2ui (u, u, 1, MPFR_RNDN);
+      /* u = 1-2^(-p), its square root is > u, and should thus give +Inf when
+         rounding away */
+      inex = mpfr_sqrt (r, u, MPFR_RNDA);
+      MPFR_ASSERTN(inex > 0);
+      MPFR_ASSERTN(mpfr_inf_p (r) && mpfr_sgn (r) > 0);
+
+      mpfr_clear (r);
+      mpfr_clear (u);
+    }
+  set_emax (emax);
+}
+
+static void
+check_underflow (void)
+{
+  mpfr_t r, u;
+  mpfr_prec_t p;
+  mpfr_exp_t emin;
+  int inex;
+
+  emin = mpfr_get_emin ();
+  for (p = MPFR_PREC_MIN; p <= 1024; p++)
+    {
+      mpfr_init2 (r, p);
+      mpfr_init2 (u, p);
+
+      set_emin (2);
+      mpfr_set_ui_2exp (u, 1, mpfr_get_emin () - 1, MPFR_RNDN); /* u = 2 */
+      /* for RNDN, since sqrt(2) is closer from 2 than 0, the result is 2 */
+      mpfr_clear_flags ();
+      inex = mpfr_sqrt (r, u, MPFR_RNDN);
+      MPFR_ASSERTN(inex > 0);
+      MPFR_ASSERTN(mpfr_equal_p (r, u));
+      MPFR_ASSERTN(mpfr_underflow_p ());
+      /* for RNDA, the result should be u, and there is underflow for p > 1,
+         since for p=1 we have 1 < sqrt(2) < 2, but for p >= 2, sqrt(2) should
+         be rounded to a number <= 1.5, which is representable */
+      mpfr_clear_flags ();
+      inex = mpfr_sqrt (r, u, MPFR_RNDA);
+      MPFR_ASSERTN(inex > 0);
+      MPFR_ASSERTN(mpfr_equal_p (r, u));
+      MPFR_ASSERTN((p == 1 && !mpfr_underflow_p ()) ||
+                   (p != 1 && mpfr_underflow_p ()));
+      /* for RNDZ, the result should be +0 */
+      mpfr_clear_flags ();
+      inex = mpfr_sqrt (r, u, MPFR_RNDZ);
+      MPFR_ASSERTN(inex < 0);
+      MPFR_ASSERTN(mpfr_zero_p (r) && mpfr_signbit (r) == 0);
+      MPFR_ASSERTN(mpfr_underflow_p ());
+
+      /* generate an input u such that sqrt(u) < 0.5*2^emin but there is no
+         underflow since sqrt(u) >= pred(0.5*2^emin), thus u >= 2^(2emin-2) */
+      mpfr_set_ui_2exp (u, 1, 2 * mpfr_get_emin () - 2, MPFR_RNDN);
+      mpfr_clear_flags ();
+      inex = mpfr_sqrt (r, u, MPFR_RNDN);
+      MPFR_ASSERTN(inex == 0);
+      MPFR_ASSERTN(mpfr_cmp_ui_2exp (r, 1, mpfr_get_emin () - 1) == 0);
+      MPFR_ASSERTN(!mpfr_underflow_p ());
+      mpfr_clear_flags ();
+      inex = mpfr_sqrt (r, u, MPFR_RNDA);
+      MPFR_ASSERTN(inex == 0);
+      MPFR_ASSERTN(mpfr_cmp_ui_2exp (r, 1, mpfr_get_emin () - 1) == 0);
+      MPFR_ASSERTN(!mpfr_underflow_p ());
+      mpfr_clear_flags ();
+      inex = mpfr_sqrt (r, u, MPFR_RNDZ);
+      MPFR_ASSERTN(inex == 0);
+      MPFR_ASSERTN(mpfr_cmp_ui_2exp (r, 1, mpfr_get_emin () - 1) == 0);
+      MPFR_ASSERTN(!mpfr_underflow_p ());
+
+      /* next number */
+      mpfr_set_ui_2exp (u, 1, 2 * mpfr_get_emin () - 2, MPFR_RNDN);
+      mpfr_nextabove (u);
+      mpfr_clear_flags ();
+      inex = mpfr_sqrt (r, u, MPFR_RNDN);
+      MPFR_ASSERTN(inex < 0);
+      MPFR_ASSERTN(mpfr_cmp_ui_2exp (r, 1, mpfr_get_emin () - 1) == 0);
+      MPFR_ASSERTN(!mpfr_underflow_p ());
+      mpfr_clear_flags ();
+      inex = mpfr_sqrt (r, u, MPFR_RNDA);
+      MPFR_ASSERTN(inex > 0);
+      mpfr_nextbelow (r);
+      MPFR_ASSERTN(mpfr_cmp_ui_2exp (r, 1, mpfr_get_emin () - 1) == 0);
+      MPFR_ASSERTN(!mpfr_underflow_p ());
+      mpfr_clear_flags ();
+      inex = mpfr_sqrt (r, u, MPFR_RNDZ);
+      MPFR_ASSERTN(inex < 0);
+      MPFR_ASSERTN(mpfr_cmp_ui_2exp (r, 1, mpfr_get_emin () - 1) == 0);
+      MPFR_ASSERTN(!mpfr_underflow_p ());
+
+      /* previous number */
+      mpfr_set_ui_2exp (u, 1, 2 * mpfr_get_emin () - 2, MPFR_RNDN);
+      mpfr_nextbelow (u);
+      mpfr_clear_flags ();
+      inex = mpfr_sqrt (r, u, MPFR_RNDN);
+      MPFR_ASSERTN(inex > 0);
+      MPFR_ASSERTN(mpfr_cmp_ui_2exp (r, 1, mpfr_get_emin () - 1) == 0);
+      /* since sqrt(u) is just below the middle between 0.5*2^emin and
+         the previous number (with unbounded exponent range), there is
+         underflow */
+      MPFR_ASSERTN(mpfr_underflow_p ());
+      mpfr_clear_flags ();
+      inex = mpfr_sqrt (r, u, MPFR_RNDA);
+      MPFR_ASSERTN(inex > 0);
+      MPFR_ASSERTN(mpfr_cmp_ui_2exp (r, 1, mpfr_get_emin () - 1) == 0);
+      MPFR_ASSERTN(!mpfr_underflow_p ());
+      mpfr_clear_flags ();
+      inex = mpfr_sqrt (r, u, MPFR_RNDZ);
+      MPFR_ASSERTN(inex < 0);
+      mpfr_nextabove (r);
+      MPFR_ASSERTN(mpfr_cmp_ui_2exp (r, 1, mpfr_get_emin () - 1) == 0);
+      MPFR_ASSERTN(mpfr_underflow_p ());
+
+      set_emin (3);
+      mpfr_set_ui_2exp (u, 1, mpfr_get_emin () - 1, MPFR_RNDN); /* u = 4 */
+      /* sqrt(u) = 2 = 0.5^2^(emin-1) should be rounded to +0 */
+      mpfr_clear_flags ();
+      inex = mpfr_sqrt (r, u, MPFR_RNDN);
+      MPFR_ASSERTN(inex < 0);
+      MPFR_ASSERTN(mpfr_zero_p (r) && mpfr_signbit (r) == 0);
+      MPFR_ASSERTN(mpfr_underflow_p ());
+
+      /* next number */
+      mpfr_set_ui_2exp (u, 1, mpfr_get_emin () - 1, MPFR_RNDN); /* u = 4 */
+      mpfr_nextabove (u);
+      /* sqrt(u) should be rounded to 4 */
+      mpfr_clear_flags ();
+      inex = mpfr_sqrt (r, u, MPFR_RNDN);
+      MPFR_ASSERTN(inex > 0);
+      MPFR_ASSERTN(mpfr_cmp_ui (r, 4) == 0);
+      MPFR_ASSERTN(mpfr_underflow_p ());
+
+      set_emin (4);
+      mpfr_set_ui_2exp (u, 1, mpfr_get_emin () - 1, MPFR_RNDN); /* u = 8 */
+      /* sqrt(u) should be rounded to +0 */
+      mpfr_clear_flags ();
+      inex = mpfr_sqrt (r, u, MPFR_RNDN);
+      MPFR_ASSERTN(inex < 0);
+      MPFR_ASSERTN(mpfr_zero_p (r) && mpfr_signbit (r) == 0);
+      MPFR_ASSERTN(mpfr_underflow_p ());
+
+      mpfr_clear (r);
+      mpfr_clear (u);
+    }
+  set_emin (emin);
+}
+
+static void
+coverage (void)
+{
+  mpfr_t r, t, u, v, w;
+  mpfr_prec_t p;
+  int inex;
+
+  /* exercise even rule */
+  for (p = MPFR_PREC_MIN; p <= 1024; p++)
+    {
+      mpfr_init2 (r, p);
+      mpfr_init2 (t, p + 1);
+      mpfr_init2 (u, 2 * p + 2);
+      mpfr_init2 (v, p);
+      mpfr_init2 (w, p);
+      do
+        mpfr_urandomb (v, RANDS);
+      while (mpfr_zero_p (v));
+      mpfr_set (w, v, MPFR_RNDN);
+      mpfr_nextabove (w); /* w = nextabove(v) */
+      mpfr_set (t, v, MPFR_RNDN);
+      mpfr_nextabove (t);
+      mpfr_sqr (u, t, MPFR_RNDN);
+      inex = mpfr_sqrt (r, u, MPFR_RNDN);
+      if (mpfr_min_prec (v) < p) /* v is even */
+        {
+          MPFR_ASSERTN(inex < 0);
+          MPFR_ASSERTN(mpfr_equal_p (r, v));
+        }
+      else /* v is odd */
+        {
+          MPFR_ASSERTN(inex > 0);
+          MPFR_ASSERTN(mpfr_equal_p (r, w));
+        }
+      mpfr_clear (r);
+      mpfr_clear (t);
+      mpfr_clear (u);
+      mpfr_clear (v);
+      mpfr_clear (w);
+    }
+}
+
 #define TEST_FUNCTION test_sqrt
 #define TEST_RANDOM_POS 8
 #include "tgeneric.c"
@@ -610,6 +934,10 @@ main (void)
 
   tests_start_mpfr ();
 
+  coverage ();
+  check_underflow ();
+  check_overflow ();
+  testall_rndf (16);
   for (p = MPFR_PREC_MIN; p <= 128; p++)
     {
       test_property1 (p, MPFR_RNDN, 0);
@@ -725,15 +1053,17 @@ main (void)
   check4 ("72154663483843080704304789585920.0", MPFR_RNDD,
           "1.e2d9a51977e6d@13");
 
-  /* check that rounding away is just rounding toward plus infinity */
+  /* check that rounding away is just rounding toward positive infinity */
   check4 ("72154663483843080704304789585920.0", MPFR_RNDA,
           "1.e2d9a51977e6e@13");
 
-  test_generic (2, 300, 15);
+  test_generic (MPFR_PREC_MIN, 300, 15);
   data_check ("data/sqrt", mpfr_sqrt, "mpfr_sqrt");
-  bad_cases (mpfr_sqrt, mpfr_sqr, "mpfr_sqrt", 8, -256, 255, 4, 128, 800, 50);
+  bad_cases (mpfr_sqrt, mpfr_sqr, "mpfr_sqrt", 0, -256, 255, 4, 128, 80, 50);
 
   bug20160120 ();
+  bug20160908 ();
+  test_sqrt1n ();
 
   tests_end_mpfr ();
   return 0;

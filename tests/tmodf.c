@@ -1,6 +1,6 @@
 /* Test file for mpfr_modf.
 
-Copyright 2007-2017 Free Software Foundation, Inc.
+Copyright 2007-2023 Free Software Foundation, Inc.
 Contributed by the AriC and Caramba projects, INRIA.
 
 This file is part of the GNU MPFR Library.
@@ -17,15 +17,10 @@ License for more details.
 
 You should have received a copy of the GNU Lesser General Public License
 along with the GNU MPFR Library; see the file COPYING.LESSER.  If not, see
-http://www.gnu.org/licenses/ or write to the Free Software Foundation, Inc.,
+https://www.gnu.org/licenses/ or write to the Free Software Foundation, Inc.,
 51 Franklin St, Fifth Floor, Boston, MA 02110-1301, USA. */
 
-#include <stdio.h>
-#include <stdlib.h>
-
 #include "mpfr-test.h"
-
-#if MPFR_VERSION >= MPFR_VERSION_NUM(2,4,0)
 
 static void
 check (const char *xis, const char *xfs, const char *xs,
@@ -92,7 +87,7 @@ check_nans (void)
 
   /* -inf */
   mpfr_set_inf (x, -1);
-  mpfr_modf (xi ,xf, x, MPFR_RNDN);
+  mpfr_modf (xi, xf, x, MPFR_RNDN);
   MPFR_ASSERTN (mpfr_inf_p (xi));
   MPFR_ASSERTN (mpfr_sgn (xi) < 0);
   MPFR_ASSERTN (mpfr_zero_p (xf));
@@ -153,7 +148,7 @@ check_special_exprange (void)
     }
 
   /* Test if an overflow occurs in mpfr_set for ope >= opq. */
-  mpfr_set_emax (MPFR_EMAX_MAX);
+  set_emax (MPFR_EMAX_MAX);
   mpfr_set_inf (x, 1);
   mpfr_nextbelow (x);
   mpfr_clear_flags ();
@@ -223,14 +218,3 @@ main (int argc, char *argv[])
   tests_end_mpfr ();
   return 0;
 }
-
-#else
-
-int
-main (void)
-{
-  printf ("Warning! Test disabled for this MPFR version.\n");
-  return 0;
-}
-
-#endif

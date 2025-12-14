@@ -1,6 +1,6 @@
-/* Test file for mpfr_set_exp.
+/* Test file for mpfr_get_exp and mpfr_set_exp.
 
-Copyright 2004, 2006-2017 Free Software Foundation, Inc.
+Copyright 2004, 2006-2023 Free Software Foundation, Inc.
 Contributed by the AriC and Caramba projects, INRIA.
 
 This file is part of the GNU MPFR Library.
@@ -17,11 +17,8 @@ License for more details.
 
 You should have received a copy of the GNU Lesser General Public License
 along with the GNU MPFR Library; see the file COPYING.LESSER.  If not, see
-http://www.gnu.org/licenses/ or write to the Free Software Foundation, Inc.,
+https://www.gnu.org/licenses/ or write to the Free Software Foundation, Inc.,
 51 Franklin St, Fifth Floor, Boston, MA 02110-1301, USA. */
-
-#include <stdio.h>
-#include <stdlib.h>
 
 #include "mpfr-test.h"
 
@@ -30,32 +27,66 @@ main (int argc, char *argv[])
 {
   mpfr_t x;
   int ret;
-  mpfr_exp_t emin, emax;
+  mpfr_exp_t emin, emax, e;
+  int i = 0;
 
   tests_start_mpfr ();
 
   emin = mpfr_get_emin ();
   emax = mpfr_get_emax ();
 
-  mpfr_init (x);
+  mpfr_init2 (x, 53);
 
   mpfr_set_ui (x, 1, MPFR_RNDN);
   ret = mpfr_set_exp (x, 2);
-  MPFR_ASSERTN(ret == 0 && mpfr_cmp_ui (x, 2) == 0);
+  MPFR_ASSERTN (ret == 0 && mpfr_cmp_ui (x, 2) == 0);
+  e = mpfr_get_exp (x);
+  MPFR_ASSERTN (e == 2);
+  e = (mpfr_get_exp) (x);
+  MPFR_ASSERTN (e == 2);
+
+  ret = mpfr_set_exp (x, emax);
+  e = mpfr_get_exp (x);
+  MPFR_ASSERTN (e == emax);
+  e = (mpfr_get_exp) (x);
+  MPFR_ASSERTN (e == emax);
+
+  ret = mpfr_set_exp (x, emin);
+  e = mpfr_get_exp (x);
+  MPFR_ASSERTN (e == emin);
+  e = (mpfr_get_exp) (x);
+  MPFR_ASSERTN (e == emin);
 
   set_emin (-1);
+
+  e = mpfr_get_exp (x);
+  MPFR_ASSERTN (e == emin);
+  e = (mpfr_get_exp) (x);
+  MPFR_ASSERTN (e == emin);
+
+#ifdef IGNORE_CPP_COMPAT
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wc++-compat"
+#endif
+  e = mpfr_get_exp ((i++, VOIDP_CAST(x)));
+#ifdef IGNORE_CPP_COMPAT
+#pragma GCC diagnostic pop
+#endif
+  MPFR_ASSERTN (e == emin);
+  MPFR_ASSERTN (i == 1);
+
   ret = mpfr_set_exp (x, -1);
-  MPFR_ASSERTN(ret == 0 && mpfr_cmp_ui_2exp (x, 1, -2) == 0);
+  MPFR_ASSERTN (ret == 0 && mpfr_cmp_ui_2exp (x, 1, -2) == 0);
 
   set_emax (1);
   ret = mpfr_set_exp (x, 1);
-  MPFR_ASSERTN(ret == 0 && mpfr_cmp_ui (x, 1) == 0);
+  MPFR_ASSERTN (ret == 0 && mpfr_cmp_ui (x, 1) == 0);
 
   ret = mpfr_set_exp (x, -2);
-  MPFR_ASSERTN(ret != 0 && mpfr_cmp_ui (x, 1) == 0);
+  MPFR_ASSERTN (ret != 0 && mpfr_cmp_ui (x, 1) == 0);
 
   ret = mpfr_set_exp (x, 2);
-  MPFR_ASSERTN(ret != 0 && mpfr_cmp_ui (x, 1) == 0);
+  MPFR_ASSERTN (ret != 0 && mpfr_cmp_ui (x, 1) == 0);
 
   mpfr_clear (x);
 

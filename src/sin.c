@@ -1,6 +1,6 @@
 /* mpfr_sin -- sine of a floating-point number
 
-Copyright 2001-2017 Free Software Foundation, Inc.
+Copyright 2001-2023 Free Software Foundation, Inc.
 Contributed by the AriC and Caramba projects, INRIA.
 
 This file is part of the GNU MPFR Library.
@@ -17,7 +17,7 @@ License for more details.
 
 You should have received a copy of the GNU Lesser General Public License
 along with the GNU MPFR Library; see the file COPYING.LESSER.  If not, see
-http://www.gnu.org/licenses/ or write to the Free Software Foundation, Inc.,
+https://www.gnu.org/licenses/ or write to the Free Software Foundation, Inc.,
 51 Franklin St, Fifth Floor, Boston, MA 02110-1301, USA. */
 
 #define MPFR_NEED_LONGLONG_H
@@ -38,7 +38,7 @@ mpfr_sin (mpfr_ptr y, mpfr_srcptr x, mpfr_rnd_t rnd_mode)
 {
   mpfr_t c, xr;
   mpfr_srcptr xx;
-  mpfr_exp_t expx, err;
+  mpfr_exp_t expx, err1, err;
   mpfr_prec_t precy, m;
   int inexact, sign, reduce;
   MPFR_ZIV_DECL (loop);
@@ -55,7 +55,6 @@ mpfr_sin (mpfr_ptr y, mpfr_srcptr x, mpfr_rnd_t rnd_mode)
         {
           MPFR_SET_NAN (y);
           MPFR_RET_NAN;
-
         }
       else /* x is zero */
         {
@@ -66,9 +65,11 @@ mpfr_sin (mpfr_ptr y, mpfr_srcptr x, mpfr_rnd_t rnd_mode)
         }
     }
 
+  expx = MPFR_GET_EXP (x);
+  err1 = -2 * expx;
+
   /* sin(x) = x - x^3/6 + ... so the error is < 2^(3*EXP(x)-2) */
-  MPFR_FAST_COMPUTE_IF_SMALL_INPUT (y, x, -2 * MPFR_GET_EXP (x), 2, 0,
-                                    rnd_mode, {});
+  MPFR_FAST_COMPUTE_IF_SMALL_INPUT (y, x, err1, 2, 0, rnd_mode, {});
 
   MPFR_SAVE_EXPO_MARK (expo);
 
@@ -81,17 +82,39 @@ mpfr_sin (mpfr_ptr y, mpfr_srcptr x, mpfr_rnd_t rnd_mode)
       goto end;
     }
 
-  m = precy + MPFR_INT_CEIL_LOG2 (precy) + 13;
-  expx = MPFR_GET_EXP (x);
+  /* for x large, since argument reduction is expensive, we want to avoid
+     any failure in Ziv's strategy, thus we take into account expx too */
+  m = precy + MPFR_INT_CEIL_LOG2 (MAX(precy,expx)) + 8;
 
-  mpfr_init (c);
-  mpfr_init (xr);
+  /* since we compute sin(x) as sqrt(1-cos(x)^2), and for x small we have
+     cos(x)^2 ~ 1 - x^2, when subtracting cos(x)^2 from 1 we will lose
+     about -2*expx bits if expx < 0 */
+  if (expx < 0)
+    {
+      /* The following assertion includes a check for integer overflow.
+         At this point, precy < MPFR_SINCOS_THRESHOLD, so that both m and
+         err1 should be small enough. But the assertion makes the code
+         safer (a smart compiler might be able to remove it). */
+      MPFR_ASSERTN (err1 <= MPFR_PREC_MAX - m);
+      m += err1;
+    }
+
+  if (expx >= 2)
+    {
+      mpfr_init2 (c, expx + m - 1);
+      mpfr_init2 (xr, m);
+    }
+  else
+    mpfr_init2 (c, m);
 
   MPFR_ZIV_INIT (loop, m);
   for (;;)
     {
       /* first perform argument reduction modulo 2*Pi (if needed),
          also helps to determine the sign of sin(x) */
+      /* TODO: Perform range reduction in a way so that the sine can
+         be computed directly from the cosine with sin(x)=cos(pi/2-x),
+         without the need of sqrt(1 - x^2). */
       if (expx >= 2) /* If Pi < x < 4, we need to reduce too, to determine
                         the sign of sin(x). For 2 <= |x| < Pi, we could avoid
                         the reduction. */
@@ -113,7 +136,7 @@ mpfr_sin (mpfr_ptr y, mpfr_srcptr x, mpfr_rnd_t rnd_mode)
           mpfr_div_2ui (c, c, 1, MPFR_RNDN);
           /* Since c approximates Pi with an error <= 2^(2-expx-m) <= 2^(-m),
              it suffices to check that c - |xr| >= 2^(2-m). */
-          if (MPFR_SIGN (xr) > 0)
+          if (MPFR_IS_POS (xr))
             mpfr_sub (c, c, xr, MPFR_RNDZ);
           else
             mpfr_add (c, c, xr, MPFR_RNDZ);
@@ -135,9 +158,8 @@ mpfr_sin (mpfr_ptr y, mpfr_srcptr x, mpfr_rnd_t rnd_mode)
       sign = MPFR_SIGN(xx);
       /* now that the argument is reduced, precision m is enough */
       mpfr_set_prec (c, m);
-      mpfr_cos (c, xx, MPFR_RNDZ);    /* can't be exact */
-      mpfr_nexttoinf (c);           /* now c = cos(x) rounded away */
-      mpfr_mul (c, c, c, MPFR_RNDU); /* away */
+      mpfr_cos (c, xx, MPFR_RNDA);    /* c = cos(x) rounded away */
+      mpfr_sqr (c, c, MPFR_RNDU);     /* away */
       mpfr_ui_sub (c, 1, c, MPFR_RNDZ);
       mpfr_sqrt (c, c, MPFR_RNDZ);
       if (MPFR_IS_NEG_SIGN(sign))
@@ -179,7 +201,8 @@ mpfr_sin (mpfr_ptr y, mpfr_srcptr x, mpfr_rnd_t rnd_mode)
      within the target precision, but in that case mpfr_can_round will fail */
 
   mpfr_clear (c);
-  mpfr_clear (xr);
+  if (expx >= 2)
+    mpfr_clear (xr);
 
  end:
   MPFR_SAVE_EXPO_FREE (expo);

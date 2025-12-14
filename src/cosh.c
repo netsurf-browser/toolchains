@@ -1,6 +1,6 @@
 /* mpfr_cosh -- hyperbolic cosine
 
-Copyright 2001-2002, 2004-2017 Free Software Foundation, Inc.
+Copyright 2001-2002, 2004-2023 Free Software Foundation, Inc.
 Contributed by the AriC and Caramba projects, INRIA.
 
 This file is part of the GNU MPFR Library.
@@ -17,7 +17,7 @@ License for more details.
 
 You should have received a copy of the GNU Lesser General Public License
 along with the GNU MPFR Library; see the file COPYING.LESSER.  If not, see
-http://www.gnu.org/licenses/ or write to the Free Software Foundation, Inc.,
+https://www.gnu.org/licenses/ or write to the Free Software Foundation, Inc.,
 51 Franklin St, Fifth Floor, Boston, MA 02110-1301, USA. */
 
 #define MPFR_NEED_LONGLONG_H
@@ -27,15 +27,15 @@ http://www.gnu.org/licenses/ or write to the Free Software Foundation, Inc.,
  *  cosh= 1/2[e^(x)+e^(-x)]              */
 
 int
-mpfr_cosh (mpfr_ptr y, mpfr_srcptr xt , mpfr_rnd_t rnd_mode)
+mpfr_cosh (mpfr_ptr y, mpfr_srcptr xt, mpfr_rnd_t rnd_mode)
 {
   mpfr_t x;
   int inexact;
   MPFR_SAVE_EXPO_DECL (expo);
 
   MPFR_LOG_FUNC (
-    ("x[%Pu]=%*.Rg rnd=%d", mpfr_get_prec (xt), mpfr_log_prec, xt, rnd_mode),
-    ("y[%Pu]=%*.Rg inexact=%d", mpfr_get_prec (y), mpfr_log_prec, y,
+    ("x[%Pu]=%.*Rg rnd=%d", mpfr_get_prec (xt), mpfr_log_prec, xt, rnd_mode),
+    ("y[%Pu]=%.*Rg inexact=%d", mpfr_get_prec (y), mpfr_log_prec, y,
      inexact));
 
   if (MPFR_UNLIKELY(MPFR_IS_SINGULAR(xt)))
@@ -82,7 +82,7 @@ mpfr_cosh (mpfr_ptr y, mpfr_srcptr xt , mpfr_rnd_t rnd_mode)
     /* The optimal number of bits : see algorithms.tex */
     Nt = Ny + 3 + MPFR_INT_CEIL_LOG2 (Ny);
 
-    /* initialise of intermediary variables */
+    /* initialize of intermediary variables */
     MPFR_GROUP_INIT_2 (group, Nt, t, te);
 
     /* First computation of cosh */

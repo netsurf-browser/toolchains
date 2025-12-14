@@ -1,6 +1,6 @@
 /* Test file for mpfr_sinh_cosh.
 
-Copyright 2007-2017 Free Software Foundation, Inc.
+Copyright 2007-2023 Free Software Foundation, Inc.
 Contributed by the AriC and Caramba projects, INRIA.
 
 This file is part of the GNU MPFR Library.
@@ -17,18 +17,13 @@ License for more details.
 
 You should have received a copy of the GNU Lesser General Public License
 along with the GNU MPFR Library; see the file COPYING.LESSER.  If not, see
-http://www.gnu.org/licenses/ or write to the Free Software Foundation, Inc.,
+https://www.gnu.org/licenses/ or write to the Free Software Foundation, Inc.,
 51 Franklin St, Fifth Floor, Boston, MA 02110-1301, USA. */
-
-#include <stdio.h>
-#include <stdlib.h>
 
 #include "mpfr-test.h"
 
-#if MPFR_VERSION >= MPFR_VERSION_NUM(2,4,0)
-
 static void
-failed (mpfr_t x, mpfr_t esh, mpfr_t gsh, mpfr_t ech, mpfr_t gch)
+failed (mpfr_ptr x, mpfr_ptr esh, mpfr_ptr gsh, mpfr_ptr ech, mpfr_ptr gch)
 {
   printf ("error : mpfr_sinh_cosh (x) x = ");
   mpfr_out_str (stdout, 10, 0, x, MPFR_RNDD);
@@ -48,7 +43,7 @@ failed (mpfr_t x, mpfr_t esh, mpfr_t gsh, mpfr_t ech, mpfr_t gch)
 
 /* check against sinh, cosh */
 static void
-check (mpfr_t x, mpfr_rnd_t rnd)
+check (mpfr_ptr x, mpfr_rnd_t rnd)
 {
   mpfr_t s, c, sx, cx;
   int isc, is, ic;
@@ -130,14 +125,3 @@ main (int argc, char *argv[])
   tests_end_mpfr ();
   return 0;
 }
-
-#else
-
-int
-main (void)
-{
-  printf ("Warning! Test disabled for this MPFR version.\n");
-  return 0;
-}
-
-#endif

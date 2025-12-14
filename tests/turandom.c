@@ -1,6 +1,6 @@
 /* Test file for mpfr_urandom
 
-Copyright 1999-2004, 2006-2017 Free Software Foundation, Inc.
+Copyright 1999-2004, 2006-2023 Free Software Foundation, Inc.
 Contributed by the AriC and Caramba projects, INRIA.
 
 This file is part of the GNU MPFR Library.
@@ -17,11 +17,8 @@ License for more details.
 
 You should have received a copy of the GNU Lesser General Public License
 along with the GNU MPFR Library; see the file COPYING.LESSER.  If not, see
-http://www.gnu.org/licenses/ or write to the Free Software Foundation, Inc.,
+https://www.gnu.org/licenses/ or write to the Free Software Foundation, Inc.,
 51 Franklin St, Fifth Floor, Boston, MA 02110-1301, USA. */
-
-#include <stdio.h>
-#include <stdlib.h>
 
 #include "mpfr-test.h"
 
@@ -38,15 +35,12 @@ test_urandom (long nbtests, mpfr_prec_t prec, mpfr_rnd_t rnd, long bit_index,
   long count = 0;
   int i;
   int inex = 1;
-  unsigned int ex_flags, flags;
+  mpfr_flags_t ex_flags, flags;
 
   size_tab = (nbtests >= 1000 ? nbtests / 50 : 20);
-  tab = (int *) calloc (size_tab, sizeof(int));
-  if (tab == NULL)
-    {
-      fprintf (stderr, "trandom: can't allocate memory in test_urandom\n");
-      exit (1);
-    }
+  tab = (int *) tests_allocate (size_tab * sizeof (int));
+  for (k = 0; k < size_tab; k++)
+    tab[k] = 0;
 
   mpfr_init2 (x, prec);
   xn = 1 + (prec - 1) / mp_bits_per_limb;
@@ -70,14 +64,14 @@ test_urandom (long nbtests, mpfr_prec_t prec, mpfr_rnd_t rnd, long bit_index,
       if (MPFR_MANT(x)[0] & MPFR_LIMB_MASK(sh) && !MPFR_IS_ZERO (x))
         {
           printf ("Error: mpfr_urandom() returns invalid numbers:\n");
-          mpfr_print_binary (x); puts ("");
+          mpfr_dump (x);
           exit (1);
         }
       /* check that the value is in [0,1] */
       if (mpfr_cmp_ui (x, 0) < 0 || mpfr_cmp_ui (x, 1) > 0)
         {
           printf ("Error: mpfr_urandom() returns number outside [0, 1]:\n");
-          mpfr_print_binary (x); puts ("");
+          mpfr_dump (x);
           exit (1);
         }
       /* check the flags (an underflow is theoretically possible, but
@@ -92,9 +86,13 @@ test_urandom (long nbtests, mpfr_prec_t prec, mpfr_rnd_t rnd, long bit_index,
           exit (1);
         }
 
-      d = mpfr_get_d1 (x); av += d; var += d*d;
-      i = (int)(size_tab * d);
-      if (d == 1.0) i --;
+      d = mpfr_get_d1 (x);
+      av += d;
+      var += d*d;
+      i = (int) (size_tab * d);
+      if (d == 1.0)
+        i--;
+      MPFR_ASSERTN (i < size_tab);
       tab[i]++;
 
       if (limb_mask && (MPFR_MANT (x)[limb_index] & limb_mask))
@@ -113,73 +111,269 @@ test_urandom (long nbtests, mpfr_prec_t prec, mpfr_rnd_t rnd, long bit_index,
   for (k = 0; k < 5; k++)
     {
       set_emin (k+1);
-      mpfr_clear_flags ();
       ex_flags = MPFR_FLAGS_UNDERFLOW | MPFR_FLAGS_INEXACT;
-      inex = mpfr_urandom (x, RANDS, rnd);
-      flags = __gmpfr_flags;
-      if (flags != ex_flags)
+      for (i = 0; i < 5; i++)
         {
-          printf ("Error: mpfr_urandom() returns incorrect flags"
-                  " for emin = %d.\n", k+1);
-          printf ("Expected ");
-          flags_out (ex_flags);
-          printf ("Got      ");
-          flags_out (flags);
-          exit (1);
-        }
-      if ((   (rnd == MPFR_RNDZ || rnd == MPFR_RNDD)
-              && (!MPFR_IS_ZERO (x) || inex != -1))
-          || ((rnd == MPFR_RNDU || rnd == MPFR_RNDA)
-              && (mpfr_cmp_ui (x, 1 << k) != 0 || inex != +1))
-          || (rnd == MPFR_RNDN
-              && (k > 0 || mpfr_cmp_ui (x, 1 << k) != 0 || inex != +1)
-              && (!MPFR_IS_ZERO (x) || inex != -1)))
-        {
-          printf ("Error: mpfr_urandom() do not handle correctly a restricted"
-                  " exponent range.\nrounding mode: %s\nternary value: %d\n"
-                  "random value: ", mpfr_print_rnd_mode (rnd), inex);
-          mpfr_print_binary (x); puts ("");
-          exit (1);
+          mpfr_clear_flags ();
+          inex = mpfr_urandom (x, RANDS, rnd);
+          flags = __gmpfr_flags;
+          if (k > 0 && flags != ex_flags)
+            {
+              printf ("Error: mpfr_urandom() returns incorrect flags"
+                      " for emin = %d (i = %d).\n", k+1, i);
+              printf ("Expected ");
+              flags_out (ex_flags);
+              printf ("Got      ");
+              flags_out (flags);
+              exit (1);
+            }
+          if ((   (rnd == MPFR_RNDZ || rnd == MPFR_RNDD)
+                  && (!MPFR_IS_ZERO (x) || inex != -1))
+              || ((rnd == MPFR_RNDU || rnd == MPFR_RNDA)
+                  && (mpfr_cmp_ui (x, 1 << k) != 0 || inex != +1))
+              || (rnd == MPFR_RNDN
+                  && (k > 0 || mpfr_cmp_ui (x, 1 << k) != 0 || inex != +1)
+                  && (!MPFR_IS_ZERO (x) || inex != -1)))
+            {
+              printf ("Error: mpfr_urandom() does not handle correctly"
+                      " a restricted exponent range.\nemin = %d\n"
+                      "rounding mode: %s\nternary value: %d\nrandom value: ",
+                      k+1, mpfr_print_rnd_mode (rnd), inex);
+              mpfr_dump (x);
+              exit (1);
+            }
         }
     }
   set_emin (emin);
 
   mpfr_clear (x);
-  if (!verbose)
+
+  if (verbose)
     {
-      free(tab);
-      return;
+      av /= nbtests;
+      var = (var / nbtests) - av * av;
+
+      th = (double)nbtests / size_tab;
+      printf ("Average = %.5f\nVariance = %.5f\n", av, var);
+      printf ("Repartition for urandom with rounding mode %s. "
+              "Each integer should be close to %d.\n",
+              mpfr_print_rnd_mode (rnd), (int) th);
+
+      for (k = 0; k < size_tab; k++)
+        {
+          chi2 += (tab[k] - th) * (tab[k] - th) / th;
+          printf("%d ", tab[k]);
+          if (((unsigned int) (k+1) & 7) == 0)
+            printf("\n");
+        }
+
+      printf("\nChi2 statistics value (with %d degrees of freedom) : %.5f\n",
+             size_tab - 1, chi2);
+
+      if (limb_mask)
+        printf ("Bit #%ld is set %ld/%ld = %.1f %% of time\n",
+                bit_index, count, nbtests, count * 100.0 / nbtests);
+
+      puts ("");
     }
 
-  av /= nbtests;
-  var = (var / nbtests) - av * av;
-
-  th = (double)nbtests / size_tab;
-  printf ("Average = %.5f\nVariance = %.5f\n", av, var);
-  printf ("Repartition for urandom with rounding mode %s. "
-          "Each integer should be close to %d.\n",
-          mpfr_print_rnd_mode (rnd), (int) th);
-
-  for (k = 0; k < size_tab; k++)
-    {
-      chi2 += (tab[k] - th) * (tab[k] - th) / th;
-      printf("%d ", tab[k]);
-      if (((k+1) & 7) == 0)
-        printf("\n");
-    }
-
-  printf("\nChi2 statistics value (with %d degrees of freedom) : %.5f\n",
-         size_tab - 1, chi2);
-
-  if (limb_mask)
-    printf ("Bit #%ld is set %ld/%ld = %.1f %% of time\n",
-            bit_index, count, nbtests, count * 100.0 / nbtests);
-
-  puts ("");
-
-  free(tab);
+  tests_free (tab, size_tab * sizeof (int));
   return;
 }
+
+static void
+underflow_tests (void)
+{
+  mpfr_t x;
+  mpfr_exp_t emin;
+  int i, k;
+  int rnd;
+
+  emin = mpfr_get_emin ();
+  mpfr_init2 (x, 4);
+
+  for (i = 2; i >= -4; i--)
+    RND_LOOP (rnd)
+      for (k = 0; k < 100; k++)
+        {
+          mpfr_flags_t ex_flags, flags;
+          int inex;
+
+          if (i >= 2)
+            {
+              /* Always underflow when emin >= 2, i.e. when the minimum
+                 representable positive number is >= 2. */
+              ex_flags = MPFR_FLAGS_UNDERFLOW | MPFR_FLAGS_INEXACT;
+            }
+          else
+            {
+#ifndef MPFR_USE_MINI_GMP
+              gmp_randstate_t s;
+
+              /* Since the unrounded random number does not depend on
+                 the current exponent range, we can detect underflow
+                 in a range larger than the one that will be tested. */
+              gmp_randinit_set (s, mpfr_rands);
+              mpfr_clear_flags ();
+              mpfr_urandom (x, s, (mpfr_rnd_t) rnd);
+              gmp_randclear (s);
+              ex_flags = MPFR_FLAGS_INEXACT;
+              if (MPFR_IS_ZERO (x) || mpfr_get_exp (x) < i)
+                ex_flags |= MPFR_FLAGS_UNDERFLOW;
+#else
+              /* Do not test the flags. */
+              ex_flags = 0;
+#endif
+            }
+
+          set_emin (i);
+          mpfr_clear_flags ();
+          inex = mpfr_urandom (x, mpfr_rands, (mpfr_rnd_t) rnd);
+          flags = __gmpfr_flags;
+          MPFR_ASSERTN (mpfr_inexflag_p ());
+          set_emin (emin);
+
+          if (MPFR_IS_NEG (x))
+            {
+              printf ("Error in underflow_tests: got a negative sign"
+                      " for i=%d rnd=%s k=%d.\n",
+                      i, mpfr_print_rnd_mode ((mpfr_rnd_t) rnd), k);
+              exit (1);
+            }
+
+          if (MPFR_IS_ZERO (x))
+            {
+              if (rnd == MPFR_RNDU || rnd == MPFR_RNDA)
+                {
+                  printf ("Error in underflow_tests: the value cannot"
+                          " be 0 for i=%d rnd=%s k=%d.\n",
+                          i, mpfr_print_rnd_mode ((mpfr_rnd_t) rnd), k);
+                  exit (1);
+                }
+            }
+
+          if (inex == 0 || (MPFR_IS_ZERO (x) && inex > 0))
+            {
+              printf ("Error in underflow_tests: incorrect inex (%d)"
+                      " for i=%d rnd=%s k=%d.\n", inex,
+                      i, mpfr_print_rnd_mode ((mpfr_rnd_t) rnd), k);
+              exit (1);
+            }
+
+          if (ex_flags != 0 && flags != ex_flags)
+            {
+              printf ("Error in underflow_tests: incorrect flags"
+                      " for i=%d rnd=%s k=%d.\n",
+                      i, mpfr_print_rnd_mode ((mpfr_rnd_t) rnd), k);
+              printf ("Expected ");
+              flags_out (ex_flags);
+              printf ("Got      ");
+              flags_out (flags);
+              exit (1);
+            }
+        }
+
+  mpfr_clear (x);
+}
+
+static void
+test_underflow (int verbose)
+{
+  mpfr_t x;
+  mpfr_exp_t emin = mpfr_get_emin ();
+  long i, exp[6] = {0, 0, 0, 0, 0, 0};
+
+  mpfr_init2 (x, 2);
+  set_emin (-3);
+#define N 1000000
+  for (i = 0; i < N; i++)
+    {
+      mpfr_urandom (x, RANDS, MPFR_RNDN);
+      if (mpfr_zero_p (x))
+        exp[5] ++;
+      else
+        /* exp=1 is possible if the generated number is 0.111111... */
+        exp[1-mpfr_get_exp(x)] ++;
+    }
+  if (verbose)
+    printf ("exp=1:%.3f(%.3f) 0:%.3f(%.3f) -1:%.3f(%.3f) -2:%.3f(%.3f) "
+            "-3:%.3f(%.3f) zero:%.3f(%.3f)\n",
+            100.0 * (double) exp[0] / (double) N, 12.5,
+            100.0 * (double) exp[1] / (double) N, 43.75,
+            100.0 * (double) exp[2] / (double) N, 21.875,
+            100.0 * (double) exp[3] / (double) N, 10.9375,
+            100.0 * (double) exp[4] / (double) N, 7.8125,
+            100.0 * (double) exp[5] / (double) N, 3.125);
+  mpfr_clear (x);
+  set_emin (emin);
+#undef N
+}
+
+static void
+overflow_tests (void)
+{
+  mpfr_t x;
+  mpfr_exp_t emax;
+  int i, k;
+  int inex;
+  int rnd;
+  mpfr_flags_t ex_flags, flags;
+
+  emax = mpfr_get_emax ();
+  mpfr_init2 (x, 4);
+  ex_flags = MPFR_FLAGS_OVERFLOW | MPFR_FLAGS_INEXACT; /* if overflow */
+  for (i = -4; i <= 0; i++)
+    {
+      set_emax (i);
+      RND_LOOP (rnd)
+        for (k = 0; k < 100; k++)
+          {
+            mpfr_clear_flags ();
+            inex = mpfr_urandom (x, mpfr_rands, (mpfr_rnd_t) rnd);
+            flags = __gmpfr_flags;
+            MPFR_ASSERTN (mpfr_inexflag_p ());
+            if (MPFR_IS_NEG (x))
+              {
+                printf ("Error in overflow_tests: got a negative sign"
+                        " for i=%d rnd=%s k=%d.\n",
+                        i, mpfr_print_rnd_mode ((mpfr_rnd_t) rnd), k);
+                exit (1);
+              }
+            if (MPFR_IS_INF (x))
+              {
+                if (rnd == MPFR_RNDD || rnd == MPFR_RNDZ)
+                  {
+                    printf ("Error in overflow_tests: the value cannot"
+                            " be +inf for i=%d rnd=%s k=%d.\n",
+                            i, mpfr_print_rnd_mode ((mpfr_rnd_t) rnd), k);
+                    exit (1);
+                  }
+                if (flags != ex_flags)
+                  {
+                    printf ("Error in overflow_tests: incorrect flags"
+                            " for i=%d rnd=%s k=%d.\n",
+                            i, mpfr_print_rnd_mode ((mpfr_rnd_t) rnd), k);
+                    printf ("Expected ");
+                    flags_out (ex_flags);
+                    printf ("Got      ");
+                    flags_out (flags);
+                    exit (1);
+                  }
+              }
+            if (inex == 0 || (MPFR_IS_INF (x) && inex < 0))
+              {
+                printf ("Error in overflow_tests: incorrect inex (%d)"
+                        " for i=%d rnd=%s k=%d.\n", inex,
+                        i, mpfr_print_rnd_mode ((mpfr_rnd_t) rnd), k);
+                exit (1);
+              }
+          }
+    }
+  mpfr_clear (x);
+  set_emax (emax);
+}
+
+#ifndef MPFR_USE_MINI_GMP
 
 /* Problem reported by Carl Witty. This test assumes the random generator
    used by GMP is deterministic (for a given seed). We need to distinguish
@@ -232,7 +426,7 @@ bug20170123 (void)
   gmp_randstate_t s;
 
   emin = mpfr_get_emin ();
-  mpfr_set_emin (-7);
+  set_emin (-7);
   mpfr_init2 (x, 53);
   gmp_randinit_default (s);
   gmp_randseed_ui (s, 398);
@@ -240,169 +434,79 @@ bug20170123 (void)
   MPFR_ASSERTN(mpfr_cmp_ui_2exp (x, 1, -8) == 0);
   mpfr_clear (x);
   gmp_randclear (s);
-  mpfr_set_emin (emin);
+  set_emin (emin);
 #endif
 }
 
+/* Reproducibility test with several rounding modes and exponent ranges. */
 static void
-underflow_tests (void)
+reprod_rnd_exp (void)
 {
-  mpfr_t x;
-  mpfr_exp_t emin;
-  int i, k;
-  int inex;
-  int rnd;
-  unsigned int ex_flags, flags;
+  int i;
 
-  emin = mpfr_get_emin ();
-  mpfr_init2 (x, 4);
-  ex_flags = MPFR_FLAGS_UNDERFLOW | MPFR_FLAGS_INEXACT; /* if underflow */
-  for (i = 2; i >= -4; i--)
+  for (i = 0; i < 10; i++)
     {
-      mpfr_set_emin (i);
-      RND_LOOP (rnd)
-        for (k = 0; k < 100; k++)
-          {
-            mpfr_clear_flags ();
-            inex = mpfr_urandom (x, RANDS, (mpfr_rnd_t) rnd);
-            flags = __gmpfr_flags;
-            MPFR_ASSERTN (mpfr_inexflag_p ());
-            if (MPFR_IS_NEG (x))
-              {
-                printf ("Error in underflow_tests: got a negative sign"
-                        " for i=%d rnd=%s k=%d.\n",
-                        i, mpfr_print_rnd_mode ((mpfr_rnd_t) rnd), k);
-                exit (1);
-              }
-            if (MPFR_IS_ZERO (x))
-              {
-                if (rnd == MPFR_RNDU || rnd == MPFR_RNDA)
-                  {
-                    printf ("Error in underflow_tests: the value cannot"
-                            " be 0 for i=%d rnd=%s k=%d.\n",
-                            i, mpfr_print_rnd_mode ((mpfr_rnd_t) rnd), k);
-                    exit (1);
-                  }
-                if (flags != ex_flags)
-                  {
-                    printf ("Error in underflow_tests: incorrect flags"
-                            " for i=%d rnd=%s k=%d.\n",
-                            i, mpfr_print_rnd_mode ((mpfr_rnd_t) rnd), k);
-                    printf ("Expected ");
-                    flags_out (ex_flags);
-                    printf ("Got      ");
-                    flags_out (flags);
-                    exit (1);
-                  }
-              }
-            if (inex == 0 || (MPFR_IS_ZERO (x) && inex > 0))
-              {
-                printf ("Error in underflow_tests: incorrect inex (%d)"
-                        " for i=%d rnd=%s k=%d.\n", inex,
-                        i, mpfr_print_rnd_mode ((mpfr_rnd_t) rnd), k);
-                exit (1);
-              }
-          }
+      gmp_randstate_t s1;
+      mpfr_prec_t prec;
+      mpfr_t x1, x2, y;
+      mp_limb_t v;
+      int r;
+
+      prec = MPFR_PREC_MIN + (randlimb () % 200);
+      mpfr_inits2 (prec, x1, x2, y, (mpfr_ptr) 0);
+
+      gmp_randinit_set (s1, mpfr_rands);
+      mpfr_urandom (x1, mpfr_rands, MPFR_RNDZ);
+      mpfr_rand_raw (&v, mpfr_rands, GMP_NUMB_BITS);
+      mpfr_set (x2, x1, MPFR_RNDN);
+      mpfr_nextabove (x2);
+      /* The real number is between x1 and x2. */
+
+      RND_LOOP (r)
+        {
+          gmp_randstate_t s2;
+          mpfr_rnd_t rr = (mpfr_rnd_t) r;
+          mp_limb_t w;
+          mpfr_ptr t[2];
+          int k, nk = 0;
+
+          gmp_randinit_set (s2, s1);
+          mpfr_urandom (y, s2, rr);
+          mpfr_rand_raw (&w, s2, GMP_NUMB_BITS);
+          if (w != v)
+            {
+              printf ("Error in reprod_rnd_exp for i=%d rnd=%s: different "
+                      "PRNG state\n", i, mpfr_print_rnd_mode (rr));
+              exit (1);
+            }
+
+          if (! MPFR_IS_LIKE_RNDA (rr, 0))
+            t[nk++] = x1;
+          if (! MPFR_IS_LIKE_RNDZ (rr, 0))
+            t[nk++] = x2;
+          MPFR_ASSERTN (nk == 1 || nk == 2);
+
+          if (!(mpfr_equal_p (y, t[0]) || (nk > 1 && mpfr_equal_p (y, t[1]))))
+            {
+              printf ("Error in reprod_rnd_exp for i=%d rnd=%s:\n",
+                      i, mpfr_print_rnd_mode (rr));
+              printf ("Expected%s\n", nk > 1 ? " one of" : "");
+              for (k = 0; k < nk; k++)
+                {
+                  printf ("  ");
+                  mpfr_dump (t[k]);
+                }
+              printf ("Got\n  ");
+              mpfr_dump (y);
+              exit (1);
+            }
+
+          gmp_randclear (s2);
+        }
+
+      mpfr_clears (x1, x2, y, (mpfr_ptr) 0);
+      gmp_randclear (s1);
     }
-  mpfr_clear (x);
-  mpfr_set_emin (emin);
-}
-
-static void
-test_underflow (int verbose)
-{
-  mpfr_t x;
-  mpfr_exp_t emin = mpfr_get_emin ();
-  long i, exp[6] = {0, 0, 0, 0, 0, 0};
-
-  mpfr_init2 (x, 2);
-  mpfr_set_emin (-3);
-#define N 1000000
-  for (i = 0; i < N; i++)
-    {
-      mpfr_urandom (x, RANDS, MPFR_RNDN);
-      if (mpfr_zero_p (x))
-        exp[5] ++;
-      else
-        /* exp=1 is possible if the generated number is 0.111111... */
-        exp[1-mpfr_get_exp(x)] ++;
-    }
-  if (verbose)
-    printf ("exp=1:%.3f(%.3f) 0:%.3f(%.3f) -1:%.3f(%.3f) -2:%.3f(%.3f) "
-            "-3:%.3f(%.3f) zero:%.3f(%.3f)\n",
-            100.0 * (double) exp[0] / (double) N, 12.5,
-            100.0 * (double) exp[1] / (double) N, 43.75,
-            100.0 * (double) exp[2] / (double) N, 21.875,
-            100.0 * (double) exp[3] / (double) N, 10.9375,
-            100.0 * (double) exp[4] / (double) N, 7.8125,
-            100.0 * (double) exp[5] / (double) N, 3.125);
-  mpfr_clear (x);
-  mpfr_set_emin (emin);
-#undef N
-}
-
-static void
-overflow_tests (void)
-{
-  mpfr_t x;
-  mpfr_exp_t emax;
-  int i, k;
-  int inex;
-  int rnd;
-  unsigned int ex_flags, flags;
-
-  emax = mpfr_get_emax ();
-  mpfr_init2 (x, 4);
-  ex_flags = MPFR_FLAGS_OVERFLOW | MPFR_FLAGS_INEXACT; /* if overflow */
-  for (i = -4; i <= 0; i++)
-    {
-      mpfr_set_emax (i);
-      RND_LOOP (rnd)
-        for (k = 0; k < 100; k++)
-          {
-            mpfr_clear_flags ();
-            inex = mpfr_urandom (x, RANDS, (mpfr_rnd_t) rnd);
-            flags = __gmpfr_flags;
-            MPFR_ASSERTN (mpfr_inexflag_p ());
-            if (MPFR_IS_NEG (x))
-              {
-                printf ("Error in overflow_tests: got a negative sign"
-                        " for i=%d rnd=%s k=%d.\n",
-                        i, mpfr_print_rnd_mode ((mpfr_rnd_t) rnd), k);
-                exit (1);
-              }
-            if (MPFR_IS_INF (x))
-              {
-                if (rnd == MPFR_RNDD || rnd == MPFR_RNDZ)
-                  {
-                    printf ("Error in overflow_tests: the value cannot"
-                            " be +inf for i=%d rnd=%s k=%d.\n",
-                            i, mpfr_print_rnd_mode ((mpfr_rnd_t) rnd), k);
-                    exit (1);
-                  }
-                if (flags != ex_flags)
-                  {
-                    printf ("Error in overflow_tests: incorrect flags"
-                            " for i=%d rnd=%s k=%d.\n",
-                            i, mpfr_print_rnd_mode ((mpfr_rnd_t) rnd), k);
-                    printf ("Expected ");
-                    flags_out (ex_flags);
-                    printf ("Got      ");
-                    flags_out (flags);
-                    exit (1);
-                  }
-              }
-            if (inex == 0 || (MPFR_IS_INF (x) && inex < 0))
-              {
-                printf ("Error in overflow_tests: incorrect inex (%d)"
-                        " for i=%d rnd=%s k=%d.\n", inex,
-                        i, mpfr_print_rnd_mode ((mpfr_rnd_t) rnd), k);
-                exit (1);
-              }
-          }
-    }
-  mpfr_clear (x);
-  mpfr_set_emax (emax);
 }
 
 /* Reproducibility test: check that the behavior does not depend on
@@ -422,37 +526,37 @@ reprod_abi (void)
 #define N 6
   /* Run this program with the MPFR_REPROD_ABI_OUTPUT environment variable
      set to get the array of strings. */
-  char *t[5 * N] = {
-    "1.8@-1",
-    "5.0@-1",
-    "5.0@-1",
-    "a.0@-1",
-    "f.c0@-1",
-    "a.51738280@-1",
-    "e.53dc74e0@-1",
-    "6.4edc72d0@-1",
-    "3.de4fdd30@-1",
-    "5.e1fe0b5a0@-1",
-    "5.9ce70076d54d1980@-1",
-    "1.f84df9a49d68e0ec@-1",
-    "b.18aa08297dbe2cf0@-1",
-    "6.def0fb5a8190c754@-1",
-    "d.17a57ed62a602ad40@-1",
-    "1.812f1fa6c4e024363ae95d58@-1",
-    "2.09b0e06eb0a7e16ce51c8b90@-1",
-    "5.86a1ac9115417c51af272238@-1",
-    "c.9e3b21f7dfb431dd6533c008@-1",
-    "6.6b26e12c345f96fd2929d4200@-1",
-    "7.d039f4414022c863224e6c641dd71900@-2",
-    "8.18e0674a0a2b318d3c99911a45e4cf40@-1",
-    "d.426ed83227d849f06424b5e86022c620@-1",
-    "7.1638e5483b69f800691942a63307fc98@-1",
-    "2.6ed009ee96c8788f6b88212f5f2a4d4b0@-1",
-    "3.8429cc14328d744c0b3cda780f0a962fcb397400@-1",
-    "4.257841b744575cc65865e54f4cf43f4f1527ebd0@-1",
-    "1.b593a359e6e146dfd7db2e5b768fe4a07efc114e@-1",
-    "2.543b005741d935e8e3081bbae9bffa33ce75ddc6@-1",
-    "a.2f9030421a312f0bb16db20c4783c6438725ed600@-1"
+  const char *t[5 * N] = {
+    "1.0@-1",
+    "3.0@-1",
+    "7.0@-1",
+    "9.0@-1",
+    "c.0@-1",
+    "4.385434c0@-1",
+    "1.9a018734@-1",
+    "8.26547780@-1",
+    "a.fd334198@-1",
+    "9.aa11d5f00@-1",
+    "d.aa9a32fd0a801ac0@-1",
+    "c.eb47074368ec6340@-1",
+    "9.7dbe2ced88ae4c30@-1",
+    "d.03218ea6704a42c0@-1",
+    "7.1530156aac800d980@-1",
+    "e.270121b1d74aea9029ccc740@-1",
+    "5.614fc2d9ca3917107609e2e0@-1",
+    "5.15417c51af272232181d6a40@-1",
+    "f.dfb431dd6533c004b6d3c590@-1",
+    "4.345f96fd2929d41eb278a4f40@-1",
+    "a.804590c6449cd8c83bae31f31f7a4100@-1",
+    "a.0a2b318d3c99911a45e4cf33847d3680@-1",
+    "2.89f6127c19092d7a1808b1842b296400@-1",
+    "2.1db4fc00348ca1531983fe4bd4cdf6d2@-1",
+    "5.2d90f11ed710425ebe549a95decbb6540@-1",
+    "8.ca35d1302cf369e03c2a58bf2ce5cff8307f0bc0@-1",
+    "3.a22bae632c32f2a7a67a1fa78a93f5e84f9caa40@-1",
+    "f.370a36febed972dbb47f2503f7e08a651edbf120@-1",
+    "d.0764d7a38c206eeba6ffe8cf39d777194f5c9200@-1",
+    "a.1a312f0bb16db20c4783c6438725ed5d6dff6af80@-1"
   };
   gmp_randstate_t s;
   int generate, i;
@@ -492,6 +596,8 @@ reprod_abi (void)
   gmp_randclear (s);
 #endif
 }
+
+#endif
 
 int
 main (int argc, char *argv[])
@@ -540,16 +646,22 @@ main (int argc, char *argv[])
 
       if (argc == 1)  /* check also small precision */
         {
-          test_urandom (nbtests, 2, (mpfr_rnd_t) rnd, -1, 0);
+          test_urandom (nbtests, MPFR_PREC_MIN, (mpfr_rnd_t) rnd, -1, 0);
         }
     }
 
   underflow_tests ();
   overflow_tests ();
 
+#ifndef MPFR_USE_MINI_GMP
+  /* Since these tests assume a deterministic random generator, and
+     this is not implemented in mini-gmp, we omit it with mini-gmp. */
   bug20100914 ();
   bug20170123 ();
+  reprod_rnd_exp ();
   reprod_abi ();
+#endif
+
   test_underflow (verbose);
 
   tests_end_mpfr ();

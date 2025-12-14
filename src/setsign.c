@@ -1,6 +1,6 @@
 /* mpfr_setsign -- Produce a value with the magnitude of x and sign bit s
 
-Copyright 2007-2017 Free Software Foundation, Inc.
+Copyright 2007-2023 Free Software Foundation, Inc.
 Contributed by the AriC and Caramba projects, INRIA.
 
 This file is part of the GNU MPFR Library.
@@ -17,7 +17,7 @@ License for more details.
 
 You should have received a copy of the GNU Lesser General Public License
 along with the GNU MPFR Library; see the file COPYING.LESSER.  If not, see
-http://www.gnu.org/licenses/ or write to the Free Software Foundation, Inc.,
+https://www.gnu.org/licenses/ or write to the Free Software Foundation, Inc.,
 51 Franklin St, Fifth Floor, Boston, MA 02110-1301, USA. */
 
 #include "mpfr-impl.h"
@@ -26,5 +26,14 @@ http://www.gnu.org/licenses/ or write to the Free Software Foundation, Inc.,
 int
 mpfr_setsign (mpfr_ptr z, mpfr_srcptr x, int s, mpfr_rnd_t rnd_mode)
 {
-  return mpfr_set4 (z, x, rnd_mode, s ? -1 : 1);
+  if (MPFR_UNLIKELY (z != x))
+    return mpfr_set4 (z, x, rnd_mode, s ? MPFR_SIGN_NEG : MPFR_SIGN_POS);
+  else
+    {
+      MPFR_SET_SIGN (z, s ? MPFR_SIGN_NEG : MPFR_SIGN_POS);
+      if (MPFR_UNLIKELY (MPFR_IS_NAN (x)))
+        MPFR_RET_NAN;
+      else
+        MPFR_RET (0);
+    }
 }

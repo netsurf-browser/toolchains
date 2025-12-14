@@ -1,6 +1,6 @@
 /* Test file for mpfr_acosh.
 
-Copyright 2001-2004, 2006-2017 Free Software Foundation, Inc.
+Copyright 2001-2004, 2006-2023 Free Software Foundation, Inc.
 Contributed by the AriC and Caramba projects, INRIA.
 
 This file is part of the GNU MPFR Library.
@@ -17,11 +17,8 @@ License for more details.
 
 You should have received a copy of the GNU Lesser General Public License
 along with the GNU MPFR Library; see the file COPYING.LESSER.  If not, see
-http://www.gnu.org/licenses/ or write to the Free Software Foundation, Inc.,
+https://www.gnu.org/licenses/ or write to the Free Software Foundation, Inc.,
 51 Franklin St, Fifth Floor, Boston, MA 02110-1301, USA. */
-
-#include <stdio.h>
-#include <stdlib.h>
 
 #include "mpfr-test.h"
 
@@ -108,7 +105,7 @@ special (void)
     }
 
   mpfr_set_ui (x, 1, MPFR_RNDN);
-  mpfr_div_2exp (x, x, 1, MPFR_RNDN);
+  mpfr_div_2ui (x, x, 1, MPFR_RNDN);
   mpfr_acosh (y, x, MPFR_RNDN);
   if (!mpfr_nan_p (y))
     {
@@ -207,8 +204,8 @@ main (int argc, char *argv[])
   bug20070831 ();
   huge ();
 
-  test_generic (2, 100, 25);
-  test_generic_huge (2, 100, 5);
+  test_generic (MPFR_PREC_MIN, 100, 25);
+  test_generic_huge (MPFR_PREC_MIN, 100, 5);
 
   data_check ("data/acosh", mpfr_acosh, "mpfr_acosh");
   bad_cases (mpfr_acosh, mpfr_cosh, "mpfr_acosh", 0, -128, 29,

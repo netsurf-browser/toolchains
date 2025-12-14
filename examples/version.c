@@ -3,7 +3,7 @@
  */
 
 /*
-Copyright 2010-2017 Free Software Foundation, Inc.
+Copyright 2010-2023 Free Software Foundation, Inc.
 Contributed by the AriC and Caramba projects, INRIA.
 
 This file is part of the GNU MPFR Library.
@@ -20,7 +20,7 @@ License for more details.
 
 You should have received a copy of the GNU Lesser General Public License
 along with the GNU MPFR Library; see the file COPYING.LESSER.  If not, see
-http://www.gnu.org/licenses/ or write to the Free Software Foundation, Inc.,
+https://www.gnu.org/licenses/ or write to the Free Software Foundation, Inc.,
 51 Franklin St, Fifth Floor, Boston, MA 02110-1301, USA.
 */
 
@@ -81,6 +81,13 @@ int main (void)
 # endif
   printf (COMP "ICC %d.%d.%d" ICCV "\n", __INTEL_COMPILER / 100,
           __INTEL_COMPILER % 100, __INTEL_COMPILER_UPDATE);
+#elif defined(__TINYC__)
+  /* The format of __TINYC__ is not described, but libtcc.c defines it with
+   *   sprintf(buffer, "%d", a*10000 + b*100 + c);
+   *   tcc_define_symbol(s, "__TINYC__", buffer);
+   */
+  printf (COMP "TCC %d.%d.%d\n", (int) (__TINYC__ / 10000),
+          (int) ((__TINYC__ / 100) % 100), (int) (__TINYC__ % 100));
 #elif (defined(__GNUC__) || defined(__clang__)) && defined(__VERSION__)
 # ifdef __clang__
 #  define COMP2 COMP
@@ -181,9 +188,11 @@ int main (void)
           mpfr_get_version (), MPFR_VERSION_STRING, MPFR_VERSION_MAJOR,
           MPFR_VERSION_MINOR, MPFR_VERSION_PATCHLEVEL);
 
-  printf ("MPFR features: TLS = %s, decimal = %s",
-          mpfr_buildopt_tls_p () ? "yes" : "no",
-          mpfr_buildopt_decimal_p () ? "yes" : "no");
+  printf ("MPFR features: TLS = %s", mpfr_buildopt_tls_p () ? "yes" : "no");
+#if MPFR_VERSION_MAJOR >= 4
+  printf (", float128 = %s", mpfr_buildopt_float128_p () ? "yes" : "no");
+#endif
+  printf (", decimal = %s", mpfr_buildopt_decimal_p () ? "yes" : "no");
 #if MPFR_VERSION_MAJOR > 3 || MPFR_VERSION_MINOR >= 1
   printf (", GMP internals = %s\nMPFR tuning: %s",
           mpfr_buildopt_gmpinternals_p () ? "yes" : "no",
@@ -237,5 +246,6 @@ int main (void)
   printf ("sizeof(mpfr_ptr) = %d\n", (int) sizeof(mpfr_ptr));
   failure_test ();
 
+  mpfr_free_cache ();
   return 0;
 }

@@ -1,6 +1,6 @@
 /* mpfr_cos -- cosine of a floating-point number
 
-Copyright 2001-2017 Free Software Foundation, Inc.
+Copyright 2001-2023 Free Software Foundation, Inc.
 Contributed by the AriC and Caramba projects, INRIA.
 
 This file is part of the GNU MPFR Library.
@@ -17,7 +17,7 @@ License for more details.
 
 You should have received a copy of the GNU Lesser General Public License
 along with the GNU MPFR Library; see the file COPYING.LESSER.  If not, see
-http://www.gnu.org/licenses/ or write to the Free Software Foundation, Inc.,
+https://www.gnu.org/licenses/ or write to the Free Software Foundation, Inc.,
 51 Franklin St, Fifth Floor, Boston, MA 02110-1301, USA. */
 
 #define MPFR_NEED_LONGLONG_H
@@ -49,7 +49,7 @@ mpfr_cos2_aux (mpfr_ptr f, mpfr_srcptr r)
 
   /* compute minimal i such that i*(i+1) does not fit in an unsigned long,
      assuming that there are no padding bits. */
-  maxi = 1UL << (CHAR_BIT * sizeof(unsigned long) / 2);
+  maxi = 1UL << (sizeof(unsigned long) * CHAR_BIT / 2);
   if (maxi * (maxi / 2) == 0) /* test checked at compile time */
     {
       /* can occur only when there are padding bits. */
@@ -64,14 +64,16 @@ mpfr_cos2_aux (mpfr_ptr f, mpfr_srcptr r)
   mpz_init (t);
   ex = mpfr_get_z_2exp (x, r); /* r = x*2^ex */
 
-  /* remove trailing zeroes */
+  /* Remove trailing zeroes.
+     Since x comes from a regular MPFR number, due to the constraints on the
+     exponent and the precision, there can be no integer overflow below. */
   l = mpz_scan1 (x, 0);
   ex += l;
   mpz_fdiv_q_2exp (x, x, l);
 
   /* since |r| < 1, r = x*2^ex, and x is an integer, necessarily ex < 0 */
 
-  p = mpfr_get_prec (f); /* same than r */
+  p = mpfr_get_prec (f); /* same as r */
   /* bound for number of iterations */
   imax = p / (-mpfr_get_exp (r));
   imax += (imax == 0);
@@ -139,8 +141,8 @@ mpfr_cos (mpfr_ptr y, mpfr_srcptr x, mpfr_rnd_t rnd_mode)
   MPFR_GROUP_DECL (group);
 
   MPFR_LOG_FUNC (
-    ("x[%Pu]=%*.Rg rnd=%d", mpfr_get_prec (x), mpfr_log_prec, x, rnd_mode),
-    ("y[%Pu]=%*.Rg inexact=%d", mpfr_get_prec (y), mpfr_log_prec, y,
+    ("x[%Pu]=%.*Rg rnd=%d", mpfr_get_prec (x), mpfr_log_prec, x, rnd_mode),
+    ("y[%Pu]=%.*Rg inexact=%d", mpfr_get_prec (y), mpfr_log_prec, y,
      inexact));
 
   if (MPFR_UNLIKELY (MPFR_IS_SINGULAR (x)))
@@ -174,7 +176,7 @@ mpfr_cos (mpfr_ptr y, mpfr_srcptr x, mpfr_rnd_t rnd_mode)
     }
 
   K0 = __gmpfr_isqrt (precy / 3);
-  m = precy + 2 * MPFR_INT_CEIL_LOG2 (precy) + 2 * K0;
+  m = precy + 2 * MPFR_INT_CEIL_LOG2 (precy) + 2 * K0 + 4;
 
   if (expx >= 3)
     {
@@ -208,10 +210,10 @@ mpfr_cos (mpfr_ptr y, mpfr_srcptr x, mpfr_rnd_t rnd_mode)
           if (MPFR_IS_ZERO(xr))
             goto ziv_next;
           /* now |xr| <= 4, thus r <= 16 below */
-          mpfr_mul (r, xr, xr, MPFR_RNDU); /* err <= 1 ulp */
+          mpfr_sqr (r, xr, MPFR_RNDU); /* err <= 1 ulp */
         }
       else
-        mpfr_mul (r, x, x, MPFR_RNDU); /* err <= 1 ulp */
+        mpfr_sqr (r, x, MPFR_RNDU); /* err <= 1 ulp */
 
       /* now |x| < 4 (or xr if reduce = 1), thus |r| <= 16 */
 
@@ -245,7 +247,7 @@ mpfr_cos (mpfr_ptr y, mpfr_srcptr x, mpfr_rnd_t rnd_mode)
       l = 2 * l + 1;
       if (reduce)
         l += (K == 0) ? 4 : 1;
-      k = MPFR_INT_CEIL_LOG2 (l) + 2*K;
+      k = MPFR_INT_CEIL_LOG2 (l) + 2 * K;
       /* now the error is bounded by 2^(k-m) = 2^(EXP(s)-err) */
 
       exps = MPFR_GET_EXP (s);
@@ -261,8 +263,8 @@ mpfr_cos (mpfr_ptr y, mpfr_srcptr x, mpfr_rnd_t rnd_mode)
           if (m > k && (m - k >= precy + (rnd_mode == MPFR_RNDN)))
             {
               /* If round to nearest or away, result is s = 1 or -1,
-                 otherwise it is round(nexttoward (s, 0)). However in order to
-                 have the inexact flag correctly set below, we set |s| to
+                 otherwise it is round(nexttoward (s, 0)). However, in order
+                 to have the inexact flag correctly set below, we set |s| to
                  1 - 2^(-m) in all cases. */
               mpfr_nexttozero (s);
               break;

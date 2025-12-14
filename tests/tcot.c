@@ -1,6 +1,6 @@
 /* Test file for mpfr_cot.
 
-Copyright 2005-2017 Free Software Foundation, Inc.
+Copyright 2005-2023 Free Software Foundation, Inc.
 Contributed by the AriC and Caramba projects, INRIA.
 
 This file is part of the GNU MPFR Library.
@@ -17,11 +17,8 @@ License for more details.
 
 You should have received a copy of the GNU Lesser General Public License
 along with the GNU MPFR Library; see the file COPYING.LESSER.  If not, see
-http://www.gnu.org/licenses/ or write to the Free Software Foundation, Inc.,
+https://www.gnu.org/licenses/ or write to the Free Software Foundation, Inc.,
 51 Franklin St, Fifth Floor, Boston, MA 02110-1301, USA. */
-
-#include <stdio.h>
-#include <stdlib.h>
 
 #include "mpfr-test.h"
 
@@ -91,11 +88,8 @@ two2emin (mpfr_exp_t e)
   old_emin = mpfr_get_emin ();
   old_emax = mpfr_get_emax ();
 
-  if (mpfr_set_emin (-e) || mpfr_set_emax (e))
-    {
-      printf ("Can't change exponent range\n");
-      exit (1);
-    }
+  set_emin (-e);
+  set_emax (e);
 
   mpfr_inits2 (53, x, y, (mpfr_ptr) 0);
   for (i = -4; i <= 4; i++)
@@ -110,7 +104,7 @@ two2emin (mpfr_exp_t e)
         mpfr_div (y, y, x, (mpfr_rnd_t) rnd);  /* 1/x - SIGN(x).epsilon */
         mpfr_set_si_2exp (x, i, -e, MPFR_RNDN);
         mpfr_cot (x, x, (mpfr_rnd_t) rnd);
-        if (! mpfr_equal_p (x, y))
+        if (! mpfr_equal_p (x, y) && rnd != MPFR_RNDF)
           {
             printf ("Error in two2emin for i = %d and rnd = %s\n",
                     i, mpfr_print_rnd_mode ((mpfr_rnd_t) rnd));
@@ -123,8 +117,8 @@ two2emin (mpfr_exp_t e)
       }
   mpfr_clears (x, y, (mpfr_ptr) 0);
 
-  mpfr_set_emin (old_emin);
-  mpfr_set_emax (old_emax);
+  set_emin (old_emin);
+  set_emax (old_emax);
 }
 
 int
@@ -137,7 +131,7 @@ main (int argc, char *argv[])
   two2emin (MPFR_EMAX_DEFAULT);
   if (MPFR_EMAX_MAX != MPFR_EMAX_DEFAULT)
     two2emin (MPFR_EMAX_MAX);
-  test_generic (2, 200, 5);
+  test_generic (MPFR_PREC_MIN, 200, 5);
 
   tests_end_mpfr ();
   return 0;

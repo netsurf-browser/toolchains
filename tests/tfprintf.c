@@ -1,6 +1,6 @@
 /* tfprintf.c -- test file for mpfr_fprintf and mpfr_vfprintf
 
-Copyright 2008-2017 Free Software Foundation, Inc.
+Copyright 2008-2023 Free Software Foundation, Inc.
 Contributed by the AriC and Caramba projects, INRIA.
 
 This file is part of the GNU MPFR Library.
@@ -17,21 +17,29 @@ License for more details.
 
 You should have received a copy of the GNU Lesser General Public License
 along with the GNU MPFR Library; see the file COPYING.LESSER.  If not, see
-http://www.gnu.org/licenses/ or write to the Free Software Foundation, Inc.,
+https://www.gnu.org/licenses/ or write to the Free Software Foundation, Inc.,
 51 Franklin St, Fifth Floor, Boston, MA 02110-1301, USA. */
 
-#ifdef HAVE_STDARG
+/* FIXME: The output is not tested (thus coverage data are meaningless).
+   For instance, slightly changing the code of mpfr_fprintf does not
+   trigger any failure in the test suite.
+   Knowing the implementation, we may need only some minimal checks:
+   all the formatted output functions are based on mpfr_vasnprintf_aux
+   and full checks are done via tsprintf. */
+
+/* Needed due to the tests on HAVE_STDARG and MPFR_USE_MINI_GMP */
+#ifdef HAVE_CONFIG_H
+# include "config.h"
+#endif
+
+#if defined(HAVE_STDARG) && !defined(MPFR_USE_MINI_GMP)
 #include <stdarg.h>
 
-#include <stdio.h>
-#include <stdlib.h>
 #include <float.h>
 #include <stddef.h>
 
-#include "mpfr-intmax.h"
+#define MPFR_NEED_INTMAX_H
 #include "mpfr-test.h"
-
-#if MPFR_VERSION >= MPFR_VERSION_NUM(2,4,0)
 
 #define QUOTE(X) NAME(X)
 #define NAME(X) #X
@@ -39,7 +47,7 @@ http://www.gnu.org/licenses/ or write to the Free Software Foundation, Inc.,
 #define check_length(num_test, var, value, var_spec)                    \
   if ((var) != (value))                                                 \
     {                                                                   \
-      printf ("Error in test #%d: mpfr_vfprintf printed %"QUOTE(var_spec) \
+      printf ("Error in test #%d: mpfr_vfprintf printed %" QUOTE(var_spec) \
               " characters instead of %d\n", (num_test), (var), (value)); \
       exit (1);                                                         \
     }
@@ -48,7 +56,7 @@ http://www.gnu.org/licenses/ or write to the Free Software Foundation, Inc.,
   if (cmp != 0)                                                         \
     {                                                                   \
       mpfr_printf ("Error in test #%d, mpfr_vfprintf printed %"         \
-                   QUOTE(var_spec)" characters instead of %d\n",        \
+                   QUOTE(var_spec) " characters instead of %d\n",       \
                    (num_test), (var), (value));                         \
       exit (1);                                                         \
     }
@@ -57,7 +65,7 @@ http://www.gnu.org/licenses/ or write to the Free Software Foundation, Inc.,
 const int prec_max_printf = 5000;
 
 static void
-check (FILE *fout, const char *fmt, mpfr_t x)
+check (FILE *fout, const char *fmt, mpfr_ptr x)
 {
   if (mpfr_fprintf (fout, fmt, x) == -1)
     {
@@ -149,11 +157,11 @@ check_mixed (FILE *fout)
   unsigned long ulo = 1;
   float f = -1.25;
   double d = -1.25;
-#if !defined(NPRINTF_T) || !defined(NPRINTF_L)
+#if defined(PRINTF_T) || defined(PRINTF_L)
   long double ld = -1.25;
 #endif
 
-#ifndef NPRINTF_T
+#ifdef PRINTF_T
   ptrdiff_t p = 1, saved_p;
 #endif
   size_t sz = 1;
@@ -179,7 +187,7 @@ check_mixed (FILE *fout)
   mpfr_init2 (mpfr, prec);
   mpfr_set_f (mpfr, mpf, MPFR_RNDN);
 
-  limb[0] = limb[1] = limb[2] = ~ (mp_limb_t) 0;
+  limb[0] = limb[1] = limb[2] = MPFR_LIMB_MAX;
 
   check_vfprintf (fout, "a. %Ra, b. %u, c. %lx%n", mpfr, ui, ulo, &j);
   check_length (1, j, 22, d);
@@ -187,57 +195,66 @@ check_mixed (FILE *fout)
                   lo, &ulo);
   check_length (2, ulo, 36, lu);
   check_vfprintf (fout, "a. %hi, b. %*f, c. %Re%hn", ush, 3, f, mpfr, &ush);
-  check_length (3, ush, 29, hu);
+  check_length (3, ush, 46, hu);
   check_vfprintf (fout, "a. %hi, b. %f, c. %#.2Rf%n", sh, d, mpfr, &i);
   check_length (4, i, 29, d);
   check_vfprintf (fout, "a. %R*A, b. %Fe, c. %i%zn", rnd, mpfr, mpf, sz,
                   &sz);
-  check_length (5, (unsigned long) sz, 34, lu); /* no format specifier "%zu" in C89 */
+  check_length (5, (unsigned long) sz, 34, lu); /* no format specifier "%zu" in C90 */
   check_vfprintf (fout, "a. %Pu, b. %c, c. %Zi%Zn", prec, ch, mpz, &mpz);
   check_length_with_cmp (6, mpz, 17, mpz_cmp_ui (mpz, 17), Zi);
   check_vfprintf (fout, "%% a. %#.0RNg, b. %Qx%Rn, c. %p", mpfr, mpq, &mpfr,
                   (void *) &i);
   check_length_with_cmp (7, mpfr, 15, mpfr_cmp_ui (mpfr, 15), Rg);
 
-#ifndef NPRINTF_T
+#ifdef PRINTF_T
   saved_p = p;
   check_vfprintf (fout, "%% a. %RNg, b. %Qx, c. %td%tn", mpfr, mpq, p, &p);
   if (p != 20)
-    mpfr_fprintf (stderr, "Error in test 8, got '%% a. %RNg, b. %Qx, c. %td'\n", mpfr, mpq, saved_p);
-  check_length (8, (long) p, 20, ld); /* no format specifier "%td" in C89 */
+    {
+      mpfr_fprintf (stderr, "Error in test 8, got '%% a. %RNg, b. %Qx, c. %td'\n", mpfr, mpq, saved_p);
+#if defined(__MINGW32__) || defined(__MINGW64__)
+      fprintf (stderr,
+               "Your MinGW may be too old, in which case compiling GMP\n"
+               "with -D__USE_MINGW_ANSI_STDIO might be required.\n");
+#endif
+    }
+  check_length (8, (long) p, 20, ld); /* no format specifier "%td" in C90 */
 #endif
 
-#ifndef NPRINTF_L
+#ifdef PRINTF_L
   check_vfprintf (fout, "a. %RA, b. %Lf, c. %QX%zn", mpfr, ld, mpq, &sz);
-  check_length (9, (unsigned long) sz, 30, lu); /* no format specifier "%zu" in C89 */
+  check_length (9, (unsigned long) sz, 30, lu); /* no format specifier "%zu" in C90 */
 #endif
 
 #ifndef NPRINTF_HH
   check_vfprintf (fout, "a. %hhi, b. %RA, c. %hhu%hhn", sch, mpfr, uch, &uch);
-  check_length (10, (unsigned int) uch, 22, u); /* no format specifier "%hhu" in C89 */
+  check_length (10, (unsigned int) uch, 22, u); /* no format specifier "%hhu" in C90 */
 #endif
 
 #if (__GNU_MP_VERSION * 10 + __GNU_MP_VERSION_MINOR) >= 42
   /* The 'M' specifier was added in gmp 4.2.0 */
   check_vfprintf (fout, "a. %Mx b. %Re%Mn", limb[0], mpfr, &limb[0]);
-  if (limb[0] != 14 + GMP_NUMB_BITS / 4 || limb[1] != ~ (mp_limb_t) 0
-      || limb[2] != ~ (mp_limb_t) 0)
+  if (limb[0] != 29 + GMP_NUMB_BITS / 4 ||
+      limb[1] != MPFR_LIMB_MAX ||
+      limb[2] != MPFR_LIMB_MAX)
     {
       printf ("Error in test #11: mpfr_vfprintf did not print %d characters"
-              " as expected\n", 14 + (int) GMP_NUMB_BITS / 4);
+              " as expected\n", 29 + (int) GMP_NUMB_BITS / 4);
       exit (1);
     }
 
-  limb[0] = ~ (mp_limb_t) 0;
+  limb[0] = MPFR_LIMB_MAX;
   /* we tell vfprintf that limb array is 2 cells wide
      and check it doesn't go through */
   check_vfprintf (fout, "a. %Re .b %Nx%Nn", mpfr, limb, limb_size, limb,
                   limb_size - 1);
-  if (limb[0] != 14 + 3 * GMP_NUMB_BITS / 4 || limb[1] != (mp_limb_t) 0
-      || limb[2] != ~ (mp_limb_t) 0)
+  if (limb[0] != 29 + 3 * GMP_NUMB_BITS / 4 ||
+      limb[1] != MPFR_LIMB_ZERO ||
+      limb[2] != MPFR_LIMB_MAX)
     {
       printf ("Error in test #12: mpfr_vfprintf did not print %d characters"
-              " as expected\n", 14 + (int) GMP_NUMB_BITS / 4);
+              " as expected\n", 29 + (int) GMP_NUMB_BITS / 4);
       exit (1);
     }
 #endif
@@ -248,7 +265,7 @@ check_mixed (FILE *fout)
     unsigned long long ullo = 1;
 
     check_vfprintf (fout, "a. %Re, b. %llx%Qn", mpfr, ullo, &mpq);
-    check_length_with_cmp (21, mpq, 16, mpq_cmp_ui (mpq, 16, 1), Qu);
+    check_length_with_cmp (21, mpq, 31, mpq_cmp_ui (mpq, 31, 1), Qu);
     check_vfprintf (fout, "a. %lli, b. %Rf%Fn", llo, mpfr, &mpf);
     check_length_with_cmp (22, mpf, 19, mpf_cmp_ui (mpf, 19), Fg);
   }
@@ -317,7 +334,8 @@ check_random (FILE *fout, int nb_tests)
       spec = (int) (randlimb () % 5);
       jmax = (spec == 3 || spec == 4) ? 6 : 5; /* ' flag only with %f or %g */
       /* advantage small precision */
-      prec = (int) (randlimb () % ((randlimb () % 2) ? 10 : prec_max_printf));
+      prec = RAND_BOOL () ? 10 : prec_max_printf;
+      prec = (int) (randlimb () % prec);
       if (spec == 3
           && (mpfr_get_exp (x) > prec_max_printf
               || mpfr_get_exp (x) < -prec_max_printf))
@@ -359,8 +377,8 @@ check_random (FILE *fout, int nb_tests)
       mpfr_fprintf (fout, "\n");
     }
 
-  mpfr_set_emin (old_emin);
-  mpfr_set_emax (old_emax);
+  set_emin (old_emin);
+  set_emax (old_emax);
 
   mpfr_clear (x);
 }
@@ -421,17 +439,6 @@ main (int argc, char *argv[])
   tests_end_mpfr ();
   return 0;
 }
-
-#else  /* MPFR_VERSION */
-
-int
-main (void)
-{
-  printf ("Warning! Test disabled for this MPFR version.\n");
-  return 0;
-}
-
-#endif  /* MPFR_VERSION */
 
 #else  /* HAVE_STDARG */
 
