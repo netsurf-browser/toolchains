@@ -1,7 +1,5 @@
 /* BFD back-end for linux flavored sparc a.out binaries.
-   Copyright 1992, 1993, 1994, 1995, 1996, 1997, 1999, 2000, 2001, 2002,
-   2003, 2004, 2005, 2006, 2007, 2008, 2009, 2011, 2012
-   Free Software Foundation, Inc.
+   Copyright (C) 1992-2018 Free Software Foundation, Inc.
 
    This file is part of BFD, the Binary File Descriptor library.
 
@@ -33,13 +31,13 @@
 #include "aout/aout64.h"
 #include "aout/stab_gnu.h"
 #include "aout/ar.h"
-#include "libaout.h"           /* BFD a.out internal data structures */
+#include "libaout.h"	       /* BFD a.out internal data structures */
 
 #define DEFAULT_ARCH bfd_arch_sparc
 /* Do not "beautify" the CONCAT* macro args.  Traditional C will not
    remove whitespace added here, and thus will fail to concatenate
    the tokens.  */
-#define MY(OP) CONCAT2 (sparclinux_,OP)
+#define MY(OP) CONCAT2 (sparc_aout_linux_,OP)
 #define TARGETNAME "a.out-sparc-linux"
 
 extern const bfd_target MY(vec);
@@ -68,11 +66,11 @@ sparclinux_write_object_contents (bfd *abfd)
   struct external_exec exec_bytes;
   struct internal_exec *execp = exec_hdr (abfd);
 
-  N_SET_MACHTYPE (*execp, M_SPARC);
+  N_SET_MACHTYPE (execp, M_SPARC);
 
   obj_reloc_entry_size (abfd) = RELOC_STD_SIZE;
 
-  WRITE_HEADERS(abfd, execp);
+  WRITE_HEADERS (abfd, execp);
 
   return TRUE;
 }
@@ -316,7 +314,7 @@ linux_add_one_symbol (struct bfd_link_info *info,
 
   insert = FALSE;
 
-  if (! info->relocatable
+  if (! bfd_link_relocatable (info)
       && linux_hash_table (info)->dynobj == NULL
       && strcmp (name, SHARABLE_CONFLICTS) == 0
       && (flags & BSF_CONSTRUCTOR) != 0
@@ -411,14 +409,15 @@ linux_tally_symbols (struct linux_link_hash_entry *h, void * data)
 	alloc = (char *) bfd_malloc ((bfd_size_type) strlen (name) + 1);
 
       if (p == NULL || alloc == NULL)
-	(*_bfd_error_handler) (_("Output file requires shared library `%s'\n"),
-			       name);
+	_bfd_error_handler (_("Output file requires shared library `%s'\n"),
+			    name);
       else
 	{
 	  strcpy (alloc, name);
 	  p = strrchr (alloc, '_');
 	  *p++ = '\0';
-	  (*_bfd_error_handler)
+	  _bfd_error_handler
+	    /* xgettext:c-format */
 	    (_("Output file requires shared library `%s.so.%s'\n"),
 	     alloc, p);
 	  free (alloc);
@@ -605,7 +604,7 @@ linux_finish_dynamic_link (bfd *output_bfd, struct bfd_link_info *info)
       if (f->h->root.root.type != bfd_link_hash_defined
 	  && f->h->root.root.type != bfd_link_hash_defweak)
 	{
-	  (*_bfd_error_handler)
+	  _bfd_error_handler
 	    (_("Symbol %s not defined for fixups\n"),
 	     f->h->root.root.root.string);
 	  continue;
@@ -655,7 +654,7 @@ linux_finish_dynamic_link (bfd *output_bfd, struct bfd_link_info *info)
 	  if (f->h->root.root.type != bfd_link_hash_defined
 	      && f->h->root.root.type != bfd_link_hash_defweak)
 	    {
-	      (*_bfd_error_handler)
+	      _bfd_error_handler
 		(_("Symbol %s not defined for fixups\n"),
 		 f->h->root.root.root.string);
 	      continue;
@@ -680,7 +679,7 @@ linux_finish_dynamic_link (bfd *output_bfd, struct bfd_link_info *info)
 
   if (linux_hash_table (info)->fixup_count != fixups_written)
     {
-      (*_bfd_error_handler) (_("Warning: fixup count mismatch\n"));
+      _bfd_error_handler (_("Warning: fixup count mismatch\n"));
       while (linux_hash_table (info)->fixup_count > fixups_written)
 	{
 	  bfd_put_32 (output_bfd, (bfd_vma) 0, fixup_table);

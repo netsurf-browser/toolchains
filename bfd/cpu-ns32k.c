@@ -1,6 +1,5 @@
 /* BFD support for the ns32k architecture.
-   Copyright 1990, 1991, 1994, 1995, 1998, 1999, 2000, 2001, 2002, 2003,
-   2004, 2005, 2007, 2012 Free Software Foundation, Inc.
+   Copyright (C) 1990-2018 Free Software Foundation, Inc.
    Almost totally rewritten by Ian Dall from initial work
    by Andrew Cagney.
 
@@ -107,8 +106,10 @@ _bfd_ns32k_get_immediate (bfd_byte *buffer, int size)
     case 4:
       value = (value << 8) | (*buffer++ & 0xff);
       value = (value << 8) | (*buffer++ & 0xff);
+      /* Fall through.  */
     case 2:
       value = (value << 8) | (*buffer++ & 0xff);
+      /* Fall through.  */
     case 1:
       value = (value << 8) | (*buffer++ & 0xff);
       break;
@@ -127,8 +128,10 @@ _bfd_ns32k_put_immediate (bfd_vma value, bfd_byte *buffer, int size)
     case 4:
       *buffer-- = (value & 0xff); value >>= 8;
       *buffer-- = (value & 0xff); value >>= 8;
+      /* Fall through.  */
     case 2:
       *buffer-- = (value & 0xff); value >>= 8;
+      /* Fall through.  */
     case 1:
       *buffer-- = (value & 0xff); value >>= 8;
     }
@@ -480,23 +483,23 @@ do_ns32k_reloc (bfd *      abfd,
      R result
 
      Do this:
-     i i i i i o o o o o        from bfd_get<size>
-     and           S S S S S    to get the size offset we want
-     +   r r r r r r r r r r  to get the final value to place
-     and           D D D D D  to chop to right size
+     i i i i i o o o o o	from bfd_get<size>
+     and	   S S S S S	to get the size offset we want
+     +	 r r r r r r r r r r  to get the final value to place
+     and	   D D D D D  to chop to right size
      -----------------------
      A A A A A
      And this:
-     ...   i i i i i o o o o o  from bfd_get<size>
-     and   N N N N N            get instruction
+     ...   i i i i i o o o o o	from bfd_get<size>
+     and   N N N N N		get instruction
      -----------------------
      ...   B B B B B
 
      And then:
      B B B B B
-     or              A A A A A
+     or		     A A A A A
      -----------------------
-     R R R R R R R R R R        put into bfd_put<size>.  */
+     R R R R R R R R R R	put into bfd_put<size>.  */
 
 #define DOIT(x) \
   x = ( (x & ~howto->dst_mask) | (((x & howto->src_mask) +  relocation) & howto->dst_mask))
@@ -586,8 +589,9 @@ _bfd_do_ns32k_reloc_contents (reloc_howto_type *howto,
   switch (size)
     {
     default:
-    case 0:
       abort ();
+    case 0:
+      return bfd_reloc_ok;
     case 1:
     case 2:
     case 4:

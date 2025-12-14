@@ -1,6 +1,5 @@
 /* Disassemble i80960 instructions.
-   Copyright 1990, 1991, 1993, 1994, 1995, 1996, 1998, 1999, 2000, 2001, 2003,
-   2005, 2007  Free Software Foundation, Inc.
+   Copyright (C) 1990-2018 Free Software Foundation, Inc.
 
    This file is part of the GNU opcodes library.
 
@@ -20,7 +19,7 @@
    02110-1301, USA.  */
 
 #include "sysdep.h"
-#include "dis-asm.h"
+#include "disassemble.h"
 
 static const char *const reg_names[] = {
 /*  0 */	"pfp", "sp",  "rip", "r3",  "r4",  "r5",  "r6",  "r7",

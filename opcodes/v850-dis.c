@@ -1,5 +1,5 @@
 /* Disassemble V850 instructions.
-   Copyright 1996-2013 Free Software Foundation, Inc.
+   Copyright (C) 1996-2018 Free Software Foundation, Inc.
 
    This file is part of the GNU opcodes library.
 
@@ -23,7 +23,7 @@
 #include <stdio.h>
 #include <string.h>
 #include "opcode/v850.h"
-#include "dis-asm.h"
+#include "disassemble.h"
 #include "opintl.h"
 
 static const char *const v850_reg_names[] =
@@ -152,7 +152,7 @@ get_operand_value (const struct v850_operand *operand,
 	  if (operand->flags & V850E_IMMEDIATE16HI)
 	    value <<= 16;
 	  else if (value & 0x8000)
-	    value |= (-1L << 16);
+	    value |= (-1UL << 16);
 
 	  return value;
 	}

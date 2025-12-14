@@ -1,6 +1,6 @@
 // plugin.h -- plugin manager for gold      -*- C++ -*-
 
-// Copyright 2008, 2009, 2010, 2011, 2013 Free Software Foundation, Inc.
+// Copyright (C) 2008-2018 Free Software Foundation, Inc.
 // Written by Cary Coutant <ccoutant@google.com>.
 
 // This file is part of gold.
@@ -60,6 +60,7 @@ class Plugin
       claim_file_handler_(NULL),
       all_symbols_read_handler_(NULL),
       cleanup_handler_(NULL),
+      new_input_handler_(NULL),
       cleanup_done_(false)
   { }
 
@@ -77,6 +78,10 @@ class Plugin
   // Call the all-symbols-read handler.
   void
   all_symbols_read();
+
+  // Call the new_input handler.
+  void
+  new_input(struct ld_plugin_input_file* plugin_input_file);
 
   // Call the cleanup handler.
   void
@@ -96,6 +101,11 @@ class Plugin
   void
   set_cleanup_handler(ld_plugin_cleanup_handler handler)
   { this->cleanup_handler_ = handler; }
+
+  // Register a new_input handler.
+  void
+  set_new_input_handler(ld_plugin_new_input_handler handler)
+  { this->new_input_handler_ = handler; }
 
   // Add an argument
   void
@@ -118,6 +128,7 @@ class Plugin
   ld_plugin_claim_file_handler claim_file_handler_;
   ld_plugin_all_symbols_read_handler all_symbols_read_handler_;
   ld_plugin_cleanup_handler cleanup_handler_;
+  ld_plugin_new_input_handler new_input_handler_;
   // TRUE if the cleanup handlers have been called.
   bool cleanup_done_;
 };
@@ -134,7 +145,8 @@ class Plugin_manager
       in_claim_file_handler_(false),
       options_(options), workqueue_(NULL), task_(NULL), input_objects_(NULL),
       symtab_(NULL), layout_(NULL), dirpath_(NULL), mapfile_(NULL),
-      this_blocker_(NULL), extra_search_path_()
+      this_blocker_(NULL), extra_search_path_(), lock_(NULL),
+      initialize_lock_(&lock_)
   { this->current_ = plugins_.end(); }
 
   ~Plugin_manager();
@@ -217,6 +229,14 @@ class Plugin_manager
     (*this->current_)->set_all_symbols_read_handler(handler);
   }
 
+  // Register a new_input handler.
+  void
+  set_new_input_handler(ld_plugin_new_input_handler handler)
+  {
+    gold_assert(this->current_ != plugins_.end());
+    (*this->current_)->set_new_input_handler(handler);
+  }
+
   // Register a claim-file handler.
   void
   set_cleanup_handler(ld_plugin_cleanup_handler handler)
@@ -280,6 +300,10 @@ class Plugin_manager
   Input_objects*
   input_objects() const
   { return this->input_objects_; }
+
+  Symbol_table*
+  symtab()
+  { return this->symtab_; }
 
   Layout*
   layout()
@@ -373,9 +397,11 @@ class Plugin_manager
   Mapfile* mapfile_;
   Task_token* this_blocker_;
 
-  // An extra directory to seach for the libraries passed by
+  // An extra directory to search for the libraries passed by
   // add_input_library.
   std::string extra_search_path_;
+  Lock* lock_;
+  Initialize_lock initialize_lock_;
 };
 
 
@@ -393,7 +419,8 @@ class Pluginobj : public Object
 
   // Fill in the symbol resolution status for the given plugin symbols.
   ld_plugin_status
-  get_symbol_resolution_info(int nsyms,
+  get_symbol_resolution_info(Symbol_table* symtab,
+			     int nsyms,
 			     ld_plugin_symbol* syms,
 			     int version) const;
 
@@ -424,6 +451,16 @@ class Pluginobj : public Object
   off_t
   filesize()
   { return this->filesize_; }
+
+  // Return the word size of the object file.
+  int
+  elfsize() const
+  { gold_unreachable(); }
+
+  // Return TRUE if this is a big-endian object file.
+  bool
+  is_big_endian() const
+  { gold_unreachable(); }
 
  protected:
   // Return TRUE if this is an object claimed by a plugin.
@@ -490,7 +527,7 @@ class Sized_pluginobj : public Pluginobj
 
   // Get the name of a section.
   std::string
-  do_section_name(unsigned int shndx);
+  do_section_name(unsigned int shndx) const;
 
   // Return a view of the contents of a section.
   const unsigned char*

@@ -1,5 +1,6 @@
 # Check illegal AVX512F instructions
 	.text
+	.allow_index_reg
 _start:
 	mov {sae}, %rax{%k1}
 	mov {sae}, %rax
@@ -13,6 +14,11 @@ _start:
 
 	vcvtps2pd (%rax){%k1}, %zmm1
 	vcvtps2pd (%rax){z}, %zmm1
+
+	vgatherqpd (%rdi),%zmm6{%k1}
+	vgatherqpd (%zmm2),%zmm6{%k1}
+	vpscatterdd %zmm6,(%rdi){%k1}
+	vpscatterdd %zmm6,(%zmm2){%k1}
 
 	.intel_syntax noprefix
 	mov rax{k1}, {sae}
@@ -28,6 +34,11 @@ _start:
 	vcvtps2pd zmm1, [rax]{k1}
 	vcvtps2pd zmm1, [rax]{z}
 
+	vgatherqpd zmm6{k1}, ZMMWORD PTR [rdi]
+	vgatherqpd zmm6{k1}, ZMMWORD PTR [zmm2+riz]
+	vpscatterdd ZMMWORD PTR [rdi]{k1}, zmm6
+	vpscatterdd ZMMWORD PTR [zmm2+riz]{k1}, zmm6
+
 	vaddps zmm2, zmm1, QWORD PTR [rax]{1to8}
 	vaddps zmm2, zmm1, QWORD PTR [rax]{1to16}
 	vaddpd zmm2, zmm1, DWORD PTR [rax]{1to8}
@@ -35,3 +46,11 @@ _start:
 	vaddps zmm2, zmm1, ZMMWORD PTR [rax]{1to16}
 	vaddps zmm2, zmm1, DWORD PTR [rax]
 	vaddpd zmm2, zmm1, QWORD PTR [rax]
+
+	.att_syntax prefix
+	vaddps %zmm0, %zmm1, %zmm2{%rcx}
+	vaddps %zmm0, %zmm1, %zmm2{z}
+
+	.intel_syntax noprefix
+	vaddps zmm2{rcx}, zmm1, zmm0
+	vaddps zmm2{z}, zmm1, zmm0

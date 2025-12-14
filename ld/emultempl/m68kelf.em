@@ -1,6 +1,5 @@
 # This shell script emits a C file. -*- C -*-
-#   Copyright 2000, 2001, 2003, 2005, 2007, 2008, 2009
-#   Free Software Foundation, Inc.
+#   Copyright (C) 2000-2018 Free Software Foundation, Inc.
 #   Written by Michael Sokolov <msokolov@ivan.Harhan.ORG>, based on armelf.em
 #
 # This file is part of the GNU Binutils.
@@ -68,7 +67,7 @@ m68k_elf_after_open (void)
 
 #ifdef SUPPORT_EMBEDDED_RELOCS
   if (command_line.embedded_relocs
-      && (! link_info.relocatable))
+      && (!bfd_link_relocatable (&link_info)))
     {
       bfd *abfd;
 
@@ -76,7 +75,7 @@ m68k_elf_after_open (void)
 	 input file with a nonzero .data section.  The BFD backend will fill in
 	 these sections with magic numbers which can be used to relocate the
 	 data section at run time.  */
-      for (abfd = link_info.input_bfds; abfd != NULL; abfd = abfd->link_next)
+      for (abfd = link_info.input_bfds; abfd != NULL; abfd = abfd->link.next)
 	{
 	  asection *datasec;
 
@@ -86,7 +85,8 @@ m68k_elf_after_open (void)
 	     COFF and ELF.  */
 	  if (bfd_get_flavour (abfd) != bfd_target_coff_flavour
 	      && bfd_get_flavour (abfd) != bfd_target_elf_flavour)
-	    einfo ("%F%B: all input objects must be COFF or ELF for --embedded-relocs\n");
+	    einfo (_("%F%B: all input objects must be COFF or ELF "
+		     "for --embedded-relocs\n"));
 
 	  datasec = bfd_get_section_by_name (abfd, ".data");
 
@@ -110,7 +110,7 @@ m68k_elf_after_open (void)
 		  || ! bfd_set_section_alignment (abfd, relsec, 2)
 		  || ! bfd_set_section_size (abfd, relsec,
 					     datasec->reloc_count * 12))
-		einfo ("%F%B: can not create .emreloc section: %E\n");
+		einfo (_("%F%B: can not create .emreloc section: %E\n"));
 	    }
 
 	  /* Double check that all other data sections are empty, as is
@@ -131,7 +131,7 @@ check_sections (bfd *abfd, asection *sec, void *datasec)
   if ((bfd_get_section_flags (abfd, sec) & SEC_DATA)
       && sec != datasec
       && sec->reloc_count != 0)
-    einfo ("%B%X: section %s has relocs; can not use --embedded-relocs\n",
+    einfo (_("%B%X: section %s has relocs; can not use --embedded-relocs\n"),
 	   abfd, bfd_get_section_name (abfd, sec));
 }
 
@@ -148,13 +148,13 @@ m68k_elf_after_allocation (void)
 
 #ifdef SUPPORT_EMBEDDED_RELOCS
   if (command_line.embedded_relocs
-      && (! link_info.relocatable))
+      && (!bfd_link_relocatable (&link_info)))
     {
       bfd *abfd;
 
       /* If we are generating embedded relocs, call a special BFD backend
 	 routine to do the work.  */
-      for (abfd = link_info.input_bfds; abfd != NULL; abfd = abfd->link_next)
+      for (abfd = link_info.input_bfds; abfd != NULL; abfd = abfd->link.next)
 	{
 	  asection *datasec, *relsec;
 	  char *errmsg;
@@ -174,10 +174,12 @@ m68k_elf_after_allocation (void)
 							  &errmsg))
 		{
 		  if (errmsg == NULL)
-		    einfo ("%B%X: can not create runtime reloc information: %E\n",
+		    einfo (_("%B%X: can not create "
+			     "runtime reloc information: %E\n"),
 			   abfd);
 		  else
-		    einfo ("%X%B: can not create runtime reloc information: %s\n",
+		    einfo (_("%X%B: can not create "
+			     "runtime reloc information: %s\n"),
 			   abfd, errmsg);
 		}
 	    }
@@ -188,10 +190,12 @@ m68k_elf_after_allocation (void)
 							   &errmsg))
 		{
 		  if (errmsg == NULL)
-		    einfo ("%B%X: can not create runtime reloc information: %E\n",
+		    einfo (_("%B%X: can not create "
+			     "runtime reloc information: %E\n"),
 			   abfd);
 		  else
-		    einfo ("%X%B: can not create runtime reloc information: %s\n",
+		    einfo (_("%X%B: can not create "
+			     "runtime reloc information: %s\n"),
 			   abfd, errmsg);
 		}
 	    }
@@ -231,15 +235,15 @@ PARSE_AND_LIST_OPTIONS='
 PARSE_AND_LIST_ARGS_CASES='
     case OPTION_GOT:
       if (strcmp (optarg, "target") == 0)
-        got_handling = GOT_HANDLING_TARGET_DEFAULT;
+	got_handling = GOT_HANDLING_TARGET_DEFAULT;
       else if (strcmp (optarg, "single") == 0)
-        got_handling = 0;
+	got_handling = 0;
       else if (strcmp (optarg, "negative") == 0)
-        got_handling = 1;
+	got_handling = 1;
       else if (strcmp (optarg, "multigot") == 0)
-        got_handling = 2;
+	got_handling = 2;
       else
-        einfo (_("Unrecognized --got argument '\''%s'\''.\n"), optarg);
+	einfo (_("Unrecognized --got argument '\''%s'\''.\n"), optarg);
       break;
 '
 

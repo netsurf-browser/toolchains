@@ -1,5 +1,5 @@
 /* Definitions for Altera Nios II assembler.
-   Copyright (C) 2012, 2013 Free Software Foundation, Inc.
+   Copyright (C) 2012-2018 Free Software Foundation, Inc.
    Contributed by Nigel Gray (ngray@altera.com).
    Contributed by Mentor Graphics, Inc.
 
@@ -45,7 +45,7 @@ extern const char *nios2_target_format (void);
    separator characters are commas, brackets and space.
    The instruction name is always separated from other tokens by a space
    The maximum number of tokens in an instruction is 5 (the instruction name,
-   3 arguments, and a 4th string representing the expected instructin opcode
+   3 arguments, and a 4th string representing the expected instruct in opcode
    after assembly. The latter is only used when the assemble is running in
    self test mode, otherwise its presence will generate an error.  */
 #define NIOS2_MAX_INSN_TOKENS	6
@@ -92,7 +92,7 @@ extern long nios2_relax_frag (segT segment, fragS * fragP, long stretch);
 
 /* Processor-specific section directives.  */
 #define md_elf_section_letter		nios2_elf_section_letter
-extern int nios2_elf_section_letter (int, char **);
+extern int nios2_elf_section_letter (int, const char **);
 #define md_elf_section_flags		nios2_elf_section_flags
 extern flagword nios2_elf_section_flags (flagword, int, int);
 #endif
@@ -101,17 +101,21 @@ extern flagword nios2_elf_section_flags (flagword, int, int);
 
 #define DIFF_EXPR_OK
 
+/* Don't allow the generic code to convert fixups involving the
+   subtraction of a label in the current section to pc-relative if we
+   don't have the necessary pc-relative relocation.  */
+#define TC_FORCE_RELOCATION_SUB_LOCAL(FIX, SEG)		\
+  (!((FIX)->fx_r_type == BFD_RELOC_16			\
+     || (FIX)->fx_r_type == BFD_RELOC_NIOS2_LO16	\
+     || (FIX)->fx_r_type == BFD_RELOC_NIOS2_HIADJ16))
+
 /* Nios2 ABI doesn't have 32-bit PCREL relocation, and, as relocations for
    CFI information will be in section other than .text, we can't use PC-biased
    relocs.  */
 #define CFI_DIFF_EXPR_OK 0
 
 #define TC_PARSE_CONS_EXPRESSION(EXP, NBYTES) nios2_cons (EXP, NBYTES)
-extern void nios2_cons (expressionS *exp, int size);
-
-#define TC_CONS_FIX_NEW nios2_cons_fix_new
-extern void nios2_cons_fix_new (struct frag *frag, int where,
-				unsigned int nbytes, struct expressionS *exp);
+extern bfd_reloc_code_real_type nios2_cons (expressionS *exp, int size);
 
 /* We want .cfi_* pseudo-ops for generating unwind info.  */
 #define TARGET_USE_CFIPOP 1
@@ -121,5 +125,8 @@ extern void nios2_cons_fix_new (struct frag *frag, int where,
 extern int nios2_regname_to_dw2regnum (char *regname);
 #define tc_cfi_frame_initial_instructions  nios2_frame_initial_instructions
 extern void nios2_frame_initial_instructions (void);
+
+#define elf_tc_final_processing nios2_elf_final_processing
+extern void nios2_elf_final_processing (void);
 
 #endif /* TC_NIOS2 */

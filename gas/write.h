@@ -1,7 +1,5 @@
 /* write.h
-   Copyright 1987, 1992, 1993, 1994, 1995, 1996, 1997, 1999, 2000, 2001,
-   2002, 2003, 2005, 2006, 2007
-   Free Software Foundation, Inc.
+   Copyright (C) 1987-2018 Free Software Foundation, Inc.
 
    This file is part of GAS, the GNU Assembler.
 
@@ -27,6 +25,19 @@
    assembler output.  S_IS_LOCAL detects it because of the \001.  */
 #ifndef FAKE_LABEL_NAME
 #define FAKE_LABEL_NAME "L0\001"
+#endif
+
+/* This is a special character that is used to indicate a fake label.
+   It must be present in FAKE_LABEL_NAME, although it does not have to
+   be the first character.  It must not be a character that would be
+   found in a valid symbol name.
+
+   Also be aware that the function _bfd_elf_is_local_label_name in
+   bfd/elf.c has an implicit assumption that FAKE_LABEL_CHAR is '\001'.
+   If this is not the case then FAKE_LABEL_NAME must start with ".L" in
+   order for the function to continue working.  */
+#ifndef FAKE_LABEL_CHAR
+#define FAKE_LABEL_CHAR '\001'
 #endif
 
 #include "bit_fix.h"
@@ -114,7 +125,7 @@ struct fix
 
   /* The location of the instruction which created the reloc, used
      in error messages.  */
-  char *fx_file;
+  const char *fx_file;
   unsigned fx_line;
 
 #ifdef USING_CGEN
@@ -158,7 +169,7 @@ struct reloc_list
       arelent r;
     } b;
   } u;
-  char *file;
+  const char *file;
   unsigned int line;
 };
 
@@ -168,10 +179,9 @@ extern addressT dot_value;
 extern fragS *dot_frag;
 extern struct reloc_list* reloc_list;
 
-extern void append (char **charPP, char *fromP, unsigned long length);
-extern void record_alignment (segT seg, int align);
-extern int get_recorded_alignment (segT seg);
-extern void subsegs_finish (void);
+extern void append (char **, char *, unsigned long);
+extern void record_alignment (segT, unsigned);
+extern int get_recorded_alignment (segT);
 extern void write_object_file (void);
 extern long relax_frag (segT, fragS *, long);
 extern int relax_segment (struct frag *, segT, int);

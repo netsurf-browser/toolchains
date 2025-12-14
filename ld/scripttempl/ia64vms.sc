@@ -1,10 +1,22 @@
 # Linker script for Itanium VMS systems.
 # Tristan Gingold <gingold@adacore.com>.
+#
+# Copyright (C) 2014-2018 Free Software Foundation, Inc.
+#
+# Copying and distribution of this file, with or without modification,
+# are permitted in any medium without royalty provided the copyright
+# notice and this notice are preserved.
 
 PAGESIZE=0x10000
 BLOCKSIZE=0x200
 
 cat <<EOF
+/* Copyright (C) 2014-2018 Free Software Foundation, Inc.
+
+   Copying and distribution of this script, with or without modification,
+   are permitted in any medium without royalty provided the copyright
+   notice and this notice are preserved.  */
+
 OUTPUT_FORMAT("${OUTPUT_FORMAT}")
 ${LIB_SEARCH_DIRS}
 ENTRY(__entry)
@@ -62,7 +74,7 @@ SECTIONS
     *(.IA_64.pltoff)
   }
   \$TFR\$ ALIGN (16) : {
-    /* Tranfer vector.  */
+    /* Transfer vector.  */
     __entry = .;
     *(.transfer)
   }
@@ -108,7 +120,7 @@ EOF
 
 . $srcdir/scripttempl/DWARF.sc
 
-cat <<EOF  
+cat <<EOF
   .note : { *(.vms.note) }
 
   /DISCARD/ : { *(.note) *(.vms_display_name_info) }

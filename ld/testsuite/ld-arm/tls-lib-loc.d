@@ -1,6 +1,6 @@
 
 .*:     file format elf32-.*arm
-architecture: armv5t, flags 0x00000150:
+architecture: arm.*, flags 0x00000150:
 HAS_SYMS, DYNAMIC, D_PAGED
 start address 0x.*
 
@@ -28,6 +28,6 @@ Disassembly of section .text:
 
 [0-9a-f]+ <foo>:
     [0-9a-f]+:	e59f0004 	ldr	r0, \[pc, #4\]	; 818c .*
-    [0-9a-f]+:	fafffff2 	blx	8154 <.*\+0x8154>
+    [0-9a-f]+:	fafffff2 	blx	8154 <.*>
     [0-9a-f]+:	e1a00000 	nop			; .*
     818c:	000080a0 	.word	0x000080a0

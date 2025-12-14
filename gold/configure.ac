@@ -1,7 +1,6 @@
 dnl Process this file with autoconf to produce a configure script.
 dnl
-dnl   Copyright 2006, 2007, 2008, 2009, 2010, 2011, 2012, 2013
-dnl   Free Software Foundation, Inc.
+dnl   Copyright (C) 2006-2018 Free Software Foundation, Inc.
 dnl
 dnl This file is free software; you can redistribute it and/or modify
 dnl it under the terms of the GNU General Public License as published by
@@ -50,7 +49,7 @@ fi
 
 sysroot_relocatable=0
 if test -n "$sysroot"; then
-  case "sysroot" in
+  case "$sysroot" in
     "${prefix}" | "${prefix}/"* | \
     "${exec_prefix}" | "${exec_prefix}/"* | \
     '${prefix}' | '${prefix}/'*| \
@@ -115,6 +114,23 @@ if test "$plugins" = "yes"; then
 fi
 AM_CONDITIONAL(PLUGINS, test "$plugins" = "yes")
 
+# Decide if -z relro should be enabled in ELF linker by default.
+ac_default_ld_z_relro=unset
+# Provide a configure time option to override our default.
+AC_ARG_ENABLE(relro,
+	      AS_HELP_STRING([--enable-relro],
+	      [enable -z relro in ELF linker by default]),
+[case "${enableval}" in
+  yes)  ac_default_ld_z_relro=1 ;;
+  no)  ac_default_ld_z_relro=0 ;;
+esac])dnl
+if test "${ac_default_ld_z_relro}" = unset; then
+  ac_default_ld_z_relro=1
+fi
+AC_DEFINE_UNQUOTED(DEFAULT_LD_Z_RELRO,
+  $ac_default_ld_z_relro,
+  [Define to 1 if you want to enable -z relro in ELF linker by default.])
+
 AC_ARG_ENABLE([targets],
 [  --enable-targets        alternative target configurations],
 [case "${enableval}" in
@@ -144,6 +160,26 @@ if test -n "$enable_targets"; then
     fi
   done
 fi
+
+# Decide which "--hash-style" to use by default
+# Provide a configure time option to override our default.
+AC_ARG_ENABLE([default-hash-style],
+AS_HELP_STRING([--enable-default-hash-style={sysv,gnu,both}],
+	       [use this default hash style]),
+[case "${enable_default_hash_style}" in
+  sysv | gnu | both) ;;
+  *) AC_MSG_ERROR([bad value ${enable_default_hash_style} for enable-default-hash-style option]) ;;
+esac],
+[case "${target}" in
+  # Enable gnu hash only on GNU targets, but not mips
+  mips*-*-*) enable_default_hash_style=sysv ;;
+  *-*-gnu* | *-*-linux* | *-*-nacl*) enable_default_hash_style=both ;;
+  *) enable_default_hash_style=sysv ;;
+esac])
+
+AC_DEFINE_UNQUOTED([DEFAULT_HASH_STYLE],
+  ["${enable_default_hash_style}"],
+  [Set the default --hash-style value])
 
 # See which specific instantiations we need.
 targetobjs=
@@ -200,12 +236,31 @@ for targ in $target $canon_targets; do
 	default_big_endian=$targ_big_endian
 	default_osabi=$targ_osabi
 
+	AM_CONDITIONAL(DEFAULT_TARGET_AARCH64, test "$targ_obj" = "aarch64")
 	AM_CONDITIONAL(DEFAULT_TARGET_ARM, test "$targ_obj" = "arm")
 	AM_CONDITIONAL(DEFAULT_TARGET_I386, test "$targ_obj" = "i386")
 	AM_CONDITIONAL(DEFAULT_TARGET_POWERPC, test "$targ_obj" = "powerpc")
 	AM_CONDITIONAL(DEFAULT_TARGET_SPARC, test "$targ_obj" = "sparc")
-	AM_CONDITIONAL(DEFAULT_TARGET_X86_64, test "$targ_obj" = "x86_64")
+	AM_CONDITIONAL(DEFAULT_TARGET_S390, test "$targ_obj" = "s390")
+	target_x86_64=no
+	target_x32=no
+	if test "$targ_obj" = "x86_64"; then
+	  case "$target" in
+	  x86_64*-linux-gnux32)
+	    target_x32=yes
+	    default_size=32
+	    ;;
+	  *)
+	    target_x86_64=yes
+	    ;;
+	  esac
+	fi
+	AM_CONDITIONAL(DEFAULT_TARGET_X86_64, test "$target_x86_64" = "yes")
+	AM_CONDITIONAL(DEFAULT_TARGET_X32, test "$target_x32" = "yes")
+	AM_CONDITIONAL(DEFAULT_TARGET_X86_64_OR_X32,
+		       test "$target_x86_64" = "yes" -o "$target_x32" = "yes")
 	AM_CONDITIONAL(DEFAULT_TARGET_TILEGX, test "$targ_obj" = "tilegx")
+        AM_CONDITIONAL(DEFAULT_TARGET_MIPS, test "$targ_obj" = "mips")
 	DEFAULT_TARGET=${targ_obj}
 	AC_SUBST(DEFAULT_TARGET)
       fi
@@ -316,6 +371,7 @@ AM_CONDITIONAL(FN_PTRS_IN_SO_WITHOUT_PIC, [
     powerpc*) false;;
     x86_64) false;;
     sparc64) false;;
+    s390x) false;;
     *) true;;
   esac])
 
@@ -343,8 +399,8 @@ AC_CACHE_CHECK([whether $CC supports -fmerge-constants],
 save_CFLAGS="$CFLAGS"
 CFLAGS="$CFLAGS -fmerge-constants"
 AC_COMPILE_IFELSE([const char *s = "foo";],
-		  [have_merge_constants=yes],
-		  [have_merge_constants=no])
+		  [gold_cv_merge_constants=yes],
+		  [gold_cv_merge_constants=no])
 CFLAGS="$save_CFLAGS"])
 AC_SUBST([MERGE_CONSTANTS_FLAG])
 AS_IF([test "$gold_cv_merge_constants" = yes],
@@ -513,7 +569,6 @@ fi
 
 # Link in zlib if we can.  This allows us to write compressed sections.
 AM_ZLIB
-AM_CONDITIONAL(HAVE_ZLIB, test "$ac_cv_header_zlib_h" = "yes")
 
 dnl We have to check these in C, not C++, because autoconf generates
 dnl tests which have no type information, and current glibc provides
@@ -521,16 +576,41 @@ dnl multiple declarations of functions like basename when compiling
 dnl with C++.
 AC_CHECK_DECLS([basename, ffs, asprintf, vasprintf, snprintf, vsnprintf, strverscmp])
 
+dnl Check if gcc supports the -gpubnames option.
+dnl Use -Werror in case of compilers that make unknown -g options warnings.
+dnl They would pass the test here, but fail in actual use when $WARN_CFLAGS
+dnl gets set later by default Autoconf magic to include -Werror.  (We are
+dnl assuming here that there is no compiler that groks -gpubnames
+dnl but does not grok -Werror.)
+save_CFLAGS="$CFLAGS"
+CFLAGS="$CFLAGS -Werror -gpubnames"
+AC_COMPILE_IFELSE([int i;], [have_pubnames=yes], [have_pubnames=no])
+CFLAGS="$save_CFLAGS"
+AM_CONDITIONAL(HAVE_PUBNAMES, test "$have_pubnames" = "yes")
+
+dnl Check if gcc supports the -fno-use-linker-plugin option.
+save_CFLAGS="$CFLAGS"
+CFLAGS="$CFLAGS -Werror -fno-use-linker-plugin"
+AC_COMPILE_IFELSE([int i;], [have_no_use_linker_plugin=yes], [have_no_use_linker_plugin=no])
+CFLAGS="$save_CFLAGS"
+AM_CONDITIONAL(HAVE_NO_USE_LINKER_PLUGIN, test "$have_no_use_linker_plugin" = "yes")
+
 AC_LANG_PUSH(C++)
 
+AC_CHECK_HEADERS(unordered_set unordered_map)
 AC_CHECK_HEADERS(tr1/unordered_set tr1/unordered_map)
 AC_CHECK_HEADERS(ext/hash_map ext/hash_set)
 AC_CHECK_HEADERS(byteswap.h)
 
 dnl When plugins enabled dynamic loader interface is required. Check headers
-dnl which may provide this interface. In case of dlfcn.h add libdl to link.
+dnl which may provide this interface. Add the necessary library to link.
 AC_CHECK_HEADERS(windows.h)
-AC_CHECK_HEADERS(dlfcn.h, [DLOPEN_LIBS="-ldl"], [DLOPEN_LIBS=""])
+AC_CHECK_HEADERS(dlfcn.h)
+AC_SEARCH_LIBS(dlopen, [dl dld])
+case "$ac_cv_search_dlopen" in
+  no*) DLOPEN_LIBS="";;
+  *)   DLOPEN_LIBS="$ac_cv_search_dlopen";;
+esac
 AC_SUBST(DLOPEN_LIBS)
 
 AC_CHECK_FUNCS(mallinfo posix_fallocate fallocate readv sysconf times)
@@ -595,18 +675,6 @@ if test "$gold_cv_stat_st_mtim" = "yes"; then
   AC_DEFINE(HAVE_STAT_ST_MTIM, 1,
 	    [Define if struct stat has a field st_mtim with timespec for mtime])
 fi
-
-dnl Check if gcc supports the -gpubnames option.
-dnl Use -Werror in case of compilers that make unknown -g options warnings.
-dnl They would pass the test here, but fail in actual use when $WARN_CFLAGS
-dnl gets set later by default Autoconf magic to include -Werror.  (We are
-dnl assuming here that there is no compiler that groks -gpubnames
-dnl but does not grok -Werror.)
-save_CXXFLAGS="$CXXFLAGS"
-CXXFLAGS="$CXXFLAGS -Werror -gpubnames"
-AC_COMPILE_IFELSE([int i;], [have_pubnames=yes], [have_pubnames=no])
-CXXFLAGS="$save_CXXFLAGS"
-AM_CONDITIONAL(HAVE_PUBNAMES, test "$have_pubnames" = "yes")
 
 AC_LANG_POP(C++)
 

@@ -10,14 +10,14 @@ ELF Header:
  +Version: +0x1
  +Entry point address: +0x10c4
  +Start of program headers: +52 \(bytes into file\)
- +Start of section headers: +504 \(bytes into file\)
+ +Start of section headers: .*
  +Flags: +0xa, sh5
  +Size of this header: +52 \(bytes\)
  +Size of program headers: +32 \(bytes\)
  +Number of program headers: +2
  +Size of section headers: +40 \(bytes\)
  +Number of section headers: +8
- +Section header string table index: 5
+ +Section header string table index: 7
 
 Section Headers:
  +\[Nr\] Name +Type +Addr +Off +Size +ES Flg Lk Inf Al
@@ -26,9 +26,9 @@ Section Headers:
  +\[ 2\] \.text +PROGBITS +00001004 000084 0000d8 00 AXp +0 +0 +4
  +\[ 3\] \.stack +PROGBITS +00080000 000180 000004 00 +WA +0 +0 +1
  +\[ 4\] \.cranges +LOUSER\+1 +00000000 000184 00003c 00 +W +0 +0 +1
- +\[ 5\] \.shstrtab +STRTAB +.*
- +\[ 6\] \.symtab +SYMTAB +.*
- +\[ 7\] \.strtab +STRTAB +.*
+ +\[ 5\] \.symtab +SYMTAB +.*
+ +\[ 6\] \.strtab +STRTAB +.*
+ +\[ 7\] \.shstrtab +STRTAB +.*
 Key to Flags:
 #...
 
@@ -45,7 +45,6 @@ Symbol table '\.symtab' contains [0-9]+ entries:
 .*: 000010a4 +0 +NOTYPE +LOCAL +DEFAULT +\[<other>: 4\] +2 start2
 .*: 00000000 +0 +FILE +LOCAL +DEFAULT +ABS .*
 .*: 000010bc +0 +NOTYPE +LOCAL +DEFAULT +2 sec3
-.*: 00000000 +0 +FILE +LOCAL +DEFAULT +ABS .*
 .*: 000010c4 +0 +NOTYPE +GLOBAL +DEFAULT +\[<other>: 4\] +2 diversion
 .*: 00001160 +0 +NOTYPE +GLOBAL +DEFAULT +.* ___dtors
 .*: 00001160 +0 +NOTYPE +GLOBAL +DEFAULT +2 __bss_start

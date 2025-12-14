@@ -21,9 +21,9 @@ Section Headers:
  +\[[ 0-9]+\] \.opd .*
  +\[[ 0-9]+\] \.got .*
  +\[[ 0-9]+\] \.plt .*
- +\[[ 0-9]+\] \.shstrtab .*
  +\[[ 0-9]+\] \.symtab .*
  +\[[ 0-9]+\] \.strtab .*
+ +\[[ 0-9]+\] \.shstrtab .*
 #...
 
 Elf file type is DYN \(Shared object file\)
@@ -47,7 +47,7 @@ Program Headers:
 Relocation section '\.rela\.dyn' at offset .* contains 18 entries:
  +Offset +Info +Type +Symbol's Value +Symbol's Name \+ Addend
 [0-9a-f ]+R_PPC64_RELATIVE +55c
-[0-9a-f ]+R_PPC64_RELATIVE +187e0
+[0-9a-f ]+R_PPC64_RELATIVE +18800
 [0-9a-f ]+R_PPC64_TPREL16 +0+60 le0 \+ 0
 [0-9a-f ]+R_PPC64_TPREL16_HA +0+68 le1 \+ 0
 [0-9a-f ]+R_PPC64_TPREL16_LO +0+68 le1 \+ 0
@@ -65,7 +65,7 @@ Relocation section '\.rela\.dyn' at offset .* contains 18 entries:
 [0-9a-f ]+R_PPC64_DTPREL64 +0+38 gd0 \+ 0
 [0-9a-f ]+R_PPC64_TPREL64 +0+58 ie0 \+ 0
 
-Relocation section '\.rela\.plt' at offset .* contains 1 entries:
+Relocation section '\.rela\.plt' at offset .* contains 1 entry:
  +Offset +Info +Type +Symbol's Value +Symbol's Name \+ Addend
 [0-9a-f ]+R_PPC64_JMP_SLOT +0+ __tls_get_addr \+ 0
 
@@ -84,7 +84,7 @@ Symbol table '\.dynsym' contains [0-9]+ entries:
 .* TLS +GLOBAL +DEFAULT +8 ld2
 .* TLS +GLOBAL +DEFAULT +8 ld1
 .* NOTYPE +GLOBAL +DEFAULT +12 __bss_start
-.* NOTYPE +GLOBAL +DEFAULT +11 _edata
+.* NOTYPE +GLOBAL +DEFAULT +12 _edata
 .* NOTYPE +GLOBAL +DEFAULT +12 _end
 .* TLS +GLOBAL +DEFAULT +8 gd0
 .* TLS +GLOBAL +DEFAULT +8 ie0
@@ -112,8 +112,7 @@ Symbol table '\.symtab' contains [0-9]+ entries:
 .* TLS +LOCAL +DEFAULT +7 ie4
 .* TLS +LOCAL +DEFAULT +7 le4
 .* TLS +LOCAL +DEFAULT +7 le5
-.* NOTYPE +LOCAL +DEFAULT +UND \.__tls_get_addr
-.* FILE +LOCAL +DEFAULT +ABS .*
+.* FILE +LOCAL +DEFAULT +ABS 
 .* OBJECT +LOCAL +DEFAULT +9 _DYNAMIC
 .* NOTYPE +LOCAL +DEFAULT +6 .*\.plt_call\.__tls_get_addr
 .* NOTYPE +LOCAL +DEFAULT +6 __glink_PLTresolve
@@ -127,7 +126,7 @@ Symbol table '\.symtab' contains [0-9]+ entries:
 .* TLS +GLOBAL +DEFAULT +8 ld2
 .* TLS +GLOBAL +DEFAULT +8 ld1
 .* NOTYPE +GLOBAL +DEFAULT +12 __bss_start
-.* NOTYPE +GLOBAL +DEFAULT +11 _edata
+.* NOTYPE +GLOBAL +DEFAULT +12 _edata
 .* NOTYPE +GLOBAL +DEFAULT +12 _end
 .* TLS +GLOBAL +DEFAULT +8 gd0
 .* TLS +GLOBAL +DEFAULT +8 ie0

@@ -1,6 +1,6 @@
 ## Process this file with automake to generate Makefile.in
 #
-#   Copyright 2012 Free Software Foundation
+#   Copyright (C) 2012-2018 Free Software Foundation, Inc.
 #
 # This file is free software; you can redistribute it and/or modify
 # it under the terms of the GNU General Public License as published by
@@ -75,11 +75,14 @@ CPU_DOCS = \
 	c-mt.texi \
 	c-msp430.texi \
 	c-nios2.texi \
+	c-nds32.texi \
 	c-ns32k.texi \
 	c-pdp11.texi \
 	c-pj.texi \
 	c-ppc.texi \
+	c-pru.texi \
 	c-rl78.texi \
+	c-riscv.texi \
 	c-rx.texi \
 	c-s390.texi \
 	c-score.texi \
@@ -90,8 +93,9 @@ CPU_DOCS = \
         c-tic6x.texi \
 	c-tilegx.texi \
 	c-tilepro.texi \
-	c-vax.texi \
 	c-v850.texi \
+	c-vax.texi \
+	c-visium.texi \
 	c-xgate.texi \
 	c-xstormy16.texi \
 	c-xtensa.texi \
@@ -110,8 +114,6 @@ MAINTAINERCLEANFILES = asconfig.texi
 
 BASEDIR = $(srcdir)/../..
 BFDDIR = $(BASEDIR)/bfd
-
-CONFIG_STATUS_DEPENDENCIES = $(BFDDIR)/configure.in
 
 # Maintenance
 

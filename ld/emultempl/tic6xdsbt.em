@@ -1,5 +1,5 @@
 # This shell script emits a C file. -*- C -*-
-#   Copyright 2011, 2012 Free Software Foundation, Inc.
+#   Copyright (C) 2011-2018 Free Software Foundation, Inc.
 #
 # This file is part of the GNU Binutils.
 #
@@ -36,19 +36,19 @@ static int merge_exidx_entries = -1;
 static int
 is_tic6x_target (void)
 {
-  extern const bfd_target bfd_elf32_tic6x_le_vec;
-  extern const bfd_target bfd_elf32_tic6x_be_vec;
-  extern const bfd_target bfd_elf32_tic6x_linux_le_vec;
-  extern const bfd_target bfd_elf32_tic6x_linux_be_vec;
-  extern const bfd_target bfd_elf32_tic6x_elf_le_vec;
-  extern const bfd_target bfd_elf32_tic6x_elf_be_vec;
+  extern const bfd_target tic6x_elf32_le_vec;
+  extern const bfd_target tic6x_elf32_be_vec;
+  extern const bfd_target tic6x_elf32_linux_le_vec;
+  extern const bfd_target tic6x_elf32_linux_be_vec;
+  extern const bfd_target tic6x_elf32_c6000_le_vec;
+  extern const bfd_target tic6x_elf32_c6000_be_vec;
 
-  return (link_info.output_bfd->xvec == &bfd_elf32_tic6x_le_vec
-  	  || link_info.output_bfd->xvec == &bfd_elf32_tic6x_be_vec
-	  || link_info.output_bfd->xvec == &bfd_elf32_tic6x_linux_le_vec
-  	  || link_info.output_bfd->xvec == &bfd_elf32_tic6x_linux_be_vec
-	  || link_info.output_bfd->xvec == &bfd_elf32_tic6x_elf_le_vec
-  	  || link_info.output_bfd->xvec == &bfd_elf32_tic6x_elf_be_vec);
+  return (link_info.output_bfd->xvec == &tic6x_elf32_le_vec
+	  || link_info.output_bfd->xvec == &tic6x_elf32_be_vec
+	  || link_info.output_bfd->xvec == &tic6x_elf32_linux_le_vec
+	  || link_info.output_bfd->xvec == &tic6x_elf32_linux_be_vec
+	  || link_info.output_bfd->xvec == &tic6x_elf32_c6000_le_vec
+	  || link_info.output_bfd->xvec == &tic6x_elf32_c6000_be_vec);
 }
 
 /* Pass params to backend.  */
@@ -95,14 +95,15 @@ static void
 gld${EMULATION_NAME}_after_allocation (void)
 {
   int layout_changed = 0;
+  int ret;
 
-  if (!link_info.relocatable)
+  if (!bfd_link_relocatable (&link_info))
     {
       /* Build a sorted list of input text sections, then use that to process
 	 the unwind table index.  */
       unsigned int list_size = 10;
       asection **sec_list = (asection **)
-          xmalloc (list_size * sizeof (asection *));
+	xmalloc (list_size * sizeof (asection *));
       unsigned int sec_count = 0;
 
       LANG_FOR_EACH_INPUT_STATEMENT (is)
@@ -129,7 +130,7 @@ gld${EMULATION_NAME}_after_allocation (void)
 		    {
 		      list_size *= 2;
 		      sec_list = (asection **)
-                          xrealloc (sec_list, list_size * sizeof (asection *));
+			xrealloc (sec_list, list_size * sizeof (asection *));
 		    }
 
 		  sec_list[sec_count++] = sec;
@@ -149,7 +150,13 @@ gld${EMULATION_NAME}_after_allocation (void)
   /* bfd_elf32_discard_info just plays with debugging sections,
      ie. doesn't affect any code, so we can delay resizing the
      sections.  */
-  if (bfd_elf_discard_info (link_info.output_bfd, & link_info))
+  ret = bfd_elf_discard_info (link_info.output_bfd, & link_info);
+  if (ret < 0)
+    {
+      einfo (_("%X%P: .eh_frame/.stab edit: %E\n"));
+      return;
+    }
+  else if (ret > 0)
     layout_changed = 1;
 
   gld${EMULATION_NAME}_map_segments (layout_changed);

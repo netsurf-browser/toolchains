@@ -1,7 +1,5 @@
 /* tc-sh.c -- Assemble code for the Renesas / SuperH SH
-   Copyright 1993, 1994, 1995, 1996, 1997, 1998, 1999, 2000, 2001, 2002,
-   2003, 2004, 2005, 2006, 2007, 2008, 2009, 2010, 2012
-   Free Software Foundation, Inc.
+   Copyright (C) 1993-2018 Free Software Foundation, Inc.
 
    This file is part of GAS, the GNU Assembler.
 
@@ -283,15 +281,15 @@ const char FLT_CHARS[] = "rRsSfFdDxXpP";
 #if BFD_HOST_64BIT_LONG
 /* The "reach" type is long, so we can only do this for a 64-bit-long
    host.  */
-#define SH64PCREL32_M (((long) -1 << 30) * 2 - 4)
+#define SH64PCREL32_M ((-((long) 1 << 30)) * 2 - 4)
 #define SH64PCREL48_F ((((long) 1 << 47) - 1) - 4)
-#define SH64PCREL48_M (((long) -1 << 47) - 4)
+#define SH64PCREL48_M ((-((long) 1 << 47)) - 4)
 #define SH64PCREL48_LENGTH (3 * 4)
 #else
 /* If the host does not have 64-bit longs, just make this state identical
    in reach to the 32-bit state.  Note that we have a slightly incorrect
    reach, but the correct one above will overflow a 32-bit number.  */
-#define SH64PCREL32_M (((long) -1 << 30) * 2)
+#define SH64PCREL32_M ((-((long) 1 << 30)) * 2)
 #define SH64PCREL48_F SH64PCREL32_F
 #define SH64PCREL48_M SH64PCREL32_M
 #define SH64PCREL48_LENGTH (3 * 4)
@@ -315,14 +313,14 @@ const char FLT_CHARS[] = "rRsSfFdDxXpP";
 #if BFD_HOST_64BIT_LONG
 /* The "reach" type is long, so we can only do this for a 64-bit-long
    host.  */
-#define MOVI_32_M (((long) -1 << 30) * 2 - 4)
+#define MOVI_32_M ((-((long) 1 << 30)) * 2 - 4)
 #define MOVI_48_F ((((long) 1 << 47) - 1) - 4)
-#define MOVI_48_M (((long) -1 << 47) - 4)
+#define MOVI_48_M ((-((long) 1 << 47)) - 4)
 #else
 /* If the host does not have 64-bit longs, just make this state identical
    in reach to the 32-bit state.  Note that we have a slightly incorrect
    reach, but the correct one above will overflow a 32-bit number.  */
-#define MOVI_32_M (((long) -1 << 30) * 2)
+#define MOVI_32_M ((-((long) 1 << 30)) * 2)
 #define MOVI_48_F MOVI_32_F
 #define MOVI_48_M MOVI_32_M
 #endif /* BFD_HOST_64BIT_LONG */
@@ -490,7 +488,7 @@ static struct hash_control *opcode_hash_control;	/* Opcode mnemonics */
 
 
 #ifdef OBJ_ELF
-/* Determinet whether the symbol needs any kind of PIC relocation.  */
+/* Determine whether the symbol needs any kind of PIC relocation.  */
 
 inline static int
 sh_PIC_related_p (symbolS *sym)
@@ -767,9 +765,10 @@ sh_check_fixup (expressionS *main_exp, bfd_reloc_code_real_type *r_type_p)
 /* Add expression EXP of SIZE bytes to offset OFF of fragment FRAG.  */
 
 void
-sh_cons_fix_new (fragS *frag, int off, int size, expressionS *exp)
+sh_cons_fix_new (fragS *frag, int off, int size, expressionS *exp,
+		 bfd_reloc_code_real_type r_type)
 {
-  bfd_reloc_code_real_type r_type = BFD_RELOC_UNUSED;
+  r_type = BFD_RELOC_UNUSED;
 
   if (sh_check_fixup (exp, &r_type))
     as_bad (_("Invalid PIC expression."));
@@ -812,7 +811,7 @@ sh_cons_fix_new (fragS *frag, int off, int size, expressionS *exp)
 /* Clobbers input_line_pointer, checks end-of-line.  */
 /* NBYTES 1=.byte, 2=.word, 4=.long */
 static void
-sh_elf_cons (register int nbytes)
+sh_elf_cons (int nbytes)
 {
   expressionS exp;
 
@@ -951,7 +950,7 @@ void
 md_begin (void)
 {
   const sh_opcode_info *opcode;
-  char *prev_name = "";
+  const char *prev_name = "";
   unsigned int target_arch;
 
   target_arch
@@ -988,7 +987,7 @@ static int reg_b;
 /* Try to parse a reg name.  Return the number of chars consumed.  */
 
 static unsigned int
-parse_reg_without_prefix (char *src, int *mode, int *reg)
+parse_reg_without_prefix (char *src, sh_arg_type *mode, int *reg)
 {
   char l0 = TOLOWER (src[0]);
   char l1 = l0 ? TOLOWER (src[1]) : 0;
@@ -1347,7 +1346,7 @@ parse_reg_without_prefix (char *src, int *mode, int *reg)
    $-prefixed register names if enabled by the user.  */
 
 static unsigned int
-parse_reg (char *src, int *mode, int *reg)
+parse_reg (char *src, sh_arg_type *mode, int *reg)
 {
   unsigned int prefix;
   unsigned int consumed;
@@ -1364,7 +1363,7 @@ parse_reg (char *src, int *mode, int *reg)
     }
   else
     prefix = 0;
-  
+
   consumed = parse_reg_without_prefix (src, mode, reg);
 
   if (consumed == 0)
@@ -1412,7 +1411,7 @@ static char *
 parse_at (char *src, sh_operand_info *op)
 {
   int len;
-  int mode;
+  sh_arg_type mode;
   src++;
   if (src[0] == '@')
     {
@@ -1584,7 +1583,7 @@ static void
 get_operand (char **ptr, sh_operand_info *op)
 {
   char *src = *ptr;
-  int mode = -1;
+  sh_arg_type mode = (sh_arg_type) -1;
   unsigned int len;
 
   if (src[0] == '#')
@@ -1678,7 +1677,7 @@ static sh_opcode_info *
 get_specific (sh_opcode_info *opcode, sh_operand_info *operands)
 {
   sh_opcode_info *this_try = opcode;
-  char *name = opcode->name;
+  const char *name = opcode->name;
   int n = 0;
 
   while (opcode->name)
@@ -2236,7 +2235,8 @@ get_specific (sh_opcode_info *opcode, sh_operand_info *operands)
 }
 
 static void
-insert (char *where, int how, int pcrel, sh_operand_info *op)
+insert (char *where, bfd_reloc_code_real_type how, int pcrel,
+       	sh_operand_info *op)
 {
   fix_new_exp (frag_now,
 	       where - frag_now->fr_literal,
@@ -2247,7 +2247,8 @@ insert (char *where, int how, int pcrel, sh_operand_info *op)
 }
 
 static void
-insert4 (char * where, int how, int pcrel, sh_operand_info * op)
+insert4 (char * where, bfd_reloc_code_real_type how, int pcrel,
+	 sh_operand_info * op)
 {
   fix_new_exp (frag_now,
 	       where - frag_now->fr_literal,
@@ -2293,7 +2294,6 @@ build_relax (sh_opcode_info *opcode, sh_operand_info *op)
 static char *
 insert_loop_bounds (char *output, sh_operand_info *operand)
 {
-  char *name;
   symbolS *end_sym;
 
   /* Since the low byte of the opcode will be overwritten by the reloc, we
@@ -2306,6 +2306,7 @@ insert_loop_bounds (char *output, sh_operand_info *operand)
   if (sh_relax)
     {
       static int count = 0;
+      char name[11];
 
       /* If the last loop insn is a two-byte-insn, it is in danger of being
 	 swapped with the insn after it.  To prevent this, create a new
@@ -2314,7 +2315,6 @@ insert_loop_bounds (char *output, sh_operand_info *operand)
 	 right in the middle, but four byte insns are not swapped anyways.  */
       /* A REPEAT takes 6 bytes.  The SH has a 32 bit address space.
 	 Hence a 9 digit number should be enough to count all REPEATs.  */
-      name = alloca (11);
       sprintf (name, "_R%x", count++ & 0x3fffffff);
       end_sym = symbol_new (name, undefined_section, 0, &zero_address_frag);
       /* Make this a local symbol.  */
@@ -2414,11 +2414,13 @@ build_Mytes (sh_opcode_info *opcode, sh_operand_info *operand)
 	      break;
 	    case IMM0_3s:
 	      nbuf[indx] |= 0x08;
+	      /* Fall through.  */
 	    case IMM0_3c:
 	      insert (output + low_byte, BFD_RELOC_SH_IMM3, 0, operand);
 	      break;
 	    case IMM0_3Us:
 	      nbuf[indx] |= 0x80;
+	      /* Fall through.  */
 	    case IMM0_3Uc:
 	      insert (output + low_byte, BFD_RELOC_SH_IMM3U, 0, operand);
 	      break;
@@ -3091,7 +3093,7 @@ md_undefined_symbol (char *name ATTRIBUTE_UNUSED)
 
 /* Various routines to kill one day.  */
 
-char *
+const char *
 md_atof (int type, char *litP, int *sizeP)
 {
   return ieee_md_atof (type, litP, sizeP, target_big_endian);
@@ -3182,7 +3184,7 @@ struct option md_longopts[] =
 size_t md_longopts_size = sizeof (md_longopts);
 
 int
-md_parse_option (int c, char *arg ATTRIBUTE_UNUSED)
+md_parse_option (int c, const char *arg ATTRIBUTE_UNUSED)
 {
   switch (c)
     {
@@ -3246,10 +3248,10 @@ md_parse_option (int c, char *arg ATTRIBUTE_UNUSED)
 	  for (; bfd_arch; bfd_arch=bfd_arch->next)
 	    {
 	      int len = strlen(bfd_arch->printable_name);
-	      
+
 	      if (bfd_arch->mach == bfd_mach_sh5)
 		continue;
-	      
+
 	      if (strncasecmp (bfd_arch->printable_name, arg, len) != 0)
 		continue;
 
@@ -3263,7 +3265,7 @@ md_parse_option (int c, char *arg ATTRIBUTE_UNUSED)
 		continue;
 	      break;
 	    }
-	  
+
 	  if (!preset_target_arch)
 	    as_bad (_("Invalid argument to --isa option: %s"), arg);
 	}
@@ -3693,7 +3695,7 @@ md_section_align (segT seg ATTRIBUTE_UNUSED, valueT size)
   return size;
 #else /* ! OBJ_ELF */
   return ((size + (1 << bfd_get_section_alignment (stdoutput, seg)) - 1)
-	  & (-1 << bfd_get_section_alignment (stdoutput, seg)));
+	  & -(1 << bfd_get_section_alignment (stdoutput, seg)));
 #endif /* ! OBJ_ELF */
 }
 
@@ -4290,7 +4292,7 @@ md_apply_fix (fixS *fixP, valueT *valP, segT seg ATTRIBUTE_UNUSED)
   if (max != 0 && (val < min || val > max))
     as_bad_where (fixP->fx_file, fixP->fx_line, _("offset out of range"));
   else if (max != 0)
-    /* Stop the generic code from trying to overlow check the value as well.
+    /* Stop the generic code from trying to overflow check the value as well.
        It may not have the correct value anyway, as we do not store val back
        into *valP.  */
     fixP->fx_no_overflow = 1;
@@ -4346,7 +4348,7 @@ md_estimate_size_before_relax (fragS *fragP, segT segment_type)
 	}
       else if (fragP->fr_symbol)
 	{
-	  /* Its got a segment, but its not ours, so it will always be long.  */
+	  /* It's got a segment, but it's not ours, so it will always be long.  */
 	  fragP->fr_subtype = C (what, UNDEF_WORD_DISP);
 	}
       else
@@ -4426,8 +4428,8 @@ tc_gen_reloc (asection *section ATTRIBUTE_UNUSED, fixS *fixp)
   arelent *rel;
   bfd_reloc_code_real_type r_type;
 
-  rel = (arelent *) xmalloc (sizeof (arelent));
-  rel->sym_ptr_ptr = (asymbol **) xmalloc (sizeof (asymbol *));
+  rel = XNEW (arelent);
+  rel->sym_ptr_ptr = XNEW (asymbol *);
   *rel->sym_ptr_ptr = symbol_get_bfdsym (fixp->fx_addsy);
   rel->address = fixp->fx_frag->fr_address + fixp->fx_where;
 
@@ -4436,7 +4438,7 @@ tc_gen_reloc (asection *section ATTRIBUTE_UNUSED, fixS *fixp)
   if (SWITCH_TABLE (fixp))
     {
       *rel->sym_ptr_ptr = symbol_get_bfdsym (fixp->fx_subsy);
-      rel->addend = 0;
+      rel->addend = rel->address - S_GET_VALUE(fixp->fx_subsy);
       if (r_type == BFD_RELOC_16)
 	r_type = BFD_RELOC_SH_SWITCH16;
       else if (r_type == BFD_RELOC_8)
@@ -4491,7 +4493,7 @@ tc_gen_reloc (asection *section ATTRIBUTE_UNUSED, fixS *fixp)
 
 #ifdef OBJ_ELF
 inline static char *
-sh_end_of_match (char *cont, char *what)
+sh_end_of_match (char *cont, const char *what)
 {
   int len = strlen (what);
 
@@ -4604,7 +4606,7 @@ sh_regname_to_dw2regnum (char *regname)
   unsigned int i;
   const char *p;
   char *q;
-  static struct { char *name; int dw2regnum; } regnames[] =
+  static struct { const char *name; int dw2regnum; } regnames[] =
     {
       { "pr", 17 }, { "t", 18 }, { "gbr", 19 }, { "mach", 20 },
       { "macl", 21 }, { "fpul", 23 }

@@ -1,6 +1,5 @@
 # This shell script emits a C file. -*- C -*-
-#   Copyright 2003, 2004, 2005, 2006, 2007, 2008, 2009, 2010, 2011
-#   Free Software Foundation, Inc.
+#   Copyright (C) 2003-2018 Free Software Foundation, Inc.
 #
 # This file is part of the GNU Binutils.
 #
@@ -27,7 +26,6 @@ fragment <<EOF
 
 #include <xtensa-config.h>
 #include "../bfd/elf-bfd.h"
-#include "../bfd/libbfd.h"
 #include "elf/xtensa.h"
 #include "bfd.h"
 
@@ -117,12 +115,7 @@ replace_insn_sec_with_prop_sec (bfd *abfd,
 
   if (insn_sec->size != 0)
     {
-      insn_contents = (bfd_byte *) bfd_malloc (insn_sec->size);
-      if (insn_contents == NULL)
-	{
-	  *error_message = _("out of memory");
-	  goto cleanup;
-	}
+      insn_contents = (bfd_byte *) xmalloc (insn_sec->size);
       if (! bfd_get_section_contents (abfd, insn_sec, insn_contents,
 				      (file_ptr) 0, insn_sec->size))
 	{
@@ -1311,7 +1304,7 @@ is_inconsistent_linkonce_section (asection *sec)
      for Tensilica's XCC compiler.  */
   name = sec_name + linkonce_len;
   if (CONST_STRNEQ (name, "prop."))
-    name = strchr (name + 5, '.') + 1;
+    name = strchr (name + 5, '.') ? strchr (name + 5, '.') + 1 : name + 5;
   else if (name[1] == '.'
 	   && (name[0] == 'p' || name[0] == 'e' || name[0] == 'h'))
     name += 2;
@@ -1439,7 +1432,7 @@ xtensa_wild_group_interleave_callback (lang_statement_union_type *statement)
 	  struct wildcard_list *l;
 	  for (l = w->section_list; l != NULL; l = l->next)
 	    {
-	      if (l->spec.sorted == TRUE)
+	      if (l->spec.sorted == by_name)
 		{
 		  no_reorder = TRUE;
 		  break;

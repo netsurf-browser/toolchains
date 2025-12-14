@@ -1,26 +1,29 @@
-2013-09-20  Alan Modra  <amodra@gmail.com>
+2018-01-27  Nick Clifton  <nickc@redhat.com>
+
+	This is the 2.30 release:
 
 	* configure: Regenerate.
 
-2013-08-05  John Tytgat  <john@bass-software.com>
+2018-01-24  Nick Clifton  <nickc@redhat.com>
 
-	* po/POTFILES.in: Regenerate.
+	* configure: Regenerate.
 
-2013-05-24  Alan Modra  <amodra@gmail.com>
+2018-01-13  Nick Clifton  <nickc@redhat.com>
 
-	* aarch64.c (aarch64_find_call): Promote to bfd_vma before sign
-	extending.
+	* po/gprof.pot: Regenerate.
+	* configure: Regenerate.
 
-2013-05-22  Venkataramanan Kumar  <Venkataramanan.kumar@linaro.org>
+2018-01-13  Nick Clifton  <nickc@redhat.com>
 
-	* aarch64.c: New file.
-	* corefile.c (find_call): Call aarch64_find_call for bfd_arch_aarch64.
-	* Makefile.am (sources): Add aarch64.c.
-	* Makefile.in: Regenerate.
+	2.30 branch created.
 
-For older changes see ChangeLog-2012
+2018-01-03  Alan Modra  <amodra@gmail.com>
+
+	Update year range in copyright notice of all files.
+
+For older changes see ChangeLog-2017
 
-Copyright (C) 2013 Free Software Foundation, Inc.
+Copyright (C) 2018 Free Software Foundation, Inc.
 
 Copying and distribution of this file, with or without modification,
 are permitted in any medium without royalty provided the copyright

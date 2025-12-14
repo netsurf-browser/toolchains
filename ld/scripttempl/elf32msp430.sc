@@ -1,10 +1,14 @@
-#!/bin/sh
+# Copyright (C) 2014-2018 Free Software Foundation, Inc.
+#
+# Copying and distribution of this file, with or without modification,
+# are permitted in any medium without royalty provided the copyright
+# notice and this notice are preserved.
 
 HEAP_SECTION_MSP430=" "
 HEAP_MEMORY_MSP430=" "
 
-if test ${GOT_HEAP_MSP-0} -ne 0 
-then 
+if test ${GOT_HEAP_MSP-0} -ne 0
+then
 HEAP_SECTION_MSP430=".heap ${RELOCATING-0} :
   {
     ${RELOCATING+ PROVIDE (__heap_data_start = .) ; }
@@ -14,19 +18,25 @@ HEAP_SECTION_MSP430=".heap ${RELOCATING-0} :
     ${RELOCATING+ PROVIDE (__heap_bottom = .) ; }
     ${RELOCATING+ PROVIDE (__heap_top = ${HEAP_START} + ${HEAP_LENGTH}) ; }
   } ${RELOCATING+ > heap}"
-HEAP_MEMORY_MSP430="heap(rwx) 		: ORIGIN = $HEAP_START,	LENGTH = $HEAP_LENGTH"
+HEAP_MEMORY_MSP430="heap(rwx)		: ORIGIN = $HEAP_START,	LENGTH = $HEAP_LENGTH"
 fi
 
 
 cat <<EOF
+/* Copyright (C) 2014-2018 Free Software Foundation, Inc.
+
+   Copying and distribution of this script, with or without modification,
+   are permitted in any medium without royalty provided the copyright
+   notice and this notice are preserved.  */
+
 OUTPUT_FORMAT("${OUTPUT_FORMAT}","${OUTPUT_FORMAT}","${OUTPUT_FORMAT}")
 OUTPUT_ARCH(${ARCH})
 
 MEMORY
 {
-  text   (rx)   	: ORIGIN = $ROM_START,  LENGTH = $ROM_SIZE
-  data   (rwx)  	: ORIGIN = $RAM_START, 	LENGTH = $RAM_SIZE
-  vectors (rw)  	: ORIGIN = 0xffe0,      LENGTH = 0x20
+  text   (rx)		: ORIGIN = $ROM_START,  LENGTH = $ROM_SIZE
+  data   (rwx)		: ORIGIN = $RAM_START,	LENGTH = $RAM_SIZE
+  vectors (rw)		: ORIGIN = 0xffe0,      LENGTH = 0x20
   bootloader(rx)	: ORIGIN = 0x0c00,	LENGTH = 1K
   infomem(rx)		: ORIGIN = 0x1000,	LENGTH = 256
   infomemnobits(rx)	: ORIGIN = 0x1000,      LENGTH = 256
@@ -43,7 +53,7 @@ SECTIONS
     ${RELOCATING+. = ALIGN(2);}
     *(.bootloader.*)
   } ${RELOCATING+ > bootloader}
-  
+
   /* Information memory.  */
   .infomem ${RELOCATING-0} :
   {
@@ -144,11 +154,16 @@ SECTIONS
     ${CONSTRUCTING+ __dtors_end = . ; }
 
     ${RELOCATING+. = ALIGN(2);}
+    *(.lower.text.* .lower.text)
+
+    ${RELOCATING+. = ALIGN(2);}
     *(.text)
     ${RELOCATING+. = ALIGN(2);}
     *(.text.*)
     ${RELOCATING+. = ALIGN(2);}
     *(.text:*)
+
+    *(.either.text.* .either.text)
 
     ${RELOCATING+. = ALIGN(2);}
     *(SORT_NONE(.fini9))
@@ -168,11 +183,15 @@ SECTIONS
 
   .rodata :
   {
+    ${RELOCATING+. = ALIGN(2);}
+    *(.lower.rodata.* .lower.rodata)
+
     . = ALIGN(2);
     *(.plt)
     *(.rodata .rodata.* .gnu.linkonce.r.* .const .const:*)
     *(.rodata1)
 
+    *(.either.rodata.*) *(.either.rodata)
     *(.eh_frame_hdr)
     KEEP (*(.eh_frame))
 
@@ -191,7 +210,6 @@ SECTIONS
     KEEP (*(.fini_array))
     KEEP (*(SORT(.fini_array.*)))
     PROVIDE (__fini_array_end = .);
-    LONG(0); /* Sentinel.  */
 
     /* gcc uses crtbegin.o to find the start of the constructors, so
        we make sure it is first.  Because this is a wildcard, it
@@ -222,8 +240,8 @@ SECTIONS
     ${RELOCATING+ _vectors_end = . ; }
   } ${RELOCATING+ > vectors}
 
-  .data ${RELOCATING-0} : ${RELOCATING+AT (ADDR (.text) + SIZEOF (.text) + SIZEOF (.rodata))}
-  {  
+  .data ${RELOCATING-0} :
+  {
     ${RELOCATING+ PROVIDE (__data_start = .) ; }
     ${RELOCATING+ PROVIDE (__datastart = .) ; }
     ${RELOCATING+. = ALIGN(2);}
@@ -232,44 +250,63 @@ SECTIONS
     *(.data.rel.ro.local) *(.data.rel.ro*)
     *(.dynamic)
 
+    ${RELOCATING+. = ALIGN(2);}
+    *(.lower.data.* .lower.data)
+
     *(.data)
     *(.data.*)
     *(.gnu.linkonce.d*)
     KEEP (*(.gnu.linkonce.d.*personality*))
     *(.data1)
+
+    *(.either.data.* .either.data)
+
     *(.got.plt) *(.got)
     ${RELOCATING+. = ALIGN(2);}
     *(.sdata .sdata.* .gnu.linkonce.s.*)
     ${RELOCATING+. = ALIGN(2);}
     ${RELOCATING+ _edata = . ; }
-  } ${RELOCATING+ > data}
-  
+  } ${RELOCATING+ > data ${RELOCATING+AT> text}}
+
+  __romdatastart = LOADADDR(.data);
+  __romdatacopysize = SIZEOF(.data);
+
   .bss ${RELOCATING+ SIZEOF(.data) + ADDR(.data)} :
   {
     ${RELOCATING+. = ALIGN(2);}
-    ${RELOCATING+ PROVIDE (__bss_start = .) ; }
+    ${RELOCATING+ PROVIDE (__bss_start = .); }
+    ${RELOCATING+ PROVIDE (__bssstart = .); }
+    *(.lower.bss.* .lower.bss)
+    ${RELOCATING+. = ALIGN(2);}
     *(.bss)
+    *(.either.bss.* .either.bss)
     *(COMMON)
     ${RELOCATING+ PROVIDE (__bss_end = .) ; }
-    ${RELOCATING+ _end = . ;  }
   } ${RELOCATING+ > data}
+  ${RELOCATING+ PROVIDE (__bsssize = SIZEOF(.bss)); }
 
   .noinit ${RELOCATING+ SIZEOF(.bss) + ADDR(.bss)} :
   {
     ${RELOCATING+ PROVIDE (__noinit_start = .) ; }
     *(.noinit)
-    *(COMMON)
     ${RELOCATING+ PROVIDE (__noinit_end = .) ; }
-    ${RELOCATING+ _end = . ;  }
   } ${RELOCATING+ > data}
 
+  .persistent ${RELOCATING+ SIZEOF(.noinit) + ADDR(.noinit)} :
+  {
+    ${RELOCATING+ PROVIDE (__persistent_start = .) ; }
+    *(.persistent)
+    ${RELOCATING+ PROVIDE (__persistent_end = .) ; }
+  } ${RELOCATING+ > data}
+
+  ${RELOCATING+ _end = . ;  }
   ${HEAP_SECTION_MSP430}
 
   /* Stabs for profiling information*/
   .profiler 0 : { *(.profiler) }
-  
+
   /* Stabs debugging sections.  */
-  .stab 0 : { *(.stab) } 
+  .stab 0 : { *(.stab) }
   .stabstr 0 : { *(.stabstr) }
   .stab.excl 0 : { *(.stab.excl) }
   .stab.exclstr 0 : { *(.stab.exclstr) }
@@ -278,10 +315,10 @@ SECTIONS
   .comment 0 : { *(.comment) }
 EOF
 
-source $srcdir/scripttempl/DWARF.sc
+. $srcdir/scripttempl/DWARF.sc
 
 cat <<EOF
-  .MP430.attributes 0 :
+  .MSP430.attributes 0 :
   {
     KEEP (*(.MSP430.attributes))
     KEEP (*(.gnu.attributes))

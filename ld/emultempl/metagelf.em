@@ -1,5 +1,5 @@
 # This shell script emits a C file. -*- C -*-
-#   Copyright 2013 Free Software Foundation, Inc.
+#   Copyright (C) 2013-2018 Free Software Foundation, Inc.
 #
 # This file is part of GNU Binutils.
 #
@@ -45,9 +45,9 @@ static bfd_signed_vma group_size = 1;
 static void
 metagelf_create_output_section_statements (void)
 {
-  extern const bfd_target bfd_elf32_metag_vec;
+  extern const bfd_target metag_elf32_vec;
 
-  if (link_info.output_bfd->xvec != &bfd_elf32_metag_vec)
+  if (link_info.output_bfd->xvec != &metag_elf32_vec)
     return;
 
   stub_file = lang_add_input_file ("linker stubs",
@@ -59,7 +59,7 @@ metagelf_create_output_section_statements (void)
 			      bfd_get_arch (link_info.output_bfd),
 			      bfd_get_mach (link_info.output_bfd)))
     {
-      einfo ("%X%P: can not create BFD %E\n");
+      einfo (_("%X%P: can not create BFD %E\n"));
       return;
     }
 
@@ -154,7 +154,6 @@ metagelf_add_stub_section (const char *stub_sec_name, asection *input_section)
   asection *stub_sec;
   flagword flags;
   asection *output_section;
-  const char *secname;
   lang_output_section_statement_type *os;
   struct hook_stub_info info;
 
@@ -166,8 +165,7 @@ metagelf_add_stub_section (const char *stub_sec_name, asection *input_section)
     goto err_ret;
 
   output_section = input_section->output_section;
-  secname = bfd_get_section_name (output_section->owner, output_section);
-  os = lang_output_section_find (secname);
+  os = lang_output_section_get (output_section);
 
   info.input_section = input_section;
   lang_list_init (&info.add);
@@ -180,7 +178,7 @@ metagelf_add_stub_section (const char *stub_sec_name, asection *input_section)
     return stub_sec;
 
  err_ret:
-  einfo ("%X%P: can not make stub section: %E\n");
+  einfo (_("%X%P: can not make stub section: %E\n"));
   return NULL;
 }
 
@@ -221,25 +219,31 @@ build_section_lists (lang_statement_union_type *statement)
 static void
 gld${EMULATION_NAME}_after_allocation (void)
 {
+  int ret;
+
   /* bfd_elf_discard_info just plays with data and debugging sections,
      ie. doesn't affect code size, so we can delay resizing the
      sections.  It's likely we'll resize everything in the process of
      adding stubs.  */
-  if (bfd_elf_discard_info (link_info.output_bfd, &link_info))
+  ret = bfd_elf_discard_info (link_info.output_bfd, &link_info);
+  if (ret < 0)
+    {
+      einfo (_("%X%P: .eh_frame/.stab edit: %E\n"));
+      return;
+    }
+  else if (ret > 0)
     need_laying_out = 1;
 
   /* If generating a relocatable output file, then we don't
      have to examine the relocs.  */
-  if (stub_file != NULL && !link_info.relocatable)
+  if (stub_file != NULL && !bfd_link_relocatable (&link_info))
     {
-      int ret = elf_metag_setup_section_lists (link_info.output_bfd,
-					       &link_info);
-
+      ret = elf_metag_setup_section_lists (link_info.output_bfd, &link_info);
       if (ret != 0)
 	{
 	  if (ret < 0)
 	    {
-	      einfo ("%X%P: can not size stub section: %E\n");
+	      einfo (_("%X%P: can not size stub section: %E\n"));
 	      return;
 	    }
 
@@ -253,7 +257,7 @@ gld${EMULATION_NAME}_after_allocation (void)
 				      &metagelf_add_stub_section,
 				      &metagelf_layout_sections_again))
 	    {
-	      einfo ("%X%P: can not size stub section: %E\n");
+	      einfo (_("%X%P: can not size stub section: %E\n"));
 	      return;
 	    }
 	}
@@ -262,13 +266,13 @@ gld${EMULATION_NAME}_after_allocation (void)
   if (need_laying_out != -1)
     gld${EMULATION_NAME}_map_segments (need_laying_out);
 
-  if (! link_info.relocatable)
+  if (!bfd_link_relocatable (&link_info))
     {
       /* Now build the linker stubs.  */
       if (stub_file != NULL && stub_file->the_bfd->sections != NULL)
 	{
 	  if (! elf_metag_build_stubs (&link_info))
-	    einfo ("%X%P: can not build stubs: %E\n");
+	    einfo (_("%X%P: can not build stubs: %E\n"));
 	}
     }
 }
@@ -324,8 +328,8 @@ PARSE_AND_LIST_ARGS_CASES='
     case OPTION_STUBGROUP_SIZE:
       {
 	const char *end;
-        group_size = bfd_scan_vma (optarg, &end, 0);
-        if (*end)
+	group_size = bfd_scan_vma (optarg, &end, 0);
+	if (*end)
 	  einfo (_("%P%F: invalid number `%s'\''\n"), optarg);
       }
       break;

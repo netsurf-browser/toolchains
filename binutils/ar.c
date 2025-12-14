@@ -1,5 +1,5 @@
 /* ar.c - Archive modify and extract.
-   Copyright 1991-2013 Free Software Foundation, Inc.
+   Copyright (C) 1991-2018 Free Software Foundation, Inc.
 
    This file is part of GNU Binutils.
 
@@ -29,11 +29,11 @@
 #include "progress.h"
 #include "getopt.h"
 #include "aout/ar.h"
-#include "libbfd.h"
 #include "bucomm.h"
 #include "arsup.h"
 #include "filenames.h"
 #include "binemul.h"
+#include "plugin-api.h"
 #include "plugin.h"
 
 #ifdef __GO32___
@@ -138,7 +138,11 @@ static int show_version = 0;
 
 static int show_help = 0;
 
+#if BFD_SUPPORTS_PLUGINS
+static const char *plugin_target = "plugin";
+#else
 static const char *plugin_target = NULL;
+#endif
 
 static const char *target = NULL;
 
@@ -571,7 +575,6 @@ decode_options (int argc, char **argv)
           break;
 	case OPTION_PLUGIN:
 #if BFD_SUPPORTS_PLUGINS
-	  plugin_target = "plugin";
 	  bfd_plugin_set_plugin (optarg);
 #else
 	  fprintf (stderr, _("sorry - this program has been built without plugin support\n"));
@@ -632,7 +635,6 @@ ranlib_main (int argc, char **argv)
 	  /* PR binutils/13493: Support plugins.  */
 	case OPTION_PLUGIN:
 #if BFD_SUPPORTS_PLUGINS
-	  plugin_target = "plugin";
 	  bfd_plugin_set_plugin (optarg);
 #else
 	  fprintf (stderr, _("sorry - this program has been built without plugin support\n"));
@@ -689,6 +691,7 @@ main (int argc, char **argv)
 
   program_name = argv[0];
   xmalloc_set_program_name (program_name);
+  bfd_set_error_program_name (program_name);
 #if BFD_SUPPORTS_PLUGINS
   bfd_plugin_set_program_name (program_name);
 #endif
@@ -737,11 +740,18 @@ main (int argc, char **argv)
 
   if (mri_mode)
     {
+      default_deterministic ();
       mri_emul ();
     }
   else
     {
       bfd *arch;
+
+      /* Fail if no files are specified on the command line.
+	 (But not for MRI mode which allows for reading arguments
+	 and filenames from stdin).  */
+      if (argv[arg_index] == NULL)
+	usage (0);
 
       /* We don't use do_quick_append any more.  Too many systems
 	 expect ar to always rebuild the symbol table even when q is
@@ -772,18 +782,26 @@ main (int argc, char **argv)
       default_deterministic ();
 
       if (postype != pos_default)
-	posname = argv[arg_index++];
+	{
+	  posname = argv[arg_index++];
+	  if (posname == NULL)
+	    fatal (_("missing position arg."));
+	}
 
       if (counted_name_mode)
 	{
 	  if (operation != extract && operation != del)
 	    fatal (_("`N' is only meaningful with the `x' and `d' options."));
+	  if (argv[arg_index] == NULL)
+	    fatal (_("`N' missing value."));
 	  counted_name_counter = atoi (argv[arg_index++]);
 	  if (counted_name_counter <= 0)
 	    fatal (_("Value for `N' must be positive."));
 	}
 
       inarch_filename = argv[arg_index++];
+      if (inarch_filename == NULL)
+	usage (0);
 
       for (file_count = 0; argv[arg_index + file_count] != NULL; file_count++)
 	continue;
@@ -951,7 +969,7 @@ open_inarch (const char *archive_filename, const char *file)
 		 bfd_get_filename (arch));
 	  goto bloser;
 	}
-    }  
+    }
 
   last_one = &(arch->archive_next);
   /* Read all the contents right away, regardless.  */
@@ -999,7 +1017,7 @@ print_contents (bfd *abfd)
       if (nread != tocopy)
 	/* xgettext:c-format */
 	fatal (_("%s is not a valid archive"),
-	       bfd_get_filename (bfd_my_archive (abfd)));
+	       bfd_get_filename (abfd->my_archive));
 
       /* fwrite in mingw32 may return int instead of bfd_size_type. Cast the
 	 return value to bfd_size_type to avoid comparison between signed and
@@ -1030,6 +1048,16 @@ extract_file (bfd *abfd)
   bfd_size_type ncopied = 0;
   bfd_size_type size;
   struct stat buf;
+
+  /* PR binutils/17533: Do not allow directory traversal
+     outside of the current directory tree.  */
+  if (! is_valid_archive_path (bfd_get_filename (abfd)))
+    {
+      non_fatal (_("illegal pathname found in archive member: %s"),
+		 bfd_get_filename (abfd));
+      free (cbuf);
+      return;
+    }
 
   if (bfd_stat_arch_elt (abfd, &buf) != 0)
     /* xgettext:c-format */
@@ -1067,7 +1095,7 @@ extract_file (bfd *abfd)
 	if (nread != tocopy)
 	  /* xgettext:c-format */
 	  fatal (_("%s is not a valid archive"),
-		 bfd_get_filename (bfd_my_archive (abfd)));
+		 bfd_get_filename (abfd->my_archive));
 
 	/* See comment above; this saves disk arm motion */
 	if (ostream == NULL)
@@ -1169,6 +1197,7 @@ write_archive (bfd *iarch)
   if (smart_rename (new_name, old_name, 0) != 0)
     xexit (1);
   free (old_name);
+  free (new_name);
 }
 
 /* Return a pointer to the pointer to the entry which should be rplacd'd

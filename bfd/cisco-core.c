@@ -1,7 +1,5 @@
 /* BFD back-end for CISCO crash dumps.
-   Copyright 1994, 1997, 1999, 2000, 2001, 2002, 2004, 2005, 2006, 2007,
-   2010, 2011, 2012
-   Free Software Foundation, Inc.
+   Copyright (C) 1994-2018 Free Software Foundation, Inc.
 
    This file is part of BFD, the Binary File Descriptor library.
 
@@ -181,21 +179,21 @@ cisco_core_file_validate (bfd *abfd, int crash_info_loc)
 
       switch (bfd_get_32 (abfd, crashinfo.cpu_vector))
 	{
-	   /* bus error           */
+	   /* bus error		  */
 	case 2 : abfd->tdata.cisco_core_data->sig = SIGBUS; break;
-	   /* address error       */
+	   /* address error	  */
 	case 3 : abfd->tdata.cisco_core_data->sig = SIGBUS; break;
 	   /* illegal instruction */
 	case 4 : abfd->tdata.cisco_core_data->sig = SIGILL;  break;
-	   /* zero divide         */
+	   /* zero divide	  */
 	case 5 : abfd->tdata.cisco_core_data->sig = SIGFPE;  break;
-	   /* chk instruction     */
+	   /* chk instruction	  */
 	case 6 : abfd->tdata.cisco_core_data->sig = SIGFPE; break;
-	   /* trapv instruction   */
+	   /* trapv instruction	  */
 	case 7 : abfd->tdata.cisco_core_data->sig = SIGFPE; break;
 	   /* privilege violation */
 	case 8 : abfd->tdata.cisco_core_data->sig = SIGSEGV; break;
-	   /* trace trap          */
+	   /* trace trap	  */
 	case 9 : abfd->tdata.cisco_core_data->sig = SIGTRAP;  break;
 	   /* line 1010 emulator  */
 	case 10: abfd->tdata.cisco_core_data->sig = SIGILL;  break;
@@ -206,24 +204,24 @@ cisco_core_file_validate (bfd *abfd, int crash_info_loc)
 	     this cannot be triggered by software.  Call it a SIGBUS.  */
 	case 13: abfd->tdata.cisco_core_data->sig = SIGBUS;  break;
 
-	  /* interrupt           */
+	  /* interrupt		 */
 	case 31: abfd->tdata.cisco_core_data->sig = SIGINT;  break;
-	  /* breakpoint          */
+	  /* breakpoint		 */
 	case 33: abfd->tdata.cisco_core_data->sig = SIGTRAP;  break;
 
-	  /* floating point err  */
+	  /* floating point err	 */
 	case 48: abfd->tdata.cisco_core_data->sig = SIGFPE;  break;
-	  /* floating point err  */
+	  /* floating point err	 */
 	case 49: abfd->tdata.cisco_core_data->sig = SIGFPE;  break;
-	  /* zero divide         */
+	  /* zero divide	 */
 	case 50: abfd->tdata.cisco_core_data->sig = SIGFPE;  break;
-	  /* underflow           */
+	  /* underflow		 */
 	case 51: abfd->tdata.cisco_core_data->sig = SIGFPE;  break;
-	  /* operand error       */
+	  /* operand error	 */
 	case 52: abfd->tdata.cisco_core_data->sig = SIGFPE;  break;
-	   /* overflow            */
+	   /* overflow		  */
 	case 53: abfd->tdata.cisco_core_data->sig = SIGFPE;  break;
-	  /* NAN                 */
+	  /* NAN		 */
 	case 54: abfd->tdata.cisco_core_data->sig = SIGFPE;  break;
 	default:
 #ifndef SIGEMT
@@ -315,9 +313,9 @@ cisco_core_file_failing_signal (bfd *abfd ATTRIBUTE_UNUSED)
   return abfd->tdata.cisco_core_data->sig;
 }
 
-extern const bfd_target cisco_core_little_vec;
+extern const bfd_target core_cisco_le_vec;
 
-const bfd_target cisco_core_big_vec =
+const bfd_target core_cisco_be_vec =
 {
     "cisco-ios-core-big",
     bfd_target_unknown_flavour,
@@ -363,12 +361,12 @@ const bfd_target cisco_core_big_vec =
        BFD_JUMP_TABLE_LINK (_bfd_nolink),
        BFD_JUMP_TABLE_DYNAMIC (_bfd_nodynamic),
 
-    & cisco_core_little_vec,
+    & core_cisco_le_vec,
 
     NULL	/* backend_data */
 };
 
-const bfd_target cisco_core_little_vec =
+const bfd_target core_cisco_le_vec =
 {
     "cisco-ios-core-little",
     bfd_target_unknown_flavour,
@@ -378,7 +376,7 @@ const bfd_target cisco_core_little_vec =
      HAS_LINENO | HAS_DEBUG |
      HAS_SYMS | HAS_LOCALS | WP_TEXT | D_PAGED),
     (SEC_HAS_CONTENTS | SEC_ALLOC | SEC_LOAD | SEC_RELOC), /* section flags */
-    0,			                                   /* symbol prefix */
+    0,							   /* symbol prefix */
     ' ',						   /* ar_pad_char */
     16,							   /* ar_max_namelen */
     0,				/* match_priority */
@@ -414,7 +412,7 @@ const bfd_target cisco_core_little_vec =
        BFD_JUMP_TABLE_LINK (_bfd_nolink),
        BFD_JUMP_TABLE_DYNAMIC (_bfd_nodynamic),
 
-    &cisco_core_big_vec,
+    &core_cisco_be_vec,
 
     NULL			/* backend_data */
 };

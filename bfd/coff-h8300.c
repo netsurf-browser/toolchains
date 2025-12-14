@@ -1,7 +1,5 @@
 /* BFD back-end for Renesas H8/300 COFF binaries.
-   Copyright 1990, 1991, 1992, 1993, 1994, 1995, 1996, 1997, 1998, 1999,
-   2000, 2001, 2002, 2003, 2004, 2005, 2006, 2007, 2008, 2012
-   Free Software Foundation, Inc.
+   Copyright (C) 1990-2018 Free Software Foundation, Inc.
    Written by Steve Chamberlain, <sac@cygnus.com>.
 
    This file is part of BFD, the Binary File Descriptor library.
@@ -339,7 +337,7 @@ rtype2howto (arelent *internal, struct internal_reloc *dst)
       internal->howto = howto_table + 19;
       break;
     default:
-      abort ();
+      internal->howto = NULL;
       break;
     }
 }
@@ -581,9 +579,7 @@ h8300_reloc16_estimate (bfd *abfd, asection *input_section, arelent *reloc,
 	  /* Done with this reloc.  */
 	  break;
 	}
-
-      /* FALLTHROUGH and try to turn the 24-/32-bit reloc into a 16-bit
-	 reloc.  */
+      /* Fall through.  */
 
     /* This is a 24-/32-bit absolute address in a mov insn, which can
        become an 16-bit absolute address if it's in the right range.  */
@@ -593,7 +589,7 @@ h8300_reloc16_estimate (bfd *abfd, asection *input_section, arelent *reloc,
       value = bfd_h8300_pad_address (abfd, value);
 
       /* If the address is a sign-extended 16-bit value then we can
-         relax this instruction.  */
+	 relax this instruction.  */
       if (value <= 0x7fff || value >= 0xffff8000u)
 	{
 	  /* Change the reloc type.  */
@@ -649,14 +645,10 @@ h8300_reloc16_extra_cases (bfd *abfd, struct bfd_link_info *link_info,
 
       /* Sanity check.  */
       if (gap < -128 || gap > 126)
-	{
-	  if (! ((*link_info->callbacks->reloc_overflow)
-		 (link_info, NULL,
-		  bfd_asymbol_name (*reloc->sym_ptr_ptr),
-		  reloc->howto->name, reloc->addend, input_section->owner,
-		  input_section, reloc->address)))
-	    abort ();
-	}
+	(*link_info->callbacks->reloc_overflow)
+	  (link_info, NULL, bfd_asymbol_name (*reloc->sym_ptr_ptr),
+	   reloc->howto->name, reloc->addend, input_section->owner,
+	   input_section, reloc->address);
 
       /* Everything looks OK.  Apply the relocation and update the
 	 src/dst address appropriately.  */
@@ -681,14 +673,10 @@ h8300_reloc16_extra_cases (bfd *abfd, struct bfd_link_info *link_info,
 
       /* Sanity check.  */
       if (gap > 32766 || gap < -32768)
-	{
-	  if (! ((*link_info->callbacks->reloc_overflow)
-		 (link_info, NULL,
-		  bfd_asymbol_name (*reloc->sym_ptr_ptr),
-		  reloc->howto->name, reloc->addend, input_section->owner,
-		  input_section, reloc->address)))
-	    abort ();
-	}
+	(*link_info->callbacks->reloc_overflow)
+	  (link_info, NULL, bfd_asymbol_name (*reloc->sym_ptr_ptr),
+	   reloc->howto->name, reloc->addend, input_section->owner,
+	   input_section, reloc->address);
 
       /* Everything looks OK.  Apply the relocation and update the
 	 src/dst address appropriately.  */
@@ -771,14 +759,10 @@ h8300_reloc16_extra_cases (bfd *abfd, struct bfd_link_info *link_info,
 	  src_address += 4;
 	}
       else
-	{
-	  if (! ((*link_info->callbacks->reloc_overflow)
-		 (link_info, NULL,
-		  bfd_asymbol_name (*reloc->sym_ptr_ptr),
-		  reloc->howto->name, reloc->addend, input_section->owner,
-		  input_section, reloc->address)))
-	    abort ();
-	}
+	(*link_info->callbacks->reloc_overflow)
+	  (link_info, NULL, bfd_asymbol_name (*reloc->sym_ptr_ptr),
+	   reloc->howto->name, reloc->addend, input_section->owner,
+	   input_section, reloc->address);
       break;
 
     /* A 16-bit absolute branch that is now an 8-bit pc-relative branch.  */
@@ -795,14 +779,10 @@ h8300_reloc16_extra_cases (bfd *abfd, struct bfd_link_info *link_info,
 
       /* Sanity check.  */
       if (gap < -128 || gap > 126)
-	{
-	  if (! ((*link_info->callbacks->reloc_overflow)
-		 (link_info, NULL,
-		  bfd_asymbol_name (*reloc->sym_ptr_ptr),
-		  reloc->howto->name, reloc->addend, input_section->owner,
-		  input_section, reloc->address)))
-	    abort ();
-	}
+	(*link_info->callbacks->reloc_overflow)
+	  (link_info, NULL, bfd_asymbol_name (*reloc->sym_ptr_ptr),
+	   reloc->howto->name, reloc->addend, input_section->owner,
+	   input_section, reloc->address);
 
       /* Now fix the instruction itself.  */
       switch (data[dst_address - 1])
@@ -842,14 +822,10 @@ h8300_reloc16_extra_cases (bfd *abfd, struct bfd_link_info *link_info,
 
       /* Sanity check.  */
       if (gap < -128 || gap > 126)
-	{
-	  if (! ((*link_info->callbacks->reloc_overflow)
-		 (link_info, NULL,
-		  bfd_asymbol_name (*reloc->sym_ptr_ptr),
-		  reloc->howto->name, reloc->addend, input_section->owner,
-		  input_section, reloc->address)))
-	    abort ();
-	}
+	(*link_info->callbacks->reloc_overflow)
+	  (link_info, NULL, bfd_asymbol_name (*reloc->sym_ptr_ptr),
+	   reloc->howto->name, reloc->addend, input_section->owner,
+	   input_section, reloc->address);
 
       /* Now fix the instruction.  */
       switch (data[dst_address - 2])
@@ -1042,14 +1018,10 @@ h8300_reloc16_extra_cases (bfd *abfd, struct bfd_link_info *link_info,
 
       /* Sanity check.  */
       if (gap < -128 || gap > 126)
-	{
-	  if (! ((*link_info->callbacks->reloc_overflow)
-		 (link_info, NULL,
-		  bfd_asymbol_name (*reloc->sym_ptr_ptr),
-		  reloc->howto->name, reloc->addend, input_section->owner,
-		  input_section, reloc->address)))
-	    abort ();
-	}
+	(*link_info->callbacks->reloc_overflow)
+	  (link_info, NULL, bfd_asymbol_name (*reloc->sym_ptr_ptr),
+	   reloc->howto->name, reloc->addend, input_section->owner,
+	   input_section, reloc->address);
 
       /* Everything looks OK.  Fix the condition in the instruction, apply
 	 the relocation, and update the src/dst address appropriately.  */
@@ -1092,7 +1064,7 @@ h8300_reloc16_extra_cases (bfd *abfd, struct bfd_link_info *link_info,
 
 	if (link_info->output_bfd->xvec != abfd->xvec)
 	  {
-	    (*_bfd_error_handler)
+	    _bfd_error_handler
 	      (_("cannot handle R_MEM_INDIRECT reloc when using %s output"),
 	       link_info->output_bfd->xvec->name);
 
@@ -1125,14 +1097,10 @@ h8300_reloc16_extra_cases (bfd *abfd, struct bfd_link_info *link_info,
 		src_address += 1;
 	      }
 	    else
-	      {
-		if (! ((*link_info->callbacks->reloc_overflow)
-		       (link_info, NULL,
-			bfd_asymbol_name (*reloc->sym_ptr_ptr),
-			reloc->howto->name, reloc->addend, input_section->owner,
-			input_section, reloc->address)))
-		  abort ();
-	      }
+	      (*link_info->callbacks->reloc_overflow)
+		(link_info, NULL, bfd_asymbol_name (*reloc->sym_ptr_ptr),
+		 reloc->howto->name, reloc->addend, input_section->owner,
+		 input_section, reloc->address);
 	    break;
 	  }
 
@@ -1416,4 +1384,4 @@ h8300_bfd_link_add_symbols (bfd *abfd, struct bfd_link_info *info)
   bfd_coff_reloc16_get_relocated_section_contents
 #define coff_bfd_relax_section bfd_coff_reloc16_relax_section
 
-CREATE_BIG_COFF_TARGET_VEC (h8300coff_vec, "coff-h8300", BFD_IS_RELAXABLE, 0, '_', NULL, COFF_SWAP_TABLE)
+CREATE_BIG_COFF_TARGET_VEC (h8300_coff_vec, "coff-h8300", BFD_IS_RELAXABLE, 0, '_', NULL, COFF_SWAP_TABLE)
