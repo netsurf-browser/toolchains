@@ -3,14 +3,11 @@
 ## From Ulrich Drepper
 ## Almost entirely rewritten by Alexandre Oliva
 ## ------------------------
-# Copyright (C) 1996, 1997, 1998, 1999, 2000, 2001, 2002, 2003, 2004, 2005,
-# 2006  Free Software Foundation, Inc.
+# Copyright (C) 1996-2017 Free Software Foundation, Inc.
 #
 # This file is free software; the Free Software Foundation
 # gives unlimited permission to copy and/or distribute it,
 # with or without modifications, as long as this notice is preserved.
-
-# serial 10
 
 # AM_PATH_LISPDIR
 # ---------------
@@ -23,7 +20,8 @@ AC_DEFUN([AM_PATH_LISPDIR],
  AC_ARG_VAR([EMACS], [the Emacs editor command])
  AC_ARG_VAR([EMACSLOADPATH], [the Emacs library search path])
  AC_ARG_WITH([lispdir],
- [  --with-lispdir          override the default lisp directory],
+ [AS_HELP_STRING([--with-lispdir],
+                 [override the default lisp directory])],
  [ lispdir="$withval"
    AC_MSG_CHECKING([where .elc files should go])
    AC_MSG_RESULT([$lispdir])],
@@ -36,7 +34,7 @@ AC_DEFUN([AM_PATH_LISPDIR],
   #  which is non-obvious for non-emacs users.
   # Redirecting /dev/null should help a bit; pity we can't detect "broken"
   #  emacsen earlier and avoid running this altogether.
-  AC_RUN_LOG([$EMACS -batch -q -eval '(while load-path (princ (concat (car load-path) "\n")) (setq load-path (cdr load-path)))' </dev/null >conftest.out])
+  AC_RUN_LOG([$EMACS -batch -Q -eval '(while load-path (princ (concat (car load-path) "\n")) (setq load-path (cdr load-path)))' </dev/null >conftest.out])
 	am_cv_lispdir=`sed -n \
        -e 's,/$,,' \
        -e '/.*\/lib\/x*emacs\/site-lisp$/{s,.*/lib/\(x*emacs/site-lisp\)$,${libdir}/\1,;p;q;}' \
@@ -51,5 +49,3 @@ AC_DEFUN([AM_PATH_LISPDIR],
 ])
 AC_SUBST([lispdir])
 ])# AM_PATH_LISPDIR
-
-AU_DEFUN([ud_PATH_LISPDIR], [AM_PATH_LISPDIR])

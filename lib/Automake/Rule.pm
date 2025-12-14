@@ -1,4 +1,4 @@
-# Copyright (C) 2003, 2004, 2006, 2007  Free Software Foundation, Inc.
+# Copyright (C) 2003-2017 Free Software Foundation, Inc.
 
 # This program is free software; you can redistribute it and/or modify
 # it under the terms of the GNU General Public License as published by
@@ -14,6 +14,8 @@
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 package Automake::Rule;
+
+use 5.006;
 use strict;
 use Carp;
 
@@ -27,8 +29,8 @@ use Automake::DisjConditions;
 require Exporter;
 use vars '@ISA', '@EXPORT', '@EXPORT_OK';
 @ISA = qw/Automake::Item Exporter/;
-@EXPORT = qw (reset register_suffix_rule suffix_rules_count
-	      suffixes rules $suffix_rules $KNOWN_EXTENSIONS_PATTERN
+@EXPORT = qw (reset register_suffix_rule next_in_suffix_chain
+	      suffixes rules $KNOWN_EXTENSIONS_PATTERN
 	      depend %dependencies %actions register_action
 	      accept_extensions
 	      reject_rule msg_rule msg_cond_rule err_rule err_cond_rule
@@ -96,12 +98,17 @@ non-object).
 my $_SUFFIX_RULE_PATTERN =
   '^(\.[a-zA-Z0-9_(){}$+@\-]+)(\.[a-zA-Z0-9_(){}$+@\-]+)' . "\$";
 
-# Suffixes found during a run.
-use vars '@_suffixes';
+my @_suffixes = ();
+my @_known_extensions_list = ();
+my %_rule_dict = ();
 
-# Same as $suffix_rules (declared below), but records only the
-# default rules supplied by the languages Automake supports.
-use vars '$_suffix_rules_default';
+# See comments in the implementation of the 'next_in_suffix_chain()'
+# variable for details.
+my %_suffix_rules;
+
+# Same as $suffix_rules, but records only the default rules
+# supplied by the languages Automake supports.
+my %_suffix_rules_builtin;
 
 =item C<%dependencies>
 
@@ -124,50 +131,19 @@ only when keys exists in C<%dependencies>.
 
 use vars '%actions';
 
-=item <$suffix_rules>
-
-This maps the source extension for all suffix rule seen to
-a C<hash> whose keys are the possible output extensions.
-
-Note that this is transitively closed by construction:
-if we have
-      exists $suffix_rules{$ext1}{$ext2}
-   && exists $suffix_rules{$ext2}{$ext3}
-then we also have
-      exists $suffix_rules{$ext1}{$ext3}
-
-So it's easy to check whether C<.foo> can be transformed to
-C<.$(OBJEXT)> by checking whether
-C<$suffix_rules{'.foo'}{'.$(OBJEXT)'}> exists.  This will work even if
-transforming C<.foo> to C<.$(OBJEXT)> involves a chain of several
-suffix rules.
-
-The value of C<$suffix_rules{$ext1}{$ext2}> is a pair
-C<[ $next_sfx, $dist ]> where C<$next_sfx> is target suffix
-for the next rule to use to reach C<$ext2>, and C<$dist> the
-distance to C<$ext2'>.
-
-The content of this variable should be updated via the
-C<register_suffix_rule> function.
-
-=cut
-
-use vars '$suffix_rules';
-
 =item C<$KNOWN_EXTENSIONS_PATTERN>
 
 Pattern that matches all know input extensions (i.e. extensions used
 by the languages supported by Automake).  Using this pattern (instead
-of `\..*$') to match extensions allows Automake to support dot-less
+of '\..*$') to match extensions allows Automake to support dot-less
 extensions.
 
 New extensions should be registered with C<accept_extensions>.
 
 =cut
 
-use vars qw ($KNOWN_EXTENSIONS_PATTERN @_known_extensions_list);
+use vars qw ($KNOWN_EXTENSIONS_PATTERN);
 $KNOWN_EXTENSIONS_PATTERN = "";
-@_known_extensions_list = ();
 
 =back
 
@@ -258,7 +234,7 @@ sub reject_rule ($$)
 =item C<accept_extensions (@exts)>
 
 Update C<$KNOWN_EXTENSIONS_PATTERN> to recognize the extensions
-listed C<@exts>.  Extensions should contain a dot if needed.
+listed in C<@exts>.  Extensions should contain a dot if needed.
 
 =cut
 
@@ -276,7 +252,6 @@ rules defined so far.)
 
 =cut
 
-use vars '%_rule_dict';
 sub rules ()
 {
   return values %_rule_dict;
@@ -306,7 +281,7 @@ sub register_action ($$)
 
 =item C<Automake::Rule::reset>
 
-The I<forget all> function.  Clears all know rules and reset some
+The I<forget all> function.  Clears all known rules and resets some
 other internal data.
 
 =cut
@@ -315,16 +290,7 @@ sub reset()
 {
   %_rule_dict = ();
   @_suffixes = ();
-  # The first time we initialize the variables,
-  # we save the value of $suffix_rules.
-  if (defined $_suffix_rules_default)
-    {
-      $suffix_rules = $_suffix_rules_default;
-    }
-  else
-    {
-      $_suffix_rules_default = $suffix_rules;
-    }
+  %_suffix_rules = %_suffix_rules_builtin;
 
   %dependencies =
     (
@@ -374,43 +340,79 @@ sub reset()
      # Tarballing.
      'dist-all'             => [],
 
-     # Phoning.
      '.PHONY'               => [],
-     # Recursive install targets (so `make -n install' works for BSD Make).
+     '.PRECIOUS'            => [],
+     # Recursive install targets (so "make -n install" works for BSD Make).
      '.MAKE'		    => [],
      );
   %actions = ();
 }
 
+=item C<next_in_suffix_chain ($ext1, $ext2)>
+
+Return the target suffix for the next rule to use to reach C<$ext2>
+from C<$ext1>, or C<undef> if no such rule exists.
+
+=cut
+
+sub next_in_suffix_chain ($$)
+{
+  my ($ext1, $ext2) = @_;
+  return undef unless (exists $_suffix_rules{$ext1} and
+                       exists $_suffix_rules{$ext1}{$ext2});
+  return $_suffix_rules{$ext1}{$ext2}[0];
+}
+
 =item C<register_suffix_rule ($where, $src, $dest)>
 
-Register a suffix rules defined on C<$where> that transform
+Register a suffix rule defined on C<$where> that transforms
 files ending in C<$src> into files ending in C<$dest>.
-
-This upgrades the C<$suffix_rules> variables.
 
 =cut
 
 sub register_suffix_rule ($$$)
 {
   my ($where, $src, $dest) = @_;
+  my $suffix_rules = $where->{'position'} ? \%_suffix_rules
+                                          : \%_suffix_rules_builtin;
 
   verb "Sources ending in $src become $dest";
   push @_suffixes, $src, $dest;
 
   # When transforming sources to objects, Automake uses the
   # %suffix_rules to move from each source extension to
-  # `.$(OBJEXT)', not to `.o' or `.obj'.  However some people
-  # define suffix rules for `.o' or `.obj', so internally we will
-  # consider these extensions equivalent to `.$(OBJEXT)'.  We
-  # CANNOT rewrite the target (i.e., automagically replace `.o'
-  # and `.obj' by `.$(OBJEXT)' in the output), or warn the user
-  # that (s)he'd better use `.$(OBJEXT)', because Automake itself
-  # output suffix rules for `.o' or `.obj'...
+  # '.$(OBJEXT)', not to '.o' or '.obj'.  However some people
+  # define suffix rules for '.o' or '.obj', so internally we will
+  # consider these extensions equivalent to '.$(OBJEXT)'.  We
+  # CANNOT rewrite the target (i.e., automagically replace '.o'
+  # and '.obj' by '.$(OBJEXT)' in the output), or warn the user
+  # that (s)he'd better use '.$(OBJEXT)', because Automake itself
+  # output suffix rules for '.o' or '.obj' ...
   $dest = '.$(OBJEXT)' if ($dest eq '.o' || $dest eq '.obj');
 
-  # Reading the comments near the declaration of $suffix_rules might
-  # help to understand the update of $suffix_rules that follows...
+  # ----------------------------------------------------------------------
+  # The $suffix_rules variable maps the source extension for all suffix
+  # rules seen to a hash whose keys are the possible output extensions.
+  #
+  # Note that this is transitively closed by construction:
+  # if we have
+  #
+  #       exists $suffix_rules{$ext1}{$ext2}
+  #    && exists $suffix_rules{$ext2}{$ext3}
+  #
+  # then we also have
+  #
+  #       exists $suffix_rules{$ext1}{$ext3}
+  #
+  # So it's easy to check whether '.foo' can be transformed to
+  # '.$(OBJEXT)' by checking whether $suffix_rules{'.foo'}{'.$(OBJEXT)'}
+  # exists.  This will work even if transforming '.foo' to '.$(OBJEXT)'
+  # involves a chain of several suffix rules.
+  #
+  # The value of $suffix_rules{$ext1}{$ext2} is a pair [$next_sfx, $dist]
+  # where $next_sfx is target suffix for the next rule to use to reach
+  # $ext2, and $dist the distance to $ext2.
+  # ----------------------------------------------------------------------
 
   # Register $dest as a possible destination from $src.
   # We might have the create the \hash.
@@ -462,18 +464,6 @@ sub register_suffix_rule ($$$)
     }
 }
 
-=item C<$count = suffix_rules_count>
-
-Return the number of suffix rules added while processing the current
-F<Makefile> (excluding predefined suffix rules).
-
-=cut
-
-sub suffix_rules_count ()
-{
-  return (scalar keys %$suffix_rules) - (scalar keys %$_suffix_rules_default);
-}
-
 =item C<@list = suffixes>
 
 Return the list of known suffixes.
@@ -488,7 +478,7 @@ sub suffixes ()
 =item C<rule ($rulename)>
 
 Return the C<Automake::Rule> object for the rule
-named C<$rulename> if defined.   Return 0 otherwise.
+named C<$rulename> if defined.  Return 0 otherwise.
 
 =cut
 
@@ -496,7 +486,7 @@ sub rule ($)
 {
   my ($name) = @_;
   # Strip $(EXEEXT) from $name, so we can diagnose
-  # a clash if `ctags$(EXEEXT):' is redefined after `ctags:'.
+  # a clash if 'ctags$(EXEEXT):' is redefined after 'ctags:'.
   $name =~ s,\$\(EXEEXT\)$,,;
   return $_rule_dict{$name} || 0;
 }
@@ -565,7 +555,7 @@ sub _new ($$)
   my ($class, $name) = @_;
 
   # Strip $(EXEEXT) from $name, so we can diagnose
-  # a clash if `ctags$(EXEEXT):' is redefined after `ctags:'.
+  # a clash if 'ctags$(EXEEXT):' is redefined after 'ctags:'.
   (my $keyname = $name) =~ s,\$\(EXEEXT\)$,,;
 
   my $self = Automake::Item::new ($class, $name);
@@ -573,6 +563,178 @@ sub _new ($$)
   return $self;
 }
 
+sub _rule_defn_with_exeext_awareness ($$$)
+{
+  my ($target, $cond, $where) = @_;
+
+  # For now 'foo:' will override 'foo$(EXEEXT):'.  This is temporary,
+  # though, so we emit a warning.
+  (my $noexe = $target) =~ s/\$\(EXEEXT\)$//;
+  my $noexerule = rule $noexe;
+  my $tdef = $noexerule ? $noexerule->def ($cond) : undef;
+
+  if ($noexe ne $target
+      && $tdef
+      && $noexerule->name ne $target)
+    {
+      # The no-exeext option enables this feature.
+      if (! option 'no-exeext')
+	{
+	  msg ('obsolete', $tdef->location,
+	       "deprecated feature: target '$noexe' overrides "
+	       . "'$noexe\$(EXEEXT)'\n"
+	       . "change your target to read '$noexe\$(EXEEXT)'",
+	       partial => 1);
+	  msg ('obsolete', $where, "target '$target' was defined here");
+	}
+    }
+    return $tdef;
+}
+
+sub _maybe_warn_about_duplicated_target ($$$$$$)
+{
+  my ($target, $tdef, $source, $owner, $cond, $where) = @_;
+
+  my $oldowner  = $tdef->owner;
+  # Ok, it's the name target, but the name maybe different because
+  # 'foo$(EXEEXT)' and 'foo' have the same key in our table.
+  my $oldname = $tdef->name;
+
+  # Don't mention true conditions in diagnostics.
+  my $condmsg =
+    $cond == TRUE ? '' : (" in condition '" . $cond->human . "'");
+
+  if ($owner == RULE_USER)
+    {
+      if ($oldowner == RULE_USER)
+        {
+          # Ignore '%'-style pattern rules.  We'd need the
+          # dependencies to detect duplicates, and they are
+          # already diagnosed as unportable by -Wportability.
+          if ($target !~ /^[^%]*%[^%]*$/)
+            {
+              ## FIXME: Presently we can't diagnose duplicate user rules
+              ## because we don't distinguish rules with commands
+              ## from rules that only add dependencies.  E.g.,
+              ##   .PHONY: foo
+              ##   .PHONY: bar
+              ## is legitimate.  This is checked in the 'phony.sh' test.
+
+              # msg ('syntax', $where,
+              #      "redefinition of '$target'$condmsg ...", partial => 1);
+              # msg_cond_rule ('syntax', $cond, $target,
+              #                "... '$target' previously defined here");
+            }
+        }
+      else
+        {
+          # Since we parse the user Makefile.am before reading
+          # the Automake fragments, this condition should never happen.
+          prog_error ("user target '$target'$condmsg seen after Automake's"
+                      . " definition\nfrom " . $tdef->source);
+        }
+    }
+  else # $owner == RULE_AUTOMAKE
+    {
+      if ($oldowner == RULE_USER)
+        {
+          # -am targets listed in %dependencies support a -local
+          # variant.  If the user tries to override TARGET or
+          # TARGET-am for which there exists a -local variant,
+          # just tell the user to use it.
+          my $hint = 0;
+          my $noam = $target;
+          $noam =~ s/-am$//;
+          if (exists $dependencies{"$noam-am"})
+            {
+              $hint = "consider using $noam-local instead of $target";
+            }
+
+          msg_cond_rule ('override', $cond, $target,
+                         "user target '$target' defined here"
+                         . "$condmsg ...", partial => 1);
+          msg ('override', $where,
+               "... overrides Automake target '$oldname' defined here",
+               partial => $hint);
+          msg_cond_rule ('override', $cond, $target, $hint)
+            if $hint;
+        }
+      else # $oldowner == RULE_AUTOMAKE
+        {
+          # Automake should ignore redefinitions of its own
+          # rules if they came from the same file.  This makes
+          # it easier to process a Makefile fragment several times.
+          # However it's an error if the target is defined in many
+          # files.  E.g., the user might be using bin_PROGRAMS = ctags
+          # which clashes with our 'ctags' rule.
+          # (It would be more accurate if we had a way to compare
+          # the *content* of both rules.  Then $targets_source would
+          # be useless.)
+          my $oldsource = $tdef->source;
+          if (not ($source eq $oldsource && $target eq $oldname))
+            {
+               msg ('syntax',
+                    $where, "redefinition of '$target'$condmsg ...",
+                    partial => 1);
+               msg_cond_rule ('syntax', $cond, $target,
+                              "... '$oldname' previously defined here");
+            }
+        }
+    }
+}
+
+# Return the list of conditionals in which the rule was defined.  In case
+# an ambiguous conditional definition is detected, return the empty list.
+sub _conditionals_for_rule ($$$$)
+{
+  my ($rule, $owner, $cond, $where) = @_;
+  my $target = $rule->name;
+  my @conds;
+  my ($message, $ambig_cond) = $rule->conditions->ambiguous_p ($target, $cond);
+
+  return $cond if !$message; # No ambiguity.
+
+  if ($owner == RULE_USER)
+    {
+      # For user rules, just diagnose the ambiguity.
+      msg 'syntax', $where, "$message ...", partial => 1;
+      msg_cond_rule ('syntax', $ambig_cond, $target,
+                     "... '$target' previously defined here");
+      return ();
+    }
+
+  # FIXME: for Automake rules, we can't diagnose ambiguities yet.
+  # The point is that Automake doesn't propagate conditions
+  # everywhere.  For instance &handle_PROGRAMS doesn't care if
+  # bin_PROGRAMS was defined conditionally or not.
+  # On the following input
+  #   if COND1
+  #   foo:
+  #           ...
+  #   else
+  #   bin_PROGRAMS = foo
+  #   endif
+  # &handle_PROGRAMS will attempt to define a 'foo:' rule
+  # in condition TRUE (which conflicts with COND1).  Fixing
+  # this in &handle_PROGRAMS and siblings seems hard: you'd
+  # have to explain &file_contents what to do with a
+  # condition.  So for now we do our best *here*.  If 'foo:'
+  # was already defined in condition COND1 and we want to define
+  # it in condition TRUE, then define it only in condition !COND1.
+  # (See cond14.sh and cond15.sh for some test cases.)
+  @conds = $rule->not_always_defined_in_cond ($cond)->conds;
+
+  # No conditions left to define the rule.
+  # Warn, because our workaround is meaningless in this case.
+  if (scalar @conds == 0)
+    {
+      msg 'syntax', $where, "$message ...", partial => 1;
+      msg_cond_rule ('syntax', $ambig_cond, $target,
+                     "... '$target' previously defined here");
+      return ();
+    }
+  return @conds;
+}
 
 =item C<@conds = define ($rulename, $source, $owner, $cond, $where)>
 
@@ -599,185 +761,38 @@ sub define ($$$$$)
   # Don't even think about defining a rule in condition FALSE.
   return () if $cond == FALSE;
 
-  # For now `foo:' will override `foo$(EXEEXT):'.  This is temporary,
-  # though, so we emit a warning.
-  (my $noexe = $target) =~ s,\$\(EXEEXT\)$,,;
-  my $noexerule = rule $noexe;
-  my $tdef = $noexerule ? $noexerule->def ($cond) : undef;
-
-  if ($noexe ne $target
-      && $tdef
-      && $noexerule->name ne $target)
-    {
-      # The no-exeext option enables this feature.
-      if (! option 'no-exeext')
-	{
-	  msg ('obsolete', $tdef->location,
-	       "deprecated feature: target `$noexe' overrides "
-	       . "`$noexe\$(EXEEXT)'\n"
-	       . "change your target to read `$noexe\$(EXEEXT)'");
-	  msg ('obsolete', $where, "target `$target' was defined here");
-	}
-      # Don't `return ()' now, as this might hide target clashes
-      # detected below.
-    }
-
+  my $tdef = _rule_defn_with_exeext_awareness ($target, $cond, $where);
 
   # A GNU make-style pattern rule has a single "%" in the target name.
   msg ('portability', $where,
-       "`%'-style pattern rules are a GNU make extension")
+       "'%'-style pattern rules are a GNU make extension")
     if $target =~ /^[^%]*%[^%]*$/;
 
-  # Diagnose target redefinitions.
+  # See whether this is a duplicated target declaration.
   if ($tdef)
     {
-      my $oldowner  = $tdef->owner;
-      # Ok, it's the name target, but the name maybe different because
-      # `foo$(EXEEXT)' and `foo' have the same key in our table.
-      my $oldname = $tdef->name;
-
-      # Don't mention true conditions in diagnostics.
-      my $condmsg =
-	$cond == TRUE ? '' : " in condition `" . $cond->human . "'";
-
-      if ($owner == RULE_USER)
-	{
-	  if ($oldowner == RULE_USER)
-	    {
-	      # Ignore `%'-style pattern rules.  We'd need the
-	      # dependencies to detect duplicates, and they are
-	      # already diagnosed as unportable by -Wportability.
-	      if ($target !~ /^[^%]*%[^%]*$/)
-		{
-		  ## FIXME: Presently we can't diagnose duplicate user rules
-		  ## because we don't distinguish rules with commands
-		  ## from rules that only add dependencies.  E.g.,
-		  ##   .PHONY: foo
-		  ##   .PHONY: bar
-		  ## is legitimate. (This is phony.test.)
-
-		  # msg ('syntax', $where,
-		  #      "redefinition of `$target'$condmsg...", partial => 1);
-		  # msg_cond_rule ('syntax', $cond, $target,
-		  #		   "... `$target' previously defined here");
-		}
-	      # Return so we don't redefine the rule in our tables,
-	      # don't check for ambiguous condition, etc.  The rule
-	      # will be output anyway because &read_am_file ignore the
-	      # return code.
-	      return ();
-	    }
-	  else
-	    {
-	      # Since we parse the user Makefile.am before reading
-	      # the Automake fragments, this condition should never happen.
-	      prog_error ("user target `$target'$condmsg seen after Automake's"
-			  . " definition\nfrom " . $tdef->source);
-	    }
-	}
-      else # $owner == RULE_AUTOMAKE
-	{
-	  if ($oldowner == RULE_USER)
-	    {
-	      # -am targets listed in %dependencies support a -local
-	      # variant.  If the user tries to override TARGET or
-	      # TARGET-am for which there exists a -local variant,
-	      # just tell the user to use it.
-	      my $hint = 0;
-	      my $noam = $target;
-	      $noam =~ s/-am$//;
-	      if (exists $dependencies{"$noam-am"})
-		{
-		  $hint = "consider using $noam-local instead of $target";
-		}
-
-	      msg_cond_rule ('override', $cond, $target,
-			     "user target `$target' defined here"
-			     . "$condmsg...", partial => 1);
-	      msg ('override', $where,
-		   "... overrides Automake target `$oldname' defined here",
-		   partial => $hint);
-	      msg_cond_rule ('override', $cond, $target, $hint)
-		if $hint;
-
-	      # Don't overwrite the user definition of TARGET.
-	      return ();
-	    }
-	  else # $oldowner == RULE_AUTOMAKE
-	    {
-	      # Automake should ignore redefinitions of its own
-	      # rules if they came from the same file.  This makes
-	      # it easier to process a Makefile fragment several times.
-	      # However it's an error if the target is defined in many
-	      # files.  E.g., the user might be using bin_PROGRAMS = ctags
-	      # which clashes with our `ctags' rule.
-	      # (It would be more accurate if we had a way to compare
-	      # the *content* of both rules.  Then $targets_source would
-	      # be useless.)
-	      my $oldsource = $tdef->source;
-	      return () if $source eq $oldsource && $target eq $oldname;
-
-	      msg ('syntax', $where, "redefinition of `$target'$condmsg...",
-		   partial => 1);
-	      msg_cond_rule ('syntax', $cond, $target,
-			     "... `$oldname' previously defined here");
-	      return ();
-	    }
-	}
-      # Never reached.
-      prog_error ("Unreachable place reached.");
+      # Diagnose invalid target redefinitions, if any.  Note that some
+      # target redefinitions are valid (e.g., for multiple-targets
+      # pattern rules).
+      _maybe_warn_about_duplicated_target ($target, $tdef, $source,
+                                           $owner, $cond, $where);
+      # Return so we don't redefine the rule in our tables, don't check
+      # for ambiguous condition, etc.  The rule will be output anyway
+      # because '&read_am_file' ignores the return code.
+      return ();
     }
 
-  # Conditions for which the rule should be defined.
-  my @conds = $cond;
-
-  # Check ambiguous conditional definitions.
   my $rule = _crule $target;
-  my ($message, $ambig_cond) = $rule->conditions->ambiguous_p ($target, $cond);
-  if ($message)			# We have an ambiguity.
-    {
-      if ($owner == RULE_USER)
-	{
-	  # For user rules, just diagnose the ambiguity.
-	  msg 'syntax', $where, "$message ...", partial => 1;
-	  msg_cond_rule ('syntax', $ambig_cond, $target,
-			 "... `$target' previously defined here");
-	  return ();
-	}
-      else
-	{
-	  # FIXME: for Automake rules, we can't diagnose ambiguities yet.
-	  # The point is that Automake doesn't propagate conditions
-	  # everywhere.  For instance &handle_PROGRAMS doesn't care if
-	  # bin_PROGRAMS was defined conditionally or not.
-	  # On the following input
-	  #   if COND1
-	  #   foo:
-	  #           ...
-	  #   else
-	  #   bin_PROGRAMS = foo
-	  #   endif
-	  # &handle_PROGRAMS will attempt to define a `foo:' rule
-	  # in condition TRUE (which conflicts with COND1).  Fixing
-	  # this in &handle_PROGRAMS and siblings seems hard: you'd
-	  # have to explain &file_contents what to do with a
-	  # condition.  So for now we do our best *here*.  If `foo:'
-	  # was already defined in condition COND1 and we want to define
-	  # it in condition TRUE, then define it only in condition !COND1.
-	  # (See cond14.test and cond15.test for some test cases.)
-	  @conds = $rule->not_always_defined_in_cond ($cond)->conds;
 
-	  # No conditions left to define the rule.
-	  # Warn, because our workaround is meaningless in this case.
-	  if (scalar @conds == 0)
-	    {
-	      msg 'syntax', $where, "$message ...", partial => 1;
-	      msg_cond_rule ('syntax', $ambig_cond, $target,
-			     "... `$target' previously defined here");
-	      return ();
-	    }
-	}
-    }
+  # Conditions for which the rule should be defined.  Due to some
+  # complications in the automake internals, this aspect is not as
+  # obvious as it might be, and in come cases this list must contain
+  # other entries in addition to '$cond'.  See the comments in
+  # '_conditionals_for_rule' for a rationale.
+  my @conds = _conditionals_for_rule ($rule, $owner, $cond, $where);
+
+  # Stop if we had ambiguous conditional definitions.
+  return unless @conds;
 
   # Finally define this rule.
   for my $c (@conds)
@@ -788,7 +803,7 @@ sub define ($$$$$)
     }
 
   # We honor inference rules with multiple targets because many
-  # make support this and people use it.  However this is disallowed
+  # makes support this and people use it.  However this is disallowed
   # by POSIX.  We'll print a warning later.
   my $target_count = 0;
   my $inference_rule_count = 0;
@@ -800,12 +815,10 @@ sub define ($$$$$)
       # two known extensions...
       if ($t =~ /^($KNOWN_EXTENSIONS_PATTERN)($KNOWN_EXTENSIONS_PATTERN)$/
 	  # ...or it's a rule with unknown extensions (i.e., the rule
-	  # looks like `.foo.bar:' but `.foo' or `.bar' are not
+	  # looks like '.foo.bar:' but '.foo' or '.bar' are not
 	  # declared in SUFFIXES and are not known language
 	  # extensions).  Automake will complete SUFFIXES from
 	  # @suffixes automatically (see handle_footer).
-
-
 	  || ($t =~ /$_SUFFIX_RULE_PATTERN/o && accept_extensions($1)))
 	{
 	  ++$inference_rule_count;
@@ -817,7 +830,7 @@ sub define ($$$$$)
   # definitions of multiple inference rules.  It's also
   # disallowed to mix plain targets with inference rules.
   msg ('portability', $where,
-       "Inference rules can have only one target before the colon (POSIX).")
+       "inference rules can have only one target before the colon (POSIX)")
     if $inference_rule_count > 0 && $target_count > 1;
 
   return @conds;
