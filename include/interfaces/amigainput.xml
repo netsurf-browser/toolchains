@@ -1,0 +1,104 @@
+<?xml version="1.0" encoding="iso-8859-1"?><!DOCTYPE library SYSTEM "library.dtd">
+
+<library name="AmigaInput" basename="AIN_Base" openname="AmigaInput.library">
+
+	<include>amigainput/amigainput.h</include>
+	<include>utility/tagitem.h</include>
+
+	<interface name="main" version="1.0" prefix="AIN_" struct="AIN_IFace" global="IAIN_">
+
+		<method name="Obtain" result="uint32">
+		</method>
+
+		<method name="Release" result="uint32">
+		</method>
+		
+		<method name="Expunge" result="void" status="unimplemented">
+		</method>
+		
+		<method name="Clone" result="struct Interface *" status="unimplemented">
+		</method>
+		
+		<method name="GetError" result="uint32">
+			<arg name="ctx" type="APTR"/>
+		</method>
+		
+		<method name="GetErrorString" result="STRPTR">
+			<arg name="error_code" type="uint32"/>
+		</method>
+		
+		<method name="CreateContext" result="APTR">
+			<arg name="api_version" type="uint32"/>
+			<arg name="tags" type="struct TagItem *"/>
+		</method>
+		
+		<method name="DeleteContext" result="void">
+			<arg name="ctx" type="APTR"/>
+		</method>
+		
+		<method name="EnumDevices" result="BOOL">
+			<arg name="ctx" type="APTR"/>
+			<arg name="enumfunc" type="APTR"/>
+			<arg name="user_data" type="APTR"/>
+		</method>
+		
+		<method name="Query" result="BOOL">
+			<arg name="ctx" type="APTR"/>
+			<arg name="device_id" type="AIN_DeviceID"/>
+			<arg name="qParameter" type="uint32"/>
+			<arg name="qArg" type="uint32"/>
+			<arg name="result" type="APTR"/>
+			<arg name="result_length" type="uint32"/>
+		</method>
+		
+		<method name="ObtainDevice" result="AIN_DeviceHandle *">
+			<arg name="ctx"		type="APTR"/>
+			<arg name="device_id" type="AIN_DeviceID"/>
+		</method>
+		
+		<method name="ReleaseDevice" result="void">
+			<arg name="ctx" type="APTR"/>
+			<arg name="handle" type="AIN_DeviceHandle *"/>
+		</method>
+		
+		<method name="SetDeviceParameter" result="BOOL">
+			<arg name="ctx"		type="APTR"/>
+			<arg name="handle"	type="AIN_DeviceHandle *"/>
+			<arg name="dParameter" type="uint32"/>
+			<arg name="dArg"	type="uint32"/>
+		</method>
+		
+		<method name="GetEvent" result="AIN_InputEvent *">
+			<arg name="ctx"		type="APTR"/>
+		</method>
+		
+		<method name="FreeEvent" result="void">
+			<arg name="ctx"		type="APTR"/>
+			<arg name="event"	type="AIN_InputEvent *"/>
+		</method>
+		
+		<method name="ReadDevice" result="BOOL">
+			<arg name="ctx"		type="APTR"/>
+			<arg name="handle"	type="AIN_DeviceHandle *"/>
+			<arg name="data"	type="APTR *"/>
+		</method>
+		
+		<method name="Set" result="BOOL">
+			<arg name="ctx"		type="APTR"/>
+			<arg name="tags"	type="struct TagItem *"/>
+		</method>
+		
+		<method name="RequestDevice" result="AIN_RequesterResult *">
+			<arg name="ctx"		type="APTR"/>
+			<arg name="tags"	type="struct TagItem *"/>
+		</method>
+		
+		<method name="FreeRequest"	result="void">
+			<arg name="ctx"		type="APTR"/>
+			<arg name="result"	type="AIN_RequesterResult *"/>
+		</method>
+
+	</interface>
+
+</library>
+
