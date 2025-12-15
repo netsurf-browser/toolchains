@@ -1,0 +1,12 @@
+CopyStore KickstartSam460/onchipmem.resource.kmod SYS:Kickstart
+
+IF NOT EXISTS SYS:Documentation/ReleaseNotes
+   MakeDir SYS:Documentation/ReleaseNotes ALL
+ENDIF
+Copy ReleaseNotes/#? SYS:Documentation/ReleaseNotes/ CLONE
+
+ASSIGN >NIL: SDK: EXISTS
+IF NOT WARN
+    Copy SDK/#? ALL SDK: CLONE
+ENDIF
+    

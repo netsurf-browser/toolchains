@@ -1,0 +1,93 @@
+TABLE OF CONTENTS
+
+onchipmem.resource/--background--
+onchipmem.resource/CopyOnChipMem
+onchipmem.resource/ObtainOnChipMem
+onchipmem.resource/ReleaseOnChipMem
+onchipmem.resource/--background--           onchipmem.resource/--background--
+
+   PURPOSE
+     The onchipmem.resource provides access to the On Chip Memory (OCM) 
+     found on the APM460Ex SoC (used on the Sam460ex board for example).
+
+     The OCM buffer is 64KB in size, 128-bit bus width, and is much faster 
+     than main RAM, up to double the DDR2 speed, basically it has a speed 
+     similar to the 460Ex L2 cache.
+
+     It's main use is to store often accessed application data, or as a way 
+     to trasfer more quicly a data buffer to/from video ram for example.
+
+   NOTES
+     this 64KB buffer is located outside the 2GB addressable space used by 
+     AmigaOS 4, there may be some system function which doesn't like to be 
+     passed an adrees beyound this limit, take care.
+
+     Never use CopyMem or CopyMemQuick from exec.library, but use
+     CopyOnChipMem instead.
+
+onchipmem.resource/CopyOnChipMem             onchipmem.resource/CopyOnChipMem
+
+   NAME
+     CopyOnChipMem -- optimized memory copy function from/to OCM
+
+   SYNOPSIS
+     CopyOnChipMem( Source, Destination, Size )
+
+     void CopyOnChipMem( ULONG *, ULONG *, ULONG );
+
+   FUNCTION
+     CopyOnChipMem is a highly optimized memory copy function, with
+     restrictions on the size and alignment of its arguments: if one of the 
+     used buffers is in main RAM, it's assumed to have been allocated with 
+     AVT_Contiguous=TRUE, AVT_PhysicalAlignment=8 or higher and 
+     AVT_Lock=TRUE.
+     Source or destination (not both) must reside in OCM, in addition, 
+     the size must be a multiple of 8.
+
+     Arbitrary overlapping copies are not supported.
+
+     The internal implementation of this function will change from
+     system to system, and may be implemented via hardware DMA.
+
+   INPUTS
+     Source            a pointer to the source data region
+     Destination       a pointer to the destination data region
+     Size              the size (in bytes) of the memory area. Zero copies
+                       zero bytes
+
+   NOTES
+     avoid to use the On Chip Memory buffer with device drivers.
+
+onchipmem.resource/ObtainOnChipMem         onchipmem.resource/ObtainOnChipMem
+
+   NAME
+     ObtainOnChipMem -- Obtain access to OnChip RAM.
+
+   SYNOPSIS
+     Address = ObtainOnChipMem( )
+
+     ULONG * ObtainOnChipMem( void );
+
+   FUNCTION
+     Acquires exclusive access to the 460ex onchip ram.
+
+   RESULTS
+     Address           Pointer to the 64KB OnChip RAM  buffer.
+
+   NOTES
+     Never assume the returned pointer address to be always the same.
+
+onchipmem.resource/ReleaseOnChipMem       onchipmem.resource/ReleaseOnChipMem
+
+   NAME
+     ReleaseOnChipMem -- Allow OnChip Ram to others.
+
+   SYNOPSIS
+     ReleaseOnChipMem( )
+
+     void ReleaseOnChipMem( void );
+
+   FUNCTION
+     Relinquish exclusive access to the 460ex OnChip Ram.
+
+
