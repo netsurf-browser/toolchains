@@ -20,13 +20,6 @@ UPSTREAM_MPC_TARBALL := mpc_$(UPSTREAM_MPC_VERSION).tar.gz
 UPSTREAM_MINGW_VERSION := v10.0.0
 UPSTREAM_MINGW_TARBALL := mingw-w64_$(UPSTREAM_MINGW_VERSION).tar.bz2
 
-#UPSTREAM_GCC_URI := http://ftpmirror.gnu.org/gcc/gcc-$(UPSTREAM_GCC_VERSION)/$(subst _,-,$(UPSTREAM_GCC_TARBALL))
-#UPSTREAM_BINUTILS_URI := http://ftpmirror.gnu.org/binutils/$(subst _,-,$(UPSTREAM_BINUTILS_TARBALL))
-#UPSTREAM_GMP_URI := http://ftp.gnu.org/gnu/gmp/$(subst _,-,$(UPSTREAM_GMP_TARBALL))
-#UPSTREAM_MPFR_URI := http://www.mpfr.org/mpfr-$(UPSTREAM_MPFR_VERSION)/$(subst _,-,$(UPSTREAM_MPFR_TARBALL))
-#UPSTREAM_MPC_URI := http://www.multiprecision.org/downloads/$(subst _,-,$(UPSTREAM_MPC_TARBALL))
-#UPSTREAM_MINGW_URI := "http://downloads.sourceforge.net/project/mingw-w64/mingw-w64/mingw-w64-release/$(subst _,-,$(UPSTREAM_MINGW_TARBALL))?r=http%3A%2F%2Fmingw-w64.sourceforge.net%2Fdownload.php&ts=1426088797&use_mirror=cznic"
-
 TOP := $(CURDIR)
 RECIPES := $(TOP)/recipes
 SOURCESDIR := $(TOP)/sources
@@ -43,8 +36,10 @@ PREFIX ?= /opt/netsurf/$(TARGET_NAME)/cross
 
 PRISTINE_TAR := $(TOP)/../tools/pristine-tar
 
-.PHONY: all clean distclean
+.PHONY: all clean distclean source-archives
 all: $(BUILDSTEPS)/gcc-final.d
+
+source-archives: $(BUILDSTEPS)/sources.d
 
 clean:
 	rm -fr $(BUILDDIR)
@@ -175,3 +170,35 @@ $(SOURCESDIR):
 
 $(SRCDIR):
 	mkdir -p $(SRCDIR)
+
+###
+# Rules to build source archives (via source-archives target)
+###
+
+UPSTREAM_GCC_URI := http://ftpmirror.gnu.org/gcc/gcc-$(UPSTREAM_GCC_VERSION)/$(subst _,-,$(UPSTREAM_GCC_TARBALL))
+UPSTREAM_BINUTILS_URI := http://ftpmirror.gnu.org/binutils/$(subst _,-,$(UPSTREAM_BINUTILS_TARBALL))
+UPSTREAM_GMP_URI := http://ftp.gnu.org/gnu/gmp/$(subst _,-,$(UPSTREAM_GMP_TARBALL))
+UPSTREAM_MPFR_URI := http://www.mpfr.org/mpfr-$(UPSTREAM_MPFR_VERSION)/$(subst _,-,$(UPSTREAM_MPFR_TARBALL))
+UPSTREAM_MPC_URI := http://www.multiprecision.org/downloads/$(subst _,-,$(UPSTREAM_MPC_TARBALL))
+UPSTREAM_MINGW_URI := "http://downloads.sourceforge.net/project/mingw-w64/mingw-w64/mingw-w64-release/$(subst _,-,$(UPSTREAM_MINGW_TARBALL))?r=http%3A%2F%2Fmingw-w64.sourceforge.net%2Fdownload.php&ts=1426088797&use_mirror=cznic"
+
+$(BUILDSTEPS)/sources.d: $(BUILDSTEPS)/buildsteps.d $(BUILDDIR)/$(UPSTREAM_GCC_TARBALL) $(BUILDDIR)/$(UPSTREAM_BINUTILS_TARBALL) $(BUILDDIR)/$(UPSTREAM_GMP_TARBALL) $(BUILDDIR)/$(UPSTREAM_MPFR_TARBALL) $(BUILDDIR)/$(UPSTREAM_MPC_TARBALL) $(BUILDDIR)/$(UPSTREAM_MINGW_TARBALL)
+	touch $@
+
+$(BUILDDIR)/$(UPSTREAM_GCC_TARBALL):
+	wget -q -O $@ $(UPSTREAM_GCC_URI)
+
+$(BUILDDIR)/$(UPSTREAM_BINUTILS_TARBALL):
+	wget -q -O $@ $(UPSTREAM_BINUTILS_URI)
+
+$(BUILDDIR)/$(UPSTREAM_GMP_TARBALL):
+	wget -q -O $@ $(UPSTREAM_GMP_URI)
+
+$(BUILDDIR)/$(UPSTREAM_MPFR_TARBALL):
+	wget -q -O $@ $(UPSTREAM_MPFR_URI)
+
+$(BUILDDIR)/$(UPSTREAM_MPC_TARBALL):
+	wget -q -O $@ $(UPSTREAM_MPC_URI)
+
+$(BUILDDIR)/$(UPSTREAM_MINGW_TARBALL):
+	wget -q -O $@ $(UPSTREAM_MINGW_URI)
