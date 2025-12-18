@@ -1,0 +1,53 @@
+#	OSLib/Source/Toolbox/oslib/Modules
+# Modules definition for Toolbox Make
+
+# Modules containing SWIs
+SWIMODULES = \
+ActionButton \
+Button \
+ColourDbox \
+ColourMenu \
+DCS \
+DDEUtils \
+DisplayField \
+DragAnObject \
+Draggable \
+FileInfo \
+FontDbox \
+FontMenu \
+FrontEnd \
+Gadget \
+Iconbar \
+Menu \
+NumberRange \
+OptionButton \
+PopUp \
+PrintDbox \
+ProgInfo \
+Quit \
+RadioButton \
+SaveAs \
+Scale \
+Scrollbar \
+ScrollList \
+Slider \
+StringSet \
+TextArea \
+TextGadgets \
+ToolAction \
+Toolbox \
+Window \
+WindowSupportExternal \
+WritableField
+
+# Modules with no SWIs
+MODULES = \
+Adjuster \
+FileDbox \
+KeyboardShortcut \
+Label \
+LabelledBox \
+ResEd
+
+# Modules defined other than by SWI definition
+ASMMODULES =

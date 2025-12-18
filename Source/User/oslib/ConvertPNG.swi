@@ -1,0 +1,60 @@
+TITLE ConvertPNG;
+
+AUTHOR "Tom Hughes, tom@compton.nu, 21 Nov 2002";
+
+NEEDS OS;
+
+TYPE
+   ConvertPNG_InfoFlags = .Bits;
+
+TYPE
+   ConvertPNG_CreateSpriteFlags = .Bits;
+
+CONST
+   ConvertPNG_CreateSpriteArea = ConvertPNG_CreateSpriteFlags: 0x1,
+   ConvertPNG_UseBackground    = ConvertPNG_CreateSpriteFlags: 0x2;
+
+TYPE
+   ConvertPNG_ColourType = .Bits;
+
+CONST
+   ConvertPNG_HasPalette      = ConvertPNG_ColourType: 0x1,
+   ConvertPNG_IsColour        = ConvertPNG_ColourType: 0x2,
+   ConvertPNG_HasAlphaChannel = ConvertPNG_ColourType: 0x4;
+
+TYPE
+   ConvertPNG_InterlaceType = .Bits;
+
+CONST
+   ConvertPNG_NoInterlacing    = ConvertPNG_InterlaceType: 0x1,
+   ConvertPNG_Adam7Interlacing = ConvertPNG_InterlaceType: 0x2;
+
+SWI
+   ConvertPNG_Info =
+   (  NUMBER 0x564C0 "Read information about a PNG image - RISC OS 4.32+",
+      ENTRY
+      (  R0 = ConvertPNG_InfoFlags: flags,
+         R1 -> .Data: buffer,
+         R2 = .Int: size
+      ),
+      EXIT
+      (  R0 = .Int: width,
+         R1 = .Int: height,
+         R2 = .Int: bpp,
+         R3 = ConvertPNG_ColourType: colour_type,
+         R4 = ConvertPNG_InterlaceType: interlace_type
+   )  ),
+
+   ConvertPNG_CreateSprite =
+   (  NUMBER 0x564C1 "Create a sprite from a PNG image - RISC OS 4.32+",
+      ENTRY
+      (  R0 = ConvertPNG_CreateSpriteFlags: flags,
+         R1 -> .Data: input_buffer,
+         R2 = .Int: input_size,
+         R3 = .Ref .Data: output_buffer,
+         R4 = .Int: output_size,
+         R5 = OS_Colour: background
+      ),
+      EXIT
+      (  R4! = .Int: size
+   )  )

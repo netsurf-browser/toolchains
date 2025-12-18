@@ -1,0 +1,71 @@
+TITLE KeyInput "RISC OS 6";
+AUTHOR "John Tytgat, John.Tytgat@aaug.net, 23 Aug 2009";
+
+NEEDS OS;
+
+TYPE
+   KeyInputCheck_Flags = .Bits;
+
+SWI
+   KeyInput_Check =
+   (  NUMBER 0x58540 "Read the state of a particular key",
+      ENTRY
+      (  R0 = KeyInputCheck_Flags: flags,
+         R1 = .Int: usage
+      ),
+      EXIT
+      (  R2 = .Int: state,
+         R3 = .Int: time
+   )  );
+
+TYPE
+   KeyInputCheckMultiple_Flags = .Bits;
+CONST
+   KeyInputCheckMultipleFlags_ReturnTime = KeyInputCheckMultiple_Flags: 0x01;
+
+SWI
+   KeyInput_CheckMultiple =
+   (  NUMBER 0x58541 "Read the state of a number of defined keys",
+      ENTRY
+      (  R0 = KeyInputCheckMultiple_Flags: flags,
+         R1 = .Ref .Int: buf,
+         R2 = .Int: num_entries_to_fill
+      ),
+      EXIT
+      (  R2 = .Int: num_entries_filled
+   )  );
+
+TYPE
+   KeyInputScan_Flags = .Bits;
+
+SWI
+   KeyInput_Scan =
+   (  NUMBER 0x58542 "Read the currently pressed key information",
+      ENTRY
+      (  R0 = KeyInputScan_Flags: flags,
+         R1 = .Int: initial_code
+      ),
+      EXIT
+      (  R1 = .Int: next_code,
+         R2 = .Int: state,
+         R3 = .Int: time
+   )  );
+
+TYPE
+   KeyInputScanMultiple_Flags = .Bits;
+CONST
+   KeyInputScanMultipleFlags_ReturnTime = KeyInputScanMultiple_Flags: 0x01;
+
+SWI
+   KeyInput_ScanMultiple =
+   (  NUMBER 0x58543 "Read the state of keys to a buffer",
+      ENTRY
+      (  R0 = KeyInputScanMultiple_Flags: flags,
+         R1 = .Int: initial_code,
+         R2 = .Ref .Int: buf,
+         R3 = .Int: num_entries_to_fill
+      ),
+      EXIT
+      (  R1 = .Int: next_code,
+         R3 = .Int: num_entries_filled
+   )  )

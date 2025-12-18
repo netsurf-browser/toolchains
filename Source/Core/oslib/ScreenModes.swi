@@ -1,0 +1,31 @@
+TITLE ScreenModes "RISC OS 3.5+";
+AUTHOR "Jonathan Coxhead, jonathan@doves.demon.co.uk, 29 Jun 1995";
+
+NEEDS OS;
+
+SWI
+   ScreenModes_ReadInfo =
+   (  NUMBER 0x487c0 "Reads miscellaneous information about screen modes - see
+                      individual reason codes",
+      ABSENT
+   ),
+
+   ScreenModesReadInfo_MonitorTitle =
+   (  NUMBER 0x487c0,
+      ENTRY
+      (  R0 # 0 "Reads the current monitor title - RISC OS 3.5+"
+      ),
+      EXIT
+      (  R0! -> .String: title
+   )  ),
+
+   ScreenModesReadInfo_DPMSState =
+   (  NUMBER 0x487c0,
+      ENTRY
+      (  R0 # 1 "Read the DPMS state as configured by the currently selected
+                 MDF - RISC OS 6"
+      ),
+      EXIT
+      (  R0 = .Int: dpms_state
+   )  )
+

@@ -1,0 +1,5 @@
+Echo <Sys$Time> !OSLib.Tools.rm.Make
+WIMPSlot -min 1024K -max 1024K
+if "<C$MODE>" = "32" then Do AMU -D -desktop -f <Obey$Dir>.AMUmakefile %0 APCS=32
+if "<C$MODE>"<> "32" then Do AMU -D -desktop -f <Obey$Dir>.AMUmakefile %0 APCS=26
+Echo <Sys$Time> Done.

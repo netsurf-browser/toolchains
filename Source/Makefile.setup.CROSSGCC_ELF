@@ -1,0 +1,62 @@
+# Settings for ELF building
+
+ifndef GCCSDK_INSTALL_CROSSBIN
+$(error Environment variable GCCSDK_INSTALL_CROSSBIN is not defined)
+endif
+ifndef GCCSDK_INSTALL_ENV
+$(error Environment variable GCCSDK_INSTALL_ENV is not defined)
+endif
+
+ifeq ($(ELFOBJECTTYPE),SOFTFPU)
+CCFLAGS = -mfloat-abi=soft
+DEFMODFLAGS = -float-abi soft
+else ifeq ($(ELFOBJECTTYPE),HARDFPU)
+CCFLAGS = -mlibscl
+DEFMODFLAGS = -float-abi hard
+else ifeq ($(ELFOBJECTTYPE),MODULE)
+CCFLAGS = -mmodule
+DEFMODFLAGS = -float-abi hard
+else
+$(error Unknown ELFOBJECTTYPE value, possible values are SOFTFPU, HARDFPU and MODULE)
+endif
+
+export SOURCEDIR := $(abspath .)
+export BINDIR := $(SOURCEDIR)/../Bin
+export BUILDDIR := $(SOURCEDIR)/../Build
+export RELEASEDIR := $(SOURCEDIR)/../Release
+export RELEASEBINDIR := $(SOURCEDIR)/../Release/$(BUILDTYPE)/$(ELFOBJECTTYPE)
+export EXAMPLESDIR := $(SOURCEDIR)/../examples
+export DOCSDIR := $(SOURCEDIR)/../docs
+
+export TOPHEADERDIR := $(BUILDDIR)/Header
+export HEADERDIR := $(TOPHEADERDIR)/oslib
+export CSTRONGDIR := $(BUILDDIR)/CStrong
+export VAPIDIR := $(BUILDDIR)/\!Vala/vapi
+export VAPIHDIR := $(BUILDDIR)/vapih
+export OBJDIR := $(BUILDDIR)/Objs
+export OBJEXCEPTDIR := $(BUILDDIR)/Objs/Exceptions
+export OSLIBSUPPORTDIR := $(BUILDDIR)/OSLibSupport
+
+export BYTEWIDE := $(SOURCEDIR)/ByteWide
+export DEFMOD := $(BINDIR)/defmod -asmtype gccelf $(DEFMODFLAGS)
+export REDUCEAOF := @echo Not needed for ELF build: reduceaof
+export BINDHELP := $(BINDIR)/bindhelp
+
+export PATH := $(GCCSDK_INSTALL_CROSSBIN):$(PATH)
+
+export CC := arm-unknown-riscos-gcc $(CCFLAGS)
+export CXX := arm-unknown-riscos-g++ $(CCFLAGS)
+export AS := arm-unknown-riscos-gcc -c -xassembler-with-cpp $(CCFLAGS) -I.. -I$(SOURCEDIR)/Types
+export LIBFILE := arm-unknown-riscos-ar rs
+export MKDIR := mkdir -p
+export RM := rm -rf
+export CP := cp -r
+export INSTALL := $(GCCSDK_INSTALL_ENV)/ro-install
+
+export ASMEXT := .gas
+export EXEEXT := ,e1f
+export LIBSUFFIX := a
+
+export OSLIBLIB := $(BUILDDIR)/libOSLib32.$(LIBSUFFIX)
+export OSLIBSUPPORTLIB := $(OSLIBSUPPORTDIR)/libOSLibSupport32.$(LIBSUFFIX)
+export OSLIBCSTRONG := $(BUILDDIR)/OSLib,3d6

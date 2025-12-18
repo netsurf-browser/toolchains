@@ -1,0 +1,94 @@
+TITLE TaskManager;
+AUTHOR "Jonathan Coxhead, jonathan@doves.demon.co.uk, 22 May 1995";
+
+NEEDS OS, Wimp;
+
+CONST TaskManager_NameLimit = .Int: 32;
+   //defined by Task Manager window width
+
+TYPE TaskManager_Flags = .Bits;
+CONST
+   TaskManager_ModuleTask = TaskManager_Flags: 0b1,
+   TaskManager_DraggableSlot = TaskManager_Flags: 0b10;
+
+TYPE
+   TaskManager_Task =
+   .Struct
+   (  Wimp_T: task,
+      .Ref .Char: name,
+      .Int: slot_size,
+      TaskManager_Flags: flags
+   );
+
+SWI
+   TaskManager_TaskNameFromHandle =
+   (  NUMBER 0x42680 "Finds the name of a task",
+      ENTRY
+      (  R0 = Wimp_T: task
+      ),
+      EXIT
+      (  R0! -> .String: name
+   )  );
+
+SWI
+   TaskManager_EnumerateTasks =
+   (  NUMBER 0x42681 "Enumerates all the currently active tasks",
+      ENTRY
+      (  R0 = .Int: context,
+         R1 = .Ref TaskManager_Task: task,
+         R2 = .Int: size
+      ),
+      EXIT
+      (  R0! = .Int: context_out,
+         R1 -> .Char: end,
+         R2?
+   )  );
+
+TYPE TaskManager_ShutdownFlags = .Bits;
+CONST
+   TaskManager_ShutdownExitOnly          = TaskManager_ShutdownFlags: %1,
+   TaskManager_ShutdownNoPreQuit         = TaskManager_ShutdownFlags: %10,
+   TaskManager_ShutdownPortablePowerDown = TaskManager_ShutdownFlags: %100,
+   TaskManager_ShutdownSendMessage       = TaskManager_ShutdownFlags: %1000,
+   TaskManager_ShutdownIgnoreUpCalls     = TaskManager_ShutdownFlags: %10000,
+   TaskManager_ShutdownReboot            = TaskManager_ShutdownFlags: %100000 "RISC OS 4+",
+   TaskManager_ShutdownPowerOff          = TaskManager_ShutdownFlags: %1000000 "RISC OS 4+";
+
+TYPE TaskManager_GroupID = .Bits;
+CONST
+   TaskManager_GroupOverview   = TaskManager_GroupID: 0x0000
+      "system overview - for RISCOS Ltd use only",
+   TaskManager_GroupRequired   = TaskManager_GroupID: 0x1000
+      "system required components - for RISCOS Ltd use only",
+   TaskManager_GroupSubsidiary = TaskManager_GroupID: 0x2000
+      "subsidiary components - for RISCOS Ltd use only",
+   TaskManager_GroupCommercial = TaskManager_GroupID: 0x3000
+      "commercial components",
+   TaskManager_GroupFreeware   = TaskManager_GroupID: 0x4000
+      "freeware components",
+   TaskManager_GroupUser       = TaskManager_GroupID: 0x5000
+      "user components - for private use only",
+   TaskManager_GroupMask       = TaskManager_GroupID: 0xf000;
+
+SWI
+   TaskManager_Shutdown =
+   (  NUMBER 0x42682 "Initiates a desktop shutdown",
+      ENTRY
+      (  R0 = TaskManager_ShutdownFlags: flags
+   )  );
+
+SWI
+   TaskManager_StartTask =
+   (  NUMBER 0x42683 "Starts a new WIMP task - RISC OS 4+",
+      ENTRY
+      (  R0 -> .Char: path_name
+   )  );
+
+SWI
+   // Extends OS_ServiceCall
+   Service_TaskManagerAcknowledgements =
+   (  NUMBER 0x30,
+      ENTRY
+      (  R1 # 0x42680 "Notify Task Manager of licence acknowledgements - RISC OS 4, RISC OS 6",
+         R2 = .Asm: add_message
+   )  )

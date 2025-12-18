@@ -1,0 +1,15 @@
+#	Index: OSLib/!OsLib/Tools/StripDepends/AMUmakefile	20031228
+#
+
+TARGET 	    	= StripDepends
+ALL   	 	= ${TARGET}
+VPATH 	 	=
+INCLUDES 	= OSLibSupport:,OSLib:,C:
+LIBS  	 	= OSLibSupport:o.${SUPPORT} OSLib:o.${OSLIB} C:o.Stubs
+
+MODULES	 	= ${TARGET}
+
+.include ${MAKEFILEDIR}.^.AMUmakefile/source
+
+#------------------------------------------------------------------------
+# Dynamic dependencies:

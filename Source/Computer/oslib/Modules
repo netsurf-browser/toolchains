@@ -1,0 +1,50 @@
+# OSLib.Source.Computer.oslib.Modules	TV	20031228
+#	List of modules comprising Computer
+#	for inclusion in Make files independant of platform
+
+# Modules containing SWIs
+SWIMODULES = \
+ADFS \
+CD \
+CDFS \
+DeviceFS \
+DHCPClient \
+DOSFS \
+Econet \
+FileCore \
+Filer \
+FilerAction \
+FileSwitch \
+Free \
+Freeway \
+FSLock \
+Joystick \
+NetFS \
+NetPrint \
+NFS \
+OSArgs \
+OSFile \
+OSFind \
+OSFSControl \
+OSGBPB \
+OSSerialOp \
+PathUtils \
+Parallel \
+PipeFS \
+RamFS \
+Resolver \
+ResourceFS \
+RouterDiscovery \
+SCSI \
+SCSIFS \
+ShareFS \
+Socket \
+SysLog
+
+# Modules with no SWIs
+MODULES = \
+CDFSFiler \
+NetFiler
+
+# Modules defined other than by SWI definition
+ASMMODULES =

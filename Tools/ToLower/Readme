@@ -1,0 +1,6 @@
+ToLower
+-------
+
+Call: ToLower sysvar
+
+Changes the contents of a system variable <sysvar> to lower case.

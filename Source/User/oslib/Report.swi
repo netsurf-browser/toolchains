@@ -1,0 +1,219 @@
+TITLE Report;
+
+AUTHOR "Philip Ludlam, philip@philipnet.com";
+
+NEEDS OS, Wimp;
+
+SWI
+   Report_Text0 =
+   (  NUMBER 0x54C80 "Displays the null terminated text",
+      ENTRY
+      (  R0 -> .String: text
+   )  );
+
+SWI
+   Report_TextS =
+   (  NUMBER 0x54C81 "Displays the null terminated text which follows
+                      the SWI in memory - cannot be called via APCS",
+      ABSENT
+   );
+
+SWI Report_Regs =
+   (  NUMBER 0x54C82 "Displays registers 0-8"
+   );
+
+TYPE
+   Report_RegistersSaveArea =
+   .Struct
+   (
+//    [16] .Int: register  // TV 20031227 -- "register" is a reserved keyword
+      [16] .Int: reg
+   );
+
+TYPE Report_RegistersFlags = .Bits;
+CONST
+   Report_RegistersDisplayR0           = Report_RegistersFlags: 0b1,
+   Report_RegistersDisplayR1           = Report_RegistersFlags: 0b10,
+   Report_RegistersDisplayR2           = Report_RegistersFlags: 0b100,
+   Report_RegistersDisplayR3           = Report_RegistersFlags: 0b1000,
+   Report_RegistersDisplayR4           = Report_RegistersFlags: 0b10000,
+   Report_RegistersDisplayR5           = Report_RegistersFlags: 0b100000,
+   Report_RegistersDisplayR6           = Report_RegistersFlags: 0b1000000,
+   Report_RegistersDisplayR7           = Report_RegistersFlags: 0b10000000,
+   Report_RegistersDisplayR8           = Report_RegistersFlags: 0b100000000,
+   Report_RegistersDisplayR9           = Report_RegistersFlags: 0b1000000000,
+   Report_RegistersDisplayR10          = Report_RegistersFlags: 0b10000000000,
+   Report_RegistersDisplayR11          = Report_RegistersFlags: 0b100000000000,
+   Report_RegistersDisplayR12          = Report_RegistersFlags: 0b1000000000000,
+   Report_RegistersDisplayR13          = Report_RegistersFlags: 0b10000000000000,
+   Report_RegistersDisplayR14          = Report_RegistersFlags: 0b100000000000000,
+   Report_RegistersDisplayR15          = Report_RegistersFlags: 0b1000000000000000,
+   Report_RegistersRegistersAreStrings = Report_RegistersFlags: 0b10000000000000000;
+
+SWI
+   Report_Registers =
+   (  NUMBER 0x54C83 "Displays some or all of the registers",
+      ENTRY
+      (  R0 -> .String: heading,
+         R1 -> Report_RegistersSaveArea: registers,
+         R2 = Report_RegistersFlags: flags
+   )  );
+
+SWI
+   Report_Where =
+   (  NUMBER 0x54C84 "Display processor Abort information"
+   );
+
+SWI
+   Report_Poll =
+   (  NUMBER 0x54C85 "Display Wimp event number",
+      ENTRY
+      (  R0 = Wimp_EventNo: event
+   )  );
+
+SWI
+   Report_Dump =
+   (  NUMBER 0x54C86 "Display memory dump",
+      ENTRY
+      (  R0 -> .Data: address,
+         R1 = .Int: length,
+         R2 = .Int: width
+   )  );
+
+SWI
+   Report_GetSwiRet =
+   (  NUMBER 0x54C87*,
+      ABSENT
+   );
+
+SWI
+   Report_Quit =
+   (  NUMBER 0x54C8A "Quit Reporter"
+   );
+
+SWI
+   Report_Clear =
+   (  NUMBER 0x54C8B "Clear Reporter's window"
+   );
+
+SWI
+   Report_Open =
+   (  NUMBER 0x54C8C "Opens the Reporter window after it has been closed
+                      by Report_Close but not Report_Hide"
+   );
+
+SWI
+   Report_Close =
+   (  NUMBER 0x54C8D "Closes Reporter's window"
+   );
+
+SWI
+   Report_On =
+   (  NUMBER 0x54C8E "Turn general reporting on"
+   );
+
+SWI
+   Report_Off =
+   (  NUMBER 0x54C8F "Turn general reporting off"
+   );
+
+SWI
+   Report_CmdOn =
+   (  NUMBER 0x54C90 "Turn reporting of *commands on"
+   );
+
+SWI
+   Report_CmdOff =
+   (  NUMBER 0x54C91 "Turn reporting of *commands off"
+   );
+
+SWI
+   Report_Hide =
+   (  NUMBER 0x54C92 "Closes Reporter's window more permanently
+                      than Report_Close"
+   );
+
+SWI
+   Report_UnHide =
+   (  NUMBER 0x54C93 "Opens Reporter's window after Report_Hide"
+   );
+
+SWI
+   Report_ErrOn =
+   (  NUMBER 0x54C94 "Turn reporting of errors on"
+   );
+
+SWI
+   Report_ErrOff =
+   (  NUMBER 0x54C95 "Turn reporting of errors off"
+   );
+
+SWI
+   Report_TaskOn =
+   (  NUMBER 0x54C96 "Turn reporting of task init/close on"
+   );
+
+SWI
+   Report_TaskOff =
+   (  NUMBER 0x54C97 "Turn reporting of task init/close off"
+   );
+
+SWI
+   Report_Vdu4On =
+   (  NUMBER 0x54C98 "Turn reporting of VDU4 output on"
+   );
+
+SWI
+   Report_Vdu4Off =
+   (  NUMBER 0x54C99 "Turn reporting of VDU4 output off"
+   );
+
+SWI
+   Report_RmaOn =
+   (  NUMBER 0x54C9A "Turn reporting of RMA storage on"
+   );
+
+SWI
+   Report_RmaOff =
+   (  NUMBER 0x54C9B "Turn reporting of RMA storage off"
+   );
+
+SWI
+   Report_TimeOn =
+   (  NUMBER 0x54C9C "Add Timestamp to Reported Commands"
+   );
+
+SWI
+   Report_TimeOff =
+   (  NUMBER 0x54C9D "Remove Timestamp from Reported Commands"
+   );
+
+SWI
+   Report_SrceOn =
+   (  NUMBER 0x54C9E "Add Source to Reported Commands"
+   );
+
+SWI
+   Report_SrceOff =
+   (  NUMBER 0x54C9F "Remove Source from Reported Commands"
+   );
+
+SWI
+   Report_ObeyOn =
+   (  NUMBER 0x54CA0 "Report only Obey commands"
+   );
+
+SWI
+   Report_ObeyOff =
+   (  NUMBER 0x54CA1 "Report all Commands"
+   );
+
+SWI
+   Report_Push =
+   (  NUMBER 0x54CA2 "Store Reporter Status"
+   );
+
+SWI
+   Report_Pull =
+   (  NUMBER 0x54CA3 "Restore Reporter Status"
+   )

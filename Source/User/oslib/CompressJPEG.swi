@@ -1,0 +1,231 @@
+TITLE CompressJPEG;
+AUTHOR "Jonathan Coxhead, jonathan@doves.demon.co.uk, 24 May 1995";
+
+NEEDS OS, JPEG;
+
+TYPE
+   CompressJPEG_Tag;
+
+TYPE
+   CompressJPEG_Parameters =
+   .Struct
+   (  .Int: width,
+      .Int: height,
+      .Int: quality,
+      .Int: bytes_per_pixel,
+      .Int: xdpi,
+      .Int: ydpi
+   );
+
+TYPE
+   CompressJPEG_ScanDescription =
+   .Struct
+   (  .Int: scan_count,
+      .Struct
+      (  .Int: components,
+         .Int: r,
+         .Int: g,
+         .Int: b,
+         .Int: ss,
+         .Int: se,
+         .Int: ah,
+         .Int: al
+      ): scan_data ...
+   );
+
+TYPE
+  CompressJPEG_CommentFlags = .Bits,
+  CompressJPEG_WriteLineFlags = .Bits,
+  CompressJPEG_TranscodeFlags = .Bits;
+
+CONST
+  CompressJPEG_ControlTerminated = CompressJPEG_CommentFlags: 0x1;
+
+CONST
+  CompressJPEG_SourceType           = CompressJPEG_WriteLineFlags: 0x7,
+  CompressJPEG_SourceType1BPP       = CompressJPEG_WriteLineFlags: 0x0,
+  CompressJPEG_SourceType2BPP       = CompressJPEG_WriteLineFlags: 0x1,
+  CompressJPEG_SourceType4BPP       = CompressJPEG_WriteLineFlags: 0x2,
+  CompressJPEG_SourceType8BPP       = CompressJPEG_WriteLineFlags: 0x3,
+  CompressJPEG_SourceType16BPP      = CompressJPEG_WriteLineFlags: 0x4,
+  CompressJPEG_SourceType32BPP      = CompressJPEG_WriteLineFlags: 0x5,
+  CompressJPEG_SourceTypeRGBTriples = CompressJPEG_WriteLineFlags: 0x7,
+  CompressJPEG_HasDoubleEntries     = CompressJPEG_WriteLineFlags: 0x8,
+  CompressJPEG_IgnoreHighByte       = CompressJPEG_WriteLineFlags: 0x10,
+  CompressJPEG_IsRGB                = CompressJPEG_WriteLineFlags: 0x20;
+
+CONST
+  CompressJPEG_GenerateProgressive      = CompressJPEG_TranscodeFlags: 0b1,
+  CompressJPEG_OperationOnUnknowns      = CompressJPEG_TranscodeFlags: 0b110,
+  CompressJPEG_OperationOnUnknownsShift = .Int: 1,
+  CompressJPEG_TransformationType       = CompressJPEG_TranscodeFlags: 0b1111000,
+  CompressJPEG_TransformationTypeShift  = .Int: 3,
+  CompressJPEG_TrimEdges                = CompressJPEG_TranscodeFlags: 0b10000000,
+  CompressJPEG_GenerateGreyscale        = CompressJPEG_TranscodeFlags: 0b100000000,
+  CompressJPEG_OptimiseForSmaller       = CompressJPEG_TranscodeFlags: 0b1000000000;
+
+CONST
+  CompressJPEG_CopyNoAdditional = CompressJPEG_TranscodeFlags: 0 "shift by CompressJPEG_OperationOnUnknownsShift",
+  CompressJPEG_CopyComments     = CompressJPEG_TranscodeFlags: 1 "shift by CompressJPEG_OperationOnUnknownsShift",
+  CompressJPEG_CopyAllElements  = CompressJPEG_TranscodeFlags: 3 "shift by CompressJPEG_OperationOnUnknownsShift";
+
+CONST
+  CompressJPEG_NoTransformation      = CompressJPEG_TranscodeFlags: 0 "shift by CompressJPEG_TransformationTypeShift",
+  CompressJPEG_FlipHorizontally      = CompressJPEG_TranscodeFlags: 1 "shift by CompressJPEG_TransformationTypeShift",
+  CompressJPEG_FlipVertically        = CompressJPEG_TranscodeFlags: 2 "shift by CompressJPEG_TransformationTypeShift",
+  CompressJPEG_Rotate90Clockwise     = CompressJPEG_TranscodeFlags: 3 "shift by CompressJPEG_TransformationTypeShift",
+  CompressJPEG_Rotate180             = CompressJPEG_TranscodeFlags: 4 "shift by CompressJPEG_TransformationTypeShift",
+  CompressJPEG_Rotate90AntiClockwise = CompressJPEG_TranscodeFlags: 5 "shift by CompressJPEG_TransformationTypeShift",
+  CompressJPEG_Transpose             = CompressJPEG_TranscodeFlags: 6 "shift by CompressJPEG_TransformationTypeShift",
+  CompressJPEG_TransverseTranspose   = CompressJPEG_TranscodeFlags: 7 "shift by CompressJPEG_TransformationTypeShift";
+
+
+CONST
+  Error_CompressJPEGBadBPP       = .Bits: 0x8183C0,
+  Error_CompressJPEGBadLineCount = .Bits: 0x8183C1,
+  Error_CompressJPEGBadBuffer    = .Bits: 0x8183C2,
+  Error_CompressJPEGBadSize      = .Bits: 0x8183C3;
+
+CONST
+  Error_CompressJPEGArithNotImpl         = .Bits: 0x81A881,
+  Error_CompressJPEGBadAlignType         = .Bits: 0x81A882,
+  Error_CompressJPEGBadAllocChunk        = .Bits: 0x81A883,
+  Error_CompressJPEGBadBufferMode        = .Bits: 0x81A884,
+  Error_CompressJPEGBadComponentID       = .Bits: 0x81A885,
+  Error_CompressJPEGBadDctSize           = .Bits: 0x81A886,
+  Error_CompressJPEGBadInColourSpace     = .Bits: 0x81A887,
+  Error_CompressJPEGBadKColourSpace      = .Bits: 0x81A888,
+  Error_CompressJPEGBadLength            = .Bits: 0x81A889,
+  Error_CompressJPEGBadMCUSize           = .Bits: 0x81A88A,
+  Error_CompressJPEGBadPoolID            = .Bits: 0x81A88B,
+  Error_CompressJPEGBadPrecision         = .Bits: 0x81A88C,
+  Error_CompressJPEGBadSampling          = .Bits: 0x81A88D,
+  Error_CompressJPEGBadState             = .Bits: 0x81A88E,
+  Error_CompressJPEGBadVirtualAccess     = .Bits: 0x81A88F,
+  Error_CompressJPEGBufferSize           = .Bits: 0x81A890,
+  Error_CompressJPEGCantSuspend          = .Bits: 0x81A891,
+  Error_CompressJPEGCCIR601NotImpl       = .Bits: 0x81A892,
+  Error_CompressJPEGComponentCount       = .Bits: 0x81A893,
+  Error_CompressJPEGConversionNotImpl    = .Bits: 0x81A894,
+  Error_CompressJPEGDACIndex             = .Bits: 0x81A895,
+  Error_CompressJPEGDACValue             = .Bits: 0x81A896,
+  Error_CompressJPEGDHTIndex             = .Bits: 0x81A897,
+  Error_CompressJPEGDQTIndex             = .Bits: 0x81A898,
+  Error_CompressJPEGEmptyImage           = .Bits: 0x81A899,
+  Error_CompressJPEGEOIExpected          = .Bits: 0x81A89A,
+  Error_CompressJPEGFileRead             = .Bits: 0x81A89B,
+  Error_CompressJPEGFileWrite            = .Bits: 0x81A89C,
+  Error_CompressJPEGFractSampleNotImpl   = .Bits: 0x81A89D,
+  Error_CompressJPEGHuffCLenOverflow     = .Bits: 0x81A89E,
+  Error_CompressJPEGHuffMissingCode      = .Bits: 0x81A89F,
+  Error_CompressJPEGImageTooBig          = .Bits: 0x81A8A0,
+  Error_CompressJPEGInputEmpty           = .Bits: 0x81A8A1,
+  Error_CompressJPEGInputEOF             = .Bits: 0x81A8A2,
+  Error_CompressJPEGNotImpl              = .Bits: 0x81A8A3,
+  Error_CompressJPEGNotCompiled          = .Bits: 0x81A8A4,
+  Error_CompressJPEGNoBackingStore       = .Bits: 0x81A8A5,
+  Error_CompressJPEGNoHuffTable          = .Bits: 0x81A8A6,
+  Error_CompressJPEGNoImage              = .Bits: 0x81A8A7,
+  Error_CompressJPEGNoQuantTable         = .Bits: 0x81A8A8,
+  Error_CompressJPEGNoSOI                = .Bits: 0x81A8A9,
+  Error_CompressJPEGOutOfMemory          = .Bits: 0x81A8AA,
+  Error_CompressJPEGQuantComponents      = .Bits: 0x81A8AB,
+  Error_CompressJPEGQuantFewColours      = .Bits: 0x81A8AC,
+  Error_CompressJPEGQuantManyColours     = .Bits: 0x81A8AD,
+  Error_CompressJPEGSOFDuplicate         = .Bits: 0x81A8AE,
+  Error_CompressJPEGSOFNoSOS             = .Bits: 0x81A8AF,
+  Error_CompressJPEGSOFUnsupported       = .Bits: 0x81A8B0,
+  Error_CompressJPEGSOIDuplicate         = .Bits: 0x81A8B1,
+  Error_CompressJPEGSOSNoSOF             = .Bits: 0x81A8B2,
+  Error_CompressJPEGTooLittleData        = .Bits: 0x81A8B3,
+  Error_CompressJPEGUnknownMarker        = .Bits: 0x81A8B4,
+  Error_CompressJPEGVirtualBug           = .Bits: 0x81A8B5,
+  Error_CompressJPEGWidthOverflow        = .Bits: 0x81A8B6,
+  Error_CompressJPEGBadDCTCoef           = .Bits: 0x81A8B7,
+  Error_CompressJPEGBadHuffTable         = .Bits: 0x81A8B8,
+  Error_CompressJPEGBadProgression       = .Bits: 0x81A8B9,
+  Error_CompressJPEGBadProgScript        = .Bits: 0x81A8BA,
+  Error_CompressJPEGBadScanScript        = .Bits: 0x81A8BB,
+  Error_CompressJPEGMismatchedQuantTable = .Bits: 0x81A8BC,
+  Error_CompressJPEGMissingData          = .Bits: 0x81A8BD,
+  Error_CompressJPEGModeChange           = .Bits: 0x81A8BE,
+  Error_CompressJPEGWBufferSize          = .Bits: 0x81A8BF;
+
+SWI
+   CompressJPEG_Start =
+   (  NUMBER 0x4A500 "Starts the JPEG compression process and sets up
+            various parameters",
+      ENTRY
+      (  R0 -> JPEG_Image: image,
+         R1 = .Int: image_size,
+         R2 -> CompressJPEG_Parameters: parameters,
+         R3 = .Ref Void: workspace,
+         R4 = .Int: workspace_size
+      ),
+      EXIT
+      (  R0! = CompressJPEG_Tag: tag
+   )  );
+
+SWI
+   CompressJPEG_WriteLine =
+   (  NUMBER 0x4A501 "Compresses one row of source pixels into the
+            JPEG buffer",
+      ENTRY
+      (  R0 = CompressJPEG_Tag: tag,
+         R1 -> .Data: pixels
+   )  );
+
+SWI
+   CompressJPEG_Finish =
+   (  NUMBER 0x4A502 "Tidies up JPEG buffer",
+      ENTRY
+      (  R0  = CompressJPEG_Tag: tag
+      ),
+      EXIT
+      (  R0! = .Int: image_size
+   )  );
+
+SWI
+   CompressJPEG_Comment =
+   (  NUMBER 0x4A503 "Add a textual comment to a JPEG - RISC OS Select",
+      ENTRY
+      (  R0 = CompressJPEG_Tag: tag,
+         R1 = CompressJPEG_CommentFlags: flags,
+         R2 -> .Char: comment,
+         R3 = .Int: comment_size
+   )  );
+
+SWI
+   CompressJPEG_WriteLineExtended =
+   (  NUMBER 0x4A504 "Compresses multiple rows of (paletted) source pixels
+            into the JPEG buffer - RISC OS Select",
+      ENTRY
+      (  R0 = CompressJPEG_Tag: tag,
+         R1 = CompressJPEG_WriteLineFlags: flags,
+         R2 -> .Data: image_data,
+         R3 -> .Data: palette_data,
+         R4 = .Int: lines,
+         R5 = .Int: bytes_between_lines
+      ),
+      EXIT
+      (  R2! -> .Data: image_data_end,
+         R4 = .Int: lines_written
+   )  );
+
+SWI
+   CompressJPEG_Transcode =
+   (  NUMBER 0x4A510 "Transcodes a JPEG from one form to another - RISC OS Select",
+      ENTRY
+      (  R0 = CompressJPEG_TranscodeFlags: flags,
+         R1 -> .Data: source_data,
+         R2 = .Int: source_size,
+         R3 = .Ref .Data: destination_data,
+         R4 = .Int: destination_size,
+         R5 = .Ref .Data: workspace,
+         R6 = .Int: workspace_size,
+         R7 -> CompressJPEG_ScanDescription: scans
+      ),
+      EXIT
+      (  R4 = .Int: out_destination_size,
+         R6 = .Int: out_workspace_size
+   )  )

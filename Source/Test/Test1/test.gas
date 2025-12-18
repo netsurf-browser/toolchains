@@ -1,0 +1,10 @@
+@ Test each assembler header individually
+
+#include "include.Hdr"
+
+	.text
+
+	.global	entry
+entry:	MOV 	pc, lr
+
+	.end

@@ -1,0 +1,19 @@
+#!/bin/bash
+
+pushd `dirname $0` > /dev/null
+TESTDIR=`pwd`
+popd > /dev/null
+
+DEFMOD=$TESTDIR/../defmod
+# Uncomment next file if you want to generate differences with a reference build of defmod:
+###DEFMOD_REF=$TESTDIR/../defmod_reference
+
+$DEFMOD -h > $TESTDIR/basic_current.h < $TESTDIR/basic.swi
+test ! -z "$DEFMOD_REF" && $DEFMOD_REF -h > $TESTDIR/basic_ref.h < $TESTDIR/basic.swi
+
+$DEFMOD -hdr > $TESTDIR/basic_current.hdr < $TESTDIR/basic.swi
+test ! -z "$DEFMOD_REF" && $DEFMOD_REF -hdr > $TESTDIR/basic_ref.hdr < $TESTDIR/basic.swi
+
+test ! -z "$DEFMOD_REF" && diff -u $TESTDIR/basic_ref.h $TESTDIR/basic_current.h > $TESTDIR/basic_h_diff.patch
+test ! -z "$DEFMOD_REF" && diff -u $TESTDIR/basic_ref.hdr $TESTDIR/basic_current.hdr > $TESTDIR/basic_hdr_diff.patch
+

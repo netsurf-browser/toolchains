@@ -1,0 +1,23 @@
+Rm
+--
+
+History
+-------
+26th October 1992  J R C  Started
+
+   Rm is a CLI-based tool that deletes all of its arguments. It is used
+in Makefile entries for 'clean.' Ignoring error checking (of which there is
+relatively quite a lot), the whole of the code is just
+
+      int main
+      (
+         int   argc,
+         char *argv []
+      )
+      {  int i;
+
+         for (i = 1; i != argc; ++i)
+            osfile_delete (argv [i], NULL, NULL, NULL, NULL, NULL);
+
+         return 0;
+      }

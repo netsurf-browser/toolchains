@@ -1,0 +1,24 @@
+# OSLib.Source.Types.oslib.Modules	TV	20040214
+#	List of modules comprising Macros
+#	for inclusion in Make files independant of platform
+
+# Modules defined by handwritten .h, .AOFHdr and .ELFHdr files.
+HDRMODULES = \
+ColTrans32 \
+DeviceFS32 \
+DOSFS32 \
+FileCore32 \
+FileSwch32 \
+OSArgs32 \
+OSCore32 \
+OSF32 \
+OSFind32 \
+OSFSCtrl32 \
+OSGBPB32 \
+PDriver32 \
+Types \
+Wimp32
+
+VAPIMODULES = \
+Types
+

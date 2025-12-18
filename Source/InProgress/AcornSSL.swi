@@ -1,0 +1,80 @@
+TITLE AcornSSL;
+
+AUTHOR "Richard Sargeant, sargeant@arcade.demon.co.uk, 12-Apr-1999";
+
+NEEDS OS, Socket;
+
+SWI
+   AcornSSL_Socket =
+   (  NUMBER &50F80 "Creates an endpoint for communication",
+      ENTRY
+      (  R0 = Socket_AF: af,
+         R1 = Socket_Sock: sock, //ignored, really
+         R2 = Socket_Ipproto: proto //ignored, really
+      ),
+      EXIT
+      (  R0! = Socket_S: s
+      )
+   ),
+   AcornSSL_Ioctl =
+   (  NUMBER &50F81 "Controls an open socket",
+      ENTRY
+      (  R0 = Socket_S: s,
+         R1 = Socket_IoctlNo: flags,
+         R2 = .Ref .Data: argp
+      )
+   ),
+   AcornSSL_Connect =
+      (NUMBER &50F82 "Initiates a connection on a socket",
+      ENTRY
+      (  R0 = Socket_S: s,
+         R1 = .Ref Socket_Sockaddr: sockaddr,
+         R2 = .Int: namelen
+      )
+   ),
+   AcornSSL_Shutdown =
+   (  NUMBER &50F83 "Shuts down part of a full-duplex connection",
+      ENTRY
+      (  R0 = Socket_S: s,
+         R1 = Socket_ShutdownType: type
+      )
+   ),
+   AcornSSL_Close =
+   (  NUMBER &50F84 "Closes an open socket",
+      ENTRY
+      (  R0 = Socket_S: s
+      )
+   ),
+   AcornSSL_Getsockopt =
+   (  NUMBER &50F85 "Get options on sockets",
+      ENTRY
+      (  R0 = Socket_S: s,
+         R1 = Socket_Level: level,
+         R2 = Socket_So: optname,
+         R3 = .Ref .Data: optval,
+         R4 = .Ref .Int: optlen
+      ) 
+   ),
+   AcornSSL_Write =
+   (  NUMBER &50F86 "Sends data from a connected socket",
+      ENTRY
+      (  R0 = Socket_S: s,
+         R1 -> .Data: msg,
+         R2 = .Int: len
+      ),
+      EXIT
+      (  R0! = .Int: cc
+      )
+   ),
+   AcornSSL_Recv =
+   (  NUMBER &50F87 "Receives data from a connected socket",
+      ENTRY
+      (  R0 = Socket_S: s,
+         R1 = .Ref .Data: buf,
+         R2 = .Int: len,
+         R3 = Socket_MsgFlags: flags
+      ),
+      EXIT
+      (  R0! = .Int: cc
+      ) 
+   )

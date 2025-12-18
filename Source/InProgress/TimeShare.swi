@@ -1,0 +1,179 @@
+TITLE TimeShare;
+
+NEEDS OS;
+
+TYPE
+   TimeShare_T              = .Int "Time";
+
+SWI
+   TimeShareV = (NUMBER 0x27 "TimeShareV", ABSENT);
+
+// TimeShareV entry for a recurrent schedule
+//
+// R0 = b31:b8 flags, b7:b0 reason code (reason code = 0)
+// R1 = new time data word
+//
+// Any clients interested in this call should use their interrupt schedule
+// handle as a pointer to a word which they check for bit 30 being set.
+//
+// If it is, this indicates that this client is one of those who requested
+// a vector call at this time.  Always pass this vector on.
+//
+//
+// TimeShareV entry for time modified
+//
+// R0 = b31:b8 flags, b7:b0 reason code (reason code = 1)
+// R1 = number of requesters of this call
+// R2 = new time data word
+//
+// Each client should decrement R1.
+// When R1 reaches 0 the call should be claimed.
+
+
+SWI
+TimeShare_ReadCurrentClock =
+   (  NUMBER &4B540 "Reads current clock",
+//      ENTRY R0
+//      EXIT R0, R1
+      ABSENT
+   ),
+
+TimeShare_ReadActiveClockTransmitters =
+   (  NUMBER &4B541 "Reads active clock transmitters",
+//      ENTRY R0
+//      EXIT R0
+      ABSENT
+   ),
+
+TimeShare_ReadAvailableClocks =
+   (  NUMBER &4B542 "Reads available clocks",
+//      ENTRY R0
+//      EXIT R0
+      ABSENT
+   ),
+
+TimeShare_ReadAvailableClockTransmitters =
+   (  NUMBER &4B543 "Reads available clock transmitters",
+//      ENTRY R0
+//      EXIT R0
+      ABSENT
+   ),
+
+TimeShare_InterruptSchedule =
+   (  NUMBER &4B544 "Schedules an interrupt",
+//      ENTRY R0, R1, R2, R3, R4
+//      EXIT R0, R1
+      ABSENT
+   ),
+
+TimeShare_PollWordSchedule =
+   (  NUMBER &4B545 "Schedules a pollword",
+//      ENTRY R0, R1, R2, R3
+//      EXIT R1
+      ABSENT
+   ),
+
+TimeShare_TimeShareVSchedule =
+   (  NUMBER &4B546 "TimeShareVSchedule",
+      ABSENT
+   ),
+
+TimeShare_ClockTransmitterControl =
+   (  NUMBER &4B547 "ClockTransmitterControl",
+      ABSENT
+   ),
+
+TimeShare_ClockControl =
+   (  NUMBER &4B548 "ClockControl",
+      ABSENT
+   ),
+
+TimeShare_ReadTimeAddress =
+   (  NUMBER &4B549 "Reads time address",
+      ABSENT
+   ),
+
+TimeShare_ReadTime =
+   (  NUMBER &4B54A "Reads time",
+      ABSENT
+   ),
+
+TimeShare_ConvertTimeToSpecified =
+   (  NUMBER &4B54B "Converts time to specified",
+      ABSENT
+   ),
+
+TimeShare_ConvertTimeFromSpecified =
+   (  NUMBER &4B54C "Converts time from specified",
+      ABSENT
+   ),
+
+TimeShare_ReadClockInformation =
+   (  NUMBER &4B54D "Reads clock information",
+      ABSENT
+   ),
+
+TimeShare_ReadClockTransmitterInformation =
+   (  NUMBER &4B54E "Reads clock transmitter information",
+      ABSENT
+   ),
+
+TimeShare_InterpretFrameRateIdentifier =
+   (  NUMBER &4B54F "Interprets frame rate identifier",
+      ABSENT
+   ),
+
+TimeShare_Deregister =
+   (  NUMBER &4B550 "Deregisters",
+      ABSENT
+   );
+
+
+CONST
+   TimeShare_ClockSourceNone = .Int: -1 "None",
+   TimeShare_ClockSourceInternal = .Int: 0 "Internal",
+   TimeShare_ClockSourceMidi = .Int: 1 "MIDI",
+   TimeShare_ClockReserved   = .Int: 2 "Reserved"; // that's >= 2
+
+
+CONST
+//Error messages
+   Error_TimeShareErrSchFull	= .Bits: 0x80dd00 "Interrupt schedule list is full",
+
+   Error_TimeShareErrBadHan	= .Bits: 0x80dd01 "Bad interrupt schedule handle",
+
+   Error_TimeShareErrBadInt	= .Bits: 0x80dd02 "Bad interrupt interval",
+
+   Error_TimeShareErrBadFrame	= .Bits: 0x80dd03 "Invalid frame rate",
+
+   Error_TimeShareErrWrongSize	= .Bits: 0x80dd04 "Not enough space provided",
+
+   Error_TimeShareErrTooMany	= .Bits: 0x80dd05 "A Clock or Clock Transmitter has too high an identity number",
+
+   Error_TimeShareErrCNotFound	= .Bits: 0x80dd06 "The Clock or Clock Transmitter specified is not available",
+
+   Error_TimeShareErrBadCC	= .Bits: 0x80dd07 "Undefined action number",
+
+   Error_TimeShareErrIllCC	= .Bits: 0x80dd08 "This is an external clock which may not be adjusted in this manner",
+
+   Error_TimeShareErrNotActive	= .Bits: 0x80dd09 "This Clock Transmitter is not active",
+
+   Error_TimeShareErrStillInUse	= .Bits: 0x80dd0a "The module cannot die until all clients have deregistered",
+
+   Error_TimeShareErrWrongClock	= .Bits: 0x80dd0b "You must select this Clock first";
+
+
+TYPE
+   TimeShare_Message =
+      .Struct
+      (  .Int: subreason
+// more
+      );
+
+CONST
+Message_TimeShareBase = .Bits: 0x4B540
+
+// Subreason 0 - TimeShare system component dying/starting
+
+// Subreason 1 - Clock(Transmitter)Control SWI called by application
+

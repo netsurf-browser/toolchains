@@ -1,0 +1,5 @@
+| syntax: TestFW <test dir>
+|	where TestDir is the directory 
+|	where the test files are created
+|	must be capable of > 77 limit.
+do run <Obey$Dir>.bin.TestFW <Wimp$ScrapDir>

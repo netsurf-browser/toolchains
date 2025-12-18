@@ -1,0 +1,150 @@
+TITLE ColourMap;
+
+AUTHOR "Tom Hughes, tom@compton.nu, 29 June 2003";
+
+NEEDS OS, OSSpriteOp;
+
+SWI
+   ColourMap_Start =
+   (  NUMBER 0x567C0 "Initialise a block of memory for use as a ColourMap
+                      workspace - RISC OS 4.36+",
+      ENTRY
+      (  R0 = .Bits: flags,
+         R1 = .Ref .Data: workspace,
+         R2 = .Int: size
+      ),
+      EXIT
+      (  R2! = .Int: size_used
+   )  ),
+
+   ColourMap_ApplyMapping =
+   (  NUMBER 0x567C1 "Apply a new colour mapping to a workspace - RISC OS 4.36+",
+      ABSENT
+   ),
+
+   ColourMapApplyMapping_Blend =
+   (  NUMBER 0x567C1,
+      ENTRY
+      (  R0 # 0 "Apply colour blend colour mapping to a workspace - RISC OS 4.36+",
+         R0 | .Bits: flags,
+         R1 = .Ref .Data: workspace,
+         R2 = .Int: size,
+         R3 = OS_Colour: colour,
+         R4 = .Int: factor
+      ),
+      EXIT
+      (  R2! = .Int: size_required
+   )  ),
+
+   ColourMapApplyMapping_User =
+   (  NUMBER 0x567C1,
+      ENTRY
+      (  R0 # 1 "Apply a user colour mapping to a workspace - RISC OS 4.36+",
+         R0 | .Bits: flags,
+         R1 = .Ref .Data: workspace,
+         R2 = .Int: size,
+         R3 -> OSSpriteOp_ColourMapping: mapping
+      ),
+      EXIT
+      (  R2! = .Int: size_required
+   )  ),
+
+   ColourMapApplyMapping_Identity =
+   (  NUMBER 0x567C1,
+      ENTRY
+      (  R0 # 2 "Apply an identity colour mapping to a workspace - RISC OS 4.36+",
+         R0 | .Bits: flags,
+         R1 = .Ref .Data: workspace,
+         R2 = .Int: size
+      ),
+      EXIT
+      (  R2! = .Int: size_required
+   )  ),
+
+   ColourMapApplyMapping_Invert =
+   (  NUMBER 0x567C1,
+      ENTRY
+      (  R0 # 3 "Apply an inversion colour mapping to a workspace - RISC OS 4.36+",
+         R0 | .Bits: flags,
+         R1 = .Ref .Data: workspace,
+         R2 = .Int: size
+      ),
+      EXIT
+      (  R2! = .Int: size_required
+   )  ),
+
+   ColourMapApplyMapping_Monochrome =
+   (  NUMBER 0x567C1,
+      ENTRY
+      (  R0 # 4 "Apply grey scale colour mapping to a workspace - RISC OS 4.36+",
+         R0 | .Bits: flags,
+         R1 = .Ref .Data: workspace,
+         R2 = .Int: size
+      ),
+      EXIT
+      (  R2! = .Int: size_required
+   )  ),
+
+   ColourMapApplyMapping_MonochromeAndScale =
+   (  NUMBER 0x567C1,
+      ENTRY
+      (  R0 # 5 "Apply grey scale colour mapping to a workspace - RISC OS 4.36+",
+         R0 | .Bits: flags,
+         R1 = .Ref .Data: workspace,
+         R2 = .Int: size,
+         R3 = OS_Colour: black,
+         R4 = OS_Colour: white
+      ),
+      EXIT
+      (  R2! = .Int: size_required
+   )  ),
+
+   ColourMapApplyMapping_Gamma =
+   (  NUMBER 0x567C1,
+      ENTRY
+      (  R0 # 6 "Apply gamma correction colour mapping to a workspace - RISC OS 4.36+",
+         R0 | .Bits: flags,
+         R1 = .Ref .Data: workspace,
+         R2 = .Int: size,
+         R3 = .Int: gamma_level
+      ),
+      EXIT
+      (  R2! = .Int: size_required
+   )  ),
+
+   ColourMapApplyMapping_Contrast =
+   (  NUMBER 0x567C1,
+      ENTRY
+      (  R0 # 7 "Apply contrast adjustment colour mapping to a workspace - RISC OS 4.36+",
+         R0 | .Bits: flags,
+         R1 = .Ref .Data: workspace,
+         R2 = .Int: size,
+         R3 = .Int: factor
+      ),
+      EXIT
+      (  R2! = .Int: size_required
+   )  ),
+
+   ColourMapApplyMapping_Brightness =
+   (  NUMBER 0x567C1,
+      ENTRY
+      (  R0 # 8 "Apply brightness adjustment colour mapping to a workspace - RISC OS 4.36+",
+         R0 | .Bits: flags,
+         R1 = .Ref .Data: workspace,
+         R2 = .Int: size,
+         R3 = .Int: offset
+      ),
+      EXIT
+      (  R2! = .Int: size_required
+   )  ),
+
+   ColourMap_End =
+   (  NUMBER 0x567C2 "Build a colour mapping descriptor from a workspace - RISC OS 4.36+",
+      ENTRY
+      (  R0 = .Bits: flags,
+         R1 = .Ref .Data: workspace,
+         R2 = .Int: size
+      ),
+      EXIT
+      (  R0! -> OSSpriteOp_ColourMapping: mapping
+   )  )

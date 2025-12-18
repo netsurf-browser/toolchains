@@ -1,0 +1,121 @@
+TITLE ZapFontMenu;
+AUTHOR "Christian Ludlam, <chris@recoil.org>, 22-Apr-05";
+
+NEEDS Toolbox, Menu, OS;
+
+CONST Class_ZapFontMenu = Toolbox_Class: 0x100300;
+
+CONST
+   ZapFontMenu_GenerateAboutToBeShown    = ZapFontMenu_Flags: 0x00000001,
+   ZapFontMenu_GenerateHasBeenHidden     = ZapFontMenu_Flags: 0x00000002,
+   ZapFontMenu_IncludeSystemFont         = ZapFontMenu_Flags: 0x00000004,
+   ZapFontMenu_EncodingMenu		 = ZapFontMenu_Flags: 0x00000008;
+
+// flags returned in selection message
+CONST
+   ZapFontMenu_EncodingSelection = .Bits: 1;
+
+TYPE ZapFontMenu_Flags = .Bits;
+
+TYPE ZapFontMenu_Object = .Struct
+  ( ZapFontMenu_Flags: flags,
+    Toolbox_StringReference: ticked_font
+  ) "Structure to describe Object for in-memory construction -
+         referenced from Toolbox_Template";
+
+TYPE ZapFontMenu_ObjectTemplate = .Struct: Toolbox_ResourceFileObject
+  ( ZapFontMenu_Flags: objectflags,
+    Toolbox_StringReference: ticked_font
+  );
+
+CONST
+   Action_ZapFontMenuAboutToBeShown    = .Bits: 0x100300,
+   Action_ZapFontMenuHasBeenHidden     = .Bits: 0x100301,
+   Action_ZapFontMenuSelection         = .Bits: 0x100302;
+
+TYPE
+   ZapFontMenu_Full = OS_Coord;
+
+TYPE
+   ZapFontMenu_ActionAboutToBeShown = .Struct
+      (  Toolbox_PositionTag: tag,
+         .Union
+         (  OS_Coord: top_left,
+            ZapFontMenu_Full: full
+         ): position
+      )  "Prefer ZapFontMenu_ActionAboutToBeShownBlock";
+
+TYPE
+   ZapFontMenu_ActionAboutToBeShownBlock = .Struct: Toolbox_ActionHeader
+      (  Toolbox_PositionTag: tag,
+         .Union
+         (  OS_Coord: top_left,
+            ZapFontMenu_Full: full
+         ): position
+      );
+
+TYPE
+   ZapFontMenu_ActionHasBeenHiddenBlock = Toolbox_ActionHeaderBase,
+   ZapFontMenu_ActionDialogueCompletedBlock = Toolbox_ActionHeaderBase
+      "Prefer ZapFontMenu_ActionHasBeenHiddenBlock";
+
+TYPE
+   ZapFontMenu_ActionSelection = .Struct
+   (  [212] .Char: identifier
+   )  "Prefer ZapFontMenu_ActionSelectionBlock";
+
+TYPE
+  ZapFontMenu_ActionSelectionBlock = .Struct: Toolbox_ActionHeader
+  ( [212] .Char: identifier  );
+
+CONST
+   Error_ZapFontMenuTasksActive        = .Bits: 0x81D440,
+   Error_ZapFontMenuAllocFailed        = .Bits: 0x81D441,
+   Error_ZapFontMenuShortBuffer        = .Bits: 0x81D442,
+   Error_ZapFontMenuNoSuchTask         = .Bits: 0x81D443,
+   Error_ZapFontMenuNoSuchMethod       = .Bits: 0x81D444,
+   Error_ZapFontMenuNoSuchMiscOpMethod = .Bits: 0x81D445;
+
+SWI
+   ZapFontMenu_ClassSWI = (NUMBER 0x100300*, ABSENT),
+   ZapFontMenu_PostFilter = (NUMBER 0x100301*, ABSENT),
+   ZapFontMenu_PreFilter = (NUMBER 0x100302*, ABSENT),
+
+   ZapFontMenu_SetFont =
+   (  NUMBER 0x44EC6,
+      ENTRY
+      (  R0 = .Bits: flags,
+         R1 = Toolbox_O: font_menu,
+         R2 # 0*,
+         R3 -> .String: font_identifier
+   )  ),
+   ZapFontMenu_GetFont =
+   (  NUMBER 0x44EC6,
+      ENTRY
+      (  R0 = .Bits: flags,
+         R1 = Toolbox_O: font_menu,
+         R2 # 1*,
+         R3 = .Ref .String: buffer,
+         R4 = .Int: size
+      ),
+      EXIT
+      (  R4! = .Int: used
+   )  ),
+   ZapFontMenu_SetSystemAvailable =
+   (  NUMBER 0x44EC6,
+      ENTRY
+      (  R0 = .Bits: flags,
+         R1 = Toolbox_O: font_menu,
+         R2 # 2*,
+         R3 = .Bool: available
+   )  ),
+   ZapFontMenu_GetSystemAvailable =
+   (  NUMBER 0x44EC6,
+      ENTRY
+      (  R0 = .Bits: flags,
+         R1 = Toolbox_O: font_menu,
+         R2 # 3*
+      ),
+      EXIT
+      (  R0! = .Bool: available
+   )  )

@@ -1,0 +1,9 @@
+This port of Bison is copy, with modifications, of that distributed under the GPL
+as part of Nick Burret's GCCSDK for RISC OS.
+
+Place the files "hairy" and "simple" in a "bison" directory under within 
+your "Choices" path; e.g. !Boot.Choices.Users.Single.bison
+
+Please send any bug reports for this port to oslib_user@compton.nu
+
+Tony van der Hoff 20021114

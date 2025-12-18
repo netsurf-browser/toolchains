@@ -1,0 +1,56 @@
+#	OSLib/Source/User/oslub/Modules
+# 	Module definition file for User Make
+
+# Modules containing SWIs
+SWIMODULES = \
+BASICTrans \
+ClipboardHolder \
+ColourPicker \
+CompressJPEG \
+ConvertBMP \
+ConvertPNG \
+ConvertSprite \
+DragASprite \
+Draw \
+DrawFile \
+Filter \
+Font \
+Hourglass \
+ImageFileConvert \
+ImageFileRender \
+JPEG \
+LineEditor \
+MimeMap \
+PDriver \
+PDumper \
+RedrawManager \
+Report \
+TaskManager \
+TaskWindow \
+URI \
+URL \
+Wimp \
+WimpExtend \
+WimpReadSysInfo \
+WimpSpriteOp \
+ZapFontMenu \
+ZapRedraw \
+Zipper \
+ZLib
+
+# Modules with no SWIs
+MODULES = \
+Alarm \
+Arcweb \
+ExtEdit \
+Help \
+InetSuite \
+MakePSFont \
+OLE \
+PlugIn \
+RemotePrinterSupport \
+StrongHelp \
+Super
+
+# Modules defined other than by SWI definition
+ASMMODULES =

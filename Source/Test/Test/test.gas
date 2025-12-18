@@ -1,0 +1,18 @@
+@ Test assembler headers
+
+@ Gets all OSLib headers:
+#include "all_oslib.Hdr"
+
+	.text
+	.global	main
+
+main:	STMFD 	sp!, {lr}		@ save the return address
+	ADR 	R0, message		@ write the message std out
+	SWI	OS_Write0
+	SWI	OS_NewLine
+	LDMFD	sp!, {pc}		@ return
+
+message:
+	.asciz	"Hello World from GNU assembler"
+
+	.end

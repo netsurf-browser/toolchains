@@ -1,0 +1,726 @@
+TITLE ZapRedraw;
+AUTHOR "Christian Ludlam, <chris@recoil.org> 09-Feb-02 23:39";
+// Updated 21-Apr-05 13:44
+
+NEEDS OS, Wimp, Font;
+
+//ZapRedraw chunk number: &48480
+
+TYPE ZapRedraw_Flags = .Bits;
+
+CONST 
+   ZapRedraw_DSA                   = ZapRedraw_Flags: %0,
+   ZapRedraw_VDU                   = ZapRedraw_Flags: %1,
+   ZapRedraw_DoubleHeight          = ZapRedraw_Flags: %10 "(DSA mode)",
+   ZapRedraw_GivenExtensionRoutine = ZapRedraw_Flags: %100 "(DSA mode)",
+   ZapRedraw_Substyles             = ZapRedraw_Flags: %1000,
+   ZapRedraw_FastRectangles        = ZapRedraw_Flags: %10000 "(DSA mode)",
+   ZapRedraw_AutoScale             = ZapRedraw_Flags: %100000,
+   ZapRedraw_Extend                = ZapRedraw_Flags: %1000000,
+   ZapRedraw_RtoL                  = ZapRedraw_Flags: %10000000 "(VDU mode)",
+   ZapRedraw_Transparent           = ZapRedraw_Flags: %100000000 "(VDU mode)",
+   ZapRedraw_AASuppress            = ZapRedraw_Flags: %1000000000 "(DSAVDU mode)",
+   ZapRedraw_16Bit                 = ZapRedraw_Flags: %10000000000 "(PrepareDataLine)",
+   ZapRedraw_32Bit                 = ZapRedraw_Flags: %100000000000 "(PrepareDataLine)",
+   ZapRedraw_SmallColours          = ZapRedraw_Flags: %1000000000000 "(PrepareDataLine)";
+
+
+TYPE ZapRedraw_F; // font handle
+TYPE ZapRedraw_E; // encoding handle
+TYPE ZapRedraw_CharCache     = .Ref .Byte;
+TYPE ZapRedraw_Colour        = .Byte;
+TYPE ZapRedraw_Substyle      = .Char;
+TYPE ZapRedraw_EncodingTable = [256] .Bits;
+
+// substyles
+CONST ZapRedraw_Normal        = ZapRedraw_Substyle: %0;
+CONST ZapRedraw_Strikethrough = ZapRedraw_Substyle: %1;
+CONST ZapRedraw_Inverse       = ZapRedraw_Substyle: %1000 "PrepareDataLine only";
+CONST ZapRedraw_Bold          = ZapRedraw_Substyle: %100000;
+CONST ZapRedraw_Italic        = ZapRedraw_Substyle: %1000000;
+CONST ZapRedraw_Underlined    = ZapRedraw_Substyle: %10000000;
+
+// encoding tables returned by ZapRedraw_Encoding 2
+CONST ZapRedrawEcoding_UTF8  = ZapRedraw_EncodingTable: 1;
+CONST ZapRedrawEcoding_UTF16 = ZapRedraw_EncodingTable: 2;
+
+
+TYPE ZapRedraw_DSABlock =
+   .Struct
+   (  ZapRedraw_Flags: flags,
+      OS_Box: box "redraw box (pixels)",
+      .Ref .Byte: screen,
+      .Int: bpl "bits per raster line of screen",
+      .Int: log2_bpp,
+      .Int: charw "(in pixels)",
+      .Int: charh "(in pixels)",
+      .Ref ZapRedraw_CharCache: caddr,
+      .Int: cbpl "bytes per cached character line",
+      .Int: cbpc "bytes per cached character",
+      .Int: linesp "line spacing (pixels)",
+      .Ref .Ref .Char: data,
+      .Int: scrollx "horizontal scroll offset in 'data' of top left of redraw rectangle (pixels)",
+      .Int: scrolly "vertical scroll offset in 'data' of top left of redraw rectangle (pixels)",
+      .Ref ZapRedraw_Palette: palette,
+      .Int: fg "index of foreground colour",
+      .Int: bg "index of background colour",
+      .Ref Void: workarea "word-aligned workspace (SWI-dependent)",
+      .Int: magx "log2 of x pixel size (O S units)",
+      .Int: magy "log2 of y pixel size (O S units)",
+      .Int: xsize "x screen size (pixels)",
+      .Int: ysize "y screen size (pixels)",
+      OS_Mode: mode,
+      .Int: length  "offset of last entry in the redraw block (optional)",
+      .Int: lmargin "width of left margin (pixels)",
+      .Int: tmargin "height of top margin (pixels)",
+      ZapRedraw_E: encoding "encoding handle / 0"
+   );
+
+TYPE ZapRedraw_VDUBlock =
+   .Struct
+   (  ZapRedraw_Flags: flags,
+      OS_Box: box "redraw box (pixels)",
+      .Ref .Byte: reserved0,
+      .Int: reserved1,
+      .Int: log2_bpp,
+      .Int: charw "(in pixels)",
+      .Int: charh "(in pixels)",
+      .Ref .Char: caddr "font name",
+      .Int: offsetx "x offset of character in bbox",
+      .Int: offsety "y offset of character in bbox",
+      .Int: linesp "line spacing (pixels)",
+      .Ref .Ref .Char: data,
+      .Int: scrollx "x scroll offset of redraw rectangle (pixels)",
+      .Int: scrolly "y scroll offset of redraw rectangle (pixels)",
+      .Ref ZapRedraw_Palette: palette,
+      .Int: fg "index of foreground colour",
+      .Int: bg "index of background colour",
+      .Ref Void: workarea "word-aligned workspace (SWI-dependent)",
+      .Int: magx "log2 of x pixel size (O S units)",
+      .Int: magy "log2 of y pixel size (O S units)",
+      .Int: xsize "x screen size (pixels)",
+      .Int: ysize "y screen size (pixels)",
+      OS_Mode: mode,
+      .Int: length  "offset of last entry in the redraw block (optional)",
+      .Int: lmargin "width of left margin (pixels)",
+      .Int: tmargin "height of top margin (pixels)",
+      ZapRedraw_E: encoding "encoding handle / 0"
+   );
+
+TYPE ZapRedraw_FontBlock =
+   .Struct
+   (  ZapRedraw_Flags: flags,
+      OS_Box: box "redraw box (pixels)",
+      .Ref .Byte: screen,
+      .Int: bpl "bits per raster line of screen",
+      .Int: log2_bpp,
+      .Int: charw "unused",
+      .Int: charh "unused",
+      ZapRedraw_F: font,
+      .Int: cbpl "unused",
+      .Int: cbpc "unused",
+      .Int: linesp "line spacing (pixels)",
+      .Ref .Ref .Char: data,
+      .Int: scrollx "horizontal scroll offset in 'data' of top left of redraw rectangle (pixels)",
+      .Int: scrolly "vertical scroll offset in 'data' of top left of redraw rectangle (pixels)",
+      .Ref ZapRedraw_Palette: palette,
+      .Int: fg "index of foreground colour",
+      .Int: bg "index of background colour",
+      .Ref Void: workarea "Should be set to 0",
+      .Int: magx "log2 of x pixel size (OS units)",
+      .Int: magy "log2 of y pixel size (OS units)",
+      .Int: xsize "x screen size (pixels)",
+      .Int: ysize "y screen size (pixels)",
+      OS_Mode: mode,
+      .Int: length  "offset of last entry in the redraw block (optional)",
+      .Int: lmargin "width of left margin (pixels)",
+      .Int: tmargin "height of top margin (pixels)",
+      ZapRedraw_E: encoding "encoding handle / 0"
+   );
+
+TYPE ZapRedraw_Block =
+   .Union
+   ( ZapRedraw_VDUBlock:  vdu,
+     ZapRedraw_DSABlock:  dsa,
+     ZapRedraw_FontBlock: font
+   );
+
+CONST
+   ZapRedraw_Command             = .Char: 0 "followed by command number",
+   ZapRedraw_CommandNull         = .Char: 0 "followed by 'c'",
+   ZapRedraw_CommandSetColours   = .Char: 1 "followed by 'f', 'b'",
+   ZapRedraw_CommandEOL          = .Char: 2,
+   ZapRedraw_Command16bitChar    = .Char: 3 "followed by 'l', 'h'",
+   ZapRedraw_CommandMerge        = .Char: 4 "followed by 'f', 'b', 'c0', 'c1'",
+   ZapRedraw_CommandReserved     = .Char: 5 "reserved",
+   ZapRedraw_CommandSetFG        = .Char: 6 "followed by 'f'",
+   ZapRedraw_CommandSetBG        = .Char: 7 "followed by 'b'",
+   ZapRedraw_CommandCursorMerge  = .Char: 8 "followed by 'f', 'b', 'x', 'y'",
+   ZapRedraw_CommandSetStyle     = .Char: 9 "followed by 's'",
+   ZapRedraw_CommandSetStyleCol  = .Char: 10 "followed by 'f', 'b', 's'",
+   ZapRedraw_CommandSetChunk     = .Char: 11 "followed by chunk bits 8-15",
+   ZapRedraw_CommandSetChunkLong = .Char: 12 "followed by chunk bits 8-15, then bits 16-23",
+   ZapRedraw_CommandDelete       = .Char: 0x7F;
+   
+// the following aren't really usable since they need to be 0,3,l,h sequences
+//   ZapRedraw_CommandTBL          = .Int:  0x100,
+//   ZapRedraw_CommandTB           = .Int:  0x101,
+//   ZapRedraw_CommandTBR          = .Int:  0x102,
+//   ZapRedraw_CommandTBLR         = .Int:  0x103,
+//   ZapRedraw_CommandB            = .Int:  0x104,
+//   ZapRedraw_CommandL            = .Int:  0x105;
+
+TYPE ZapRedraw_DSAPalette = .Struct (.Bits: dup_colour ...);
+TYPE ZapRedraw_VDUPalette = .Struct (OS_Colour: colour ...);
+TYPE ZapRedraw_Palette    = .Union (ZapRedraw_VDUPalette: vdu,
+                                    ZapRedraw_DSAPalette: dsa);
+
+
+SWI ZapRedraw_RedrawArea =
+   (  NUMBER &48480 "Redraws a rectangle of characters on the screen",
+      ENTRY
+      (  R1 -> ZapRedraw_Block: redraw_block,
+         R2 = .Asm: extension_fn,
+         R3 =  .Ref Void: extension_handle
+      ),
+      EXIT (R0?)
+   );
+
+
+// reason codes for extension routines
+TYPE ZapRedraw_Reason = .Int;
+CONST 
+   ZapRedraw_NewRaster       = ZapRedraw_Reason: 0,
+   ZapRedraw_SetColours      = ZapRedraw_Reason: 1,
+   ZapRedraw_Merge           = ZapRedraw_Reason: 4,
+   ZapRedraw_SetFG           = ZapRedraw_Reason: 6,
+   ZapRedraw_SetBG           = ZapRedraw_Reason: 7,
+   ZapRedraw_CursorMerge     = ZapRedraw_Reason: 8,
+   ZapRedraw_SetStyle        = ZapRedraw_Reason: 9,
+   ZapRedraw_SetStyleColours = ZapRedraw_Reason: 10,
+   ZapRedraw_SetChunk        = ZapRedraw_Reason: 11,
+   ZapRedraw_SetLargeChunk   = ZapRedraw_Reason: 12;
+
+
+SWI ZapRedraw_GetPaletteEntry =
+   (  NUMBER &48481 "Takes a colour bitmap and duplicates it to create
+                     a DSA colour mask",
+      ENTRY
+      (  R0 = OS_ColourNumber: colour_number,
+         R1 = .Int: bpp
+      ),
+      EXIT (R0! = .Int: dup_colour)
+   );
+
+
+SWI ZapRedraw_RedrawRaster =
+   ( NUMBER &48482 "Deprecated - use ZapRedraw_RedrawArea instead",
+     ABSENT
+   );
+
+
+SWI ZapRedraw_ConvertBitmap =
+   (  NUMBER 0x48483 "Converts a 1bpp bitmap for use by
+                      ZapRedraw_RedrawArea",
+      ENTRY
+      ( R1 -> ZapRedraw_Block: redraw_block,
+        R2 =  .Int: first,
+        R3 =  .Int: last,
+        R4 =  ZapRedraw_CharCache: bitmaps
+      ),
+      EXIT (R0?)
+   );
+
+
+SWI ZapRedraw_PrepareDataLine =
+   (  NUMBER 0x48484 "Helps prepare the 'r_data' field of the redraw block",
+      ENTRY
+      ( R0  =  ZapRedraw_Colour: ctrl_colour,
+        R1  -> ZapRedraw_Block: redraw_block,
+        R2  -> .String: input,
+        R3  -> ZapRedraw_Colour: fg,
+        R4  -> ZapRedraw_Colour: bg,
+        R5  =  .Int: length,
+        R6  =  .Ref .String: output,
+        R7  -> ZapRedraw_Substyle: substyles
+      ),
+      EXIT
+      ( R0  =  .Int: highest,
+        R5! =  .Int: length_out
+      )
+   );
+
+
+SWI ZapRedraw_AddCursor =
+   (  NUMBER 0x48485 "Deprecated - use ZapRedraw_AddCursorSmart instead",
+      ABSENT
+   );
+   
+
+SWI ZapRedraw_FindCharacter =
+   (  NUMBER 0x48486 "Finds the (n + 1)th printable character within
+                      a line",
+      ENTRY
+      ( R0  =  .Int:               count,
+        R1  -> .String:            input,
+        R2  =  ZapRedraw_Colour:   fg,
+        R3  =  ZapRedraw_Colour:   bg,
+        R4  =  ZapRedraw_Substyle: style
+      ),
+      EXIT
+      ( R0  -> .String:            something,
+        R1! -> .String:            next_char,
+        R2  =  ZapRedraw_Colour:   fg_out,
+        R3  =  ZapRedraw_Colour:   bg_out,
+        R4  =  ZapRedraw_Substyle: style_out
+      )
+   );
+
+
+SWI ZapRedraw_MoveBytes =
+   (  NUMBER 0x48487 "Fast byte shifting",
+      ENTRY
+      ( R1 -> .Byte:      source,
+        R2 =  .Ref .Byte: dest,
+        R3 =  .Int:       length
+      ),
+      EXIT
+      ( R0?,
+        R1?,
+        R2?,
+        R3?
+      )
+   );
+
+
+SWI ZapRedraw_CachedCharSize =
+   (  NUMBER 0x48488 "Calculates cbpl, cbpc from charw, charh, bpp",
+      ENTRY
+      ( R0 =  .Int: bpp,
+        R2 =  .Int: charw,
+        R3 =  .Int: charh
+      ),
+      EXIT
+      ( R0?,
+        R2 =  .Int: cbpl,
+        R3 =  .Int: cbpc
+      )
+   );
+
+
+SWI ZapRedraw_ConvBitmapChar =
+   (  NUMBER 0x48489 "Performs the bitmap conversion for one character",
+      ENTRY
+      ( R1 -> ZapRedraw_Block: redraw_block,
+        R2 =  .Int:                  source_bpl,
+        R3 =  .Int:                  dest_bpl,
+        R4 =  ZapRedraw_CharCache:   source_bitmap,
+        R5 =  ZapRedraw_CharCache:   dest_bitmap,
+        R6 =  .Bits:                 bit_mask,
+        R7 =  .Int:                  bpp
+      ),
+      EXIT
+      ( R0?,
+        R4  =  ZapRedraw_CharCache: next_source,
+        R5! =  ZapRedraw_CharCache: next_dest
+      )
+   );
+
+
+TYPE ZapRedrawCreatePalette_Flags = .Bits;
+CONST ZapRedrawCreatePalette_WimpToVDU = ZapRedrawCreatePalette_Flags: %1;
+CONST ZapRedrawCreatePalette_VDUToDSA  = ZapRedrawCreatePalette_Flags: %10;
+
+SWI ZapRedraw_CreatePalette =
+   (  NUMBER 0x4848A "Performs various operations on palette data",
+      ENTRY
+      ( R0 =  ZapRedrawCreatePalette_Flags: flags,
+        R1 -> ZapRedraw_Block: redraw_block,
+        R2 -> ZapRedraw_Palette: in,
+        R3 =  .Ref ZapRedraw_Palette: out,
+        R4 =  .Int: number
+      ),
+      EXIT (R0?)
+   );
+
+
+SWI ZapRedraw_InsertChar =
+   (  NUMBER 0x4848B "Inserts a single character into a string of 'data'
+                      format",
+      ENTRY
+      ( R0 =  .Int:         c,
+        R1 =  .Ref .String: address
+      ),
+      EXIT
+      ( R0?,
+        R1! -> .String: address_out
+      )
+   );
+
+
+SWI ZapRedraw_ReadSystemChars =
+   (  NUMBER 0x4848C "Converts the system characters to a form usable
+                      for ZapRedraw_RedrawArea",
+      ENTRY
+      ( R0 =  ZapRedraw_CharCache:  buffer,
+        R1 -> ZapRedraw_Block: redraw_block
+      ),
+      EXIT (R0?)
+   );
+
+
+SWI ZapRedraw_ReverseBitmaps =
+   (  NUMBER 0x4848D "Reverses the bits of each byte",
+      ENTRY
+      ( R1 =  ZapRedraw_CharCache: source,
+        R2 =  ZapRedraw_CharCache: dest,
+        R3 =  .Int:                number
+      ),
+      EXIT (R0?)
+   );
+
+
+SWI ZapRedraw_ReadVduVars =
+   (  NUMBER 0x4848E "Fills in bpl, bpp, magx, magy, xsize, ysize, mode",
+      ENTRY (R1 = .Ref ZapRedraw_Block: redraw_block),
+      EXIT  (R0?)
+   );
+
+
+SWI ZapRedraw_GetRectangle =
+   (  NUMBER 0x4848F "Takes the redraw rectangle block as returned by
+                      Wimp_RedrawWindow or Wimp_GetRectangle and uses it to fill
+                      in the ZapRedraw block",
+      ENTRY
+      ( R0 -> Wimp_Draw:            wimp_block,
+        R1 =  .Ref ZapRedraw_Block: redraw_block
+      ),
+      EXIT (R0?)
+   );
+
+
+SWI ZapRedraw_AddVduBitmaps =
+   (  NUMBER 0x48490 "Creates bitmaps for extra characters from a
+                      standard bitmap of the normal characters",
+      ENTRY
+      ( R1 -> ZapRedraw_Block: redraw_block,
+        R2 =  .Int:                  first,
+        R3 =  .Int:                  last,
+        R4 =  ZapRedraw_CharCache:   address
+      ),
+      EXIT (R0?)
+   );
+
+
+SWI ZapRedraw_CacheFontChars =
+   (  NUMBER 0x48491 "Caches a range of characters as bitmaps - see
+                      individual reason codes",
+      ABSENT
+   );
+
+SWI ZapRedrawCacheFontChars_CurrentMode =
+   (  NUMBER 0x48491,
+      ENTRY
+      ( R0 #  1 "Caches a range of characters as bitmaps in the curent mode",
+        R1 -> ZapRedraw_Block: redraw_block,
+        R2 -> .String: font_name,
+        R3 =  .Int:    size,
+        R4 =  .Int:    xoff,
+        R5 =  .Int:    yoff,
+        R6 =  .Int:    first,
+        R7 =  .Int:    last
+      ),
+      EXIT (R0?)
+   );
+
+SWI ZapRedrawCacheFontChars_1bpp =
+   (  NUMBER 0x48491,
+      ENTRY
+      ( R0 #  2 "Caches a range of characters as bitmaps in 1bpp",
+        R1 -> ZapRedraw_Block: redraw_block,
+        R2 -> .String: font_name,
+        R3 =  .Int:    size,
+        R4 =  .Int:    xoff,
+        R5 =  .Int:    yoff,
+        R6 =  .Int:    first,
+        R7 =  .Int:    last
+      ),
+      EXIT (R0?)
+   );
+
+
+TYPE  ZapRedrawSpriteSize_Reason = .Bits;
+CONST ZapRedrawSpriteSizeReason_PassOne = ZapRedrawSpriteSize_Reason: 0;
+CONST ZapRedrawSpriteSizeReason_PassTwo = ZapRedrawSpriteSize_Reason: %10000000;
+
+SWI ZapRedraw_SpriteSize =
+   (  NUMBER 0x48492 "Returns the size required for a sprite area the
+                      size of a single character",
+      ABSENT
+   );
+
+SWI ZapRedrawSpriteSize_CurrentMode =
+   (  NUMBER 0x48492,
+      ENTRY
+      ( R0  #  1 "Returns the size required for the sprite area in the current mode",
+      	R0  |  ZapRedrawSpriteSize_Reason: pass,
+      	R1  -> ZapRedraw_Block: redraw_block
+      ),
+      EXIT
+      ( R0! =  .Int: size
+      )
+   );
+
+SWI ZapRedrawSpriteSize_1bpp =
+   (  NUMBER 0x48492,
+      ENTRY
+      ( R0  #  2 "Returns the size required for the sprite area in a 1bpp mode",
+      	R0  |  ZapRedrawSpriteSize_Reason: pass,
+      	R1  -> ZapRedraw_Block: redraw_block
+      ),
+      EXIT
+      ( R0! =  .Int: size
+      )
+   );
+
+
+SWI ZapRedraw_RedrawWindow =
+   (  NUMBER 0x48493 "The whole Wimp_RedrawWindowRequest event handler",
+      ENTRY
+      ( R0 -> Wimp_Draw: wimp_block,
+      	R1 -> ZapRedraw_Block: redraw_block
+      ),
+      EXIT (R0?)
+   );
+
+
+SWI ZapRedraw_Divide =
+   (  NUMBER 0x48494 "Fast unsigned integer division / modulus",
+      ENTRY
+      ( R0  =  .Bits: numerator,
+        R1  =  .Bits: denominator
+      ),
+      EXIT
+      ( R0! =  .Bits: div,
+        R1?,
+        R2  =  .Bits: mod,
+        R3?
+      )
+    );
+
+// Note this claims to corrupt R0-R12 but that's silly because SWIs don't
+//  have access to those registers
+SWI ZapRedraw_PlotRectangle =
+    (  NUMBER 0x48495 "Fast rectangle fill routine using DSA",
+       ENTRY
+       ( R0  =  .Int: x0,
+         R1  =  .Int: y0,
+         R2  =  .Int: x1,
+         R3  =  .Int: y1,
+         R4  =  OS_ColourNumber: colour
+       ),
+       EXIT (R0?, R1?, R2?, R3?, R4?, R5?, R6?, R7?, R8?)
+    );
+
+
+TYPE ZapRedraw_AddCursorMatch = .Bits;
+CONST ZapRedraw_MatchForColourShift = .Int: 0 "shift for foreground colour to match";
+CONST ZapRedraw_MatchForColourShift = .Int: 8 "shift for background colour to match";
+CONST ZapRedraw_MatchFor = ZapRedraw_AddCursorMatch: 0x40000000 "match foreground";
+CONST ZapRedraw_MatchBac = ZapRedraw_AddCursorMatch: 0x80000000 "match background";
+
+TYPE ZapRedraw_AddCursorCursor = .Bits;
+CONST ZapRedraw_CursorHighByteShift  = .Int: 0  "shift for cursor high byte";
+CONST ZapRedraw_CursorForShift       = .Int: 16 "shift for cursor foreground colour";
+CONST ZapRedraw_CursorForShift       = .Int: 24 "shift for cursor background colour";
+CONST ZapRedraw_CursorMergeCharacter = 
+         ZapRedraw_AddCursorCursor: 0x400 "use merge character sequence";
+CONST ZapRedraw_CursorMergeCursor = 
+         ZapRedraw_AddCursorCursor: 0x800 "use merge cursor sequence";
+     
+SWI ZapRedraw_AddCursorSmart =
+   (  NUMBER 0x48496 "Adds in the codes to place 'cursors' over some of
+                      the text",
+      ENTRY
+      ( R0 =  .Ref .String: dest,
+        R1 ->  ZapRedraw_Block: redraw_block,
+        R2 =  .Int: offset     "offset in characters of start of cursor",
+        R3 =  .Int: length     "length in characters of cursor string",
+        R4 -> .String: cursors "string of low bytes of cursor characters",
+        R5 -> .String: source  "0,2 terminated",
+        R6 =  ZapRedraw_AddCursorMatch: match,
+        R7 =  ZapRedraw_AddCursorCursor: cursor
+      ),
+      EXIT
+      ( R0 -> .String: end
+      )
+   );
+
+
+TYPE ZapRedrawFindFont_Flags = .Bits;
+CONST ZapRedrawFindFont_DSA            = ZapRedrawFindFont_Flags: %0;
+CONST ZapRedrawFindFont_VDU            = ZapRedrawFindFont_Flags: %1;
+CONST ZapRedrawFindFont_ReductionBlock = ZapRedrawFindFont_Flags: %10;
+
+TYPE ZapRedraw_ReductionBlock = OS_Box;
+SWI ZapRedraw_FindFont =
+   ( NUMBER 0x48497 "Opens a font and returns a font handle",
+     ENTRY
+     ( R0  -> .String:                  name,
+       R1  =  ZapRedrawFindFont_Flags:  flags,
+       R2  =  .Int:                     size,
+       R3  =  .Int:                     aspect,
+       R4  -> ZapRedraw_ReductionBlock: block
+     ),
+     EXIT
+     ( R0! =  ZapRedraw_F: handle
+     )
+   );
+
+
+SWI ZapRedraw_LoseFont =
+   (  NUMBER 0x48498 "Closes a font",
+      ENTRY
+      ( R0  =  ZapRedraw_F: handle
+      ),
+      EXIT (R0?)
+   );
+
+
+TYPE ZapRedrawReadCharSize_Flags = .Bits;
+CONST ZapRedrawReadCharSize_Pixels = ZapRedrawReadCharSize_Flags: %0;
+CONST ZapRedrawReadCharSize_OS     = ZapRedrawReadCharSize_Flags: %1;
+CONST ZapRedrawReadCharSize_Linesp = ZapRedrawReadCharSize_Flags: %10;
+CONST ZapRedrawReadCharSize_Scale  = ZapRedrawReadCharSize_Flags: %100;
+
+SWI ZapRedraw_ReadCharSize =
+   (  NUMBER 0x48499 "Reads the character size of an opened font",
+      ENTRY
+      ( R0  =  ZapRedraw_F:                 handle,
+        R1  -> ZapRedraw_Block:             redraw_block,
+        R2  =  ZapRedrawReadCharSize_Flags: flags
+      ),
+      EXIT
+      ( R0?,
+        R2  =  .Int: charw,
+        R3  =  .Int: charh
+      )
+    );
+
+
+SWI ZapRedraw_Version =
+   (  NUMBER 0x4849a "Reads the version of ZapRedraw",
+      EXIT
+      ( R0! =  .Int: Version,
+        R1?, // div_mod not APCS compliant
+        R2?  // move_bytes not APCS compliant (actually, it's almost APCS32 compliant, 
+             //                                but fairly usless in a C context)
+      )
+   );
+
+
+SWI ZapRedraw_ListFonts =
+   (  NUMBER 0x4849b "Scans for fonts, returning their identifiers one at a
+            time, or or builds a menu of fonts",
+      ENTRY
+      (  R1 = .Ref .Data: buffer1,
+         R2 = Font_ListContext: context,
+         R3 = .Int: size1,
+         R4 = .Ref .Data: buffer2,
+         R5 = .Int: size2,
+         R6 -> .String: tick_font
+      ),
+      EXIT
+      (  R2! = Font_ListContext: context_out,
+         R3 = .Int: used1,
+         R5 = .Int: used2
+      )
+   );
+
+
+SWI ZapRedraw_UpdateWindow =
+   (  NUMBER 0x4849c "Updates a wimpdow by calling Wimp_UpdateWindow and
+                      ZapRedraw_RedrawWindow",
+      ENTRY
+      ( R0  ->  Wimp_Draw: update,
+        R1  ->  ZapRedraw_Block: redraw_block
+      ),
+      EXIT (R0?)
+    );
+
+
+SWI ZapRedraw_ReadFontInfo =
+   (  NUMBER 0x4849d "Read information about an open font - see individual subreasons",
+      ABSENT
+   );
+
+SWI ZapRedraw_ReadFontName =
+   (  NUMBER 0x4849d,
+      ENTRY
+      ( R0  #  0 "Read the font name of an open font",
+        R1  =  ZapRedraw_F: handle
+      ),
+      EXIT
+      ( R0! -> .String: name
+      )
+   );
+
+
+SWI ZapRedraw_ReadModeBPP =
+   (  NUMBER 0x4849e "Read the Log2 BPP for the current mode, adjusted for ViewFinder",
+      EXIT (R0! = .Int: bpp)
+   );
+
+SWI ZapRedraw_DecodeMenu =
+   (  NUMBER 0x4849f "Decode a selection made from a font menu",
+      ENTRY
+      (  R0 = Font_DecodeFlags: flags,
+         R1 -> .Data: menu,
+         R2 -> .Data: block,
+         R3 = .Ref .Data: buffer,
+         R4 = .Int: size
+      ),
+      EXIT
+      (  R3 -> .Int: next_selection,
+         R4 = .Int: used
+      )
+   );
+
+
+SWI ZapRedraw_Encoding =
+   (  NUMBER 0x484a0 "Perform various operations on encodings - see individual reason codes",
+      ABSENT
+   );
+
+SWI ZapRedrawEncoding_Find =
+   (  NUMBER 0x484a0 "Opens an encoding for later use",
+      ENTRY
+      (  R0  #  0,
+         R1  -> .String: name
+      ),
+      EXIT 
+      (  R0! = ZapRedraw_E: handle
+      )
+   );
+
+SWI ZapRedrawEncoding_Lose =
+   (  NUMBER 0x484a0 "Closes an encoding",
+      ENTRY
+      (  R0  #  1,
+         R1  =  ZapRedraw_E: handle
+      ),
+      EXIT 
+      (  R0?
+      )
+   );
+
+SWI ZapRedrawEncoding_Table =
+   (  NUMBER 0x484a0 "Returns the encoding table for an open encoding file",
+      ENTRY
+      (  R0  #  2,
+         R1  =  ZapRedraw_E: handle
+      ),
+      EXIT 
+      (  R0! -> ZapRedraw_EncodingTable: table
+      )
+   )

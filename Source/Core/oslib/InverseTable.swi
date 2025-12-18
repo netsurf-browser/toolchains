@@ -1,0 +1,50 @@
+TITLE InverseTable;
+
+AUTHOR "Tom Hughes, tom@compton.nu, 21 Nov 2002";
+
+NEEDS OS, OSSpriteOp;
+
+TYPE
+   InverseTable_Colour = .Bits;
+
+CONST
+   InverseTable_RShift = .Int: 0,
+   InverseTable_GShift = .Int: 5,
+   InverseTable_BShift = .Int: 10,
+   InverseTable_R      = InverseTable_Colour: 0b11111,
+   InverseTable_G      = InverseTable_Colour: 0b1111100000,
+   InverseTable_B      = InverseTable_Colour: 0b111110000000000;
+
+SWI
+   InverseTable_Calculate =
+   (  NUMBER 0x4BF40 "Calculates inverse tables for the current destination - RISC OS 4.32+",
+      EXIT
+      (  R0 = .Ref InverseTable_Colour: gcol_to_colour,
+         R1 = .Ref OS_GCOL: colour_to_gcol
+   )  ),
+
+   InverseTable_SpriteTableForSprite =
+   (  NUMBER 0x4BF41 "Calculates inverse tables for the given sprite - RISC OS 4.32+",
+      ENTRY
+      (  R0 = .Ref InverseTable_Colour: gcol_to_colour_in,
+         R1 = .Ref OS_GCOL: colour_to_gcol_in,
+         R2 = OSSpriteOp_Area: area,
+         R3 = OSSpriteOp_Id: id
+      ),
+      EXIT
+      (  R0 = .Ref InverseTable_Colour: gcol_to_colour_out,
+         R1 = .Ref OS_GCOL: colour_to_gcol_out
+   )  ),
+
+   InverseTable_SpriteTableForMode =
+   (  NUMBER 0x4BF41 "Calculates inverse tables for the given mode - RISC OS 4.32+",
+      ENTRY
+      (  R0 = .Ref InverseTable_Colour: gcol_to_colour_in,
+         R1 = .Ref OS_GCOL: colour_to_gcol_in,
+         R2 = OS_Mode: mode,
+         R3 # 0
+      ),
+      EXIT
+      (  R0 = .Ref InverseTable_Colour: gcol_to_colour_out,
+         R1 = .Ref OS_GCOL: colour_to_gcol_out
+   )  )

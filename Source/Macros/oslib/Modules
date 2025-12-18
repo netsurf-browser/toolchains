@@ -1,0 +1,7 @@
+# OSLib.Source.Macros.oslib.Modules	TV	20040214
+#	List of modules comprising Macros
+#	for inclusion in Make files independant of platform
+
+# Modules defined by handwritten .h, .AOFHdr and .ELFHdr files.
+HDRMODULES = \
+Macros

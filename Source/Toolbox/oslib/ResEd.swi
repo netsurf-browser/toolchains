@@ -1,0 +1,267 @@
+TITLE ResEd;
+//AUTHOR "Jonathan Coxhead, jonathan@doves.demon.co.uk, 9 Mar 1999";
+AUTHOR "Christian Ludlam, <chris@recoil.org>, 25 Apr 2005";
+
+NEEDS OS, Wimp, Toolbox;
+
+CONST
+   Message_ResedObjectLoad          = .Bits: 0x83340,
+   Message_ResedObjectLoaded        = .Bits: 0x83341,
+   Message_ResedObjectSend          = .Bits: 0x83342,
+   Message_ResedObjectSending       = .Bits: 0x83343,
+   Message_ResedObjectRenamed       = .Bits: 0x83344,
+   Message_ResedObjectDeleted       = .Bits: 0x83345,
+   Message_ResedObjectModified      = .Bits: 0x83346,
+   Message_ResedObjectClosed        = .Bits: 0x83347,
+   Message_ResedSpritesChanged      = .Bits: 0x83348,
+   Message_ResedObjectNameRequest   = .Bits: 0x83349,
+   Message_ResedObjectName          = .Bits: 0x8334a,
+   Message_ResedKeycutDetails       = .Bits: 0x8334b;
+
+
+TYPE
+   ResEd_D "Abstract type for Document IDs",
+   ResEd_O "Abstract type for Object IDs";
+
+
+// flags from messages
+TYPE
+   ResEd_ObjectLoadFlags    = .Bits,
+   ResEd_ObjectLoadedFlags  = .Bits,
+   ResEd_ObjectSendingFlags = .Bits,
+   ResEd_ObjectSendFlags    = .Bits,
+   ResEd_KeycutDetailsFlags = .Bits;
+
+CONST
+   ResEd_ForceLoad = ResEd_ObjectLoadFlags: 1,
+
+   ResEd_LoadFailed = ResEd_ObjectLoadedFlags: 1,
+
+   ResEd_CannotSend = ResEd_ObjectSendingFlags: 1,
+
+   ResEd_DeleteAfterSend = ResEd_ObjectSendFlags: 1,
+
+   ResEd_KeycutRaisesEvent    = ResEd_KeycutDetailsFlags: %1,
+   ResEd_KeycutShowsObject    = ResEd_KeycutDetailsFlags: %10,
+   ResEd_KeycutShowsTransient = ResEd_KeycutDetailsFlags: %100;
+
+// error codes
+TYPE
+   ResEd_Error = .Int;
+
+CONST
+   ResEd_ErrorNoMemory              = ResEd_Error: 0,
+   ResEd_ErrorUkVersion             = ResEd_Error: 1 "object_load message",
+   ResEd_ErrorUkObject              = ResEd_Error: 1 "object_sending message",
+   ResEd_ErrorCorruptData           = ResEd_Error: 2,
+   ResEd_ErrorNonFatalInternalError = ResEd_Error: 3,
+   ResEd_ErrorFatalInternalError    = ResEd_Error: 4;
+
+
+// wimp messages
+TYPE
+   ResEd_MessageObjectLoad =
+   .Struct
+   (  ResEd_ObjectLoadFlags: flags,
+      ResEd_D: doc_id,
+      ResEd_O: obj_id,
+      Toolbox_Class: obj_class,
+      .Int: version,
+      .Ref .Byte: address "In sender's address space",
+      .Int: obj_size,
+      [208] .Char: name
+   ),
+
+   ResEd_MessageObjectLoaded =
+   .Struct
+   (  ResEd_ObjectLoadedFlags: flags,
+      ResEd_D: doc_id,
+      ResEd_O: obj_id,
+      ResEd_Error: error "Present if flags bit 0 set"
+   ),
+
+   ResEd_MessageObjectSending =
+   .Struct
+   (  ResEd_ObjectSendingFlags: flags,
+      ResEd_D: doc_id,
+      ResEd_O: obj_id,
+      .Ref .Byte: address "In sender's address space",
+      .Int: obj_size,
+      ResEd_Error: error "Present if flags bit 0 set"
+   ),
+
+   ResEd_MessageObjectSend =
+   .Struct
+   (  ResEd_ObjectSendFlags: flags,
+      ResEd_D: doc_id,
+      ResEd_O: obj_id
+   ),
+
+   ResEd_MessageObjectRenamed =
+   .Struct
+   (  .Bits: flags,
+      ResEd_D: doc_id,
+      ResEd_O: obj_id,
+      [224] .Char: new_name
+   ),
+
+   ResEd_MessageObjectDeleted =
+   .Struct
+   (  .Bits: flags,
+      ResEd_D: doc_id,
+      ResEd_O: obj_id
+   ),
+
+   ResEd_MessageObjectModified =
+   .Struct
+   (  .Bits: flags,
+      ResEd_D: doc_id,
+      ResEd_O: obj_id
+   ),
+
+   ResEd_MessageObjectClosed =
+   .Struct
+   (  .Bits: flags,
+      ResEd_D: doc_id,
+      ResEd_O: obj_id
+   ),
+
+   ResEd_MessageSpritesChanged =
+   .Struct
+   (  .Bits: flags
+   ),
+
+   ResEd_MessageObjectNameRequest =
+   .Struct
+   (  .Bits: flags,
+      ResEd_D: doc_id,
+      ResEd_O: obj_id,
+      Wimp_W: window,
+      Wimp_I: icon
+   ),
+
+   ResEd_MessageObjectName =
+   .Struct
+   (  .Bits: flags,
+      ResEd_D: doc_id,
+      ResEd_O: obj_id,
+      Wimp_W: window,
+      Wimp_I: icon,
+      Toolbox_Class: obj_class,
+      [212] .Char: name
+   ),
+
+   ResEd_MessageKeycutDetails =
+   .Struct
+   (  ResEd_KeycutDetailsFlags: flags,
+      Wimp_T: shell,
+      Wimp_W: window,
+      Wimp_KeyNo: key,
+      Toolbox_Action: key_action "Only if flags bit 0 set",
+      [216] .Char: names "Key name followed by Object name"
+   );
+
+
+// Full messages
+TYPE
+   ResEd_FullMessageObjectLoad =
+   .Struct: Wimp_MessageHeader
+   (  ResEd_ObjectLoadFlags: flags,
+      ResEd_D: doc_id,
+      ResEd_O: obj_id,
+      Toolbox_Class: obj_class,
+      .Int: version,
+      .Ref .Byte: address "In sender's address space",
+      .Int: obj_size,
+      [208] .Char: name
+   ),
+
+   ResEd_FullMessageObjectLoaded =
+   .Struct: Wimp_MessageHeader
+   (  ResEd_ObjectLoadedFlags: flags,
+      ResEd_D: doc_id,
+      ResEd_O: obj_id,
+      ResEd_Error: error "Present if flags bit 0 set"
+   ),
+
+   ResEd_FullMessageObjectSending =
+   .Struct: Wimp_MessageHeader
+   (  ResEd_ObjectSendingFlags: flags,
+      ResEd_D: doc_id,
+      ResEd_O: obj_id,
+      .Ref .Byte: address "In sender's address space",
+      .Int: obj_size,
+      ResEd_Error: error "Present if flags bit 0 set"
+   ),
+
+   ResEd_FullMessageObjectSend =
+   .Struct: Wimp_MessageHeader
+   (  ResEd_ObjectSendFlags: flags,
+      ResEd_D: doc_id,
+      ResEd_O: obj_id
+   ),
+
+   ResEd_FullMessageObjectRenamed =
+   .Struct: Wimp_MessageHeader
+   (  .Bits: flags,
+      ResEd_D: doc_id,
+      ResEd_O: obj_id,
+      [224] .Char: new_name
+   ),
+
+   ResEd_FullMessageObjectDeleted =
+   .Struct: Wimp_MessageHeader
+   (  .Bits: flags,
+      ResEd_D: doc_id,
+      ResEd_O: obj_id
+   ),
+
+   ResEd_FullMessageObjectModified =
+   .Struct      : Wimp_MessageHeader
+   (  .Bits: flags,
+      ResEd_D: doc_id,
+      ResEd_O: obj_id
+   ),
+
+   ResEd_FullMessageObjectClosed =
+   .Struct: Wimp_MessageHeader
+   (  .Bits: flags,
+      ResEd_D: doc_id,
+      ResEd_O: obj_id
+   ),
+
+   ResEd_FullMessageSpritesChanged =
+   .Struct: Wimp_MessageHeader
+   (  .Bits: flags
+   ),
+
+   ResEd_FullMessageObjectNameRequest =
+   .Struct: Wimp_MessageHeader
+   (  .Bits: flags,
+      ResEd_D: doc_id,
+      ResEd_O: obj_id,
+      Wimp_W: window,
+      Wimp_I: icon
+   ),
+
+   ResEd_FullMessageObjectName =
+   .Struct: Wimp_MessageHeader
+   (  .Bits: flags,
+      ResEd_D: doc_id,
+      ResEd_O: obj_id,
+      Wimp_W: window,
+      Wimp_I: icon,
+      Toolbox_Class: obj_class,
+      [212] .Char: name
+   ),
+
+   ResEd_FullMessageKeycutDetails =
+   .Struct: Wimp_MessageHeader
+   (  ResEd_KeycutDetailsFlags: flags,
+      Wimp_T: shell,
+      Wimp_W: window,
+      Wimp_KeyNo: key,
+      Toolbox_Action: key_action "Only if flags bit 0 set",
+      [216] .Char: names "Key name followed by Object name"
+   )
+

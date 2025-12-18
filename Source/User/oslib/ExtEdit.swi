@@ -1,0 +1,95 @@
+TITLE ExtEdit;
+
+AUTHOR "Tom Hughes, tom@compton.nu, 28 Oct 2001";
+
+CONST
+   Message_ExtEditRq       = .Bits: 0x45D80,
+   Message_ExtEditAck      = .Bits: 0x45D81,
+   Message_ExtEditReturn   = .Bits: 0x45D82,
+   Message_ExtEditAbort    = .Bits: 0x45D83,
+   Message_ExtEditDataSave = .Bits: 0x45D84,
+   Message_ExtEditCursor   = .Bits: 0x45D85;
+
+TYPE
+   ExtEdit_DataType = .Bits;
+
+CONST
+   ExtEdit_FileType = ExtEdit_DataType: 0xFFFF,
+   ExtEdit_SubType = ExtEdit_DataType: 0xFFFF0000,
+   ExtEdit_SubTypeShift = .Int: 16;
+
+TYPE
+   ExtEdit_JobHandle = .Bits;
+
+CONST
+   ExtEdit_ClientHandle = ExtEdit_JobHandle: 0xFFFF,
+   ExtEdit_EditorHandle = ExtEdit_JobHandle: 0xFFFF0000,
+   ExtEdit_EditorHandleShift = .Int: 16;
+
+TYPE
+   ExtEdit_Flags = .Bits;
+
+CONST
+   ExtEdit_ContinueEditing    = ExtEdit_Flags: 0x1,
+   ExtEdit_SelectionOnly      = ExtEdit_Flags: 0x2,
+   ExtEdit_ReadOnly           = ExtEdit_Flags: 0x4,
+   ExtEdit_ImmediateExecution = ExtEdit_Flags: 0x8,
+   ExtEdit_AdjustSelection    = ExtEdit_Flags: 0x10;
+
+CONST
+   ExtEdit_BeforeStart = .Int: 0,
+   ExtEdit_AfterEnd    = .Int: -2,
+   ExtEdit_NoChange    = .Int: -1;
+
+TYPE
+   ExtEdit_MessageRq =
+   .Struct
+   (  ExtEdit_DataType: data_type,
+      ExtEdit_JobHandle: job_handle,
+      ExtEdit_Flags: flags,
+      [20] .Char: parent_name,
+      [204] .Char: leaf_name
+   ),
+
+   ExtEdit_MessageAck =
+   .Struct
+   (  ExtEdit_DataType: data_type,
+      ExtEdit_JobHandle: job_handle,
+      ExtEdit_Flags: flags
+   ),
+
+   ExtEdit_MessageReturn =
+   .Struct
+   (  ExtEdit_DataType: data_type,
+      ExtEdit_JobHandle: job_handle,
+      ExtEdit_Flags: flags
+   ),
+
+   ExtEdit_MessageAbort =
+   .Struct
+   (  [4] .Byte: reserved,
+      ExtEdit_JobHandle: job_handle
+   ),
+
+   ExtEdit_MessageDataSave =
+   .Struct
+   (  ExtEdit_JobHandle: job_handle,
+      [12] .Byte: reserved,
+      .Int: est_size,
+      .Bits: file_type,
+      [212] .Char: file_name
+   ),
+
+   ExtEdit_MessageCursor =
+   .Struct
+   (  [4] .Byte: reserved,
+      ExtEdit_JobHandle: job_handle,
+      ExtEdit_Flags: flags,
+      .Int: new_cursor_pos,
+      .Int: new_sos_pos,
+      .Int: new_eos_pos,
+      .Int: old_cursor_pos,
+      .Int: old_sos_pos,
+      .Int: old_eos_pos
+   )
+

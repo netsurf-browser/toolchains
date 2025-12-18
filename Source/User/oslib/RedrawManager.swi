@@ -1,0 +1,89 @@
+TITLE RedrawManager;
+AUTHOR "John Tytgat, John.Tytgat@aaug.net, 11 Aug 2009";
+
+NEEDS OS, Wimp;
+
+TYPE RedrawAddRemoveCallBack_Flags = .Bits;
+CONST
+   RedrawAddRemoveCallBackFlags_SetupGraphRect = RedrawAddRemoveCallBack_Flags: 0x02,
+   RedrawAddRemoveCallBackFlags_ScreenCoords   = RedrawAddRemoveCallBack_Flags: 0x04,
+   RedrawAddRemoveCallBackFlags_AfterIconPlot  = RedrawAddRemoveCallBack_Flags: 0x08;
+//   RedrawAddRemoveCallBackFlags_AddrToCall     = RedrawAddRemoveCallBack_Flags: 0x10
+
+SWI
+   Redraw_AddCallBack =
+   (  NUMBER 0x82C80 "Add callback to the RedrawManager",
+      ABSENT
+   ),
+
+   RedrawAddCallBack_SWI =
+   (  NUMBER 0x82C80,
+      ENTRY
+      (  R0 # 0 "Add SWI based callback to the RedrawManager",
+         R0 | RedrawAddRemoveCallBack_Flags: flags,
+         R1 = Wimp_W: window_handle,
+         R2 = .Int: swi,
+         R3 -> OS_Box: region,
+         R4 = .Int: region_data
+      )
+   ),
+
+   RedrawAddCallBack_Address =
+   (  NUMBER 0x82C80,
+      ENTRY
+      (  R0 # 16 "Add address based callback to the RedrawManager",
+         R0 | RedrawAddRemoveCallBack_Flags: flags,
+         R1 = Wimp_W: window_handle,
+         R2 = .Asm: callback,
+         R3 -> OS_Box: region,
+         R4 = .Int: region_data,
+         R5 = .Int: private_word
+      )
+   );
+
+SWI
+   Redraw_RemoveCallBack =
+   (  NUMBER 0x82C81 "Remove callback to the RedrawManager",
+      ABSENT
+   ),
+
+   RedrawRemoveCallBack_SWI =
+   (  NUMBER 0x82C81,
+      ENTRY
+      (  R0 # 0 "Remove SWI based callback to the RedrawManager",
+         R0 | RedrawAddRemoveCallBack_Flags: flags,
+         R1 = Wimp_W: window_handle,
+         R2 = .Int: swi,
+         R3 -> OS_Box: region,
+         R4 = .Int: region_data
+      )
+   ),
+
+   RedrawRemoveCallBack_Address =
+   (  NUMBER 0x82C81,
+      ENTRY
+      (  R0 # 16 "Remove address based callback to the RedrawManager",
+         R0 | RedrawAddRemoveCallBack_Flags: flags,
+         R1 = Wimp_W: window_handle,
+         R2 = .Asm: callback,
+         R3 -> OS_Box: region,
+         R4 = .Int: region_data,
+         R5 = .Int: private_word
+      )
+   );
+
+SWI
+   // Extends OS_ServiceCall
+   Service_RedrawManagerInstalled =
+   (  NUMBER 0x30,
+      ENTRY
+      (  R1 # 0xA5 "Redraw Manager starts up",
+         R0 = .Int: version
+   )  ),
+
+   Service_RedrawManagerDying =
+   (  NUMBER 0x30,
+      ENTRY
+      (  R1 # 0xA6 "Redraw Manager is about to die"
+   )  )
+

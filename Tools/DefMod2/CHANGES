@@ -1,0 +1,83 @@
+CHANGES (Mid 2007 - End 2012)
+=============================
+
+- GCCSDK 4 ELF support (-asmtype and -float-abi options)
+- Made APCS-32 output default.
+- Vala support.
+- .bytes removal.
+- Proper typedef for .Asm.
+- Add AsAsm support.
+- Add GPL license and special exception in all output.
+
+CHANGES
+=======
+
+The build system for compiling defmod no longer relies on anything external
+to the defmod directory except for kernel.h and swis.h.
+
+In this distribution, I've merged the bits of oslibsupport I need into the
+oslib directory inside defmod - I probably ought to have created
+defmod/oslibsupport instead for consistency.
+
+chelp.c had a bug - it didn't check s->description was non-NULL before
+passing it to fprintf.  I've fixed this.
+
+defmod.y: I've added a -q option for quiet builds - this suppresses the
+warnings about narrow types and gets rid of the notes about inlinable SWIs. 
+Using this option makes it harder for important warnings to hide in the build
+logs.
+
+defmod.y: I've added a macro DEFAULT_TO_APCS_32 which is set to 0 or 1 to
+flip which way the default APCS is set.  This alters the help output to
+append the string [default] to whichever of the -26bit or -32bit options
+represents the default state.
+
+If PACE_BUILD is defined when compiling defmod.c, the version number
+information is taken from the file VersionNum.  This is part of the
+infrastructure for our configuration management scripts.   If the macro is
+not defined, __DATE__ is the only distinguishing version information as
+before.
+
+Define RISCOS if you are building defmod on a RISC OS machine. Define
+EXECUTE_ON_RISCOS if you are building defmod to run on a RISC OS machine
+(define both if both are true)
+
+Added unix.c as a re-implementation of riscos.c to supply required "SWIs". 
+Not exactly complete support for error generation, but good enough to get by
+with for the moment.
+
+In hdr.c: UNIX builds make assembler headers use oslib/Hdr/<name> in
+Emit_Get.
+
+In objasm.c: I've altered the ARM2/3 compatibility instruction for returning
+CPSR flags from MOV R<n>, PC to RSB R<n>,PC,PC.  This is much more faithful
+to the idea of returning the CPSR as it guarantees that there are no PC bits
+in the returned flags (thus you can legitimately test bits 2,3,4 to see if
+you are in a 32-bit mode)
+
+
+CHANGES (June 7th 2001)
+=======================
+
+Define UNIX if you are building defmod on a UNIX machine. Define
+EXECUTE_ON_UNIX ifyou are building defmod to run on a UNIX machine
+(define both if both are true)
+
+In cstrong.c, altered the path creation to use / as a directory separator. 
+This is very untested and will remain so until the other StrongHelp support
+bits and pieces and ported.
+
+
+
+NOTES
+=====
+
+All outstanding issues have been resolved.  cstrong output works but further
+processing of the generated data has not been attempted.
+
+
+-- 
+Stewart Brodie,
+June 7th 2001
+
+#END#

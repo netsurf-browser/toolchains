@@ -1,0 +1,102 @@
+TITLE BlendTable;
+
+AUTHOR "Tom Hughes, tom@compton.nu, 20 Nov 2002";
+
+NEEDS OS, OSSpriteOp;
+
+TYPE
+   BlendTable_GenerateFlags = .Bits;
+
+CONST
+   BlendTable_SourceIsPointer     = BlendTable_GenerateFlags: 0b1,
+   BlendTable_DestinaionIsPointer = BlendTable_GenerateFlags: 0b10,
+   BlendTable_LockTable           = BlendTable_GenerateFlags: 0b100;
+
+SWI
+   BlendTable_GenerateTable =
+   (  NUMBER 0x56280 "Generate a table of blended palette entries for
+                      blending - RISC OS 4.31+",
+      ABSENT
+   ),
+
+   BlendTable_GenerateTableModeToMode =
+   (  NUMBER 0x56280 "Generate a table of blended palette entries for blending
+                      between two modes - RISC OS 4.31+",
+      ENTRY
+      (  R0 = BlendTable_GenerateFlags: flags,
+         R1 = OS_Mode: source_mode,
+         R2 # 0,
+         R3 = OS_Mode: destination_mode,
+         R4 # 0,
+         R5 = .Int: translucency,
+         R6 = .Ref .Data: buffer_in
+      ),
+      EXIT
+      (  R0 = .Int: source_colours,
+         R1 = .Int: destination_colours,
+         R2 = .Int: size,
+         R6 = .Ref .Data: buffer_out
+   )  ),
+
+   BlendTable_GenerateTableModeToSprite =
+   (  NUMBER 0x56280 "Generate a table of blended palette entries for blending
+                      from a mode to a sprite - RISC OS 4.31+",
+      ENTRY
+      (  R0 = BlendTable_GenerateFlags: flags,
+         R1 = OS_Mode: source_mode,
+         R2 # 0,
+         R3 -> OSSpriteOp_Area: destination_area,
+         R4 = OSSpriteOp_Id: destination_id,
+         R5 = .Int: translucency,
+         R6 = .Ref .Data: buffer_in
+      ),
+      EXIT
+      (  R0 = .Int: source_colours,
+         R1 = .Int: destination_colours,
+         R2 = .Int: size,
+         R6 = .Ref .Data: buffer_out
+   )  ),
+
+   BlendTable_GenerateTableSpriteToMode =
+   (  NUMBER 0x56280 "Generate a table of blended palette entries for blending
+                      from a sprite to a mode - RISC OS 4.31+",
+      ENTRY
+      (  R0 = BlendTable_GenerateFlags: flags,
+         R1 -> OSSpriteOp_Area: source_area,
+         R2 = OSSpriteOp_Id: source_id,
+         R3 = OS_Mode: destination_mode,
+         R4 # 0,
+         R5 = .Int: translucency,
+         R6 = .Ref .Data: buffer_in
+      ),
+      EXIT
+      (  R0 = .Int: source_colours,
+         R1 = .Int: destination_colours,
+         R2 = .Int: size,
+         R6 = .Ref .Data: buffer_out
+   )  ),
+
+   BlendTable_GenerateTableSpriteToSprite =
+   (  NUMBER 0x56280 "Generate a table of blended palette entries for blending
+                      between two sprites - RISC OS 4.31+",
+      ENTRY
+      (  R0 = BlendTable_GenerateFlags: flags,
+         R1 -> OSSpriteOp_Area: source_area,
+         R2 = OSSpriteOp_Id: source_id,
+         R3 -> OSSpriteOp_Area: destination_area,
+         R4 = OSSpriteOp_Id: destination_id,
+         R5 = .Int: translucency,
+         R6 = .Ref .Data: buffer_in
+      ),
+      EXIT
+      (  R0 = .Int: source_colours,
+         R1 = .Int: destination_colours,
+         R2 = .Int: size,
+         R6 = .Ref .Data: buffer_out
+   )  ),
+
+   BlendTable_UnlockTable =
+   (  NUMBER 0x56281 "Unlock a blend table - RISC OS 4.31+",
+      ENTRY
+      (  R0 = .Ref .Data: buffer
+   )  )

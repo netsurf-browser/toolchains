@@ -1,0 +1,33 @@
+#ifndef Types_Hdr
+#  define Types_Hdr
+
+R	.req	r0
+
+	.set	Int,	4
+	.set	Bits,	4
+	.set	Bool,	4
+	.set	Short,	2
+	.set	Char,	1
+	.set	Byte,	1
+	.set	Ptr,	4
+
+	.set	Float,	4
+	.set	Double,	8
+
+	.set	Null,	0
+	.set	False,	0
+	.set	True,	1
+	.set	None,	0
+	.set	All,	0xFFFFFFFF
+
+@ may be used as a "don't care" value
+	.set	Skip,	0
+
+	.set	V,	1<<28
+	.set	C,	1<<29
+	.set	Z,	1<<30
+	.set	N,	1<<31
+
+	.set	Error,	-2
+
+#endif

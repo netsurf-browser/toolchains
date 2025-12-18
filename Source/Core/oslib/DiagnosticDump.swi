@@ -1,0 +1,23 @@
+TITLE DiagnosticDump "RISC OS 6";
+AUTHOR "John Tytgat, John.Tytgat@aaug.net, 12 Aug 2009";
+
+NEEDS OS;
+
+TYPE DiagnosticDumpWrite_Flags = .Bits;
+CONST
+  DiagnosticDumpWriteFlags_AppAccNone            = DiagnosticDumpWrite_Flags: 0x00,
+  DiagnosticDumpWriteFlags_AppAccRead            = DiagnosticDumpWrite_Flags: 0x01,
+  DiagnosticDumpWriteFlags_AppAccReadTrace       = DiagnosticDumpWrite_Flags: 0x02,
+  DiagnosticDumpWriteFlags_AppAccReadTraceRecord = DiagnosticDumpWrite_Flags: 0x03,
+  DiagnosticDumpWriteFlags_FullFilename          = DiagnosticDumpWrite_Flags: 0x04,
+  DiagnosticDumpWriteFlags_OpenDumpDir           = DiagnosticDumpWrite_Flags: 0x08;
+
+SWI DiagnosticDump_Write =
+   (  NUMBER 0x58B00 "Write, or buffer for later writing, a diagnostic dump
+                      for the current system state - RISC OS 6",
+      ENTRY
+      (  R0 = DiagnosticDumpWrite_Flags: flags,
+         R1 -> .String: filename,
+         R2 -> OS_RegisterBlock: regs
+   )  )
+

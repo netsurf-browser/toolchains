@@ -1,0 +1,205 @@
+#ifndef Macros_Hdr
+#  define Macros_Hdr
+
+#  ifndef Get_Types
+#    define Get_Types
+#    include "oslib/Types.Hdr"
+#  endif
+
+@OSLib---efficient, type-safe, transparent, extensible,
+@   register-safe API coverage of RISC OS
+@Copyright (c) 1994 Jonathan Coxhead
+
+@   OSLib is free software; you can redistribute it and/or modify
+@it under the terms of the GNU General Public License as published by
+@the Free Software Foundation; either version 1, or (at your option)
+@any later version.
+@
+@   OSLib is distributed in the hope that it will be useful,
+@but WITHOUT ANY WARRANTY; without even the implied warranty of
+@MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+@GNU General Public License for more details.
+@
+@   You should have received a copy of the GNU General Public License
+@along with this programme; if not, write to the Free Software
+@Foundation, Inc, 675 Mass Ave, Cambridge, MA 02139, U S A.
+
+	.macro	Inc c, r1
+	ADD\c	\r1, \r1, #1
+	.endm
+
+        .macro	IncS c, r1
+        ADD\cS	\r1, \r1, #1
+	.endm
+
+        .macro	Dec c, r1
+        SUB\c	\r1, \r1, #1
+	.endm
+
+        .macro	DecS c, r1
+        SUB\cS	\r1, \r1, #1
+	.endm
+
+        @ r1 = MAX (r2, r3)
+        .macro	Max r1, r2, r3
+        CMP     \r2, \r3
+        MOVGT   \r1, \r2
+        MOVLE   \r1, \r3
+	.endm
+
+        @ r1 = MIN (r2, r3)
+        .macro	Min r1, r2, r3
+        CMP     \r2, \r3
+        MOVLT   \r1, \r2
+        MOVGE   \r1, \r3
+	.endm
+
+        @ r1 = MAX (r1, r2)
+        .macro	MaxAB r1, r2
+        CMP     \r1, \r2
+        MOVLT   \r1, \r2
+	.endm
+
+        @ r1 = MIN (r1, r2)
+        .macro	MinAB r1, r2
+        CMP     \r1, \r2
+        MOVGT   \r1, \r2
+	.endm
+
+        @ r1 = ABS (r2)
+        .macro	Abs r1, r2
+        CMP     \r2, #0
+        MOVGE   \r1, \r2
+        RSBLT   \r1, \r2, #0
+	.endm
+
+        @ r1 = SGN (r2)
+        .macro	Sgn r1, r2
+        CMP     \r2, #0
+        MOVGT   \r1, #1
+        MOVEQ   \r1, #0
+        MVNLT   \r1, #0
+	.endm
+
+        @ r1 = DIM (r2, r3)
+        .macro	Dim r1, r2, r3
+        CMP     \r2, \r3
+        SUBGT   \r1, \r2, \r3
+        MOVLE   \r1, #0
+	.endm
+
+        @ r1 = SQR (r2)
+        .macro	Sqr c, r1, r2
+        MUL\c   \r1, \r2, \r2
+	.endm
+
+        @ r1 = BOOL (r2)
+	@ 'Bool' is not a valid macro name for gas so there we renamed it to
+	@ 'ConvToBool'.
+        .macro	ConvToBool r1, r2
+        MOVS    \r1, \r2	@ Assuming False == 0
+        MOVNE   \r1, #True
+	.endm
+
+        @ r1 = INT (r2)
+	@ 'Int' is not a valid macro name for gas so there we renamed it to
+	@ 'ConvToBool'.
+        .macro	ConvToInt r1, r2
+        SUB     \r1, \r2, #"0"
+        CMP     \r1, #9
+        SUBHI   \r1, \r2, #"a"
+        CMPHI   \r1, #5
+        SUBHI   \r1, \r2, #"A"
+        CMPHI   \r1, #5
+        ADDHI   \r1, \r1, #10
+	.endm
+
+        @ r1 = UCHAR (r2)
+        .macro	UChar r1, r2
+        CMP     \r2, #10
+        ADDLT   \r1, \r2, #"0"
+        ADDGE   \r1, \r2, #"A"-10
+	.endm
+
+        @ r1 = LCHAR (r2)
+        .macro	LChar r1, r2
+        CMP     \r2, #10
+        ADDLT   \r1, \r2, #"0"
+        ADDGE   \r1, \r2, #"a"-10
+	.endm
+
+        @ r1 = BINEXP (r2)
+        .macro	BinExp c, r1, r2
+        MOV\c   \r1, #1
+        MOV\c   \r1, \r1, LSL \r2
+	.endm
+
+        @ r1 = ALIGN (r2)
+        .macro	Align c, r1, r2
+        ADD\c   \r1, \r2, #3
+        BIC\c   \r1, \r1, #3
+	.endm
+
+        @ C=1 V=0 Z=0 N=0
+        .macro	SetC
+        CMP     PC, #0
+	.endm
+
+        @ C=0 V=0 Z=0 N=0
+        .macro	ClearFlags
+        CMN     PC, #0
+	.endm
+
+        .macro	ClrV
+        ClearFlags
+	.endm
+
+        .macro	ClrC
+        ClearFlags
+	.endm
+
+        .macro	ClrN
+        ClearFlags
+	.endm
+
+        @ C=0 V=1 Z=0 N=1
+        .macro	SetV
+        CMP     PC, #&80000000
+	.endm
+
+        @ C=0 V=0 Z=0 N=1
+        .macro	SetN
+        CMN     PC, #&80000000
+	.endm
+
+        @ C=* V=* Z=1 N=0
+        .macro	SetZ
+        TST     PC, #0
+	.endm
+
+        @ C=* V=* Z=0 N=0
+        .macro	ClrZ
+        TEQ     PC, #0
+	.endm
+
+        .macro	NOP
+        &       0
+	.endm
+
+        @ rc := ra DIV rb; ra := ra REM rb; rb preserved, rtemp corrupt
+        .macro	DivRem rc, ra, rb, rtemp
+        MOV     \rtemp, \rb
+        CMP     \rtemp, \ra, LSR #1
+1:	MOVLS   \rtemp, \rtemp, LSL #1
+        CMPLS   \rtemp, \ra, LSR #1
+        BLS     1b
+        MOV     \rc, #0
+2:	CMP     \ra, \rtemp
+        SUBCS   \ra, \ra, \rtemp
+        ADC     \rc, \rc, \rc
+        MOV     \rtemp, \rtemp, LSR #1
+        CMP     \rtemp, \rb
+        BCS     2b
+	.endm
+
+#endif

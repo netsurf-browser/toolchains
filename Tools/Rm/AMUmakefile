@@ -1,0 +1,15 @@
+#	Index: OSLib/!OsLib/Tools/Rm/AMUakefile	20040308
+#
+
+TARGET		= rm
+ALL   	 	= ${TARGET}
+VPATH 	 	=
+INCLUDES    	= C:
+LIBS  	    	= C:o.Stubs
+
+MODULES	    	= ${TARGET}
+
+.include ${MAKEFILEDIR}.^.AMUmakefile/source
+
+#------------------------------------------------------------------------
+# Dynamic dependencies:

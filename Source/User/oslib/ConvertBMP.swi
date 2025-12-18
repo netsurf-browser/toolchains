@@ -1,0 +1,41 @@
+TITLE ConvertBMP;
+AUTHOR "John Tytgat, John.Tytgat@aaug.net, 13 Dec 2010";
+
+NEEDS OS;
+
+TYPE ConvertBMPCreateSpriteFromDIB_Flags = .Bits;
+CONST
+   ConvertBMPCreateSpriteFromDIBFlags_CreateSprite = ConvertBMPCreateSpriteFromDIB_Flags: 0x01;
+
+TYPE
+   DIBHeader =
+   .Struct
+   (  .Int: sizeHeader,
+      .Int: width,
+      .Int: height,
+      .Int: planes_bps,
+      .Int: compression,
+      .Int: sizeImage,
+      .Int: x_pixels_per_meter,
+      .Int: y_pixels_per_meter,
+      .Int: num_colormap_entries,
+      .Int: num_important_colours
+   );
+
+SWI
+   ConvertBMP_CreateSpriteFromDIB =
+   (  NUMBER 0x58940 "Convert from a Windows 'Device Independent Bitmap' (DIB)
+                      to a sprite (or sprite area)",
+      ENTRY
+      (  R0 = ConvertBMPCreateSpriteFromDIB_Flags: flags,
+         R1 -> DIBHeader: header,
+         R2 = .Int: header_length,
+         R3 -> .Data: bitmap,
+         R4 = .Int: bitmap_length,
+         R5 = .Ref .Data: buf_out,
+         R6 = .Int: buf_out_len
+      ),
+      EXIT
+      (  R6! = .Int: buf_out_used
+   )  )
+

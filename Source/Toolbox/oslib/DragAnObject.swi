@@ -1,0 +1,42 @@
+TITLE DragAnObject;
+AUTHOR "Jonathan Coxhead, jonathan@doves.demon.co.uk, 18 Jan 1995";
+
+NEEDS OS;
+
+TYPE DragAnObject_Flags = .Bits "Flags word for DragAnObject_Start";
+CONST
+   DragAnObject_HPosLeft        = DragAnObject_Flags:                 0b00,
+   DragAnObject_HPosCentre      = DragAnObject_Flags:                 0b01,
+   DragAnObject_HPosRight       = DragAnObject_Flags:                 0b10,
+   DragAnObject_VPosBottom      = DragAnObject_Flags:               0b0000,
+   DragAnObject_VPosCentre      = DragAnObject_Flags:               0b0100,
+   DragAnObject_VPosTop         = DragAnObject_Flags:               0b1000,
+   DragAnObject_NoBound         = DragAnObject_Flags:             0b000000,
+   DragAnObject_BoundToWindow   = DragAnObject_Flags:             0b010000,
+   DragAnObject_GivenBBox       = DragAnObject_Flags:             0b100000,
+   DragAnObject_BoundObject     = DragAnObject_Flags:            0b0000000,
+   DragAnObject_BoundPointer    = DragAnObject_Flags:            0b1000000,
+   DragAnObject_DropShadow      = DragAnObject_Flags:           0b10000000,
+   DragAnObject_NoDither        = DragAnObject_Flags:          0b100000000,
+   DragAnObject_CenterOnPtrPos  = DragAnObject_Flags:         0b1000000000 "Object is centred on pointer position - RISC OS 4",
+
+   DragAnObject_SWIFunction     = DragAnObject_Flags:  0b00000000000000000,
+   DragAnObject_CallFunction    = DragAnObject_Flags:  0b10000000000000000,
+   DragAnObject_FunctionUser    = DragAnObject_Flags: 0b000000000000000000,
+   DragAnObject_FunctionSVC     = DragAnObject_Flags: 0b100000000000000000,
+   DragAnObject_FunctionUseUser = DragAnObject_Flags:0b1000000000000000000 "Really use user mode - RISC OS 5";
+
+SWI DragAnObject_Start =
+   (  NUMBER 0x49C40 "Takes a copy of an object and starts a Wimp drag",
+      ENTRY
+      (  R0 = DragAnObject_Flags: flags,
+         R1 = .Asm: function,
+         R2 -> OS_RegisterBlock: register_block,
+         R3 -> OS_Box: box,
+         R4 -> OS_Box: bbox
+   )  );
+
+SWI DragAnObject_Stop =
+   (  NUMBER 0x49C41 "Terminates any current drag operation, and releases
+                      workspace"
+   )

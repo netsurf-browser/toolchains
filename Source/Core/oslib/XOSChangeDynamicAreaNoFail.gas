@@ -1,0 +1,81 @@
+@Index: OSLib/!OsLib/Source/Core/oslib/XOSChangeDynamicAreaNoFail.asm 	20031228
+@ os_change_dynamic_area_no_fail - Extend or shrink dynamic area without throwing error if
+@	the change was only partially performed
+@
+@ Initial Release 	08-Nov-01	Tony van der Hoff
+@	Bug fix		21-Dec-01	TV
+@	Bug Fix		20-Feb-02	TV
+@
+@OSLib---efficient, type-safe, transparent, extensible,
+@   register-safe API coverage of RISC OS
+@
+@   OSLib is free software; you can redistribute it and/or modify
+@it under the terms of the GNU General Public Licence as published by
+@the Free Software Foundation; either version 1, or (at your option)
+@any later version.
+@
+@   OSLib is distributed in the hope that it will be useful,
+@but WITHOUT ANY WARRANTY; without even the implied warranty of
+@MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+@GNU General Public License for more details.
+@
+@   You should have received a copy of the GNU General Public Licence
+@along with this programme; if not, write to the Free Software
+@Foundation, Inc, 675 Mass Ave, Cambridge, MA 02139, U S A.
+
+@#include "oslib/OSHeap.Hdr"
+
+R	.req	r0
+
+	.global	xos_change_dynamic_area_no_fail
+	.type	xos_change_dynamic_area_no_fail, %function
+	
+        .text
+
+@	os_change_dynamic_area_no_fail
+@ 	APCS Compliant
+@Entry  A1 =  area type
+@	A2 =  required size change in bytes (signed integer)
+@	A3 -> actual size change in bytes (unsigned integer)
+@
+@  C Prototype:
+@extern os_error* os_change_dynamic_area_no_fail( os_dynamic_area_no area,
+@				   	    	  int size_increase,
+@					          int* size_change
+@			                        );
+@
+@ This code works around the problem that OS_ChangeDynamicArea throws an error if the move is only
+@ partially performed. OSLib is then unable to return the amount by which the area has changed.
+@ The object code is patched into the library at build time by the MakeFile.
+
+xos_change_dynamic_area_no_fail:
+        MOV     IP, LR			@
+
+        SWI     0x2002a			@ XOS_ChangeDynamicArea (PRM 1-377)
+        BVC 	90f			@ no error - normal return
+
+        @Test for Error_ChDynamNotAllMoved -  return any other error
+	@ fixed bug causing R1 (result) and R2 (A3) to be overwritten with scratch data [TV 020220]
+	STMFD	SP,{R2}			@ save workspace
+	LDR 	R3, =0x1c1		@ Error_ChDynamNotAllMoved
+	LDR	R2, [R0]		@ get error number in R2 [TV 011221]
+	CMP 	R2, R3
+	LDMFD	SP,{R2}			@ restore workspace
+	BNE	99f			@ return error
+
+	@ ignore Error_ChDynamNotAllMoved
+
+	@ valid return
+90:	TEQ	A3, #0			@ check null pointer
+	STRNE	R1, [A3]		@ output R1 [TV 020220]
+	MOV	R,  #0			@ clear error pointer
+
+	@ exit
+99:
+#ifdef __APCS_32__
+	MOV	PC, IP
+#else
+        MOVS    PC, IP
+#endif
+
+	.end

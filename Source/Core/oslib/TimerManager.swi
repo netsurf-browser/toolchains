@@ -1,0 +1,97 @@
+TITLE TimerManager "RISC OS 6";
+AUTHOR "John Tytgat, John.Tytgat@aaug.net, 24 Aug 2009";
+
+NEEDS OS;
+
+TYPE
+   TimerManagerReturnNumber_Flags = .Bits;
+
+SWI
+   TimerManager_ReturnNumber =
+   (  NUMBER 0x58B80 "Find the number of timers available to the operating system",
+      ENTRY
+      (  R0 = TimerManagerReturnNumber_Flags: flags
+      ),
+      EXIT
+      (  R0! = .Int: num_timers
+   )  );
+
+TYPE
+   TimerManager_MeasurementFormat = .Bits;
+CONST
+   TimerManagerMeasurementFormat_InUnitScalerShift  = .Int: 0,
+   TimerManagerMeasurementFormat_InUnitScalerMask   = .Int: 0x7,
+   TimerManagerMeasurementFormat_InTypeShift        = .Int: 4,
+   TimerManagerMeasurementFormat_InTypeMask         = .Int: 0x3,
+   TimerManagerMeasurementFormat_OutUnitScalerShift = .Int: 0,
+   TimerManagerMeasurementFormat_OutUnitScalerMask  = .Int: 0x7,
+   TimerManagerMeasurementFormat_OutTypeShift       = .Int: 4,
+   TimerManagerMeasurementFormat_OutTypeMask        = .Int: 0x3,
+
+   // Shifted by TimerManagerMeasurementFormat_InUnitScalerShift or
+   // TimerManagerMeasurementFormat_OutUnitScalerShift and masked by
+   // TimerManagerMeasurementFormat_InUnitScalerMask or
+   // TimerManagerMeasurementFormat_OutUnitScalerMask.
+   TimerManagerMeasurementFormat_ScaleEMin9 = TimerManager_MeasurementFormat: 0 "scaled by 1/1000000000",
+   TimerManagerMeasurementFormat_ScaleEMin6 = TimerManager_MeasurementFormat: 1 "scaled by 1/1000000",
+   TimerManagerMeasurementFormat_ScaleEMin3 = TimerManager_MeasurementFormat: 3 "scaled by 1/1000",
+   TimerManagerMeasurementFormat_ScaleE0 = TimerManager_MeasurementFormat: 4 "scaled by 1",
+   TimerManagerMeasurementFormat_ScaleEPos3 = TimerManager_MeasurementFormat: 5 "scaled by 1000",
+   TimerManagerMeasurementFormat_ScaleEPos6 = TimerManager_MeasurementFormat: 6 "scaled by 1000000",
+   TimerManagerMeasurementFormat_ScaleEPos9 = TimerManager_MeasurementFormat: 7 "scaled by 1000000000",
+
+   // Shifted by TimerManagerMeasurementFormat_InTypeShift or
+   // TimerManagerMeasurementFormat_OutTypeShift and masked by
+   // TimerManagerMeasurementFormat_InTypeMask or
+   // TimerManagerMeasurementFormat_OutTypeMask.
+   TimerManagerMeasurementFormat_TypeNativeTicks = TimerManager_MeasurementFormat: 0,
+   TimerManagerMeasurementFormat_TypeFrequency   = TimerManager_MeasurementFormat: 1,
+   TimerManagerMeasurementFormat_TypePeriod      = TimerManager_MeasurementFormat: 2;
+
+SWI
+   TimerManager_Claim =
+   (  NUMBER 0x58B81 "Claim a timer for dedicated use by a client",
+      ENTRY
+      (  R0 = TimerManager_MeasurementFormat: flags,
+         R1 = .Int: timer_number,
+         R2 = .Int: timer_value,
+         R3 = .Asm: interrupt_call,
+         R4 = .Int: ws_ptr
+      ),
+      EXIT
+      (  R2! = TimerManager_MeasurementFormat: timer_rate
+   )  );
+
+TYPE
+   TimerManagerRelease_Flags = .Bits;
+
+SWI
+   TimerManager_Release =
+   (  NUMBER 0x58B82 "Release a previously claimed timer",
+      ENTRY
+      (  R0 = TimerManagerRelease_Flags: flags,
+         R1 = .Int: timer_number
+   )  ),
+
+   TimerManager_SetRate =
+   (  NUMBER 0x58B83 "Change the rate used by a timer",
+      ENTRY
+      (  R0 = TimerManager_MeasurementFormat: flags,
+         R1 = .Int: timer_number,
+         R2 = .Int: timer_value
+      ),
+      EXIT
+      (  R2! = TimerManager_MeasurementFormat: timer_rate
+   )  ),
+
+   TimerManager_Convert =
+   (  NUMBER 0x58B84 "Convert between timer rate formats",
+      ENTRY
+      (  R0 = TimerManager_MeasurementFormat: flags,
+         R1 = .Int: timer_number,
+         R2 = .Int: timer_value
+      ),
+      EXIT
+      (  R2! = TimerManager_MeasurementFormat: timer_rate
+   )  )
+

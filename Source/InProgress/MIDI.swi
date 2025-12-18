@@ -1,0 +1,366 @@
+TITLE MIDI;
+AUTHOR "Jonathan Coxhead, jonathan@doves.demon.co.uk, 21 Aug 1995";
+
+NEEDS OS;
+
+CONST
+   Error_MIDITxDataLost = .Bits: &20401,
+   Error_MIDIFraming    = .Bits: &20402,
+   Error_MIDIRxDataLost = .Bits: &20403,
+   Error_MIDIOverrun    = .Bits: &20404;
+
+TYPE MIDI_Driver = .Bits;
+CONST MIDI_DriverConnection = MIDI_Driver: %11,
+ MIDI_DriverConnectionShift = .Int: 0,
+ MIDI_DriverConnectionNone  = MIDI_Driver: 0,
+ MIDI_DriverConnectionIn    = MIDI_Driver: 1,
+ MIDI_DriverConnectionOut   = MIDI_Driver: 2,
+ MIDI_DriverPort            = MIDI_Driver: %1100,
+ MIDI_DriverPortShift       = .Int: 2;
+TYPE MIDI_TouchSensitivity = .Int;
+CONST MIDI_TouchSensitivityOn = MIDI_TouchSensitivity: 1,
+ MIDI_TouchSensitivityOff = MIDI_TouchSensitivity: 2;
+SWI MIDI_SoundEnable = (NUMBER 0x404C0 "Enables the MIDI
+      interpreter/sound system driver",
+   entry (R0 = MIDI_Driver: driver,
+         R1 = MIDI_TouchSensitivity: touch_sensitivity),
+   exit (r0?));
+
+TYPE MIDI_Mode = .Bits, MIDI_Channels = .Bits;
+CONST MIDI_ModeAllChannelsPoly = MIDI_Mode: 1,
+ MIDI_ModeAllChannelsMono = MIDI_Mode: 2,
+ MIDI_ModeOneChannelPoly = MIDI_Mode: 3,
+ MIDI_ModeOneChannelMono = MIDI_Mode: 4,
+ MIDI_ChannelNo = MIDI_Channels: %11111111,
+ MIDI_ChannelCount = MIDI_Channels: %1111111100000000,
+ MIDI_ChannelNoShift = .Int: 0,
+ MIDI_ChannelCountShift = .Int: 8;
+SWI MIDI_SetMode = (NUMBER 0x404C1 "Sets the MIDI channel m,ode of the
+internal sound system controller",
+   entry (r0 = .Int: mode_no,
+         r1 = MIDI_Channels: channels),
+   exit (r0 = .Int: old_mode_no,
+         r1 = MIDI_Channels: old_channels));
+
+TYPE MIDI_TxChannel = .Int;
+SWI MIDI_SetTxChannel = (NUMBER 0x404C2 "Sets the MIDI channel and
+port number for subsequent transmission commands",
+   entry (r0 = MIDI_TxChannel: channel),
+   exit  (r0! = MIDI_TxChannel: old_channel));
+
+TYPE MIDI_ActiveSensing = .Bits;
+CONST MIDI_ActiveSensingStateOn = MIDI_ActiveSensing: 1,
+      MIDI_ActiveSensingStateOff = MIDI_ActiveSensing: 0,
+      MIDI_ActiveSensingStateShift = .Int: 0,
+      MIDI_ActiveSensingPort = MIDI_ActiveSensing: %110,
+      MIDI_ActiveSensingPortShift = .Int: 1;
+SWI MIDI_SetTxActiveSensing = (NUMBER 0x404C3 "Puts the transmitter
+into active sensing mode",
+   entry (r0 = MIDI_ActiveSensing: active),
+   exit  (r0! = .Bits: active_sensing_state));
+
+TYPE MIDI_SongMode = .Bits;
+CONST MIDI_SongModeExternalTiming = MIDI_SongMode: 1,
+ MIDI_SongModeInternalTiming      = MIDI_SongMode: %10,
+ MIDI_SongModeFastClock           = MIDI_SongMode: %100,
+ MIDI_SongModeNew                 = MIDI_SongMode: %1000,
+ MIDI_SongModeStoreSRTMessages    = MIDI_SongMode: %10000,
+ MIDI_SongModeOrdinarySRTMessages = MIDI_SongMode: %100000;
+SWI MIDI_InqSongPositionPointer = (NUMBER 0x404C4 "Returns the value
+of the internal song position pointer",
+   exit (r0! = .Int: song_position,
+         r1 = MIDI_SongMode: mode));
+
+TYPE MIDI_Buffer = .Bits;
+CONST MIDI_BufferRx = MIDI_Buffer: 0,
+ MIDI_BufferTx = MIDI_Buffer: 1,
+ MIDI_BufferPortNo = MIDI_Buffer: %110,
+ MIDI_BufferPortNoShift = .Int: 1;
+SWI MIDI_InqBufferSize = (NUMBER 0x404C5 "Returns the number of empty
+bytes in the transmit or receive buffer",
+   entry (R0 = MIDI_Buffer: buffer),
+   exit (R0! = .Int: buffer_size));
+
+TYPE MIDI_Error = .Bits "MIDI error code - one byte per channel";
+CONST MIDI_ErrorActiveSensing = .Byte: 65,
+ MIDI_ErrorRxDataLost = .Byte: 66,
+ MIDI_ErrorOverrun = .Byte: 79,
+ MIDI_ErrorFraming = .Byte: 70,
+ MIDI_ErrorVoices = .Byte: 86,
+ MIDI_ErrorTxDataLost = .Byte: 84,
+ MIDI_ErrorPitch = .Byte: 76,
+ MIDI_ErrorNone = .Byte: 0;
+SWI MIDI_InqError = (NUMBER 0x404C6 "Returns the values of the MIDI
+error bytes",
+   exit (R0! = MIDI_Error: error));
+
+TYPE MIDI_RxByteStatus = .Bits;
+CONST MIDI_RxByteStatusRx = MIDI_RxByteStatus: %11111111,
+      MIDI_RxByteStatusReceived = MIDI_RxByteStatus:
+            %1111000000000000000000000000,
+      MIDI_RxByteStatusPortNo = MIDI_RxByteStatus: &F0000000;
+SWI MIDI_RxByte = (NUMBER 0x404C7 "Returns the next received MIDI
+                   byte, apart from real time messages",
+   entry (R0 = .Int: port_no),
+   exit (R0 = MIDI_RxByteStatus: status,
+         R1 = .Int: rx_time));
+
+TYPE MIDI_RxCommandStatus = .Bits;
+CONST
+   MIDI_RxCommandStatusState     = MIDI_RxCommandStatus: %11111111,
+   MIDI_RxCommandStatusData0     = MIDI_RxCommandStatus: &FF00,
+   MIDI_RxCommandStatusData1     = MIDI_RxCommandStatus: &FFFF00,
+   MIDI_RxCommandStatusByteCount = MIDI_RxCommandStatus: &F000000,
+   MIDI_RxCommandStatusPort      = MIDI_RxCommandStatus: &F0000000;
+SWI MIDI_RxCommand = (NUMBER 0x404C8 "Returns the next complete MIDI
+command as a set of bytes, normally excluding system real time",
+   entry (R0 = .Int: port_no),
+   exit (R0 = MIDI_RxCommandStatus: status,
+         R1 = .Int: rx_time));
+
+TYPE MIDI_TxByteStatus = .Bits;
+CONST MIDI_TxByteStatusTx = MIDI_TxByteStatus: %11111111,
+   MIDI_TxByteStatusPort = MIDI_TxByteStatus: &F0000000,
+   MIDI_TxByteStatusPortShift = .Int: 28;
+SWI MIDI_TxByte = (NUMBER 0x404C9 "Tranmits a byte from MIDI OUT,
+regardless of running status",
+   entry (R0 = MIDI_TxByteStatus: status));
+
+TYPE MIDI_TxCommandStatus = .Bits;
+CONST
+   MIDI_TxCommandStatusState     = MIDI_TxCommandStatus: %11111111,
+   MIDI_TxCommandStatusData0     = MIDI_TxCommandStatus: &FF00,
+   MIDI_TxCommandStatusData1     = MIDI_TxCommandStatus: &FFFF00,
+   MIDI_TxCommandStatusByteCount = MIDI_TxCommandStatus: &F000000,
+   MIDI_TxCommandStatusPort      = MIDI_TxCommandStatus: &F0000000;
+SWI MIDI_TxCommand = (NUMBER 0x404CA "Tranmaits or schedules on the
+MIDI schedule queue a complete MIDI command",
+   entry (R0 = MIDI_TxCommandStatus: status,
+         R1 = .Int: tx_time),
+   exit (R0! = .Int: free_slot_count));
+
+SWI MIDI_TxNoteOff = (NUMBER 0x404CB "Tranmits a MIDI Note Off command",
+   entry (R0 = .Int: note, R1 = .Int: velocity));
+
+SWI MIDI_TxNoteOn = (NUMBER 0x404CC "Tranmits a MIDI Note On command",
+   entry (R0 = .Int: note, R1 = .Int: velocity));
+
+SWI MIDI_TxPolyKeyPressure = (NUMBER 0x404CD "Tranmits a MIDI Poly Key
+Pressure (after touch) command",
+   entry (R0 = .Int: note, R1 = .Int: pressure));
+
+SWI MIDI_TxControlChange = (NUMBER 0x404CE "Tranmits a MIDI Control
+Change command",
+   entry (R0 = .Int: control));
+
+TYPE MIDI_LocalControl = .Int;
+CONST MIDI_LocalControlOff = MIDI_LocalControl: 0,
+      MIDI_LocalControlOn = MIDI_LocalControl: 127;
+SWI MIDI_TxLocalControl = (NUMBER 0x404CF "Tranmits a MIDI Local Control
+command number 122",
+   entry (R0 = MIDI_LocalControl: local_control));
+
+SWI MIDI_TxAllNotesOff = (NUMBER 0x404D0 "Tranmits a MIDI All Notes Off
+command");
+
+SWI MIDI_TxOmniModeOff = (NUMBER 0x404D1 "Tranmits a MIDI Omni Mode
+Off command");
+
+SWI MIDI_TxOmniModeOn = (NUMBER 0x404D2 "Tranmits a MIDI Omni Mode On
+command");
+
+SWI MIDI_TxMonoModeOn = (NUMBER 0x404D3 "Tranmits a MIDI Mono Mode On
+command",
+      entry (R0 = .Int: channel_count));
+
+SWI MIDI_TxPolyModeOn = (NUMBER 0x404D4 "Tranmits a MIDI Poly Mode On
+command");
+
+SWI MIDI_TxProgramChange = (NUMBER 0x404D5 "Tranmits a MIDI Programme
+Change command for the 'voice,' 'tone,' or 'patch' in the receiver",
+      entry (R0 = .Int: prog_no));
+
+SWI MIDI_TxChannelPressure = (NUMBER 0x404D6 "Tranmits a MIDI Channel
+Pressure command",
+      entry (R0 = .Int: pressure));
+
+SWI MIDI_TxPitchWheel = (NUMBER 0x404D7 "Tranmits a MIDI Pitch Wheel
+command",
+      entry (R0 = .Int: pitch_change));
+
+SWI MIDI_TxSongPositionPointer = (NUMBER 0x404D8 "Tranmits a MIDI Song
+Position Pointer command",
+      entry (R0 = .Int: song_position));
+
+SWI MIDI_TxSongSelect = (NUMBER 0x404D9 "Tranmits a MIDI Song Select
+command",
+      entry (R0 = .Int: song_no));
+
+SWI MIDI_TxTuneRequest = (NUMBER 0x404DA "Tranmits a MIDI Tune Request
+command");
+
+SWI MIDI_TxStart = (NUMBER 0x404DB "Tranmits a MIDI Start command,
+resets the beat counter, enables transmission of timing clock messages
+and disables reception of start, continue, stop and timing clock
+messages");
+
+SWI MIDI_TxContinue = (NUMBER 0x404DC "Tranmits a MIDI Start command,
+enables transmission of timing clock messages and disables reception of
+start, continue, stop and timing clock messages");
+
+SWI MIDI_TxStop = (NUMBER 0x404DD "Tranmits a MIDI Stop command,
+disables transmission of timing clock messages, enabling reception of
+start, continue, stop and timing clock messages");
+
+SWI MIDI_TxSystemReset = (NUMBER 0x404DE "Tranmits a MIDI System
+Reset command");
+
+SWI MIDI_IgnoreTiming = (NUMBER 0x404DF "Sets ignoring or
+reception of timing messages",
+   entry (R0 = .Bool: ignore_timing));
+
+SWI MIDI_SynchSoundScheduler = (NUMBER 0x404E0 "Sets sound scheduler
+synchronistion to sound interrupts or to incoming MIDI timing clock
+messages",
+   entry (R0 = .Bool: synch_to_messages),
+   exit (R1! = .Bool: old_synch_to_messages));
+
+SWI MIDI_FastClock = (NUMBER 0x404E1 "Resets and starts the fast clock",
+   entry (R0 = .Int: tx_rate, R1 = .Int: reset_time),
+   exit (R0! = .Int: old_tx_rate));
+
+TYPE MIDI_Reset = .Bits;
+CONST MIDI_ResetAll            = MIDI_Reset: 0,
+      MIDI_ResetTxStatus       = MIDI_Reset: 1,
+      MIDI_ResetRx             = MIDI_Reset: %10,
+      MIDI_ResetTx             = MIDI_Reset: %100,
+      MIDI_ResetScheduler      = MIDI_Reset: %1000,
+      MIDI_ResetError          = MIDI_Reset: %10000,
+      MIDI_StoreSRTMessages    = MIDI_Reset: &40000000,
+      MIDI_OrdinarySRTMessages = MIDI_Reset: &f0000000;
+SWI MIDI_Init = (NUMBER 0x404E2 "Does all or part of an internal system
+reset",
+   entry (R0 = MIDI_Reset: reset),
+   exit (R0! = .Int: port_count));
+
+SWI MIDI_SetBufferSize = (NUMBER 0x404E3 "Clears the buffer and then
+claims the requested buffer size from the RMA",
+   entry (R0 # 0, R1 = .Int: buffer_size),
+   exit (R0! = .Int: buffer_size_out,
+         R1 = .Int: total_size_out));
+
+SWI MIDI_Interface = (NUMBER 0x404E4 "Gets addresses for more efficient
+access to critical SWI's",
+   exit (R0 = .Ref Void: workspace, R1 = .Asm: swi_code));
+
+
+TYPE MIDI_DriverFlags = .Bits;
+CONST etc;
+TYPE MIDI_DriverBlock = .Struct (MIDI_DriverFlags: flags,
+   .Asm: tx_vector_addr, .Asm: tx_irq_rdy_vector_addr,
+   .Asm: rx_vector_addr, .Asm: clk_vector_addr,
+   .Asm: feature_vector_addr, .Int: version,
+   [32] .Char: title);
+TYPE MIDI_CallTable = .Struct (.Asm: rx_addr,
+   .Asm: tx_irq__addr, .Asm: clk_addr,
+   .Asm: error_addr, .Int: no);
+ SWI
+   MIDI_InstallDriver =
+   (  NUMBER 0x404E5 "Installs or deinstalls a driver - see separate
+            reason codes",
+      ABSENT
+   ),
+   MIDIInstallDriver_Deinstall =
+   (  NUMBER 0x404E5,
+      ENTRY
+      (  R0 # 0 "Deinstalls a driver",
+         R1 = .Int: driver_no,
+         R2 -> MIDI_DriverBlock: block
+      ),
+      EXIT (R1?, R2?)
+   ),
+   MIDIInstallDriver_Install =
+   (  NUMBER 0x404E5,
+      ENTRY
+      (  R0 # 1 "Installs a driver",
+         R2 -> MIDI_DriverBlock: block
+      ),
+      EXIT
+      (  R1 = .Int: driver_no,
+         R2 -> MIDI_CallTable: call_table
+      )
+   ),
+   MIDIInstallDriver_Reinstall =
+   (  NUMBER 0x404E5,
+      ENTRY
+      (  R0 # 2 "Reinstalls a driver",
+         R2 -> MIDI_DriverBlock: block
+      ),
+      EXIT
+      (  R1 = .Int: driver_no,
+         R2 -> MIDI_CallTable: call_table
+      )
+   );
+
+SWI MIDI_RxPortMap = (NUMBER 0x404E6 "Sets up a map of port numbers to
+      drivers that receive MIDI data - see separate reason codes",
+      ABSENT);
+
+SWI MIDIRxPortMap_Get = (NUMBER 0x404E6, ENTRY (R0 = .Int: port_no,
+      R1 # 0 "Gets the driver to port map register",
+      R2 = .Int: driver_no), EXIT (R2! = .Bits: register));
+
+SWI MIDIRxPortMap_Set = (NUMBER 0x404E6, ENTRY (R0 = .Int: port_no,
+      R1 # 1 "Sets the driver to port map register",
+      R2 = .Int: driver_no), EXIT (R1! = .Bool: successful));
+
+SWI MIDIRxPortMap_Clear = (NUMBER 0x404E6, ENTRY (R0 = .Int: port_no,
+      R1 # 2 "Clears the driver to port map register",
+      R2 = .Int: driver_no));
+
+SWI MIDI_TxPortMap = (NUMBER 0x404E7 "Sets up a map of port numbers to
+      drivers that send MIDI data - see separate reason codes",
+      ABSENT);
+
+SWI MIDITxPortMap_Get = (NUMBER 0x404E7, ENTRY (R0 = .Int: port_no,
+      R1 # 0 "Gets the driver to port map register",
+      R2 = .Int: driver_no), EXIT (R2! = .Bits: register));
+
+SWI MIDITxPortMap_Set = (NUMBER 0x404E7, ENTRY (R0 = .Int: port_no,
+      R1 # 1 "Sets the driver to port map register",
+      R2 = .Int: driver_no), EXIT (R1! = .Bool: successful));
+
+SWI MIDITxPortMap_Clear = (NUMBER 0x404E7, ENTRY (R0 = .Int: port_no,
+      R1 # 2 "Clears the driver to port map register",
+      R2 = .Int: driver_no));
+
+SWI MIDI_DriverInfo = (NUMBER 0x404E8 "Passes back information relating
+      to installed drivers, ABSENT);
+
+SWI MIDI_ClockStamp = (NUMBER 0x404E9 "For internal use only", ABSENT);
+
+SWI MIDI_Thru = (NUMBER 0x404EA "Maps a transmit port to a receive
+port - see separate reason codes", ABSENT);
+
+SWI
+   // Extends OS_ServiceCall
+   Service_MIDI =
+   (  NUMBER 0x30,
+      ENTRY
+      (  R0 = .Bool: dying
+         R1 # 0x58 "Notification that the MIDI system is either starting up or dying",
+   )  );
+
+TYPE MIDI_Event = .Int;
+CONST MIDI_EventRx               = MIDI_Event: 0,
+      MIDI_EventError            = MIDI_Event: 1,
+      MIDI_EventScheduleEmptying = MIDI_Event: 2;
+SWI
+   // Extends OS_GenerateEvent
+   Event_MIDI =
+   (  NUMBER &22,
+      ENTRY
+      (  R0 # &11 "MIDI event",
+         R1 = MIDI_Event: event
+      )
+   )

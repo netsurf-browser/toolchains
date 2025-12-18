@@ -1,0 +1,57 @@
+# Macros
+RM    	    = rm -nq
+STRIP 	    = stripdepends
+CC  = cc -apcs 3/${APCS} -c -fah -throwback -IOSLib:,OSLibSupport:
+CPP = c++ -o $@ -c -throwback -IC:,OSLib:
+GCC = gcc -o $@ -c -mstubs -mthrowback -IOsLib:
+GPP = g++ -o $@ -c -xc++ -mthrowback -IOsLib:
+LINK = Link
+
+ifeq (${APCS},32)
+OSLIB	= OSLib32
+SUPPORT	= OSLibSupport32
+else
+OSLIB	= OSLib
+SUPPORT	= OSLibSupport
+endif
+
+COPYFLAGS   = A~C~DFLN~P~Q~R~S~T~V
+TARGET	 = TestFW
+BIN   	 = bin.${TARGET}
+OBJ   	 = o.${TARGET}
+DIR   	 = <OSLib$SourceDir>.Test.TestFW
+
+LIBS_S	 = OSLibSupport:o.${SUPPORT}
+LIBS_OS  = OSLib:o.${OSLIB}
+LIBS_C	 = C:o.stubs
+
+#--------------------------------------------------------------
+all:  ${BIN}
+
+clean:
+   ${RM} -r ${BIN} ${OBJ} l
+
+stripdepends:
+   ${STRIP} makefile
+
+tree:
+   @cdir o
+   @cdir bin
+
+archive_source:
+   cdir ${ARCHIVE}
+   cdir ${ARCHIVE}.c
+   copy ${DIR}.*   ${ARCHIVE}.*   ${COPYFLAGS}
+   copy ${DIR}.c.* ${ARCHIVE}.c.* ${COPYFLAGS}
+
+#--------------------------------------------------------------
+${BIN}:  ${OBJ} ${LIBS_OS} ${Libs_S}
+      	 ${LINK} ${OBJ} ${Libs_S} ${LIBS_OS} ${LIBS_C} -output $@
+
+#General rules
+.SUFFIXES: .o .c
+
+.c.o: 	    ;${CC} $< -o $@
+
+#------------------------------------------------------------------------
+# Dynamic dependencies:

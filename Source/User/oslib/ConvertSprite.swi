@@ -1,0 +1,32 @@
+TITLE ConvertSprite;
+AUTHOR "John Tytgat, John.Tytgat@aaug.net, 13 Dec 2010";
+
+NEEDS OS, OSSpriteOp;
+
+TYPE
+   ConvertSpriteCreateSprite_Flags = .Bits;
+CONST
+   ConvertSpriteCreateSpriteFlags_UseMask = ConvertSpriteCreateSprite_Flags: 0x01;
+
+TYPE
+   ConvertSpriteCreateSprite_Registers = [10] .Int;
+
+SWI
+   ConvertSprite_CreateSprite =
+   (  NUMBER 0x56800 "Create a sprite of a given type using any arbitrary
+                      rendering routine",
+      ENTRY
+      (  R0 = ConvertSpriteCreateSprite_Flags: flags,
+         R1 = .Int: width "OS units",
+         R2 = .Int: height "OS units",
+         R3 = OS_Mode: mode,
+         R4 -> OS_SpritePalette: palette,
+         R5 = .Ref OSSpriteOp_Header: buf,
+         R6 = .Int: buf_size_in,
+         R7 = .Int: swinumber,
+         R8 = .Ref ConvertSpriteCreateSprite_Registers: regs,
+         R9 = OS_Colour: background
+      ),
+      EXIT
+      (  R6 = .Int: buf_size_out
+   )  )

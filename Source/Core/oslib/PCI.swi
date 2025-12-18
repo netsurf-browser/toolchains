@@ -1,0 +1,313 @@
+TITLE PCI;
+
+AUTHOR "Tom Hughes, tom@compton.nu, 21 Dec 2002";
+
+NEEDS OS;
+
+TYPE
+   PCI_ID = .Bits;
+
+CONST
+   PCI_VendorID      = PCI_ID: 0xffff,
+   PCI_VendorIDShift = .Int: 0,
+   PCI_DeviceID      = PCI_ID: 0xffff0000,
+   PCI_DeviceIDShift = .Int: 16;
+
+TYPE
+   PCI_Class = .Int;
+
+TYPE
+   PCI_Function = .Int;
+
+CONST
+   PCI_AnyID = PCI_ID: -1;
+
+TYPE
+   PCI_AccessSize;
+
+CONST
+   PCI_ByteAccess     = PCI_AccessSize: 1,
+   PCI_HalfWordAccess = PCI_AccessSize: 2,
+   PCI_WordAccess     = PCI_AccessSize: 4;
+
+TYPE
+   PCI_Address;
+
+TYPE
+   PCI_ConfigurationAddress;
+
+TYPE
+   PCI_MemoryReadFlags = .Bits;
+
+CONST
+   PCI_MemoryReadPrefetchable = PCI_MemoryReadFlags: 0x8;
+
+TYPE
+   PCI_MemoryWriteFlags = .Bits;
+
+TYPE
+   PCI_ReadInfoFlags = .Bits;
+
+TYPE
+   PCI_HardwareAddressInputFlags = .Bits;
+
+CONST
+   PCI_HardwareAddressAccessReadWrite  = PCI_HardwareAddressInputFlags: 0x0,
+   PCI_HardwareAddressAccessReadOnly   = PCI_HardwareAddressInputFlags: 0x1,
+   PCI_HardwareAddressAccessNone       = PCI_HardwareAddressInputFlags: 0x2,
+   PCI_HardwareAddressAccess           = PCI_HardwareAddressInputFlags: 0xf,
+   PCI_HardwareAddressAccessShift      = .Int: 0,
+   PCI_HardwareAddressBufferable       = PCI_HardwareAddressInputFlags: 0x10,
+   PCI_HardwareAddressCacheable        = PCI_HardwareAddressInputFlags: 0x20,
+   PCI_HardwareAddressAccessSet        = PCI_HardwareAddressInputFlags: 0x200,
+   PCI_HardwareAddressQueryOnly        = PCI_HardwareAddressInputFlags: 0x80000000;
+
+TYPE
+   PCI_HardwareAddressOutputFlags = .Bits;
+
+CONST
+   PCI_HardwareAddressIsIO         = PCI_HardwareAddressOutputFlags: 0x1,
+   PCI_HardwareAddressPrefetchable = PCI_HardwareAddressOutputFlags: 0x8;
+
+CONST
+   PCI_ReadInfoDeviceNumber        = PCI_ReadInfoFlags: 0x1,
+   PCI_ReadInfoFunctionNumber      = PCI_ReadInfoFlags: 0x1,
+   PCI_ReadInfoBusNumber           = PCI_ReadInfoFlags: 0x2,
+   PCI_ReadInfoParentBridgeHandle  = PCI_ReadInfoFlags: 0x4,
+   PCI_ReadInfoSlotNumber          = PCI_ReadInfoFlags: 0x8,
+   PCI_ReadInfoID                  = PCI_ReadInfoFlags: 0x10,
+   PCI_ReadInfoRevisionID          = PCI_ReadInfoFlags: 0x20,
+   PCI_ReadInfoSubsystemID         = PCI_ReadInfoFlags: 0x40,
+   PCI_ReadInfoClass               = PCI_ReadInfoFlags: 0x80,
+   PCI_ReadInfoCMOSAddress         = PCI_ReadInfoFlags: 0x100,
+   PCI_ReadInfoCMOSSize            = PCI_ReadInfoFlags: 0x200,
+   PCI_ReadInfoDescription         = PCI_ReadInfoFlags: 0x400,
+   PCI_ReadInfoDeviceVectorNumber  = PCI_ReadInfoFlags: 0x800,
+   PCI_ReadInfoEthernetAddressLow  = PCI_ReadInfoFlags: 0x1000,
+   PCI_ReadInfoEthernetAddressHigh = PCI_ReadInfoFlags: 0x2000,
+   PCI_ReadInfoLogicalDMAChannel   = PCI_ReadInfoFlags: 0x4000,
+   PCI_ReadInfoVendorDescription   = PCI_ReadInfoFlags: 0x8000;
+
+TYPE
+   PCI_LogicalAddressFlags = .Bits;
+
+CONST
+   PCI_LogicalAddressBufferable = PCI_LogicalAddressFlags: 0x10,
+   PCI_LogicalAddressIsIO       = PCI_LogicalAddressFlags: 0x40000000;
+
+SWI
+   PCI_ReadID =
+   (  NUMBER 0x50380 *, // FIXME: good description is missing
+      ENTRY
+      (  R3 = PCI_Function: function
+      ),
+      EXIT
+      (  R0! = PCI_ID: id,
+         R1 = PCI_ID: subsystem_id
+   )  ),
+
+   PCI_ReadHeader =
+   (  NUMBER 0x50381 *, // FIXME: good description is missing
+      ENTRY
+      (  R1 = .Ref .Data: buffer,
+         R2 = .Int: size,
+         R3 = PCI_Function: function
+   )  ),
+
+   PCI_ReturnNumber =
+   (  NUMBER 0x50382 "Returns the number of function handles that have
+                      been used",
+      EXIT
+      (  R0! = PCI_Function: used
+   )  ),
+
+   PCI_EnumerateFunctions =
+   (  NUMBER 0x50383 *, // FIXME: good description is missing
+      ENTRY
+      (  R3 = PCI_Function: previous_function
+      ),
+      EXIT
+      (  R0 = PCI_ID: id,
+         R1 = PCI_ID: subsystem_id,
+         R2 = PCI_Class: pciclass,
+         R3! = PCI_Function: function
+   )  ),
+
+   PCI_IORead =
+   (  NUMBER 0x50384 *, // FIXME: good description is missing
+      ENTRY
+      (  R0 = PCI_Address: address,
+         R2 = PCI_AccessSize: access_size
+      ),
+      EXIT
+      (  R1! = .Int: value
+   )  ),
+
+   PCI_IOWrite =
+   (  NUMBER 0x50385 *, // FIXME: good description is missing
+      ENTRY
+      (  R0 = PCI_Address: address,
+         R1 = .Int: value,
+         R2 = PCI_AccessSize: access_size
+   )  ),
+
+   PCI_MemoryRead =
+   (  NUMBER 0x50386 *, // FIXME: good description is missing
+      ENTRY
+      (  R0 = PCI_Address: address,
+         R1 = .Int: size,
+         R2 = .Ref .Data: buffer,
+         R4 = PCI_MemoryReadFlags: flags
+   )  ),
+
+   PCI_MemoryWrite =
+   (  NUMBER 0x50387 *, // FIXME: good description is missing
+      ENTRY
+      (  R0 = PCI_Address: address,
+         R1 = .Int: size,
+         R2 -> .Data: buffer,
+         R4 = PCI_MemoryWriteFlags: flags
+   )  ),
+
+   PCI_ConfigurationRead =
+   (  NUMBER 0x50388 *, // FIXME: good description is missing
+      ENTRY
+      (  R0 = PCI_ConfigurationAddress: address,
+         R2 = PCI_AccessSize: access_size,
+         R3 = PCI_Function: function
+      ),
+      EXIT
+      (  R1! = .Int: value
+   )  ),
+
+   PCI_ConfigurationWrite =
+   (  NUMBER 0x50389 *, // FIXME: good description is missing
+      ENTRY
+      (  R0 = PCI_ConfigurationAddress: address,
+         R1 = .Int: value,
+         R2 = PCI_AccessSize: access_size,
+         R3 = PCI_Function: function
+   )  ),
+
+   PCI_HardwareAddress =
+   (  NUMBER 0x5038A *, // FIXME: good description is missing
+      ENTRY
+      (  R0 = PCI_HardwareAddressInputFlags: flags,
+         R1 = .Int: address_index,
+         R3 = PCI_Function: function
+      ),
+      EXIT
+      (  R0 = PCI_HardwareAddressOutputFlags: flags_out,
+         R1! = PCI_Address: pci_address,
+         R2 = .Int: length,
+         R4 = .Ref .Data: logical_address
+   )  ),
+
+   PCI_ReadInfo =
+   (  NUMBER 0x5038B *, // FIXME: good description is missing
+      ENTRY
+      (  R0 = PCI_ReadInfoFlags: flags,
+         R1 = .Ref .Data: buffer,
+         R2 = .Int: size,
+         R3 = PCI_Function: function
+      ),
+      EXIT
+      (  R2! = .Int: length
+   )  ),
+
+   PCI_SpecialCycle =
+   (  NUMBER 0x5038C "Issues a special cycle on the PCI bus",
+      ENTRY
+      (  R0 = .Int: bus,
+         R1 -> .Data: message
+   )  ),
+
+   PCI_FindByLocation =
+   (  NUMBER 0x5038D "Finds a function handle based on the specified topology",
+      ENTRY
+      (  R0 = .Int: bus,
+         R1 = .Int: device_or_function
+      ),
+      EXIT
+      (  R3! = PCI_Function: function
+   )  ),
+
+   PCI_FindByID =
+   (  NUMBER 0x5038E "Finds a function handle based on the specified IDs",
+      ENTRY
+      (  R0 = PCI_ID: vendor_id,
+         R1 = PCI_ID: device_id,
+         R2 = PCI_ID: subsystem_vendor_id,
+         R3 = PCI_Function: previous_function,
+         R4 = PCI_ID: subsystem_id
+      ),
+      EXIT
+      (  R3! = PCI_Function: function
+   )  ),
+
+   PCI_FindByClass =
+   (  NUMBER 0x5038F "Finds a function handle hased on the specified class",
+      ENTRY
+      (  R0 = PCI_Class: pciclass,
+         R1 = PCI_Class: class_mask,
+         R3 = PCI_Function: previous_function
+      ),
+      EXIT
+      (  R3! = PCI_Function: function
+   )  ),
+
+   PCI_RAMAlloc =
+   (  NUMBER 0x50390 "Allocates memory from a fixed, contiguous memory pool,
+                      suitable for use by other bus masters",
+      ENTRY
+      (  R0 = .Int: size,
+         R1 = .Int: alignment,
+         R2 = .Int: boundary_limitation
+      ),
+      EXIT
+      (  R0 = .Ref .Data: logical_address,
+         R1 = PCI_Address: pci_address
+   )  ),
+
+   PCI_RAMFree =
+   (  NUMBER 0x50391 "Free memory allocated with PCI_RAMAlloc",
+      ENTRY
+      (  R0 = .Ref .Data: logical_address
+   )  ),
+
+   PCI_LogicalAddress =
+   (  NUMBER 0x50392 "Maps a given PCI address into the logical memory map",
+      ENTRY
+      (  R0 = PCI_LogicalAddressFlags: flags,
+         R1 = PCI_Address: pci_address,
+         R2 = .Int: length
+      ),
+      EXIT
+      (  R4! = .Ref .Data: logical_address
+   )  );
+
+SWI
+   // Extends OS_ServiceCall
+   Service_PCILookupDescription =
+   (  NUMBER 0x30,
+      ENTRY
+      (  R1 # 0xC3,
+         R2 # 0 "Lookup description",
+         R3 = PCI_Function: function
+      ),
+      EXIT
+      (  R1! = .Bool: unclaimed,
+         R2 -> .Char: description
+   )  ),
+
+   Service_PCILookupVendorDescription =
+   (  NUMBER 0x30,
+      ENTRY
+      (  R0 = PCI_ID: vendir,
+         R1 # 0xC3,
+         R2 # 1 "Lookup vendor description"
+      ),
+      EXIT
+      (  R1! = .Bool: unclaimed,
+         R2 -> .Char: description
+   )  )

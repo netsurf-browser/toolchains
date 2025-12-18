@@ -1,0 +1,21 @@
+TITLE TypeTrans; //based on version 1.03 (06 Apr 1998) from !Attacher
+
+//AUTHOR "for John Allen, john@bramber.demon.co.uk, 1 Apr 1999";
+
+NEEDS OS;
+
+SWI
+   TypeTrans_FromPC = (
+      NUMBER &505C0 "Translates PC file extensions to RISC OS file types",
+      ENTRY (R1 -> .String: extension),
+      EXIT (R0! = .Bits: file_type)),
+   TypeTrans_ToPC = (
+      NUMBER &505C1 "Translates RISC OS file types to PC file extensions",
+      ENTRY (R0 = .Bits: file_type),
+      EXIT (R1! -> .String: extension)),
+   TypeTrans_FromMIME = (NUMBER &505C2*, ABSENT),
+   TypeTrans_ToMIME = (NUMBER &505C3*, ABSENT),
+   TypeTrans_FromUUcode = (NUMBER &505C4*, ABSENT),
+   TypeTrans_ToUUcode = (NUMBER &505C5*, ABSENT),
+   TypeTrans_FromBase64 = (NUMBER &505C6*, ABSENT),
+   TypeTrans_ToBase64 = (NUMBER &505C7*, ABSENT)

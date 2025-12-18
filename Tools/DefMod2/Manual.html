@@ -1,0 +1,1371 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 3.2//EN">
+<html>
+<head>
+<title>DefMod</title>
+<meta http-equiv="Content-Type" content="text/html;charset=utf-8" >
+</head>
+
+<body>
+   <h1><tt>DefMod</tt></h1>
+
+   <h2><a name = contents>Contents</a></h2>
+
+<table>
+   <tr><td><a href = "#contents">Contents</a></td></tr>
+   <tr><td><a href = "#introduction">Introduction</a></td></tr>
+   <tr><td><a href = "#mifs">Module interface files</a></td></tr>
+   <tr><td><a href = "#syntax">Syntax</a></td></tr>
+   <tr><td><a href = "#semantics">Semantics</a></td></tr>
+   <tr><td><a href = "#bytewide">The <tt>ByteWide</tt>
+file</a></td></tr>
+   <tr><td><a href = "#apcstoswi"><small>APCS</small>
+to <small>SWI</small></a></td></tr>
+   <tr><td><a href = "#implementation">Implementation
+notes</a></td></tr>
+   <tr><td><a href = "#grammar">The grammar</a></td></tr>
+   <tr><td><a href = "#example">An example file</a></td></tr>
+   <tr><td><a href = "#future">Future possibilities</a></td></tr>
+   <tr><td><a href = "#revhist">Revision history</a></td></tr>
+</table>
+
+   <h2><a name = introduction>Introduction</a></h2>
+
+   <p><tt>DefMod</tt> is the tool for generating all sorts of different
+files from module interface files. A module interface file (with the
+conventional file extension <tt>.swi</tt>) contains enough information
+to specify, in a language-independent form, the interface to a
+<small>RISC&nbsp;OS</small> module. This can be used to generate
+suitable files to enable the module to be called from any high-level
+language. The whole of <tt>OSLib</tt> (apart from <tt>"types.h"</tt> and
+<tt>"macros.h"</tt>) is derived from a set of modules interface files
+and these <tt>DefMod</tt> options:</p>
+
+<dl>
+   <dt><tt>-asmtype</tt> &lt;asmtype&gt;</dt>
+   <dd>selects the type of assembler program to be used.  Possible values for &lt;asmtype&gt; are
+<small>objasm</small> (<tt>ObjAsm</tt> running on <small>RISC&nbsp;OS</small>) which is the
+default value,
+<small>asasmaof</small> (<tt>AsAsm</tt> with AOF output),
+<small>asasmelf</small> (<tt>AsAsm</tt> with ELF output),
+<small>gccaof</small> (<tt>GCCSDK 3.4 AOF</tt>),
+<small>armasm</small> (<tt>ArmAsm</tt>)
+and <small>gccelf</small> (<tt>GCCSDK 4 ELF</tt>).
+   </dd>
+   <dt><tt>-float-abi</tt> &lt;float ABI&gt;</dt>
+   <dd>marks object files marks object files which float-abi is in use.
+Possible values for &lt;float ABI&gt; are
+<small>soft</small> (floating point values are passed in integer registers
+and/or the stack, no FP instructions are used),
+<small>hard</small> (floating point values are passed in FP registers, FP
+instructions can be used).
+   <dt><tt>-o</tt></dt>
+   <dd>produces a directory containing <tt>ObjAsm</tt> or <tt>GAS</tt> source files defining
+the <small>SWI</small> veneers as separate files; object files corresponding
+to them; and a text file <tt>ViaFile</tt> which may be ued as input to
+<tt>LibFile</tt> to combine them into a library</dd>
+
+   <dt><tt>-h</tt></dt>
+   <dd>produces a commented C header file defining all the constants as
+macros, all the types as <tt>typedef</tt>'s and all the
+<small>SWI</small>'s as function prototypes</dd>
+
+   <dt><tt>-hdr</tt></dt>
+   <dd>produces a commented assembler header file defining all the
+constants as symbols, all the types and structure offsets as symbols,
+and all the <small>SWI</small>'s as symbols</dd>
+
+   <dt><tt>-chelp</tt></dt>
+   <dd>produces a <tt>SrcEdit</tt>-compatible help file for the C
+interface</dd>
+
+   <dt><tt>-cstrong</tt></dt>
+   <dd>produces a <tt>StrongHelp</tt>-compatible help file for the C
+interface</dd>
+
+   <dt><tt>-vapi</tt></dt>
+   <dd>produces vapi files for the <tt>Vala</tt> programming language.</dd>
+
+   <dt><tt>-vapideps</tt></dt>
+   <dd>produces deps files which contain the dependencies between different vapi files
+   used by the <tt>Vala</tt> programming language.</dd>
+
+   <dt><tt>-vapih</tt></dt>
+   <dd>produces (parts of) C headerfiles for use with the <tt>Vala</tt> programming language.</dd>
+</dl>
+
+   <p>For other options, see <tt>DefMod -help</tt>.</p>
+
+   <p><tt>DefMod</tt> can be most useful when used at the start of a project:
+it can be used to specify the whole of the module interface before any
+of the module is written. The header files it generates can then be used
+during actual development of the module. This means that all the
+resources used by the module are defined in one place only---the
+module interface file---which will then be the master for things
+like <small>SWI</small> numbers, command numbers, error numbers,
+structures and <small>SWI</small> calling conventions for development of
+the module itself and its clients.</p>
+
+   <h2><a name = mifs>Module interface files</a></h2>
+
+   <p>The format of a module interface file is described completely by the
+grammar which accompanies this document. A brief outline follows.</p>
+
+   <h2><a name = syntax>Syntax</a></h2>
+
+   <p>There is no separate lexical analyser: the grammar goes all the
+way to the individual character level. A consequence of this is that a
+convention is needed to keep reserved words grammatically distinct from
+user-defined identifiers: since the grammar should be case-insensitive
+but case-preserving (at least in the area of <small>SWI</small> names),
+case is not used as the mechanism: instead, reserved words start with a
+full stop.</p>
+
+   <p>There are some conventions (metarules, really) used in the
+grammar:<p>
+
+<ul>
+   <li><tt>empty</tt> is defined as nothing;</li>
+
+   <li>any non-terminal of the form <i>notion</i><tt>_option</tt> is
+defined as either a <i>notion</i>, or else as absent
+(<tt>empty</tt>);</li>
+
+   <li>similarly, a <i>notion</i><tt>_sequence</tt> is a sequence of
+<i>notion</i>s with no other intervening tokens;</li>
+
+   <li>a <i>notion</i><tt>_list</tt> is a sequence of <i>notion</i>s
+separated (but not terminated) by comma tokens;</li>
+
+   <li>a <i>notion</i><tt>_series</tt> is a sequence of <i>notion</i>s
+separated (but not terminated) by semi-colon tokens;</li>
+
+   <li>if <i>notion</i> is the name of a punctuation mark, it is
+defined as that mark followed by optional white space (a category which
+includes comments);</li>
+
+   <li>the start symbol is <tt>file</tt>.</li>
+</ul>
+
+   <p>Case in the interface file is important, because it is used to
+decide where to break up a name. S<small>WI</small> names must always be
+specified exactly in the form used by the system. All symbols should
+begin with the module prefix, or <tt>Error_</tt>, <tt>Event_</tt>,
+<tt>Message_</tt>, <tt>Service_</tt>, <tt>UpCall_</tt> or else should
+end in <tt>V</tt> (for vectors).</p>
+
+   <p>There is an example module interface file for the ColourPicker
+module (see <a href = "#example">An example file</a>).</p>
+
+   <p>A file consists of a series of declarations. There are 6 different
+types of declaration. Each type may occur as many times as necessary.
+The way in which commas and semi-colons are used may be a bit confusing:
+they are <em>separators</em>, not terminators as in C, so, for example,
+a <tt>CONST</tt> section might be</p>
+
+<pre>
+      CONST
+         a = T: 0,
+         b = T: 1,
+         c = T: 2
+</pre>
+
+   <p>and there is no comma at the end. If there were multiple sections in a
+file, then semi-colons appear between them, but not at the end, like
+this:</p>
+
+<pre>
+      CONST section; TYPE section; SWI section; another CONST section
+</pre>
+
+   <p>This will all be familiar to users of Pascal or
+<small>ALGOL</small>.</p>
+
+   <p>A <tt>type_defn</tt> with no type defines an "abstract type". A
+structure type may end with <tt>...,</tt> in which case various extra macros
+will be generated. An abstract type name is often a single letter (as in
+<tt>wimp_w</tt>, <tt>os_f</tt>).</p>
+
+   <p>A <small>SWI</small> number may be followed with a textual
+description or with a star (in which case a description will be made
+up).  A reason code will be created (instead of a standalone SWI) when the
+SWI number does not contain a description (nor a star) and there is at least one
+constant register definition with a non-empty text description or star.
+When there is more than one constant register definition with a non-empty
+test description or star, the first one mentioned will be considered
+to be the reason code and its description (or the made one up in case of a
+star) will be used to describe this SWI entry. A warning is given when the SWI entry does not contain
+any description nor star, or when the SWI number and one or more constant register definitions
+do have a textual description (and no star).
+</p>
+
+   <p>One output register may be marked with a pling, in which case the
+non-x form will return it as its result.</p>
+
+   <p>Constants may be provided in decimal, hex (&amp; or 0x) or binary (%
+or 0b) or as a character value of up to 4 characters (e g, "TASK").</p>
+
+   <h2><a name = semantics>Semantics</a></h2>
+
+   <h3>The <tt>TITLE</tt> section</h3>
+
+   <p>This gives the module a title. It is used to produce a comment in
+output, and should be the same as the module prefix. There can only be
+one of these.</p>
+
+   <h3>The <tt>AUTHOR</tt> section</h3>
+
+   <p>This gives a string which appears in the output, also as a
+comment. There can only be one of these.</p>
+
+   <h3>The <tt>NEEDS</tt> section</h3>
+
+   <p>Contains the names of other module interfaces on which this one
+depends. This does not cause the named module interface file to be read
+by <tt>DefMod</tt>, but may cause it to emit some kind of include
+directive in the output.</p>
+
+   <h3>The <tt>CONST</tt> section</h3>
+
+   <p>Contains constant definitions. Constants may be of a built-in type
+or one defined in this or another interface file.</p>
+
+   <h3>The <tt>TYPE</tt> section</h3>
+
+   <p>Defines types. Types are built-in types (<tt>Int</tt>,
+<tt>Short</tt>, <tt>Byte</tt>, <tt>Char</tt>, <tt>Bits</tt>,
+<tt>Bool</tt>, <tt>String</tt>, <tt>Asm</tt>,
+<tt>Data</tt>) or derived types. They are classified into "register",
+"non-register fixed-length" and "non-register variable-length"
+types. The register types are: <tt>Int</tt>, <tt>Short</tt>,
+<tt>Byte</tt>, <tt>Char</tt>, <tt>Bits</tt>, <tt>Bool</tt>, <tt>Asm</tt>, <tt>Ref</tt>
+<i>anything</i>, and unions of these; non-register fixed-length types
+are: arrays, structures containing no <tt>...</tt>, and unions of anything so
+far; and non-register variable-length types are: <tt>String</tt>,
+<tt>Data</tt>, <tt>Struct</tt> with <tt>...</tt>, and unions not
+so far mentioned.</p>
+
+   <p>In fact, not all the checking that would be desirable can be done,
+since <tt>DefMod</tt> deals with only one file at a time.</p>
+
+   <p>The reasons for the distinctions are (a) that only register types
+may be arguments of <small>SWI</small> calls; (b) special treatment is
+given to structures whose last component is a repeating fixed-length
+element, in the form of extra macros to deal with objects of those
+types.</p>
+
+   <p>The built-in types must be provided by the target language. For C,
+they are in the file <tt>"types.h"</tt>, included by all headers.</p>
+
+   <p>Within unions only, the type <tt>Void</tt> is allowed, signifying
+that the union may be "empty".</p>
+
+   <h3>The <tt>SWI</tt> section</h3>
+
+   <p>Contains the registers needed on input, and produced on output, by
+each <small>SWI</small> the module defines. For details of how the
+algorithm for producing the <small>APCS</small>
+veneers works, see the section <a href =
+"#apcstoswi"><small>APCS</small> to
+<small>SWI</small></a>. Registers may be specified as</p>
+
+<ul>
+   <li>containing a value;</li>
+   <li>pointing to a value;</li>
+   <li>containing a constant (input only);</li>
+   <li>corrupted (output only);</li>
+   <li>disjoined with a constant (input only);</li>
+   <li>added to a constant (input only).</li>
+</ul>
+
+   <p>The two forms</p>
+
+<pre>
+      Rx = .Ref Thing: thing
+</pre>
+
+   <p>(<tt>R</tt><i>x</i> contains a pointer to a <tt>Thing</tt>
+called <tt>thing</tt>) and</p>
+
+<pre>
+      Rx -> Thing: thing
+</pre>
+
+   <p>(<tt>R</tt><i>x</i> points to a <tt>Thing</tt> called
+<tt>thing</tt>) are closely related: the difference is one of intent
+only. The second form is used when the argument must be valid on input;
+so the <small>SWI</small> is accepting a value of type <tt>Thing</tt> as
+an argument, represented by a pointer to it ("input" arguments); the
+first form is used when the value is not present, but the
+<small>SWI</small> will fill it in ("output" arguments). (A third form
+of syntax could be provided for "update" arguments, but this has not
+been done.) In C, the first form generates an ordinary pointer, the
+second a pointer-to-constant.</p>
+
+   <p>The <tt>.swi</tt> file contains the whole of the module interface.
+This includes modules <small>SWI</small>'s, structures and constants, as
+expected; but also other resources defined by the module: service calls,
+vectors, error numbers, upcalls, <tt>Wimp</tt> messages (numbers and
+structures), events, etc. The vector, upcall and service entries are
+useful when making the call, typically done within the module rather
+than by a client. Even so, they are part of the module interface and
+logically belong in the interface file.</p>
+
+   <p>We assume that a non-x form will only be called in user mode:
+therefore, no attempt is made to save <tt>LR</tt> over the
+<small>SWI</small> instruction.</p>
+
+   <p>The output arguments are not written if a <small>SWI</small>
+fails.</p>
+
+   <p>The case of <small>PSR</small> flags being required on
+input is not supported. The only two calls where this is necessary are
+<tt>RemV</tt> and <tt>CnpV</tt>, which are obsolescent anyway.</p>
+
+   <p>If a call has no output arguments, and exactly one input argument
+which is a pointer to an unnamed structure with no <tt>...</tt> part, then the
+structure elements are passed in in separate registers. See
+<tt>Wimp_SetIconState</tt> for an example.</p>
+
+   <p>If a <small>SWI</small> call happens also to be
+<small>APCS</small>-compliant, this information can
+be passed to the compiler, which can then generate an inline
+<small>SWI</small> instruction, by using the <tt>__swi()</tt> directive
+provided with <small>ARM</small> C release 5. To disable this feature
+for use with earlier or non-<small>ARM</small> compilers (e.g.,
+<tt>CFront</tt>) requires a header file containing the lines</p>
+
+<pre>
+      #ifdef  __swi
+      #undef  __swi
+      #define __swi(x) extern
+      #endif
+</pre>
+
+<p>and the <tt>-D__swi</tt> compiler flag must be provided when using the
+header files. <tt>"Types.h"</tt> contains these lines.</p>
+
+   <h2><a name = bytewide>The <tt>ByteWide</tt> file</a></h2>
+
+   <p>In order to generate correct code, the width of all types used for
+output needs to be known. (Bytes must be stored with byte-store
+instructions.) In order to avoid having to read all <tt>NEEDS</tt>
+files, a separate list of byte-wide types must be provided. All other
+undefined types will be assumed to be register-wide, and a warning will
+be given. For <tt>OSLib</tt>, the byte-wide file is</p>
+
+<pre>
+      Font_F
+      OS_Action
+      OS_F
+      OS_GCOL
+      OS_Tint
+      Wimp_Colour
+</pre>
+
+   <p>There is no support for 2-byte quantities on output.</p>
+
+   <h2><a name = apcstoswi><small>APCS</small> to
+<small>SWI</small></a></h2>
+
+   <p>"<small>APCS</small> to <small>SWI</small>" is
+what <tt>DefMod</tt> does when generating library files: it generates a
+veneer that assumes the C function has been called via
+<small>APCS</small> (in other words, the first 4
+arguments are in <tt>R0</tt>,&nbsp;...,&nbsp;<tt>R3</tt>, and the rest are
+on the stack), and sets the registers up as they should be for calling
+the <small>SWI</small>; that calls the <small>SWI</small>; and that then
+puts all the registers back where they should be for the
+<small>APCS</small>-conformant exit conditions (result
+in <tt>R0</tt>, other output values written to the addresses supplied on
+input).</p>
+
+   <p>This section describes how it does it.</p>
+
+   <h3>Notation</h3>
+
+   <p>To simplify the discussion, we refer to the registers by 2 sets of
+names. Considered as input to and output from the <small>SWI</small>, we
+call them <tt>R0</tt>,&nbsp;...,&nbsp;<tt>R9</tt>; considered as
+<small>APCS</small> entry registers, we call them
+<tt>A1</tt>,&nbsp;...,&nbsp;<tt>A4</tt> (the "argument registers") and
+<tt>V1</tt>,&nbsp;...,&nbsp;<tt>V6</tt> (the "variable registers"); also,
+when considered as the <small>APCS</small> result register,
+we call <tt>R0</tt> just <tt>R</tt>. The remaining 6 registers are always
+called <tt>SL</tt>, <tt>FP</tt>, <tt>IP</tt>, <tt>SP</tt>, <tt>LR</tt>,
+<tt>PC</tt>.</p>
+
+   <p>Let <i>i</i> be the number of registers provided on input, and let
+the registers be <i>I<sub>0</sub>,&nbsp;...,&nbsp;I<sub>i-1</sub></i>; let
+<i>o</i> be the number of results required, and let the registers be
+<i>O<sub>0</sub>,&nbsp;...,&nbsp;O<sub>o-1</sub></i>; let <i>c</i> be the
+number of registers corrupted, and let the registers be
+<i>C<sub>0</sub>,&nbsp;...,&nbsp;C<sub>c-1</sub></i>; let <i>k</i> be the
+number of registers to be loaded with constants, and let the registers be
+<i>K<sub>0</sub>,&nbsp;...,&nbsp;K<sub>k-1</sub></i>. Also, let <i>f</i> be 1
+if flags are to be supplied on output, 0 if not.</p>
+
+   <p>Recall that on entry</p>
+
+<table>
+   <tr><td>The 1<sup>st</sup> argument</td> <td>is in</td> <td><tt>R0 (A1)</tt></td></tr>
+   <tr><td>The 2<sup>nd</sup> argument</td> <td>is in</td> <td><tt>R1 (A2)</tt></td></tr>
+   <tr><td>The 3<sup>rd</sup> argument</td> <td>is in</td> <td><tt>R2 (A3)</tt></td></tr>
+   <tr><td>The 4<sup>th</sup> argument</td> <td>is in</td> <td><tt>R3 (A4)</tt></td></tr>
+   <tr>
+      <td>The <i>i</i><sup>th</sup> argument</td>
+      <td>is at</td>
+      <td><tt>[SP, #4*(</tt><i>i</i><tt>-4)]</tt></td>
+      <td>(<i>i</i> &gt; 4)</td>
+   </tr>
+</table>
+
+   <p>So on entry,
+<tt>R</tt><i>I</i><sub>0</sub>,&nbsp;...,&nbsp;<tt>R</tt><i>I</i><sub><i>i</i>-1</sub>
+must be copied from the
+0<sup>th</sup>,&nbsp;...,&nbsp;(<i>i</i>-1)<sup>th</sup> arguments and
+<tt>R</tt><i>K</i><sub>0</sub>,&nbsp;...,&nbsp;<tt>R</tt><i>K</i><sub><i>k</i>-1</sub>
+must be set to their values; and on exit,</p>
+
+<table>
+   <tr>
+      <td>If&nbsp;<tt>V</tt>&nbsp;is&nbsp;set</td>
+      <td><tt>R</tt> must be set to an error block pointer (and <tt>V</tt>
+cleared)</td>
+   </tr>
+   <tr>
+      <td>If&nbsp;<tt>V</tt>&nbsp;is&nbsp;clear</td>
+<td><tt>R</tt><i>O</i><sub>0</sub>,&nbsp;...,&nbsp;<tt>R</tt><i>O</i><sub><i>o</i>-1</sub>
+must be copied to (the addresses in) the
+<i>i</i><sup>th</sup>,&nbsp;...,&nbsp;(<i>i</i>+<i>o</i>-1)<sup>th</sup> arguments;
+and if flags are required, they must be written to (the address in) the
+(<i>i</i>+<i>o</i>)<sup>th</sup> argument, and <tt>R</tt> cleared.
+      </td>
+   </tr>
+</table>
+
+   <h3>Definitions</h3>
+
+   <p>Consider those variable registers <i>V</i> which will have to be
+preserved by this whole function: these are the ones that
+<small>APCS</small> requires to be preserved which we
+will be using ourselves, or which the <small>SWI</small> corrupts:</p>
+
+   <p><i>V</i>&nbsp;=&nbsp;{4&nbsp;<u>&lt;</u>&nbsp;<i>r</i>&nbsp;&lt;&nbsp;10:
+there is an <i>x</i> such that
+<i>r</i>&nbsp;=&nbsp;<i>I</i><sub><i>x</i></sub> or
+<i>r</i>&nbsp;=&nbsp;<i>O</i><sub><i>x</i></sub> or
+<i>r</i>&nbsp;=&nbsp;<i>C</i><sub><i>x</i></sub> or
+<i>r</i>&nbsp;=&nbsp;<i>K</i><sub><i>x</i></sub>}</p>
+
+   <p>Also consider those registers <i>A</i> which are going to have to be
+saved over the call, because they contain addresses to be used for output.
+These are those of the
+<i>i</i><sup>th</sup>,&nbsp;...,&nbsp;(<i>i</i>+<i>o</i>+<i>f</i>-1)<sup>th</sup> arguments
+which are passed in <tt>R0</tt>,&nbsp;...,&nbsp;<tt>R3</tt>:</p>
+
+   <p><i>A</i>&nbsp;=&nbsp;{0&nbsp;<u>&lt;</u>&nbsp;<i>r</i>&nbsp;&lt;&nbsp;4:
+<i>i</i>&nbsp;<u>&lt;</u>&nbsp;<i>r</i>&nbsp;&lt;&nbsp;<i>i</i>+sup(inf(<i>o</i>+<i>f</i>,4)-<i>i</i>,0)}</p>
+
+   <h3>Input</h3>
+
+   <p>Very easy:</p>
+
+<pre>
+        ;keep current SP safe---it points at the tail of the argument list
+        MOV     IP, SP
+        ;save registers that need it over the call (SP -= 4*|V|)
+        STMFD   SP!, {V}
+        ;save registers that contain output addresses (SP -= 4*|A|)
+        STMFD   SP!, {A}
+        ;load registers for SWI that are in the argument tail
+        LDM     IP, {I4, ..., I(i - 1)}
+        ;load registers for SWI that are in registers already
+        MOV     I3, A3
+        MOV     I2, A2
+        MOV     I1, A1
+        MOV     I0, A0
+        ;set up constants
+        MOV     K(k - 1), whatever
+        ...
+        MOV     K0, whatever
+</pre>
+
+   <p>(In fact,
+<tt>STMFD SP!, {</tt><i>V</i><tt>, </tt><i>A</i><tt>}</tt> will
+do rather than the two instructions above.)</p>
+
+   <p>After all this,</p>
+
+<table>
+   <tr>
+      <td>
+         <tt>[SP, #4|</tt><i>A</i><tt>|+4|</tt><i>V</i><tt>|]</tt>
+      </td>
+      <td>
+         contains
+      </td>
+      <td>
+         saved arguments (as set up by <small>APCS</small>)
+      <td>
+   </tr>
+   <tr>
+      <td>
+         <tt>[SP, #4|</tt><i>A</i><tt>|]</tt>
+      </td>
+      <td>
+         contains
+      </td>
+      <td>
+         saved variables (saved by us)
+      <td>
+   </tr>
+   <tr>
+      <td>
+         <tt>[SP]</tt>
+      </td>
+      <td>
+         contains
+      </td>
+      <td>
+         saved output addresses (also saved by us where not already saved by
+<small>APCS</small>)
+      <td>
+   </tr>
+</table>
+
+   <p>In fact, 2 variants are possible: first, if
+<i>i</i>&nbsp;<u>&lt;</u>&nbsp;4, we do not need <tt>IP</tt> before the
+<small>SWI</small> is called, so we can use it to save <tt>LR</tt> in. After
+the <small>SWI</small>, <tt>LR</tt> is corrupted anyway, so we can use it as
+we see fit. Second, if <i>i</i>&nbsp;&gt;&nbsp;4, we stack <tt>LR</tt> along
+with <i>V</i>, <i>A</i>. In the first case, on exit we have to do
+<tt>MOVS PC, IP</tt> (or <tt>MOV PC, IP</tt> for a 32-bit APCS). In the second, 
+we just add <tt>PC</tt> to the
+list of registers to be restored on return.</p>
+
+   <h3>Call the <small>SWI</small></h3>
+
+<pre>
+        ;do the call
+        SWI     (swi)
+</pre>
+
+   <h3>Output</h3>
+
+   <p>Harder, though the <tt>V</tt>-set case is easy:</p>
+
+<pre>
+        ;do error return
+        BVS     exit
+</pre>
+
+   <p>If <tt>V</tt> is clear, we have to retrieve the addresses passed in the
+(<i>i</i>+1)<sup>th</sup>,&nbsp;...,&nbsp;(<i>i</i>+<i>o</i>-1)<sup>th</sup>
+arguments. These have been saved in 2 different places: argument <i>i</i>+<i>x</i>
+is at <tt>[SP,&nbsp;#4</tt><i>x</i><tt>]</tt>
+(<i>i</i>+<i>x</i>&nbsp;&lt;&nbsp;4), or at
+<tt>[SP,&nbsp;#4|</tt><i>V</i><tt>|+4|</tt><i>A</i><tt>|+4*(</tt><i>i</i><tt>+</tt><i>x</i><tt>-4)]</tt>
+(otherwise).</p>
+
+   <p>Initially, assume only that <i>i</i>&nbsp;<u>&gt;</u>&nbsp;4:</p>
+
+<pre>
+        ;get address for first argument
+        LDR     IP, [SP, #4*|V| + 4|A| + 4*(i - 4)]
+        STR     O0, [IP]
+
+        ... repeat for other arguments ...
+
+        ;get address for last argument
+        LDR     IP, [SP, #4*|V| + 4|A| + 4*((i + o - 1) - 4)]
+        STR     O(o - 1), [IP]
+
+        ;if flags are required, do them too
+        LDR     IP, [SP, #4*|V| + 4|A| + 4*((i + o) - 4)]
+        STR     PC, [IP]
+</pre>
+
+   <p>In fact, it may be the case that
+<i>i</i>+<i>o</i>+<i>f</i>-1&nbsp;&lt;&nbsp;4. In this case, we have to replace
+any</p>
+
+<pre>
+        LDR     IP, [SP, #4*|A| + 4|S| + 4*((i + x) - 4)]
+        STR     O(x), [IP]
+</pre>
+
+   <p>sequences for which <i>i</i>+<i>x</i>&nbsp;&lt;&nbsp;4 by sequences that
+go</p>
+
+<pre>
+        LDR     IP, [SP, #4*x]
+        STR     O(x), [IP]
+</pre>
+
+   <p>where <tt>[SP,&nbsp;#4</tt><i>x</i><tt>]</tt> is the value that
+<tt>R</tt>(<i>i</i>+<i>x</i>) had on entry to the code, as stacked at the
+beginning.</p>
+
+   <p>If any of the output addresses were in registers that have been
+preserved, we do not need to reload them from memory. And we can supply an
+extra (very useful!) facility by checking for <tt>NULL</tt> pointers
+before writing to them.</p>
+
+   <p>There is one trick which is missed: we could use registers which are
+preserved by the call, but which we do not need to set to any particular
+value, to keep addresses in. This is left as an exercise for the reader.
+<tt>:-)</tt></p>
+
+   <h3>Return</h3>
+
+   <p>Restore everthing to its initial state:</p>
+
+<pre>
+        MOV     R, #0
+  exit
+        ;skip over saved output addresses
+        ADD     SP, SP, 4|A|
+        ;restore saved variables
+        LDMFD   SP!, {V}
+        MOV     PC, LR
+</pre>
+
+   <p>A piece of cake!</p>
+
+   <h3>Type conversion for C</h3>
+
+   <p>The <tt>DefMod</tt> file has its own set of types, which must be
+mapped to C types. The match is close, but <tt>DefMod</tt> allows
+structure types with arbitrarily repeated final members. These are not
+representable with standard C, but we use knowledge of how all ARM C
+compilers work to generate some macros that help with these.</p>
+
+   <p>To convert (<i>CVT</i>) a type from the <tt>DefMod</tt> form to
+the C form,</p>
+
+<table>
+   <tr><td><tt>Int</tt></td>        <td><tt>int</tt></td></tr>
+   <tr><td><tt>Short</tt></td>      <td><tt>short</tt></td></tr>
+   <tr><td><tt>Byte</tt></td>       <td><tt>unsigned char</tt> (is also <tt>byte</tt>)</td></tr>
+   <tr><td><tt>Char</tt></td>       <td><tt>char</tt></td></tr>
+   <tr><td><tt>Bits</tt></td>       <td><tt>unsigned int</tt> (is also <tt>bits</tt>)</td></tr>
+   <tr><td><tt>Bool</tt></td>       <td><tt>int</tt> (is also <tt>osbool</tt>)</td></tr>
+   <tr><td><tt>Asm</tt></td>        <td><tt>asm_routine</tt></td></tr>
+
+   <tr><td><tt>String</tt></td>     <td><tt>char</tt></td></tr>
+   <tr><td><tt>Data</tt></td>       <td><tt>unsigned char</tt> (is also <tt>byte</tt>)</td></tr>
+   <tr>
+      <td><tt>Ref </tt><i>type</i></td>
+      <td><i>CVT(type)</i> <tt>*</tt></td>
+   </tr>
+   <tr>
+      <td><tt>Struct (..., </tt><i>type</i><tt>, ...}</tt></td>
+      <td><tt>struct {..., </tt><i>CVT(type)</i><tt>, ...}</tt></td>
+   </tr>
+   <tr>
+      <td><tt>Union (..., </tt><i>type</i><tt>, ...}</tt></td>
+      <td><tt>union {..., </tt><i>CVT(type)</i><tt>, ...}</tt></td>
+   </tr>
+   <tr>
+      <td><tt>[</tt><i>const</i><tt>]</tt> <i>type</i></td>
+      <td><i>CVT(type)</i>&nbsp;<tt>[</tt><i>VAL(const)</i><tt>]</tt></td>
+   </tr>
+   <tr>
+      <td><i>id</i></td>
+      <td><tt>Convert_To_Extern&nbsp;(</tt><i>id</i><tt>)</tt></td>
+   </tr>
+</table>
+
+   <p>and in writing prototypes</p>
+
+<table>
+   <tr>
+      <td><tt>=</tt> <i>type</i></td>
+      <td>becomes</td>
+      <td><i>CVT(type)</i> on input, <i>CVT(type)</i>&nbsp;<tt>*</tt> on
+output</td>
+   </tr>
+   <tr>
+      <td><tt>-></tt> <i>type</i></td>
+      <td>becomes</td>
+      <td><i>CVT(type)</i>&nbsp;const&nbsp;<tt>*</tt> on input,
+<i>CVT(type)</i>&nbsp;<tt>**</tt> on output</td>
+   </tr>
+   <tr>
+      <td><tt>#</tt> <i>num</i></td>
+      <td>disappears</td>
+   </tr>
+   <tr>
+      <td><tt>|</tt> <i>type</i></td>
+      <td>becomes</td>
+      <td><i>CVT(type)</i></td>
+   </tr>
+   <tr>
+      <td><tt>?</tt></td>
+      <td>disappears</td>
+   </tr>
+   <tr>
+      <td><tt>FLAGS</tt></td>
+      <td>becomes</td>
+      <td><tt>unsigned&nbsp;*</tt> (output only)</td>
+   </tr>
+</table>
+
+   <h2><a name = implementation>Implementation notes</a></h2>
+
+   <p><tt>DefMod</tt> works by reading the interface file using a
+<tt>Yacc</tt>-generated parser derived and producing an internal
+form of the data in memory; it then emits this data in the required
+form. It is not written with speed or low memory-use in mind, but rather
+with robustness, correctness and ease of coding:</p>
+
+<dl>
+   <dt>
+      Robustness
+   </dt>
+   <dd>
+      Every error condition that might arise is checked for and reported
+to the user, including all filing system, i/o and <small>SWI</small>
+errors.
+   </dd>
+
+   <dt>
+     Correctness
+   </dt>
+   <dd>
+      If it works at all, it will produce the right answer. If it
+doesn't, it shows the error message to the user.
+   </dd>
+
+   <dt>
+      Ease of coding
+   </dt>
+   <dd>
+      2 shortcuts have simplified the structure of <tt>DefMod</tt>, at
+the expense of efficiency:
+
+      <ol>
+         <li>
+            There is no lexical analysis phase: lexical analysis is done
+by the same grammar that parses the interface file. This avoids the
+possibility that the lexical structure might interfere with the
+syntactical structure of the file.
+         </li>
+         <li>
+            <p>The parser uses string-valued variables for various
+purposes. Rather than construct some objects on the heap with
+<tt>malloc()</tt>, I have simply used a <tt>Yacc</tt> object big
+enough to hold a string of the largest possible length <i>N</i>. In
+combination with the point above, this means that building up a string
+of length <i>l</i> involves <i>lN</i> byte-copies.</p>
+         </li>
+      </ol>
+
+      These don't seem to be a problem in practice.
+   </dd>
+</dl>
+
+   <p>There is a small bootstrapping problem: <tt>DefMod</tt> is
+actually a client of <tt>OSLib</tt>. In order to build <tt>DefMod</tt>,
+there is therefore an implementation of the parts of <tt>OSLib</tt> that
+<tt>DefMod</tt> needs, as macros (using <tt>_swix()</tt>). This is
+called <tt>SWILib</tt>. In principal, these could now be replaced with
+the output of <tt>DefMod&nbsp;-l</tt>, but this would be to introduce a
+potentially lethal feedback loop.</p>
+
+   <h2><a name = grammar>The grammar</a></h2>
+
+   <p><tt>Yacc</tt> requires an input file containing the complete
+grammar with C code to apply at each reduction. Here we have only
+the grammar itself, with rules derived from the conventions above (see
+<a href = "#syntax">Syntax</a>) deleted.</p>
+
+<pre>
+file: ws decl_SERIES_OPTION;
+
+decl: title_decl | author_decl | needs_decl | const_decl | type_decl |
+      swi_decl;
+
+title_decl: TITLE ID DESCRIPTION_OPTION;
+
+author_decl: AUTHOR DESCRIPTION;
+
+needs_decl: NEEDS needs_LIST;
+
+needs: ID;
+
+const_decl: CONST const_defn_LIST;
+
+const_defn: ID EQUALS type COLON const DESCRIPTION_OPTION;
+
+const: NUM | ID;
+
+type_decl: TYPE type_defn_LIST;
+
+type_defn: ID DESCRIPTION_OPTION | ID EQUALS type DESCRIPTION_OPTION;
+
+base_type: COLON ID
+type: INT | SHORT | BYTE | CHAR | BITS | BOOL | REF type |
+      STRING | ASM | DATA | STRUCT base_type_OPTION OPEN typed_var_LIST
+      ellipsis_OPTION CLOSE | UNION OPEN toided_var_LIST CLOSE | SUB const
+      BUS type | ID;
+
+toid: type | VOID;
+
+typed_var: type COLON ID DESCRIPTION_OPTION;
+
+toided_var: toid COLON ID DESCRIPTION_OPTION;
+
+swi_decl: SWI swi_defn_LIST;
+
+swi_defn: ID EQUALS swi;
+
+swi: OPEN number_part condition_part_OPTION CLOSE;
+
+number_part: NUMBER NUM description_OPTION;
+
+condition_part: entry_part | entry_part exit_part | entry_part
+                absent_part | exit_part | absent_part;
+
+entry_part: COMMA ENTRY OPEN entry_condition_LIST CLOSE;
+
+exit_part: COMMA EXIT OPEN exit_condition_LIST CLOSE;
+
+absent_part: COMMA ABSENT;
+
+entry_condition: REG CONTAINS typed_var | REG REFERENCES typed_var |
+                 REG CONSTANT NUM description_OPTION |
+                 REG DISJOINS typed_var | REG CONJOINS typed_var |
+                 REG ADDS typed_var | REG EXCLUSIVELY_DISJOINS typed_var
+                 | FLAGS;
+
+exit_condition: REG pling_OPTION CONTAINS typed_var |
+                REG pling_OPTION REFERENCES typed_var | REG CORRUPTED |
+                REG PLING | FLAGS pling_OPTION;
+
+description: DESCRIPTION | STAR;
+
+ws: ws_item_SEQUENCE_OPTION;
+
+nl: '\n' | '\r';
+
+space: spacechar | nl;
+
+ws_item: space | comment;
+
+comment: '/' '/' commentchar_SEQUENCE_OPTION nl;
+
+TITLE:  t i t l e   ws;
+AUTHOR: a u t h o r ws;
+NEEDS:  n e e d s   ws;
+CONST:  c o n s t   ws;
+TYPE:   t y p e     ws;
+SWI:    s w i       ws;
+
+NUMBER: n u m b e r ws;
+ENTRY:  e n t r y   ws;
+EXIT:   e x i t     ws;
+ABSENT: a b s e n t ws;
+
+FLAGS:  f l a g s   ws;
+
+CONTAINS:             '='     ws;
+REFERENCES:           '-' '&gt;' ws;
+CONSTANT:             '#'     ws;
+DISJOINS:             '|'     ws;
+CONJOINS:             '&amp;'     ws;
+ADDS:                 '+'     ws;
+EXCLUSIVELY_DISJOINS: '^'     ws;
+CORRUPTED:            '?'     ws;
+STAR:                 '*'     ws;
+PLING:                '!'     ws;
+
+INT:    '.' i n t       ws;
+SHORT:  '.' s h o r t   ws;
+BYTE:   '.' b y t e     ws;
+CHAR:   '.' c h a r     ws;
+BITS:   '.' b i t s     ws;
+BOOL:   '.' b o o l     ws;
+DATA:   '.' d a t a     ws;
+
+VOID:   '.' v o i d     ws;
+STRING: '.' s t r i n g ws;
+ASM:    '.' a s m       ws;
+
+STRUCT:   '.' s t r u c t ws;
+UNION:    '.' u n i o n   ws;
+REF:      '.' r e f       ws;
+ELLIPSIS: '.' '.' '.'     ws;
+
+SEMICOLON: ';' ws;
+COMMA:     ',' ws;
+EQUALS:    '=' ws;
+OPEN:      '(' ws;
+CLOSE:     ')' ws;
+COLON:     ':' ws;
+SUB:       '[' ws;
+BUS:       ']' ws;
+
+ID: id_start id_cont_SEQUENCE_OPTION ws;
+
+NUM: num ws;
+
+REG: r digit ws;
+
+DESCRIPTION: '"' wordchar_SEQUENCE word_SEQUENCE_OPTION '"' ws;
+word: space_SEQUENCE wordchar_SEQUENCE;
+wordchar: simplechar | '\\' | '\'';
+
+letter: a | b | c | d | e | f | g | h | i | j | k | l | m | n | o | p |
+        q | r | s | t | u | v | w | x | y | z;
+bit: '0' | '1';
+digit: bit | '2' | '3' | '4' | '5' | '6' | '7' | '8' | '9';
+hexit: digit | a | b | c | d | e | f;
+
+id_start: letter;
+
+id_cont: letter | digit | '_';
+
+num: dec_num | hex_num | bin_num | char_num;
+
+dec_num: digit_SEQUENCE | '-' digit_SEQUENCE;
+
+hex_num: '0' x hexit_SEQUENCE | '&amp;' hexit_SEQUENCE;
+
+bin_num: '0' b bit_SEQUENCE | '%' bit_SEQUENCE;
+
+char_num: '\'' numchars '\'';
+
+numchars: numchar | numchar numchar | numchar numchar numchar |
+          numchar numchar numchar numchar;
+
+numchar: simplechar | compoundchar | spacechar | '"';
+commentchar: simplechar | spacechar | '\\' | '"' | '\'';
+spacechar: ' ' | '\xA0' | '\t';
+simplechar: letter | digit | '!' | '#' | '$' | '%' | '&amp;' | '(' | ')' |
+            '*' | '+' | ',' | '-' | '.' | '/' | ':' | ';' | '&lt;' | '=' |
+            '&gt;' | '?' | '@' | '[' | ']' | '^' | '_' | '`' | ' | '|' |
+            '}' | '~' | '\x8C' | '\x8D' | '\x8E' | '\x8F' | '\x90' | 
+            '\x91' | '\x92' | '\x93' | '\x94' | '\x95' | '\x96' |
+            '\x97' | '\x98' | '\x99' | '\x9C' | '\x9D' | '\xA1' | 
+            '\xA2' | '\xA3' | '\xA4' | '\xA5' | '\xA6' | '\xA7' |
+            '\xA8' | '\xA9' | '\xAA' | '\xAB' | '\xAC' | '\xAD' | 
+            '\xAE' | '\xAF' | '\xB0' | '\xB1' | '\xB9' | '\xB2' |
+            '\xB3' | '\xB4' | '\xB5' | '\xB6' | '\xB7' | '\xB8' | 
+            '\xBA' | '\xBB' | '\xBC' | '\xBD' | '\xBE' | '\xBF' |
+            '\xD7' | '\xF7';
+
+compoundchar: '\\' escapedchar | '\\' x hexit hexit;
+
+escapedchar: '\'' | '"' | '\\' | n | '0';
+</pre>
+
+   <h2><a name = example>An example file</a></h2>
+
+<pre>
+TITLE ColourPicker;
+
+NEEDS OS, Wimp;
+
+CONST
+   //Error numbers
+   Error_ColourPickerUninit     = .Bits: &amp;20D00,
+   Error_ColourPickerBadModel   = .Bits: &amp;20D01,
+   Error_ColourPickerBadHandle  = .Bits: &amp;20D02,
+   Error_ColourPickerBadFlags   = .Bits: &amp;20D03,
+   Error_ColourPickerInUse      = .Bits: &amp;20D04,
+   Error_ColourPickerModelInUse = .Bits: &amp;20D05,
+   Error_ColourPickerBadReason  = .Bits: &amp;20D06;
+
+CONST
+   //Colour model entry numbers
+   ColourPicker_EntryDialogueStarting  = .Int: 0,
+   ColourPicker_EntryDialogueFinishing = .Int: 1,
+   ColourPicker_EntryRedrawArea        = .Int: 2,
+   ColourPicker_EntryUpdateArea        = .Int: 3,
+   ColourPicker_EntryReadValues        = .Int: 4,
+   ColourPicker_EntrySetValues         = .Int: 5,
+   ColourPicker_EntryProcessEvent      = .Int: 6,
+   ColourPicker_EntrySetColour         = .Int: 7,
+   //more here ...
+   ColourPicker_EntryLimit             = .Int: 8;
+
+TYPE
+   ColourPicker_D,
+
+   ColourPicker_Colour =
+   .Struct
+   (  OS_Colour: colour,
+      .Int: size, //of the 'info' array
+      .Int: info ...
+   );
+
+TYPE ColourPicker_DialogueFlags = .Bits;
+CONST
+   //Flag bits for ColourPicker_Dialogue
+   ColourPicker_DialogueOffersTransparent = ColourPicker_DialogueFlags:    %1,
+   ColourPicker_DialogueTransparent       = ColourPicker_DialogueFlags:   %10,
+   ColourPicker_DialogueType              = ColourPicker_DialogueFlags: %1100,
+   ColourPicker_DialogueTypeShift         = .Int: 2,
+   ColourPicker_DialogueTypeNever         = .Bits: 0,
+   ColourPicker_DialogueTypeClick         = .Bits: 1,
+   ColourPicker_DialogueTypeClickDrag     = .Bits: 2,
+   ColourPicker_DialogueIgnoreHelp        = ColourPicker_DialogueFlags: %10000,
+   ColourPicker_DialogueIgnoreKeyPressed  = ColourPicker_DialogueFlags: %100000;
+TYPE
+   ColourPicker_Dialogue =
+   .Struct
+   (  ColourPicker_DialogueFlags: flags,
+      .Ref .String: title,
+      OS_Box: visible,
+      .Int: xscroll,
+      .Int: yscroll,
+      OS_Colour: colour,
+      .Int: size, //of the 'info' array
+      .Int: info ...
+   );
+
+TYPE ColourPicker_ModelFlags = .Bits;
+TYPE
+   ColourPicker_Model =
+   .Struct
+   (  ColourPicker_ModelFlags: flags,
+      .Ref .String: name,
+      .Ref .String: description,
+      .Int: info_size,
+      OS_Coord: pane_size,
+      [ColourPicker_EntryLimit] .Ref .Asm: entries
+   );
+
+CONST
+   //Colour model numbers (for 'size')
+   ColourPicker_ModelSizeRGB  = .Int: 16,
+   ColourPicker_ModelSizeCMYK = .Int: 20,
+   ColourPicker_ModelSizeHSV  = .Int: 16;
+
+CONST
+   //Colour model numbers (for 'info + 0')
+   ColourPicker_ModelRGB  = .Int: 0,
+   ColourPicker_ModelCMYK = .Int: 1,
+   ColourPicker_ModelHSV  = .Int: 2;
+
+CONST
+   //WIMP message numbers
+   Message_ColourPickerColourChoice         = .Bits: &amp;47700,
+   Message_ColourPickerColourChanged        = .Bits: &amp;47701,
+   Message_ColourPickerCloseDialogueRequest = .Bits: &amp;47702,
+   Message_ColourPickerOpenParentRequest    = .Bits: &amp;47703,
+   Message_ColourPickerResetColourRequest   = .Bits: &amp;47704;
+
+CONST
+   //for the various messages
+   ColourPicker_ColourTransparent = ColourPicker_ColourFlags: %1,
+   ColourPicker_ColourDragging    = ColourPicker_ColourFlags: %10;
+
+TYPE
+   //Types for message blocks
+   ColourPicker_MessageColourChoice =
+      .Struct
+      (  ColourPicker_D: d,
+         ColourPicker_ColourFlags: flags,
+         OS_Colour: colour,
+         .Int: size, //of the 'info' array (in bytes !)
+         .Int: info ...
+      ),
+
+   ColourPicker_MessageColourChanged =
+      .Struct
+      (  ColourPicker_D: d,
+         ColourPicker_ColourFlags: flags,
+         OS_Colour: colour,
+         .Int: size, //of the 'info' array
+         .Int: info ...
+      ),
+
+   ColourPicker_MessageOpenParentRequest =
+      .Struct
+      (  ColourPicker_D: d
+      ),
+
+   ColourPicker_MessageCloseDialogueRequest =
+      .Struct
+      (  ColourPicker_D: d
+      ),
+
+   ColourPicker_MessageResetColourRequest =
+      .Struct
+      (  ColourPicker_D: d
+      );
+
+SWI
+   ColourPicker_RegisterModel =
+   (  NUMBER &amp;47700 "For internal use only",
+      ENTRY
+      (  R0 = .Int: model_no,
+         R1 -&gt; ColourPicker_Model: model,
+         R2 = .Ref Void: workspace
+   )  ),
+
+   ColourPicker_DeregisterModel =
+   (  NUMBER &amp;47701 "For internal use only",
+      ENTRY
+      (  R0 = .Int: model_no
+   )  );
+
+TYPE ColourPicker_OpenFlags = .Bits;
+CONST
+   //for ColourPicker_OpenDialogue
+   ColourPicker_OpenTransient = ColourPicker_OpenFlags: %1,
+   ColourPicker_OpenSubMenu   = ColourPicker_OpenFlags: %10, //only relevant if Transient
+   ColourPicker_OpenToolbox   = ColourPicker_OpenFlags: %10; //only relevant if Permanent
+SWI
+   ColourPicker_OpenDialogue =
+   (  NUMBER &amp;47702 "Creates and opens a colour picker dialogue",
+      ENTRY
+      (  R0 = ColourPicker_OpenFlags: flags,
+         R1 -&gt; ColourPicker_Dialogue: dialogue
+      ),
+      EXIT
+      (  R0! = ColourPicker_D: d,
+         R1 = Wimp_W: w
+   )  );
+
+TYPE ColourPicker_CloseFlags = .Bits;
+SWI ColourPicker_CloseDialogue =
+   (  NUMBER &amp;47703 "Closes a colour picker dialogue which is in
+            progress",
+      ENTRY
+      (  R0 = ColourPicker_CloseFlags: flags,
+         R1 = ColourPicker_D: d
+   )  );
+
+TYPE
+   ColourPicker_UpdateFlags = .Bits;
+CONST
+   //for ColourPicker_UpdateDialogue
+   ColourPicker_UpdateOffersTransparent = ColourPicker_UpdateFlags: %1,
+   ColourPicker_UpdateTransparent       = ColourPicker_UpdateFlags: %10,
+   ColourPicker_UpdateType              = ColourPicker_UpdateFlags: %100,
+   ColourPicker_UpdateVisible           = ColourPicker_UpdateFlags: %1000,
+   ColourPicker_UpdateScroll            = ColourPicker_UpdateFlags: %10000,
+   ColourPicker_UpdateTitle             = ColourPicker_UpdateFlags: %100000,
+   ColourPicker_UpdateColour            = ColourPicker_UpdateFlags: %1000000,
+   ColourPicker_UpdateModel             = ColourPicker_UpdateFlags: %10000000,
+   ColourPicker_UpdateIgnoreHelp        = ColourPicker_UpdateFlags: %100000000,
+   ColourPicker_UpdateIgnoreKeyPressed  = ColourPicker_UpdateFlags: %1000000000;
+SWI
+   ColourPicker_UpdateDialogue =
+   (  NUMBER &amp;47704 "Updates some or all of the contents of a colour
+            picker dialogue",
+      ENTRY
+      (  R0 = ColourPicker_UpdateFlags: flags,
+         R1 = ColourPicker_D: d,
+         R2 -&gt; ColourPicker_Dialogue: dialogue
+   )  );
+
+TYPE ColourPicker_ReadFlags = .Bits;
+SWI
+   ColourPicker_ReadDialogue =
+   (  NUMBER &amp;47705 "Reads the current state of a colour picker
+dialogue
+            without changing it",
+      ENTRY
+      (  R0 = ColourPicker_ReadFlags: flags,
+         R1 = ColourPicker_D: d,
+         R2 = .Ref ColourPicker_Dialogue: dialogue
+      ),
+      EXIT
+      (  R1 = Wimp_W: w,
+         R2 = .Int: size
+   )  );
+
+TYPE ColourPicker_SetFlags = .Bits;
+SWI
+   ColourPicker_SetColour =
+   (  NUMBER &amp;47706 "Reserved for future expansion",
+      ENTRY
+      (  R0 = ColourPicker_SetFlags: flags,
+         R1 -&gt; ColourPicker_Colour: colour
+   )  );
+
+TYPE ColourPicker_HelpFlags = .Bits;
+SWI
+   ColourPicker_HelpReply =
+   (  NUMBER &amp;47707 "Makes a colour picker respond to a
+            Message_HelpRequest with its own help text",
+      ENTRY
+      (  R0 = ColourPicker_HelpFlags: flags,
+         R1 -&gt; Wimp_Message: help_request
+   )  );
+
+SWI
+   ColourPicker_ModelSWI = (NUMBER &amp;47708 "For internal use only",
+         ABSENT),
+
+   ColourPickerModelSWI_ColourChanged =
+   (  NUMBER &amp;47708,
+      ENTRY
+      (  R0 # 0 "Informs the front end to send a message to the client,
+               if required",
+         R1 -&gt; ColourPicker_Colour: colour
+   )  ),
+
+   //Cause the Picker to send a message to the application. if required.
+   ColourPickerModelSWI_ColourChangedByDragging =
+   (  NUMBER &amp;47708,
+      ENTRY
+      (  R0 # 1 "Informs the front end to send a dragging message to the
+               client, if required",
+         R1 -&gt; ColourPicker_Colour: colour
+   )  ),
+
+   ColourPickerModelSWI_ClaimEvent =
+   (  NUMBER &amp;47708,
+      ENTRY
+      (  R0 # 2 "Informs the front end that the back end wants an event
+               type",
+         R1 = .Int: event,
+         R2 -&gt; ColourPicker_Colour: colour
+   )  ),
+
+   ColourPickerModelSWI_ReleaseEvent =
+   (  NUMBER &amp;47708,
+      ENTRY
+      (  R0 # 3 "Informs the front end that the back end no longer wants an
+            event type",
+         R1 = .Int: event,
+         R2 -&gt; ColourPicker_Colour: colour
+   )  ),
+
+   ColourPickerModelSWI_ProcessKey =
+   (  NUMBER &amp;47708,
+      ENTRY
+      (  R0 # 4 "Passes an unhandled key press on to the front end",
+         R1 = .Int: c,
+         R2 -&gt; ColourPicker_Colour: colour
+   )  );
+
+SWI
+   Service_ColourPickerLoaded =
+   (  NUMBER 0x30,
+      ENTRY
+      (  R1 # &amp;93 "For internal use only",
+         R2 -&gt; .Asm: loaded_service,
+         R3 = .Ref Void: workspace
+   )  )
+</pre>
+
+   <h2><a name = future>Future possibilities</a></h2>
+
+   <p>Could have an <tt>UPDATE</tt> category, optional between
+<tt>ENTRY</tt> and <tt>EXIT</tt> categories. This would allow 1
+argument to be saved on calls that use a value and then update it.</p>
+
+   <p>Could have more knowledge about buffers and buffer lengths, and
+provide a more consistent interface. (S<small>WI</small>'s that fill
+buffers have two arguments, usually called <tt>buffer</tt> and
+<tt>size</tt>, and may return one of: a pointer to the next free byte
+(called <tt>end</tt>); a number of bytes written (called <tt>used</tt>);
+or a count of buffer bytes <em>not</em> used (called <tt>spare</tt>).
+More consistency could be derived by having a cleverer veneer.</p>
+
+   <p>Alternatively (or additionally), these calls couild always return
+the pointer to the filled-in buffer, so you could nest calls as with C
+string functions.</p>
+
+   <p>It would be good to have support for <tt>enum</tt>'s, so you could
+have cross-references generated in the help files from the type name to
+allowable values of that type. We could also have support for sets of
+enumerated types.</p>
+
+   <p>Some S<small>WI</small>'s have two or more registers that are
+equally likely to be needed as results. Could they be persuaded to
+return a structure-valued result? Under C release 5, it's easy for the
+non-x case, but it would have to work for <em>all</em> cases to be
+useful.</p>
+
+   <p>More info in C help (register <=> arg mappings, other notes).</p>
+
+   <p>Put the text for x and non-x forms into the same help page,
+indexed by both words.</p>
+
+   <p>Modify everything in sight so that when an array is sized by a
+constant, the manifest makes it through to the help text, highlighted so
+you can find its value.</p>
+
+   <p>Use registers that are otherwise unused by the veneer code as an
+alternative to the stack in order to save on memory accesses.</p>
+
+   <h2><a name = revhist>Revision history</a></h2>
+
+<table>
+   <tr>
+      <td>1<sup>st</sup>&nbsp;Jul&nbsp;1992</td>
+      <td>J&nbsp;R&nbsp;C</td>
+      <td>Started.</td>
+   </tr>
+   <tr>
+      <td>5<sup>th</sup>&nbsp;Jul&nbsp;1992</td>
+      <td>J&nbsp;R&nbsp;C</td>
+      <td>Added Handling of <tt>FLAGS</tt> arguments, handling of constant
+arguments, handling of <small>SWI</small>'s that corrupt random
+registers.</td>
+   </tr>
+   <tr>
+      <td>6<sup>th</sup>&nbsp;Jul&nbsp;1992</td>
+      <td>J&nbsp;R&nbsp;C</td>
+      <td>Changed the way reason codes are handled, implemented them.</td>
+   </tr>
+   <tr>
+      <td>7<sup>th</sup>&nbsp;Jul&nbsp;1992</td>
+      <td>J&nbsp;R&nbsp;C</td>
+      <td>Save <tt>LR</tt> over calls, in case we are in <small>SVC</small>
+mode.</td>
+   </tr>
+   <tr>
+      <td>10<sup>th</sup>&nbsp;Jul&nbsp;1992</td>
+      <td>J&nbsp;R&nbsp;C</td>
+      <td>Added type conversion notes.</td>
+   </tr>
+   <tr>
+      <td></td>
+      <td>J&nbsp;R&nbsp;C</td>
+      <td>Handling of <tt>BLOCK</tt> arguments. (If there is no <tt>EXIT</tt>
+clause, and the last <tt>ENTRY</tt> argument is of the form
+<tt>R</tt><i>x</i>&nbsp;<tt>->&nbsp;.Struct&nbsp;...</tt> then the constructed
+interface assumes that the structure is passed by value, i&nbsp;e, its fields
+are passed in order. See <tt>wimp_set_icon_state()</tt> for an instance of
+this.)</td>
+   </tr>
+   <tr>
+      <td>24<sup>th</sup>&nbsp;Oct&nbsp;1994</td>
+      <td>J&nbsp;R&nbsp;C</td>
+      <td>Updated for release to those that ask.</td>
+   </tr>
+   <tr>
+      <td>20<sup>th</sup>&nbsp;Jul&nbsp;1997</td>
+      <td>J&nbsp;R&nbsp;C</td>
+      <td>Updated for general release on <tt>http://www.doves.demon.co.uk</tt>.</td>
+   </tr>
+   <tr>
+      <td>26<sup>th</sup>&nbsp;Mar&nbsp;1999</td>
+      <td>T&nbsp;V</td>
+      <td>Amended definition of conversion types for String and Data for Free OSLib 5.4.</td>
+   </tr>
+   <tr>
+      <td>4<sup>th</sup>&nbsp;Mar&nbsp;2000</td>
+      <td>T&nbsp;J&nbsp;H</td>
+      <td>Added base types for structures to the grammar definition.</td>
+   </tr>
+</table>
+
+<!--
+   Notes. Remind me never to use HTML for mathematics again ...
+   In proportional text, extra spaces round '+' '-' '&times;' '&divide;' and
+before '(' in function calls seem superfluous, but spaces around relations
+'=' '&gt;' '&lt;' and ellipses '...' look good.
+
+-->
+
+</body>
+</html>

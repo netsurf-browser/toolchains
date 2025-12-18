@@ -1,0 +1,154 @@
+TITLE TEST;
+
+AUTHOR "Test";
+
+SWI
+   // *** Test 1 ***
+   // This case is ment as a base to derive one or more SWI calls from
+   // it (all sharing the same SWI code).  Stubs for this call won't be
+   // emited as it is, without specialisation, useless.
+   // For testing purposes, we don't specify further specialisations.
+   TEST_AbstractCallWithReasonCodesAbsent =
+   (  NUMBER 0xAAA01 "This SWI has multiple reason codes.",
+      ABSENT
+   ),
+
+   // *** Test 2 ***
+   TEST_AbstractCallWithReasonCodesAbsentPlusSpecialisations1 =
+   (  NUMBER 0xAAA02 "This SWI has multiple reason codes.",
+      ABSENT
+   ),
+
+   // Note: no description for NUMBER anymore but one for the parameters
+   // doing the specialisation.
+   TEST_AbstractCallWithReasonCodesAbsentPlusSpecialisations1_Reason0 =
+   (  NUMBER 0xAAA02,
+      ENTRY
+      (  R0 # 0 "Reason code 0 specialisation 1" )
+   ),
+
+   // Note: no description for NUMBER anymore but one for the parameters
+   // doing the specialisation.
+   TEST_AbstractCallWithReasonCodesAbsentPlusSpecialisations1_Reason1 =
+   (  NUMBER 0xAAA02,
+      ENTRY
+      (  R0 # 1 "Reason code 1 specialisation 1" )
+   ),
+
+   // Note: no description for NUMBER anymore and not even for the
+   // reason code so description will be generated automatically
+   // together with a warning.  Note that the warning has to be taken
+   // seriously as this case is not seen as a specialisation, hence
+   // the output is wrong.
+   TEST_AbstractCallWithReasonCodesAbsentPlusSpecialisations1_Reason2 =
+   (  NUMBER 0xAAA02,
+      ENTRY
+      (  R0 # 2 )
+   ),
+
+   // Note: here we have two descriptions and it is unspecified which
+   // one will be used for output.  Hence, we warn about this.
+   TEST_AbstractCallWithReasonCodesAbsentPlusSpecialisations1_Reason3 =
+   (  NUMBER 0xAAA02 "This general SWI description might or might not be overruled by the specialised description below.",
+      ENTRY
+      (  R0 # 3 "Reason code 3 specialisation 1" )
+   ),
+
+   // *** Test 3 ***
+   // Suppose the Absent is in another .swi file but we do have the
+   // specialisations here.
+
+   // Note: no description for NUMBER anymore but one for the parameters
+   // doing the specialisation.
+   TEST_AbstractCallWithReasonCodesAbsentPlusSpecialisations2_Reason0 =
+   (  NUMBER 0xAAA03,
+      ENTRY
+      (  R0 # 0 "Reason code 0 specialisation 2" )
+   ),
+
+   // Note: no description for NUMBER anymore but one for the parameters
+   // doing the specialisation.
+   TEST_AbstractCallWithReasonCodesAbsentPlusSpecialisations2_Reason1 =
+   (  NUMBER 0xAAA03,
+      ENTRY
+      (  R0 # 1 "Reason code 1 specialisation 2" )
+   ),
+
+   // *** Test 4 ***
+   TEST_WithoutDescription =
+   (  NUMBER 0xAAA04,
+      ENTRY
+      (  R0 = .Int: in
+   )  ),
+
+   // *** Test 5 ***
+   TEST_WithDescription =
+   (  NUMBER 0xAAA05 "This SWI has a description",
+      ENTRY
+      (  R0 = .Int: in
+   )  ),
+
+   // *** Test 6 ***
+   TEST_WithStar =
+   (  NUMBER 0xAAA06 *,
+      ENTRY
+      (  R0 = .Int: in
+   )  ),
+
+   // *** Test 7 ***
+   // With ABSENT, you won't get any output.
+   TEST_WithStarAndAbsent =
+   (  NUMBER 0xAAA07 *,
+      ABSENT
+   ),
+
+   // *** Test 8 ***
+   // We give the SWI number a star, so that makes sure this entry is not
+   // considered as a reason code SWI.  There is no real description here
+   // either but as we have the star, we should not get a warning.
+   TEST_ShouldNotGiveWarning1 =
+   (  NUMBER 0xAAA08 *,
+      ENTRY
+      (  R0 # 8
+   )  ),
+
+   // *** Test 9 ***
+   // Here we have a starred constant register so this will result in a
+   // reason code.  There is no real description but as we have a star
+   // here, we shouldn't get any warning about a missing description.
+   TEST_ShouldNotGiveWarning2 =
+   (  NUMBER 0xAAA09,
+      ENTRY
+      (  R0 # 9 *
+   )  ),
+
+   // *** Test 10 ***
+   // An odd case where we have two star descriptions.  Currently we don't
+   // warn on this and consider this as a reason code.
+   TEST_ShouldNotGiveWarning3 =
+   (  NUMBER 0xAAA0A *,
+      ENTRY
+      (  R0 # 10 *
+   )  ),
+
+   // *** Test 11 ***
+   // Another odd case: here we have a SWI number definition and a constant
+   // register with a star.  Results in a reason code.
+   TEST_ShouldNotGiveWarning4 =
+   (  NUMBER 0xAAA0B "Goes for reason code 11",
+      ENTRY
+      (  R0 # 11 *
+   )  ),
+
+   // *** Test 12 ***
+   // We have two constant registers here and no SWI name description.
+   // So it is a reason code SWI and the first mentioned constant register
+   // is defined to be the reason code.  In this case here, value 12 and
+   // not 0.
+   TEST_ShouldBeReasonCode12 =
+   (  NUMBER 0xAAA0C,
+      ENTRY
+      (  R2 # 12 *,
+         R0 #  0
+   )  )
+

@@ -1,0 +1,148 @@
+OSLib
+=====
+
+Introduction
+------------
+
+This is the OSLib source release. It contains everything you need to build
+and modify OSLib, its build tools, and OSLibSupport. It is available by SVN
+from http://ro-oslib.sourceforge.net.
+
+Building
+--------
+
+Currently from OSLib 7 onwards, the only supported build method is via
+cross-compilation using GCCSDK http://gccsdk.riscos.info/.  Also from
+OSLib 7 onwards we build an AOF OSLib version using GCCSDK 3.4.6 and the ELF
+OSLib version using GCCSDK 4 (both conforming APCS-32).
+
+The deliverables for each of the AOF and ELF builds are:
+
+- OSLib700-unix.zip: zip archive containing the OSLib32 library and the C &
+  assembler headers in Unix filename format (i.e. header.h seen on Unix, or,
+  header/h seen on RISC OS).
+  This should be used by the OSLib users cross-compiling on a non-RISC OS
+  host. Users who build OSLib themselves via cross-compiling, it is easier
+  to install this library and its headers directly in the GCCSDK environment
+  using the 'install' Makefile target instead of unzipping the contents of
+  this zip file.
+
+- OSLib700.zip: zip archive containing the OSLib library and the C &
+  assembler headers in RISC OS filename format (i.e. h.header on RISC OS).
+  This should be used by the OSLib users compiling on RISC OS.
+
+- OSLibSupport700-unix.zip: zip archive containing the OSLibSupport32 
+  library and its header files for cross-compile usage.
+
+- OSLibSupport700.zip: zip archive containing the OSLibSupport32 library
+  and its header files for use under RISC OS.
+
+- OSLibStrongHelp700.zip: zip archive containing StrongHelp file of this
+  OSLib release.
+
+- OSLibVapi700-unix.zip: zip archive containing OSLib bindings for the Vala
+  programming language for cross-compile usage.
+  This should be used by the OSLib users cross-compiling on a non-RISC OS
+  host. Users who build OSLib themselves via cross-compiling, it is easier
+  to install this library and its headers directly in the GCCSDK environment
+  using the 'install-vapis' Makefile target instead of unzipping the contents
+  of this zip file.
+
+- OSLibVapi700.zip:  zip archive containing OSLib bindings for the Vala
+  programming language for use under RISC OS.
+
+- OSLibExamples700.zip: zip archive containg the PRM example files 
+
+- OSLib700-src.zip: all SVN sources used to make this release happen.
+
+[ Note: pre-OSLib 7 releases also had a 'deep' OSLib deliverable for RISC OS
+  users who were using OSLib on a filing system supporting only a limited
+  number of files per directory like some of the old FileCore disc formats.
+  As this is of a very limited interest today, this is no longer supported. ]
+
+Build prerequisites
+-------------------
+
+At least GCCSDK GCC 3.4.6 Release 2 (http://gccsdk.riscos.info/) for AOF builds,
+and GCCSDK GCC 4.1.2 Release 2 for ELF builds. You need also to have setup the
+environment variables GCCSDK_INSTALL_CROSSBIN and GCCSDK_INSTAL_ENV.  Cfr. the
+GCCSDK installation notes.
+
+[ Note: the GCCSDK GCC 3.4.6 AOF compiler is $GCCSDK_INSTALL_CROSSBIN/gcc
+  while the GCCSDK GCC 4 ELF compiler is
+  $GCCSDK_INSTALL_CROSSBIN/arm-unknown-riscos-gcc.  It is therefore
+  possible to have both GCCSDK 3.4 and GCCSDK 4 installed using the
+  same $GCCSDK_INSTALL_CROSSBIN value.  Mind that you can not share
+  the same $GCCSDK_INSTALL_ENV value as this would result in overwriting
+  AOF or ELF header and libraries files during cross-compilation. ]
+
+Supported Makefile targets
+--------------------------
+
+For the GCCSDK cross-compiler user:
+
+  - install-aof/install-elf: builds & installs the AOF respectively
+    the ELF OSLib version in the GCCSDK environment.  The makefile
+    variable ELFOBJECTYPE can be set (see below).
+  - install: defaults to install-elf target.
+  - install-vapis: install OSLib bindingss for the Vala programming
+    language.
+
+For the OSLib developer using the GCCSDK cross-compiler:
+
+  - all: builds the ELF OSLib version and the StrongHelp OSLib file.
+    The build results are written in Source/Build subdirectory.
+  - oslib-elf: builds the ELF OSLib version.  An additional makefile
+    variable ELFOBJECTYPE define can be set as:
+      - "SOFTFPU" : for softfloat targets (e.g. UnixLib runtime usage).
+      - "HARDFPU" : for FPA hardfloat targets (e.g. SharedCLibrary
+        usage).
+      - "MODULE" : for FPA hardfloat targets used for building modules
+        based on the SharedCLibrary.
+  - oslib-aof: builds the AOF OSLib version.
+  - cstrong: builds the StrongHelp OSLib file.
+  - vapis: builds the OSLib bindings for the Vala programming language.
+  - tools: builds the host OSLib tools which are going to be used during
+    the main OSLib building.
+
+For the OSLib release manager:
+
+  Use the 'build-n-release' script to build all zip files (including
+  doing a minimal sanity check).  This is using the *-release Makefile
+  targets.
+
+For all:
+
+  - clean: to remove all build generated files.
+
+Tools
+-----
+
+The Tools directory contains further subdirectories for each of the
+specialised tools used to build OSLib. Of these, DefMod (now at version 2) is
+the most important, translating the SWI definitions into  assembler sources.
+Bison is required to interpret the DefMod language definition file, and is
+used to build DefMod.
+
+ReduceAOF (not used for ELF builds) removes redundant chunk headers form the
+AOF files before placing them in the library, thus minimising the size of the
+latter.
+
+IndexHelp and BindHelp are used to process the Help output from DefMod to
+create the StrongHelp manuals.
+
+Rm is a small file deletion utility, with the ability to process multiple
+arguments, and StripDepends is used to clean a Make file of all the
+(installation-specific) dynamic dependency information.  Rm and StripDepends
+are currently not used (nor needed) in the cross-compilation build of OSLib.
+
+Since some of these tools are themselves dependant upon OSLib, the build
+order is critical.
+
+Credits
+-------
+
+Thanks are due to Druck, for supplying the initial "portable OSLib", upon
+which, with enhancements, the tools are built via cross-compilation.
+
+-EOF-

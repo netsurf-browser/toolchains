@@ -1,0 +1,51 @@
+#	Index: OSLib/!OsLib/Tools/bison/AMUmakefile	20040304
+#
+#------------------------------------------------------------------------
+
+ALL   	 = ${TARGET} ${TEMPLATES}
+TARGET	 = bison
+VPATH 	 =
+DEFINES  = HAVE_CONFIG_H RISC_OS
+INCLUDES = C:
+LIBS  	 = C:o.Stubs
+
+MODULES= \
+allocate \
+closure \
+conflicts \
+derives \
+files \
+getargs \
+getopt \
+getopt1 \
+gram \
+lalr \
+lex \
+lr0 \
+main \
+nullable \
+output \
+print \
+reader \
+reduce \
+symtab \
+tmpfile \
+warshall
+
+TEMPLATES= \
+<choices$write>.bison.simple \
+<choices$write>.bison.hairy
+
+.include ${MAKEFILEDIR}.^.AMUmakefile/source
+
+#------------------------------------------------------------------------
+<choices$write>.bison.simple: simple
+      	    ${MD} <choices$write>.bison
+      	    ${CP} simple <choices$write>.bison.simple ${COPYFLAGS}
+
+<choices$write>.bison.hairy: hairy
+      	    ${MD} <choices$write>.bison
+      	    ${CP} hairy <choices$write>.bison.hairy ${COPYFLAGS}
+
+#------------------------------------------------------------------------
+# Dynamic dependencies:

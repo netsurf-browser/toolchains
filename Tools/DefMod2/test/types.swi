@@ -1,0 +1,41 @@
+TITLE TYPE_TEST;
+
+AUTHOR "Types Test";
+
+SWI
+   TEST_NoTypes =
+   (  NUMBER 0xAAA00 "No arguments"
+   ),
+
+   TEST_BasicTypes =
+   (  NUMBER 0xAAA00 "Basic types test",
+      ENTRY
+      (  R0 = .Int: an_int,
+         R1 = .Short: a_short,
+         R2 = .Byte: a_byte,
+         R3 = .Char: a_char,
+         R4 = .Bits: a_bits,
+         R5 = .Bool: a_bool,
+         R6 = .Asm: an_asm
+   )  ),
+
+   TEST_RefTypes1 =
+   (  NUMBER 0xAAA01 "Reference to basic types - part 1",
+      ENTRY
+      (  R0 = .Ref .Int: ref_an_int,
+         R1 = .Ref .Short: ref_a_short,
+         R2 = .Ref .Byte: ref_a_byte,
+         R3 = .Ref .Char: ref_a_char,
+         R4 = .Ref .Bits: ref_a_bits,
+         R5 = .Ref .Bool: ref_a_bool,
+         R6 = .Ref .Asm: ref_an_asm
+   )  ),
+
+   TEST_RefTypes2 =
+   (  NUMBER 0xAAA02 "Reference to basic types - part 2",
+      ENTRY
+      (  R0 = .Ref Void: ref_a_void,
+         R1 = .Ref .String: ref_a_string,
+         R2 = .Ref .Data: ref_a_data
+   )  )
+

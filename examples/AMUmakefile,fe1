@@ -1,0 +1,109 @@
+# Makefile for OSLib
+
+# ***********************************
+# ***    C h a n g e   L i s t    ***
+# ***********************************
+# Date          Name         Description
+# ----          ----         -----------
+# 16-Aug-94     JC           Created.
+# 05-Sep-94     AMcC         Added Generic RISC OS Build rules
+# 27th Feb 1995 JC           Added Macros headers
+# 21st Jun 1995 JRC          Split into 4 pieces
+# 11th Apr 2001 TV   	     Amended Include path
+#	       	     	     removed dynamic dependencies; they don't help
+# 07th Jul 2004 TV		Modifications in line with current working
+
+LIBDIR 	=
+INCLUDE = -IC:,OSLib:
+
+#
+# Generic options:
+#
+MKDIR   = cdir
+WIPE    = wipe
+WFLAGS  = ~c~v
+
+#
+# Program specific options:
+#
+COMPONENT = OSLib
+
+EXAMPLES = \
+o.Ex0 \
+o.Ex1 \
+o.Ex2 \
+o.HelloWorld \
+o.p1-046 \
+o.p1-053 \
+o.p1-067 \
+o.p1-068 \
+o.p1-108 \
+o.p1-109 \
+o.p1-110 \
+o.p1-219 \
+o.p1-332 \
+o.p1-334 \
+o.p1-467 \
+o.p1-606 \
+o.p1-754 \
+o.p1-833 \
+o.p1-834 \
+o.p2-042 \
+o.p2-083 \
+o.p2-099 \
+o.p2-383 \
+o.p2-413 \
+o.p2-491 \
+o.p2-492 \
+o.p2-493 \
+o.p2-524 \
+o.p2-526 \
+o.p2-589 \
+o.p2-615 \
+o.p2-616 \
+o.p2-617 \
+o.p2-618 \
+o.p2-619 \
+o.p2-625 \
+o.p2-629 \
+o.p2-632 \
+o.p2-634 \
+o.p2-636 \
+o.p2-638 \
+o.p2-691 \
+o.p2-735 \
+o.p2-740 \
+o.p2-743 \
+o.p3-018 \
+o.p3-023 \
+o.p3-024 \
+o.p3-025 \
+o.p3-063 \
+o.p3-070 \
+o.p3-072 \
+o.p3-073 \
+o.p3-162 \
+o.p3-185 \
+o.p3-198 \
+o.p3-231 \
+o.p3-246 \
+o.p3-411 \
+o.p3-421 \
+o.p3-433 \
+o.p3-469 \
+o.p3-549 \
+o.p3-659 \
+o.p3-743
+
+all:		${EXAMPLES}
+
+examples: 	${EXAMPLES}
+
+clean:		;${WIPE} o.* ${WFLAGS}
+
+.SUFFIXES: .c .o
+.c.o:;     cc -c -throwback ${INCLUDE} -wp -fc -D__swi -o $@ $<
+#           Create $@ #Truncate file since we don't actually need it
+
+#------------------------------------------------------------------------
+# Dynamic dependencies:

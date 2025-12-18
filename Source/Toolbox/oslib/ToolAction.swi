@@ -1,0 +1,196 @@
+TITLE ToolAction;
+//AUTHOR "Jonathan Coxhead, jonathan@doves.demon.co.uk, 8 Mar 1999";
+AUTHOR "Tony van der Hoff, tony@mk-net.demon.co.uk, 14 May 2001; OSLib V6.22";
+
+NEEDS OS;
+NEEDS Toolbox;
+NEEDS Gadget;
+
+CONST
+   Class_ToolAction = Toolbox_Class: 0x4014;
+
+TYPE
+   ToolAction_Gadget = .Struct
+   (
+      Toolbox_StringReference: off_text,
+      .Int: off_text_limit,
+      Toolbox_StringReference: on_text,
+      .Int: on_text_limit,
+      .Bits: click_action,
+      Toolbox_StringReference: select_show,
+      .Bits: adjust_action,
+      Toolbox_StringReference: adjust_show,
+      Toolbox_StringReference: fade_text,
+      .Int: fade_text_limit
+   ),
+
+   ToolAction_Object = .Struct: Gadget_Object
+   (
+      Toolbox_StringReference: off_text,
+      .Int: off_text_limit,
+      Toolbox_StringReference: on_text,
+      .Int: on_text_limit,
+      .Bits: click_action,
+      Toolbox_StringReference: select_show,
+      .Bits: adjust_action,
+      Toolbox_StringReference: adjust_show,
+      Toolbox_StringReference: fade_text,
+      .Int: fade_text_limit
+   );
+
+CONST
+   Error_ToolActionOutOfMemory      = .Bits: 0x80E920,
+   Error_ToolActionCantCreateIcon   = .Bits: 0x80E921,
+   Error_ToolActionCantCreateObject = .Bits: 0x80E922;
+
+CONST
+   ToolAction_GenerateSelect        = Gadget_Flags: 0x001,
+   ToolAction_IsText                = Gadget_Flags: 0x002,
+   ToolAction_On                    = Gadget_Flags: 0x004,
+   ToolAction_AutoToggle            = Gadget_Flags: 0x008,
+   ToolAction_NoPressedSprite       = Gadget_Flags: 0x010,
+   ToolAction_AutoRepeat            = Gadget_Flags: 0x020,
+   ToolAction_ShowTransient         = Gadget_Flags: 0x040,
+   ToolAction_ShowAsPopUp           = Gadget_Flags: 0x080,
+   ToolAction_HasFadeSprite         = Gadget_Flags: 0x100;
+
+CONST
+   Action_ToolActionSelected        = .Bits: 0x140140;
+
+CONST
+   ToolAction_SelectedAdjust        = .Bits: 0x01,
+   ToolAction_SelectedSelect        = .Bits: 0x04;
+
+TYPE
+   ToolAction_IdentFlags = .Bits;
+
+CONST
+   ToolAction_IdentMask          = ToolAction_IdentFlags: 0x0F,
+   ToolAction_IdentOff           = ToolAction_IdentFlags: 0x00,
+   ToolAction_IdentOn            = ToolAction_IdentFlags: 0x01,
+   ToolAction_IdentFade          = ToolAction_IdentFlags: 0x02;
+
+
+SWI
+   ToolAction_ToolAction = (NUMBER 0x140140*, ABSENT);
+
+SWI
+   // Extends SWI Toolbox_ObjectMiscOp:
+   ToolAction_SetIdent =
+   (  NUMBER 0x44EC6,
+      ENTRY
+      (
+         R0 = ToolAction_IdentFlags: flags,
+         R1 = Toolbox_O: window,
+         R2 # 0x140140*,
+         R3 = Toolbox_C: toolaction
+      )
+   );
+
+SWI
+   ToolAction_GetIdent =
+   (  NUMBER 0x44EC6,
+      ENTRY
+      (
+         R0 = .Bits: flags,
+         R1 = Toolbox_O: window,
+         R2 # 0x140141*,
+         R3 = Toolbox_C: toolaction
+      ),
+      EXIT
+      (
+         R0! = ToolAction_IdentFlags : ident
+      )
+   );
+
+SWI
+   ToolAction_SetAction =
+   (  NUMBER 0x44EC6,
+      ENTRY
+      (
+         R0 = .Bits: flags,
+         R1 = Toolbox_O: window,
+         R2 # 0x140142*,
+         R3 = Toolbox_C: toolaction,
+         R4 = .Bits: select_action,
+         R5 = .Bits: adjust_action
+      )
+   );
+
+SWI
+   ToolAction_GetAction =
+   (  NUMBER 0x44EC6,
+      ENTRY
+      (
+         R0 = .Bits: flags,
+         R1 = Toolbox_O: window,
+         R2 # 0x140143*,
+         R3 = Toolbox_C: toolaction
+      ),
+      EXIT
+      (
+         R0 = .Bits: select_action,
+         R1 = .Bits: adjust_action
+      )
+   );
+
+SWI
+   ToolAction_SetClickShow =
+   (  NUMBER 0x44EC6,
+      ENTRY
+      (
+         R0 = .Bits: flags,
+         R1 = Toolbox_O: window,
+         R2 # 0x140144*,
+         R3 = Toolbox_C: toolaction,
+         R4 = Toolbox_O: select_show_object,
+         r5 = Toolbox_O: adjust_show_object
+      )
+   );
+
+SWI
+   ToolAction_GetClickShow =
+   (  NUMBER 0x44EC6,
+      ENTRY
+      (
+         R0 = .Bits: flags,
+         R1 = Toolbox_O: window,
+         R2 # 0x140145*,
+         R3 = Toolbox_C: toolaction
+      ),
+      EXIT
+      (
+         R0 = Toolbox_O: select_show_object,
+         R1 = Toolbox_O: adjust_show_object
+      )
+   );
+
+SWI
+   ToolAction_SetState =
+   (  NUMBER 0x44EC6,
+      ENTRY
+      (
+         R0 = .Bits: flags,
+         R1 = Toolbox_O: window,
+         R2 # 0x140146*,
+         R3 = Toolbox_C: toolaction,
+         R4 = .Bool: on
+      )
+   );
+
+SWI
+   ToolAction_GetState =
+   (  NUMBER 0x44EC6,
+      ENTRY
+      (
+         R0 = .Bits: flags,
+         R1 = Toolbox_O: window,
+         R2 # 0x140147*,
+         R3 = Toolbox_C: toolaction
+      ),
+      EXIT
+      (
+         R0! = .Bool: on
+      )
+   )
+

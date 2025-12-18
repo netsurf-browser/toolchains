@@ -1,0 +1,69 @@
+TITLE PCCardFS;
+
+NEEDS OS, FileCore;
+
+CONST
+   Error_PCCardFSNought = .Bits: 0x808B00;
+
+CONST
+   Error_PCCardFSFilerNought = .Bits: 0x808C00;
+
+SWI PCCardFS_DiscOp = (NUMBER 0x47540 "Performs various operations on a
+      P C card -
+      see individual reason codes", ABSENT);
+SWI PCCardFSDiscOp_Verify = (NUMBER 0x47540,
+      ENTRY (R1 # 0 "Verifies a P C card", R1 | .Bits: flags,
+            R2 = FileCore_DiscAddress: pc_card_addr, R4 = .Int: size),
+      EXIT (R2 = FileCore_DiscAddress: next_pc_card_addr,
+            R4! = .Int: unverified));
+SWI PCCardFSDiscOp_ReadSectors = (NUMBER 0x47540,
+      ENTRY (R1 # 1 "Reads sectors from a P C card", R1 | .Bits: flags,
+            R2 = FileCore_DiscAddress: pc_card_addr, R3 = .Ref .Data: data,
+            R4 = .Int: size),
+       EXIT (R2 = FileCore_DiscAddress: next_pc_card_addr,
+             R3 = .Ref .Data: next_data,
+             R4! = .Int: unread));
+SWI PCCardFSDiscOp_WriteSectors = (NUMBER 0x47540,
+      ENTRY (R1 # 2 "Writes sectors to a P C card", R1 | .Bits: flags,
+            R2 = FileCore_DiscAddress: pc_card_addr, R3 -> .Data: data,
+            R4 = .Int: size),
+      EXIT (R2 = FileCore_DiscAddress: next_pc_card_addr,
+            R3 -> .Data: next_data,
+            R4! = .Int: unwritten));
+SWI PCCardFSDiscOp_Seek = (NUMBER 0x47540,
+      ENTRY (R1 # 5 "Seeks to a P C card location", R1 | .Bits: flags,
+            R2 = FileCore_DiscAddress: pc_card_addr));
+SWI PCCardFSDiscOp_Restore = (NUMBER 0x47540,
+      ENTRY (R1 # 6 "Does a restore operation for a P C card", R1 | .Bits: flags,
+            R2 = FileCore_DiscAddress: pc_card_addr));
+
+SWI PCCardFS_Drives = (NUMBER 0x47542 "Returns information on PCCardFS' P C cards",
+      EXIT (R0 = .Int: default_pc_card,
+      R1 = .Int: reserved,
+      R2 = .Int: pc_card_count));
+
+SWI PCCardFS_FreeSpace = (NUMBER 0x47543 "Returns information on a P C card's
+      free space", ENTRY (R0 -> .String: pc_card_name),
+      EXIT (R0! = .Int: free, R1 = .Int: max));
+
+SWI PCCardFS_DescribeDisc = (NUMBER 0x47545 "Returns a disc record
+      describing a P C card's shape and format",
+      ENTRY (R0 -> .String: pc_card_name,
+      R1 = .Ref FileCore_Disc: pc_card));
+
+SWI PCCardFS_MiscOp = (NUMBER 0x4754C "Performs miscellaneous functions for
+      accessing P C cards -
+      see individual reason codes", ABSENT);
+SWI PCCardFSMiscOp_Mount = (NUMBER 0x4754C, ENTRY (R0 # 0 "Mounts a P C card,
+      reading in the data asked for",
+      R1 = .Int: slot_no,
+      R2 = FileCore_DiscAddress: pc_card_addr,
+      R3 = .Ref .Data: buffer,
+      R4 = .Int: size,
+      R5 = .Ref FileCore_Disc: pc_card));
+SWI PCCardFSMiscOp_PollChanged = (NUMBER 0x4754C, ENTRY (R0 # 1 "Polls the
+      sequence number for a P C card",
+      R1 = .Int: slot_no,
+      R2 = .Int: sequence_no),
+      EXIT (R2 = .Int: sequence_no_out,
+      R3 = .Bits: result))

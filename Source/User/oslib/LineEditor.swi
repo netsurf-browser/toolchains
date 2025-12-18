@@ -1,0 +1,237 @@
+TITLE LineEditor;
+AUTHOR "Christian Ludlam, <chris@recoil.org> 13-Feb-02 13:26";
+
+NEEDS Wimp;
+
+//LineEditor chunk number: &83880
+
+TYPE LineEditor_H;
+
+
+TYPE LineEditor_Length = .Int;
+CONST LineEditor_Unknown = LineEditor_Length: 0xfffffffe;
+CONST LineEditor_NoEdit  = LineEditor_Length: 0xffffffff;
+
+
+TYPE LineEditor_Pos = .Int;
+CONST LineEditor_End            = LineEditor_Pos: 0x7FFFFFFF;
+CONST LineEditor_PreviousWrap   = LineEditor_Pos: 0x80000000;
+CONST LineEditor_PreviousNoWrap = LineEditor_Pos: 0x80000001;
+CONST LineEditor_NextNoWrap     = LineEditor_Pos: 0x80000002;
+CONST LineEditor_NextWrap       = LineEditor_Pos: 0x80000003;
+
+
+TYPE LineEditor_Cursors = .Int;
+CONST LineEditor_Block          = LineEditorCursors: %0;
+CONST LineEditor_Underline      = LineEditorCursors: %1;
+CONST LineEditor_Steady         = LineEditorCursors: %00;
+CONST LineEditor_Flashing       = LineEditorCursors: %10;
+
+CONST LineEditor_NormalShift    = .Int: 0; // shift
+CONST LineEditor_OvertypeShift  = .Int: 8; // shift
+
+TYPE LineEditorSetOptions_Flags = .Bits;
+CONST LineEditor_LocalTaskwindows    = LineEditorSetOptions_Flags: %1;
+CONST LineEditor_LocalAppendDots     = LineEditorSetOptions_Flags: %10;
+CONST LineEditor_LocalOvertype       = LineEditorSetOptions_Flags: %100;
+CONST LineEditor_LocalKeepDuplicates = LineEditorSetOptions_Flags: %1000;
+CONST LineEditor_LocalNoTilde        = LineEditorSetOptions_Flags: %10000;
+CONST LineEditor_LocalNoEvents       = LineEditorSetOptions_Flags: %100000;
+CONST LineEditor_LocalNoCircumflex   = LineEditorSetOptions_Flags: %1000000;
+
+
+TYPE LineEditor_Pos = .Int;
+CONST LineEditor_End            = LineEditor_Pos: 0x7FFFFFFF;
+CONST LineEditor_PreviousWrap   = LineEditor_Pos: 0x80000000;
+CONST LineEditor_PreviousNoWrap = LineEditor_Pos: 0x80000001;
+CONST LineEditor_NextWrap       = LineEditor_Pos: 0x80000002;
+CONST LineEditor_NextNoWrap     = LineEditor_Pos: 0x80000003;
+
+
+SWI LineEditor_SetOptions =
+   (  NUMBER 0x83880 "Sets the options used by LineEditoritor",
+      ENTRY
+      ( R0  =  .Int: size,
+        R1  =  LineEditorSetOptions_Flags: flags,
+        R2  =  .Int: min,
+        R3  =  .Int: max,
+        R4  =  LineEditor_Cursors: cursors
+      )
+   );
+   
+
+SWI LineEditor_GetOptions =
+   (  NUMBER 0x83881 "Reads the options used by LineEditoritor",
+      EXIT
+      ( R0  =  .Int: size,
+        R1  =  LineEditorSetOptions_Flags: flags,
+        R2  =  .Int: min,
+        R3  =  .Int: max,
+        R4  =  LineEditor_Cursors: cursors
+      )
+   );
+
+
+SWI LineEditor_CreateBuffer =
+   (  NUMBER 0x83882 "Creates a new private history buffer",
+      ENTRY
+      ( R0  =  .Int: size,
+        R1  =  Wimp_T: task,
+        R2  =  .Bits: expansion
+      ),
+      EXIT
+      ( R0! =  LineEditor_H: handle
+      )
+   );
+     
+
+SWI LineEditor_DeleteBuffer =
+   (  NUMBER 0x83883 "Releases a private history buffer",
+      ENTRY
+      ( R0  = LineEditor_H: handle
+      )
+   );
+     
+     
+SWI LineEditor_SetPos =
+   (  NUMBER 0x83884 "Sets the position in the private history buffer",
+      ENTRY
+      ( R0  = LineEditor_H: handle,
+        R1  = LineEditor_Pos: position
+      )
+   );
+   
+
+SWI LineEditor_GetPos =
+   (  NUMBER 0x83885 "Reads the current position in the history buffer",
+      ENTRY
+      ( R0  =  LineEditor_H: handle
+      ),
+      EXIT
+      ( R0! =  LineEditor_Pos: position
+      )
+   );
+   
+
+SWI LineEditor_GetLine =
+   (  NUMBER 0x83886 "Reads a line from the history buffer",
+      ENTRY
+      ( R0  =  LineEditor_H: handle,
+        R1  =  .Ref .Char: buffer,
+        R2  =  .Int: length
+      ),
+      EXIT
+      ( R2! =  .Int: used
+      )
+   );
+   
+
+SWI LineEditor_AppendLine =
+   (  NUMBER 0x83887 "Adds a line to the history buffer",
+      ENTRY
+      ( R0  =  LineEditor_H: handle,
+        R1  -> .Char: line
+      )
+   );
+   
+
+SWI LineEditor_DeleteLine = 
+   (  NUMBER 0x83888 "Removes the last line from the history buffer",
+      ENTRY
+      ( R0  =  LineEditor_H: handle
+      )     
+   );
+   
+
+SWI LineEditor_ReadInfo = 
+   (  NUMBER 0x83889 "Reads information about current LineEditoritor edits",
+      ENTRY
+      ( R0  =  Wimp_T: task_handle
+      ),
+      EXIT
+      ( R0  =  LineEditor_Length: length,
+        R1! =  .Int: pos
+      )
+   );
+   
+   
+
+SWI LineEditor_ReadLine = 
+   (  NUMBER 0x8388a "Reads a line of input with history",
+      ENTRY
+      ( R0  =  .Ref .Char: buffer,
+        R1  =  .Int: size,
+        R2  =  .Char: min_char,
+        R3  =  .Char: max_char,
+        R5  #  0,
+        R6  =  LineEditor_H: handle
+      ),
+      EXIT
+      ( 
+        FLAGS!,
+        R0?,
+        R1  =  .Int: used
+      )
+   );
+   
+
+SWI LineEditor_ReadLineGivenEcho = 
+   (  NUMBER 0x8388a "Reads a line of input with history, using the given 
+                      echo character",
+      ENTRY
+      ( R0  =  .Ref .Char: buffer,
+        R1  =  .Int: size,
+        R2  =  .Char: min_char,
+        R3  =  .Char: max_char,
+        R4  =  .Char: echo,
+        R5  #  1,
+        R6  =  LineEditor_H: handle
+      ),
+      EXIT
+      ( 
+        FLAGS!,
+        R0?,
+        R1  =  .Int: used
+      )
+   );
+   
+
+SWI LineEditor_ReadLineSuppressInvalid = 
+   (  NUMBER 0x8388a "Reads a line of input with history, not echoing 
+                      invalid characters",
+      ENTRY
+      ( R0  =  .Ref .Char: buffer,
+        R1  =  .Int: size,
+        R2  =  .Char: min_char,
+        R3  =  .Char: max_char,
+        R5  #  2,
+        R6  =  LineEditor_H: handle
+      ),
+      EXIT
+      ( 
+        FLAGS!,
+        R0?,
+        R1  =  .Int: used
+      )
+   );
+   
+
+SWI LineEditor_ReadLineGivenEchoSuppressInvalid = 
+   (  NUMBER 0x8388a "Reads a line of input with history, using the given 
+                      echo character and not echoing invalid characters",
+      ENTRY
+      ( R0  =  .Ref .Char: buffer,
+        R1  =  .Int: size,
+        R2  =  .Char: min_char,
+        R3  =  .Char: max_char,
+        R4  =  .Char: echo,
+        R5  #  3,
+        R6  =  LineEditor_H: handle
+      ),
+      EXIT
+      ( 
+        FLAGS!,
+        R0?,
+        R1  =  .Int: used
+      )
+   )

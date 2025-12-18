@@ -1,0 +1,16 @@
+#	Index: OSLib/!OsLib/Tools/ToLower/AMUMakefile	20040224
+#
+
+ALL   	 = ${TARGET}
+TARGET 	 = ToLower
+VPATH 	 =
+DEFINES  =
+INCLUDES = C:
+LIBS  	 = C:o.Stubs
+
+MODULES	 = ${TARGET}
+
+.include ${MAKEFILEDIR}.^.AMUmakefile/source
+
+#------------------------------------------------------------------------
+# Dynamic dependencies:

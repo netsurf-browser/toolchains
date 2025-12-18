@@ -1,0 +1,315 @@
+TITLE HAL;
+
+AUTHOR "Tom Hughes, tom@compton.nu, 23 Nov 2002";
+
+NEEDS OS;
+
+TYPE
+   HAL_Device = .Int,
+   HAL_Timer = .Int;
+
+SWI
+   HAL_IRQEnable =
+   (  NUMBER 0x7A,
+      ENTRY
+      (  R0 = HAL_Device: device,
+         R8 # 0,
+         R9 # 1 "Unmasks the specified IRQ source - RISC OS 5+"
+      ),
+      EXIT
+      (  R0! = .Bool: was_enabled,
+         R1?,
+         R2?,
+         R3?
+   )  ),
+
+   HAL_IRQDisable =
+   (  NUMBER 0x7A,
+      ENTRY
+      (  R0 = HAL_Device: device,
+         R8 # 0,
+         R9 # 2 "Masks the specified IRQ source - RISC OS 5+"
+      ),
+      EXIT
+      (  R0! = .Bool: was_enabled,
+         R1?,
+         R2?,
+         R3?
+   )  ),
+
+   HAL_IRQClear =
+   (  NUMBER 0x7A,
+      ENTRY
+      (  R0 = HAL_Device: device,
+         R8 # 0,
+         R9 # 3 "Clears the specified IRQ source - RISC OS 5+"
+      ),
+      EXIT
+      (  R0?,
+         R1?,
+         R2?,
+         R3?
+   )  ),
+
+   HAL_IRQSource =
+   (  NUMBER 0x7A,
+      ENTRY
+      (  R8 # 0,
+         R9 # 4 "Returns the number of the highest priority asserted IRQ - RISC OS 5+"
+      ),
+      EXIT
+      (  R0! = HAL_Device: device,
+         R1?,
+         R2?,
+         R3?
+   )  ),
+
+   HAL_IRQStatus =
+   (  NUMBER 0x7A,
+      ENTRY
+      (  R0 = HAL_Device: device,
+         R8 # 0,
+         R9 # 5 "Returns non-zero if the specified device is requesting an IRQ - RISC OS 5+"
+      ),
+      EXIT
+      (  R0! = .Bool: requested,
+         R1?,
+         R2?,
+         R3?
+   )  ),
+
+   HAL_FIQEnable =
+   (  NUMBER 0x7A,
+      ENTRY
+      (  R0 = HAL_Device: device,
+         R8 # 0,
+         R9 # 6 "Unmasks the specified FIQ source - RISC OS 5+"
+      ),
+      EXIT
+      (  R0! = .Bool: was_enabled,
+         R1?,
+         R2?,
+         R3?
+   )  ),
+
+   HAL_FIQDisable =
+   (  NUMBER 0x7A,
+      ENTRY
+      (  R0 = HAL_Device: device,
+         R8 # 0,
+         R9 # 7 "Masks the specified FIQ source - RISC OS 5+"
+      ),
+      EXIT
+      (  R0! = .Bool: was_enabled,
+         R1?,
+         R2?,
+         R3?
+   )  ),
+
+   HAL_FIQDisableAll =
+   (  NUMBER 0x7A,
+      ENTRY
+      (  R0 = HAL_Device: device,
+         R8 # 0,
+         R9 # 8 "Masks all FIQ sources - RISC OS 5+"
+      ),
+      EXIT
+      (  R0?,
+         R1?,
+         R2?,
+         R3?
+   )  ),
+
+   HAL_FIQClear =
+   (  NUMBER 0x7A,
+      ENTRY
+      (  R0 = HAL_Device: device,
+         R8 # 0,
+         R9 # 9 "Clears the specified FIQ source - RISC OS 5+"
+      ),
+      EXIT
+      (  R0?,
+         R1?,
+         R2?,
+         R3?
+   )  ),
+
+   HAL_FIQSource =
+   (  NUMBER 0x7A,
+      ENTRY
+      (  R8 # 0,
+         R9 # 10 "Returns the number of the highest priority asserted FIQ - RISC OS 5+"
+      ),
+      EXIT
+      (  R0! = HAL_Device: device,
+         R1?,
+         R2?,
+         R3?
+   )  ),
+
+   HAL_FIQStatus =
+   (  NUMBER 0x7A,
+      ENTRY
+      (  R0 = HAL_Device: device,
+         R8 # 0,
+         R9 # 11 "Returns non-zero if the specified device is requesting an FIQ - RISC OS 5+"
+      ),
+      EXIT
+      (  R0! = .Bool: requested,
+         R1?,
+         R2?,
+         R3?
+   )  );
+
+SWI
+   HAL_Timers =
+   (  NUMBER 0x7A,
+      ENTRY
+      (  R8 # 0,
+         R9 # 12 "Returns number of timers - RISC OS 5+"
+      ),
+      EXIT
+      (  R0! = .Int: timers,
+         R1?,
+         R2?,
+         R3?
+   )  ),
+
+   HAL_TimerDevice =
+   (  NUMBER 0x7A,
+      ENTRY
+      (  R0 = HAL_Timer: timer,
+         R8 # 0,
+         R9 # 13 "Returns IRQ device number of the specified timer - RISC OS 5+"
+      ),
+      EXIT
+      (  R0! = HAL_Device: device,
+         R1?,
+         R2?,
+         R3?
+   )  ),
+
+   HAL_TimerGranularity =
+   (  NUMBER 0x7A,
+      ENTRY
+      (  R0 = HAL_Timer: timer,
+         R8 # 0,
+         R9 # 14 "Returns basic granularity of the specified timer in ticks per second - RISC OS 5+"
+      ),
+      EXIT
+      (  R0! = .Int: granularity,
+         R1?,
+         R2?,
+         R3?
+   )  ),
+
+   HAL_TimerMaxPeriod =
+   (  NUMBER 0x7A,
+      ENTRY
+      (  R0 = HAL_Timer: timer,
+         R8 # 0,
+         R9 # 15 "Returns maximum period of the specified timer - RISC OS 5+"
+      ),
+      EXIT
+      (  R0! = .Int: max_period,
+         R1?,
+         R2?,
+         R3?
+   )  ),
+
+   HAL_TimerSetPeriod =
+   (  NUMBER 0x7A,
+      ENTRY
+      (  R0 = HAL_Timer: timer,
+         R1 = .Int: period,
+         R8 # 0,
+         R9 # 16 "Sets period of the specified timer - RISC OS 5+"
+      ),
+      EXIT
+      (  R0?,
+         R1?,
+         R2?,
+         R3?
+   )  ),
+
+   HAL_TimerPeriod =
+   (  NUMBER 0x7A,
+      ENTRY
+      (  R0 = HAL_Timer: timer,
+         R8 # 0,
+         R9 # 17 "Reads period of the specified timer - RISC OS 5+"
+      ),
+      EXIT
+      (  R0! = .Int: period,
+         R1?,
+         R2?,
+         R3?
+   )  ),
+
+   HAL_TimerReadCountdown =
+   (  NUMBER 0x7A,
+      ENTRY
+      (  R0 = HAL_Timer: timer,
+         R8 # 0,
+         R9 # 18 "Returns the time until the next interrupt for the specified timer - RISC OS 5+"
+      ),
+      EXIT
+      (  R0! = .Int: time_remaining,
+         R1?,
+         R2?,
+         R3?
+   )  );
+
+SWI
+   HAL_CounterRate =
+   (  NUMBER 0x7A,
+      ENTRY
+      (  R8 # 0,
+         R9 # 19 "Returns the rate of the counter in ticks per second - RISC OS 5+"
+      ),
+      EXIT
+      (  R0! = .Int: rate,
+         R1?,
+         R2?,
+         R3?
+   )  ),
+
+   HAL_CounterPeriod =
+   (  NUMBER 0x7A,
+      ENTRY
+      (  R8 # 0,
+         R9 # 20 "Returns the period of the counter in ticks - RISC OS 5+"
+      ),
+      EXIT
+      (  R0! = .Int: period,
+         R1?,
+         R2?,
+         R3?
+   )  ),
+
+   HAL_CounterRead =
+   (  NUMBER 0x7A,
+      ENTRY
+      (  R8 # 0,
+         R9 # 21 "Reads the current counter value - RISC OS 5+"
+      ),
+      EXIT
+      (  R0! = .Int: period,
+         R1?,
+         R2?,
+         R3?
+   )  ),
+
+   HAL_CounterDelay =
+   (  NUMBER 0x7A,
+      ENTRY
+      (  R0 = .Int: delay,
+         R8 # 0,
+         R9 # 22 "Delay for at least the specified number of microseconds - RISC OS 5+"
+      ),
+      EXIT
+      (  R0?,
+         R1?,
+         R2?,
+         R3?
+   )  )

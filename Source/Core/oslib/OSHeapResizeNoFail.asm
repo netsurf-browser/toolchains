@@ -1,0 +1,72 @@
+;Index: OSLib/!OsLib/Source/Core/oslib/OSHeapResizeNoFail.asm	20031228
+; osheap_resize_no_fail - Extend or shrink heap without throwing error if shrink fails
+; Initial Release 	08-Nov-01	Tony van der Hoff
+;	Bug fix		21-Dec-01	TV
+
+;OSLib---efficient, type-safe, transparent, extensible,
+;   register-safe API coverage of RISC OS
+;
+;   OSLib is free software; you can redistribute it and/or modify
+;it under the terms of the GNU General Public Licence as published by
+;the Free Software Foundation; either version 1, or (at your option)
+;any later version.
+;
+;   OSLib is distributed in the hope that it will be useful,
+;but WITHOUT ANY WARRANTY; without even the implied warranty of
+;MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+;GNU General Public License for more details.
+;
+;   You should have received a copy of the GNU General Public Licence
+;along with this programme; if not, write to the Free Software
+;Foundation, Inc, 675 Mass Ave, Cambridge, MA 02139, U S A.
+
+	GET oslib/OSHeap.Hdr
+
+	EXPORT	osheap_resize_no_fail
+
+	AREA	|SWI$$Code|, CODE, READONLY, PIC
+
+;	osheap_resize_no_fail
+; 	APCS Compliant
+;Entry  A1 =  pointer to heap
+;	A2 =  required size change in bytes (signed integer)
+;Exit  	R  =  actual size change in bytes
+;
+;  C Prototype:
+;extern int osheap_resize_no_fail( byte* heap,
+;				   int size_increase
+;			         );
+;
+; This code works around the problem that OSHeap_Resize throws an error if shrink fails.
+; OSLib is then unable to return the amount by which the heap shrunk.
+; It also negates R3 if the error occurs, to give a consistent sign regardless of error condition.
+; The object code is patched into the library at build time by the MakeFile
+
+osheap_resize_no_fail ROUT
+        MOV     R3, A2			; required change
+        MOV     R1, A1			; pointer to heap
+	MOV	R0, #OSHeap_Resize	; reason code
+        SWI     XOS_Heap	   	; XOS_Heap	(PRM 1-375)
+        BVC 	%99			; no error - normal return
+
+        ;Test for Error_HeapExcessiveShrink -  report any other error
+	LDR 	R1, =Error_HeapExcessiveShrink
+	LDR	R2, [R0]		; get error number in R2; [TV 011221]
+	CMP 	R2, R1
+	SWINE	&2B			; OS_GenerateError - no return
+
+	; ignore Error_HeapExcessiveShrink
+	RSB	R3, R3, #0		; complement R3 to give actual change
+
+	; exit
+99	MOV 	R, R3			; APCS return value
+
+	[ {CONFIG} = 32
+	MOV	PC, LR
+	|
+        MOVS    PC, LR
+	]
+
+	LTORG
+
+        END

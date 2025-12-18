@@ -1,0 +1,202 @@
+TITLE SharedCLibrary;
+AUTHOR "Jonathan Coxhead, jonathan@doves.demon.co.uk, 18 May 1995";
+
+NEEDS OS;
+
+CONST SharedCLibrary_RootStackSizeShift = .Int: 16;
+
+TYPE SharedCLibrary_Stub =
+   .Struct
+   (  .Int: chunk_id,
+      .Ref .Ref .Data: entry_vector,
+      .Ref .Ref .Data: entry_vector_limit,
+      .Ref .Data: static_data,
+      .Ref .Data: static_data_limit
+   );
+
+TYPE SharedCLibrary_StubList = .Struct (SharedCLibrary_Stub: stub ...);
+
+TYPE Kernel_UnwindBlock =
+   .Struct
+   (  .Int: r4,
+      .Int: r5,
+      .Int: r6,
+      .Int: r7,
+      .Int: r8,
+      .Int: r9,
+      .Int: fp,
+      .Int: sp,
+      .Int: pc,
+      .Int: sl,
+      [3] .Int: f4,
+      [3] .Int: f5,
+      [3] .Int: f6,
+      [3] .Int: f7
+   );
+
+SWI SharedCLibrary_LibInitAPCS_A =
+   (  NUMBER 0x80680 "Interfaces an application using APCS-A with the
+                      Shared C Library - obsolete",
+      ABSENT
+   );
+
+SWI SharedCLibrary_LibInitAPCS_R =
+   (  NUMBER 0x80681 "Interfaces an application using APCS-R with the
+                      Shared C Library",
+      ENTRY
+      (  R0 -> SharedCLibrary_StubList: stub_list,
+         R1 = .Ref Void: workspace,
+         R2 = .Ref Void: workspace_limit,
+         R3 # -1,
+         R4 # 0,
+         R5 # -1,
+         R6 = .Int: shifted_root_stack_size
+      ),
+      EXIT
+      (  R0?,
+         R1 -> .Data: stack,
+         R2 = .Ref .Data: stack_limit,
+         R6 = .Int: version
+   )  );
+
+SWI SharedCLibrary_LibInitModule =
+   (  NUMBER 0x80682 "Interfaces a module using APCS-R with the
+                      Shared C Library",
+      ENTRY
+      (  R0 -> SharedCLibrary_StubList: stub_list,
+         R1 = .Ref Void: workspace,
+         R2 = .Ref Void: workspace_limit,
+         R3 = .Ref .Data: clear,
+         R4 -> .Data: static_data,
+         R5 = .Ref .Data: static_data_limit,
+         R6 = .Int: shifted_root_stack_size
+      ),
+      EXIT
+      (  R0?,
+         R1 -> .Data: stack,
+         R2 = .Ref .Data: stack_limit,
+         R6 = .Int: version
+   )  );
+
+SWI SharedCLibrary_LibInitAPCS_32 =
+   (  NUMBER 0x80683 "Interfaces an application using APCS-32 with the
+                      Shared C Library",
+      ENTRY
+      (  R0 -> SharedCLibrary_StubList: stub_list,
+         R1 = .Ref Void: workspace,
+         R2 = .Ref Void: workspace_limit,
+         R3 # -1,
+         R4 # 0,
+         R5 # -1,
+         R6 = .Int: shifted_root_stack_size
+      ),
+      EXIT
+      (  R0?,
+         R1 -> .Data: stack,
+         R2 = .Ref .Data: stack_limit,
+         R6 = .Int: version
+   )  );
+
+SWI SharedCLibrary_LibInitModuleAPCS_32 =
+   (  NUMBER 0x80684 "Interfaces a module using APCS-32 with the
+                      Shared C Library",
+      ENTRY
+      (  R0 -> SharedCLibrary_StubList: stub_list,
+         R1 = .Ref Void: workspace,
+         R2 = .Ref Void: workspace_limit,
+         R3 = .Ref .Data: clear,
+         R4 -> .Data: static_data,
+         R5 = .Ref .Data: static_data_limit,
+         R6 = .Int: shifted_root_stack_size
+      ),
+      EXIT
+      (  R0?,
+         R1 -> .Data: stack,
+         R2 = .Ref .Data: stack_limit,
+         R6 = .Int: version
+   )  );
+
+SWI
+   // Extends OS_ServiceCall
+   Service_APCSBacktrace =
+   (  NUMBER 0x30,
+      ENTRY
+      (  R1 # 0xDC "APCS Backtrace related service call - RISC OS 6"
+      ),
+      ABSENT
+   ),
+
+   Service_APCSBacktraceBacktraceRequest =
+   (  NUMBER 0x30,
+      ENTRY
+      (  R0 # 0 "An APCS Backtrace has been requested - RISC OS 6",
+         R1 # 0xDC,
+         R2 = OS_F: output,
+         R3 -> OS_RegisterBlock: initial_register_set,
+         R4 -> Kernel_UnwindBlock: unwind,
+         R5 -> .String: language,
+         R6 = .Int: error_number,
+         R7 -> .Data: fault_address,
+         R8 -> .Data: app_def
+      ),
+      EXIT
+      (  R1! = .Bool: unclaimed
+   )  ),
+
+   Service_APCSBacktraceRegisterDump =
+   (  NUMBER 0x30,
+      ENTRY
+      (  R0 # 1 "An APCS Backtrace is in progress and a register dump needs
+                 to be written - RISC OS 6",
+         R1 # 0xDC,
+         R2 = OS_F: output,
+         R3 -> OS_RegisterBlock: initial_register_set,
+         R8 -> .Data: app_def
+      ),
+      EXIT
+      (  R1! = .Bool: unclaimed
+   )  ),
+
+   Service_APCSBacktraceBacktraceDump =
+   (  NUMBER 0x30,
+      ENTRY
+      (  R0 # 2 "An APCS Backtrace is in progress and the backtrace needs
+                 to be written - RISC OS 6",
+         R1 # 0xDC,
+         R2 = OS_F: output,
+         R3 -> OS_RegisterBlock: initial_register_set,
+         R4 -> Kernel_UnwindBlock: unwind,
+         R5 -> .String: language,
+         R8 -> .Data: app_def
+      ),
+      EXIT
+      (  R1! = .Bool: unclaimed
+   )  ),
+
+   Service_APCSBacktraceDecodeName =
+   (  NUMBER 0x30,
+      ENTRY
+      (  R0 # 16 "Request to decode a function name into a displayable
+                  format - RISC OS 6",
+         R1 # 0xDC,
+         R2 -> .String: encoded_name,
+         R3 -> .String: language
+      ),
+      EXIT
+      (  R1! = .Bool: unclaimed,
+         R2 -> .String: decoded_name
+   )  ),
+
+   Service_APCSBacktraceMiniDumpCreated =
+   (  NUMBER 0x30,
+      ENTRY
+      (  R0 # 32 "Notification to clients that a MiniDump has been
+                  created - RISC OS 6",
+         R1 # 0xDC,
+         R2 -> .String: minidump_filename,
+         R3 -> .String: executable_name
+      ),
+      EXIT
+      (  R1! = .Bool: unclaimed
+   )  )
+

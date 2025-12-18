@@ -1,0 +1,1 @@
+OBJS += Err_/Nomem.o Err_/Oserror.o Err_/Reporterr.o

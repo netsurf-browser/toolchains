@@ -1,0 +1,22 @@
+TITLE CDFSFiler;
+
+AUTHOR "Tom Hughes, tom@compton.nu, 29 June 2003";
+
+NEEDS Wimp;
+
+CONST
+   Message_CDFSFilerOpenPlayer = .Bits: 0x4BE00;
+
+TYPE
+   CDFSFiler_MessageOpenPlayer =
+   .Struct
+   (  .Int: drive_number,
+      .Bits: flags
+   );
+
+TYPE
+   CDFSFiler_FullMessageOpenPlayer =
+   .Struct: Wimp_MessageHeader
+   (  .Int: drive_number,
+      .Bits: flags
+   )

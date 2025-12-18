@@ -1,0 +1,7 @@
+Echo <sys$Time> Making <Obey$Dir> ...
+Dir <Obey$Dir>
+SetEval OSLib$Slot 3*1024/2
+Do WIMPSlot -min <OSLib$Slot>K
+Do WIMPSlot -max <OSLib$Slot>K
+Do AMU -f <Obey$Dir>.AMUmakefile -desktop -k examples
+Echo <Sys$Time> Done.

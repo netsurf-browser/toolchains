@@ -1,0 +1,50 @@
+AUTHOR "Richard Sargeant, sargeant@arcade.demon.co.uk, 22-Jan-1999";
+
+TITLE TinySupport; // SWI prefix used for the TinyStubs module
+
+//NEEDS OS;
+
+SWI TinySupport_Init =
+// Registers a client with TinyStubs
+// R0 on entry is pointer to tiny stubs table to process
+// Have not studied exit conditions recently... R0 and R1 useful!
+   (NUMBER 0x82C40 "Probably for internal use only", ABSENT);
+
+SWI TinySupport_Die =
+// Deregisters a client from TinyStubs
+   (NUMBER 0x82C41 "Probably for internal use only", ABSENT);
+
+SWI TinySupport_Init2 =
+   (NUMBER 0x82C42 "Probably for internal use only", ABSENT);
+
+SWI TinySupport_Share =
+   (NUMBER 0x82C43 "Probably for internal use only", ABSENT);
+
+CONST
+   TinySupport_Clib		     = .Bits: -4,
+   TinySupport_Internal		     = .Bits: -3,
+   TinySupport_Kernel		     = .Bits: -2,
+   TinySupport_NoMore		     = .Bits: -1;
+
+CONST
+// Numbers for routines held in the TinyStubs module
+   TinySupport_rmensure		     = .Int: 0,
+   TinySupport_1		     = .Int: 1,		// name?
+   TinySupport_string_copy	     = .Int: 2,		// guess
+   TinySupport_string_to_buffer	     = .Int: 3,
+   TinySupport_4		     = .Int: 4,		// name?
+   TinySupport__copy_template	     = .Int: 5,
+   TinySupport___zap_gadget	     = .Int: 6,
+   TinySupport___read_gadget	     = .Int: 7,
+   TinySupport_8		     = .Int: 8,		// name?
+   TinySupport__create_from_template = .Int: 9,
+   TinySupport_delete_gadget	     = .Int: 10,
+   TinySupport_11		     = .Int: 11,	// name?
+   TinySupport_12		     = .Int: 12,	// name?
+   TinySupport_mem_allocate	     = .Int: 13,
+   TinySupport_mem_free		     = .Int: 14,
+   TinySupport_mem_free_all	     = .Int: 15,
+   TinySupport_rma_callocate	     = .Int: 16,	// guess
+   TinySupport_rma_reallocate	     = .Int: 17,	// guess
+   TinySupport_rma_free		     = .Int: 18,	// guess
+   TinySupport_swi_veneer	     = .Int: 19		// guess

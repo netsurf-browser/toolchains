@@ -1,0 +1,72 @@
+	GET	oslib/OSGBPB.Hdr
+	GET	oslib/Macros.Hdr
+
+	AREA	code, CODE
+
+	; void EnumCSD (void);
+	EXPORT	|EnumCSD|
+|EnumCSD|
+	STMFD	R13!, {R4-R11, R14}
+	MOV	R4, #0
+|loop|
+	MOV	R0, #OSGBPB_DirEntriesInfoStamped
+	LDR	R1, =dirname
+	LDR	R2, =buffer
+	MOV	R3, #10
+	MOV	R5, #endbuffer - buffer
+	LDR	R6, =wildcard
+	SWI	OS_GBPB
+	CMP	R4, #-1
+	LDMEQFD	R13!, {R4-R11, PC}
+
+	TEQ	R3, #0
+|printloop|
+	BEQ	loop
+
+	LDR	R0, [R2, #OSGBPB_InfoStampedBase_size]
+	BL	PrintHex
+
+	ADD	R2, R2, #OSGBPB_InfoStampedBase
+	MOV	R0, R2
+	SWI	OS_Write0
+	SWI	OS_NewLine
+	; Skip object name:
+|skipname|
+	LDRB	R14, [R2], #1
+	TEQ	R14, #0
+	BNE	skipname
+;	Following OSLib macro doesn't seem to be appreciated by as.
+;	Align	, R2, R2
+	ADD	R2, R2, #3
+	BIC	R2, R2, #3
+
+	SUBS	R3, R3, #1
+	B	printloop
+
+|dirname|
+	=	"@", 0
+|wildcard|
+	=	"*", 0
+	ALIGN
+
+	; R0 = hex address to be printed
+|PrintHex|
+	STMFD	R13!, {R0-R7, R14}
+	ADR	R1, PrintHexBuffer
+	MOV	R2, #PrintHexBufferEnd - PrintHexBuffer
+	SWI	OS_ConvertHex8
+	ADR	R0, PrintHexBuffer
+	SWI	OS_Write0
+	SWI	OS_NewLine
+	LDMFD	R13!, {R0-R7, PC}
+|PrintHexBuffer|
+	#	16
+|PrintHexBufferEnd|
+	ALIGN
+
+	AREA	data, DATA, NOINIT
+|buffer|
+	#	256
+|endbuffer|
+
+	END

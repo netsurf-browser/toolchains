@@ -1,0 +1,47 @@
+# Settings for AOF building
+
+ifndef GCCSDK_INSTALL_CROSSBIN
+$(error Environment variable GCCSDK_INSTALL_CROSSBIN is not defined)
+endif
+ifndef GCCSDK_INSTALL_ENV
+$(error Environment variable GCCSDK_INSTALL_ENV is not defined)
+endif
+
+export SOURCEDIR := $(abspath .)
+export BINDIR := $(SOURCEDIR)/../Bin
+export BUILDDIR := $(SOURCEDIR)/../Build
+export RELEASEDIR := $(SOURCEDIR)/../Release
+export RELEASEBINDIR := $(SOURCEDIR)/../Release/$(BUILDTYPE)
+export EXAMPLESDIR := $(SOURCEDIR)/../examples
+export DOCSDIR := $(SOURCEDIR)/../docs
+
+export TOPHEADERDIR := $(BUILDDIR)/Header
+export HEADERDIR := $(TOPHEADERDIR)/oslib
+export CSTRONGDIR := $(BUILDDIR)/CStrong
+export OBJDIR := $(BUILDDIR)/Objs
+export OBJEXCEPTDIR := $(BUILDDIR)/Objs/Exceptions
+export OSLIBSUPPORTDIR := $(BUILDDIR)/OSLibSupport
+
+export BYTEWIDE := $(SOURCEDIR)/ByteWide
+export DEFMOD := $(BINDIR)/defmod -asmtype gccaof
+export REDUCEAOF := $(BINDIR)/reduceaof
+export BINDHELP := $(BINDIR)/bindhelp
+
+export PATH := $(GCCSDK_INSTALL_CROSSBIN):$(PATH)
+
+export CC := gcc
+export CXX := g++
+export AS := gcc -c -xassembler-with-cpp -I.. -I$(SOURCEDIR)/Types -mapcs-32 -Wa,-apcs32
+export LIBFILE := libfile -c
+export MKDIR := mkdir -p
+export RM := rm -rf
+export CP := cp -r
+export INSTALL := $(GCCSDK_INSTALL_ENV)/ro-install
+
+export ASMEXT := .asm
+export EXEEXT := ,ff8
+export LIBSUFFIX := o
+
+export OSLIBLIB := $(BUILDDIR)/OSLib32.$(LIBSUFFIX)
+export OSLIBSUPPORTLIB := $(OSLIBSUPPORTDIR)/OSLibSupport32.$(LIBSUFFIX)
+export OSLIBCSTRONG := $(BUILDDIR)/OSLib,3d6

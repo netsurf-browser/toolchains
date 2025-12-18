@@ -1,0 +1,50 @@
+#Source/Core/oslib/Modules
+#
+
+# Modules containing SWIs
+SWIMODULES = \
+BlendTable \
+Buffer \
+Cache \
+ColourMap \
+ColourTrans \
+Debugger \
+DiagnosticDump \
+DMA \
+FPEmulator \
+HAL \
+IIC \
+InverseTable \
+KeyInput \
+MessageTrans \
+OS \
+OSByte \
+OSHeap \
+OSModule \
+OSReadSysInfo \
+OSSpriteOp \
+OSWord \
+PCI \
+Podule \
+Portable \
+ScreenBlanker \
+ScreenModes \
+ServiceInternational \
+SharedCLibrary \
+Sound \
+Squash \
+Territory \
+TimerManager
+
+# Modules with no SWIs
+MODULES = \
+Shell 
+
+# Modules defined other than by SWI definition
+ASMMODULES = \
+OSChangeDynamicAreaNoFail \
+OSHeapResizeNoFail \
+OSReadVarValSize \
+XOSChangeDynamicAreaNoFail \
+XOSHeapResizeNoFail \
+XOSReadVarValSize
