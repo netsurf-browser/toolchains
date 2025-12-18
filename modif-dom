@@ -1,0 +1,3 @@
+include/ldg.h    : remplacer __CDECL par CDECL dans les protos
+src/cpx/global.h : ajout de #include <gem.h> (depuis ldg 2.32, la lib
+                   gem n'est plus d‚clar‚ dans ldg.h

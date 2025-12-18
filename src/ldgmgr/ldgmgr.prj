@@ -1,0 +1,12 @@
+..\..\gemsys\ldg\ldgmgr.app
+.c[-y+ -g+ -p- -I.. -I..\share]
+.l[-y+]
+=
+pcstart.o
+ldgmgr.c
+..\share\internal.c
+
+gem.lib
+pctoslib.lib
+pcstdlib.lib
+..\..\lib\purec\ldg.lib

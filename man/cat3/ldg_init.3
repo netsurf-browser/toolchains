@@ -1,0 +1,17 @@
+LDG_INIT(3)                   LDG Call                     LDG_INIT(3)
+
+NAME
+   ldg_init - LDG interface of a library.
+
+SYNOPSIS
+   int ldg_init( LDGLIB *ldg);
+
+PARAMETERS
+      ldg    : adress of the LDGLIB structure,
+      return : 0 no error. -1: the library was launched by a non
+               LDG application.
+
+DESCRIPTION
+    This function provides the  interface between the LDG-library  and
+    the LDG-system.
+

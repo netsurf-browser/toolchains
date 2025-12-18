@@ -1,0 +1,46 @@
+A l'instart des DDL de ZindoZ, les LDG devraient
+ˆtre m‚ticuleusement document‚es afin d'ˆtre
+exploit‚es au mieux!
+
+		Librarie Dynamique Ex_lib
+			  ~~~~~~~~~~~~
+	Un exemple de programmation d'une LDG par
+	Dominique B‚r‚ziat. Cette exemple illustre
+	le cas des passages de paramŠtres flottants.
+
+But:
+	Fournir un exemple didactique de programmation
+	de LDG.
+
+Installation:
+	Copier le fichier EX_LIB.LIB dans le r‚pertoire des
+	libraries dynamiques LDG.
+
+Fonctions:
+	
+	char* CDECL (*mathinfo)( VOID);
+		retourne une chaine d'information.
+	
+	double CDECL (*sinus)( Real*);
+		retourne le sinus d'un nombre flottant.
+	
+	double CDECL (*cosinus)( Real*);
+		retourne le cosinus d'un nombre flottant.
+
+Binding:
+
+	#include <ldg.h>
+	#include "ex_lib.h"
+	
+	LDG* math;
+	int  apid;
+	
+	load_math() {
+		math = ldg_exec( apid, "ex_lib.ldg");
+		if( popup) {
+			init_ldg_math( math);
+		} else
+			;	/* Erreur */
+	}
+
+	/* et linker le fichier ex_lib.o */

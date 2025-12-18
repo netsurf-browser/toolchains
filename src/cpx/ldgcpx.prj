@@ -1,0 +1,15 @@
+ldg.cp
+.C[-M+ -P- -G- -Y- -I. -I..\..\include -I..\share -DNOSTARTUP]
+.L[-Y- -V+]
+=
+; pas de startup pour un CPX
+main.c
+evnt.c
+funcs.c
+bubble.c
+utils.c
+..\share\internal.c
+..\..\lib\purec\ldg.lib
+gem.lib
+pcstdlib.lib
+pctoslib.lib

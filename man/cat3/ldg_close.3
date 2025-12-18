@@ -1,0 +1,27 @@
+LDG_CLOSE(3)                  LDG Call                    LDG_CLOSE(3)
+
+NAME
+    ldg_close - close a dynamical library opened by ldg_open()
+
+SYNOPSIS
+   #include <ldg.h>
+
+   int ldg_close( LDG *ldg, WORD} *gl);
+
+PARAMETERS
+            ldg : LDG descriptor returned by ldg_exec() function.
+         global : global array used by AES functions,
+         return : 0 if no error or a code error.
+
+DESCRIPTION
+   This function removes from the memory a library. The library will be
+   really removed if:
+        ú any client use the library or, 
+        ú the library is not shareable or.
+
+COMPATIBILITY LDG 1.xx
+   ldg_close() replaces ldg_term() and ldg_libterm(). Macros defined in 
+   LDG.H emulates these functions.
+
+SEE ALSO
+   ldg_open(3), ldg_error(3).

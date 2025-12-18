@@ -1,0 +1,20 @@
+Historique de la librarie de d‚veloppement pour LDG (ldgdevel)
+--------------------------------------------------------------
+
+Le num‚ro de version de la librairie est donn‚ par la variable
+ldg_version.
+
+version 2.30 : 
+	- cette version de la librairie s'aligne avec le
+	  num‚ro de version du TSR LDG,
+	- int‚gration du scratch register (Pure C, Sozobon),
+	- int‚gration de la fonction ldg_docpush(),
+	- ajout volatile pour la transmition du pointeur LDG
+	  entre librairie et client.
+
+version 2.00 : nouvelle librairie qui correspond au protocol 2
+			   de fonctionnement des LDG
+
+version 1.20 : derniŠre version de la librarie pour LDG 1.xx
+
+

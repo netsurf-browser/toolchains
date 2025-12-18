@@ -1,0 +1,47 @@
+------------------------------------------------------
+|   Librairie Dynamique Gem - last news              |
+|             Version 2.31, May 2003                 |
+|   All right reserved by Dominique B‚r‚ziat,        |
+|   Olivier Landemarre and Arnaud Bercegeay          |
+------------------------------------------------------
+ 
+Thanks you  for using  the LDG  system. We  hope  this
+software will give you fully satisfaction.
+ 
+ ÝBWhat's new ?Ýb
+ 
+This release is minor one. 
+
+ - one bug has been fixed on the way LDG looks for a
+   library when one specify its path with MiNT convention.
+ - the developper C library is now totaly independant on
+   the GEM library used. 
+Note for developper : 
+   as LDG is independant of the GEM library, you need to 
+   specify the GEM header file before including 'ldg.h'.
+ - LDG and its utilities have been recompiled used the
+   last version of Gemlib (pl43).
+ 
+ ÝBRecommandationsÝb
+ 
+Warning, when you start your system with LDG, the LDG
+CPX is not necessarly correctly configured. 
+  
+To simple  users (eg  non LDG-developpers),  read  the
+Installation  paragraph   from   the   hypertext   LDG
+documentation.
+ 
+This package (C-libraries, tools and the LDG protocol)
+is complety free of use, even in a commercial framework. 
+Authors refuse all responsabilities in case or malfunction
+or problem appeared with the installation or the use
+of LDG system. Use it at your own risk.
+
+Additional informations can be found at the internet 
+address:    ÝUhttp://ldg.atari.org/Ýu
+         or ÝUhttp://ldg.org.free.fr/Ýu
+ 
+Last update : May 2003.
+  
+The authors.
+ÝU                                                       Ýu 

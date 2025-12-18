@@ -1,0 +1,37 @@
+LDG_ERROR(3)                  LDG Call                   LDG_ERROR(3)
+
+NAME
+   ldg_error() - report a code error when ldg_open() returns NULL.
+
+SYNOPSYS
+   #include <ldg.h>
+
+   int ldg_error( void);
+
+PARAMETER
+    return : an error code.
+
+DESCRIPTION
+    This function returns  an error code  if ldg_open() returns  NULL.
+    Possible errors are :
+
+      ú LDG_LIB_FULLED: Impossible to register a new library,
+      ú LDG_APP_FULLED: Impossible to register a new client,
+      ú LDG_ERR_EXEC:   the LDG-library requested is not GEMDOS executable,
+      ú LDG_BAD_FORMAT: the LDG-library requested have a bad format,
+      ú LDG_LIB_LOCKED: the LDG-library requested is locked,
+      ú LDG_NOT_FOUND:  the LDG-library requested is not found,
+      ú LDG_NO_MEMORY:  no more memory,
+      ú LDG_NO_TSR:     TSR not installed,
+      ú LDG_BAD_TSR:    bad TSR version number (function required not
+                        supported by TSR).
+
+COMPATIBILITY LDG 1.xx
+    Some  errors   are  obsolets   with  LDG   2.00:   LDG_NO_MANAGER,
+    LDG_TIME_IDL With LDG 1.xx,  ldg_error can return  0 even when  an
+    error occurs.  In  this case,  the  LDG-manager sends  a  message,
+    LDG_ERROR, indicating the error.                                  
+
+SEE ALSO
+    ldg_open(3).
+    

@@ -1,0 +1,18 @@
+;; Note : il faut compiler la lib LDG avant !
+..\..\auto\ldg.prg
+.s[-y-]
+.c[-y- -g+ -p- -I. -I.. -I..\..\include]
+.l[-y- -v]
+=
+pcstart.o
+tsrmain.c		; Partie principale du TSR (code d‚marrage)
+tsrinfo.c		; dialog GEM pour install hors boot
+cookie.s		; Gestion des cookies
+ldglist.c		; Routines listes librairies/clients
+ldgcook.c		; Fonctions du cookie
+
+..\..\lib\purec\ldg.lib	; Pour ldg_Malloc(), set_error(), ldg_error() et ldg_load()
+
+pcstdlib.lib
+pctoslib.lib
+gem.lib

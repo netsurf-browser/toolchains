@@ -1,0 +1,12 @@
+		Example of typical distribution
+		-------------------------------
+
+\SRC 		  	Source of the LDG library (for example)
+\DOC 		  	Documentation of the library
+\INCLUDE\LDG	  	C header for application client
+\LIB 		  	C library containing bindings for
+			  	application client.
+\GEMSYS\LDG    	The standard path to install the
+			  	library,
+
+README 		  	Instruction file

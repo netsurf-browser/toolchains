@@ -1,0 +1,50 @@
+# @(#)Tools/cc.cfg
+# Konfigurationsdatei fuer cc (C Compiler Driver fuer Pure C)
+# Julian F. Reschke, 21. Januar 1994
+
+# Basisverzeichnis fuer Pure C. Ausgehend von diesem Verzeichnis werden
+# Headerdateien und Libraries gesucht (sofern fuer INCLUDEPATH und
+# LIBRARYPATH keine absoluten Pfade angegeben sind). PUREC_HOME wird,
+# ggfs. der Environmentvariable $PUREC entnommen (sofern vorhanden).
+# Anderenfalls wird der Ordner \PUREC auf dem aktuellen Laufwerk probiert. 
+PUREC_HOME	C:\PROG\PURE_C
+
+# Verzeichnis, in dem Libraries standardmaessig gesucht werden. Falls
+# der Pfadname kein \ enthaelt, wird PUREC_HOME davorgehaengt (Defaultwert:
+# lib).
+LIBRARY_PATH	lib
+
+# Verzeichnis, in dem Header standardmaessig gesucht werden. Falls
+# der Pfadname kein \ enthaelt, wird PUREC_HOME davorgehaengt (Defaultwert:
+# include).
+INCLUDE_PATH	include
+
+# Namen fuer die einzelnen Executables (defaults: pasm, cpp, pcc, plink)
+# Wichtiger Hinweis: die einzelnen Programme sollten dringend das
+# ARGV-Verfahren verstehen (nicht in alten Versionen von Pure C!)
+ASSEMBLER		pasm
+PREPROCESSOR	cpp
+COMPILER		pcc
+LINKER			plink
+
+# Name fuer den Startupcode (wird im Library-Verzeichnis gesucht, wenn
+# er keinen \ enthaelt). Standardwert ist pcstart.o. Eine Sonderfunktion
+# hat der Wert <none>: dann wird kein spezieller Startupcode benutzt.
+STARTUPCODE		<none>
+
+# Abkuerzungen fuer Bibliotheksnamen (siehe Option -l). Vordefiniert
+# sind c und m
+LIBNAME		gPCGEMLIB.LIB
+LIBNAME		tPCTOSLIB.LIB
+#LIBNAME		mPCFLTLIB.LIB
+
+# Automatisch mitzulinkende Dateien (zB spezielle Libs oder Objectfiles
+# wie getopt)
+# ADDLIBRARY	PCSTDLIB
+# ADDLIBRARY	pcgemlib
+
+# Zusaetzliche Defaultoptionen fuer die einzelnen Phasen (siehe Option
+# -W). In diesem Beispiel: -S=8192 an die l-Phase (Linker) uebergeben
+# (siehe Option -W in der Manual-Page).
+ADDOPTION	l,-S=8192
+

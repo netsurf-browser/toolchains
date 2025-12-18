@@ -1,0 +1,12 @@
+; Librarie de developpement
+
+..\..\lib\purec\ldg.lib
+.C[-y- -g+ -p+ -DGEMLIB=0 -DLDG230]
+.L[-j+ -y- -v+]
+.S[-y-]
+=
+ldgapp.c	; routines pour clients
+ldglib.c	; routines pour librairies
+ldgutil.c	; divers
+ldgload.c	; chargement bas-niveau
+stdcapc.s	; fix scratch register bug

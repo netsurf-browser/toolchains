@@ -1,0 +1,22 @@
+LDG_DEBUG(3)                  LDG Call                    LDG_DEBUG(3)
+
+
+NAME
+    ldg_debug - debug a LDG library
+
+SYNOPSIS
+    int ldg_debug( char *fmt, ...);
+
+PARAMETERS
+        fmt : a string format like printf()
+
+DESCRIPTION
+    This function writes a message into  a log file. The complet  path
+    of the log file is specified by the environ variable LDG_DEBUG. If 
+    this variable is not defined, the function is unactived. If the 
+    string begin by a '[' character , the string will be displayed in 
+    a GEM alert box instead of be written in a log file.  Otherwise
+    this function has the same usage than the printf() function.
+
+
+LDG_DEBUG(3)                System Call                   LDG_DEBUG(3)

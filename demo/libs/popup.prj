@@ -1,0 +1,12 @@
+popup.ldg
+.C[-Y- -G+]
+.L[-Y-]
+=
+pcstart.o
+popup.c
+
+gem.lib
+pcstdlib.lib
+pctoslib.lib
+..\..\lib\purec\ldg.lib
+

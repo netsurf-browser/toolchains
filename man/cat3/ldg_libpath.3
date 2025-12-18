@@ -1,0 +1,28 @@
+LDG_LIBPATH(3)                  LDG Call                LDG_LIBPATH(3)
+
+
+NAME
+    ldg_libpath - locate a dynamical library.
+
+SYNOPSIS
+    int ldg_libpath( char *path, WORD *gl);
+
+PARAMETERS
+            ldg : LDG descriptor returned by ldg_exec() function.
+         global : global array used by AES functions,
+         return : 1 if the library is located, 0 else.
+
+DESCRIPTION
+    This  function  returns  the  effective  location  of  a  library.
+    ldg_open() uses it  to locate  library. Before the  call, path  is
+    filled with the  name of the  library to locate.  At return,  path
+    contains the full location of the library. path should pointed  on
+    a sufficienly large buffer. This function quite is different of 
+    ldg_getpath() which uses to know the exact path of the library 
+    inside it.
+
+   
+SEE ALSO
+    ldg_open(), ldg_getpath().
+
+LDG_LIBPATH(3)                  LDG Call                LDG_LIBPATH(3)

@@ -1,0 +1,2 @@
+
+ldgutil.c:ldg_cookie(): Use Ssystem() when it is possible.

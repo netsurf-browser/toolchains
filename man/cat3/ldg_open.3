@@ -1,0 +1,44 @@
+LDG_OPEN(3)                   LDG Call                     LDG_OPEN(3)
+
+NAME
+    ldg_open - open a dynamical library
+    
+SYNOPSYS
+   #include <ldg.h>
+
+   LDG *ldg_open( char *name, WORD *global);
+
+PARAMETERS
+           name : library name (relative or complete path),
+         global : global array used by AES functions,
+         return : the LDG descriptor of the library or NULL if error.
+
+DESCRIPTION
+   This function loads a LDG-library in memory. If the library is  not
+   in memory, it is loaded using the current directory. If library  is
+   not found,  $LDGPATH  environ value,  LDG  cookie value  and  $PATH
+   environ value are used to locate  the library. If an error  occurs,
+   the function returns  NULL and  an explicite error  message can  be
+   obtain with function ldg_error().
+
+   When a library is loaded, the  client can received a message  (from
+   LDG kernel),  LDG_QUIT, which  indicates a  library loaded  by  the
+   client has  been removed  from  the memory.  In this  case,  client
+   should reload the library. The message has the following structure:   
+
+        word 0   : LDG_QUIT
+        word 1-2 : unused
+        word 3-4 : address of the LDG-descriptor
+        word 5   : raison of the terminaison :
+                    0 : shutdown
+                    1 : screen resolution changed
+                    2 : crashed or explicit terminaison of the library
+  
+
+COMPATIBILITY LDG 1.xx
+   ldg_open() replaces ldg_exec(), ldg_exec_evnt(), ldg_libexec(). Macros
+   defined in LDG.H emulates these functions.
+
+SEE ALSO
+   ldg_close(3), ldg_error(3).
+  

@@ -1,0 +1,59 @@
+ÝUInstallation des LDG                                     AideÝu
+ 
+L'installateur copie les fichiers dans les diff‚rents
+r‚pertoires systŠmes ad‚quat de fa‡on … ce que les LDG
+soient actif lors du prochaine red‚marrage de votre
+machine. L'installation est regroup‚e dans trois
+sections. Pour activer une section, il faut s‚lectionner
+le bouton … gauche du titre de la section.
+
+Pour ‚diter un champ, d‚placez le curseur avec les
+flŠches du clavier et tapez le chemin du r‚pertoire, 
+ou bien clickez directement sur le champ pour faire
+apparaŒtre un s‚lecteur de fichier.
+
+ÝUSection systŠmeÝu : installe ou met … jour le systŠme LDG.
+
+  ÝBr‚p. AUTOÝb  : r‚pertoire des programmes r‚sident (TSR)
+  ÝBr‚p. CPXÝb   : r‚pertoire des modules de Xcontrol
+  ÝBr‚p. STARTÝb : r‚pertoire des d‚mons GEM (concerne les
+               systŠmes multitƒches)
+  ÝBr‚p. LDGÝb   : r‚pertoire o— seront stock‚ les libraries 
+               dynamiques (typiquement \gemsys\ldg)
+  ÝBr‚p. HYPÝb   : r‚pertoire o— seront stock‚ les fichiers
+               d'aide ST-Guide
+  ÝBExtrasÝb     : contributions et programmes annexes
+
+ÝUSection d‚veloppeurÝu : installe les outils de d‚veloppement
+                      pour cr‚er des clients LDG ou de 
+                      nouvelles libraries LDG.
+
+  ÝBIncludeÝb    : fichiers entˆte C,
+  ÝBLibÝb        : libraries C de d‚veloppement,
+  ÝBGcc, Gcc 295, Purec, Sozobon XÝb: s‚lectionnez votre 
+    		compilateur favori.
+
+	Gcc 295 est la derniŠre version de gcc disponible pour
+	nos machines. Toutefois, cette version ne fonctionne 
+	qu'avec MiNT dans un systŠme de fichier de type Unix. 
+
+	Des exemples de libraries et de clients LDG seront
+	copi‚s dans le r‚pertoire Extras de la section
+	pr‚c‚dente.
+
+ÝUSection outils UnixÝu : si vous utilisez un environnent de type
+					  Unix, cette section propose des outils
+					  int‚ressants.
+
+  ÝBBinÝb        : r‚pertoire des programmes Unix
+  ÝBMan pagesÝb  : r‚pertoire des manuels Unix
+
+ 
+Les r‚pertoires indiqu‚s dans ces champs seront cr‚‚s si
+besoin est.
+ 
+AprŠs avoir correctement remplit les champs, cliquez sur le 
+bouton 'Installer' pour d‚marrer l'installation et suivez les
+instructions.
+ 
+ÝU                                                             Ýu

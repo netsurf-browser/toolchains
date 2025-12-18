@@ -1,0 +1,45 @@
+LDG Kernel (TSR) Historic file
+
+December 2004:
+  - Adapte makefile for bash/mint-fs
+  - compiling for GemLib 0.43.3
+  - modifs in the way a library is searched (ldg_libpath) : under construction
+
+(next of file in french ...)
+
+May 2002 : TSR version 2.30 : nouvelle release publique majeur
+ 			   qui integre les modifs depuis la 2.21.
+ 			   la fonction ldg_error() retourne LDG_NO_FUNC si
+ 			   ldg_find() a choue au moins une fois.
+ 			   pas de modif par rapport a la version 2.23 juste une
+ 			   mise a jour general des numros de version.				
+   Nov 2001 : TSR version 2.23 : Gestion des blocs par SHM (non publique)
+ 	Dec 2000 : TSR version 2.22 : pour test (non publique)
+ 	Dec 2000 : TSR version 2.21 : gestion du cumul des 
+ 			   ouverture multiple d'une mme lib par un client
+   Nov 2000 : version maintenant prte pour la release. Un
+ 			   gros bug a t corrig dans ldg_unload() qui
+ 			   ne librait plus les ressources. 
+ 			   La version du cookie est la 2.20 non beta !
+ 	Oct 2000 : la version du cookie avait t distribue aux
+ 			   beta-testeurs avec le numro 3.00. Elle est
+ 			   ramene  2.20 (pour faire converger les numros
+ 			   de version). On en profite pour changer la structure
+ 			   interne (tableau des usedby)
+ 	Oct 2000 : ajout de la fonction ldg_libpath()
+ 	Sep 2000 : rorganisation des sources. TSR et LIB sont
+ 			   bien spar.
+ 	Mai 2000 : nouvelle version (v2.00) en cours ...
+ 	16/08/1999 Recompilation avec nouvelle lib LDG corrigeant
+ 			   de trs nombreux bugs
+ 	16/05/1999 Modification de la structure ldg : on rajoute 3
+ 			   pointeurs sur des fonctions de chargement, 
+ 			   dchargement de librairies et recherche d'une 
+ 			   fonction.
+ 	27/05/1999 Modification les fonctions renvoient un long au
+ 			   lieu d'un pointeur pour GFA	(v2.1)
+
+ Remarques :
+ Le module de demarrage du TSR (tsrmainc.c) est inspir de ISO-TIME.C 
+ par Julian F. Reschke avec un bug en moins, le TSR de Julian restait
+ en mode superviseur.

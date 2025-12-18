@@ -1,0 +1,158 @@
+@database "Documentation of LDG CPX version 2.00"
+@options "+g -i -s +zz -t4"
+@author "Dominique B‚r‚ziat"
+@$VER: 2.00 (November 2000)
+@subject "Documentation/Utilities"
+
+@node "Main" "Documentation of LDG CPX version 2.00"
+
+	Documentation of LDG CPX
+	Version 2.20 of December 2000
+
+	written by Dominique B‚r‚ziat
+	all rights reserved
+
+
+	Legal Aspects
+	Introduction
+	Configure menu
+	Library menu
+	Expert menu
+	Information menu
+
+@endnode 
+
+@node "Legal Aspects" "LDG CPX : Legal Aspects"
+@{B}Legal Aspects@{b}
+@Line 1 70 0 0 7
+
+ Author : Dominique B‚r‚ziat
+Version : 2.20, December 2000
+  Legal : FreeWare
+Contact : mailto:Dominiqie.Bereziat@inria.fr
+
+@endnode
+
+@node "Introduction" "LDG CPX : Introduction"
+@{B}Introduction@{b}
+@Line 1 70 0 0 7
+
+This CPX configures the LDG cookie ('LDGM'). In addition,
+it can returns information about a library and about other 
+LDG aspects.
+
+This last version is specially designed for LDG 2 but it can 
+work with LDG 1.xx system. However, a LDG 1.10 system is 
+absolutly needed by the CPX.
+
+The CPX is divided in four formulars, each formular can
+be acces using the popup menu placed in the left down
+corner of the CPX :
+
+	Configure	F1	-> devoted to the LDG cookie configuration
+	Library		F2  -> returns info on a library
+	Expert		F3  -> performs expert commands and set some
+					   special variables
+	Information F4  -> General information
+
+
+@endnode
+
+@node "Configure menu" "LDG CPX : Configure menu"
+@{B}Configure menu@{b}
+@Line 1 70 0 0 7
+
+You can access this menu by pressing the F1 key.
+This formular returns information on your LDG configuration
+and sets some important value such as :
+	the path libraries : the path where *.LDG files are stored
+	the garbage collector time : time between two garbage collector
+								 performed by the LDG garbage deamon
+								 (LDGD.APP) if LDG 2.xx is used
+								 or by LDG manager if LDG 1.xx is
+								 used.
+
+In addition, the formular returns the 'LDGM' cookie version.
+
+
+@endnode
+
+@node "Library menu" "LDG CPX : Library menu"
+@{B}Library menu@{b}
+@Line 1 70 0 0 7
+	
+You can access this menu by pressing the F2 key.
+This menu displays information about a LDG library. Select
+a library to load with the F6 key. Informations retuned
+are :
+	- library version
+	- LDG protocol version used (currently 1.00, 1.10, 1.20 or 2.00)
+	- special flags of the library :
+		* shared : the library may be shared with severals
+				   clients. If a library is not shareable. A copy
+				   of it is used.
+		* resident : the library stays resident in memory after
+					 loading.
+		* locked : the library is locked : one and only one
+				   client can used the library.
+	- close function : the library has a closure function.
+	- private extension : the library uses its own extension
+	- special extension : if this is field is used, it indicated
+		the library use a newer version of LDG protocol than
+		recognize by the CPX : you should update your LDG system.
+
+@endnode
+
+@node "Expert menu" "LDG CPX : Expert menu"
+@{B}Expert menu@{b}
+@Line 1 70 0 0 7
+
+You can access this menu by pressing the F3 key. This menu
+is divided in two parts. The first part is devoted to send 
+request to internal LDG kernel. For LDG 2.xx, LDG kernel is
+included in the TSR LDG (AUTO\LDG.PRG) and you must select as
+target item 'Tsr' in left popup. For LDG 1.xx, LDG kernel
+is included in the LDG-manager (LDGMGR.APP) and have to 
+select as target item 'Manager' in left popup. This popup
+can be accessed by pressing F7 button.
+
+Notice that we provide in LDG 2.10 package a new version
+of manager which uses directly TSR functions. If a
+client compatible LDG 1 uses this manager, libraries are
+in fact shared with clients compatible LDG 2 (which was
+not the case with older version of manager). In this case,
+choice TSR or Manager as target is equivalent.
+
+After choice the target, you can choice an action in the
+right popup. This popup can be accessed by pressing F6
+button. Possible actions are :
+	- Garbage collector (F11): libraries unused will be unloaded
+	- Reset (F12): all libraries will be discharged : be carefull !!
+	- List loaded libs (F13): display in a popup the list of libraries
+	                          loaded. You can select an item to display
+	                           the list of client using the library.
+	- Internal infos (F14): return information about capabilities of
+	                        the system.
+	- Shutdown (F15): this action is only possible with manager. It
+				 	  send an AP_TERM message to the manager forcing
+				      it to quit.
+
+In addition, a field indicates the number of libraries currently
+loaded.
+
+The second part containt some variable used by LDG 1.xx but obsolete
+with the new LDG version 2. The only setting is 'idle' which sets the
+time idle (a value in millisecond unit). With LDG-manager 2.00 this
+variable as no effect.
+
+@endnode
+
+@node "Information menu" "LDG CPX : Information menu"
+@{B}Information menu@{b}
+@Line 1 70 0 0 7
+
+You can access this menu by pressing the F4 key. This menu
+displays informations on LDG, Authors and Web access ...
+
+@endnode
+

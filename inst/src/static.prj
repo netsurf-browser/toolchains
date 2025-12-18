@@ -1,0 +1,15 @@
+install.app
+.C[-y+ -p+ -DSTATICLIB]
+.L[-y+]
+=
+pcstart.o
+main.c
+minitext.c
+fileutil.c
+
+pcgemlib.lib
+pcgmxlib.lib
+pctoslib.lib
+pcstdlib.lib
+windom.lib
+ldg.lib

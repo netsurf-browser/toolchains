@@ -1,0 +1,52 @@
+MEM.LDG  - Historic file
+(c) 1998 - 2004 Dominique Béréziat
+
+Distributed under conditions specified by the LGLP licence
+MEM.LDG is a part of LDG distribution
+
+next is french ... (we plan to translate)
+
+v 0.50 : 
+mem.ldg alloue maintenant un bloc personnel par client.
+Cela permet :
+ - de resoudre les problemes precedents car chaque
+   possŠde son propre bloc.
+ - d'utiliser de la m‚moire non partageable
+ - si un client merde en d‚passant la m‚moire qui
+   lui est allou‚, il n'empietera pas sur celle d'un autre client.
+ 				 
+Si un client souhaite partager de la m‚moire, il doit le
+faire explicitement (avec les m‚canismes habituels de
+MiNT). => un exemple dans la doc. ou faire des fonctions
+haut niveau ?
+Le prix de cette meilleur gestion de la m‚moire est que les
+fonctions possede un parametre supplementaire (toutefois il
+masqu‚ dans le binding des fonctions).
+
+ 		
+v 0.40 : 
+On supprime le bit 14. Rappel : ce bit permet que
+le bloc ne soit pas supprimable de la m‚moire (sauf
+pour l'application qui a fait le malloc). Or, en cas de
+plantage de l'appli. On ne peut plus le lib‚rer (ref
+doc MiNT). Une solution : bloquer les blocs par le d‚mon LDG (qui
+intŠgre ca depuis LDG version 2.30.
+La fonction realloc ‚tait mal prototyp‚ dans mem.ldg
+
+ 		
+v 0.31 : ajout de ldg_strdup()
+ 		
+v 0.20 : 
+La librairie est maintenant LDG_NOT_SHARED
+pour r‚soudre les problŠmes dues aux partages
+de zone m‚moire par plusieurs applications dans
+le cas ou le premier client se termine. 
+le module LDGMAIN est linke en premier, sinon
+sous MiNT, la premiere string est ‚cras‚e, je
+comprend d'ailleurs pas pourquoi.
+ 		
+v 0.30 : 
+appel a Mxalloc() avec le bit 14 actif
+librarie de nouveau partageable. : c'est quoi deja ca ?
+
+v 0.10 : premiere version

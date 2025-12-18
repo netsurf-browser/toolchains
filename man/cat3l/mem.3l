@@ -1,0 +1,106 @@
+MEM(3l)                   LDG Call                     MEM(3l)
+
+NAME
+    mem.ldg - A memory manager for Gem dynamical libraries.
+              current version 0.50, May 2002.
+
+DESCRIPTION
+    The goal of this library is to supply to other LDG-libraries 
+    some high-level memory functions. LDG-libraries cannot use 
+    directly the C malloc() function because LDG needs usually to
+    share the memory reserved by malloc() with its client. Use 
+    directly the function ldg_Malloc() (ldg_Malloc() gets memory 
+    directly from the system using the Malloc() and Mxalloc() 
+    GEMDOS functions) is a bad idea if you need to allocate or
+    desallocate a lot of time because the GEMDOS memory function 
+    are bugged and contribute to fragment the memory.
+
+    So, MEM.LDG offers the equivalent functions to malloc(),
+    realloc(), free()... The memory obtained with these functions
+    can be shared with others programs.
+
+SYNOPSIS
+
+   Each fonction admits an additionnal parameter (a context) which 
+   identify client which use MEM.LDG. This parameter allows MEM.LDG 
+   to allocate  separate bloc memory for each process. 
+ 
+   Functions are prefixed with an underscore character '_'. 
+   Functions without context parameter have no prefix and 
+   are binded in mem.h using the AES application identificator
+   as context. In general, we use these functions instead of
+   context functions.
+
+    void* _ldg_malloc( long size, long context);
+    void* ldg_malloc( long size);
+
+        prodives shared memory in a similar way than
+        the malloc() function.
+
+    void* _ldg_calloc( long size, long context);
+    void* ldg_calloc( long size);
+
+        similar to (*ldg_malloc)() excepted the memory is
+        initialized to zero.
+
+    void* _ldg_realloc( void *adr, long size, long context);
+    void* ldg_realloc( void *adr, long size);
+    
+        dynamic reallocation of shared memory obtained
+        with (*ldg_malloc)() (see realloc()).
+
+    void _ldg_free( void *adr, long context);
+    void ldg_free( void *adr);
+
+        release the shared memory reserved with ldg_malloc()
+
+    void _ldg_strdup( void *src, long context);
+    void ldg_strdup( void *src);
+
+        duplicate a string.
+
+    void _ldg_allocmode( long mode, long context);
+    void  ldg_allocmode( long mode);
+
+        mode = 1 : set memory allocation to global mode
+        mode = 0 : set memory allocation to private mode (default)
+
+		This function should be call one time before any
+		memory allocation request.
+
+BINDING
+    #include <ldg/mem.h>
+    LDG *mem;
+	int err, vers = 0x0050;
+
+	err = ldg_mem_init( "mem.ldg", vers, &mem);
+
+	/* err is a LDG code error (see ldg.hyp)
+	 * vers is a number version required for mem.ldg 
+	 */
+	 
+    /* compile and link your library with -lmem flag */
+    
+    /* At the end, you have to free up the library */
+    ldg_close( mem, ldg_global);
+
+BUGS
+    Currently, any bugs are reported.
+
+FUTUR
+
+    With LDG.MEM, we have a global memory manager for all 
+    LDG-library. It could be interesting to create some controls
+    of this function, for example :
+        - free memory used by crashed library,
+        - set a maximum limit per library or for all library,
+        - choice between TTram and STram ...
+
+    Any ideas are welcome.
+
+CREDITS
+    This LDG uses the functions (modified) of MiNTLIB.
+
+AUTHOR
+    Dominique B‚r‚ziat, 
+    mail: Dominique.Bereziat@lip6.fr

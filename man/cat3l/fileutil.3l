@@ -1,0 +1,98 @@
+FILEUTIL(3l)               LDG Call                    FILEUTIL(3l)
+
+NAME
+    FILEUTIL - A LDG library providing some utilities to copy,
+               move and delete files and directories.
+
+DESCRIPTION
+    FileUtil is a LDG (Gem Dynamical Library) usefull to manipulate 
+    files like in a installer program for instance. It provides 5 
+    functions to copy, move and delete file and directories. These 
+    functions try to be a equivalent functions of standard Unix
+    commands such as cp, mv, rm, rmdir and mkdir.
+
+SYNOPSIS
+    WORD cp( char *src, char *dest);
+
+        copy file(s) src in dest directory. TOS regular expression 
+        can be used. A directory cannnot be copied. The function 
+        returns number of file copied or a negative code error.
+
+    WORD mv( char *src, char *dest);
+
+        move file(s) src in dest directory. TOS regular expression 
+        can be used. A directory cannnot be moved. The function 
+        returns number of file moved or a negative code error.
+
+    WORD rm( char *path);
+
+        delete file(s) dest. TOS regular expression can be used. A 
+        directory cannnot be deleted. The function returns number of 
+        file deleted or a negative code error.
+
+    WORD rmdir( char *path);
+
+        delete directorie(s) dest. TOS regular expression can be used.
+        A directory must be empty to be deleted. The function returns 
+        number of directories deleted or a negative code error.
+
+    WORD mkdir( char *path);
+
+        create a directory. If a father directory does not existe it will
+        be created too. The function returns number of directories 
+        effectively created or a negative code error.
+
+LOW LEVEL FUNCTIONS
+	WORD regexp( const char *rexp, const char *name);
+	
+		returns TRUE if 'name' matches to the TOS regular expression 
+		'rexp'. Special character are :
+			* : design any group of characters,
+			? : design any character,
+			[] : design
+		
+	XDTA *fgetdta( void);
+		
+		returns the current XDTA (extended Disk Transfer Address).
+		The XDTA structure is just an extension of the GEMDOS DTA
+		structure. It can handle 64-bit filename buffer. This
+		function replaces Fgetdta().
+	
+	void gsetdta( XDTA *);
+	
+		set the current XDTA. This function replaces Fsetdta().
+	
+	WORD fsfirst( char *name, LONG attr);
+		
+		This function replace Fsfirst() and works correctly with long
+		filename.
+
+	WORD fsnext( void);
+	
+		This function replace Fsnext() and works correctly with long
+		filename.
+
+BUGS
+	Regexp() does not handle a sequence with * followed by a [] 
+	sequence.
+		
+
+BINDING
+    #define BIND_FILETUTIL	/* constant to define if the module is the main module */
+    #include <ldg\fileutil.h>
+
+    LDG *fu = ldg_open( "fileutil.ldg", ldg_global);
+    if( fu) ldg_init_fileutil( fu);
+
+HISTORIC
+	version 0.10 : First public released version.
+	version 0.20 : Shells function suppport now long filename.
+				   New functions, extending GEMDOS functions
+				   Fgetdta, Fsetdta, Fsfirst and Fsnext to long filename.
+				   Adding regexp() function handling the TOS
+				   regular expressions.
+	
+AUTHOR
+    Dominique B‚r‚ziat
+    email: Dominique.Bereziat@inria.fr
+

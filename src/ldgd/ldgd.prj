@@ -1,0 +1,10 @@
+..\..\gemsys\magic\start\ldgd.app
+.C[-Y- -G+]
+.L[-Y-]
+=
+pcstart.o
+ldgd.c
+gem.lib
+pctoslib.lib
+pcstdlib.lib
+ldg.lib

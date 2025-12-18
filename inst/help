@@ -1,0 +1,51 @@
+›ULDG installation                                         Help›u
+ 
+The installer copy files in your system folders in order to 
+LDG system be  ready to use after the  next reboot. The
+installer is divided  into 3 sections. To activate a section
+installation you have to check-in its button title.
+
+To edit a field, use the keyboard arrows and type the directory
+pathname or click directly on a field to use the system
+file selector.
+
+›USystem section›u : install or update LDG into your system.
+ 
+    ›BAUTO-path›b  : your TSR directory, usually C:\AUTO
+    ›BCPX-path›b   : your CPX directory, usually C:\CPX
+    ›BSTART-path›b : Auto Start application (for multitasking 
+                 system)
+    ›BLDG-path›b   : the directory where LDG-lib are stored,
+                 usually C:\GEMSYS\LDG,
+    ›BHYP-path›b   : the directory where ST-Guide files are 
+                 stored.
+    ›BExtras›b     : contribution and utility programs. 
+ 
+›UDevelopper section›u : install C-libraries needed to create new
+                     LDG libraries or LDG applications. 
+
+    ›BInclude›b    : header files for C compilers
+    ›BLib›b        : libraries for C compilers
+    ›BGcc, Gcc 295, Pure C, Sozobon X›b: select your favorite 
+                 compiler
+    
+    Gcc 295 designs the last version of Gcc available for 
+    our computers. However, gcc-2.9.5 works only in a MiNT 
+    framework with an Unix-like hierarchy. Interested people 
+    will recognize themselves.
+
+    Examples  of  library  and  application using LDG will be 
+    copied in the directory Extras of the previous section. 
+  
+›UUnix tools›u : if you use an Un*x-like hierachy  and  a  shell, 
+			 this section proposes some interesting tools.
+
+    ›BBin›b        : path of unix programs
+    ›BMan pages›b  : path of unix manual pages (man)
+
+Notes : If a subfolder don't exist, it will be created.
+ 
+Fill in correctly each fields and select button 'Install'  to
+start the installation.
+›U                                                             ›u
+

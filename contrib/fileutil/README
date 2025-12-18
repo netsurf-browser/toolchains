@@ -1,0 +1,23 @@
+This is FILEUTIL version 0.20 (Jan. 2002)
+written by Dominique B‚r‚ziat (c) 2002
+
+Goal
+
+It is a LDG module providing shell functions to
+copy, move and delete files and subfolders. This
+version support now long filename. The module
+provides too equivalent of GEMDOS functions FsFisrt(),
+FsNext(), FsetDta() and FgetDta() supporting
+long filename.
+
+Install
+
+Just copy GEMSYS/LDG/FILEUTIL.LDG in your LDG folder.
+The file INCLUDE/LDG/FILEUTIL.H containt the interface
+to FILEUTIL functions.
+Documentation is the file MAN/CAT3L/FILEUTIL.3L
+
+Contact
+
+Any suggestion or remark is welcomed. Mail to
+Dominique.Bereziat@lip6.fr

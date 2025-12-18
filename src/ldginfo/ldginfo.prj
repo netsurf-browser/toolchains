@@ -1,0 +1,13 @@
+..\..\bin\ldginfo.ttp
+.C [-y+ -g+]
+.L [-y+]
+=
+pcstart.o
+
+ldginfo.c
+..\share\internal.c
+
+pcstdlib.lib
+pctoslib.lib
+gem.lib
+..\..\lib\purec\ldg.lib

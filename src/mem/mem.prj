@@ -1,0 +1,21 @@
+..\..\gemsys\ldg\mem.ldg
+.C[-y- -p+ -DDOSHM]
+.L[-y-]
+=
+pcstart.o
+
+ldgmain.c		; LDG-lib main part
+bcopy.s			; fast buffer copy hack
+osmem.c			; Direct OS call to memory
+sbrk.c			; sbrk() function
+malloc.c		
+bzero.c
+realloc.c
+getpages.c
+globals.c
+utils.c
+
+pcstdlib.lib
+pctoslib.lib
+gem.lib
+ldg.lib

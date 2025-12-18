@@ -1,0 +1,57 @@
+----------------------------------------------------
+|  Librairie Dynamique Gem - derniŠres nouvelles   |
+|            Version 2.31 de Mai 2003              |
+|  Tous droits r‚serv‚s (c) Dominique B‚r‚ziat,    |
+|  Olivier Landemarre et Arnaud Bercegeay          |
+----------------------------------------------------
+ 
+Merci d'utiliser les libraries dynamiques GEM.  Nous
+esp‚rons que  ce  systŠme de  librairies  dynamiques
+vous donnera entiŠre satisfaction.
+ 
+ ÝBPrincipales nouveaut‚sÝb
+ 
+Cette  version  est  une  mise-…-jour mineure de  la 
+version 2.30. 
+
+ - un bug a ‚t‚ fix‚ dans la maniŠre dont les libraries
+   sont recherch‚es lorsqu'on sp‚cifie les chemins …
+   la fa‡on MiNT,
+ - les libraries C de d‚veloppements sont maintenant
+   ind‚pendantes de la librarie GEM utilis‚e.
+Note pour les d‚veloppeurs:
+   Comme la librairie LDG est ind‚pendante de la
+   librarie GEM utilis‚e, vous devez sp‚cifier le
+   fichier entˆte GEM utilis‚ avant d'inclure 'ldg.h'.
+ - Tous les programmes du package LDG ont ‚t‚
+   recompil‚ avec la librairie Gemlib pl43. Nous
+   encourageons d'ailleurs les d‚veloppeurs a
+   l'utiliser.
+
+ ÝBRecommandationsÝb
+ 
+Attention, le CPX  de r‚glage du  TSR ldg n'est  pas
+configur‚ …  votre configuration,  aprŠs le  reboot,
+lancez le CPX et mettez-le … jour.
+ 
+Aux  utilisateurs   non  programmeurs,   nous   vous
+conseillons de lire le paragraphe 'Installation'  de
+la documentation  hypertexte (au  format  ST-Guide),
+les LDG  peuvent  ˆtre  param‚tr‚es  de  diff‚rentes
+maniŠres selon votre systŠme.
+ 
+Le  pr‚sent  package   (les  bibliothŠques  C,   les
+programmes annexes et le protocol LDG) est totalement
+libre d'utilisation mˆme dans un cadre commercial.
+Les auteurs refutent toutes responsabilit‚s en cas
+de disfonctionnement ou de problŠmes apparus lors de
+l'installation ou l'usage du systŠme LDG.
+ 
+Vous pouvez consulter le site internet 
+     ÝUhttp://ldg.atari.orgÝu
+ ou  ÝUhttp://ldg.org.free.frÝu
+ 
+DerniŠre modification : Mai 2003.
+  
+Les auteurs.
+ÝU                                                    Ýu

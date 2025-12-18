@@ -1,0 +1,6 @@
+
+# $Id: VERSION 119 2015-05-30 08:59:27Z landemarre $
+#
+
+# Define this to the version of the package.
+VERSION=2.35

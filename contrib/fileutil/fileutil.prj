@@ -1,0 +1,14 @@
+..\..\gemsys\ldg\fileutil.ldg
+;fileutil.ldg
+.C [-y- -p+]
+.L [-y-]
+=
+pcstart.o
+fileutil.c
+
+pcstdlib.lib
+pctoslib.lib
+ldg.lib
+pcgemlib.lib
+pcfltlib.lib
+

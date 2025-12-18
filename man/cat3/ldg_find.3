@@ -1,0 +1,23 @@
+LDG_FIND(3)                   LDG Call                     LDG_FIND(3)
+
+NAME
+   ldg_find - get a function inside a dynamical library.
+   
+SYNOPSIS
+   #include <ldg.h>
+
+   void *ldg_find( char *name,LDG *ldg);
+
+PARAMETERS
+         name : name of searched function,
+          ldg : LDG descriptor,
+       retrun : address of the function is found or NULL otherwose.
+
+DESCRIPTION
+    This function  looks for  a function  inside a  LDG-library.  This
+    function is optimized to find a set of functions in the same order
+    they are built inside the library. A good convention is to use the
+    alphabetic order.
+
+SEE ALSO
+    ldg_open(3).

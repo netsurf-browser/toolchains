@@ -1,0 +1,179 @@
+LDGINFO(1)                  User Commands                 LDGINFO(1)
+
+
+NAME
+    LDGINFO - An utility to control the LDG system and shared 
+              libraries. Version 2.20 (formely SHOWLIB).
+
+SYNOPSIS
+    LDGINFO [options] [file ...]
+
+PARAMETERS
+    The command line attents for a list of options eventually 
+    followed by a list of LDG-libraries. File is the name of a LDG 
+    library. Options are :
+        -h, --help : 
+            display a help message,
+
+        -v, --version :
+            display the version number,
+
+        -l, --ldg :
+        	display the LDG configuration,
+
+        -p, --header :
+        -f, --function :
+        -u, --update :
+            these options require a list of one or severals 
+            libraries specified at the end of the command line. If 
+            the path of the libraries is not complet, LDGINFO uses 
+            the LDG cookie to locate where the libraries are 
+            stored. The extension of a library can be omitted. In 
+            this case, a postfix '.ldg' is used.
+
+            Option -p displays informations contained in the header 
+            of the library.
+
+            Option -f displays the list of functions avalaible in 
+            the library.
+
+            Option -u update the library : the library will be 
+            copied in the LDG-path if its number version is the 
+            last. In addition, if the older library is backuped 
+            using its version number as file extension (eg: 
+            screen.ldg version 1.30 is renamed as screen.130).
+
+        -i, --inspect :
+            this option examines all LDG libraries stored in the 
+            LDG path system. Subdirectories are explored too,
+
+        -i <pathfolder>, --inspect <pathfolder> :
+            LDGINFO examine all files from the directory <pathfolder>,
+
+        -t, -internal:
+            display internal information about libraries loaded,
+
+        -m, --manager :
+            display information about the LDG-manager if loaded in 
+            memory, this option is here for backward compatibility. 
+            In the last version of LDG, library loaded by TSR and 
+            by Manager are shared,
+
+        -g, --garbage :
+            perform a garbage collecting : unused libraries will be
+            discharged,
+
+        -r, --reset :
+            reset LDG system : all libraries will be discharged. A
+            LDG_QUIT message is sent to each client using these
+            libraries. Use with option with many precaution (it is 
+            used by LDG developpers for their testing sequences),
+
+        -k, --key :
+            LDGINFO waits a keypressed to terminate,
+
+        -a, --all :
+            cumulate options -l, -m, -p, -f,
+
+    The following options address the ldg cookie ('LDGM'). When a
+    value is changed, that affects directly LDG system, however these
+    changes are not taken into account for the next reboot.
+
+        --cookie-version:
+            display the cookie version i.e. the LDG kernel version
+            currently active,
+
+        --cookie-idle [value] :
+            display or set the cookie time idle value to 'value' 
+            (in msec),
+
+        --cookie-garbage [value] :
+            display or set the cookie auto garbage collector time 
+            to 'value' (in sec),
+
+        --cookie-path [path] :
+            display or set the cookie path where are stored the LDG 
+            libraries,
+
+    The following options address the TSR (LDG.PRG). When a value 
+    is changed, the change will be take in account for the next 
+    reboot. However, if you can use the LDG CPX, these switches will be 
+    probably without action. These switches will be used in the 
+    special case if you does not use a control panel.
+
+        --tsr-version:
+            display the TSR version,
+
+        --tsr-idle [value]:
+        	display or set the TSR idle time to 'value' (in msec),
+
+        --tsr-garbage [value]:
+            display or set the TSR garbage time to 'value' (in sec.),
+
+        --tsr-path [path]:
+        	display or set the TSR  path where are stored the LDG 
+            libraries,
+
+        --tsr path:
+        	specify the location of LDG.PRG. The default location 
+            is 'C:\AUTO\LDG.PRG'. This option should be placed be 
+            before options --tsr-*.
+
+DESCRIPTION
+    LDGINFO is a tool devoted to handle your LDG system. It is a 
+    command line program and an alternative if you does not use
+    a CPX control panel. It could be call from a script during a
+    boot in a Unix-style environment. With LDGINFO, you can :
+
+        - inspect your LDG configuration (see -l,-t options)
+        - configure the LDG cookie (--cookie-*),
+        - inspect your libraries and update them easily (-f,-p,-i,-u),
+        - inspect the LDG manager (-m),
+        - change the internal default settings of the TSR (--tsr-*),
+        - clean LDG memory and reset the system (-g,-r).
+
+	Update a library with ldginfo is very recommend (see option -u).
+
+    This version of LDGINFO is compiled with LDG 2.xx but it is
+    normaly compatible with all version of LDG. Please, contact
+    the author for any problems.
+
+EXAMPLES
+    List libraries available on your system :
+        > ldginfo -i 
+
+    A general view of your LDG configuration :
+        > ldginfo -l
+
+    Where are stored your libraries ?
+        > ldginfo --cookie-path
+
+    A way for a script to locate ldg librarie path
+        > ldgpath=`ldginfo --cookie-path`
+
+    Change the time temporaly garbage collecting value :
+        > ldginfo --cookie-garbage 2000
+
+    Print the LDG version :
+        > ldginfo --cookie-version
+
+    Display informations about MEM.LDG, a standard library :
+        > ldginfo -p -f mem
+
+    List libraries currently loaded and clients using them :
+        > ldginfo -t
+
+    Install or update a library :
+        > ldginfo -u mesa_gl.ldg
+
+    Clean LDG memory (perform a garbage collecting) :
+        > ldginfo -g
+
+AUTHOR
+    Dominique Bereziat
+    Contact at : mailto:Dominique.Bereziat@lip6.fr, 
+                 http://ldg.atari.org/
+            or   htpp://ldg.org.free.fr/
+
+
+LDGINFO(1)                  User Commands                 LDGINFO(1)

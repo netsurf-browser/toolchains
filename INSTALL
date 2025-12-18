@@ -1,0 +1,40 @@
+LDG installation
+
+this file has two parts :
+1/ How to install LDG on your system
+2/ How to compile LDG (currently in french)
+------------- How to instal LDG --------
+There is a install program : just launches it and follows instructions.
+If the program does not run (it is the case on Aranym) : you
+can install manually :
+
+a) Installing LDG kernel
+copy auto/ldg.prg in your auto folder
+copy cpx/ldg.cpx in your CPX folder
+copy gemsys/ldg anywhere you want (probably C:/gemsys)
+copy gemsys/magic/start anywhere you want : it contains LDGD.APP that
+   should be launch automatically by AES on multitask system. It is
+   not required on single-TOS
+copy guides/*.hyp and guides/*.ref in your ST-Guide folder
+
+b) Configuring LDG kernel
+execute from your desktop auto/ldg.prg
+execute cpx/ldg.cpx from Xcontrol and set the correct path
+of LDG-libraries : it should be C:/gemsys/ldg but any location is
+possible.
+
+c) Installing devel libraries (optional, only for developper)
+depending on your compiler, copy the right LDG library in your
+compiler libraries folder:
+  - with gcc 2.9.5 (MiNT and ext2 filesystem) : copy lib/gcc295/*.a in /usr/lib
+  - with gcc 2.8.1 (any TOS) : copy lib/gcc281/*.olb in $GNULIB folder
+  - with sozobon 2 : copy lib/sox/*.a in your sozobon lib folder
+  - with pure c : copy lib/*.a in your Pure C lib folder
+Copy LDG header files include/* in your compiler include folder
+
+If your use an shell command line, you can copy manual file (folder man)
+and some utility (folder bin).
+
+------------- How to compile LDG --------------------
+See file src/COMPILE
+

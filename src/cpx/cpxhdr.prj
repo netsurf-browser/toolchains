@@ -1,0 +1,8 @@
+cpxhdr
+.L[-V+]
+=
+pcstart.o
+cpxhdr.c
+gem.lib
+pcstdlib.lib
+pctoslib.lib

@@ -1,0 +1,16 @@
+..\..\install.app
+.C[-y- -p+]
+.L[-y-]
+=
+pcstart.o
+
+main.c
+..\..\..\viewtext\viewtext.c
+
+pcgemlib.lib
+pcgmxlib.lib
+pctoslib.lib
+pcstdlib.lib
+windom.lib
+;viewtext.lib
+ldg.lib

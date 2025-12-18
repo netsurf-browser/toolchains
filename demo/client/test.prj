@@ -1,0 +1,6 @@
+test.tos
+.C [-8+]
+=
+pcstart.o
+test.c
+pcstdlib.lib

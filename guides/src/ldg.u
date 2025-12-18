@@ -1,0 +1,1367 @@
+# Version pour UDO 5
+!english
+
+# LaTeX settings
+!tex_2e
+!tex \usepackage{fullpage}
+
+# ST-Guide settings
+!stg @options "+g -i -s +zz -t4"
+!stg @subject "Programming/Programming guidelines"
+!stg @tabsize 4
+
+# General settings
+!use_style_book [tex,asc,rtf,win]
+!use_short_toc          [stg,win,pch,info,html]
+!use_auto_subtocs       [stg,win,html,pch,info]
+!use_auto_subsubtocs    [stg,win,html,pch,info]
+!no_effects             [asc]
+!no_numbers             [html,info]
+!no_umlaute             [info]
+
+!ifdest [tex]
+    !define E \,
+    !define ml ~\newline
+!else
+    !macro E ~
+    !macro ml (!nl)
+!endif
+
+
+# Hyphenation
+
+!ifdest [stg]
+!include ldg.uhs
+!endif
+
+!title Documentation of
+!version version 2.33 (October 2005)
+!program LDG
+!programimage titre2
+!date (!today)
+!author Olivier Landemarre, Dominique B‚r‚ziat and Arnaud Bercegeay
+!street (c) 1997 - 2005 all right reserved.
+!email http://ldg.sf.net/
+
+
+!begin_document
+!maketitle
+!tableofcontents
+
+
+!node Introduction
+
+LDG stands in french for Librairies  Dynamiques GEM or in english  GEM
+Dynamical Libraries. It is a protocol allowing GEM application to load
+and share libraries (or plugin if you prefer).  The goal of LDG is  to
+provide some  usefull  functions  to the  GEM  applications  like  the
+WinDeath DDL. These libraries are dynamicals i.e. they are loaded when
+the application  need it  and  unloaded when  they are  unused.  These
+libraries may  be shared  with severals  clients. Libraries  can  have
+special right such as unshareable,  memory resident or locked. The LDG 
+works with all TOS-compatible  computers and TOS-compatible OS such as 
+MagiC, Geneva or  MiNT with singletasking or multitasking systems too.
+
+(!U)How does it work ?(!u)
+
+With the  new  LDG 2.00,  the  mechanism  is now  really  simple  (see
+historic section to understand the LDG evolution). The clients use the
+cookie functions  to load  or  unload a  library.  When a  library  is
+required, the library  is initially searched  inside the internal  LDG
+list of libraries used.
+   - if library is already loaded (i.e. already use by an another
+   	 client), same library is used.
+   - if library is not found, it is loaded in memory.
+
+
+(!U)What you'll find in the LDG package(!u)
+
+First, if you  are a (!I)simple(!i) user i.e not  a developper, you just
+have to read the  section Installation in  order to install  correctly
+the LDG system. Normally,  the LDG installer  has  done properly  this
+job.
+
+Second, if  you  are a developper,  you'll find a  C-library for  Gcc,
+Sozobon C and Pure  C to write LDG-clients  and LDG-libraries. If  you
+use an another language (GFA-basic, Forth, ...), you does not need  to
+use these libraries because the LDG-cookie offers you the functions to
+handle the  LDG-protocol. If  you want  to write  LDG-libraries,  only
+Pure C, Gcc and Sozobon C compilers are currently supported.If you are
+interested to adapte the LDG-system to an another one , please contact
+us (see section Authors and the LDG team).
+
+You'll find in  the package  tools, a LDG  demo and  some examples  of
+LDG-client and LDG-libraries.
+
+(!U)How read the LDG documentation ?(!u)
+
+The section Installation describes the  way to install your LDG system
+depending   your   environement.  The  section Functions of the C-library  
+describes each  functions  offered  by the
+C-library.  The  section   Programming advices   gives  to  developper
+some  importants   recommandations,  tricks   and  tips   to   develop
+LDG-libraries. The section Availables libraries makes the point on the
+LDG-libraries available  on the  scene. You'll  find the  Bugs  report
+section, the History section and finally the Authors contacts.
+
+(!U)LDG versus MagiC shared libraries (SLB)(!u)
+
+In our opinion LDG has several advantages compare to SLB :
+!begin_itemize
+!item 	LDG libraries are dynamicals. They can be load or unload dynamically. 
+		Magic loads SLB libraries during the boot : unused libraries can decrease 
+		dramatically free memory. However, FreeMiNT since version
+		1.15 (?) handles SLB dynamically.
+!item 	LDG libraries can be shared, duplicated or not. SLB are always shared. 
+!item 	A LDG-library is easy to create compare to SLB library (ASM is required). 
+!item 	LDG works currently on any TOS based system.
+!item   LDG can work without any system extension. SLB can be used
+		only with MagiC, FreeMiNT and with plain-TOS with MetaDOS
+		extension using a SLB driver. For example, the LDG installer
+		works perfectly with plain-TOS although it uses FILEUTIL
+		LDG library.
+!end_itemize
+
+(!U)Notes(!u)
+
+Notice that all version before the 1.00 version are beta-version. From
+the 0.99 the LDG-protocol was modified and there is an incompatibility
+with the newer versions.
+
+######################################################################
+
+!node Legal aspects
+
+LDG is now (from version 2.32) distributed under conditions specified
+by the GNU LESSER GENERAL PUBLIC LICENSE also known as the LGPL
+license.
+
+Please, read the file COPYPRIGHT for details about this license.
+
+######################################################################
+
+!node Installation
+
+If you have correctly install LDG with the LDG installer program, this
+section can be probably ignored.
+
+Notes :  with the  new version  of LDG  (version 2.00),  some  environ
+variables are obsolets.
+
+(!U)TSR installation(!u)
+
+!begin_enumerate
+!item  Copy the file LDG.PRG into your AUTO folder (probably C:\AUTO).
+
+!item  Copy the file LDG.CPX into your CPX folder (probably C:\CPX or
+   C:\GEMSYS\CPX).
+
+!item  If you use a multitasking OS, copy LDGD.APP in your START 
+   folder (typically, C:\GEMSYS\MAGIC\START for MagiC, for Naes
+   you probably have to add a line in your N_AES.CNF file such
+   as `exec C:\GEMSYS\MAGIC\START\LDGD.APP'.
+   This program can be omitted. It is used to discharge libraries
+   which not used by a client (typically, when a client crashes).
+   You can clean LDG manually rom the LDG CPX.
+
+!item  Reboot your computer or launch directly LDG.PRG.
+
+!item  Open the LDG cpx, and choice a folder for the LDG-libraries.
+   (probably C:\GEMSYS\LDG or C:\LDG). 
+
+!item  Save the configuration with the `save' button of the CPX.
+
+!item  Copy all your LDG files (*.LDG extension) into the LDG-folder.
+
+!item  If you have a multitasking  system, copy the file LDGMGR.APP in  in
+   LDG-folder. If  you  have  a  monotasking  system,  copy  the  file
+   LDGMGR.APP  into  your  desktop   accessories  folder  and   rename
+   LDGMGR.APP in LDGMGR.ACC then reboot your computer. 
+!end_enumerate
+
+IMPORTANT  REMARK   :  LDG   manager  is   used  only   for   backward
+compatibility: client compiled with a LDG system which version  number
+anterior to  2  (1.20  is  the last  version  before  2.00) needs  the
+LDG-manager   except   if   the    client   used   directly    cookies
+functionalities.
+
+Ok, your system is ready to work,  try the demo program supplied in  the
+LDG distribution.
+
+(!U)Environ variables(!u)
+
+The LDG cookie contains the path where LDG libraries stand. In addition
+of this path, environ variables (!B)PATH(!b) and (!B)LDGPATH(!b) are
+used to locate LDG libraries.
+
+The way to install environs variables depends on your OS:
+!begin_description
+!item  [MagiC, MagicMac, MagiC PC:]
+      edit your MAGX.INF file. Somewhere before the keyword #_CTR,
+	  add the following lines:
+!begin_verbatim
+        #_ENV LDGPATH=your ldg path
+!end_verbatim
+ 
+!item  [Naes:]
+      edit the  file N_AES.CNF  and add  the environ  values with  the
+      keyword export. Syntaxe is:
+!begin_verbatim
+      export LDGPATH=C:\GEMSYS\LDG
+!end_verbatim
+
+!item  [MultiTos:]
+      edit the  file  GEM.CNF and  add  the environ  values  with  the
+      keyword export. Syntaxe is:
+!begin_verbatim
+      setenv LDGPATH=C:\GEMSYS\LDG
+!end_verbatim
+
+!item  [TOS:]
+      you need a special patch such as GemRam to add environ variables.
+!end_description
+ 
+
+######################################################################
+
+
+!node Developper corner
+
+!subnode Compatibility with LDG version 1.xx
+
+LDG 2.xx is a  major evolution compare to  LDG version 1.xx (the  last
+was 1.20). We  list the  difference between the two versions  and say  few
+words about the compatibility.
+
+!begin_enumerate
+!item  LDG manager disappears. (!nl)
+  	With LDG 1.xx, the manager loads and unloads libraries requested  by
+  	clients and handles  special  library  flags  (locked,  resident,
+  	unshareable). This job is now performed directly by the LDG TSR.           
+
+!item  GEM protocol disappears. (!nl)
+  	It is a consequent of the previous point. Because client can call
+  	directly from the  TSR functions, GEM  messages are obsolets.  The
+  	consequence is the system is now really fast. Time idle  parameter
+    is unusefull.  However, the  message LDG_QUIT  (see ldg_open()) is
+    kept and used to inform clients their libraries have been unloaded
+    from the memory.
+
+!item  Library are loaded with the same way from an application or  from
+     a library.
+!end_enumerate
+
+Libraries and clients compiled with LDG 1.xx are fully compatible with
+LDG 2.00 if  LDG manager  is installed in  LDG paths.  Even, for  some
+clients using directly cookie functions, LDG manager is not used.
+
+Calls for loading and  unloading are now very  simple. There are  only
+two  functions  :  ldg_open()  and  ldg_close().  LDG  1.xx  made  the
+distinction between library loaded by  client and library loaded by  a
+library. It is not necessary to  change your code if you compile  your
+application with LDG 2.00 because the header LDG.H provides some macros  
+allowing the backward compatibility. 
+
+!subnode Structures and data
+
+!subsubnode LDG
+
+Here, the definition of the LDG structure. This structure is
+given to a client during a LDG_REQUEST session.
+
+!begin_verbatim
+typedef struct ldg {
+      LONG magic;       /* magic number, always 'LDGM' */
+      WORD vers;        /* library version  */
+      WORD id;          /* id of launcher, reserved */
+      WORD num;         /* number of items in 'list' */
+      PROC *list;       /* list of library functions */
+      char *infos;      /* a message to describe the library */
+      void *baspag;     /* reserved (basepage of library) */
+      /* From version 0.99 */
+      WORD flags;       /* library flags */
+      /* From version 0.99c */
+      void (*close)(void); /* if non NULL, pointer on a function
+                            * called when the library is released */   
+      /* From version 1.00 */
+      WORD vers_ldg;    /* Version of LDG-protocol */
+      char path[FLEN];  /* path of library */
+      LONG user_ext;    /* Extension of the library */
+      LONG addr_ext;    /* For futur usage */
+   } LDG;
+!end_verbatim
+
+!subsubnode PROC
+
+The variable list adresses the function of the library. Here the
+definition of its type:
+
+!begin_verbatim
+typedef struct entrie {
+      char *name;       /* Name of the function */
+      char *info;       /* a message to describe the function */
+      void *func;       /* pointer to the function */
+   } PROC;
+!end_verbatim
+
+!subsubnode LDGLIB
+
+Because the  structure  LDG features  private  and public  fields,  we
+prefer used, when a library is built, the following structure:
+
+!begin_verbatim
+typedef struct ldglib {
+    WORD vers;              /* Library version */
+    WORD num;               /* number of item in variable list */
+    PROC *list;             /* list of the functions */
+    char *infos;            /* a message to describe the library */
+    WORD flags;             /* library flags */
+    void (*close)(void);    /* closure function */
+    LONG user_ext;          /* an extension for the library */
+} LDGLIB;
+!end_verbatim
+
+Then, all fields of LDGLIB structure have to be set by the  developper
+inside in the library.  The real structure  used by ther  LDG-protocol
+are initialized by the ldg_init() function provided by the C-libraries
+developper.
+
+(!U)The flags variable(!u)
+
+This variable is a bit field:
+
+!begin_description
+!item [LDG_NOT_SHARED (0x01)] (!ml)
+        This bit means that the library can not be shared by  severals
+        client. When a  client request  the library, the  new copy  of
+        this library is loaded.
+!item [LDG_LOCKED (0x02)] (!ml)
+        This bit means that the library is locked: this library can be
+        used by one and only one  client. If a second client  requests
+        this library, a message error is returned.
+!item  [LDG_RESIDENT (0x04)] (!ml)
+        This bit means that the  library used a client stays  resident
+        in memory  even the  client close  the LDG  session with  this
+        library.
+!end_description
+
+(!U)Note:(!u) 
+	These special  states  are  handled  by  the  TSR.  The  C-library
+	developper of the  LDG package provides  a way to  load a  library
+	even when the TSR  is not installed. In  this case, special  flags
+    are not supported.
+
+(!U)The close variable(!u)
+
+This variable can containt the address  of a closure function. When  a
+library is terminated,  this function  is called. A  such function  is
+usually used to free up memory or others ressources.
+
+(!U)The user_ext variable(!u)
+
+This variable is can be used by the library for its own usage.
+
+ 
+
+!subnode Server functions
+
+A LDG library is very easy to write. The developer just have to  write
+their  functions,  like  standard  C  functions,  and  declare   these
+functions in  the LDGLIB  structure.  Communication  between  the
+library and clients is very simple  : the library is loaded in  memory
+then executed. The executed library,  using an environ variable  based
+method, transmits to the executor the address of the LDG structure.
+ 
+
+!subsubnode ldg_init()
+!alias ldg_init
+!begin_description
+
+!item [NAME] (!ml)
+	ldg_init - LDG interface of a library.
+
+!item [SYNOPSIS] (!ml)
+   (!B)int(!b) ldg_init( LDGLIB *ldg);
+
+!item [PARAMETERS] (!ml)
+      ldg    : adress of the LDGLIB structure, (!ml)
+      return : 0 no error. -1: the library was launched by a non
+               LDG application.
+
+!item [DESCRIPTION] (!ml)
+    This function provides the  interface between the LDG-library  and
+    the LDG-system.
+ 
+!end_description
+######################################################################
+!subsubnode ldg_getpath()
+!alias ldg_getpath
+!begin_description
+
+!item [NAME] (!ml)
+	ldg_getpath - returns the real own path of a shared lib.
+
+!item [SYNOPSIS] (!ml)
+   (!B)char(!b)* ldg_getpath( (!B)void(!b));
+
+!item [PARAMETERS] (!ml)
+      return : buffer containing the current library path.
+
+!item [DESCRIPTION] (!ml)
+    This function returns the real path of a library. It can
+    be called only inside a LDG-library and outside the
+    main function. The reason is the path is not initialised
+    during the first execution of a library (i.e. when the
+    main() function is executed). So ldg_getpath() can only be
+    invoked inside a library function.
+
+	This function is usefull if you want read/write data or configuration
+	files in the same directory then the library.
+
+!item [SEE ALSO] (!ml)
+	ldg_libpath()
+!end_description
+######################################################################
+!subsubnode Example of library
+
+!begin_verbatim
+/*
+ * a LDG-library example, using double precision decimal parameters
+ * examples\lib\ex_lib.c
+ */
+
+#include <portab.h>		/* Definition of WORD, CDECL, etc ... */
+#include <aes.h>        /* Use aesbind.h or gem.h for most of C compilers */
+#include <ldg.h>
+#include <math.h>
+
+/*
+ * double are not standard between different
+ * compilers. We encapsul the double with a
+ * long : each compiler makes the conversion.
+ */
+
+typedef union real {
+        long dummy;
+        double value;
+    } Real;
+
+/* prototypages */
+
+double CDECL sinus( Real *);
+double CDECL cosinus( Real *);
+
+/*
+ * This variable describes the library containt
+ * A convention : use the alphabetic order
+ */
+
+PROC LibFunc[] = { 
+    "cosinus",     "/* The math cos() function */\n"
+                   "double cosinus( double *x);\n", cosinus,
+    "sinus",       "/* The math sin() function */\n"
+                   "double sinus( double *x);\n", sinus };
+
+LDGLIB LibLdg[]={ 0x0101,   /* library version */
+                  2,        /* number of functions */
+                  LibFunc,  /* list of functions */
+                  "This library provides some "
+                  "math functions. ",   /* information string */
+                  0 };      /* Library flags */
+
+
+double CDECL sinus( Real *val) {
+    return( sin(val->value));
+}
+
+double CDECL cosinus( Real *val) {
+    return( cos(val->value));
+}
+
+/*
+ *  Main function : communication between client and library
+ */
+
+int main( void) {
+    ldg_init( LibLdg);
+    return 0;
+}
+
+/* END OF FILE */
+!end_verbatim
+
+The functions of  a LDG-library have  all prototypes possible  (except
+the CDECL suffix). So these functions have to be documented. With  the
+library, a C-header file  containing the functions  prototype and a  C
+file or object file containing the binding of the DG-library functions
+should be supply.
+
+With EX_LIB.LDG, we have EX_LIB.H :
+
+!begin_verbatim
+/*
+ *  EX_LIB.H
+ *
+ *  Definition of the functions of the LDG
+ *  library EX_LDG.LDG
+ */
+#include <portab.h>
+
+/* The functions */
+double CDECL (*cosinus)( long *);
+double CDECL (*sinus)( long *);
+
+/* Lib initialization */
+void init_ex_lib( LDG *);
+
+/* END OF FILE */
+!end_verbatim
+
+Now, in addition of EX_LIB.H, we find the file EX_LIB.C contaning  the
+LDG 'binding'  of the  function  of EX_LIB.LDG.  This file  should  be
+compiled then linked with the client using EX_LIB.LDG.
+
+!begin_verbatim
+/*
+ * EX_LIB.C
+ *
+ * Binding of EX_LIB functions
+ */
+
+#include <ldg.h>
+#include <ldg\ex_lib.h>
+
+void init_ex_lib( LDG *ldg) {
+    cosinus = ldg_find( "cosinus", ldg);
+    sinus   = ldg_find( "sinus", ldg);
+}
+
+/* END OF FILE */
+!end_verbatim
+
+!subnode Client functions
+ 
+!subsubnode ldg_open()
+!alias ldg_open
+!begin_description
+
+!item [NAME] (!ml)
+	ldg_open - open a dynamical library.
+
+!item [SYNOPSIS] (!ml)
+  	LDG *ldg_open( (!B)char(!b) *name, (!B)WORD(!b) *global);
+
+!item [PARAMETERS] (!ml)
+           name : library name (relative or complete path), (!ml)
+         global : global array used by AES functions, (!ml)
+         return : the LDG descriptor of the library or NULL if error.
+
+!item [DESCRIPTION] (!ml)
+   This function loads a LDG-library in memory. If the library is  not
+   in memory, it is loaded using the current directory. If library  is
+   not found,  $LDGPATH  environ value,  LDG  cookie value  and  $PATH
+   environ value are used to locate  the library. If an error  occurs,
+   the function returns (!B)NULL(!b) and  an explicite error  message can  be
+   obtain with function ldg_error().
+
+   When a library is loaded, the  client can receive a message  (from
+   LDG kernel),  (!B)LDG_QUIT(!b), which  indicates a  library loaded  by  the
+   client has  been removed  from  the memory.  In this  case,  client
+   should reload the library. The message has the following structure:   
+	!begin_table [ll]
+        word 0   !! LDG_QUIT
+        word 1-2 !! unused
+        word 3-4 !! address of the LDG-descriptor
+        word 5   !! origin of the terminaison :
+                 !!   0 : shutdown
+                 !!   1 : screen resolution changed
+                 !!   2 : crashed or explicit terminaison of the library
+	!end_table  
+
+!item [COMPATIBILITY LDG 1.xx] (!ml)
+   ldg_open() replaces ldg_exec(), ldg_exec_evnt(), ldg_libexec(). Macros
+   defined in LDG.H emulates these functions.
+
+!item [SEE ALSO] (!ml)
+	ldg_close(), ldg_error().
+ 
+!end_description
+######################################################################
+!subsubnode ldg_close()
+!alias ldg_close
+!begin_description
+
+!item [NAME] (!ml)
+	ldg_close - close a dynamical library opened by ldg_open().
+
+!item [SYNOPSIS] (!ml)
+   (!B)int(!b) ldg_close( LDG *ldg, (!B)WORD(!b) *gl);
+
+!item [PARAMETERS] (!ml)
+            ldg : LDG descriptor returned by ldg_exec() function. (!ml)
+         global : global array used by AES functions, (!ml)
+         return : 0 if no error or a code error. 
+
+!item [DESCRIPTION] (!ml)
+    This function removes from the memory a library. The library will be
+    really removed if:
+	!begin_itemize
+    !item  anybody use the library or, 
+    !item  the library is not shareable.
+	!end_itemize
+
+!item [COMPATIBILITY LDG 1.xx] (!ml)
+   ldg_close() replaces ldg_term() and ldg_libterm(). Macros defined in LDG.H 
+   emulates these functions.
+
+!item [SEE ALSO] (!ml)
+	ldg_open(), ldg_error().
+!end_description 
+######################################################################
+!subsubnode ldg_error()
+!alias ldg_error
+!begin_description
+
+!item [NAME] (!ml)
+	ldg_error() - report a code error when ldg_open() returns NULL.
+
+!item [SYNOPSYS] (!ml)
+   #include <ldg.h>
+
+   (!B)int(!b) ldg_error( (!B)void(!b));
+
+!item [PARAMETERS] (!ml)
+    return : an error code.
+
+!item [DESCRIPTION] (!ml)
+    This function returns  an error code  if ldg_open() returns  NULL.
+    Possible errors are :
+!begin_table [ll]
+(!B)LDG_LIB_FULLED(!b) !! Impossible to register a new library,
+(!B)LDG_APP_FULLED(!b) !! Impossible to register a new client,
+(!B)LDG_ERR_EXEC(!b) !!   the LDG-library requested is not GEMDOS 
+					 !! executable,
+(!B)LDG_BAD_FORMAT(!b) !! the LDG-library requested have a bad format,
+(!B)LDG_LIB_LOCKED(!b) !! the LDG-library requested is locked,
+(!B)LDG_NOT_FOUND(!b) !!  the LDG-library requested is not found,
+(!B)LDG_NO_MEMORY(!b) !!  no more memory,
+(!B)LDG_NO_TSR(!b) !!		TSR not installed,
+(!B)LDG_BAD_TSR(!b) !!	bad TSR version number (function required
+      				!!	not supported by TSR),
+(!B)LDG_NOFUNC(!b) !!		ldg_find() has returned NULL.
+!end_table
+
+!item [COMPATIBILITY LDG 1.xx] (!ml)
+	Some  errors   are  obsolets   with  LDG   2.00:   LDG_NO_MANAGER,
+	LDG_TIME_IDLE. With LDG 1.xx,  ldg_error can returns 0 even when an
+	error occurs.  In  this case,  the  LDG-manager sends  a  message,
+	LDG_ERROR, indicating the error. This feature is now obsolet.
+!end_description
+######################################################################
+!subsubnode ldg_find()
+!alias ldg_find
+!begin_description
+
+!item [NAME] (!ml)
+   ldg_find - get a function inside a dynamical library.
+   
+!item [SYNOPSIS] (!ml)
+   #include <ldg.h>
+
+   (!B)void(!b) *ldg_find( (!B)char(!b) *name, LDG *ldg);
+
+!item [PARAMETERS] (!ml)
+         name : name of searched function, (!ml)
+          ldg : LDG descriptor, (!ml)
+       return : address of the function is found or NULL otherwise.
+
+!item [DESCRIPTION] (!ml)
+    This function  looks for  a function  inside a  LDG-library.  This
+    function is optimized to find a set of functions in the same order
+    they are built inside the library. A good convention is to use the
+    alphabetic order.
+
+    If ldg_find() returns NULL, the internal ldg error is set to 
+    LDG_NOFUNC. After a set of ldg_find(), as usual in library binding,
+    ldg_error() can be called to verify if all is okay.
+!end_description
+######################################################################
+!subsubnode ldg_libpath()
+!alias ldg_libpath
+!begin_description
+
+!item [NAME] (!ml)
+	ldg_libpath	- locate a dynamical library.
+
+!item [SYNOPSIS] (!ml)
+   (!B)int(!b) ldg_libpath( (!B)char(!b) *path, (!B)WORD(!b) *gl);
+
+!item [PARAMETERS] (!ml)
+            ldg : LDG descriptor returned by ldg_exec() function. (!ml)
+         global : global array used by AES functions, (!ml)
+         return : 1 if the library is located, 0 else. 
+
+!item [DESCRIPTION] (!ml)
+    This  function  returns  the  effective  location  of  a  library.
+    ldg_open() uses it  to locate  library. Before the  call, path  is
+    filled with the  name of the  library to locate.  At return,  path
+    contains the full location of the library. path should pointed  on
+    a sufficienly large buffer. This function is different of 
+    ldg_getpath() which use to know the exact path of the library 
+    inside it.
+    
+!item [SEE ALSO] (!ml)
+	ldg_open(), ldg_getpath().
+!end_description
+######################################################################
+!subsubnode Example of client program
+
+!begin_verbatim
+/*
+ *  Using the functions of EX_LIB.H
+ *	For GemLib user : gem.h should be included before
+ *					  ldg.h
+ */
+
+#include <gem.h>
+#include <ldg.h>
+#include <ldg\ex_lib.h>
+
+LDG *ex_lib;    /* LDG descriptor of EX_LIB.LDG */
+
+int main( void) {
+   int end = 0;
+ 
+   appl_init ();
+ 
+   /* Load the library and get the functions */
+   
+   ex_lib = ldg_open ( "ex_lib.ldg", ldg_global);
+   if( !ex_lib) {
+      form_alert ( 1, "[1][Error with ex_lib.ldg!][OK]");
+      appl_exit();
+      return 0;
+   } 
+   init_ex_lib( ex_lib);
+ 
+   while( !end) {
+      evnt_mesag( msg);
+   }
+ 
+   /* Fin de la lib et du programme */
+   ldg_close( ex_ldg, ldg_global);
+   appl_exit();
+}
+
+/* END OF FILE */
+!end_verbatim
+ 
+
+!subnode Utility functions
+
+!subsubnode ldg_cookie()
+!alias ldg_cookie
+!begin_description
+
+!item [NAME] (!ml)
+	ldg_cookie - find a cookie in cookie jar.
+
+!item [SYNOPSIS] (!ml)
+    (!B)int(!b) ldg_cookie( (!B)long(!b) cookie, (!B)long(!b) *value);
+
+!item [PARAMETERS] (!ml)
+        cookie : cookie identificator (eg 'LDGM'), (!ml)
+         value : cookie value.
+
+!item [DESCRIPTION] (!ml)
+    returns TRUE if a cookie 'cookie' is in memory and provide
+    the cookie value.
+!end_description
+######################################################################
+!subsubnode ldg_callback()
+!alias ldg_callback
+!begin_description
+
+!item [NAME] (!ml)
+	ldg_callback - invoke an "external" __CDECL function
+
+!item [SYNOPSIS] (!ml)
+    (!B)long(!b) ldg_callback( void *f, ...);
+
+!item [PARAMETERS] (!ml)
+	f : a __CDECL function
+	... : the parameters of 'f'
+
+!item [DESCRIPTION] (!ml)
+	This function will save A2/D2 registers, invoke the CDECL function
+	'f'	with the paramters given in place of '...', and restore  A2/D2
+	registers.
+	When a branchements are performed from a code  compiled  with  one
+	compiler to a code compiled with another compiler, this function 
+	may be used instead of calling directly f(...), because scratch
+	register differs from a compiler to another.
+	A user case of this is callback functions, where the code invoking
+	the callback function is part of a LDG, and the callback function
+	is part of another LDG or part of an application.... or vice versa.
+!end_description
+###################################################################### 
+!subsubnode ldg_debug()
+!alias ldg_debug
+!begin_description
+
+!item [NAME] (!ml)
+	ldg_debug - debug a LDG library
+
+!item [SYNOPSIS] (!ml)
+    int ldg_debug( char *fmt, ...);
+
+!item [PARAMETERS] (!ml)
+        fmt : a string format like printf()
+
+!item [DESCRIPTION] (!ml)
+    This function writes a message into  a log file. The complet  path
+    of the log file is specified by the environ variable LDG_DEBUG. If 
+    this variable is not defined, the function is unactived. If the 
+    string begin by a '[' character , the string will be displayed in 
+    a GEM alert box instead of be written in a log file.  Otherwise
+    this function has the same usage than the printf() function.
+!end_description
+######################################################################
+!subsubnode ldg_cpush()
+!alias ldg_cpush
+!begin_description
+
+!item [NAME] (!ml)
+	ldg_cpush - flush the cache processor
+
+!item [SYNOPSIS] (!ml)
+    (!B)void(!b) ldg_cpush( (!B)void(!b));
+
+!item [DESCRIPTION] (!ml)
+	This function flushes the caches of processor. It is 
+	only usefull with 68040 and 68080 processors which
+	have a large cache. ldg_open() flushes the caches
+	before loading a library.
+!end_description
+######################################################################
+!subsubnode ldg_Malloc()
+!alias ldg_Malloc
+!begin_description
+
+!item [SYNOPSIS] (!ml)
+    (!B)void(!b) *ldg_Malloc( (!B)long(!b) size);
+
+!item [DESCRIPTION] (!ml)
+    This function reserves memory shareable to the operating
+    system.
+!end_description 
+######################################################################
+!subsubnode ldg_Calloc()
+!alias ldg_Calloc
+!begin_description
+
+!item [SYNOPSIS] (!ml)
+    void *ldg_Calloc( long count, long size);
+           
+!item [DESCRIPTION] (!ml)
+    This function reserves memory shareable and initializes it
+    to zero.
+!end_description
+######################################################################
+!subsubnode ldg_Realloc()
+!alias ldg_Realloc
+!begin_description
+
+!item [SYNOPSIS] (!ml)
+    void *ldg_Realloc( void *oldblk, long oldsize, long newsize);
+
+!item [DESCRIPTION] (!ml)
+    This function reallocate a new size of memory. The old
+    size must be specified (in oldsize).
+!end_description
+######################################################################
+!subsubnode ldg_Free()
+!alias ldg_Free
+!begin_description
+
+!item [SYNOPSIS] (!ml)
+    int ldg_Free( void *adr);
+    
+!item [DESCRIPTION] (!ml)
+    Memory reserved with ldg_Malloc() or ldg_Calloc() can be
+    released using this function.
+!end_description
+######################################################################
+!subnode Calling AES-functions from a LDG-library
+
+If you want to call the AES functions inside a LDG-library, it is  not
+possible to use the  standard GEM C-library  of your compiler  because
+the AES functions binding use  a local array variable containing  some
+importants values  for  AES. But,  it  is  possible to  call  the  AES
+functions  using  the   C-library  MT_AES,  provided   with  the   LDG
+distribution. A MT_AES call is the same than the AES call excepted one
+parameter. This  parameter is  the  AES array.  Keep  in mind  that  a
+LDG-function executed  by a  client is  seen like  a function  of  the
+client. So  the  client  initiates a  AES  session,  with  appl_init()
+function and the LDG-function calls a MT_AES function, using the array
+parameter created by  appl_init(). The  first call  of the  ldg_exec()
+function initialized a global variable,  ldg_global, that is an  array
+of WORD and should  be used to call  the MT_AES functions. Thus,  your
+LDG-function should receved as parameter this variable.
+
+Here a small example :
+
+    In the client :
+!begin_verbatim
+    #include <gem.h>
+	#include <ldg.h>
+
+    int main( void) {
+        LDG *a_lib;
+        VOID CDECL (*a_function)( WORD*);
+
+        appl_init();
+        a_lib = ldg_open( "A_LIB.LDG", ldg_global);
+        a_function = ldg_find( "a_function", a_lib);
+        
+        (*a_function)( ldg_global);
+ 
+        ...   
+    }
+!end_verbatim
+    In the library :
+!begin_verbatim
+	#include <ldg.h>
+    #include <mt_aes.h>
+
+    VOID CDECL a_function( WORD *gl) {
+        mt_form_alert( 1, "[1][A stupid function!][OK]", gl);
+    }
+!end_verbatim
+
+
+!subnode Other languages
+
+If you  use  others language  than  PureC,  GnuC or  SozobonC,  it  is
+possible to use the LDG-protocol as  client. Your language have to  be
+able to read  the cookies of  the system. The  LDG TSR  (AUTO\LDG.PRG)
+installs in the cookiejar a set of functions to load and unload a  LDG
+library. This cookies is available from LDG version 1.00. It has the 
+identifier  'LDGM' (or 0x4C44474D)  and points to the following 
+memory structure :
+
+
+!begin_table [|lllll|] !hline
+Offset !! Size !! Name  !! version !!       Purpose
+!hline
+0x00  !!  2   !!  version   !! 0x0100 !!   version of the cookie
+0x02  !!  128 !!  path      !! 0x0100 !!   path of the LDG folder
+0x82  !!  2   !!  garbage   !! 0x0100 !!   auto garbage collecting time
+0x84  !!  2   !!  idle      !! 0x0100 !!   obsolet variable with LDG 2.xx
+!hline
+0x88  !!  4   !!  ldg_open  !! 0x0200 !!   address of function ldg_open()
+0x8C  !!  4   !!  ldg_close !! 0x0200 !!   address of function ldg_close()
+0x90  !!  4   !!  ldg_find  !! 0x0200 !!   address of function ldg_find()
+!hline
+0x94  !!  4   !!  ldg_open_ev !! 0x0210 !! obsolet function with LDG 2.xx, 
+	!!		!!				!!			!!	now identic to ldg_open
+0x98  !!  2   !!  error       !! 0x0210 !! last error occuring, used by 
+	!!      !!              !!          !! ldg_error()
+!hline
+0x9C  !!  4   !!  ldg_garbage !! 0x0220 !! reserved
+0xA0  !!  4   !!  ldg_reset   !! 0x0220 !! reserved
+0xA4  !!  4   !!  internal    !! 0x0220 !! reserved
+0xA8  !!  4   !!  ldg_libpath !! 0x0220 !! address of function ldg_libpath()
+!hline
+!end_table
+
+The column (!B)version(!b) describes the minimal value of the version
+field for which the field is available.
+
+If you want create a LDG library with a compiler not supported,
+please contact us.
+
+
+!subnode Programming advices
+The LDG principles come from many constations:
+
+!begin_itemize
+!item  How shared between several application a same function built  using
+   different compiler and programming language ?
+
+!item  How extended easy the operating system, using GEM, without trap any
+   functions or vector exceptions ?
+
+!item   How  a  software  could   enhanced  its  capability  without   new
+   compilation (the  plugin  method)  and using  a  special  processor
+   feature like PPC on MagiC Mac (who will create a mathematic library
+   using PPC)?
+
+!item  How keeps,  with a  such system, a  good performance  compare to  a
+   standard application ?
+
+!item  How deals with the 16 bits and 32 bits mode of the Gnu C Compiler ?
+!end_itemize
+
+When you'll write a LDG-library, keep in mind theses motivations !
+
+(!U)Rules to create a LDG-library(!u)
+
+There are severals rules to respect :
+!begin_itemize
+!item  The functions of the library have to be prototyped as CDECL,
+
+!item  With some compilers, Gcc for  e.g, parameters have a 32 bits  size.
+   Use 32-bit size parameters in your function (to be compatible  with
+   Gcc 32 bits). However, Gcc can  compile in 16 bits mode and  accept
+   16-bit size.
+
+!item The double format can create many problem with different  compiler.
+   Often, real data can be encapsuled using a union with a long value:
+
+!begin_verbatim
+        typedef union {
+            double real;
+            long   dummy;
+        } Real;
+!end_verbatim
+
+	A best solution is to use the LDG 'double' library (written by
+	Olivier Landemarre) (see http://ldg.atari.org)
+
+!item Each  LDG function  should  be documented!  Remember that  the  LDG
+   format allows to document your fonction inside the library itself.
+
+!item  After compilation,  a LDG-library  should be  loaded in  shareable
+   memory. For that purpose,  use the PRGFLAGS  program to change  its
+   MiNT protection mode.
+
+!item  Remember your  library may be  shareable by severals  applications.
+   Keep careful with global and static variables. If a function cannot
+   support a multiple call, it should handle a wait loop.
+!end_itemize
+
+(!U)About memory allocation(!u)
+
+!begin_itemize
+!item  Memory allocation with the standard C function or with the Malloc()
+   GEMDOS function  and exchange  of these  data with  the client  are
+   forbiden because  the memory  should be  shareable (specially  with
+   MiNT). For  that purpose  you can  use the functions ldg_Malloc(),
+	ldg_Realloc(), ldg_Calloc() and ldg_Free()
+   provided with the C-library developper.
+
+!item These memory functions  make directly  usage of the  GEMDOS function.  A
+	  frequent usage of these functions can dangerously fragment the memory.
+	It is more insteresting (and more  efficient) to use the functions of
+	the LDG memory manager (MEM.LDG) provided with the LDG distribution.
+   
+!item  Exchange data  from a client  to a library  is correct if the
+       LDG-library is a GEMDOS executable with a MiNT mode set to GLOBAL.
+		We provide in the distribution an utility (prgflags) to
+		set the flags of GEMDOS executable.
+
+!end_itemize
+
+(!U)A typically example of a LDG library distribution(!u)
+
+If you create and diffuse a LDG-library, the archive file should
+have the following structure :
+
+!begin_verbatim
+  MYLDGLIB.LZH :
+    
+    \gemsys\ldg\myldglib.ldg  ; The LDG library
+    \include\ldg\myldglib.h   ; The C header containing the prototype
+                              ; of the functions of MYLDGLIB.LDG
+    \lib\myldglib.c           ; Binding of the functions in portable C
+                              ; You can provide compiled library too.
+    \man\man3l\myldglib.3l    ; manuel page nroff format
+    \hyp\myldglib.hyp         ; hypertext documentation of the library
+    \readme                   ; details for installation 
+    \install                  ; if possible a script or an installer program
+!end_verbatim
+
+By convention,  the C-header  file containing  the definition  of  the
+function of a LDG-library should be  placed in a subdirectory of  your
+include  folder.  These  file  are  included  by  client  using  these
+libraries. The C-library  (here MYLDGLIB.LIB  or LYLDGLIB.O)  contains
+the  binding  of  the   functions.  It  is   usally  a  function   (eg
+init_myldglib()) initializing  the LDG  functions using  the  function
+ldg_find(). This file should be linked with the client.
+
+If you create and diffuse a LDG-library, please contact us and we will
+create a link from our LDG internet site.
+
+Have fun !
+
+!node Availables libraries
+
+We list libraries currently available :
+
+!begin_table [|l|l|l|] !hline
+Library     !! Description               !! Author
+!hline
+(!xlink [MEM.LDG] [mem.hyp]) !! Memory manager	 !!	 Dominique B‚r‚ziat
+FILEUTIL   !! Utilities to copy files	  !! Dominique B‚r‚ziat
+MESA_GL    !! Free OpenGL for Atari!     !! Olivier Landemarre
+TINY_GL    !! Light version of MesaGL    !! Olivier Landemarre
+SCREEN     !! Universal screen driver    !! Olivier Landemarre
+           !! with dithering features.   !!
+ME         !! Interface to the           !! Arnaud Bercegeay
+           !! Parx M&E¿ modules.         !!
+XML        !! Read, analyse XML files.	  !! Phlippe Castella
+DOUBLE     !! Convert double value between !!  Olivier Landemarre
+		   !! IEEE and Pure C formats.	  !!
+!hline
+!end_table
+
+Some applications use LDG-system as a (!I)ready-to-work(!i) plugin 
+system :
+!begin_itemize
+!item  WinSH (D.B‚r‚ziat),
+!item  Vision 4.0 (J.Lusetti),
+!item  GemDemo, Kronos, GccShell (O.Landemarre),
+!item  Eureka 2.02 (F.Lecoat),
+!item  Riri2 (A.Bercegeay).
+!end_itemize
+ 
+
+!node Tools
+
+!begin_table [ll]
+(!xlink [LDG.CPX] [LDGCPX.HYP])   !! To setup the LDG system.
+LDG INFOS !! Powerful tool for managing your dynamical libraries.
+PRGFLAGS  !! A shell command to set quiclky the GemDOS flags of
+		  !!  *.LDG files.
+LDGINFO	  !! A shell command alternative to LDG INFOS for script 
+          !! manipulation of LDG. For wizard users !
+!end_table 
+
+!node Bugs
+
+Currently, there is no bug known. 
+
+Please sends your bug report to the Authors.
+
+!node Historic
+
+!begin_description
+ !item [2.33] Minor release. 
+	!begin_itemize
+	!item added new function ldg_callback() that save/restore A2/D2 registers
+	!item enhanced loading of ldg: now a directory may be part of the filename
+	      (for example "windom/userdef.ldg" or "zcodec/jpeg.ldg").
+	!end_itemize
+
+ !item [2.32] Minor release. 
+	!begin_itemize
+	!item LDG is now distributed under conditions specified by the LESSER
+	GNU PUBLIC LICENCE (see file COPYRIGHT in this distribution for
+	details about this licence).
+	!end_itemize
+
+ !item [2.31] Minor release. 
+	!begin_itemize
+	!item one bug has been fixed on the way LDG looks for a library when 
+          one specify its path with MiNT convention.
+        !item the developper C library is now totaly independant on
+          the GEM library used. Note for developper : as  LDG is independant of 
+          the GEM library, you need to specify the GEM header file before 
+          including 'ldg.h'.
+        !item LDG and its utilities have been recompiled used the last version of 
+          Gemlib (pl43).
+        !item Using ldg devel library, it is not necessary to link a GEM library
+          if your LDG does not require it.
+	!end_itemize
+!item [2.30] Major release. Important bugs had been fixed :
+!begin_itemize
+!item  Scratch register problem fixed (Arnaud Bercegeay).
+!item  Problems with MiNT fixed.
+!item  New function ldg_cpush() to deal with 68040 - 68060 cache.
+!item  New version of ldginfo.ttp (formely showlib.ttp).
+!item  New LDG code error LDG_NOFUNC.
+!item  Library developpement version number and TSR version
+	   number are aligned to 2.30.
+!item  When it is possible (MiNT and MagiC), libraries are loaded
+       in shared memory (dev/shm). LDG kernel offers a way to
+	   share user memory. MEM.LDG uses it to share memory.
+	   For that, LDG deamon is required running. This is totally transparency 
+	   for the user (or developper).
+!item  Great thanx to Arnaud for its help and contributions !
+!end_itemize
+   
+!item [2.11] Minor release. The GEM installer works with long 
+	filename system, the default configuration of TSR (LDG.PRG) 
+	can be changed (using SHOWLIB.TTP). So you can use LDG without 
+	the LDG CPX. 
+
+!item [2.10]
+!begin_itemize
+!item  correction of a small which occurs when a client loads several 
+  times a same library,
+!item  new version of CPX and SHOWLIB (a LDG tool). These updates are
+  due to the previous bug correction,
+!item  new version (2.00) of LDGMGR.APP. This application is the LDG 
+  manager used by client compiled with LDG 1.xx. It is supplied for 
+  backward compatibility. This version provides a better compatibility
+  between LDG 1 and 2.
+!item  last release of LDG INFO (written by A.Bercegeay), a very usefull tool
+  for LDG-libraries managing.
+!end_itemize
+
+!item [2.00] This version is  a major evolution  of LDG :  LDG manager is  now
+	 obsolet and, then, the LDG protocol communication between  client
+	 and manager - based on AES message - is unused.
+     TSR version is 2.20.
+
+!hline 
+
+!item [1.20]  Many  bugs   fixed,  specially  concerning   MiNT  with   memory
+     protection. Developper libraries: new function ldg_libexec_evnt()
+     TSR : new  functions libexec_event()  and error().  Documentation
+     switches to english !
+	 TSR version is 2.10.
+
+!item [1.10] TSR : LDG.PRG contains now the functions to load/unload  LDG-lib.
+     Thus, languages not  supported by  the LDG  distribution can  now
+     handled (as client) the LDG protocol.  A LDG-lib can now call  an
+     another LDG-lib (see ldg_libexec()).
+     TSR version is 2.00
+
+!item [1.00] The  first  non-beta  version.  (See  the  0.99C   version)
+     Showlib.ttp :  version  1.30  Showlip.app  is  removed  from  the
+     distribution. Adding Sozobon C support
+	 TSR version is 1.00. (TSR does not contain any functions, it is
+     just used to configure LDG variables).
+
+!end_description
+
+!hline
+Warning : versions older than 1.00 are beta and not public release.
+!begin_description
+!item [0.99 Release A] New protocol featuring a LDG-manager.
+     Different acces of a LDG-lib (resident, locked, unshareable).
+!item [0.99 Release B]
+     Bug in LDG-manager fixed.
+     Showlib version 1.11.
+!item [0.99 Release C]
+     Dirty bug fixed in the loading LDG function
+     Showlib.ttp version 1.00 (a TTP version of Showlib)
+     Bug in ldg_cookie() fixed
+     LDG-lib can now used a closure function
+     LDG_LIST provides now the version of the LDG-manager
+
+!item [0.90] With SingleTOS, LDG works correctly.
+
+!item [0.80] MT_AES library (for using AES from a LDG-LIB)
+     Source is compatible GemLib pl 36 and Pure C
+     GemLib
+
+!item [0.70] LDG_REQUEST message have changed, the LDG_ANSWER
+     message is obsolet
+
+!item [0.60] Gcc 32bits is now supported
+
+!item [0.50] New data structure, some fixed bugs
+
+!item [0.40] GEM messages of the protocol have a new number
+
+!item [0.30] SingleTOS is supported (using a new protocol)
+
+!item [0.20] Extension of the LDG-protocol
+
+!item [0.10] The first version (from Olivier Landemarre)     
+
+!end_description
+
+!node Authors and the LDG team
+!alias Authors
+
+The LDG-protocol has been created by :
+
+!begin_itemize
+!item  Olivier Landemarre :
+!begin_quote
+!begin_table [ll]
+   Support : !! Gnu C, MagiC Mac
+   E-mail  : !! Olivier.Landemarre@@utbm.fr 
+   WWW     : !! http://www.utbm.fr/Les.personnes/Olivier.Landemarre/
+!end_table
+!end_quote
+
+!image olivier2
+
+and
+
+!item  Dominique B‚r‚ziat :
+!begin_quote
+!begin_table [ll]
+   Support : !! Pure C, Falcon, MagiC, MultiTOS, MiNT
+   E-mail  : !! Dominique.Bereziat@@inria.fr 
+   WWW     : !! http://windom.free.fr/welcome.html
+!end_table
+!end_quote
+
+!image dom
+
+and
+
+!item  Arnaud Bercegeay :
+!begin_quote
+!begin_table
+   Support : !! LDG_INFOS, Hades040 and Milan support, Sozobon C, Gcc 295
+   E-mail  : !! Arnaud.Bercegeay@free.fr
+   WWW     : !! http://perso.wanadoo.fr/arnaud.bercegeay/
+!end_table
+!end_quote
+
+We would like warmly thank for his great help. He has highly contributed 
+to this last version, so we decide to assaciote him in the authors list 
+because it knows LDG as well as us.
+
+!end_itemize
+
+
+!end_itemize
+
+
+We would like to cite the following people for their
+help, contribution or suggestions :
+
+!begin_itemize
+!item  Fran‡ois Lecoat :
+!begin_quote
+!begin_table [ll]
+   Support : !! Hades060, NAES, PC Emulations
+   E-mail  : !! lecoat@ief.u-psud.fr
+   WWW     : !! http://www.ief.u-psud.fr/!~lecoat/
+!end_table
+!end_quote
+
+!image lecoat
+
+!item  Philippe Castella : 
+!begin_quote [ll]
+!begin_table
+   Support : !! Sozobon C
+   E-mail  : !! analogic@wanadoo.fr
+   WWW     : !! 
+!end_table
+
+!image philip
+
+!end_itemize
+ 
+
+!node* Scratch register
+
+Depending on your compiler, when you execute a program, some registers
+can be scratched. As LDG-libraries and clients can be written with
+different compilers, some problems can appear after a LDG call.
+The LDG developper library save now the ''scratch register'' before
+the call and restore its after the execution.
+
+
+!end_document 
+

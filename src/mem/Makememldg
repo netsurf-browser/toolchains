@@ -1,0 +1,60 @@
+# Librairie Dynamique GEM
+# Olivier Landemarre, Dominique B‚r‚ziat, Arnaud Bercegeay
+# tous droits r‚serv‚s 1997-2015
+#
+# makefile to build ldginfo
+
+ifeq ($(CROSS),yes)
+CC      = m68k-atari-mint-gcc
+LD      = m68k-atari-mint-gcc
+STRIP      = m68k-atari-mint-strip
+else
+CC      = gcc
+LD      = gcc
+STRIP     = strip
+endif
+CFLAGS  = -I../../include -I../share -O2
+LDFLAGS =
+LDLIBS  = -lgem
+STARTUP =
+
+TARGET  = ../../bin/68k/mem.ldg
+TARGETV4E  = ../../bin/coldfire/mem.ldg
+
+all: mem.ldg clean
+
+mem.ldg:;
+	$(CC) -c $(CFLAGS) ldgmain.c -o ldgmain.o
+	$(CC) -c $(CFLAGS) osmem.c -o osmem.o
+	$(CC) -c $(CFLAGS) sbrk.c -o sbrk.o
+	$(CC) -c $(CFLAGS) malloc.c -o malloc.o
+	$(CC) -c $(CFLAGS) bzero.c -o bzero.o
+	$(CC) -c $(CFLAGS) realloc.c -o realloc.o
+	$(CC) -c $(CFLAGS) getpages.c -o getpages.o
+	$(CC) -c $(CFLAGS) globals.c -o globals.o
+	$(CC) -c $(CFLAGS) utils.c -o utils.o
+	$(CC) -c $(CFLAGS) bcopy2.c -o bcopy2.o
+	$(LD) $(LDFLAGS) -o$@ ldgmain.o bcopy2.o osmem.o sbrk.o malloc.o bzero.o realloc.o getpages.o globals.o utils.o $(STARTUP) $(LDLIBS)  ../../lib/gcc/libldg.a
+	$(STRIP) $@
+	mv $@ $(TARGET)
+	$(RM) $@
+	$(CC) -c $(CFLAGS) -mcpu=5475 ldgmain.c -o ldgmain.o
+	$(CC) -c $(CFLAGS) -mcpu=5475 osmem.c -o osmem.o
+	$(CC) -c $(CFLAGS) -mcpu=5475 sbrk.c -o sbrk.o
+	$(CC) -c $(CFLAGS) -mcpu=5475 malloc.c -o malloc.o
+	$(CC) -c $(CFLAGS) -mcpu=5475 bzero.c -o bzero.o
+	$(CC) -c $(CFLAGS) -mcpu=5475 realloc.c -o realloc.o
+	$(CC) -c $(CFLAGS) -mcpu=5475 getpages.c -o getpages.o
+	$(CC) -c $(CFLAGS) -mcpu=5475 globals.c -o globals.o
+	$(CC) -c $(CFLAGS) -mcpu=5475 utils.c -o utils.o
+	$(CC) -c $(CFLAGS) -mcpu=5475 bcopy2.c -o bcopy2.o
+	$(LD) $(LDFLAGS) -mcpu=5475 -o$@ ldgmain.o bcopy2.o osmem.o sbrk.o malloc.o bzero.o realloc.o getpages.o globals.o utils.o $(STARTUP) $(LDLIBS) ../../lib/gcc/m5475/libldg.a
+	$(STRIP) $@
+	mv $@ $(TARGETV4E)
+	$(RM) $@
+
+
+clean:;
+	$(RM) mem.ldg
+	$(RM) ldgmain.o bcopy2.o osmem.o sbrk.o malloc.o bzero.o realloc.o getpages.o globals.o utils.o
+

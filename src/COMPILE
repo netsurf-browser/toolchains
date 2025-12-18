@@ -1,0 +1,68 @@
+How to compile LDG
+------------------
+
+Currently we use a set of Makefile working with the couple
+bash/gmake. The system is supposed to be MiNT. 
+
+( Note : it is possible to compile on plain-TOS or MagiC using
+Mupfel. However, mupfel and associated makefile are not more 
+supported but you can retreive the old developpement environ
+at http://ldg.org.free.fr/devel/ldgshell.tar.gz )
+
+LDG kernel and its utilities are compiled with Pure C. The
+C-library developper is supported by 4 compilers : gcc-mint,
+gcc-tos, pure c and sozobon c. For each one, we use a set of 
+environ variables we describe now :
+
+Gcc 2.9.5
+
+It is the version provide in MiNT distribution such as SpareMiNT.
+This compiler can only live in a mint filesystem ie all files
+required by gcc are in /usr/bin, /usr/lib, /usr/include etc...
+
+You have to define two variables :
+CC_GCC295=gcc  (or CC_GCC295=/usr/bin/gcc)
+AR_GCC295=ar   (or CC_GCC295=/usr/bin/ar)
+
+and that's all
+
+Gcc 2.8.1
+
+It an older gcc version. Advantage of this version that it was
+be supported both by MiNT and TOS without MiNT. We recommand you
+if you use MagiC too.
+
+Variable to define :
+CC_GCC281=<complet path to gcc.ttp>
+AR_GCC281=<complet path to ar.ttp>
+
+Moreover, the compiler needs to locate its libraries, so
+define :
+GNUINC=<complet path to gcc include dir>
+GNULIB=<complet path to gcc lib dir>
+
+Sozobon C
+
+Sozobon is a light and free C compiler. However it is no longer supported.
+Suppose Sozobon is installed in $SOXDIR directory. To use it, you have to 
+define the following variables :
+CC_SOX=$SOXDIR/bin/cc.ttp
+AR_SOX=$SOXDIR/bin/ar.ttp
+and
+SOZBIN=$SOXDIR/bin
+SOZINC=$SOXDIR/include,$SOXDIR/include/xdlibs
+SOZLIB=$SOXDIR/lib,$SOXDIR/lib/xdlibs
+
+Pure C
+
+We use the command line compiler and linker of Pure C. Suppose $PUREC
+is the location of your Pure C directory.
+
+Variable to define :
+CC_PUREC=$PUREC/pcc.ttp
+LD_PUREC=$PUREC/plink.ttp
+
+and
+PURECINC=$PUREC/include
+PURECLIB=$PUREC/lib
+

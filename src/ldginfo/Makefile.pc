@@ -1,0 +1,21 @@
+# Librairie Dynamique GEM
+# Olivier Landemarre, Dominique B‚r‚ziat, Arnaud Bercegeay
+# tous droits r‚serv‚s 1997/1998/1999/2000/2001/2002
+#
+# makefile to build ldginfo
+
+CC      = cc
+CFLAGS  = -O -W0,-P -I..\..\include
+LDFLAGS = -Wl,-V,-S=4096 -s -lgem ..\..\lib\purec\ldg.lib
+TARGET  = ..\..\bin\ldginfo.ttp
+
+all: $(TARGET)
+
+$(TARGET): ldginfo.o internal.o ..\..\lib\purec\ldg.lib
+	$(CC) ldginfo.o internal.o -o $(TARGET) $(LDFLAGS)
+
+internal.o: ..\share\internal.c
+
+clean:
+	$(RM) ldginfo.o internal.o
+

@@ -1,0 +1,20 @@
+client.app
+.C[-Y- -G+ -P+ -I..\libs\include]
+.L[-Y-]
+=
+pcstart.o
+
+..\libs\exlibbnd.c  ; module containing bindings of ex_lib
+..\libs\popupbnd.c  ; module containing bindings of popup
+
+client.c		; main module
+
+ldg.lib			; LDG development library
+
+windom.lib		; GEM windowing library
+pcgmxlib.lib	; extension of pcgemlib needed by WinDom
+
+pcfltlib.lib
+pcgemlib.lib
+pctoslib.lib
+pcstdlib.lib

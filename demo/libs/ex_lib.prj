@@ -1,0 +1,11 @@
+ex_lib.ldg
+.C[-Y- -G+]
+.L[-Y-]
+=
+pcstart.o
+ex_lib.c
+pcfltlib.lib
+gem.lib
+pcstdlib.lib
+pctoslib.lib
+ldg.lib

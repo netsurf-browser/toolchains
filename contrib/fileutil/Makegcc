@@ -1,0 +1,31 @@
+CC 		= gcc
+LD 		= gcc
+STRIP     = strip
+
+
+CFLAGS	= -I../../include -I../share -O2
+LDFLAGS	= -lgem
+
+OBJECTS	  = fileutil.o 
+
+LDGTARGET = ../../bin/68k/fileutil.ldg
+LDGTARGETV4E = ../../bin/coldfire/fileutil.ldg
+
+all: fileutil.ldg
+
+fileutil.ldg:;
+	$(CC) -c $(CFLAGS) fileutil.c -o fileutil.o
+	$(LD) $(LDFLAGS) -o$@ fileutil.o ../../lib/gcc/libldg.a
+	$(STRIP) $@
+	mv $@ $(LDGTARGET)
+	$(RM) $@
+	$(RM) $(OBJECTS)
+	$(CC) -c -mcpu=5475 $(CFLAGS) fileutil.c -o fileutil.o
+	$(LD) -mcpu=5475 $(LDFLAGS) -o$@ fileutil.o ../../lib/gcc/m5475/libldg.a
+	$(STRIP) $@
+	mv $@ $(LDGTARGETV4E)
+	$(RM) $@
+	$(RM) $(OBJECTS)
+clean:
+	$(RM) $(OBJECTS)
+	$(RM) fileutil.ldg

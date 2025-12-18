@@ -1,0 +1,35 @@
+Historic file for LDG.CPX
+-------------------------
+
+v 2.22 (04/12)
+	The previous version was bugged : the cpx could not
+	save its values. This bug has been fixed.	
+
+(next is in french)
+
+v 2.21 
+	compilation avec GEMLIB pl43
+	correction qq bugs
+
+v 2.20
+	support de LDG 2.10
+
+v 2.10
+	support de LDG 2.00
+
+v 2.01
+	bug mineur fix‚ (crash du CPX lorsque LDG.PRG 
+	‚tant absent) par Olivier
+	le parametre Use cookie fonction agit sur le
+	flag du cookie (cr‚‚ a cet effet).
+
+v 2.00
+	nouvelles fonctions int‚grant les fonctionnalit‚s
+	d'un ShowLib.
+
+v 1.00
+	premiere version du CPX avec juste les fonctions
+	de r‚glage du TSR
+
+
+

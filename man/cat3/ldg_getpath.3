@@ -1,0 +1,23 @@
+LDG_GETPATH(3)                  LDG Call                LDG_GETPATH(3)
+
+NAME
+    ldg_getpath - returns the real own path of a shared lib.
+
+SYNOPSIS
+   char* ldg_init( void);
+
+PARAMETERS
+      return : buffer containing the current library path.
+
+DESCRIPTION
+    This function returns the real path of a library. It can
+    be called only inside a LDG-library and outside the
+    main function. The reason is the path is not initialised
+    during the first execution of a library (i.e. when the
+    main() function is executed). So ldg_getpath() can only be
+    invoked inside a library function.
+
+SEE ALSO
+    ldg_libpath()
+
+LDG_LIBPATH(3)                  LDG Call                LDG_LIBPATH(3)

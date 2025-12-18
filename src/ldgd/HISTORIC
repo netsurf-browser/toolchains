@@ -1,0 +1,29 @@
+LDG d‚mon - historique
+----------------------
+
+Le ldg d‚mon existe depuis LDG version 2.xx
+
+version 1.00 : premiere version qui ne fait que du
+		 	   garbage collecting
+
+version 1.10 : Modif au cr‚dit d'Olivier
+			   Ajout d'un m‚canisme de blocage de la m‚moire
+			   (neccessaire surtout sous MiNT). Le d‚mon interprete
+			   le message GEM LDGD_SHM_REQUEST (0x4C5F) de la maniere 
+			   suivante :
+			   		mot 0 : LDGD_SHM_REQUEST
+			   		mot 3 : LDGD_SHARE_LDG = bloque la m‚moire qu'occupe
+			   					une LDG charg‚e,
+			   				LDGD_UNSHARE_LDG = d‚bloque la m‚moire qu'occupe
+			   					une LDG charg‚e,
+			   				LDGD_SHARE_MEM = bloque un bloc m‚moire utilisateur
+			   					r‚serv‚ par MEM.LDG,
+			   				LDGD_UNSHARE_MEM = bloque un bloc m‚moire utilisateur
+			   					r‚serv‚ par MEM.LDG,
+			   		mot 4 : id utilis‚ pour construire le nom du bloc m‚moire
+			   				qui apparait dans le r‚pertoire U:\shm\ soit :
+			   					U:\shm\memxxx.shm pour les blocs MEM.LDG
+			   					U:\shm\ldgxxx.shm pour les libraries
+			   	Evident cela ne fonctionne sur sous MiNT et MagiC. Sous
+			   	TOS, cela est simplement ignor‚.
+				(version pour LDG 2.30)
