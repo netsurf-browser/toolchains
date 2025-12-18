@@ -45,20 +45,6 @@ UPSTREAM_CODESETS_TARBALL := codesets_$(UPSTREAM_CODESETS_VERSION).tar.xz
 UPSTREAM_BISON_VERSION := 2.7.1
 UPSTREAM_BISON_TARBALL := bison_$(UPSTREAM_BISON_VERSION).tar.gz
 
-#UPSTREAM_GCC_URI := http://ftp.gnu.org/gnu/gcc/gcc-$(UPSTREAM_GCC_VERSION)/$(subst _,-,$(UPSTREAM_GCC_TARBALL))
-#UPSTREAM_BINUTILS_URI := http://svn.code.sf.net/p/adtools/code/branches/binutils/$(UPSTREAM_BINUTILS_VERSION)/@$(UPSTREAM_BINUTILS_REVISION)
-#UPSTREAM_GMP_URI := http://ftp.gnu.org/gnu/gmp/$(subst _,-,$(UPSTREAM_GMP_TARBALL))
-#UPSTREAM_MPFR_URI := http://www.mpfr.org/mpfr-$(UPSTREAM_MPFR_VERSION)/$(subst _,-,$(UPSTREAM_MPFR_TARBALL))
-#UPSTREAM_MPC_URI := http://www.multiprecision.org/downloads/$(subst _,-,$(UPSTREAM_MPC_TARBALL))
-#UPSTREAM_CLIB2_URI := https://github.com/adtools/clib2/archive/V$(UPSTREAM_CLIB2_VERSION).tar.gz
-#UPSTREAM_NDK_URI := http://kas1e.mikendezign.com/zerohero_crosscompilers_backup/files/m68k-amigaos/ndk-3.9-includes.tar.bz2
-#UPSTREAM_OPENURL_URI := https://github.com/jens-maus/libopenurl/archive/$(UPSTREAM_OPENURL_VERSION).tar.gz
-#UPSTREAM_AMISSL_URI := https://github.com/jens-maus/amissl/releases/download/$(UPSTREAM_AMISSL_VERSION)/AmiSSL-$(UPSTREAM_AMISSL_VERSION)-SDK.lha
-#UPSTREAM_GUIGFX_URI := http://neoscientists.org/~bifat/binarydistillery/guigfxlib.lha
-#UPSTREAM_RENDER_URI := http://neoscientists.org/~bifat/binarydistillery/renderlib.lha
-#UPSTREAM_CODESETS_URI := https://github.com/jens-maus/libcodesets/releases/download/$(UPSTREAM_CODESETS_VERSION)/codesets-$(UPSTREAM_CODESETS_VERSION).lha
-#UPSTREAM_BISON_URI := https://ftp.gnu.org/gnu/bison/$(subst _,-,$(UPSTREAM_BISON_TARBALL)):
-
 # need to force the auto* version in use
 GCC_AUTOCONF := autoconf2.64
 GCC_AUTOHEADER := autoheader2.64
@@ -81,11 +67,14 @@ TARGET_NAME := m68k-unknown-amigaos
 PREFIX ?= /opt/netsurf/$(TARGET_NAME)/cross
 
 PRISTINE_TAR := $(TOP)/../tools/pristine-tar
+REPACK := $(TOP)/../tools/repack
 
 GCC_ENV_PARAMS := AUTOCONF=$(GCC_AUTOCONF) AUTOHEADER=$(GCC_AUTOHEADER) AUTOM4TE=$(GCC_AUTOM4TE) PATH="$(PREFIX)/bin:$(PATH)"
 
-.PHONY: all clean distclean
+.PHONY: all clean distclean source-archives
 all: $(BUILDSTEPS)/stage2.d
+
+source-archives: $(BUILDSTEPS)/sources.d
 
 clean:
 	rm -fr $(BUILDDIR)
@@ -298,3 +287,77 @@ $(SOURCESDIR):
 
 $(SRCDIR):
 	mkdir -p $@
+
+###
+# Rules to build source archives (via source-archives target)
+###
+
+UPSTREAM_GCC_URI := http://ftp.gnu.org/gnu/gcc/gcc-$(UPSTREAM_GCC_VERSION)/$(subst _,-,$(UPSTREAM_GCC_TARBALL))
+UPSTREAM_BINUTILS_URI := http://svn.code.sf.net/p/adtools/code/branches/binutils/$(UPSTREAM_BINUTILS_VERSION)/@$(UPSTREAM_BINUTILS_REVISION)
+UPSTREAM_GMP_URI := http://ftp.gnu.org/gnu/gmp/$(subst _,-,$(UPSTREAM_GMP_TARBALL))
+UPSTREAM_MPFR_URI := http://www.mpfr.org/mpfr-$(UPSTREAM_MPFR_VERSION)/$(subst _,-,$(UPSTREAM_MPFR_TARBALL))
+UPSTREAM_MPC_URI := http://www.multiprecision.org/downloads/$(subst _,-,$(UPSTREAM_MPC_TARBALL))
+UPSTREAM_CLIB2_URI := https://github.com/adtools/clib2/archive/V$(UPSTREAM_CLIB2_VERSION).tar.gz
+UPSTREAM_NDK_URI := http://kas1e.mikendezign.com/zerohero_crosscompilers_backup/files/m68k-amigaos/ndk-3.9-includes.tar.bz2
+UPSTREAM_OPENURL_URI := https://github.com/jens-maus/libopenurl/archive/$(UPSTREAM_OPENURL_VERSION).tar.gz
+UPSTREAM_AMISSL_URI := https://github.com/jens-maus/amissl/releases/download/$(UPSTREAM_AMISSL_VERSION)/AmiSSL-$(UPSTREAM_AMISSL_VERSION)-SDK.lha
+UPSTREAM_GUIGFX_URI := https://web.archive.org/web/20240715085500if_/http://neoscientists.org/~bifat/binarydistillery/guigfxlib.lha
+UPSTREAM_RENDER_URI := https://web.archive.org/web/20240715085500if_/http://neoscientists.org/~bifat/binarydistillery/renderlib.lha
+UPSTREAM_CODESETS_URI := https://github.com/jens-maus/libcodesets/releases/download/$(UPSTREAM_CODESETS_VERSION)/codesets-$(UPSTREAM_CODESETS_VERSION).lha
+UPSTREAM_BISON_URI := https://ftp.gnu.org/gnu/bison/$(subst _,-,$(UPSTREAM_BISON_TARBALL))
+
+$(BUILDSTEPS)/sources.d: $(BUILDSTEPS)/buildsteps.d $(BUILDDIR)/$(UPSTREAM_GCC_TARBALL) $(BUILDDIR)/$(UPSTREAM_BINUTILS_TARBALL) $(BUILDDIR)/$(UPSTREAM_GMP_TARBALL) $(BUILDDIR)/$(UPSTREAM_MPFR_TARBALL) $(BUILDDIR)/$(UPSTREAM_MPC_TARBALL) $(BUILDDIR)/$(UPSTREAM_CLIB2_TARBALL) $(BUILDDIR)/$(UPSTREAM_NDK_TARBALL) $(BUILDDIR)/$(UPSTREAM_OPENURL_TARBALL) $(BUILDDIR)/$(UPSTREAM_AMISSL_TARBALL) $(BUILDDIR)/$(UPSTREAM_GUIGFX_TARBALL) $(BUILDDIR)/$(UPSTREAM_RENDER_TARBALL) $(BUILDDIR)/$(UPSTREAM_CODESETS_TARBALL) $(BUILDDIR)/$(UPSTREAM_BISON_TARBALL)
+	touch $@
+
+$(BUILDDIR)/$(UPSTREAM_GCC_TARBALL):
+	wget -q -O $@ $(UPSTREAM_GCC_URI)
+
+$(BUILDDIR)/$(UPSTREAM_BINUTILS_TARBALL):
+	rm -rf $(BUILDDIR)/sources/binutils
+	svn export $(UPSTREAM_BINUTILS_URI) $(BUILDDIR)/sources/binutils-$(UPSTREAM_BINUTILS_VERSION)
+	tar -C $(BUILDDIR)/sources -caf $@ binutils-$(UPSTREAM_BINUTILS_VERSION)
+
+$(BUILDDIR)/$(UPSTREAM_GMP_TARBALL):
+	wget -q -O $@ $(UPSTREAM_GMP_URI)
+
+$(BUILDDIR)/$(UPSTREAM_MPFR_TARBALL):
+	wget -q -O $@ $(UPSTREAM_MPFR_URI)
+
+$(BUILDDIR)/$(UPSTREAM_MPC_TARBALL):
+	wget -q -O $@ $(UPSTREAM_MPC_URI)
+
+$(BUILDDIR)/$(UPSTREAM_CLIB2_TARBALL):
+	wget -q -O $@ $(UPSTREAM_CLIB2_URI)
+
+$(BUILDDIR)/$(UPSTREAM_NDK_TARBALL):
+	wget -q -O $@ $(UPSTREAM_NDK_URI)
+
+$(BUILDDIR)/$(UPSTREAM_OPENURL_TARBALL):
+	wget -q -O $@ $(UPSTREAM_OPENURL_URI)
+
+$(BUILDDIR)/$(UPSTREAM_AMISSL_TARBALL):
+	rm -rf $(BUILDDIR)/sources/amissl
+	mkdir -p $(BUILDDIR)/sources/amissl
+	wget -q -O $(BUILDDIR)/sources/amissl/amissl-$(UPSTREAM_AMISSL_VERSION).lha $(UPSTREAM_AMISSL_URI)
+	$(REPACK) $(BUILDDIR)/sources/amissl/amissl-$(UPSTREAM_AMISSL_VERSION).lha $@
+
+$(BUILDDIR)/$(UPSTREAM_GUIGFX_TARBALL):
+	rm -rf $(BUILDDIR)/sources/guigfx
+	mkdir -p $(BUILDDIR)/sources/guigfx
+	wget -q -O $(BUILDDIR)/sources/guigfx/guigfx-$(UPSTREAM_GUIGFX_VERSION).lha $(UPSTREAM_GUIGFX_URI)
+	$(REPACK) $(BUILDDIR)/sources/guigfx/guigfx-$(UPSTREAM_GUIGFX_VERSION).lha $@
+
+$(BUILDDIR)/$(UPSTREAM_RENDER_TARBALL):
+	rm -rf $(BUILDDIR)/sources/render
+	mkdir -p $(BUILDDIR)/sources/render
+	wget -q -O $(BUILDDIR)/sources/render/render-$(UPSTREAM_RENDER_VERSION).lha $(UPSTREAM_RENDER_URI)
+	$(REPACK) $(BUILDDIR)/sources/render/render-$(UPSTREAM_RENDER_VERSION).lha $@
+
+$(BUILDDIR)/$(UPSTREAM_CODESETS_TARBALL):
+	rm -rf $(BUILDDIR)/sources/codesets
+	mkdir -p $(BUILDDIR)/sources/codesets
+	wget -q -O $(BUILDDIR)/sources/codesets/codesets-$(UPSTREAM_CODESETS_VERSION).lha $(UPSTREAM_CODESETS_URI)
+	$(REPACK) $(BUILDDIR)/sources/codesets/codesets-$(UPSTREAM_CODESETS_VERSION).lha $@
+
+$(BUILDDIR)/$(UPSTREAM_BISON_TARBALL):
+	wget -q -O $@ $(UPSTREAM_MPC_URI)
