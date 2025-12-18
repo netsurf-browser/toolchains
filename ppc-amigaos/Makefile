@@ -6,15 +6,12 @@
 
 UPSTREAM_LHASA_VERSION := 887d68ebca0cbad392af3709203745d202a2020b
 UPSTREAM_LHASA_TARBALL := lhasa-$(UPSTREAM_LHASA_VERSION).zip
-UPSTREAM_LHASA_URI := https://github.com/fragglet/lhasa/archive/$(UPSTREAM_LHASA_VERSION).zip
 
 UPSTREAM_NDK_VERSION := 54.16
 UPSTREAM_NDK_TARBALL := SDK_$(UPSTREAM_NDK_VERSION).lha
-UPSTREAM_NDK_URI := "http://hyperion-entertainment.biz/index.php/downloads?view=download&format=raw&file=127"
 
 UPSTREAM_NDK_UPDATE_VERSION := update2
 UPSTREAM_NDK_UPDATE_TARBALL := SDK_addon_final_edition_$(UPSTREAM_NDK_UPDATE_VERSION).zip
-UPSTREAM_NDK_UPDATE_URI := http://kas1e.mikendezign.com/aos4/SDK_addon_final_edition_$(UPSTREAM_NDK_UPDATE_VERSION).zip
 
 ###
 # Toolchain components
@@ -61,19 +58,6 @@ UPSTREAM_RENDER_TARBALL := renderlib_$(UPSTREAM_RENDER_VERSION).tar.xz
 UPSTREAM_CODESETS_VERSION := 6.20
 UPSTREAM_CODESETS_TARBALL := codesets_$(UPSTREAM_CODESETS_VERSION).tar.xz
 
-#UPSTREAM_GCC_URI := http://ftp.gnu.org/gnu/gcc/gcc-$(UPSTREAM_GCC_VERSION)/$(subst _,-,$(UPSTREAM_GCC_TARBALL))
-#UPSTREAM_BINUTILS_URI := ftp://ftp.gnu.org/gnu/binutils/$(subst _,-,$(UPSTREAM_BINUTILS_TARBALL))
-#UPSTREAM_GMP_URI := http://ftp.gnu.org/gnu/gmp/$(subst _,-,$(UPSTREAM_GMP_TARBALL))
-#UPSTREAM_MPFR_URI := http://www.mpfr.org/mpfr-$(UPSTREAM_MPFR_VERSION)/$(subst _,-,$(UPSTREAM_MPFR_TARBALL))
-#UPSTREAM_MPC_URI := http://ftp.gnu.org/gnu/mpc/$(subst _,-,$(UPSTREAM_MPC_TARBALL))
-#UPSTREAM_CLIB4_URI := https://github.com/AmigaLabs/clib4/releases/download/v$(UPSTREAM_CLIB4_VERSION)/clib4-v$(UPSTREAM_CLIB4_VERSION).lha
-#UPSTREAM_OPENURL_URI := https://github.com/jens-maus/libopenurl/archive/$(UPSTREAM_OPENURL_VERSION).tar.gz
-#UPSTREAM_AMISSL_URI := https://github.com/jens-maus/amissl/releases/download/$(UPSTREAM_AMISSL_VERSION)/AmiSSL-$(UPSTREAM_AMISSL_VERSION)-SDK.lha
-#UPSTREAM_ONCHIPMEM_URI := http://www.acube-systems.biz/download/onchipmem_res-$(UPSTREAM_ONCHIPMEM_VERSION).lha
-#UPSTREAM_GUIGFX_URI := http://neoscientists.org/~bifat/binarydistillery/guigfxlib.lha
-#UPSTREAM_RENDER_URI := http://neoscientists.org/~bifat/binarydistillery/renderlib.lha
-#UPSTREAM_CODESETS_URI := https://github.com/jens-maus/libcodesets/releases/download/$(UPSTREAM_CODESETS_VERSION)/codesets-$(UPSTREAM_CODESETS_VERSION).lha
-
 # need to force the auto* version in use
 GCC_AUTOCONF := autoconf2.69
 GCC_AUTOHEADER := autoheader2.69
@@ -94,11 +78,12 @@ TARGET_NAME := ppc-amigaos
 PREFIX ?= /opt/netsurf/$(TARGET_NAME)/cross
 
 PRISTINE_TAR := $(TOP)/../tools/pristine-tar
+REPACK := $(TOP)/../tools/repack
 
-.PHONY: all minimised-ndk clean distclean
+.PHONY: all clean distclean source-archives
 all: $(BUILDSTEPS)/stage2.d
 
-minimised-ndk: $(BUILDSTEPS)/ndk-src.d
+source-archives: $(BUILDSTEPS)/sources.d
 
 clean:
 	rm -fr $(BUILDDIR)
@@ -263,57 +248,110 @@ $(SRCDIR):
 	mkdir -p $@
 
 ###
-# Rules to build the minimised NDK (via the minimised-ndk target)
+# Rules to build source archives (via source-archives target)
 ###
 
-$(BUILDSTEPS)/ndk-src.d: $(BUILDSTEPS)/lhasa.d $(SOURCESDIR)/$(UPSTREAM_NDK_TARBALL) $(SOURCESDIR)/$(UPSTREAM_NDK_UPDATE_TARBALL)
+UPSTREAM_LHASA_URI := https://github.com/fragglet/lhasa/archive/$(UPSTREAM_LHASA_VERSION).zip
+UPSTREAM_NDK_URI := "http://hyperion-entertainment.biz/index.php/downloads?view=download&format=raw&file=127"
+UPSTREAM_NDK_UPDATE_URI := http://kas1e.mikendezign.com/aos4/SDK_addon_final_edition_$(UPSTREAM_NDK_UPDATE_VERSION).zip
+UPSTREAM_GCC_URI := http://ftp.gnu.org/gnu/gcc/gcc-$(UPSTREAM_GCC_VERSION)/$(subst _,-,$(UPSTREAM_GCC_TARBALL))
+UPSTREAM_BINUTILS_URI := ftp://ftp.gnu.org/gnu/binutils/$(subst _,-,$(UPSTREAM_BINUTILS_TARBALL))
+UPSTREAM_GMP_URI := http://ftp.gnu.org/gnu/gmp/$(subst _,-,$(UPSTREAM_GMP_TARBALL))
+UPSTREAM_MPFR_URI := http://www.mpfr.org/mpfr-$(UPSTREAM_MPFR_VERSION)/$(subst _,-,$(UPSTREAM_MPFR_TARBALL))
+UPSTREAM_MPC_URI := http://ftp.gnu.org/gnu/mpc/$(subst _,-,$(UPSTREAM_MPC_TARBALL))
+UPSTREAM_CLIB4_URI := https://github.com/AmigaLabs/clib4/releases/download/v$(UPSTREAM_CLIB4_VERSION)/clib4-v$(UPSTREAM_CLIB4_VERSION).lha
+UPSTREAM_OPENURL_URI := https://github.com/jens-maus/libopenurl/archive/$(UPSTREAM_OPENURL_VERSION).tar.gz
+UPSTREAM_AMISSL_URI := https://github.com/jens-maus/amissl/releases/download/$(UPSTREAM_AMISSL_VERSION)/AmiSSL-$(UPSTREAM_AMISSL_VERSION)-SDK.lha
+UPSTREAM_ONCHIPMEM_URI := http://www.acube-systems.biz/download/onchipmem_res-$(UPSTREAM_ONCHIPMEM_VERSION).lha
+UPSTREAM_GUIGFX_URI := https://web.archive.org/web/20240715085500if_/http://neoscientists.org/~bifat/binarydistillery/guigfxlib.lha
+UPSTREAM_RENDER_URI := https://web.archive.org/web/20240715085500if_/http://neoscientists.org/~bifat/binarydistillery/renderlib.lha
+UPSTREAM_CODESETS_URI := https://github.com/jens-maus/libcodesets/releases/download/$(UPSTREAM_CODESETS_VERSION)/codesets-$(UPSTREAM_CODESETS_VERSION).lha
+
+$(BUILDSTEPS)/sources.d: $(BUILDSTEPS)/buildsteps.d $(BUILDDIR)/$(MINIMISED_NDK_TARBALL) $(BUILDDIR)/$(UPSTREAM_GCC_TARBALL) $(BUILDDIR)/$(UPSTREAM_BINUTILS_TARBALL) $(BUILDDIR)/$(UPSTREAM_GMP_TARBALL) $(BUILDDIR)/$(UPSTREAM_MPFR_TARBALL) $(BUILDDIR)/$(UPSTREAM_MPC_TARBALL) $(BUILDDIR)/$(UPSTREAM_CLIB4_TARBALL) $(BUILDDIR)/$(UPSTREAM_OPENURL_TARBALL) $(BUILDDIR)/$(UPSTREAM_AMISSL_TARBALL) $(BUILDDIR)/$(UPSTREAM_ONCHIPMEM_TARBALL) $(BUILDDIR)/$(UPSTREAM_GUIGFX_TARBALL) $(BUILDDIR)/$(UPSTREAM_RENDER_TARBALL) $(BUILDDIR)/$(UPSTREAM_CODESETS_TARBALL)
+	touch $@
+
+$(BUILDSTEPS)/lhasa.d:
+	rm -rf $(BUILDDIR)/lhasa $(BUILDDIR)/prefix
+	mkdir -p $(BUILDDIR)/lhasa
+	mkdir -p $(BUILDDIR)/prefix
+	wget -q -O $(BUILDDIR)/lhasa/$(UPSTREAM_LHASA_TARBALL) $(UPSTREAM_LHASA_URI)
+	unzip $(BUILDDIR)/lhasa/$(UPSTREAM_LHASA_TARBALL) -d $(BUILDDIR)/lhasa
+	cd $(BUILDDIR)/lhasa/lhasa-$(UPSTREAM_LHASA_VERSION) && autoreconf -i
+	cd $(BUILDDIR)/lhasa/lhasa-$(UPSTREAM_LHASA_VERSION) && ./configure --prefix=$(BUILDDIR)/prefix
+	cd $(BUILDDIR)/lhasa/lhasa-$(UPSTREAM_LHASA_VERSION) && make
+	cd $(BUILDDIR)/lhasa/lhasa-$(UPSTREAM_LHASA_VERSION) && make install
+	touch $@
+$(BUILDDIR)/$(MINIMISED_NDK_TARBALL): $(BUILDSTEPS)/lhasa.d
+	rm -rf $(BUILDDIR)/ndk-src
+	mkdir -p $(BUILDDIR)/ndk-src
+	wget -q -O $(BUILDDIR)/ndk-src/$(UPSTREAM_NDK_TARBALL) $(UPSTREAM_NDK_URI)
+	wget -q -O $(BUILDDIR)/ndk-src/$(UPSTREAM_NDK_UPDATE_TARBALL) $(UPSTREAM_NDK_UPDATE_URI)
 	mkdir -p $(BUILDDIR)/ndk-src/tmp/
-	$(BUILDDIR)/prefix/bin/lha xw=$(BUILDDIR)/ndk-src $(SOURCESDIR)/$(UPSTREAM_NDK_TARBALL)
+	$(BUILDDIR)/prefix/bin/lha xw=$(BUILDDIR)/ndk-src $(BUILDDIR)/ndk-src/$(UPSTREAM_NDK_TARBALL)
 	$(BUILDDIR)/prefix/bin/lha xw=$(BUILDDIR)/ndk-src/tmp $(BUILDDIR)/ndk-src/SDK_Install/base.lha
 	$(BUILDDIR)/prefix/bin/lha xw=$(BUILDDIR)/ndk-src/tmp $(BUILDDIR)/ndk-src/SDK_Install/execsg_sdk-54.31.lha
 	$(BUILDDIR)/prefix/bin/lha xw=$(BUILDDIR)/ndk-src/tmp $(BUILDDIR)/ndk-src/SDK_Install/newlib-53.80.lha
 	$(BUILDDIR)/prefix/bin/lha xw=$(BUILDDIR)/ndk-src/tmp $(BUILDDIR)/ndk-src/SDK_Install/clib2.lha
 	$(BUILDDIR)/prefix/bin/lha xw=$(BUILDDIR)/ndk-src/tmp $(BUILDDIR)/ndk-src/SDK_Install/pthreads-53.12.lha
-	unzip -o $(SOURCESDIR)/$(UPSTREAM_NDK_UPDATE_TARBALL) -d $(BUILDDIR)/ndk-src/tmp
-	mkdir -p $(BUILDDIR)/ndk-src/aos4-ndk-$(UPSTREAM_NDK_VERSION)+$(UPSTREAM_NDK_UPDATE_VERSION)
-	cp -r $(BUILDDIR)/ndk-src/tmp/Include $(BUILDDIR)/ndk-src/aos4-ndk-$(UPSTREAM_NDK_VERSION)+$(UPSTREAM_NDK_UPDATE_VERSION)/include
-	cp -r $(BUILDDIR)/ndk-src/tmp/newlib $(BUILDDIR)/ndk-src/aos4-ndk-$(UPSTREAM_NDK_VERSION)+$(UPSTREAM_NDK_UPDATE_VERSION)/newlib
-	cp -r $(BUILDDIR)/ndk-src/tmp/clib2 $(BUILDDIR)/ndk-src/aos4-ndk-$(UPSTREAM_NDK_VERSION)+$(UPSTREAM_NDK_UPDATE_VERSION)/clib2
-	cp -r $(BUILDDIR)/ndk-src/tmp/Local/common/include/* $(BUILDDIR)/ndk-src/aos4-ndk-$(UPSTREAM_NDK_VERSION)+$(UPSTREAM_NDK_UPDATE_VERSION)/newlib/include/
-	cp -r $(BUILDDIR)/ndk-src/tmp/Local/newlib/lib/* $(BUILDDIR)/ndk-src/aos4-ndk-$(UPSTREAM_NDK_VERSION)+$(UPSTREAM_NDK_UPDATE_VERSION)/newlib/lib/
-	cp -r $(BUILDDIR)/ndk-src/tmp/SDK/Include/* $(BUILDDIR)/ndk-src/aos4-ndk-$(UPSTREAM_NDK_VERSION)+$(UPSTREAM_NDK_UPDATE_VERSION)/include
-	cp -r $(BUILDDIR)/ndk-src/tmp/SDK/local/newlib/lib/* $(BUILDDIR)/ndk-src/aos4-ndk-$(UPSTREAM_NDK_VERSION)+$(UPSTREAM_NDK_UPDATE_VERSION)/newlib/lib/
-	cp -r $(BUILDDIR)/ndk-src/tmp/SDK/local/common/include/* $(BUILDDIR)/ndk-src/aos4-ndk-$(UPSTREAM_NDK_VERSION)+$(UPSTREAM_NDK_UPDATE_VERSION)/newlib/include/
-	tar -C $(BUILDDIR)/ndk-src -caf $(BUILDDIR)/aos4-ndk-$(UPSTREAM_NDK_VERSION)+$(UPSTREAM_NDK_UPDATE_VERSION).tar.xz aos4-ndk-$(UPSTREAM_NDK_VERSION)+$(UPSTREAM_NDK_UPDATE_VERSION)
-	touch $@
+	unzip -o $(BUILDDIR)/ndk-src/$(UPSTREAM_NDK_UPDATE_TARBALL) -d $(BUILDDIR)/ndk-src/tmp
+	mkdir -p $(BUILDDIR)/ndk-src/$(subst _,-,$(basename $(basename $(notdir $@))))
+	cp -r $(BUILDDIR)/ndk-src/tmp/Include $(BUILDDIR)/ndk-src/$(subst _,-,$(basename $(basename $(notdir $@))))/include
+	cp -r $(BUILDDIR)/ndk-src/tmp/newlib $(BUILDDIR)/ndk-src/$(subst _,-,$(basename $(basename $(notdir $@))))/newlib
+	cp -r $(BUILDDIR)/ndk-src/tmp/clib2 $(BUILDDIR)/ndk-src/$(subst _,-,$(basename $(basename $(notdir $@))))/clib2
+	cp -r $(BUILDDIR)/ndk-src/tmp/Local/common/include/* $(BUILDDIR)/ndk-src/$(subst _,-,$(basename $(basename $(notdir $@))))/newlib/include/
+	cp -r $(BUILDDIR)/ndk-src/tmp/Local/newlib/lib/* $(BUILDDIR)/ndk-src/$(subst _,-,$(basename $(basename $(notdir $@))))/newlib/lib/
+	cp -r $(BUILDDIR)/ndk-src/tmp/SDK/Include/* $(BUILDDIR)/ndk-src/$(subst _,-,$(basename $(basename $(notdir $@))))/include
+	cp -r $(BUILDDIR)/ndk-src/tmp/SDK/local/newlib/lib/* $(BUILDDIR)/ndk-src/$(subst _,-,$(basename $(basename $(notdir $@))))/newlib/lib/
+	cp -r $(BUILDDIR)/ndk-src/tmp/SDK/local/common/include/* $(BUILDDIR)/ndk-src/$(subst _,-,$(basename $(basename $(notdir $@))))/newlib/include/
+	tar -C $(BUILDDIR)/ndk-src -caf $@ $(subst _,-,$(basename $(basename $(notdir $@))))
 
-###
-# Rules to build and install lhasa
-###
+$(BUILDDIR)/$(UPSTREAM_GCC_TARBALL):
+	wget -q -O $@ $(UPSTREAM_GCC_URI)
 
-$(BUILDSTEPS)/lhasa.d: $(BUILDSTEPS)/lhasa-srcdir.d
-	mkdir -p $(BUILDDIR)/lhasa
-	mkdir -p $(BUILDDIR)/prefix
-	cd $(BUILDDIR)/lhasa && $(SRCDIR)/lhasa/configure --prefix=$(BUILDDIR)/prefix
-	cd $(BUILDDIR)/lhasa && make
-	cd $(BUILDDIR)/lhasa && make install
-	touch $@
+$(BUILDDIR)/$(UPSTREAM_BINUTILS_TARBALL):
+	wget -q -O $@ $(UPSTREAM_GCC_URI)
 
-$(BUILDSTEPS)/lhasa-srcdir.d: $(BUILDSTEPS)/buildsteps.d $(SOURCESDIR)/$(UPSTREAM_LHASA_TARBALL)
-	unzip $(SOURCESDIR)/$(UPSTREAM_LHASA_TARBALL)
-	mv lhasa-$(UPSTREAM_LHASA_VERSION) $(SRCDIR)/lhasa
-	cd $(SRCDIR)/lhasa && autoreconf -i
-	touch $@
+$(BUILDDIR)/$(UPSTREAM_GMP_TARBALL):
+	wget -q -O $@ $(UPSTREAM_GMP_URI)
 
-###
-# Rules to fetch NDK sources
-###
+$(BUILDDIR)/$(UPSTREAM_MPFR_TARBALL):
+	wget -q -O $@ $(UPSTREAM_MPFR_URI)
 
-$(SOURCESDIR)/$(UPSTREAM_LHASA_TARBALL):
-	wget -q -O $@ $(UPSTREAM_LHASA_URI)
+$(BUILDDIR)/$(UPSTREAM_MPC_TARBALL):
+	wget -q -O $@ $(UPSTREAM_MPC_URI)
 
-$(SOURCESDIR)/$(UPSTREAM_NDK_TARBALL):
-	wget -q -O $@ $(UPSTREAM_NDK_URI)
+$(BUILDDIR)/$(UPSTREAM_CLIB4_TARBALL):
+	wget -q -O $@ $(UPSTREAM_CLIB4_URI)
 
-$(SOURCESDIR)/$(UPSTREAM_NDK_UPDATE_TARBALL):
-	wget -q -O $@ $(UPSTREAM_NDK_UPDATE_URI)
+$(BUILDDIR)/$(UPSTREAM_OPENURL_TARBALL):
+	wget -q -O $@ $(UPSTREAM_OPENURL_URI)
+
+$(BUILDDIR)/$(UPSTREAM_AMISSL_TARBALL):
+	rm -rf $(BUILDDIR)/sources/amissl
+	mkdir -p $(BUILDDIR)/sources/amissl
+	wget -q -O $(BUILDDIR)/sources/amissl/amissl-$(UPSTREAM_AMISSL_VERSION).lha $(UPSTREAM_AMISSL_URI)
+	$(REPACK) $(BUILDDIR)/sources/amissl/amissl-$(UPSTREAM_AMISSL_VERSION).lha $@
+
+$(BUILDDIR)/$(UPSTREAM_ONCHIPMEM_TARBALL):
+	rm -rf $(BUILDDIR)/sources/onchipmem
+	mkdir -p $(BUILDDIR)/sources/onchipmem
+	wget -q -O $(BUILDDIR)/sources/onchipmem/onchipmem-$(UPSTREAM_ONCHIPMEM_VERSION).lha $(UPSTREAM_ONCHIPMEM_URI)
+	$(REPACK) $(BUILDDIR)/sources/onchipmem/onchipmem-$(UPSTREAM_ONCHIPMEM_VERSION).lha $@
+
+$(BUILDDIR)/$(UPSTREAM_GUIGFX_TARBALL):
+	rm -rf $(BUILDDIR)/sources/guigfx
+	mkdir -p $(BUILDDIR)/sources/guigfx
+	wget -q -O $(BUILDDIR)/sources/guigfx/guigfx-$(UPSTREAM_GUIGFX_VERSION).lha $(UPSTREAM_GUIGFX_URI)
+	$(REPACK) $(BUILDDIR)/sources/guigfx/guigfx-$(UPSTREAM_GUIGFX_VERSION).lha $@
+
+$(BUILDDIR)/$(UPSTREAM_RENDER_TARBALL):
+	rm -rf $(BUILDDIR)/sources/render
+	mkdir -p $(BUILDDIR)/sources/render
+	wget -q -O $(BUILDDIR)/sources/render/render-$(UPSTREAM_RENDER_VERSION).lha $(UPSTREAM_RENDER_URI)
+	$(REPACK) $(BUILDDIR)/sources/render/render-$(UPSTREAM_RENDER_VERSION).lha $@
+
+$(BUILDDIR)/$(UPSTREAM_CODESETS_TARBALL):
+	rm -rf $(BUILDDIR)/sources/codesets
+	mkdir -p $(BUILDDIR)/sources/codesets
+	wget -q -O $(BUILDDIR)/sources/codesets/codesets-$(UPSTREAM_CODESETS_VERSION).lha $(UPSTREAM_CODESETS_URI)
+	$(REPACK) $(BUILDDIR)/sources/codesets/codesets-$(UPSTREAM_CODESETS_VERSION).lha $@
