@@ -33,19 +33,6 @@ UPSTREAM_PML_PATCH := pml-2.03-mint-20191013.patch
 UPSTREAM_GEMLIB_VERSION := Git-20230112
 UPSTREAM_GEMLIB_TARBALL := gemlib_$(UPSTREAM_GEMLIB_VERSION).tar.bz2
 
-#UPSTREAM_GCC_URI := http://ftp.gnu.org/gnu/gcc/gcc-$(UPSTREAM_GCC_VERSION)/$(subst _,-,$(UPSTREAM_GCC_TARBALL))
-#UPSTREAM_GCC_PATCH_URI := http://vincent.riviere.free.fr/soft/m68k-atari-mint/archives/$(UPSTREAM_GCC_PATCH).bz2
-#UPSTREAM_BINUTILS_URI := ftp://ftp.gnu.org/gnu/binutils/$(subst _,-,$(UPSTREAM_BINUTILS_TARBALL))
-#UPSTREAM_BINUTILS_PATCH_URI := http://vincent.riviere.free.fr/soft/m68k-atari-mint/archives/$(UPSTREAM_BINUTILS_PATCH).bz2
-#UPSTREAM_GMP_URI := http://ftp.gnu.org/gnu/gmp/$(subst _,-,$(UPSTREAM_GMP_TARBALL))
-#UPSTREAM_MPFR_URI := http://www.mpfr.org/mpfr-$(UPSTREAM_MPFR_VERSION)/$(subst _,-,$(UPSTREAM_MPFR_TARBALL))
-#UPSTREAM_MPC_URI := http://www.multiprecision.org/mpc/download/$(subst _,-,$(UPSTREAM_MPC_TARBALL))
-#UPSTREAM_MINTBIN_URI := http://vincent.riviere.free.fr/soft/m68k-atari-mint/archives/$(subst _,-,$(UPSTREAM_MINTBIN_TARBALL))
-#UPSTREAM_MINTLIB_URI := http://vincent.riviere.free.fr/soft/m68k-atari-mint/archives/$(subst _,-,$(UPSTREAM_MINTLIB_TARBALL))
-#UPSTREAM_PML_URI := http://vincent.riviere.free.fr/soft/m68k-atari-mint/archives/$(subst _,-,$(UPSTREAM_PML_TARBALL))
-#UPSTREAM_PML_PATCH_URI := http://vincent.riviere.free.fr/soft/m68k-atari-mint/archives/$(UPSTREAM_PML_PATCH).bz2
-#UPSTREAM_GEMLIB_URI := http://vincent.riviere.free.fr/soft/m68k-atari-mint/archives/$(subst _,-,$(UPSTREAM_GEMLIB_TARBALL))
-
 GCC_AUTOCONF := autoconf2.64
 GCC_AUTOHEADER := autoheader2.64
 GCC_AUTORECONF := autoreconf2.64
@@ -72,8 +59,10 @@ PREFIX ?= /opt/netsurf/$(TARGET_NAME)/cross
 
 PRISTINE_TAR := $(TOP)/../tools/pristine-tar
 
-.PHONY: all clean distclean
+.PHONY: all clean distclean source-archives
 all: $(BUILDSTEPS)/gemlib.d
+
+source-archives: $(BUILDSTEPS)/sources.d
 
 clean:
 	rm -fr $(BUILDDIR)
@@ -265,3 +254,60 @@ $(SOURCESDIR):
 
 $(SRCDIR):
 	mkdir -p $@
+
+###
+# Rules to build source archives (via source-archives target)
+###
+
+UPSTREAM_GCC_URI := http://ftp.gnu.org/gnu/gcc/gcc-$(UPSTREAM_GCC_VERSION)/$(subst _,-,$(UPSTREAM_GCC_TARBALL))
+UPSTREAM_BINUTILS_URI := ftp://ftp.gnu.org/gnu/binutils/$(subst _,-,$(UPSTREAM_BINUTILS_TARBALL))
+UPSTREAM_GMP_URI := http://ftp.gnu.org/gnu/gmp/$(subst _,-,$(UPSTREAM_GMP_TARBALL))
+UPSTREAM_MPFR_URI := http://www.mpfr.org/mpfr-$(UPSTREAM_MPFR_VERSION)/$(subst _,-,$(UPSTREAM_MPFR_TARBALL))
+UPSTREAM_MPC_URI := http://www.multiprecision.org/downloads/$(subst _,-,$(UPSTREAM_MPC_TARBALL))
+UPSTREAM_MINTBIN_URI := http://vincent.riviere.free.fr/soft/m68k-atari-mint/archives/$(subst _,-,$(UPSTREAM_MINTBIN_TARBALL))
+UPSTREAM_MINTLIB_URI := http://vincent.riviere.free.fr/soft/m68k-atari-mint/archives/$(subst _,-,$(UPSTREAM_MINTLIB_TARBALL))
+UPSTREAM_PML_URI := http://vincent.riviere.free.fr/soft/m68k-atari-mint/archives/$(subst _,-,$(UPSTREAM_PML_TARBALL))
+UPSTREAM_GEMLIB_URI := http://vincent.riviere.free.fr/soft/m68k-atari-mint/archives/$(subst _,-,$(UPSTREAM_GEMLIB_TARBALL))
+
+UPSTREAM_GCC_PATCH_URI := http://vincent.riviere.free.fr/soft/m68k-atari-mint/archives/$(UPSTREAM_GCC_PATCH).bz2
+UPSTREAM_BINUTILS_PATCH_URI := http://vincent.riviere.free.fr/soft/m68k-atari-mint/archives/$(UPSTREAM_BINUTILS_PATCH).bz2
+UPSTREAM_PML_PATCH_URI := http://vincent.riviere.free.fr/soft/m68k-atari-mint/archives/$(UPSTREAM_PML_PATCH).bz2
+
+$(BUILDSTEPS)/sources.d: $(BUILDSTEPS)/buildsteps.d $(BUILDDIR)/$(UPSTREAM_GCC_TARBALL) $(BUILDDIR)/$(UPSTREAM_BINUTILS_TARBALL) $(BUILDDIR)/$(UPSTREAM_GMP_TARBALL) $(BUILDDIR)/$(UPSTREAM_MPFR_TARBALL) $(BUILDDIR)/$(UPSTREAM_MPC_TARBALL) $(BUILDDIR)/$(UPSTREAM_MINTBIN_TARBALL) $(BUILDDIR)/$(UPSTREAM_MINTLIB_TARBALL) $(BUILDDIR)/$(UPSTREAM_PML_TARBALL) $(BUILDDIR)/$(UPSTREAM_GEMLIB_TARBALL) $(BUILDDIR)/$(UPSTREAM_GCC_PATCH) $(BUILDDIR)/$(UPSTREAM_BINUTILS_PATCH) $(BUILDDIR)/$(UPSTREAM_PML_PATCH)
+	touch $@
+
+$(BUILDDIR)/$(UPSTREAM_GCC_TARBALL):
+	wget -q -O $@ $(UPSTREAM_GCC_URI)
+
+$(BUILDDIR)/$(UPSTREAM_BINUTILS_TARBALL):
+	wget -q -O $@ $(UPSTREAM_BINUTILS_URI)
+
+$(BUILDDIR)/$(UPSTREAM_GMP_TARBALL):
+	wget -q -O $@ $(UPSTREAM_GMP_URI)
+
+$(BUILDDIR)/$(UPSTREAM_MPFR_TARBALL):
+	wget -q -O $@ $(UPSTREAM_MPFR_URI)
+
+$(BUILDDIR)/$(UPSTREAM_MPC_TARBALL):
+	wget -q -O $@ $(UPSTREAM_MPC_URI)
+
+$(BUILDDIR)/$(UPSTREAM_MINTBIN_TARBALL):
+	wget -q -O $@ $(UPSTREAM_MINTBIN_URI)
+
+$(BUILDDIR)/$(UPSTREAM_MINTLIB_TARBALL):
+	wget -q -O $@ $(UPSTREAM_MINTLIB_URI)
+
+$(BUILDDIR)/$(UPSTREAM_PML_TARBALL):
+	wget -q -O $@ $(UPSTREAM_PML_URI)
+
+$(BUILDDIR)/$(UPSTREAM_GEMLIB_TARBALL):
+	wget -q -O $@ $(UPSTREAM_GEMLIB_URI)
+
+$(BUILDDIR)/$(UPSTREAM_GCC_PATCH):
+	wget -q -O - $(UPSTREAM_GCC_PATCH_URI) | bzcat >$@
+
+$(BUILDDIR)/$(UPSTREAM_BINUTILS_PATCH):
+	wget -q -O - $(UPSTREAM_BINUTILS_PATCH_URI) | bzcat >$@
+
+$(BUILDDIR)/$(UPSTREAM_PML_PATCH):
+	wget -q -O - $(UPSTREAM_PML_PATCH_URI) | bzcat >$@
