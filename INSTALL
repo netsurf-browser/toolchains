@@ -1,0 +1,17 @@
+WinDom installation
+-------------------
+
+Just unpack the current archive and copy files from 'include' and 
+'lib\compiler' of WinDom package in your compiler include and lib 
+directory.
+
+WinDom is available for GCC 2.95+, but it should be compiled for
+Pure C, Sozobon C, and Gcc 2.8.1 as well.
+
+windom2 requires GEMLIB 0.43.5+ and LDG-DEV packages:
+
+GEMLIB:
+http://arnaud.bercegeay.free.fr/gemlib/ 
+
+LDG-DEV:
+http://ldg.sf.net

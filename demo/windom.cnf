@@ -1,0 +1,6 @@
+[Default Settings]
+#windom.userdef.list = windom/userdef/userdef.ldg
+#windom.userdef.list = windom/userdef/textured.ldg
+#windom.userdef.list = windom/userdef/xgem.ldg
+windom.userdef.list = __builtin__
+[end]

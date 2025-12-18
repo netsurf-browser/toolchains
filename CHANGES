@@ -1,0 +1,89 @@
+# $Id: CHANGES,v 1.3 2005/03/07 21:46:20 bercegeay Exp $
+
+HOW TO adapt windom application for windom 1.21.x to windom 2.0.0
+
+
+Modification of APPvar global variable
+*************************************************************************
+
+app.id  -------> _AESapid
+
+
+lot of internal changes
+*************************************************************************
+Lot of internal functions of windom have changed. The name of the
+function has not changed, but the number and type of parameters expected
+by the function have changed... So, if you use such internal function,
+your application may compile just fine (no unresolved symbols), but the
+executable may crash !
+
+--------> make sure that windom functions you call are all declared in
+windom.h. A good and easy way to do so is to check that the compiler
+reports 0 warning.
+
+
+EVNTvar.buff removed
+*************************************************************************
+The evnt.buff array has been removed.
+
+If you want to access to the complete message in your callbcak functions,
+then just use the extra parameter buff[] we added in that pupose.
+
+--------> type of callback functions are now:
+typedef void __CDECL (* func_evntdata)(WINDOW *, short buff[8], void *);
+typedef void __CDECL (* func_evnt    )(WINDOW *, short buff[8]);
+
+
+
+callback function type should be respected now
+*************************************************************************
+
+windom2 is much more strict for callback functions, and the type of
+the callback function is now checked. This implies some modification
+of the windom API:
+
+ObjcAttach( OC_FORM, win, ob, BIND_FUNC, callback)
+--------> ObjcAttachFormFunc( win, ob, callback, callback_data)
+
+ObjcAttach( OC_FORM, win, ob, BIND_BIT, &var, bit)
+--------> ObjcAttachBit( OC_FORM, win, ob, &var, bit)
+
+And the type of the callback function should be checked:
+typedef void __CDECL (* func_evntdata)(WINDOW *, short buff[8], void *);
+typedef void __CDECL (* func_evnt    )(WINDOW *, short buff[8]);
+typedef void __CDECL (* func_bind    )(WINDOW *, int, int, void *);
+typedef void __CDECL (* func_bindmenu)(WINDOW *, int, int, int, void *);
+typedef void __CDECL (* func_doslid  )(WINDOW *, int, float, void *);
+typedef void __CDECL (* func_userdraw)(WINDOW *, PARMBLK *, void *);
+
+Very important for purec users : don't forget the __CDECL word !
+
+
+vdi handle
+*************************************************************************
+
+The win->graf structure is now dynamically allocated, or point to the
+global application GRAF data. As consequence, replace
+
+win->graf.handle   ---------->  win->graf->handle
+
+
+standard callback functions
+*************************************************************************
+
+form_close() --------> stdFormClose()
+WindClear()  --------> stdWindClear()
+
+That is for callback function attached to windows (by using EvntAttach()
+or win->icon->draw=func f.e.).
+
+The function WindClear() is still there if you need it, but WindClear shall
+not be used as callback function (wrong type).
+
+
+ldg library requiered
+*************************************************************************
+
+windom2 applications have to be linked with LDG devel library (libldg.a):
+don't forget to add the "-lldg" word to your final "cc" line.
+

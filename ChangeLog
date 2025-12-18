@@ -1,0 +1,6360 @@
+2006-06-22 11:40  Arnaud BERCEGEAY
+
+	* README, VERSION, include/mt_wndm.h, src/windom.doxy,
+	src/rpm/windom.spec:
+
+	this is now version 2.0.1
+	
+2006-06-22 11:39  Arnaud BERCEGEAY
+
+	* HOWTO_RELEASE:
+
+	minor changes
+	
+2006-06-20 21:59  Arnaud BERCEGEAY
+
+	* src/evnt_list.c, userdef/extended/interface.c:
+
+	fixed some doxygen comments
+	
+2006-06-19 23:09  Arnaud BERCEGEAY
+
+	* src/frm_buttn_ev.c:
+
+	callback function attached to toolbar should work now
+	
+2006-06-19 20:48  Arnaud BERCEGEAY
+
+	* src/: frm_buttn_ev.c, globals.h, objc_edit.c:
+
+	editable fields in toolbar should work now
+	
+2006-06-14 23:09  Arnaud BERCEGEAY
+
+	* src/gcc.mak:
+
+	changed gcc build options: without debug by default
+	
+2006-06-14 23:00  Arnaud BERCEGEAY
+
+	* src/wind_set.c:
+
+	fixed documentation (AES4 toolbar not used)
+	
+2006-04-23 18:55  Arnaud BERCEGEAY
+
+	* src/evnt_windom.c:
+
+	fixed bug #1441098 (handling of MN_SELECTED msg from old AES)
+	
+2006-04-18 20:50  Arnaud BERCEGEAY
+
+	* src/vqt_xname.c:
+
+	added missing header string.h (bug #1471337)
+	
+2006-04-18 20:46  Arnaud BERCEGEAY
+
+	* src/: bubble_call.c, font_name2id.c:
+
+	added missing header string.h (bug #1471472)
+	
+2006-04-18 19:50  Arnaud BERCEGEAY
+
+	* src/conf_windom.c:
+
+	fixed bug #1441081: mt_ConfWindom() may crash on some AES
+	
+2006-04-12 22:53  Arnaud BERCEGEAY
+
+	* src/objc_attach.c, userdef/extended/string.c:
+
+	fixed: removed cast of lvalues (bug #1459775)
+	
+2006-03-27 20:23  Arnaud BERCEGEAY
+
+	* src/objc_attach.c, userdef/extended/interface.c,
+	userdef/extended/string.c:
+
+	added missing header (string.h) - bug #1459083
+	
+2006-03-27 20:13  Arnaud BERCEGEAY
+
+	* src/comp_split.c:
+
+	fixed #undef directives (Bugs item #1459085)
+	
+2006-03-22 21:58  Arnaud BERCEGEAY
+
+	* demo/: demo.h, demo.hrd, demo.rsc, evnt-fnc.c, global.h, setup.c,
+	util.c, win-cust.c, win-divr.c, win-form.c, win-tool.c:
+
+	removed window information feature (CTRL I in the menu)
+	
+2006-03-16 21:16  Arnaud BERCEGEAY
+
+	* src/rpm/windom.spec:
+
+	added RPM dependancies: gemlib and ldg-dev
+	
+2006-03-14 20:45  Arnaud BERCEGEAY
+
+	* demo/: evnt-av.c, setup.c, win-cust.c, win-divr.c, win-fram.c,
+	win-tool.c:
+
+	fixed: value returned by WindCreate() and FrameCreate() now checked
+	
+2006-03-14 20:40  Arnaud BERCEGEAY
+
+	* src/frame_create.c:
+
+	fixed: value returned by mt_WindCreate() is now checked
+	
+2006-03-07 21:06  Arnaud BERCEGEAY
+
+	* demo/win-tool.c:
+
+	fixed redraw of popup objects (and its child)
+	
+2006-03-06 21:04  Arnaud BERCEGEAY
+
+	* src/: objc_wchange.c, objc_wdraw.c:
+
+	Some clipping fixes (popup in toolbar now works fine again) :
+	- remove exclusion based on the window clipping rectangle: in these
+	  functions, win->graf->clip may be not relevant.
+	- remove exclusion based on the work reclangle: these function may be
+	  called to redraw objects of the toolbar (cf OC_TOOLBAR), and such objects
+	  are always out of the WORK area because the TOOLBAR is not part of the
+	  WORK area.
+	
+2006-02-26 17:47  Standa OPICHAL
+
+	* src/objc_edit.c:
+
+	rc_intersect() pulled out of the loop.
+	
+2006-02-26 04:15  Standa OPICHAL
+
+	* src/: comp_menu.c, comp_widget.c, gcc.mak, globals.h, std_evnt.c:
+
+	Added a standard handler function for CM_REFLOW and hooked that to the
+	WIDGET component. This is useful e.g. when the menu is removed or changed.
+	
+	comp_menu_tnormal() removed and replaced with more general comp_menu_set()
+	that handles all menu concerning WindSet() modes. This now also respects
+	the API abstraction.
+	
+2006-02-26 03:56  Standa OPICHAL
+
+	* src/objc_change.c:
+
+	Gemlib constants used where possible.
+	
+2006-02-26 03:09  Standa OPICHAL
+
+	* src/wind_get.c:
+
+	Makeing WindGet() behaviour consistent and go to the app->priv->desk
+	for win == NULL situation.
+	
+2006-02-25 04:32  Standa OPICHAL
+
+	* src/: objc_wchange.c, objc_wdraw.c:
+
+	Fixed to use real WinDom WINDOW rectangle list as opposed to AES' directly.
+	
+2006-02-25 04:25  Standa OPICHAL
+
+	* src/mnscroll.c:
+
+	Note added:
+	ObjcWindChange() should not be used in menu navigation implementation
+	as it is outside of the WM_WORKXYWH rectangle.
+	
+2006-02-25 04:16  Standa OPICHAL
+
+	* src/objc_wdraw.c:
+
+	Fixed to use real WinDom WINDOW rectangle list as opposed to AES' directly.
+	
+2006-02-25 04:14  Standa OPICHAL
+
+	* include/mt_wndm.h, src/appl_init.c, src/comp_menu.c,
+	src/comp_widget.c, src/menu_tnormal.c, src/wind_set.c:
+
+	WF_MENUTNORMAL introduced. The mt_MenuTnormal() is now implemented as
+	mt_WindSet( WF_MENUTNORMAL, ...) call to distinguish between different
+	WINDOW kinds (desktop, aes instance, custom WINDOW /in a component/).
+	
+2006-02-25 04:12  Standa OPICHAL
+
+	* src/comp_window.c:
+
+	The WM_WORKXYWH of a WINDOW in a component should be clipped.
+	
+2006-02-25 04:03  Standa OPICHAL
+
+	* src/mnscroll.c:
+
+	Unused variables removal.
+	
+2006-02-25 03:50  Standa OPICHAL
+
+	* src/mnscroll.c:
+
+	mt_MenuTnormal() used in the menu navigation routine.
+	
+2006-02-24 22:55  Standa OPICHAL
+
+	* src/evnt_list.c:
+
+	The win_public variable is not really needed. The function argument 'w'
+	is used.
+	
+2006-02-22 21:04  Arnaud BERCEGEAY
+
+	* src/evnt_list.c:
+
+	app->priv->desk should not get out of the internal of windom.
+	
+	If "win" is a pointer to app->priv->desk, then the callback function
+	provides NULL (intead of app->priv->desk to the application.
+	It's usefull if the application does some checking like "if win=NULL"
+	in the callback function to know if the callback function is called
+	for a window of for the application.
+	
+2006-02-22 19:33  Standa OPICHAL
+
+	* src/: comp_menu.c, comp_widget.c, files.mak:
+
+	A MENU component created. A new comp_menu.c file created to isolate all
+	necessary functions.
+	
+2006-02-22 19:28  Standa OPICHAL
+
+	* src/evnt_redraw.c:
+
+	mt_CompEvntRedrawLGrect() added. Some adjustments to the other functions
+	implementations.
+	
+2006-02-22 19:26  Standa OPICHAL
+
+	* include/mt_wndm.h, src/comp_create.c:
+
+	CS_FOCUSED component state added to simplify the focus detection.
+	
+	A mt_CompDelete() takes care about the component being deleted and
+	removes the focus if set.
+	
+2006-02-22 17:15  Standa OPICHAL
+
+	* src/: appl_exit.c, appl_init.c, data.c, evnt_list.c,
+	evnt_windom.c, globals.h, menu_bar.c, menu_bind.c, objc_attach.c,
+	wind_get.c, wind_set.c:
+
+	WINDOW *app->priv->desk added to simplify application related settings and
+	WinDom internals.
+	
+2006-02-20 22:53  Arnaud BERCEGEAY
+
+	* include/mt_wndm.h:
+
+	this is cvs version of windom
+	
+2006-02-20 20:53  Arnaud BERCEGEAY
+
+	* src/rpm/windom.spec:
+
+	fixed chronological order of changelog
+	
+2006-02-20 20:33  Arnaud BERCEGEAY
+
+	* ChangeLog:
+
+	updated for release 2.0.0
+	
+2006-02-20 20:29  Arnaud BERCEGEAY
+
+	* src/rpm/windom.spec, src/windom.doxy, include/mt_wndm.h,
+	HOWTO_RELEASE, README, VERSION:
+
+	updated for release 2.0.0
+	
+2006-02-16 22:29  Arnaud BERCEGEAY
+
+	* src/: rsrc_xfree.c, rsrc_xload.c:
+
+	restored rev 1.4 of rsrc_xfree.c and rev 1.9 of rsrc_xload.c
+	
+2006-02-16 16:57  Standa OPICHAL
+
+	* demo/util.c:
+
+	Symbolic constants usage.
+	
+2006-02-16 16:54  Standa OPICHAL
+
+	* src/: rsrc_xfree.c, rsrc_xload.c:
+
+	Decoupling the rcfix() code. Also the RsrcXfree now destroys the rcfix()
+	created CICON bitmaps only when actualy used.
+	
+2006-02-16 16:34  Standa OPICHAL
+
+	* src/rsrc_xload.c:
+
+	CICONs are now fixed by the AES itself if the rsrc_rcfix() call is
+	available.
+	
+2006-02-16 07:50  Arnaud BERCEGEAY
+
+	* src/rsrc_xload.c:
+
+	CICON always fixed whatever the support of CICON in AES
+	
+2006-02-16 04:26  Standa OPICHAL
+
+	* src/wind_attach.c:
+
+	Adding and fixing necessary initialization.
+	
+2006-02-14 21:58  Arnaud BERCEGEAY
+
+	* demo/evnt-fnc.c:
+
+	fixed typo
+	
+2006-02-14 21:57  Arnaud BERCEGEAY
+
+	* demo/: evnt-fnc.c, global.c, global.h, load-bub.c, main.c,
+	setup.c, util.c, win-cust.c:
+
+	RsrcXload() is used in place of RsrcLoad() because only the former can
+	convert CICON object to userdef for a correct rendering on all AESes.
+	- RsrcXload/RsrcXfree() have replaced RsrcLoad/RsrcFree().
+	- A global variable 'rsc' (and friends) has been added.
+	- rsrc_gaddr() has been replaced by RsrcGaddr().
+	- RsrcXtype() parameter has been changed.
+	
+	Maybe RsrcLoad() will be restored in a futur version of windom, when
+	transformation of CICON could be simply done with a RSC loaded by
+	RsrcLoad().
+	
+2006-02-14 21:50  Arnaud BERCEGEAY
+
+	* src/: cicon.c, rsrc_xload.c:
+
+	fixed: initialisation of XRSRCFIX data in RsrcXload()
+	
+2006-02-14 14:20  Arnaud BERCEGEAY
+
+	* Makefile, VERSION, src/rpm/windom.spec:
+
+	update RPM building process for RC2
+	
+2006-02-14 09:02  Arnaud BERCEGEAY
+
+	* ChangeLog:
+
+	updated for version 2.0.0-RC2
+	
+2006-02-14 00:31  Arnaud BERCEGEAY
+
+	* src/wind_set.c:
+
+	fixed doxygen documentation
+	
+2006-02-14 00:30  Arnaud BERCEGEAY
+
+	* HOWTO_RELEASE, INSTALL, src/doc/install.c,
+	src/doc/presentation.c, src/doc/usage.c:
+
+	windom2 is now build for gcc only.
+	
+	windom2 should still compile for other compilers (gcc281, purec and
+	sozobonx), but the official windom2 package will only support gcc.
+	This library compiled for other compilers should be available as a
+	separate package in the futur.
+	
+2006-01-31 22:34  Arnaud BERCEGEAY
+
+	* demo/win-form.c:
+
+	fix (cast) of NULL value to make pure c compiler happy
+	
+2006-01-31 22:30  Arnaud BERCEGEAY
+
+	* README, VERSION, include/mt_wndm.h, src/rpm/windom.spec,
+	src/windom.doxy:
+
+	stamped as RC2
+	
+2006-01-31 22:28  Arnaud BERCEGEAY
+
+	* HOWTO_RELEASE:
+
+	fixed typo
+	
+2006-01-25 23:22  Arnaud BERCEGEAY
+
+	* demo/: demo.h, demo.hrd, demo.rsc, win-tool.c:
+
+	toolbar of window with menu and tb is now reactive
+	
+2006-01-24 23:16  Arnaud BERCEGEAY
+
+	* demo/win-form.c:
+
+	- the quit:yes/no form now uses the standard MODAL window feature in place
+	  of the old (and soon deprecated) FormWind*() API
+	- the modal form example is now similar to the standard form example
+	  (form closed by OK or CANCEL exit buttons only)
+	
+2006-01-23 22:13  Arnaud BERCEGEAY
+
+	* demo/win-tool.c:
+
+	implemented cycling of popup
+	
+2006-01-23 21:57  Arnaud BERCEGEAY
+
+	* demo/demo.rsc:
+
+	cosmetics (atari logo in menu now visible)
+	
+2006-01-23 21:04  Arnaud BERCEGEAY
+
+	* examples/multifrm/: multifrm.h, multifrm.hrd, multifrm.rsc:
+
+	some cosmetic changes
+	
+2006-01-23 20:34  Arnaud BERCEGEAY
+
+	* src/comp_widget.c:
+
+	give the hand to other AES applications so that they could redraw their
+	background windows while we are real-time resizing our window.
+	
+2006-01-23 20:23  Arnaud BERCEGEAY
+
+	* examples/frame/: tstframe.c, txtframe.c, wdiff.c:
+
+	tell the world if the example uses the old buggy and deprecated Frame()
+	API or the new and experimental Component() API.
+	
+2006-01-23 06:35  Standa OPICHAL
+
+	* src/: comp_create.c, comp_window.c, frame_attach.c, wind_get.c,
+	wind_set.c:
+
+	comp_get() case WF_FIRSTAREAXYWH added to get COMPONENT redraw working
+	again.
+	
+	Wind[SG]et() return values adjusted to reflect documentation (0 /E_OK/
+	on success otherwise negative return value).
+	
+2006-01-23 03:07  Standa OPICHAL
+
+	* src/comp_widget.c:
+
+	The info OBJECT position is the position of the component. Clipping must
+	be done after setting the position.
+	
+2006-01-23 02:43  Standa OPICHAL
+
+	* examples/frame/dragdrop.c:
+
+	Uninitialized variable warning removed.
+	
+2006-01-23 02:41  Standa OPICHAL
+
+	* include/mt_wndm.h, src/comp_create.c:
+
+	Return values are of type 'int' (sync with other API functions).
+	
+	Using mint/errno.h values E_OK, ENOSYS instead of numerical constants.
+	
+2006-01-19 22:01  Arnaud BERCEGEAY
+
+	* include/mt_wndm.h:
+
+	fixed documentation of app::gdos
+	
+2006-01-19 21:52  Arnaud BERCEGEAY
+
+	* examples/popup/: ex_popup.h, ex_popup.hrd, ex_popup.rsc:
+
+	remove unused LIST buttons
+	
+2006-01-17 21:00  Arnaud BERCEGEAY
+
+	* include/windom.h:
+
+	added WindXGet() and WindXGetGrect()
+	
+2006-01-17 07:57  Arnaud BERCEGEAY
+
+	* src/wind_get.c:
+
+	both WF_FIRSTAREAXYWH and WF_FIRSTXYWH are accepted now
+	
+2006-01-16 23:29  Arnaud BERCEGEAY
+
+	* src/: evnt_redraw.c, move_work.c, objc_edit.c:
+
+	use WF_FIRSTAREAXYWH when available
+	
+2006-01-12 05:05  Standa OPICHAL
+
+	* src/font_sel.c:
+
+	The app->gdos is initialized to the vst_load_fonts() + app->inout[10] value
+	in the appl_init().
+	
+	NVDI does not give the same value for consecutive vst_load_fonts() without
+	the vst_unload_fonts() between.
+	
+2006-01-12 04:42  Standa OPICHAL
+
+	* src/comp_create.c:
+
+	The comp_redraw() made static. Plus a comment adjustment.
+	
+2006-01-12 04:37  Standa OPICHAL
+
+	* src/: globals.h, wind_set.c:
+
+	WF_HILIGHT moved to the wind_menu_set() - perhaps just temporarilly.
+	
+2006-01-11 23:10  Arnaud BERCEGEAY
+
+	* demo/evnt-fnc.c:
+
+	Added some checking to prevent a massive sending of WM_CLOSED messages
+	when the application exit
+	
+2006-01-11 22:51  Arnaud BERCEGEAY
+
+	* demo/main.c:
+
+	- Added user-localisation of RSC file when then RSC file is not found
+	- Removed initialisation of evnt.b* (button) stuff, already done by windom
+	
+2006-01-09 20:26  Standa OPICHAL
+
+	* src/comp_window.c:
+
+	MN_SELECTED passed to the acquired WINDOW.
+	
+	Naming adjusted.
+	
+2006-01-07 05:57  Standa OPICHAL
+
+	* src/: comp_window.c, globals.h, wind_set.c:
+
+	Common WINDOW related menu stuff extracted into a new wind_menu_set().
+	
+2006-01-07 05:48  Standa OPICHAL
+
+	* include/mt_wndm.h, src/comp_aslider.c, src/frame_attach.c,
+	src/globals.h, src/wind_get.c:
+
+	Adding mt_WindXGet() and mt_WindXGetGrect() functions. Customer window
+	handlers now also take the GRECT *clip to enable wind_xget() optimization.
+	
+	The WF_FIRSTXYWH is translated into the WF_FIRSTAREAXYWH automatically
+	when available in wind_aes_get().
+	
+2006-01-04 20:14  Arnaud BERCEGEAY
+
+	* src/appl_control.c:
+
+	updated TODO comment
+	
+2006-01-04 07:43  Standa OPICHAL
+
+	* src/appl_write.c:
+
+	Comment typo fixed.
+	
+2006-01-03 20:47  Arnaud BERCEGEAY
+
+	* AUTHORS:
+
+	updated copyright line (year++ and AUTHORS file)
+	
+2006-01-03 16:13  Standa OPICHAL
+
+	* include/windom/list.h:
+
+	LINKABLEPTR structure and listLast() added.
+	
+2006-01-03 15:52  Arnaud BERCEGEAY
+
+	* userdef/: Makefile, extended/char.c, extended/draw.c,
+	extended/extend.c, extended/global.h, extended/interface.c,
+	extended/interface.h, extended/ldg.c, extended/string.c,
+	extended/wsystem.h, extended/wsystem.rh, extended/wsystem.rsh,
+	extended/xedit.c:
+
+	updated copyright line (year++ and AUTHORS file)
+	
+2006-01-03 15:48  Standa OPICHAL
+
+	* HOWTO_RELEASE:
+
+	Added step -1. CLEAN CHECKOUT which is needed to get clean source
+	distribution files.
+	
+2006-01-03 15:46  Standa OPICHAL
+
+	* VERSION:
+
+	Version variable split to multiple ones to allow automatic file version
+	changes.
+	
+2006-01-03 15:46  Arnaud BERCEGEAY
+
+	* include/: av.h, mt_wndm.h, scancode.h, windom.h, windom/list.h,
+	windom/udlib.h:
+
+	updated copyright line (year++ and AUTHORS file)
+	
+2006-01-03 15:45  Standa OPICHAL
+
+	* Makefile:
+
+	srctgz target changed to contain all sources as they are in CVS
+	
+	clean target added to simplify things
+	
+2006-01-03 15:39  Arnaud BERCEGEAY
+
+	* examples/: Makefile, bubble/Makefile, bubble/bubbltst.c,
+	component/Makefile, component/cal.c, component/comptest.c,
+	frame/Makefile, frame/tstframe.c, frame/txtframe.c,
+	frame/viewtext.c, frame/viewtext.h, frame/wdiff.c,
+	mousexy/Makefile, mousexy/mousexy.c, multifrm/Makefile,
+	multifrm/multifrm.c, popup/Makefile, popup/ex_popup.c,
+	slider/Makefile, slider/slider.c, tutorial/Makefile,
+	tutorial/text.c, tutorial/text.h, tutorial/tut-1-1.c,
+	tutorial/tut-1-2.c, tutorial/tut-1-3.c, tutorial/tut-1-4.c,
+	tutorial/tut-2-1.c, tutorial/tut-2-2.c, tutorial/tut-2-3.c,
+	tutorial/tutorial.c:
+
+	updated copyright line (year++ and AUTHORS file)
+	
+2006-01-03 15:15  Arnaud BERCEGEAY
+
+	* demo/: evnt-av.c, evnt-fnc.c, files.mak, gcc.mak, gcc281.mak,
+	global.c, global.h, load-bub.c, main.c, makefile, pc.mak, setup.c,
+	sox.mak, util.c, win-cust.c, win-divr.c, win-form.c, win-fram.c,
+	win-tool.c:
+
+	updated copyright line (year++ and AUTHORS file)
+	
+2006-01-03 15:09  Standa OPICHAL
+
+	* examples/component/cal.c:
+
+	The 'struct tm*' management cleaned.
+	
+	The win_cal_update() renamed to cal_update() and changed to only reconstruct
+	the children components of the actual calendar root component.
+	
+2006-01-03 15:05  Standa OPICHAL
+
+	* src/: comp_aslider.c, comp_object.c, comp_slider.c, comp_szd.c,
+	comp_widget.c, comp_window.c, globals.h:
+
+	Some Comp*() naming adjusted to be more consistent. Comments fixed.
+	
+	Preliminary support for CLT_STACK layout type components.
+	
+2006-01-03 15:02  Standa OPICHAL
+
+	* src/frame_create.c:
+
+	Marked as @deprecated.
+	
+2006-01-03 14:58  Standa OPICHAL
+
+	* include/mt_wndm.h, src/comp_create.c, src/evnt_list.c:
+
+	Frame*() things marked as @deprecated.
+	
+	Added the CS_IN_USE/CS_DESTROYED concept to the mt_CompDelete() in the same
+	sense as it works for mt_WindDelete().
+	
+2006-01-03 14:57  Arnaud BERCEGEAY
+
+	* src/comp_object.c:
+
+	updated copyright line (year++ and AUTHORS file)
+	
+2006-01-03 14:52  Arnaud BERCEGEAY
+
+	* src/: Makefile, add_slash.c, appl_control.c, appl_exit.c,
+	appl_get.c, appl_init.c, appl_name.c, appl_set.c, appl_write.c,
+	av_exit.c, av_init.c, av_server.c, av_status.c, av_strfmt.c,
+	av_waitfor.c, bubble_attach.c, bubble_call.c, bubble_do.c,
+	bubble_evnt.c, bubble_find.c, bubble_free.c, bubble_get.c,
+	bubble_modal.c, cicon.c, cicon.h, clip_off.c, clip_on.c,
+	close_fontid.c, comp_aslider.c, comp_create.c, comp_slider.c,
+	comp_split.c, comp_szd.c, comp_widget.c, comp_window.c,
+	conf_getline.c, conf_inquire.c, conf_read.c, conf_windom.c,
+	conf_write.c, conv_path.c, cookie.h, cookieptr.c, data.c,
+	debug_windom.c, do_update.c, draw_submenu.c, evnt_list.c,
+	evnt_redraw.c, evnt_windom.c, files.mak, font_id2name.c,
+	font_name2id.c, font_sel.c, fontsel.h, form_alert.c, form_attach.c,
+	form_begin.c, form_close.c, form_create.c, form_end.c,
+	form_resize.c, form_restore.c, form_save.c, form_thbget.c,
+	form_thbset.c, form_thumb.c, form_wbegin.c, form_wdo.c,
+	form_wend.c, frame_attach.c, frame_calc.c, frame_create.c,
+	frame_find.c, frame_get.c, frame_init.c, frame_remove.c,
+	frame_search.c, frame_set.c, frame_set_widget.c, frm_buttn_ev.c,
+	frm_click.c, frm_drw.c, frm_dstry.c, frm_fld.c, frm_keybd_ev.c,
+	frm_keyhd.c, frm_mvd.c, frm_top.c, fsel.c, fsel.h, galloc.c,
+	gcc.mak, gcc281.mak, gemcode2ascii.c, get_appname.c, get_cookie.c,
+	get_next_obj.c, getindexmenu.c, give_iconifyxywh.c, globals.c,
+	globals.h, glue.c, grectcenter.c, import_xobjc.mak, is_menu.c,
+	is_modal.c, keybd2ascii.c, list.c, load_fontid.c, menu_attach.c,
+	menu_bar.c, menu_bind.c, menu_disable.c, menu_enable.c,
+	menu_execcmd.c, menu_icheck.c, menu_scroll.c, menu_text.c,
+	menu_tnormal.c, mnscroll.c, mnscroll.h, mouse.h, mouse.rh,
+	mouse.rsh, mouse_objc.c, mouse_sprite.c, mouse_work.c, move_work.c,
+	ob_istype.c, obj_fd_flag.c, obj_fd_xtype.c, obj_nb.c, obj_root.c,
+	objc_attach.c, objc_change.c, objc_char.c, objc_drawparent.c,
+	objc_dup.c, objc_edit.c, objc_free.c, objc_ishidden.c,
+	objc_str3d.c, objc_strfmt.c, objc_string.c, objc_tree.c,
+	objc_wchange.c, objc_wdraw.c, objc_wdrawparent.c, obspec_mem.c,
+	options.h, pc.mak, popup.c, rc_set.c, remove_frame.c, rsrc_gaddr.c,
+	rsrc_ghdr.c, rsrc_load.c, rsrc_userdraw.c, rsrc_userfree.c,
+	rsrc_xfree.c, rsrc_xload.c, scrap_txtread.c, scrap_txtwrite.c,
+	set_gadget_pos.c, shel_help.c, shel_write.c, slid_attach.c,
+	slid_create.c, slid_delete.c, slid_getvalue.c, slid_setfunc.c,
+	slid_setsize.c, slid_setupdat.c, slid_setvalue.c, sliders.h,
+	snd_arrw.c, snd_msg.c, snd_mubutton.c, snd_rdw.c, sox.mak,
+	std_dstry.c, std_evnt.c, std_fntchg.c, std_mwk.c, strdup.c,
+	toserror.h, udlib_add_obj.c, udlib_char.c, udlib_edit.c,
+	udlib_exit.c, udlib_extended.c, udlib_extfree.c, udlib_garbage.c,
+	udlib_get_edpos.c, udlib_get_type.c, udlib_init.c, udlib_list.c,
+	udlib_objfind.c, udlib_rm_obj.c, udlib_string.c,
+	udlib_unextended.c, vq_extfs.c, vq_magx.c, vq_mint.c,
+	vqt_extname.c, vqt_name.c, vqt_xname.c, vst_font.c,
+	vst_loadfonts.c, vst_unloadfonts.c, w_getbkgr.c, w_getpal.c,
+	w_putbkgr.c, w_setpal.c, wind_attach.c, wind_calc.c, wind_clear.c,
+	wind_close.c, wind_create.c, wind_delete.c, wind_find.c,
+	wind_get.c, wind_handle.c, wind_lst.c, wind_lst2.c, wind_new.c,
+	wind_open.c, wind_set.c, wind_slider.c, wind_top.c, wportab.h,
+	xrsrc.c:
+
+	updated copyright line (year++ and AUTHORS file)
+	
+2005-12-20 23:30  Arnaud BERCEGEAY
+
+	* ChangeLog, HOWTO_RELEASE:
+
+	initial checkin
+	
+2005-12-20 23:28  Arnaud BERCEGEAY
+
+	* VERSION, src/rpm/windom.spec:
+
+	fixed versionning of rpm
+	
+2005-12-20 22:50  Arnaud BERCEGEAY
+
+	* README, VERSION, include/mt_wndm.h, src/windom.doxy,
+	src/rpm/windom.spec:
+
+	bumped to version 2.0.0-RC1
+	
+2005-12-20 22:43  Arnaud BERCEGEAY
+
+	* src/objc_free.c:
+
+	fixed documentation
+	
+2005-12-20 21:08  Arnaud BERCEGEAY
+
+	* src/av_init.c:
+
+	fixed bug #1385936: AvInit() crashes the desktop if Memory Protection
+	is enabled
+	
+2005-12-19 04:39  Standa OPICHAL
+
+	* examples/frame/viewtext.c:
+
+	Memory alloc/free inconsistencies between TextCreate/Blank/del_text() fixed.
+	
+2005-12-18 23:37  Arnaud BERCEGEAY
+
+	* src/udlib_init.c:
+
+	temporary disable userdef.ldg feature
+	
+2005-12-17 18:09  Standa OPICHAL
+
+	* src/: comp_split.c, comp_widget.c:
+
+	wind_update(BEG/END_MCTRL) used.
+	
+	Unnecessary and not working code removed.
+	
+2005-12-17 18:02  Standa OPICHAL
+
+	* examples/frame/: viewtext.c, wdiff.c:
+
+	D&D double pipe closure removed.
+	
+	Window name and info line allocation cleaned up.
+	
+2005-12-16 17:20  Standa OPICHAL
+
+	* src/font_sel.c:
+
+	It seems to be a NVDI 5.0 bug that it returns one font less on the first
+	call to vst_load_fonts(). The second call returns the correct number.
+	
+	Removing the NFD debugging lines accidentally added in the previous commit.
+	
+2005-12-16 16:44  Standa OPICHAL
+
+	* src/font_sel.c:
+
+	All fonts displayed in NVDI again.
+	
+2005-12-15 20:21  Arnaud BERCEGEAY
+
+	* include/mt_wndm.h, src/comp_create.c, src/evnt_windom.c:
+
+	- content of the WM_XKEYBD message is now similar to AP_KEYBD
+	- some fixes and cleanup in EvntWindomBuff()
+	
+2005-12-15 04:01  Standa OPICHAL
+
+	* src/frm_buttn_ev.c:
+
+	Numerical constants replaced with their #define names.
+	
+2005-12-15 03:58  Standa OPICHAL
+
+	* src/evnt_windom.c:
+
+	Some numerical constants replaced with their #define names.
+	
+2005-12-14 22:56  Arnaud BERCEGEAY
+
+	* src/: conf_inquire.c, slid_create.c, slid_setfunc.c:
+
+	windom is now float-free
+	
+2005-12-14 22:03  Arnaud BERCEGEAY
+
+	* src/: do_update.c, evnt_redraw.c, move_work.c, objc_edit.c,
+	objc_wchange.c, objc_wdraw.c:
+
+	the AES function wind_get(WF_FIRSTXYWH) has been replaced by the new
+	AES function wind_xget(WF_FIRSTAREAXYWH) when available.
+	
+2005-12-14 20:57  Arnaud BERCEGEAY
+
+	* demo/evnt-fnc.c, demo/win-cust.c, examples/bubble/bubbltst.c,
+	examples/frame/tstframe.c, examples/frame/wdiff.c,
+	include/mt_wndm.h, src/comp_create.c, src/evnt_windom.c,
+	src/form_create.c, src/frame_create.c, src/frm_click.c:
+
+	- content of buff[] for WM_XBUTTON message is now similar to AP_BUTTON
+	  message. Buff[] should be used in callback functions instead of evnt.xxx
+	- fixed demo with new definition of func_bindmenu type
+	- added documentation for WM_XBUTTON, AP_BUTTON, AP_KEYBD and WM_FORM
+	  messages
+	- fixed content of WM_FORM message
+	
+2005-12-14 05:47  Standa OPICHAL
+
+	* src/menu_execcmd.c:
+
+	Single character with no modifier is not now not handled as a shortcut
+	key.
+	
+	This was causing the size edit field in font selector not to be editable
+	with characters 2-6 under TOS 4.04 as there were 'Accessorie 2-6' entries
+	in the GEM menu in the RSC.
+	
+2005-12-14 04:39  Standa OPICHAL
+
+	* src/font_sel.c:
+
+	Scroll max value is to be lower then max-8. This is still related to the
+	previous off by 1 max value problem. Now the fontselector seems to work ok.
+	
+2005-12-14 01:42  Standa OPICHAL
+
+	* src/evnt_windom.c:
+
+	We mean both SHIFTs pressed for the application hide functionality.
+	
+	Similarly to the previous commit here for the iconification we want all
+	three modifiers to be pressed at the same time.
+	
+2005-12-14 00:57  Standa OPICHAL
+
+	* src/evnt_windom.c:
+
+	Close window did not close it because of missing parentesiss in the if
+	statement.
+	
+2005-12-14 00:41  Standa OPICHAL
+
+	* examples/component/cal.c:
+
+	Unused variable compiler warning removed.
+	
+2005-12-14 00:21  Standa OPICHAL
+
+	* src/font_sel.c:
+
+	Fixing bug #1368782 (hopefully): The dialog fill in had a off by one
+	'max' problem.
+	
+2005-12-14 00:19  Standa OPICHAL
+
+	* src/vst_loadfonts.c:
+
+	Need to return the number of extra fonts (no negative error values).
+	
+2005-12-13 23:01  Arnaud BERCEGEAY
+
+	* examples/slider/slider.c, include/mt_wndm.h, include/windom.h,
+	src/globals.h, src/slid_attach.c, src/slid_create.c,
+	src/slid_getvalue.c, src/slid_setvalue.c:
+
+	SlidXxx functions now use integer type instead of float type
+	
+2005-12-13 00:35  Dominique BEREZIAT
+
+	* examples/tutorial/tut-2-3.c:
+
+	Bug fix in tut-2-3.c (a crash occured when a window was iconified).
+	
+2005-12-12 22:59  Arnaud BERCEGEAY
+
+	* src/: wind_get.c, wind_set.c:
+
+	use wind_set/get(WF_WORKXYWH) instead of wind_calc() when possible
+	
+2005-12-12 22:57  Arnaud BERCEGEAY
+
+	* src/appl_init.c:
+
+	new flag AES4_SETWORKXYWH of app::aes4
+	
+2005-12-12 22:56  Arnaud BERCEGEAY
+
+	* src/files.mak:
+
+	replaced call_stguide.o by shel_help.o
+	
+2005-12-12 22:51  Arnaud BERCEGEAY
+
+	* include/mt_wndm.h:
+
+	aes4 is now a long integer; added AES4_SETWORKXYWH
+	
+2005-12-12 22:30  Dominique BEREZIAT
+
+	* src/call_stguide.c, src/shel_help.c, src/shel_write.c,
+	include/windom.h, include/mt_wndm.h:
+
+	- call_stguide.c renamed in shel_help.c (mt_CallStGuide() renamed in
+	mt_ShelHelp()).
+	
+	- Fix bug in mt_ShelWrite() appeared during the previous commit.
+	VS: ----------------------------------------------------------------------
+	
+2005-12-12 07:47  Arnaud BERCEGEAY
+
+	* include/: mt_wndm.h, windom.h:
+
+	remove __cplusplus stuff (see macro __XXX_DECLS)
+	
+2005-12-12 01:21  Dominique BEREZIAT
+
+	* examples/tutorial/: tut-1-2.c, tut-1-3.c, tut-2-1.c, tut-2-2.c,
+	tut-2-3.c:
+
+	- Fixe some warning message (on void *data field of callbacks functions)
+	- Remplace EvntExec() by ApplWrite()
+	- Change proto of MenuFunc callback according to the new func_bindmenu (a bug
+	  remains in MenuTnormal() calls in tut-2-3.c)/
+	
+2005-12-12 01:14  Dominique BEREZIAT
+
+	* demo/evnt-fnc.c:
+
+	Changing prototype of MenuFunc callbacks according to the new definition
+	of menu_bindmenu.
+	
+2005-12-12 01:12  Dominique BEREZIAT
+
+	* include/mt_wndm.h, include/windom.h, src/menu_bind.c:
+
+	New prototype for func_bindmenu : parameter 'mode' has been removed (because
+	these callbacks address always a menu, ie an OC_MENU mode).
+	
+	Adding documentation of func_bindmenu.
+	
+2005-12-11 21:20  Dominique BEREZIAT
+
+	* src/shel_write.c:
+
+	When an VA_START message is sent, mt_ShelWrite() waits for an ACK (ie VA_STARTED)
+	with a time idle of 500 ms. If the message is not received, the function
+	returns -2. Documentation has been updated.
+	
+2005-12-08 19:55  Arnaud BERCEGEAY
+
+	* Makefile, src/rpm/windom-dev.spec, src/rpm/windom.spec:
+
+	rename windom-dev.rpm to windom.rpm
+	
+2005-12-07 22:52  Arnaud BERCEGEAY
+
+	* src/rpm/windom-dev.spec:
+
+	added RPM for windom-dev package
+	
+2005-12-07 22:51  Arnaud BERCEGEAY
+
+	* Makefile, VERSION:
+
+	added makefile to build windom packages
+	
+2005-12-07 22:20  Arnaud BERCEGEAY
+
+	* examples/tutorial/.cvsignore:
+
+	initial checkin
+	
+2005-12-07 22:10  Arnaud BERCEGEAY
+
+	* examples/tutorial/Makefile:
+
+	fixed 'make clean': text.o was missing
+	
+2005-12-06 22:55  Arnaud BERCEGEAY
+
+	* src/rsrc_xload.c:
+
+	RsrcXload() now transforms G_CICON to G_USERDEF only if the AES is not
+	able to draw G_CICON objects.
+	
+2005-12-06 22:32  Arnaud BERCEGEAY
+
+	* src/objc_dup.c, src/objc_free.c, include/mt_wndm.h:
+
+	added mt_ObjcNDupAtAddr() and mt_ObjcNFreeAtAddr()
+	
+2005-12-01 23:20  Arnaud BERCEGEAY
+
+	* examples/tutorial/tut-1-3.c:
+
+	fixed tut-1-3
+	
+2005-12-01 04:33  Standa OPICHAL
+
+	* src/wind_attach.c:
+
+	Fixing bug #1368784: Uninitialized win->binding list was causing the
+	FselInput() external window message search to stall the application.
+	
+2005-11-30 23:42  Arnaud BERCEGEAY
+
+	* examples/tutorial/tut-2-1.c:
+
+	fixed: application crashes at startup
+	
+2005-11-28 23:31  Standa OPICHAL
+
+	* src/comp_widget.c:
+
+	Fixing bug #1368613: The realtime resize widget uses wind_update(BEG_MCTRL)
+	to reserve the mouse messages to the current application.
+	
+2005-11-23 20:40  Arnaud BERCEGEAY
+
+	* include/mt_wndm.h:
+
+	we are now working on next 2.0.0 release
+	
+2005-11-23 20:38  Arnaud BERCEGEAY
+
+	* README:
+
+	updated for release 1.99.99
+	
+2005-11-23 20:01  Arnaud BERCEGEAY
+
+	* include/mt_wndm.h:
+
+	remove the '-cvs' tag for the release
+	
+2005-11-23 19:39  Arnaud BERCEGEAY
+
+	* demo/.cvsignore:
+
+	cvs should ignore generated files
+	
+2005-11-22 23:05  Arnaud BERCEGEAY
+
+	* examples/multifrm/: multifrm.c, multifrm.rsc:
+
+	- translate to english
+	- set height of tab to 20 pixels (instead of 16 pixels) for a better
+	  look
+	
+2005-11-22 22:51  Arnaud BERCEGEAY
+
+	* userdef/extended/draw.c:
+
+	fixed rendering of up-side-down tabs
+	
+2005-11-22 22:33  Arnaud BERCEGEAY
+
+	* src/objc_free.c:
+
+	sync with objc_dup.c
+	
+2005-11-22 20:33  Arnaud BERCEGEAY
+
+	* examples/Makefile:
+
+	fixed typo
+	
+2005-11-22 20:20  Arnaud BERCEGEAY
+
+	* examples/Makefile:
+
+	added global makefile for all examples
+	
+2005-11-21 23:10  Arnaud BERCEGEAY
+
+	* include/mt_wndm.h:
+
+	added documentation for mt_ObjcAttachVar()
+	
+2005-11-21 22:10  Arnaud BERCEGEAY
+
+	* src/windom.doxy:
+
+	current version is 1.99.99
+	
+2005-11-21 21:24  Arnaud BERCEGEAY
+
+	* demo/: demo.h, demo.hrd, demo.rsc, win-cust.c, win-fram.c:
+
+	- added a form 'FRAME' in the RSC, to display a warning message saying that
+	  framed windows are bugged but components will soon solve that.
+	- cleanup (removed OLDWAY_MENU_HANDLER flag)
+	
+2005-11-18 00:06  Arnaud BERCEGEAY
+
+	* src/doc/extobjtype.c:
+
+	added new page for extended ob_type of windom
+	
+2005-11-17 23:48  Arnaud BERCEGEAY
+
+	* src/doc/: config.c, main.c:
+
+	config page in separate file, plus some refresh
+	
+2005-11-17 23:46  Arnaud BERCEGEAY
+
+	* src/objc_dup.c:
+
+	new features of ObjcDup() temporary disabled (bug to fix there)
+	
+2005-11-17 23:45  Arnaud BERCEGEAY
+
+	* src/: comp_create.c, comp_slider.c:
+
+	fixed some comments to make doxygen happy
+	
+2005-11-16 23:40  Arnaud BERCEGEAY
+
+	* src/doc/main.c:
+
+	added link to extended type doc and userdef API from main page
+	
+2005-11-16 22:42  Arnaud BERCEGEAY
+
+	* src/: doxygen.c, doc/main.c:
+
+	moved and renamed doxygen.c to doc/main.c
+	
+2005-11-16 21:40  Arnaud BERCEGEAY
+
+	* src/doc/: history1.c, install.c, presentation.c, usage.c:
+
+	one page per file now
+	
+2005-11-15 23:55  Arnaud BERCEGEAY
+
+	* src/: doxygen.c, doc/presentation.c:
+
+	refresh of the doc
+	
+2005-11-15 22:45  Arnaud BERCEGEAY
+
+	* cvs2cl.pl, users, src/Makefile:
+
+	added mechanism to generate the ChangeLog file
+	
+2005-11-14 22:08  Arnaud BERCEGEAY
+
+	* include/windom/udlib.h, src/Makefile, src/doxygen.c,
+	userdef/extended/interface.c, userdef/extended/interface.h:
+
+	added documentation of userdef LDG API
+	
+2005-11-14 21:24  Arnaud BERCEGEAY
+
+	* include/windom/list.h, src/doxygen.c, src/list.c,
+	src/windom.doxy:
+
+	added documentation for list library
+	
+2005-11-08 23:52  Arnaud BERCEGEAY
+
+	* userdef/extended/draw.c:
+
+	For TAB objects (ob_onglet) : remplaced boxes with rounded corner by
+	trapezes (better rendering, and less dependant to the VDI)... and
+	finally disable this rendering (temporary) because it's not yet ok IMO.
+	
+2005-11-08 22:53  Arnaud BERCEGEAY
+
+	* demo/: demo.h, demo.hrd, demo.rsc, main.c:
+
+	form 'About Windom...' redesigned
+	
+2005-11-08 22:52  Arnaud BERCEGEAY
+
+	* demo/win-cust.c:
+
+	fixed tuning of flashing speed
+	
+2005-11-08 22:50  Arnaud BERCEGEAY
+
+	* include/mt_wndm.h:
+
+	we are nearest than ever to windom2 ;)
+	
+2005-11-07 21:38  Arnaud BERCEGEAY
+
+	* src/udlib_init.c:
+
+	fixed reloading of builtin userdef lib
+	
+2005-11-06 23:05  Arnaud BERCEGEAY
+
+	* userdef/: extended/.cvsignore, textured/.cvsignore,
+	xgem/.cvsignore:
+
+	ignore generated directories for object files
+	
+2005-11-06 22:03  Arnaud BERCEGEAY
+
+	* src/udlib_list.c:
+
+	renamed zzlen local var to retlen to clear a gcc warn.
+	
+2005-11-06 22:00  Arnaud BERCEGEAY
+
+	* src/fsel.c:
+
+	cleanup: removed non MP friendly code
+	
+2005-11-06 21:56  Arnaud BERCEGEAY
+
+	* src/draw_submenu.c:
+
+	fixed comment
+	
+2005-11-06 21:43  Arnaud BERCEGEAY
+
+	* src/: appl_init.c, conf_getline.c, globals.h:
+
+	mt_ConfGetLine() is now safe thread (static variable pos has moved to
+	app->priv section)
+	
+2005-11-06 20:40  Arnaud BERCEGEAY
+
+	* src/bubble_modal.c:
+
+	- fixed mouse form set to "help" form. The bubble GEM cookie is no more
+	  read (not MP friendly), but a built-in help mouse form is used instead
+	- better restoring of the previous mouse form when the bubble is closed.
+	
+2005-11-06 19:30  Arnaud BERCEGEAY
+
+	* userdef/: extended/draw.c, textured/draw.c, xgem/draw.c:
+
+	fixed clipping of G_TITLE in windows
+	
+2005-11-06 17:39  Arnaud BERCEGEAY
+
+	* src/: appl_exit.c, appl_init.c, globals.h, mnscroll.c:
+
+	There is now one MNSCROLL form per application, and this form
+	may now contain extended objects (or 3d objects) because it will be
+	given to objc_extended().
+	
+2005-11-06 17:07  Arnaud BERCEGEAY
+
+	* src/: appl_init.c, comp_slider.c, comp_widget.c, frame_init.c,
+	frame_set_widget.c, globals.h, set_gadget_pos.c:
+
+	The frame slider tree is now duplicated per application.
+	In other words, this feature is now shareable in windom :)
+	
+	Warning: be careful with components stuff. It may crash if
+	FrameInit() hasn't been called. I added a FIXME comment to remember this.
+	
+2005-11-06 15:15  Arnaud BERCEGEAY
+
+	* src/cicon.c:
+
+	xdraw_cicon() goes back private to the module
+	
+2005-11-06 15:09  Arnaud BERCEGEAY
+
+	* userdef/extended/xedit.c:
+
+	fixed includes to make all compilers happy
+	
+2005-11-06 15:07  Arnaud BERCEGEAY
+
+	* src/gcc281.mak:
+
+	fixed build of libwindom for gcc281
+	
+2005-11-06 02:26  Arnaud BERCEGEAY
+
+	* src/: gcc.mak, gcc281.mak, import_xobjc.mak, pc.mak, sox.mak:
+
+	define BUILTIN_XOBJC and fix dependency on OBJDIR
+	
+2005-11-06 02:25  Arnaud BERCEGEAY
+
+	* userdef/extended/: draw.c, global.h, interface.c:
+
+	modifications for BUILTIN target and various compilers
+	
+2005-11-06 01:39  Arnaud BERCEGEAY
+
+	* src/: appl_init.c, files.mak, gcc.mak, gcc281.mak,
+	import_xobjc.mak, pc.mak, sox.mak, udlib_init.c:
+
+	the userdef library "extended" from /userdef directory is now compiled
+	in windom kernel as a builtin userdef lib.
+	
+	The reserved filename "__builtin__" is used for this builtin userdef.
+	
+2005-11-06 01:22  Arnaud BERCEGEAY
+
+	* userdef/extended/: global.h, interface.h:
+
+	prototype of interface.c moved from global.h to the new file
+	interface.h. This is needed for building this library as builtin
+	part of windom kernel.
+	
+2005-11-03 23:18  Arnaud BERCEGEAY
+
+	* userdef/textured/: extend.c, global.h, interface.c, loadimg.c,
+	string.c, xedit.c:
+
+	preserve A2/D2 thanks to ldg_callback()
+	
+2005-11-03 23:08  Arnaud BERCEGEAY
+
+	* userdef/xgem/: draw.c, extend.c, global.h, interface.c, string.c,
+	xedit.c:
+
+	preserve A2/D2 thanks to ldg_callback()
+	
+2005-11-03 22:36  Arnaud BERCEGEAY
+
+	* userdef/extended/: draw.c, extend.c, global.h, interface.c,
+	string.c, xedit.c:
+
+	use new ldg_callback() function to preserve D2/A2 when invoking
+	windom kernel function from a userdef lib.
+	
+	ldg_callback() will be provided with ldg-dev 2.33, or by checking out
+	current CVS version of LDG at ldg.sf.net.
+	
+2005-11-03 21:21  Arnaud BERCEGEAY
+
+	* src/: appl_init.c, globals.c, globals.h, pc.mak, sox.mak,
+	stdcall.s, udlib_init.c:
+
+	Remove hack to preserve D2/A2 registers when LDG userdef library uses
+	cdecl functions provided by windom.
+	
+	Now, this constraint (preserve D2/A2) is exported to the userdef lib,
+	which will soon be easy to do thanks to new ldg_callback() function
+	that comes with next LDG 2.33 release.
+	
+2005-11-03 21:15  Arnaud BERCEGEAY
+
+	* src/vqt_xname.c:
+
+	removed unused variable
+	
+2005-11-03 21:14  Arnaud BERCEGEAY
+
+	* src/udlib_extended.c:
+
+	log things to do in a TODO comment
+	
+2005-10-28 00:01  Arnaud BERCEGEAY
+
+	* src/objc_dup.c:
+
+	removed what is now a false comment ;)
+	
+2005-10-27 23:59  Arnaud BERCEGEAY
+
+	* src/appl_init.c:
+
+	cleanup
+	
+2005-10-27 23:15  Arnaud BERCEGEAY
+
+	* src/appl_init.c:
+
+	w_getpal is protected against palette==NULL case
+	
+2005-10-27 22:59  Arnaud BERCEGEAY
+
+	* src/mouse_work.c:
+
+	mouse RSC doesnt need to be rsrc_obfix-ed
+	
+2005-10-27 22:32  Arnaud BERCEGEAY
+
+	* src/: objc_dup.c, objc_free.c:
+
+	G_CICON are now really duplicated by mt_ObjcDup()
+	
+2005-10-27 20:18  Arnaud BERCEGEAY
+
+	* src/: objc_dup.c, objc_free.c:
+
+	G_IMAGE are now really duplicated by mt_ObjcDup()
+	
+2005-10-26 23:13  Arnaud BERCEGEAY
+
+	* src/: objc_dup.c, objc_free.c:
+
+	G_ICON are now really duplicated by mt_ObjcDup()
+	
+2005-10-24 20:08  Arnaud BERCEGEAY
+
+	* demo/sox.mak:
+
+	added libc with support of floats for sozobon
+	
+2005-10-24 00:18  Arnaud BERCEGEAY
+
+	* src/: evnt_windom.c, frm_click.c, globals.h, options.h:
+
+	removed GFORM option
+	
+2005-10-23 22:54  Arnaud BERCEGEAY
+
+	* include/mt_wndm.h, src/globals.h:
+
+	vq_mint, vq_magx and vq_extfs are now private
+	
+2005-10-20 20:37  Arnaud BERCEGEAY
+
+	* src/files.mak, src/vq_nvdi.c, include/mt_wndm.h, src/vqt_xname.c:
+
+	removed vq_nvdi()
+	removed reading of SPD cookie
+	
+	existence of enhanced VDI functions are tested another way, much more clean
+	and this allows other VDI to be supported as well.
+	
+2005-10-19 23:25  Arnaud BERCEGEAY
+
+	* include/mt_wndm.h, include/windom.h, src/files.mak,
+	src/vq_xaaes.c:
+
+	removed vq_xaaes()
+	
+	This function only works with old version of xaaes, and it is useless
+	because detecting the version of XAAES is not the right way to know if a
+	particular AES feature is supported : appl_getinfo() is the right way.
+	
+2005-10-19 21:41  Arnaud BERCEGEAY
+
+	* include/mt_wndm.h, include/windom.h, src/files.mak,
+	src/vq_winx.c:
+
+	removed vq_winx()
+	
+	vq_winx() is useless because detecting the presence of WINX is not
+	the right way to know if a particular AES feature is supported :
+	appl_getinfo() is the right way.
+	
+2005-10-19 20:25  Arnaud BERCEGEAY
+
+	* include/mt_wndm.h, src/files.mak, src/vq_naes.c:
+
+	removed vq_naes()
+	
+	getting version of N.AES (by reading its cookie) is not clean, and
+	just checking the presence of N.AES is useless. Furthermore, this is not
+	the right way to know if a particular AES feature is supported :
+	appl_getinfo() is the right way.
+	
+2005-10-19 20:05  Arnaud BERCEGEAY
+
+	* include/mt_wndm.h, src/files.mak, src/vq_tos.c:
+
+	removed vq_tos()
+	
+	This function is not 'clean' (use of Supexec) and is useless because
+	Windom is a GEM library, and reading the TOS version number is not
+	the right way to know if a particular GEM feature is supported.
+	
+2005-10-18 23:45  Arnaud BERCEGEAY
+
+	* demo/evnt-fnc.c, include/mt_wndm.h, include/windom.h,
+	src/appl_control.c, src/appl_init.c, src/evnt_windom.c:
+
+	- added ap_cout parameter to mt_ApplControl
+	- windom now uses appl_getinfo() instead of vq_naes() to detect if the
+	  AES supports appl_control() or not.
+	
+2005-10-17 21:44  Arnaud BERCEGEAY
+
+	* src/: cookie.h, vq_nvdi.c:
+
+	vq_nvdi() now returns if NVDI is detected or not. The version number
+	of NVDI is no more returned, but how to get the NVDI version
+	is detailled in vq_nvdi() documentation if you need it.
+	
+2005-10-17 21:37  Arnaud BERCEGEAY
+
+	* src/: cookie.h, vq_naes.c:
+
+	vq_naes() now returns if N.AES is detected or not. The version number
+	of N.AES is no more returned, but how to get the NAES version
+	is detailled in vq_naes() documentation if you need it.
+	
+2005-10-17 20:57  Arnaud BERCEGEAY
+
+	* examples/tutorial/Makefile:
+
+	doc of the tutorial now generated in windom/src
+	
+2005-10-17 20:52  Arnaud BERCEGEAY
+
+	* examples/slider/: .cvsignore, Makefile, files.mak, gcc.mak,
+	gcc281.mak, makefile, pc.mak, slider.prj, sox.mak:
+
+	Remove makefile for gcc281, purec and sozobonx compilers.
+	Examples are now build by gcc only (but they should still be compilable
+	by other compilers too)
+	
+2005-10-17 20:42  Arnaud BERCEGEAY
+
+	* examples/mousexy/.cvsignore:
+
+	fix filename of prg
+	
+2005-10-17 20:28  Arnaud BERCEGEAY
+
+	* examples/popup/: .cvsignore, Makefile, ex_popup.prj, files.mak,
+	gcc.mak, gcc281.mak, makefile, pc.mak, sox.mak:
+
+	Remove makefile for gcc281, purec and sozobonx compilers.
+	Examples are now build by gcc only (but they should still be compilable
+	by other compilers too)
+	
+2005-10-17 20:21  Arnaud BERCEGEAY
+
+	* examples/multifrm/: .cvsignore, Makefile, files.mak, gcc.mak,
+	gcc281.mak, makefile, multifrm.prj, pc.mak, sox.mak:
+
+	Remove makefile for gcc281, purec and sozobonx compilers.
+	Examples are now build by gcc only (but they should still be compilable
+	by other compilers too)
+	
+2005-10-17 20:16  Arnaud BERCEGEAY
+
+	* examples/mousexy/: .cvsignore, Makefile, files.mak, gcc.mak,
+	gcc281.mak, makefile, mousexy.prj, pc.mak, sox.mak:
+
+	Remove makefile for gcc281, purec and sozobonx compilers.
+	Examples are now build by gcc only (but they should still be compilable
+	by other compilers too)
+	
+2005-10-17 20:01  Arnaud BERCEGEAY
+
+	* examples/frame/: .cvsignore, Makefile, files.mak, gcc.mak,
+	gcc281.mak, makefile, pc.mak, sox.mak, tstframe.prj, txtframe.prj,
+	wdiff.prj:
+
+	Remove makefile for gcc281, purec and sozobonx compilers.
+	Examples are now build by gcc only (but they should still be compilable
+	by other compilers too)
+	
+2005-10-17 19:46  Arnaud BERCEGEAY
+
+	* examples/component/: .cvsignore, Makefile, files.mak, gcc.mak,
+	makefile:
+
+	Remove makefile for gcc281, purec and sozobonx compilers.
+	Examples are now build by gcc only (but they should still be compilable
+	by other compilers too)
+	
+2005-10-17 19:37  Arnaud BERCEGEAY
+
+	* examples/bubble/: .cvsignore, Makefile, bubble.prj, files.mak,
+	gcc.mak, gcc281.mak, makefile, pc.mak, sox.mak:
+
+	Remove makefile for gcc281, purec and sozobonx compilers.
+	Examples are now build by gcc only (but they should still be compilable
+	by other compilers too)
+	
+2005-10-17 00:31  Arnaud BERCEGEAY
+
+	* src/: objc_dup.c, objc_free.c:
+
+	added some FIXME/TODO comments for stuff to fix/do
+	
+2005-10-16 21:51  Arnaud BERCEGEAY
+
+	* src/: appl_exit.c, cookie.h, doxygen.c, evnt_list.c,
+	give_iconifyxywh.c, wind_get.c, wind_set.c:
+
+	- removed support of ICFS
+	- added some "empty" doc for component functions
+	
+2005-10-16 17:44  Arnaud BERCEGEAY
+
+	* include/mt_wndm.h:
+
+	removed GET_CICONBLK and GET_ICONBLK macro, because they no more work
+	since the transformation of extended object is performed by external
+	library (userdef.ldg).
+	
+2005-10-16 16:50  Arnaud BERCEGEAY
+
+	* src/: appl_get.c, appl_set.c:
+
+	unified doc of windom configuration data in _config structure
+	
+2005-10-16 16:49  Arnaud BERCEGEAY
+
+	* src/: Makefile, windom.doxy:
+
+	html documentation is now generated in windom/doc/html
+	
+2005-10-16 15:21  Arnaud BERCEGEAY
+
+	* doc/: Makefile, README, windom.u:
+
+	cleanup
+	
+2005-10-16 01:30  Arnaud BERCEGEAY
+
+	* src/: Makefile, appl_init.c, doxygen.c, globals.h, windom.doxy,
+	doc/presentation.c:
+
+	more work on documentation
+	
+2005-10-15 16:10  Arnaud BERCEGEAY
+
+	* src/doxygen.c, src/windom.doxy, examples/tutorial/Doxyfile,
+	examples/tutorial/README, examples/tutorial/doxy.c,
+	examples/tutorial/tut-1-1.c, examples/tutorial/tut-1-2.c,
+	examples/tutorial/tut-1-3.c, examples/tutorial/tut-2-2.c,
+	examples/tutorial/tut-2-3.c, examples/tutorial/tut.css,
+	examples/tutorial/tutorial.c:
+
+	more work on tutorial
+	
+2005-10-13 23:13  Arnaud BERCEGEAY
+
+	* src/: doxygen.c, windom.doxy:
+
+	changed documentation
+	
+2005-10-12 20:33  Arnaud BERCEGEAY
+
+	* src/: std_dstry.c, std_evnt.c:
+
+	added documentation
+	
+2005-10-11 23:17  Arnaud BERCEGEAY
+
+	* src/std_evnt.c:
+
+	added documentation
+	
+2005-10-10 23:02  Arnaud BERCEGEAY
+
+	* src/: frm_click.c, frm_drw.c, frm_dstry.c, frm_fld.c,
+	frm_keyhd.c, frm_mvd.c, frm_top.c:
+
+	added documentation
+	
+2005-10-10 22:02  Arnaud BERCEGEAY
+
+	* src/: rc_set.c, w_getbkgr.c, w_getpal.c, w_putbkgr.c, w_setpal.c:
+
+	added documentation
+	
+2005-10-10 20:57  Arnaud BERCEGEAY
+
+	* include/mt_wndm.h, src/rsrc_userdraw.c:
+
+	fixed documentation of func_userdraw
+	
+2005-10-10 20:21  Arnaud BERCEGEAY
+
+	* src/: glue.c, wind_clear.c:
+
+	added documentation
+	
+2005-10-06 23:34  Arnaud BERCEGEAY
+
+	* src/: snd_arrw.c, snd_msg.c, snd_rdw.c:
+
+	added documentation
+	
+2005-10-06 23:17  Arnaud BERCEGEAY
+
+	* src/: debug_windom.c, give_iconifyxywh.c:
+
+	added documentation
+	
+2005-10-05 23:30  Arnaud BERCEGEAY
+
+	* src/: clip_off.c, clip_on.c:
+
+	added documentation
+	
+2005-10-05 23:03  Arnaud BERCEGEAY
+
+	* src/: call_stguide.c, conv_path.c, galloc.c, keybd2ascii.c,
+	xrsrc.c:
+
+	added documentation
+	
+2005-10-05 20:42  Arnaud BERCEGEAY
+
+	* src/: vq_extfs.c, vq_magx.c, vq_mint.c, vq_naes.c, vq_nvdi.c,
+	vq_tos.c, vq_winx.c, vqt_extname.c:
+
+	added documentation
+	
+2005-10-04 23:04  Arnaud BERCEGEAY
+
+	* src/: font_id2name.c, font_name2id.c, vqt_name.c, vqt_xname.c,
+	vst_font.c, vst_loadfonts.c, vst_unloadfonts.c:
+
+	added documentation for FontXxx 'n co
+	
+2005-10-04 20:46  Arnaud BERCEGEAY
+
+	* src/glue.c:
+
+	added missing header
+	
+2005-10-04 20:45  Arnaud BERCEGEAY
+
+	* src/: frame_attach.c, frame_calc.c, frame_create.c, frame_find.c,
+	frame_get.c, frame_init.c, frame_remove.c, frame_search.c,
+	frame_set.c, glue.c:
+
+	added documentation for FrameXxx
+	
+2005-10-03 22:46  Arnaud BERCEGEAY
+
+	* include/windom.h:
+
+	fixed MenuScroll (this is a void function)
+	
+2005-10-03 22:44  Arnaud BERCEGEAY
+
+	* src/comp_window.c:
+
+	convert c++ comments to c comments to make purec happy
+	
+2005-10-03 22:30  Arnaud BERCEGEAY
+
+	* src/globals.h:
+
+	disable the DEBUG() macro, because it's unused and it leads purec compiler
+	to generate an error for the following test:
+	#if DEBUG
+	
+2005-09-29 21:32  Arnaud BERCEGEAY
+
+	* src/: mouse_objc.c, mouse_sprite.c, mouse_work.c:
+
+	added documentation for MouseXxx
+	
+2005-09-29 20:28  Arnaud BERCEGEAY
+
+	* src/: form_alert.c, form_create.c, form_thumb.c, form_wdo.c:
+
+	documentation updated
+	
+2005-09-29 00:03  Arnaud BERCEGEAY
+
+	* src/: evnt_list.c, evnt_redraw.c:
+
+	documentation updated
+	
+2005-09-27 22:50  Arnaud BERCEGEAY
+
+	* src/: conf_getline.c, conf_inquire.c, conf_read.c, conf_windom.c,
+	conf_write.c:
+
+	added documentation for ConfXxx
+	
+2005-09-27 21:29  Arnaud BERCEGEAY
+
+	* src/bubble_modal.c:
+
+	fixed documentation
+	
+2005-09-26 23:09  Arnaud BERCEGEAY
+
+	* src/: bubble_attach.c, bubble_call.c, bubble_do.c, bubble_evnt.c,
+	bubble_find.c, bubble_free.c, bubble_get.c, bubble_modal.c:
+
+	added documentation for BubbleXxx
+	
+2005-09-20 23:12  Arnaud BERCEGEAY
+
+	* src/set_gadget_pos.c:
+
+	fixed bug: sizer widget may be a userdef object
+	
+2005-09-20 22:44  Arnaud BERCEGEAY
+
+	* include/mt_wndm.h, include/windom.h, src/files.mak,
+	src/globals.h, src/objc_char.c, src/udlib_char.c:
+
+	added new function mt_ObjcChar()
+	
+2005-09-19 22:09  Arnaud BERCEGEAY
+
+	* src/rsrc_xload.c:
+
+	cleanup (removed unused _windomerr global var)
+	
+2005-09-18 23:02  Arnaud BERCEGEAY
+
+	* src/font_sel.c:
+
+	FontSel is now thread safe
+	
+2005-09-15 22:21  Arnaud BERCEGEAY
+
+	* include/mt_wndm.h, src/appl_write.c:
+
+	Removed mt_ApplWrite() with variable arguments (this was specific to
+	16bits compilers)
+	
+2005-09-15 22:13  Arnaud BERCEGEAY
+
+	* src/udlib_init.c:
+
+	check for mandatory functions of userdef lib
+	
+2005-09-15 22:11  Arnaud BERCEGEAY
+
+	* src/: appl_control.c, appl_get.c, appl_set.c, appl_write.c:
+
+	doc: some fixes
+	
+2005-09-15 21:22  Arnaud BERCEGEAY
+
+	* src/galloc.c:
+
+	update comment: type_mxalloc may remain a static var because we made
+	the assumption that the OS (freemint or magic) may not change on the fly.
+	
+2005-09-15 20:55  Arnaud BERCEGEAY
+
+	* include/windom.h:
+
+	replace macro by inline func + some cleanup
+	
+2005-09-15 20:17  Arnaud BERCEGEAY
+
+	* src/: files.mak, vqt_xname.c, vqt_xname2.c:
+
+	rename vqt_xname2.c to vqt_xname.c
+	
+2005-09-15 20:16  Arnaud BERCEGEAY
+
+	* src/vqt_xname.c:
+
+	removed empty file
+	
+2005-09-15 20:14  Arnaud BERCEGEAY
+
+	* include/windom.h:
+
+	replace macro by inline func
+	
+2005-09-15 20:13  Arnaud BERCEGEAY
+
+	* src/vq_xaaes.c:
+
+	added documentation
+	
+2005-09-14 00:00  Arnaud BERCEGEAY
+
+	* include/windom.h:
+
+	replace macro by inline func for Rsrc lib
+	
+2005-09-12 23:03  Arnaud BERCEGEAY
+
+	* include/windom.h:
+
+	replace macro by inline func for SlidXxx
+	
+2005-09-08 20:53  Arnaud BERCEGEAY
+
+	* include/windom.h:
+
+	- replace macro by inline func for WindXxx() functions
+	- cleanup (remove mt_add_windowlist() & co functions)
+	
+2005-09-01 22:09  Arnaud BERCEGEAY
+
+	* include/windom.h:
+
+	replace macro by inline func for ObjcXxx
+	
+2005-08-31 21:59  Arnaud BERCEGEAY
+
+	* include/windom.h:
+
+	replace macro by inline func for Menu, Font and Select lib
+	
+2005-08-30 20:52  Arnaud BERCEGEAY
+
+	* include/windom.h:
+
+	replace macro by inline func for FrameXxxx
+	
+2005-08-30 19:44  Arnaud BERCEGEAY
+
+	* include/windom.h:
+
+	replace macro by inline func for MouseXxxx
+	
+2005-08-30 00:36  Arnaud BERCEGEAY
+
+	* include/windom.h:
+
+	replace macro by inline func for FormXxx functions
+	
+2005-08-29 23:52  Arnaud BERCEGEAY
+
+	* include/windom.h:
+
+	replace macro by inline func for EvntXxx functions
+	
+2005-08-24 17:04  Standa OPICHAL
+
+	* include/mt_wndm.h, src/comp_create.c, src/comp_object.c,
+	src/comp_window.c, src/wind_get.c, src/wind_set.c,
+	examples/component/cal.c:
+
+	WM_DESTROY default recursive handler removed - call mt_CompDelete() to
+	destroy the component. That function will execute the WM_DESTROY for itself
+	and all children recurisively before it gets deleted physically to allow
+	custom data disposal.
+	
+	Componental focus should not influence WINDOWs. WF_COMPFOCUS removed in
+	favor of CM_FOCUS. Focus is afterwards handled internally on the component
+	tree inside a single component tree. The top level component of the tree
+	holds the pointer to current focus component and it is possible to set/get
+	via mt_Comp[SG]etPtr( CF_FOCUS ) - see comp_create.c for the changes.
+	
+	Order of creation/destruction fixed in cal.c which might have been crashing
+	in the previous versions on day change.
+	
+2005-08-24 16:46  Standa OPICHAL
+
+	* src/comp_slider.c:
+
+	General documentation added.
+	
+2005-08-23 22:42  Arnaud BERCEGEAY
+
+	* include/windom.h:
+
+	replace macro by inline func for Conf lib
+	
+2005-08-19 21:07  Standa OPICHAL
+
+	* src/wind_set.c:
+
+	Letting the slider sets go through the default case.
+	Fixing an unwanted fallthrough in the WF_HILIGHT case.
+	
+2005-08-19 17:25  Standa OPICHAL
+
+	* include/mt_wndm.h, src/comp_create.c, examples/frame/wdiff.c:
+
+	Removing the WINDOW* pointer from mt_CompFind() signature.
+	
+2005-08-16 23:52  Standa OPICHAL
+
+	* examples/component/cal.c, examples/component/comptest.c,
+	examples/frame/txtframe.c, examples/frame/wdiff.c,
+	include/mt_wndm.h, src/comp_create.c, src/comp_object.c,
+	src/comp_slider.c, src/comp_split.c, src/comp_szd.c,
+	src/comp_widget.c, src/comp_window.c, src/evnt_list.c,
+	src/evnt_redraw.c, src/globals.h:
+
+	Removing the WINDOW* from the comp_func_* signatures as COMPONENTs are to
+	be independent of WINDOW completely. The COMPONENT now contains its own
+	W_GRAFPORT* graf member to handle clipping and VDI output just like WINDOW.
+	
+2005-08-15 23:16  Standa OPICHAL
+
+	* COMPONENTS:
+
+	Typos and accuratcy corrections.
+	
+2005-08-15 23:15  Standa OPICHAL
+
+	* src/comp_aslider.c:
+
+	Some comments adjusted.
+	
+2005-08-15 23:14  Standa OPICHAL
+
+	* examples/frame/: txtframe.c, wdiff.c:
+
+	The comp_window_create_widget() was renamed to comp_widget_create().
+	
+2005-08-15 23:13  Standa OPICHAL
+
+	* src/: comp_slider.c, comp_widget.c, comp_window.c, globals.h:
+
+	More work on decoupling the widget and slider components from the other
+	stuff in comp_window.c. This should lead to complete reusability of those
+	components without using any other of them (except from the logical
+	dependencies - like e.g. that the info is needed for widget).
+	
+2005-08-15 23:09  Standa OPICHAL
+
+	* src/wind_get.c:
+
+	Adding the WF_INFO to use WINDOW instead the AES data. This makes it
+	possible to reuse also for WS_CUSTOM WINDOW instances.
+	
+2005-08-15 23:08  Standa OPICHAL
+
+	* src/vq_magx.c:
+
+	Touching the MagX cookie is no problem since MagiC would never have memory
+	protection. Also it doesn't make sense to have MagX cookie in MP capable OS.
+	Such hack would _only_ lead to another hacks and support for corrupted apps.
+	
+2005-08-15 23:03  Standa OPICHAL
+
+	* examples/frame/tstframe.c:
+
+	Changing the C++ colliding 'new' identifier into 'another'.
+	
+2005-05-02 20:05  Arnaud BERCEGEAY
+
+	* include/: mt_wndm.h, windom.h, windom/list.h, windom/udlib.h:
+
+	headers are now __cplusplus compliant
+	
+2005-04-26 22:46  Standa OPICHAL
+
+	* examples/component/files.mak:
+
+	Accidental file addition removed.
+	
+2005-04-23 19:05  Standa OPICHAL
+
+	* src/comp_create.c:
+
+	By default the status is CS_PROPORTIONAL for flex components. This makes
+	the default behaviour more reasonable.
+	
+2005-04-23 19:01  Standa OPICHAL
+
+	* examples/component/cal.c:
+
+	Keyboard control made simpler. The calendar header made nicer.
+	
+2005-04-23 18:35  Standa OPICHAL
+
+	* include/mt_wndm.h, src/comp_create.c:
+
+	CS_PROPORTIONAL component status introduced. Ensure proportional component
+	contents redraw. Set when already visible parts need redraw when the component
+	size changes.
+	
+2005-04-19 18:37  Standa OPICHAL
+
+	* examples/frame/wdiff.c:
+
+	Moving away from the Frame API.
+	
+	There is still quite some work to do to get the component API
+	(especially the WIDGET stuff) clean.
+	
+2005-04-19 18:32  Standa OPICHAL
+
+	* examples/component/: cal.c, comptest.c, files.mak, gcc.mak:
+
+	Update for the current API.
+	
+	Adding a small calendar component example application.
+	
+2005-04-19 17:53  Standa OPICHAL
+
+	* examples/frame/txtframe.c:
+
+	Adjusting to use mt_WindSet( WF_COMPONENT ).
+	
+2005-04-19 17:52  Standa OPICHAL
+
+	* include/mt_wndm.h, src/comp_create.c, src/globals.h,
+	src/wind_get.c, src/wind_set.c:
+
+	mt_WindAttachComp() removed -> instead use the WF_COMPONENT to be
+	more consistent with the rest of the WinDom API.
+	
+	WF_COMPONENT and WF_COMPFOCUS WindSet/Get() modes introduced.
+	
+	void *mt_WindGetPtr() added for easy of use.
+	
+2005-04-14 03:23  Standa OPICHAL
+
+	* src/globals.h:
+
+	'private' -> 'priv'
+	
+2005-04-14 03:22  Standa OPICHAL
+
+	* include/mt_wndm.h, src/appl_exit.c, src/appl_init.c,
+	src/av_exit.c, src/av_init.c, src/av_server.c, src/av_status.c,
+	src/bubble_attach.c, src/bubble_find.c, src/bubble_free.c,
+	src/bubble_get.c, src/close_fontid.c, src/conf_getline.c,
+	src/conf_inquire.c, src/conf_read.c, src/conf_write.c, src/data.c,
+	src/evnt_list.c, src/evnt_windom.c, src/give_iconifyxywh.c,
+	src/load_fontid.c, src/menu_bind.c, src/menu_disable.c,
+	src/menu_enable.c, src/mouse_work.c, src/objc_attach.c,
+	src/obspec_mem.c, src/udlib_edit.c, src/udlib_exit.c,
+	src/udlib_extended.c, src/udlib_extfree.c, src/udlib_garbage.c,
+	src/udlib_get_edpos.c, src/udlib_get_type.c, src/udlib_init.c,
+	src/udlib_string.c, src/udlib_unextended.c, src/vqt_name.c,
+	src/vqt_xname2.c, src/wind_lst2.c, src/wind_set.c, src/xrsrc.c:
+
+	Using C++ keyword 'private' is generally not a good idea. It prevented
+	WinDom from being compilable using C++ compiler. Changed to 'priv'.
+	
+2005-04-14 03:06  Standa OPICHAL
+
+	* src/globals.h:
+
+	comp_dfs() put to the globals.h as it is used in comp_slider.c now.
+	
+2005-04-14 03:05  Standa OPICHAL
+
+	* src/comp_widget.c:
+
+	Widget components handling improved.
+	
+	Focus changes, internal structure organization made more polished.
+	
+2005-04-14 03:04  Standa OPICHAL
+
+	* src/comp_window.c:
+
+	Redraw the the WIDGET MENU line when set (just like AES does).
+	
+2005-04-14 03:02  Standa OPICHAL
+
+	* src/comp_slider.c:
+
+	Manage focus changes.
+	
+2005-04-14 02:32  Standa OPICHAL
+
+	* src/comp_aslider.c:
+
+	Cosmetic changes.
+	
+2005-04-14 02:31  Standa OPICHAL
+
+	* src/comp_create.c:
+
+	List item next and prev values need to be initialized.
+	
+	Decoupled exported container_setfocus() function (RENAME?).
+	
+2005-04-04 20:30  Arnaud BERCEGEAY
+
+	* src/globals.h:
+
+	removed hack: gemlib 0.43.4 is now required
+	
+2005-04-02 21:50  Standa OPICHAL
+
+	* include/mt_wndm.h, src/do_update.c, src/frame_create.c,
+	src/wind_create.c, src/wind_get.c, src/wind_set.c:
+
+	W_ICON.draw removed WM_ICONDRAW introduced to get icon redraw function
+	scheme more consisted with the rest.
+	
+	The mt_WindSet/Get( WF_ICONDRAW ) is deprecated (working however).
+	I encourage everyone to use mt_EvntAttach/Add( WM_ICONDRAW ).
+	
+2005-04-02 21:45  Standa OPICHAL
+
+	* src/evnt_list.c:
+
+	mt_EvntFind() fixed to work according to the docs.
+	
+2005-04-01 21:33  Arnaud BERCEGEAY
+
+	* include/windom.h:
+
+	fixed some inline void functions (no return)
+	
+2005-04-01 05:54  Standa OPICHAL
+
+	* src/comp_object.c:
+
+	AES OBJECT components do DISABLE/ENABLE on focus get/lose.
+	
+2005-04-01 05:53  Standa OPICHAL
+
+	* src/comp_window.c:
+
+	Focus change improvements.
+	
+	WM_SLIDXYWH wind_get case added to make sliders work again in frames.
+	
+2005-04-01 05:49  Standa OPICHAL
+
+	* examples/frame/gcc.mak:
+
+	Adding dependency on the .a file
+	
+2005-03-25 20:52  Arnaud BERCEGEAY
+
+	* include/mt_wndm.h:
+
+	Added AES4_FIRSTAREAXYWH constant (this bit gives the availability of
+	wind_get(WF_FIRSTAREAXYWH))
+	
+2005-03-25 20:43  Arnaud BERCEGEAY
+
+	* src/appl_init.c:
+
+	- fixed detection of AES4_MENUBAR (appl_getinfo() now has a bit dedicated)
+	- added detection of AES4_FIRSTAREAXYWH
+	
+2005-03-23 23:17  Standa OPICHAL
+
+	* src/: std_evnt.c, wind_slider.c, comp_aslider.c, wind_get.c:
+
+	Use the new WF_SLIDXYWH to get the width/height of the area to slide using
+	the AES WINDOW sliders. This can be used to slide other than work area
+	of the window (e.g. a COMPONENT which is done in comp_aslider.c).
+	
+2005-03-23 23:09  Standa OPICHAL
+
+	* include/mt_wndm.h, src/comp_create.c:
+
+	The COMPONENT redrawing is not clipped unlike for WINDOW. Set the component
+	status CS_CLIP flag to have the component setup clipping for the part to be
+	redrawn.
+	
+2005-03-23 23:05  Standa OPICHAL
+
+	* src/: frame_create.c, wind_set.c, frame_calc.c, set_gadget_pos.c:
+
+	Use just the WC_* constants for mt_WindCalc() no decimal literals.
+	
+2005-03-23 21:49  Arnaud BERCEGEAY
+
+	* src/: evnt_list.c, wind_delete.c:
+
+	fixed mt_WindDelete() : the Datas are now free-ed at the very end,
+	just before the WINDOW is free-ed (mt_DataClear() was called to early,
+	when some functions may still need to get Datas attached to windows, like
+	the window handler f.e.)
+	
+2005-03-18 18:53  Arnaud BERCEGEAY
+
+	* examples/frame/: txtframe.c, viewtext.c, viewtext.h, wdiff.c:
+
+	use non-mt gl_appvar when possible
+	
+2005-03-18 17:30  Standa OPICHAL
+
+	* examples/frame/: files.mak, gcc.mak, gcc281.mak, marrant.c,
+	marrant.prj, pc.mak, sox.mak, wdiff.c:
+
+	Removing marrant.c and related stuff
+	
+2005-03-18 17:26  Arnaud BERCEGEAY
+
+	* examples/frame/wdiff.c:
+
+	fixed dragndrop (added extra null byte)
+	
+2005-03-18 02:42  Standa OPICHAL
+
+	* examples/frame/: marrant.c, tstframe.c, txtframe.c, viewtext.c,
+	viewtext.h, wdiff.c:
+
+	Adjusting the frame examples according to the recent changes in the
+	callback function signature.
+	
+	Introducing COMPONENT based frame-like example (txtframe.c).
+	
+2005-03-17 22:01  Arnaud BERCEGEAY
+
+	* src/: evnt_windom.c, form_wdo.c, objc_wdrawparent.c:
+
+	fixed documentation (dox written ahead of the right func)
+	
+2005-03-17 21:33  Arnaud BERCEGEAY
+
+	* include/windom.h:
+
+	replace macro by inline func for Av and Bubble libs
+	
+2005-03-17 21:10  Arnaud BERCEGEAY
+
+	* include/windom.h:
+
+	cleanup
+	
+2005-03-17 20:57  Arnaud BERCEGEAY
+
+	* src/: conf_inquire.c, conf_write.c, form_alert.c, globals.h,
+	glue.c:
+
+	removed dirty hack for non-mt functions with va_args. We removed the
+	requirement "windom 2.0.0 shall be available as windom.ldg", and so, we
+	can make va_args stuff clean. We'll care about the "va_args compatible
+	between all compilers" requirement in a later release of windom.
+	
+	FormAlert(), ConfWrite() and ConfInquire() use the new functions
+	mt_vFormAlert(), mt_vConfInquire() and mt_vConfWrite().
+	
+	mt_FormAlert(), mt_ConfWrite() and mt_ConfInquire() are also based on
+	the new mt_vFormAlert(), mt_vConfInquire() and mt_vConfWrite() functions.
+	
+2005-03-17 20:43  Arnaud BERCEGEAY
+
+	* include/windom.h:
+
+	fixed proto of stdWindClear (added buff param)
+	
+2005-03-16 22:48  Arnaud BERCEGEAY
+
+	* include/windom.h:
+
+	replace macros by inline functions for Application library
+	
+2005-03-16 22:31  Arnaud BERCEGEAY
+
+	* src/glue.c, include/windom.h:
+
+	ApplWrite moved from glue.c to windom.h
+	
+2005-03-16 22:16  Arnaud BERCEGEAY
+
+	* src/frm_cls.c, include/windom.h, src/files.mak,
+	src/form_create.c, src/globals.h:
+
+	removed private function frm_cls()
+	
+2005-03-16 21:52  Arnaud BERCEGEAY
+
+	* examples/multifrm/gcc.mak:
+
+	fix makefile for cross-gcc
+	
+2005-03-16 21:50  Arnaud BERCEGEAY
+
+	* examples/: slider/slider.c, popup/ex_popup.c:
+
+	sync with current windom library:
+	- added "short buff[8]" parameter to event callback functions
+	- use this parameter instead of the (now removed) global evnt.buff[] variable
+	
+2005-03-16 19:30  Arnaud BERCEGEAY
+
+	* examples/mousexy/mousexy.c:
+
+	sync with current windom library:
+	- added "short buff[8]" parameter to event callback functions
+	- use this parameter instead of the (now removed) global evnt.buff[] variable
+	
+	added a "i'm alive" character (1st character of the info line) which form
+	changes each time the xtimer callback function is invoked.
+	
+2005-03-16 19:27  Arnaud BERCEGEAY
+
+	* examples/mousexy/gcc.mak:
+
+	fixed makefile for cross-gcc
+	
+2005-03-16 19:20  Arnaud BERCEGEAY
+
+	* examples/bubble/bubbltst.c:
+
+	sync with current windom library:
+	- added "short buff[8]" parameter to event callback functions
+	- use this parameter instead of the (now removed) global evnt.buff[] variable
+	
+2005-03-14 23:01  Arnaud BERCEGEAY
+
+	* src/: comp_object.c, comp_slider.c, form_thbset.c, frm_click.c,
+	globals.h:
+
+	minor changes to make pure c compiler happy
+	
+2005-03-13 20:27  Standa OPICHAL
+
+	* include/mt_wndm.h, src/appl_init.c, src/clip_off.c,
+	src/clip_on.c, src/comp_aslider.c, src/comp_create.c,
+	src/comp_szd.c, src/comp_window.c, src/do_update.c,
+	src/evnt_redraw.c, src/frame_attach.c, src/frame_create.c,
+	src/globals.h, src/mnscroll.c, src/move_work.c,
+	src/rsrc_userdraw.c, src/wind_calc.c, src/wind_delete.c,
+	src/wind_get.c, src/wind_open.c, src/wind_set.c:
+
+	* WIND_HANDLERS now do not allow fallback to the standard
+	AES ones. Instead put the call to the replacement handler.
+	This makes it less confusing concerning what would happen
+	next in the code. The standard AES handlers are named
+	wind_aes_*().
+	
+	* mt_ClipOn/Off() changed to take W_GRAFPORT rather than
+	WINDOW argument
+	
+	* We do not do mt_ClipOff() in the WinDom internal
+	redraw functions since now. Rather save/restore the
+	previous clipping rectangle. It makes it work properly
+	when nesting WINDOWs (utilizing COMPONENTs). The very
+	first clipping is initialized in ApplInit() (anyway,
+	does it make sense to have clipping off complete in some
+	scenario?). Actually there perhaps should be a GrafPort
+	related init function for this IMO.
+	
+	* WINDOW menu redraw function little reorganized so
+	that it would be readily usable for a MENU COMPONENT.
+	
+	* Some more work on slidable COMPONENTs. The children
+	are stretched using the C_SLIDERINFO.max value now if
+	present.
+	
+2005-03-07 22:47  Arnaud BERCEGEAY
+
+	* demo/win-form.c:
+
+	windom internal function frm_cls() is no more used
+	
+2005-03-07 22:46  Arnaud BERCEGEAY
+
+	* CHANGES:
+
+	updated:
+	- EVNTvar::buff[] removed
+	- added extra paramter buff[8] to callback functions
+	- do not use private function (get a 0-warning compilation)
+	
+2005-03-07 06:03  Standa OPICHAL
+
+	* demo/: evnt-av.c, evnt-fnc.c, global.h, main.c, util.c,
+	win-cust.c, win-divr.c, win-form.c, win-fram.c, win-tool.c:
+
+	The evnt.buff[] removal changes.
+	
+2005-03-07 05:59  Standa OPICHAL
+
+	* include/windom.h:
+
+	Adjustments for the new concept of buff[] passing needed in the draw_page()
+	code and frm_cls() macro.
+	
+2005-03-07 05:57  Standa OPICHAL
+
+	* src/comp_aslider.c:
+
+	Cosmetic changes.
+	
+2005-03-05 01:56  Standa OPICHAL
+
+	* src/files.mak:
+
+	Build the added files.
+	
+2005-03-05 01:55  Standa OPICHAL
+
+	* src/: comp_object.c, comp_slider.c, comp_split.c, comp_widget.c,
+	globals.h:
+
+	Several new COMPONENTs:
+	- Slider
+	- AES OBJECT (single level - used for slider implementation)
+	- Split
+	- WIDGET
+	
+	All API is still subject to cleanup/rename/change.
+	
+2005-03-05 01:47  Standa OPICHAL
+
+	* src/: comp_aslider.c, comp_create.c, comp_window.c, evnt_list.c:
+
+	evnt->app.buff[] removal adjustments.
+	
+2005-03-04 23:33  Standa OPICHAL
+
+	* include/mt_wndm.h, src/comp_create.c, src/comp_szd.c,
+	src/comp_window.c, src/evnt_list.c:
+
+	- adding long buff[8] to the COMPONENT callback signature (now, the buff[]
+	  array used to store mesages is locally reserved when needed, and sent to
+	  callback functions attached to messages events)
+	
+2005-03-04 22:48  Arnaud BERCEGEAY
+
+	* include/mt_wndm.h:
+
+	- removed buff[8] from the EVNTvar data (now, the buff[] array used to
+	  store AES mesages is locally reserved when needed, and sent to
+	  callback functions attached to messages events)
+	- fix sending of WM_XM1 and WM_XM2 messages
+	
+2005-03-04 22:44  Arnaud BERCEGEAY
+
+	* src/: appl_exit.c, appl_init.c, bubble_modal.c, debug_windom.c,
+	do_update.c, evnt_list.c, evnt_redraw.c, evnt_windom.c, font_sel.c,
+	form_thbset.c, form_thumb.c, form_wbegin.c, form_wdo.c,
+	frame_create.c, frm_click.c, frm_cls.c, frm_drw.c, frm_dstry.c,
+	frm_fld.c, frm_keyhd.c, frm_mvd.c, frm_top.c, fsel.c, globals.h,
+	glue.c, move_work.c, popup.c, std_dstry.c, std_evnt.c,
+	std_fntchg.c, wind_clear.c:
+
+	- removed buff[8] from the EVNTvar data (now, the buff[] array used to
+	  store AES mesages is locally reserved when needed, and sent to
+	  callback functions attached to messages events)
+	- fix sending of WM_XM1 and WM_XM2 messages
+	
+2005-02-24 22:19  Arnaud BERCEGEAY
+
+	* include/mt_wndm.h, include/windom.h, src/globals.h:
+
+	mt_EvntRedrawGrect() moved to the public API
+	
+2005-02-24 21:22  Arnaud BERCEGEAY
+
+	* src/: draw_page.c, files.mak, globals.h:
+
+	draw_page() removed. Use mt_EvntRedrawGrect() instead
+	
+2005-02-24 21:12  Arnaud BERCEGEAY
+
+	* include/windom.h:
+
+	added draw_page() deprecated function for compatibility
+	
+2005-02-24 21:09  Arnaud BERCEGEAY
+
+	* src/comp_aslider.c:
+
+	removed local prototype of external function
+	
+2005-02-22 17:25  Standa OPICHAL
+
+	* src/: globals.h, comp_create.c, comp_window.c:
+
+	mt_snd_comp_rdw() removed and instead the mt_CompEvntExec( WM_REDRAW) is
+	used.
+	
+	This makes significant difference when we redraw the desired component
+	immediately instead of posting an AES message to do so later. For the
+	FRAME-like custom slider COMPONENT we cannot use the AES message as
+	the slider COMPONENT might be redrawn while another redraw is in progress.
+	There would be nothing wrong with this unless the need of
+	WF_FIRSTXYWH/WF_NEXTXYWH which cannot be nested.
+	
+	Perhaps some WINDOM internal queuing mechanism might help here as the problem
+	with sending AES message is basicaly that a different message (than the
+	expected WM_REDRAW) might be handled which is not really what we want/need.
+	
+2005-02-22 17:15  Standa OPICHAL
+
+	* src/cookie.h:
+
+	Header guards added.
+	
+2005-02-22 17:13  Standa OPICHAL
+
+	* src/evnt_redraw.c, src/rc_set.c, include/mt_wndm.h,
+	src/do_update.c:
+
+	rc_lset() - LGRECT rc_set() equivalent.
+	mt_CompEvntRedraw() - COMPONENT mt_EvntRedraw() equivalent.
+	
+	WM_PREREDRAW moved to be executed before the wind_update() is issued (more
+	control over subsequent WM_REDRAW).
+	
+2005-02-21 08:05  Standa OPICHAL
+
+	* src/std_evnt.c:
+
+	Cosmetic changes.
+	
+2005-02-20 19:00  Dominique BEREZIAT
+
+	* src/windom.doxy:
+
+	WinDom API documentation is generated in docs/api
+	
+2005-02-20 17:58  Standa OPICHAL
+
+	* src/: comp_window.c, globals.h, wind_create.c:
+
+	Temporary WM_REPOSED definition added to globals.h
+	
+	Some unused handler registrations removed from comp_window.c.
+	
+2005-02-20 17:53  Dominique BEREZIAT
+
+	* examples/tutorial/: Doxyfile, Makefile, README, doxy.c, text.c,
+	text.h, tut-1-1.c, tut-1-2.c, tut-1-3.c, tut-1-4.c, tut-2-1.c,
+	tut-2-2.c, tut-2-3.c, tut.css, tut_2.h, tut_2.hrd, tut_2.rsc:
+
+	Starting a WinDom tutorial remplacing the old tutorial chapter in the
+	old ST-Guide documentation. Documentation is generated in docs/tutorial.
+	
+2005-02-20 17:51  Dominique BEREZIAT
+
+	* src/Makefile:
+
+	Documentation of WinDom API is now generated in a docs/api
+	directory. All WinDom related documentation should go in docs.
+	
+2005-02-20 17:29  Standa OPICHAL
+
+	* src/comp_window.c:
+
+	WM_REPOSED ifdef'ed (until the CVS gemlib becomes public).
+	
+2005-02-19 22:52  Standa OPICHAL
+
+	* src/: comp_create.c, comp_window.c:
+
+	C++ style comments fixed.
+	
+2005-02-19 21:25  Standa OPICHAL
+
+	* src/files.mak:
+
+	New COMPONENT stuff files added.
+	
+2005-02-19 21:21  Standa OPICHAL
+
+	* src/: comp_create.c, comp_szd.c:
+
+	Several new features:
+	
+	* CM_GETFOCUS/CM_LOSEFOCUS implemented
+	* CM_REPOSED proposal (most probably to be changed)
+	* mt_CompSet() introduced (used for slider setup ATM)
+	
+	Min/max COMPONENT size adoption tunning.
+	
+2005-02-19 21:17  Standa OPICHAL
+
+	* src/comp_window.c:
+
+	COMPONENT wraps WINDOW (mt_CompAttachWindow()). This can be used
+	to reimplement frames later.
+	
+2005-02-19 21:15  Standa OPICHAL
+
+	* src/comp_aslider.c:
+
+	AES slider used to slide COMPONENT instance (mt_WindSliderLink())
+	
+2005-02-19 21:13  Standa OPICHAL
+
+	* src/: globals.h, wind_delete.c:
+
+	Function for real AES WINDOW deletion.
+	
+2005-02-14 07:34  Arnaud BERCEGEAY
+
+	* userdef/xgem/draw.c:
+
+	remove extra '%13' character
+	
+2005-02-14 00:05  Arnaud BERCEGEAY
+
+	* userdef/xgem/draw.c:
+
+	drawing of check-button rewritten
+	
+2005-02-12 00:33  Standa OPICHAL
+
+	* include/mt_wndm.h, src/objc_dup.c:
+
+	mt_ObjcNDup() added to allow subtree duplication.
+	
+2005-02-11 22:55  Arnaud BERCEGEAY
+
+	* userdef/textured/interface.c:
+
+	set to 0 the default content of ulib_data
+	
+2005-02-11 21:48  Arnaud BERCEGEAY
+
+	* src/appl_init.c:
+
+	pathes with antislash instead of slash to make non-mint users happy
+	
+2005-02-11 21:41  Arnaud BERCEGEAY
+
+	* include/mt_wndm.h:
+
+	WFNT and WPOP are no more used (thanks to EvntData lib)
+	
+2005-02-11 02:25  Standa OPICHAL
+
+	* src/snd_rdw.c:
+
+	Using w_get_hndl() so that in case of WS_CUSTOM WINDOW the correct AES
+	handle is used.
+	
+2005-02-11 02:23  Standa OPICHAL
+
+	* src/globals.h, src/move_work.c, src/std_evnt.c,
+	src/wind_create.c, include/mt_wndm.h, src/frame_attach.c,
+	src/wind_get.c:
+
+	A new WM_SLIDEXY message added getting the dx and dy of the window slide
+	action (in pixels) in the evnt.buff[4 and 5]. The move_work() actually
+	calls a WM_SLIDEXY registered handler.
+	
+	New get_root_handle() added to the WS_CUSTOM handler set.
+	New w_get_hndl(app,win) to be used in passing messages to a application's
+	own window.
+	
+2005-02-10 22:49  Arnaud BERCEGEAY
+
+	* userdef/xgem/draw.c:
+
+	- fix position, height and width of 3D buttons (border was applied twice:
+	  once in extend.c when the object is transformed to a userdef, and then
+	  when the userdef is drawn)
+	- fix y-position of shortcut underline (was 1 pixel too low)
+	- modification in drawing of boxtitle: the white border is now draw behind
+	  the grey border (grey=foreground, white=bakground/shadow), and the text
+	  is drawn in grey (instead of black), and with a white shadow.
+	
+2005-02-10 22:45  Arnaud BERCEGEAY
+
+	* userdef/: extended/draw.c, textured/draw.c:
+
+	- fix position, height and width of 3D buttons (border was applied twice:
+	  once in extend.c when the object is transformed to a userdef, and then
+	  when the userdef is drawn)
+	- fix y-position of shortcut underline (was 1 pixel too low)
+	
+2005-02-10 00:13  Standa OPICHAL
+
+	* src/: do_update.c, evnt_redraw.c:
+
+	Do the screen rectangle intersection just once at the beginning.
+	
+	TODO: the same in move_work, but this is under some deeper changes
+	      to be commited later.
+	
+2005-02-09 23:37  Standa OPICHAL
+
+	* src/wind_calc.c:
+
+	In case WS_CUSTOM doesn't have the calc() implemented then fall back to
+	the AES functions.
+	
+2005-02-09 23:31  Standa OPICHAL
+
+	* src/wind_delete.c:
+
+	Return value assignment
+	
+2005-02-09 23:28  Standa OPICHAL
+
+	* src/frame_attach.c:
+
+	Commenting out uncommited dependencies for now.
+	
+2005-02-09 23:26  Standa OPICHAL
+
+	* src/frame_attach.c:
+
+	Code style and indentation adjustments.
+	
+2005-02-09 22:27  Arnaud BERCEGEAY
+
+	* userdef/Makefile:
+
+	added xgem target
+	
+2005-02-09 22:17  Arnaud BERCEGEAY
+
+	* userdef/xgem/: char.c, draw.c, extend.c, font_8.h, global.h,
+	interface.c, ldg.c, Makefile, string.c, xedit.c:
+
+	initial checkin of XGEM.LDG
+	
+2005-02-09 22:12  Arnaud BERCEGEAY
+
+	* userdef/textured/: Makefile, char.c, draw.c, extend.c, global.h,
+	interface.c, ldg.c, loadimg.c, string.c, xedit.c:
+
+	tell the world this is TEXTURED.LDG version 0.01
+	
+2005-02-08 21:18  Arnaud BERCEGEAY
+
+	* src/: pc.mak, wind_set.c:
+
+	fixes to make pure C happy:
+	- transform C++ comment to standard C comment style
+	- remove extra $ character in purec makefile
+	
+2005-02-08 21:02  Arnaud BERCEGEAY
+
+	* src/wind_create.c:
+
+	disabled WM_REPOSED feature if the installed gemlib doesn't define this
+	constant.
+	This should be changed back (WM_REPOSED enable without #ifdef) as soon as
+	an official gemlib release defines WM_REPOSED.
+	
+2005-02-08 20:57  Arnaud BERCEGEAY
+
+	* src/: globals.h, toserror.h:
+
+	somes fixes to make sozobonx compiler happy
+	
+2005-02-03 19:54  Arnaud BERCEGEAY
+
+	* examples/slider/: gcc.mak, slider.c:
+
+	modification for windom 2
+	
+2005-02-03 18:04  Standa OPICHAL
+
+	* src/: do_update.c, evnt_redraw.c:
+
+	Screen area intersection added just like in move_work.c
+	
+2005-02-03 18:01  Standa OPICHAL
+
+	* src/: wind_get.c, wind_set.c:
+
+	Window handlers might also be assigned to application scope so that
+	e.g. mt_WindSet( app, NULL, WF_MENU ) might set the application menu
+	
+	Its implementation can be moved to another file just like the
+	frame dependent things.
+	
+2005-02-02 17:59  Standa OPICHAL
+
+	* src/wind_create.c:
+
+	WM_REPOSED (XaAES extension) bound to std_szd()
+	
+2005-02-02 17:57  Standa OPICHAL
+
+	* src/std_evnt.c:
+
+	The std_szd() will work for WS_CUSTOM windows fine now.
+	
+2005-02-02 14:07  Standa OPICHAL
+
+	* examples/frame/dragdrop.c:
+
+	mt_AppAESapid(&app) -> _AESapid
+	
+	Also ddmessage() should send the message to the apid passed as argument
+	and not to itself _AESapid.
+	
+2005-02-02 01:58  Standa OPICHAL
+
+	* src/std_evnt.c:
+
+	FrameExit() called in the default AP_TERM handler.
+	
+2005-02-02 01:48  Standa OPICHAL
+
+	* src/: move_work.c, evnt_redraw.c:
+
+	WF_FIRSTXYWH/WF_NEXTXYWH might also get overwritten for WS_CUSTOM windows.
+	
+	Rely on the WINDOW->handle being an existing AES window handle no more.
+	
+2005-02-02 01:23  Standa OPICHAL
+
+	* src/globals.h:
+
+	Accidental frame_init flag commit fix.
+	
+2005-02-02 01:15  Standa OPICHAL
+
+	* src/frame_init.c:
+
+	Unused __calc and other removal.
+	
+2005-02-02 00:59  Standa OPICHAL
+
+	* include/mt_wndm.h, src/globals.c, src/globals.h, src/wind_get.c,
+	src/wind_set.c, src/frame_attach.c, src/wind_calc.c,
+	src/wind_close.c, src/wind_delete.c:
+
+	WIND_HANDLERS introduction to handle WindGet/Set/Calc/Close/Delete()
+	properly for non-AES window WINDOW instances (i.e. frames and later
+	components).
+	
+2005-02-01 23:35  Standa OPICHAL
+
+	* examples/frame/: dragdrop.c, gcc.mak, marrant.c, tstframe.c,
+	txtframe.c, viewtext.c, wdiff.c:
+
+	Updated for the current maintrunk state: VDI graf changes, -lldg added
+	and others.
+	
+2005-02-01 23:19  Arnaud BERCEGEAY
+
+	* examples/popup/gcc.mak:
+
+	fixed makefile for cross-gcc
+	
+2005-02-01 23:05  Arnaud BERCEGEAY
+
+	* userdef/textured/: draw.c, extend.c:
+
+	- root object is now transformed to ub_dialmover at the end (to allow root
+	  object to be transformed to another userdef -- a 3D box with shadow
+	  attribute for example)
+	- added drawing of shadow for 3D objects (G_BOX, IBOX, BOXCHAR, BOXTEXT)
+	
+2005-02-01 22:00  Arnaud BERCEGEAY
+
+	* src/popup.c:
+
+	- rendering of sliders fixed (background of slider may be drawn over the
+	  arrow sliders) + small cleanup of the code.
+	- fixed position of the slider when it is at the very bottom (touch the
+	  down arrow box) when the slider is at it lowest position (an error of 1
+	  pixel sometimes appeared due to rounding of value in computation of slider
+	  position)
+	
+2005-02-01 19:08  Arnaud BERCEGEAY
+
+	* src/popup.c:
+
+	- fixed ob_flag of the root object: the bit SHADOWED of ob_flags was set... but
+	SHADOWED is a ob_state bit !!! So, the bit LASTOB of ob_flags of the root object
+	was actually set... which is really not a good idea at all. It's now fixed.
+	- Some cleanup
+	
+2005-02-01 16:40  Standa OPICHAL
+
+	* src/toserror.h:
+
+	ENOSYS added
+	
+2005-01-27 22:57  Arnaud BERCEGEAY
+
+	* examples/: multifrm/multifrm.c, popup/ex_popup.c, popup/gcc.mak:
+
+	adapted to current windom version
+	
+2005-01-27 22:55  Arnaud BERCEGEAY
+
+	* examples/mousexy/: gcc.mak, mousexy.c:
+
+	- adapted to current windom version
+	- fix reading of preferences (ConfInquire expect a "int*" value as
+	  parameter, and not a "short*" value -- did not work as expected
+	  when compiled with 32bits compilers)
+	
+2005-01-27 22:51  Arnaud BERCEGEAY
+
+	* examples/component/comptest.c:
+
+	sync with current windom version (win->graf->handle)
+	
+2005-01-27 22:48  Arnaud BERCEGEAY
+
+	* examples/bubble/: bubbltst.c, gcc.mak:
+
+	adapted to current windom library
+	
+2005-01-27 22:43  Arnaud BERCEGEAY
+
+	* src/: do_update.c, form_attach.c, form_close.c, frame_create.c,
+	glue.c, wind_clear.c, wind_create.c:
+
+	- Added callback functions stdFormClose() stdWindClear() and mt_stdWindClear()
+	- new function mt_FormClose() renamed to mt_stdFormClose()
+	- W_ICON->draw is now a func_evnt callback function (much more coherent)
+	- mt_WindClear() has lost the __CDECL attribute (not needed)
+	
+2005-01-27 22:37  Arnaud BERCEGEAY
+
+	* include/: mt_wndm.h, windom.h:
+
+	- added macro ApplGet() and ApplSet()
+	- Added callback functions stdFormClose() stdWindClear() and mt_stdWindClear()
+	- new function mt_FormClose() renamed to mt_stdFormClose()
+	- W_ICON->draw is now a func_evnt callback function (much more coherent)
+	- mt_WindClear() has lost the __CDECL attribute (not needed)
+	
+2005-01-27 22:29  Arnaud BERCEGEAY
+
+	* CHANGES:
+
+	updated
+	
+2005-01-18 21:35  Arnaud BERCEGEAY
+
+	* userdef/: textured/Makefile, Makefile:
+
+	textured userdef lib now generated as textured.ldg
+	
+2005-01-18 21:33  Arnaud BERCEGEAY
+
+	* src/: conf_read.c, globals.h, udlib_list.c:
+
+	- added udlib_ConfSetLib
+	- now ConfRead() look for the string "windom.userdef.list[.tos]" in the
+	  config file, and set its content as new value of CONF(app)->udlib_filenames.
+	  This string content must be a filename, or several filenames separated by
+	  the ";" character.
+	
+2005-01-17 22:50  Arnaud BERCEGEAY
+
+	* demo/evnt-fnc.c:
+
+	fix: extended object (userdef) were not free-ed
+	
+2005-01-17 21:45  Arnaud BERCEGEAY
+
+	* userdef/textured/: global.h, interface.c, loadimg.c:
+
+	- use private memory (libc malloc provided by the application thru APPENV
+	  structure) instead of globale shared memory (ldg_Malloc) when loading
+	  and dithering images
+	- fixes some memory allocations (free(mfdb->fd_addr) was missing)
+	
+2005-01-14 22:39  Arnaud BERCEGEAY
+
+	* examples/multifrm/: gcc.mak, multifrm.c:
+
+	adaptation from windom 1.21.x to windom 2 for gcc
+	
+2005-01-14 22:37  Arnaud BERCEGEAY
+
+	* CHANGES:
+
+	initial checkin of HOWTO port windom 1.21.x application to windom 2
+	
+2005-01-14 22:26  Arnaud BERCEGEAY
+
+	* src/objc_drawparent.c:
+
+	fix computation of the depth of the redraw
+	
+2005-01-14 22:25  Arnaud BERCEGEAY
+
+	* src/frm_buttn_ev.c:
+
+	unselected radio button are now redrawn with its parents (transparency)
+	
+2005-01-14 22:23  Arnaud BERCEGEAY
+
+	* src/font_sel.c:
+
+	transform 3D objects of the font selector to userdef objects
+	
+2005-01-14 22:20  Arnaud BERCEGEAY
+
+	* src/: fontsel.rsc, fontsel.rsh:
+
+	fixed extended type, position and size of UP and DOWN arrows of the builtin
+	font selector
+	
+2005-01-14 22:16  Arnaud BERCEGEAY
+
+	* userdef/textured/: countertop.png, manila_paper.png,
+	purple_marble.png:
+
+	removed unused images
+	
+2005-01-14 22:14  Arnaud BERCEGEAY
+
+	* demo/demo.rsc:
+
+	removed space between thumb
+	
+2005-01-14 22:13  Arnaud BERCEGEAY
+
+	* userdef/textured/: Makefile, draw.c, extend.c, global.h,
+	interface.c, loadimg.c:
+
+	- added img target to install texture files in gemsys/ldg/windom/userdef/img
+	- 3d objects are now textured (fix UNDO and CANCEL button)
+	- large modification on thumb objects
+	- root object is now always transformed to dialmove userdef
+	- images are now loaded in the path of the userdef library (in img/ subdir)
+	
+2005-01-14 22:04  Arnaud BERCEGEAY
+
+	* include/mt_wndm.h, include/windom.h, src/files.mak,
+	src/objc_wdrawparent.c:
+
+	added mt_ObjcWindDrawParent()
+	
+2005-01-14 21:58  Arnaud BERCEGEAY
+
+	* userdef/textured/rough_paper.png:
+
+	a bit more dark (near to light grey)
+	
+2005-01-14 21:57  Arnaud BERCEGEAY
+
+	* userdef/textured/rough_paper_l.png:
+
+	texture for background thumb
+	
+2005-01-10 22:42  Arnaud BERCEGEAY
+
+	* src/: add_slash.c, appl_control.c, appl_exit.c, appl_get.c,
+	appl_init.c, appl_name.c, appl_set.c, appl_write.c, av_exit.c,
+	av_init.c, av_server.c, av_status.c, av_strfmt.c, av_waitfor.c,
+	bubble_attach.c, bubble_call.c, bubble_do.c, bubble_evnt.c,
+	bubble_find.c, bubble_free.c, bubble_get.c, bubble_modal.c,
+	call_stguide.c, cicon.c, cicon.h, clip_off.c, clip_on.c,
+	close_fontid.c, comp_create.c, comp_szd.c, conf_getline.c,
+	conf_inquire.c, conf_read.c, conf_windom.c, conf_write.c,
+	conv_path.c, cookie.h, cookieptr.c, data.c, debug_windom.c,
+	do_update.c, draw_page.c, draw_submenu.c, evnt_list.c,
+	evnt_redraw.c, evnt_windom.c, files.mak, font_id2name.c,
+	font_name2id.c, font_sel.c, fontsel.h, form_alert.c, form_attach.c,
+	form_begin.c, form_close.c, form_create.c, form_end.c,
+	form_resize.c, form_restore.c, form_save.c, form_thbget.c,
+	form_thbset.c, form_thumb.c, form_wbegin.c, form_wdo.c,
+	form_wend.c, frame_attach.c, frame_calc.c, frame_create.c,
+	frame_find.c, frame_get.c, frame_init.c, frame_remove.c,
+	frame_search.c, frame_set.c, frame_set_widget.c, frm_buttn_ev.c,
+	frm_click.c, frm_cls.c, frm_drw.c, frm_dstry.c, frm_fld.c,
+	frm_keybd_ev.c, frm_keyhd.c, frm_mvd.c, frm_top.c, fsel.c, fsel.h,
+	galloc.c, gcc.mak, gcc281.mak, gemcode2ascii.c, get_appname.c,
+	get_cookie.c, get_next_obj.c, getindexmenu.c, give_iconifyxywh.c,
+	globals.c, globals.h, grectcenter.c, is_menu.c, is_modal.c,
+	keybd2ascii.c, list.c, load_fontid.c, menu_attach.c, menu_bar.c,
+	menu_bind.c, menu_disable.c, menu_enable.c, menu_execcmd.c,
+	menu_icheck.c, menu_scroll.c, menu_text.c, menu_tnormal.c,
+	mnscroll.c, mnscroll.h, mouse.h, mouse_objc.c, mouse_sprite.c,
+	mouse_work.c, move_work.c, ob_istype.c, obj_fd_flag.c,
+	obj_fd_xtype.c, obj_nb.c, obj_root.c, objc_attach.c, objc_change.c,
+	objc_drawparent.c, objc_dup.c, objc_edit.c, objc_free.c,
+	objc_ishidden.c, objc_str3d.c, objc_strfmt.c, objc_string.c,
+	objc_tree.c, objc_wchange.c, objc_wdraw.c, obspec_mem.c, options.h,
+	pc.mak, popup.c, rc_set.c, remove_frame.c, rsrc_gaddr.c,
+	rsrc_ghdr.c, rsrc_load.c, rsrc_userdraw.c, rsrc_userfree.c,
+	rsrc_xfree.c, rsrc_xload.c, scrap_txtread.c, scrap_txtwrite.c,
+	set_gadget_pos.c, shel_write.c, slid_attach.c, slid_create.c,
+	slid_delete.c, slid_getvalue.c, slid_setfunc.c, slid_setsize.c,
+	slid_setupdat.c, slid_setvalue.c, snd_arrw.c, snd_msg.c,
+	snd_mubutton.c, snd_rdw.c, sox.mak, std_dstry.c, std_evnt.c,
+	std_fntchg.c, std_mwk.c, strdup.c, toserror.h, udlib_add_obj.c,
+	udlib_edit.c, udlib_exit.c, udlib_extended.c, udlib_extfree.c,
+	udlib_garbage.c, udlib_get_edpos.c, udlib_get_type.c, udlib_init.c,
+	udlib_list.c, udlib_objfind.c, udlib_rm_obj.c, udlib_string.c,
+	udlib_unextended.c, vq_extfs.c, vq_magx.c, vq_mint.c, vq_naes.c,
+	vq_nvdi.c, vq_tos.c, vq_winx.c, vq_xaaes.c, vqt_extname.c,
+	vqt_name.c, vqt_xname.c, vqt_xname2.c, vst_font.c, vst_loadfonts.c,
+	vst_unloadfonts.c, w_getbkgr.c, w_getpal.c, w_putbkgr.c,
+	w_setpal.c, wind_attach.c, wind_calc.c, wind_clear.c, wind_close.c,
+	wind_create.c, wind_delete.c, wind_find.c, wind_get.c,
+	wind_handle.c, wind_lst.c, wind_lst2.c, wind_new.c, wind_open.c,
+	wind_set.c, wind_slider.c, wind_top.c, wportab.h, xrsrc.c:
+
+	copyright year++
+	
+2005-01-10 22:27  Arnaud BERCEGEAY
+
+	* userdef/extended/Makefile, userdef/extended/char.c,
+	userdef/extended/draw.c, userdef/extended/extend.c,
+	userdef/extended/global.h, userdef/extended/interface.c,
+	userdef/extended/ldg.c, userdef/extended/string.c,
+	userdef/extended/wsystem.h, userdef/extended/xedit.c,
+	userdef/textured/Makefile, userdef/textured/char.c,
+	userdef/textured/draw.c, userdef/textured/extend.c,
+	userdef/textured/global.h, userdef/textured/interface.c,
+	userdef/textured/ldg.c, userdef/textured/loadimg.c,
+	userdef/textured/string.c, userdef/textured/xedit.c, include/av.h,
+	include/mt_wndm.h, include/scancode.h, include/windom.h,
+	include/windom/list.h, include/windom/udlib.h:
+
+	copyright year++
+	
+2005-01-09 23:11  Arnaud BERCEGEAY
+
+	* userdef/textured/: countertop.png, ice.png, manila_paper.png,
+	purple_marble.png, rough_paper.png:
+
+	some png file to use as texture
+	
+2005-01-09 23:07  Arnaud BERCEGEAY
+
+	* userdef/textured/: Makefile, char.c, draw.c, extend.c, global.h,
+	interface.c, ldg.c, loadimg.c, string.c, xedit.c:
+
+	initial checkin of this (very experimental) textured userdef lib
+	
+2005-01-07 13:43  Standa OPICHAL
+
+	* src/appl_init.c:
+
+	mt_AppAESnumapps binding usage fixed.
+	
+2005-01-06 22:26  Arnaud BERCEGEAY
+
+	* src/: appl_exit.c, appl_init.c, files.mak, globals.h,
+	udlib_init.c, udlib_list.c:
+
+	list of userdef.ldg are now stored in APPvar. Default filenames are set by
+	mt_ApplInit(), and may be changed by the config file (to do...).
+	Added function to manipulate that list of filenames (zzstrings: strings with
+	nul character between them, ended by 2 nul characters).
+	
+2005-01-05 21:17  Arnaud BERCEGEAY
+
+	* userdef/extended/: Makefile, draw.c:
+
+	change target dir of userdef.ldg
+	
+2005-01-03 22:37  Arnaud BERCEGEAY
+
+	* userdef/extended/pc.mak:
+
+	remove makefile for purec
+	
+2004-12-27 12:37  Arnaud BERCEGEAY
+
+	* userdef/extended/: Makefile, draw.c, files.mak, ldg.c:
+
+	two targets are now built:
+	- standard userdef.ldg shareable library (magic, freemint...)
+	- specific udeftos.ldg not shareable library for monoTOS
+	plus some clean-up
+	
+2004-12-20 21:01  Arnaud BERCEGEAY
+
+	* src/: appl_exit.c, appl_init.c, globals.h, udlib_init.c:
+
+	a new VDI virtual workstation is created, reserved for userdef library.
+	
+2004-12-19 23:10  Arnaud BERCEGEAY
+
+	* demo/gcc281.mak:
+
+	fix makefile for gcc281
+	
+2004-12-19 21:58  Arnaud BERCEGEAY
+
+	* src/gcc281.mak:
+
+	fix makefile for gcc281
+	
+2004-12-19 15:45  Arnaud BERCEGEAY
+
+	* demo/: evnt-av.c, evnt-fnc.c, global.h, main.c, pc.mak, setup.c,
+	sox.mak, util.c, win-cust.c, win-divr.c, win-form.c, win-fram.c:
+
+	various fixes for purec
+	
+2004-12-19 15:40  Arnaud BERCEGEAY
+
+	* src/: appl_init.c, globals.c, globals.h, pc.mak, udlib_init.c:
+
+	adapted stdcall.s stuff for purec
+	
+2004-12-19 12:42  Arnaud BERCEGEAY
+
+	* src/pc.mak:
+
+	added stdcall.s for purec
+	
+2004-12-19 12:41  Arnaud BERCEGEAY
+
+	* src/: evnt_list.c, wind_delete.c:
+
+	- use WS_WIN_IN_USE and WS_DESTROYED to avoid mt_WindDelete()
+	  to free the window if this window is still in use (mt_EvntExec() of WM_DESTROY
+	  for example).
+	- evnt_clear() now "evnt_dispose" the evnt instead of free-ing it.
+	
+2004-12-19 12:12  Arnaud BERCEGEAY
+
+	* include/mt_wndm.h:
+
+	win->status is now a long (32bits) interger.
+	added 2 more status: WS_WIN_IN_USE and WS_DESTROYED to avoid mt_WindDelete()
+	to free the window if this window is still in use (mt_EvntExec() of WM_DESTROY
+	for example).
+	
+2004-12-18 23:00  Arnaud BERCEGEAY
+
+	* demo/: gcc.mak, makefile, sox.mak:
+
+	- creation of a object-directory per compiler
+	- one binary name per compiler (demo-gcc.prg, demo-sox.prg, etc...)
+	- sozobon now uses external preprocessor now (internal preprocessor seems
+	  bugged for nested macro).
+	
+2004-12-18 22:55  Arnaud BERCEGEAY
+
+	* src/: Makefile, appl_init.c, gcc.mak, gcc281.mak, globals.c,
+	globals.h, pc.mak, sox.mak, stdcall.s, udlib_init.c:
+
+	various fixes for other compiler than gcc 2.95 (mainly the stdcall
+	transformation (save/retore of A2/D2 on the fly) based on LDG sources)
+	
+2004-12-17 22:10  Arnaud BERCEGEAY
+
+	* src/: objc_draw.c, objc_xedit.c, userdef.c:
+
+	merge MT branch to main trunk
+	
+2004-12-17 21:57  Arnaud BERCEGEAY
+
+	* COMPONENTS, demo/demo.rsc, demo/evnt-av.c, demo/evnt-fnc.c,
+	demo/gcc.mak, demo/global.h, demo/main.c, demo/setup.c,
+	demo/util.c, demo/win-cust.c, demo/win-divr.c, demo/win-form.c,
+	demo/win-fram.c, demo/win-tool.c, examples/component/comptest.c,
+	examples/component/files.mak, examples/component/gcc.mak,
+	examples/component/makefile, examples/slider/slider.c,
+	include/av.h, include/mt_wndm.h, include/scancode.h,
+	include/windom.h, include/windom/list.h, include/windom/udlib.h,
+	src/Makefile, src/add_slash.c, src/appl_control.c, src/appl_exit.c,
+	src/appl_get.c, src/appl_init.c, src/appl_name.c, src/appl_set.c,
+	src/appl_write.c, src/av_exit.c, src/av_init.c, src/av_server.c,
+	src/av_status.c, src/av_strfmt.c, src/av_waitfor.c,
+	src/bubble_attach.c, src/bubble_call.c, src/bubble_conf.c,
+	src/bubble_do.c, src/bubble_evnt.c, src/bubble_find.c,
+	src/bubble_free.c, src/bubble_get.c, src/bubble_modal.c,
+	src/call_stguide.c, src/cicon.c, src/cicon.h, src/clip_off.c,
+	src/clip_on.c, src/close_fontid.c, src/comp_create.c,
+	src/comp_szd.c, src/conf_getline.c, src/conf_inquire.c,
+	src/conf_read.c, src/conf_windom.c, src/conf_write.c,
+	src/conv_path.c, src/cookie.h, src/cookieptr.c, src/data.c,
+	src/debug_windom.c, src/do_update.c, src/doxygen.c,
+	src/draw_page.c, src/draw_submenu.c, src/evnt_list.c,
+	src/evnt_redraw.c, src/evnt_windom.c, src/files.mak,
+	src/font_id2name.c, src/font_name2id.c, src/font_sel.c,
+	src/fontsel.h, src/fontsel.rsh, src/form_alert.c,
+	src/form_attach.c, src/form_begin.c, src/form_close.c,
+	src/form_create.c, src/form_end.c, src/form_resize.c,
+	src/form_restore.c, src/form_save.c, src/form_thbget.c,
+	src/form_thbset.c, src/form_thumb.c, src/form_wbegin.c,
+	src/form_wdo.c, src/form_wend.c, src/frame_attach.c,
+	src/frame_calc.c, src/frame_create.c, src/frame_find.c,
+	src/frame_get.c, src/frame_init.c, src/frame_remove.c,
+	src/frame_search.c, src/frame_set.c, src/frame_set_widget.c,
+	src/frm_buttn_ev.c, src/frm_click.c, src/frm_cls.c, src/frm_drw.c,
+	src/frm_dstry.c, src/frm_fld.c, src/frm_keybd_ev.c,
+	src/frm_keyhd.c, src/frm_mvd.c, src/frm_top.c, src/fsel.c,
+	src/fsel.h, src/galloc.c, src/gcc.mak, src/gcc281.mak,
+	src/gemcode2ascii.c, src/get_appname.c, src/get_cookie.c,
+	src/get_next_obj.c, src/getindexmenu.c, src/give_iconifyxywh.c,
+	src/globals.c, src/globals.h, src/glue.c, src/grectcenter.c,
+	src/has_applgetinfo.c, src/is_menu.c, src/is_modal.c,
+	src/is_title.c, src/keybd2ascii.c, src/list.c, src/load_fontid.c,
+	src/menu_attach.c, src/menu_bar.c, src/menu_bind.c,
+	src/menu_disable.c, src/menu_enable.c, src/menu_execcmd.c,
+	src/menu_icheck.c, src/menu_scroll.c, src/menu_text.c,
+	src/menu_tnormal.c, src/mnscroll.c, src/mnscroll.h, src/mouse.h,
+	src/mouse.rh, src/mouse.rsh, src/mouse_objc.c, src/mouse_sprite.c,
+	src/mouse_work.c, src/move_work.c, src/new_cookie.c,
+	src/ob_istype.c, src/obj_fd_flag.c, src/obj_fd_xtype.c,
+	src/obj_nb.c, src/obj_root.c, src/objc_attach.c, src/objc_change.c,
+	src/objc_drawparent.c, src/objc_dup.c, src/objc_edit.c,
+	src/objc_free.c, src/objc_ishidden.c, src/objc_str3d.c,
+	src/objc_strfmt.c, src/objc_string.c, src/objc_tree.c,
+	src/objc_wchange.c, src/objc_wdraw.c, src/obspec_mem.c,
+	src/options.h, src/pc.mak, src/popup.c, src/rc_clip_off.c,
+	src/rc_clip_on.c, src/rc_set.c, src/remove_frame.c,
+	src/rsrc_gaddr.c, src/rsrc_ghdr.c, src/rsrc_load.c,
+	src/rsrc_userdraw.c, src/rsrc_userfree.c, src/rsrc_xfree.c,
+	src/rsrc_xload.c, src/scrap_txtread.c, src/scrap_txtwrite.c,
+	src/set_cookie.c, src/set_gadget_pos.c, src/shel_write.c,
+	src/slid_attach.c, src/slid_create.c, src/slid_delete.c,
+	src/slid_getvalue.c, src/slid_setfunc.c, src/slid_setsize.c,
+	src/slid_setupdat.c, src/slid_setvalue.c, src/snd_arrw.c,
+	src/snd_msg.c, src/snd_mubutton.c, src/snd_rdw.c, src/sox.mak,
+	src/std_dstry.c, src/std_evnt.c, src/std_fntchg.c, src/std_mwk.c,
+	src/strdup.c, src/toserror.h, src/udlib_add_obj.c,
+	src/udlib_edit.c, src/udlib_exit.c, src/udlib_extended.c,
+	src/udlib_extfree.c, src/udlib_garbage.c, src/udlib_get_edpos.c,
+	src/udlib_get_type.c, src/udlib_init.c, src/udlib_objfind.c,
+	src/udlib_rm_obj.c, src/udlib_string.c, src/udlib_unextended.c,
+	src/userdef.h, src/vq_extfs.c, src/vq_magx.c, src/vq_mint.c,
+	src/vq_naes.c, src/vq_nvdi.c, src/vq_tos.c, src/vq_winx.c,
+	src/vq_xaaes.c, src/vqt_extname.c, src/vqt_name.c, src/vqt_xname.c,
+	src/vqt_xname2.c, src/vst_font.c, src/vst_loadfonts.c,
+	src/vst_unloadfonts.c, src/w_getbkgr.c, src/w_getpal.c,
+	src/w_putbkgr.c, src/w_setpal.c, src/wind_attach.c,
+	src/wind_calc.c, src/wind_clear.c, src/wind_close.c,
+	src/wind_create.c, src/wind_delete.c, src/wind_find.c,
+	src/wind_get.c, src/wind_handle.c, src/wind_lst.c, src/wind_lst2.c,
+	src/wind_new.c, src/wind_open.c, src/wind_set.c, src/wind_slider.c,
+	src/wind_top.c, src/windom.doxy, src/wportab.h, src/wsystem.h,
+	src/wsystem.hrd, src/wsystem.rh, src/wsystem.rsc, src/wsystem.rsh,
+	src/xrsrc.c, userdef/extended/Makefile, userdef/extended/char.c,
+	userdef/extended/draw.c, userdef/extended/extend.c,
+	userdef/extended/files.mak, userdef/extended/global.h,
+	userdef/extended/interface.c, userdef/extended/ldg.c,
+	userdef/extended/pc.mak, userdef/extended/string.c,
+	userdef/extended/wsystem.h, userdef/extended/wsystem.rh,
+	userdef/extended/wsystem.rsc, userdef/extended/wsystem.rsh,
+	userdef/extended/xedit.c:
+
+	merge MT branch to main trunk
+	
+2004-12-17 20:41  Arnaud BERCEGEAY
+
+	* src/: gcc.mak, gcc281.mak, pc.mak:
+
+	some fixes in various makefile
+	
+2004-12-17 20:38  Arnaud BERCEGEAY
+
+	* src/get_cookie.c:
+
+	replaced "__has_no_ssystem_initialised" by "initialised" to prevent
+	sozobon(HCC) to crash (too long name ?)
+	
+2004-12-16 23:13  Arnaud BERCEGEAY
+
+	* src/: frm_buttn_ev.c, menu_bind.c:
+
+	some workaround to avoid sozobon crash
+	
+2004-12-16 21:58  Arnaud BERCEGEAY
+
+	* src/sox.mak:
+
+	fixed makefile for sozobonx
+	
+2004-12-05 12:49  Arnaud BERCEGEAY
+
+	* src/wind_set.c:
+
+	added documentation for WindSet(WF_VWORK)
+	
+2004-12-03 20:45  Arnaud BERCEGEAY
+
+	* src/wind_delete.c, src/wind_set.c, include/mt_wndm.h:
+
+	added WF_VWORK option for WindSet(). This option allows to create a
+	VDI virtual workstation that will be used to redraw the content of this
+	window. Usage:
+	WindSet(win,WF_VWORK,1,0,0,0) : create a workstation
+	WindSet(win,WF_VWORK,0,0,0,0) : remove a worstation (if any)
+	
+2004-12-02 20:36  Arnaud BERCEGEAY
+
+	* demo/: evnt-av.c, util.c, win-cust.c, win-divr.c, win-form.c,
+	win-fram.c:
+
+	updated to be compliant with new win.graf design
+	
+2004-12-02 20:18  Arnaud BERCEGEAY
+
+	* include/mt_wndm.h, src/clip_off.c, src/clip_on.c, src/font_sel.c,
+	src/frame_create.c, src/frm_drw.c, src/move_work.c, src/popup.c,
+	src/set_gadget_pos.c, src/w_getpal.c, src/w_setpal.c,
+	src/wind_attach.c, src/wind_clear.c, src/wind_create.c,
+	src/wind_delete.c:
+
+	- There's no more one virtual VDI workstation opened per window. Now, only
+	  one virtual workstation is opened by mt_ApplInit() for the whole application.
+	  The VDI handle that you can get from WINDOW structure point to the VDI handle
+	  opened for the whole application (app->graf.handle).
+	
+	  INCOMPATIBILITY:
+	  Now, the "graf" data of windows is a pointer. You may access the vdi handle
+	  or the clipping area by using win->graf->handle or win->graf->clip instead
+	  of win->graf.handle or win->graf.clip.
+	
+	- use evntdata for the fontselector (instead separate evnt and data), and
+	  fix the initialisation of the string (fontname) to display.
+	
+2004-12-01 21:22  Arnaud BERCEGEAY
+
+	* src/: rc_clip_off.c, rc_clip_on.c:
+
+	removed unused files (functions are now in clip_on.c and clip_off.c)
+	
+2004-11-30 22:57  Arnaud BERCEGEAY
+
+	* src/: appl_exit.c, appl_init.c, globals.h, glue.c:
+
+	the aes global array is now kept at the same address from the very begining
+	(before ApplInit) up to the end (ApplExit) of the application.
+	Before, this array may be moved to another address at the end of ApplInit(),
+	which may lead to problem under some AES under certain circumstances...
+	
+2004-11-28 14:41  Arnaud BERCEGEAY
+
+	* src/objc_ishidden.c:
+
+	file objc_ishidden.c was initially added on branch windom-mt-branch.
+	
+2004-11-28 14:41  Arnaud BERCEGEAY
+
+	* src/files.mak, src/objc_ishidden.c, include/mt_wndm.h,
+	include/windom.h:
+
+	new function mt_ObjcIsHidden() added
+	
+2004-11-28 14:39  Arnaud BERCEGEAY
+
+	* src/udlib_init.c:
+
+	use antislash instead of slash for userdef.ldg pathname
+	
+2004-11-28 14:38  Arnaud BERCEGEAY
+
+	* src/globals.h:
+
+	add prototype for mt_ObjcAttach()
+	
+2004-11-23 19:59  Arnaud BERCEGEAY
+
+	* include/windom.h, README:
+
+	updated for release 1.21.3
+	
+2004-11-22 22:22  Arnaud BERCEGEAY
+
+	* src/objc_drawparent.c:
+
+	file objc_drawparent.c was initially added on branch windom-mt-branch.
+	
+2004-11-22 22:21  Arnaud BERCEGEAY
+
+	* src/objc_wdraw.c, src/files.mak, src/objc_draw.c,
+	src/objc_drawparent.c, include/mt_wndm.h, include/windom.h:
+
+	- new function added: mt_ObjcDrawParent()
+	- function mt_ObjcDraw() is now mapped to mt_ObjcDrawParent() thanks to
+	  some macros in windom header files.
+	- file objc_draw.c has been deleted (no more useful).
+	
+2004-11-22 22:13  Arnaud BERCEGEAY
+
+	* demo/demo.rsc:
+
+	changed ob_type of the main formulaire (G_STRING -> G_BUTTON because i
+	haven't found how to change it to G_BOX with interface), so that the background
+	of the form is not transparent if the userdef library is not loaded.
+	
+2004-11-22 22:05  Arnaud BERCEGEAY
+
+	* src/objc_draw.c:
+
+	fix drawing of children in ObjcDraw() with OC_OBJC mode
+	
+2004-11-22 22:03  Arnaud BERCEGEAY
+
+	* examples/frame/gcc.mak:
+
+	explicit the path to libwindom for cross-gcc
+	
+2004-11-19 21:30  Arnaud BERCEGEAY
+
+	* src/: menu_tnormal.c, mnscroll.c:
+
+	fix: redraw of menu in window under xaaes
+	
+2004-11-19 21:28  Arnaud BERCEGEAY
+
+	* src/: menu_tnormal.c, mnscroll.c:
+
+	fix: redraw of menu in window when running under xaaes
+	message MN_SELECTED is no more send if the menu is closed without selecting
+	one of the menu entries (click out of the menu area).
+	
+2004-11-18 21:02  Arnaud BERCEGEAY
+
+	* src/glue.c, include/windom.h:
+
+	ObjcAttach() removed (use ObjcAttachXxxx() instead)
+	
+2004-11-18 20:59  Arnaud BERCEGEAY
+
+	* src/: mnscroll.c:
+
+	fixed: double call of functions binded to menu
+	
+2004-11-17 22:54  Arnaud BERCEGEAY
+
+	* demo/: evnt-fnc.c, setup.c, win-cust.c, win-form.c:
+
+	update for new ObjcAttach functions
+	
+2004-11-17 22:50  Arnaud BERCEGEAY
+
+	* include/: mt_wndm.h, windom.h:
+
+	ObjcAttach management partially rewritten
+	
+2004-11-17 22:44  Arnaud BERCEGEAY
+
+	* src/: form_thumb.c, frm_buttn_ev.c, globals.h, menu_bind.c,
+	objc_attach.c, slid_attach.c:
+
+	ObjcAttach management partially rewritten
+	
+2004-11-15 21:49  Arnaud BERCEGEAY
+
+	* include/: mt_wndm.h, windom.h:
+
+	use shorter names:
+	- mt_ObjcAttachVariable() renamed to mt_ObjcAttachVar()
+	- mt_ObjcAttachBitset() renamed to mt_ObjcAttachBit()
+	- mt_ObjcAttachFunction() renamed to mt_ObjcAttachFunc()
+	
+	remove type func_objc and use already defined type func_bind in
+	mt_ObjcAttachFunc()
+	
+2004-11-15 21:04  Arnaud BERCEGEAY
+
+	* include/: mt_wndm.h, windom.h:
+
+	added function mt_ObjcAttachFunction(), mt_ObjcAttachBitset() and
+	mt_ObjcAttachVariable().
+	
+2004-11-09 23:14  Arnaud BERCEGEAY
+
+	* src/wind_clear.c:
+
+	set VDI write mode to MD_REPLACE to clear the window content
+	
+2004-11-09 23:12  Arnaud BERCEGEAY
+
+	* include/windom.h:
+
+	added ClipOn() and ClipOff() macros
+	
+2004-11-07 00:10  Dominique BEREZIAT
+
+	* src/form_wend.c:
+
+	mt_EvntExec() crashed because evnt buffer is unitialised. mt_ApplWrite()
+	is better.
+	
+2004-11-02 21:50  Arnaud BERCEGEAY
+
+	* src/: draw_page.c, move_work.c, objc_edit.c:
+
+	intersect area returned by WF_FIRSTXYWH with the screen area (needed for
+	some AES that returnes area partially out of the screen when the window is
+	partially out of the screen)
+	
+2004-11-02 21:44  Arnaud BERCEGEAY
+
+	* src/: evnt_redraw.c, move_work.c, objc_xedit.c:
+
+	intersect area returned by WF_FIRSTXYWH with the screen area (needed for
+	some AES that returnes area partially out of the screen when the window is
+	partially out of the screen)
+	
+2004-11-01 22:12  Arnaud BERCEGEAY
+
+	* userdef/extended/: extend.c, global.h:
+
+	- fix restoring of objects (after being transformed to userdef) : the ob_flags
+	  is save in order to restore the 3D flags
+	- _xobjc_align_obj3d(1) is now called BEFORE _xobjc_init_type(), and
+	  _xobjc_align_obj3d(0) is called AFTER _xobjc_free_type().
+	
+2004-11-01 22:02  Arnaud BERCEGEAY
+
+	* src/: frame_create.c, frm_buttn_ev.c, slid_attach.c, std_mwk.c:
+
+	fix restoring of the mouse form (if AES4_XGMOUSE flag is set)
+	
+2004-11-01 21:42  Arnaud BERCEGEAY
+
+	* src/: frame_create.c, frm_buttn_ev.c, slid_attach.c, std_mwk.c:
+
+	fix restoring of the mouse form (if AES4_XGMOUSE flag is set)
+	
+2004-11-01 21:37  Arnaud BERCEGEAY
+
+	* src/: font_sel.c, xrsrc.c:
+
+	init_type()/free_type() and align_obj3d() are now called in the right order:
+	the object must be "aligned" before being transformed to a USERDEF,
+	and it must be "unaligned" after being transformed back to its original type.
+	
+2004-10-01 21:14  Arnaud BERCEGEAY
+
+	* src/udlib_init.c:
+
+	fix define for GCC (replace __GCC__ by __GNUC__)
+	
+2004-10-01 20:40  Arnaud BERCEGEAY
+
+	* include/mt_wndm.h:
+
+	add a - ahead of the betatag for a better layout
+	
+2004-09-30 21:38  Arnaud BERCEGEAY
+
+	* src/udlib_init.c:
+
+	Now, code compiled by a compiler (userdef lib) may branch to a code compiled
+	by another compiler (application/windom). We have to take care of scratch
+	registers that differ from one compiler to another.
+	The modification save/restore A2/D2 registers if the code is compiled by
+	sozobon or purec so that all interfaces are compliant with GCC convention
+	(D0-D1 and A0-A1 are the only scratch registers).
+	This is based on LDG stdcall feature.
+	
+2004-09-30 21:33  Arnaud BERCEGEAY
+
+	* src/objc_dup.c:
+
+	add TODO comment
+	
+2004-09-21 11:07  Dominique BEREZIAT
+
+	* src/get_appname.c:
+
+	when application is not launched by shel_write(), get_appname tries to
+	fing application name using mt_ApplName().
+	
+2004-09-19 21:42  Dominique BEREZIAT
+
+	* userdef/extended/draw.c:
+
+	Thumb objects now display correctly rounded buttons. I don't know
+	why this bug was appeared (due to the GEM library ?).
+	
+2004-09-19 11:23  Dominique BEREZIAT
+
+	* examples/slider/slider.c:
+
+	mt-compliant adaptation.
+	
+2004-09-19 11:22  Dominique BEREZIAT
+
+	* src/slid_attach.c:
+
+	Change callback proto according to last Arnaud's changes
+	
+2004-09-18 18:42  Arnaud BERCEGEAY
+
+	* include/mt_wndm.h, src/globals.h:
+
+	- move proto of mt_snd_msg() from src/global.h to mt_wndm.h
+	- remove proto of mt_snd_rdw() from src/global.h  (is already in mt_wndm.h)
+	
+2004-09-18 18:37  Arnaud BERCEGEAY
+
+	* examples/component/gcc.mak:
+
+	- link ldg library
+	- fix the path of the windom library for cross-compiler (the path of the
+	  library has to be explicited, the ld option doesnt work)
+	
+2004-09-18 18:33  Arnaud BERCEGEAY
+
+	* examples/component/comptest.c:
+
+	change the type of callback function (APPvar is now the last parameter)
+	
+2004-09-16 21:23  Arnaud BERCEGEAY
+
+	* include/mt_wndm.h:
+
+	remove FA_xxx constants for form_alert (moved to gemlib)
+	
+2004-09-16 21:17  Arnaud BERCEGEAY
+
+	* demo/: evnt-av.c, evnt-fnc.c, global.h, main.c, setup.c, util.c,
+	win-cust.c, win-divr.c, win-form.c, win-fram.c, win-tool.c:
+
+	remove the 1st parameter (APPvar) of callback function
+	
+2004-09-16 21:14  Arnaud BERCEGEAY
+
+	* include/mt_wndm.h:
+
+	- add prototype for some CompEvnt* functions to avoid warnings when
+	  compiling windom.
+	- APPvar is now the last parameter for callback functions
+	- typedef of callback functions has changed: the last parameter (APPvar)
+	  is no more required if you have included windom.h.
+	  If you only include mt_wndm.h because you want MT bindings, then the
+	  last parameter (APPvar) is required.
+	
+2004-09-16 21:08  Arnaud BERCEGEAY
+
+	* src/: appl_init.c, comp_create.c, evnt_list.c, evnt_windom.c,
+	font_sel.c, form_attach.c, form_thumb.c, form_wbegin.c,
+	frame_create.c, frm_buttn_ev.c, frm_click.c, frm_cls.c, frm_drw.c,
+	frm_dstry.c, frm_fld.c, frm_keyhd.c, frm_mvd.c, frm_top.c,
+	globals.h, menu_bind.c, popup.c, rsrc_userdraw.c, slid_attach.c,
+	slid_create.c, slid_setfunc.c, slid_setvalue.c, std_dstry.c,
+	std_evnt.c, std_fntchg.c, wind_create.c:
+
+	APPvar is now the last parameter of callback functions
+	
+2004-09-14 21:48  Arnaud BERCEGEAY
+
+	* userdef/extended/Makefile:
+
+	header files are now loaded in ../../include
+	
+2004-09-14 21:44  Arnaud BERCEGEAY
+
+	* demo/gcc.mak:
+
+	add -lldg command in order to load userdef.ldg
+	
+2004-09-14 21:42  Arnaud BERCEGEAY
+
+	* include/windom/udlib.h:
+
+	file udlib.h was initially added on branch windom-mt-branch.
+	
+2004-09-14 21:40  Arnaud BERCEGEAY
+
+	* src/Makefile, src/files.mak, src/gcc.mak, src/globals.h,
+	src/pc.mak, src/udlib_add_obj.c, src/udlib_garbage.c,
+	src/udlib_init.c, include/wdmxobj.h, include/windom/udlib.h:
+
+	userdef routines are now in an independant library (LDG)
+	
+2004-09-14 21:28  Arnaud BERCEGEAY
+
+	* userdef/extended/ldg.c:
+
+	file ldg.c was initially added on branch windom-mt-branch.
+	
+2004-09-14 21:28  Arnaud BERCEGEAY
+
+	* userdef/extended/: Makefile, draw.c, extend.c, files.mak,
+	gcc.mak, global.h, ldg.c:
+
+	userdef routines are now in an independant library (LDG)
+	
+2004-09-13 00:04  Dominique BEREZIAT
+
+	* src/comp_create.c:
+
+	Adding documentation.
+	
+2004-09-13 00:04  Dominique BEREZIAT
+
+	* src/globals.h:
+
+	changing "wdmxobj.h" into <wdmxobj.h> in include directive.
+	
+2004-09-12 00:08  Dominique BEREZIAT
+
+	* include/windom.h:
+
+	Remove macro clip (error from me).
+	
+2004-09-11 17:23  Dominique BEREZIAT
+
+	* include/windom.h:
+
+	Adding macro clip for backward comptability.
+	
+2004-09-09 20:22  Arnaud BERCEGEAY
+
+	* src/pc.mak:
+
+	purec now generates objects in its purec directory; update with userdef lib built
+	
+2004-09-09 20:20  Arnaud BERCEGEAY
+
+	* src/Makefile:
+
+	add purec object directory cleanup for clean target
+	
+2004-09-09 20:18  Arnaud BERCEGEAY
+
+	* userdef/extended/: Makefile, global.h:
+
+	add support for purec
+	
+2004-09-09 20:17  Arnaud BERCEGEAY
+
+	* userdef/extended/pc.mak:
+
+	file pc.mak was initially added on branch windom-mt-branch.
+	
+2004-09-09 20:17  Arnaud BERCEGEAY
+
+	* userdef/extended/pc.mak:
+
+	makefile for purec added
+	
+2004-09-08 23:39  Arnaud BERCEGEAY
+
+	* src/: appl_init.c, appl_write.c, cicon.c, comp_create.c, data.c,
+	font_sel.c, form_attach.c, form_thumb.c, form_wbegin.c,
+	frame_create.c, frm_click.c, frm_cls.c, frm_drw.c, frm_dstry.c,
+	frm_fld.c, frm_keyhd.c, frm_mvd.c, frm_top.c, get_cookie.c,
+	globals.h, glue.c, popup.c, std_dstry.c, std_evnt.c, std_fntchg.c,
+	std_mwk.c, wind_clear.c, wind_set.c:
+
+	fixes and modifications to make purec happy:
+	- func_evnt functions are __CDECL function
+	- c++ comments (//) replaced by c comments (/**/)
+	- fix get_cookie() (code specific to purec & sozobon)
+	- various other changes to allow purec to compile windom
+	
+2004-09-08 23:18  Arnaud BERCEGEAY
+
+	* include/mt_wndm.h:
+
+	fix: func_evnt functions are CDECL
+	
+2004-09-03 14:32  Arnaud BERCEGEAY
+
+	* include/mt_wndm.h:
+
+	windom from MT branch is tagged as release 1.99.x
+	
+2004-08-31 20:37  Arnaud BERCEGEAY
+
+	* README, include/windom.h:
+
+	release 1.21.2
+	
+2004-08-31 20:35  Arnaud BERCEGEAY
+
+	* src/: files.mak, slid_create.c, slid_delete.c:
+
+	mt_SlidDelete() added
+	
+2004-08-31 20:35  Arnaud BERCEGEAY
+
+	* src/slid_delete.c:
+
+	file slid_delete.c was initially added on branch windom-mt-branch.
+	
+2004-08-31 20:32  Arnaud BERCEGEAY
+
+	* include/: mt_wndm.h, windom.h:
+
+	mt_SlidDelete() added
+	
+2004-08-19 20:18  Arnaud BERCEGEAY
+
+	* src/userdef.c:
+
+	cleanup (remove debug stuff)
+	
+2004-08-19 20:10  Arnaud BERCEGEAY
+
+	* src/userdef.c:
+
+	Bug fix: the demo now works under plain TOS (testesd with TOS 4.04)
+	- the userdef routines now use as less memory stack as possible (near all
+	  the variables have been transformed to static variables)
+	- some VDI functions have been replaced by home-cooked VDI functions
+	  which are not safe thread, but use only few stack memory
+	- gemdos call are no more performed during userdef subroutine
+	  (get_cookie for let them fly in shortcut color function)
+	
+2004-08-18 20:59  Arnaud BERCEGEAY
+
+	* src/: appl_exit.c, appl_write.c, av_exit.c, av_init.c,
+	av_waitfor.c, bubble_modal.c, debug_windom.c, evnt_windom.c,
+	form_close.c, frm_buttn_ev.c, menu_execcmd.c, mnscroll.c,
+	shel_write.c, snd_arrw.c, snd_msg.c, snd_rdw.c, wind_set.c,
+	wind_top.c:
+
+	replace app->aes_global[2] by mt_AppId(app)
+	
+2004-08-18 19:42  Arnaud BERCEGEAY
+
+	* include/mt_wndm.h:
+
+	rename mt_AESxxx macro to mt_AppAESxxx to avoid conflicts with gemlib
+	add mt_AppId() macro
+	
+2004-08-07 23:01  Dominique BEREZIAT
+
+	* include/mt_wndm.h:
+
+	Adding doc for mt_RsrcFree() macro.
+	
+2004-08-07 23:00  Dominique BEREZIAT
+
+	* src/: cicon.c, rsrc_xfree.c, xrsrc.c:
+
+	Adding documentation.
+	
+2004-08-06 00:53  Dominique BEREZIAT
+
+	* src/menu_attach.c:
+
+	Adding comment hilighting the status of this function.
+	
+2004-08-06 00:50  Dominique BEREZIAT
+
+	* src/: menu_disable.c, menu_enable.c, menu_scroll.c, popup.c:
+
+	Adding documentation.
+	
+2004-08-05 23:45  Dominique BEREZIAT
+
+	* src/data.c:
+
+	Updating documentation
+	
+2004-08-05 23:44  Dominique BEREZIAT
+
+	* src/: font_sel.c, fsel.c:
+
+	Adding documentation
+	
+2004-07-29 23:55  Dominique BEREZIAT
+
+	* src/: galloc.c, grectcenter.c, objc_attach.c:
+
+	Adding/correct documentation
+	
+2004-07-28 01:13  Dominique BEREZIAT
+
+	* src/: evnt_list.c, evnt_redraw.c:
+
+	Correct errors in @todo field.
+	
+2004-07-28 01:06  Dominique BEREZIAT
+
+	* src/shel_write.c:
+
+	Remove static declaration (tag BUG removed). Use the application
+	pipe variable to send VA_START message (tag FIXME removed). Adding
+	documentation.
+	
+2004-07-28 00:05  Arnaud BERCEGEAY
+
+	* src/appl_init.c:
+
+	vq_xaaes has been renamed to mt_vq_xaaes ;)
+	
+2004-07-26 21:46  Arnaud BERCEGEAY
+
+	* src/form_end.c:
+
+	fix syntax error (remove parasitical character...)
+	
+2004-07-25 23:58  Dominique BEREZIAT
+
+	* include/mt_wndm.h, include/windom.h, src/doxygen.c,
+	src/form_alert.c, src/form_attach.c, src/form_begin.c,
+	src/form_close.c, src/form_end.c, src/form_restore.c,
+	src/form_save.c, src/form_thbget.c, src/form_thbset.c,
+	src/form_thumb.c, src/form_wend.c, src/glue.c, src/menu_bar.c,
+	src/menu_icheck.c, src/menu_text.c, src/menu_tnormal.c,
+	src/objc_attach.c, src/objc_change.c, src/objc_draw.c,
+	src/objc_dup.c, src/objc_edit.c, src/objc_free.c, src/objc_str3d.c,
+	src/objc_strfmt.c, src/objc_string.c, src/objc_tree.c,
+	src/objc_wchange.c, src/objc_wdraw.c:
+
+	Completing documentation of Formular library.
+	Adding documentation of Object and Menu library.
+	
+2004-07-25 23:54  Dominique BEREZIAT
+
+	* src/vq_xaaes.c:
+
+	vq_xaaes() renamed in mt_vq_xaaes().
+	
+2004-07-22 15:33  Dominique BEREZIAT
+
+	* src/: doxygen.c, slid_attach.c, slid_create.c, slid_getvalue.c,
+	slid_setfunc.c, slid_setsize.c, slid_setupdat.c, slid_setvalue.c:
+
+	Adding documentation for slider library
+	
+2004-07-21 23:02  Arnaud BERCEGEAY
+
+	* src/gcc.mak:
+
+	update install target for gcc295
+	
+2004-07-21 11:22  Standa OPICHAL
+
+	* examples/component/comptest.c:
+
+	mt_ContainerAttach() renamed to mt_WindAttachComp()
+	
+2004-07-21 11:19  Standa OPICHAL
+
+	* include/mt_wndm.h, src/comp_create.c:
+
+	mt_ContainerAttach() renamed to mt_WindAttachComp().
+	
+	CM_REFLOW message introduced. It was needed to decouple the WM_RESIZE and
+	the component recomputation because the WM_RESIZE clears the FULLSIZE flag.
+	Therefore some window contents changes which needed to recompute the
+	flex component sizes and update the *pos_max/min values was affecting the
+	fulled state (the word 'reflow' was taken from Mozilla naming convention).
+	
+	Component container WM_FULLED support.
+	Component WM_DESTROY support (removed also some memleaks from mt_CompDelete()).
+	
+	Maximum window size adjusted to the carried component size (if the
+	component is smaller only) in WM_RESIZE handler.
+	
+2004-07-21 11:10  Standa OPICHAL
+
+	* src/evnt_list.c:
+
+	Fixing the function signature (int msg -> short msg).
+	
+2004-07-21 10:16  Standa OPICHAL
+
+	* src/data.c:
+
+	The data should be attached to the app->private->data and not to the
+	app->private->binding list.
+	
+	This is exactly what I meant by 'no type safety' feature of the list
+	implementation and macros. Easy misses with fatal consequences.
+	
+2004-07-20 21:20  Arnaud BERCEGEAY
+
+	* src/: globals.h, appl_init.c, data.c:
+
+	DATA can now be attached to an application (APPvar).
+	To attach/search/remove a data to an application, just use the standard
+	DataXxx() functions with win=NULL; this is similar to EvntXxx() functions.
+	
+2004-07-20 18:14  Standa OPICHAL
+
+	* src/: std_evnt.c, wind_delete.c:
+
+	comment typo fix.
+	
+2004-07-20 18:13  Standa OPICHAL
+
+	* src/evnt_list.c:
+
+	Small code simplifications.
+	
+2004-07-20 18:12  Standa OPICHAL
+
+	* src/comp_szd.c:
+
+	Some more comments about the component's WM_RESIZE... Perhaps a new
+	CM_RESIZE will be needed?
+	
+2004-07-20 18:10  Standa OPICHAL
+
+	* src/appl_exit.c:
+
+	Do not free() NULL value (the checks are in all places, but here).
+	
+	Realized after checking the example code with the TosWin2 memdebug feature.
+	
+2004-07-20 18:08  Standa OPICHAL
+
+	* src/add_slash.c:
+
+	English: antislash -> backslash
+	
+2004-07-19 21:53  Arnaud BERCEGEAY
+
+	* src/: evnt_list.c, evnt_windom.c, globals.h:
+
+	the flag EVM_ISWIN is not more used.
+	This allowed a great simplification of the evnt-list management.
+	
+2004-07-15 18:57  Standa OPICHAL
+
+	* src/comp_create.c:
+
+	Removing useless rectangle intersection.
+	
+2004-07-15 18:49  Standa OPICHAL
+
+	* examples/component/comptest.c, include/mt_wndm.h,
+	src/comp_create.c, src/comp_szd.c, src/rc_set.c:
+
+	LGRECT (long coordinate GRECT-like structure) and auxiliary functions added
+	(to the rc_set.c for now).
+	
+	All the COMPONENT GRECTs were exchanged with LGRECTs.
+	
+	comp_redraw() added to optimalize the COMPONENT redraw action. It speeds up
+	redrawing greatly if large number of children are present. It actually
+	doesn't call the handler when the COMPONENT work rectangle doesn't intersect
+	the rectangle to be redrewn.
+	
+2004-07-15 18:22  Standa OPICHAL
+
+	* src/std_evnt.c:
+
+	AvExit() if AV protocol support was on.
+	
+2004-07-15 16:26  Standa OPICHAL
+
+	* src/: draw_page.c, evnt_redraw.c, frame_create.c, move_work.c:
+
+	Putting the rectangle intersection back into the AES message buffer
+	to make the handlers be able to optimize its operation based on it.
+	
+	Not only do_update.c needed this, but in fact we need to keep track
+	of all WM_REDRAW EventExec() calls and set the rectangle there.
+	If the rectangle is not there then an application that tries to optimize
+	that may get completely bogus values because the WM_REDRAW is beeing
+	executed from within e.g. WM_VSLID handler where the buffer doesn't contain
+	the rectangle to redraw.
+	
+2004-07-14 22:24  Standa OPICHAL
+
+	* include/mt_wndm.h, src/comp_create.c:
+
+	Adding CF_MAXSIZE mode for mt_CompGetGrect() returning the maximum size
+	of a component considering only fixed children. This is useful for
+	setting the win->?pos_max slider values (would probably need to get
+	a bit better name).
+	
+2004-07-14 22:16  Standa OPICHAL
+
+	* src/comp_szd.c:
+
+	The non-axis resizing made working properly.
+	
+2004-07-14 21:59  Dominique BEREZIAT
+
+	* demo/main.c, include/mt_wndm.h, src/cicon.c, src/doxygen.c,
+	src/rsrc_gaddr.c, src/rsrc_ghdr.c, src/rsrc_load.c,
+	src/rsrc_userdraw.c, src/rsrc_xload.c:
+
+	Adding some macros in mt_wndm.h to access easily element
+	of global AES array of application (mt_AESapid, ...)
+	Adding documentation for Rsrc library
+	
+2004-07-14 20:38  Arnaud BERCEGEAY
+
+	* src/evnt_list.c:
+
+	various fixes (by reading code)
+	
+2004-07-14 13:54  Standa OPICHAL
+
+	* src/get_cookie.c:
+
+	Adding an explanation that clearly states that the cookie jar space search
+	part is not MP friendly.
+	
+2004-07-14 10:29  Arnaud BERCEGEAY
+
+	* src/: get_cookie.c, vq_mint.c:
+
+	remove some TODO/FIXME comments:
+	get_cookie() and vq_mint() are MP_FRIENDLY because get_cookie() is
+	now based on mintlib Getcookie() function (even if mintlib is not used).
+	
+2004-07-14 10:21  Arnaud BERCEGEAY
+
+	* src/mnscroll.c:
+
+	fix menu (within window) redraw pb
+	
+2004-07-13 23:32  Arnaud BERCEGEAY
+
+	* userdef/extended/global.h:
+
+	include the right windom/list.h file
+	
+2004-07-13 23:22  Arnaud BERCEGEAY
+
+	* src/globals.h, include/mt_wndm.h:
+
+	make sure the right windom/list.h file is included
+	
+2004-07-13 23:18  Arnaud BERCEGEAY
+
+	* src/vq_extfs.c:
+
+	remove local prototype of vq_magx() and unused variable vers
+	
+2004-07-13 23:16  Standa OPICHAL
+
+	* src/evnt_list.c:
+
+	Handle the application binding when win is NULL.
+	
+2004-07-13 22:42  Standa OPICHAL
+
+	* examples/component/: comptest.c, files.mak, gcc.mak, makefile:
+
+	New COMPONENT test example.
+	
+2004-07-13 22:42  Standa OPICHAL
+
+	* examples/component/comptest.c:
+
+	file comptest.c was initially added on branch windom-mt-branch.
+	
+2004-07-13 22:42  Standa OPICHAL
+
+	* examples/component/files.mak:
+
+	file files.mak was initially added on branch windom-mt-branch.
+	
+2004-07-13 22:42  Standa OPICHAL
+
+	* examples/component/gcc.mak:
+
+	file gcc.mak was initially added on branch windom-mt-branch.
+	
+2004-07-13 22:42  Standa OPICHAL
+
+	* examples/component/makefile:
+
+	file makefile was initially added on branch windom-mt-branch.
+	
+2004-07-13 22:41  Standa OPICHAL
+
+	* src/get_cookie.c:
+
+	MP friendliness comment added.
+	
+2004-07-13 22:39  Standa OPICHAL
+
+	* src/vq_extfs.c:
+
+	Using vq_mint() instead of get_cookie().
+	
+2004-07-13 22:38  Standa OPICHAL
+
+	* src/comp_szd.c:
+
+	file comp_szd.c was initially added on branch windom-mt-branch.
+	
+2004-07-13 22:38  Standa OPICHAL
+
+	* src/: comp_create.c, files.mak, comp_szd.c:
+
+	New COMPONENT creation and few standard handlers.
+	
+2004-07-13 22:38  Standa OPICHAL
+
+	* src/comp_create.c:
+
+	file comp_create.c was initially added on branch windom-mt-branch.
+	
+2004-07-13 22:37  Standa OPICHAL
+
+	* src/: appl_init.c, data.c, evnt_list.c, globals.h, wind_create.c:
+
+	The Data and Event library rewritten to use the list.h structures instead
+	of proprietary chains. mt_Comp* equivalents added to both.
+	
+2004-07-13 22:33  Standa OPICHAL
+
+	* include/windom/list.h:
+
+	file list.h was initially added on branch windom-mt-branch.
+	
+2004-07-13 22:33  Standa OPICHAL
+
+	* src/list.c, src/list.h, src/udlib_add_obj.c, src/udlib_edit.c,
+	src/udlib_exit.c, src/udlib_extended.c, src/udlib_extfree.c,
+	src/udlib_garbage.c, src/udlib_get_edpos.c, src/udlib_get_type.c,
+	src/udlib_init.c, src/udlib_objfind.c, src/udlib_rm_obj.c,
+	src/udlib_string.c, src/udlib_unextended.c, include/mt_wndm.h,
+	include/windom/list.h:
+
+	Moving the list.h to the include/windom/list.h.
+	
+	Adjusting the listNext() and listPrev() macros to not to need the list
+	instance pointer.
+	
+2004-07-12 20:55  Arnaud BERCEGEAY
+
+	* examples/bubble/gcc.mak:
+
+	explicit windom library to use for cross-gcc
+	
+2004-07-07 22:13  Arnaud BERCEGEAY
+
+	* demo/gcc.mak:
+
+	make sure that local lib is linked (required for cross-gcc)
+	
+2004-06-29 20:19  Arnaud BERCEGEAY
+
+	* src/globals.c:
+
+	wglb is now initialised
+	
+2004-06-29 20:18  Arnaud BERCEGEAY
+
+	* include/windom.h:
+
+	version changed to 1.21.1
+	
+2004-06-29 20:16  Arnaud BERCEGEAY
+
+	* README:
+
+	various update (release, web site)
+	
+2004-06-25 08:18  Standa OPICHAL
+
+	* src/globals.h:
+
+	Removing unnecessary #undef.
+	
+2004-06-24 21:10  Arnaud BERCEGEAY
+
+	* src/evnt_list.c:
+
+	revert changes in end of mt_EvntCleanUp(): it's important to keep
+	the previous element linked to "scan" (that's the reason why i
+	used scan->next instead of scan)
+	
+2004-06-24 08:56  Standa OPICHAL
+
+	* src/: evnt_windom.c, form_thumb.c:
+
+	English: 'clic' -> 'click'
+	
+2004-06-24 08:39  Standa OPICHAL
+
+	* src/: form_thumb.c, frm_drw.c, std_fntchg.c, evnt_windom.c,
+	wind_create.c:
+
+	English: 'binded' -> 'bound'
+	
+2004-06-24 08:35  Standa OPICHAL
+
+	* src/: evnt_list.c, evnt_redraw.c:
+
+	English: there is no 'binded' word in there. 'Bind' is irregular and past
+	tense is 'bound'.
+	
+	Some code beautyfying (no functionality change).
+	
+2004-06-24 08:34  Standa OPICHAL
+
+	* src/appl_init.c:
+
+	The app->wglb and app->private initialization added. It removed startup crashes
+	especialy happenning in MagiC or when executed from within gdb.
+	
+	Standard AP_TERM handler added. To not to force the application programmer
+	to write its own until it is needed for some cleanup.
+	
+2004-06-24 08:30  Standa OPICHAL
+
+	* src/std_evnt.c:
+
+	Adding a default AP_TERM handler.
+	
+2004-06-24 08:28  Standa OPICHAL
+
+	* include/mt_wndm.h, src/globals.h:
+
+	Publishing the mt_Clip*() functions.
+	
+2004-06-24 08:21  Standa OPICHAL
+
+	* src/clip_on.c:
+
+	Code beautyfying.
+	
+2004-06-19 16:48  Dominique BEREZIAT
+
+	* src/wind_get.c:
+
+	fix doc.
+	
+2004-06-18 22:41  Arnaud BERCEGEAY
+
+	* src/mnscroll.c:
+
+	fix display bug when opening another title of window-menu
+	
+2004-06-17 20:29  Arnaud BERCEGEAY
+
+	* src/: files.mak, getindexmenu.c, globals.h, is_title.c,
+	menu_disable.c, menu_enable.c, mnscroll.c:
+
+	replace is_title() by ob_istype(); remove is_title()
+	
+2004-06-16 23:51  Arnaud BERCEGEAY
+
+	* include/wdmxobj.h:
+
+	remplace short by void to shut-up gcc warning
+	
+2004-06-16 23:44  Arnaud BERCEGEAY
+
+	* src/menu_bar.c:
+
+	The menu tree is now duplicated, and the copy is installed as desktop
+	menu. Extended objects (userdef installed by RsrcXtype() for example)
+	are free-ed and restored back to their original form. This only applied
+	to the copy of the menu.
+	
+2004-06-16 23:39  Arnaud BERCEGEAY
+
+	* src/globals.h:
+
+	fix macro against multiple inclusion of globals.h (__WINDOM_GLOBAL__)
+	add LIST and LINKABLE structure (for new LIST management)
+	change UDLIB_LIB and UDLIB_OBJ and APPvar->private->udef_lib data to
+	deal with the new LIST management
+	add prototype for ob_istype() and udlib_objfind()
+	remove prototype for udlib_getprev()
+	update prototype for udlib_unextended()
+	
+2004-06-16 23:33  Arnaud BERCEGEAY
+
+	* src/: getindexmenu.c, menu_execcmd.c, mnscroll.c:
+
+	use ob_istype() instead of direct access to ob_type field. This is
+	needed to parse menu tree when some objects have been transformed to
+	userdef objects.
+	
+2004-06-16 23:31  Arnaud BERCEGEAY
+
+	* src/objc_dup.c:
+
+	fix duplication of userdef object
+	
+2004-06-16 23:26  Arnaud BERCEGEAY
+
+	* src/: appl_init.c, udlib_add_obj.c, udlib_edit.c, udlib_exit.c,
+	udlib_extended.c, udlib_extfree.c, udlib_garbage.c,
+	udlib_get_edpos.c, udlib_get_type.c, udlib_init.c, udlib_rm_obj.c,
+	udlib_string.c, udlib_unextended.c:
+
+	use new LIST management for UDLIB_xxx
+	
+2004-06-16 23:23  Arnaud BERCEGEAY
+
+	* src/files.mak:
+
+	added: list.o ob_istype.o udlib_objfind.o
+	removed: udlib_getprev.o
+	
+2004-06-16 23:22  Arnaud BERCEGEAY
+
+	* src/: list.c, list.h:
+
+	add LIST management (contrib. Standa)
+	
+2004-06-16 23:22  Arnaud BERCEGEAY
+
+	* src/list.c:
+
+	file list.c was initially added on branch windom-mt-branch.
+	
+2004-06-16 23:22  Arnaud BERCEGEAY
+
+	* src/list.h:
+
+	file list.h was initially added on branch windom-mt-branch.
+	
+2004-06-16 23:20  Arnaud BERCEGEAY
+
+	* src/udlib_getprev.c:
+
+	function removed (udlib_objfind is better)
+	
+2004-06-16 23:18  Arnaud BERCEGEAY
+
+	* src/udlib_objfind.c:
+
+	file udlib_objfind.c was initially added on branch windom-mt-branch.
+	
+2004-06-16 23:18  Arnaud BERCEGEAY
+
+	* src/udlib_objfind.c:
+
+	new function udlib_objfind()
+	
+2004-06-16 23:14  Arnaud BERCEGEAY
+
+	* src/ob_istype.c:
+
+	file ob_istype.c was initially added on branch windom-mt-branch.
+	
+2004-06-16 23:14  Arnaud BERCEGEAY
+
+	* src/ob_istype.c:
+
+	new function ob_istype()
+	
+2004-06-10 17:55  Arnaud BERCEGEAY
+
+	* src/do_update.c:
+
+	bugfix: add missing braces ;)
+	
+2004-06-10 17:51  Arnaud BERCEGEAY
+
+	* src/cicon.c:
+
+	cleanup (remove unused xy array)
+	
+2004-06-10 12:08  Standa OPICHAL
+
+	* src/do_update.c:
+
+	Putting the rectangle intersection back into the AES message buffer
+	to make the handlers be able to optimize its operation based on it.
+	
+2004-06-02 20:49  Arnaud BERCEGEAY
+
+	* demo/: win-cust.c, win-tool.c:
+
+	add the missing 1st param APPvar to some callback fn
+	
+2004-06-02 20:11  Arnaud BERCEGEAY
+
+	* demo/setup.c:
+
+	fix refresh of the object after change
+	
+2004-06-01 19:32  Arnaud BERCEGEAY
+
+	* src/do_update.c:
+
+	set back the 2nd vs_clip, requiered to clip the work area only
+	
+2004-06-01 19:31  Arnaud BERCEGEAY
+
+	* src/cicon.c:
+
+	remove the clip_off() call: draw_cicon shall not clip anything
+	
+2004-05-31 23:58  Dominique BEREZIAT
+
+	* src/: Makefile, form_attach.c, form_create.c, form_resize.c,
+	form_thumb.c, form_wbegin.c, form_wdo.c, form_wend.c, frm_drw.c,
+	globals.h, popup.c, std_dstry.c, std_evnt.c, wind_calc.c:
+
+	adding documentation for mt_WindCalc(), mt_FormCreate(), mt_FormResize(),
+	mt_FormAttach(), mt_FormWind*() , mt_FormThumb().
+	
+2004-05-31 23:45  Arnaud BERCEGEAY
+
+	* src/udlib_init.c:
+
+	load_lib() now returns NULL instead of -1 in case of error
+	
+2004-05-31 21:49  Arnaud BERCEGEAY
+
+	* demo/: setup.c, win-cust.c:
+
+	add the missing 1st parameter APPvar to callback functions
+	
+2004-05-31 21:45  Arnaud BERCEGEAY
+
+	* src/objc_attach.c:
+
+	check value returned by malloc and zero-ed BIND data
+	
+2004-05-31 18:34  Arnaud BERCEGEAY
+
+	* userdef/extended/gcc.mak, src/gcc.mak:
+
+	the CC line is now displayed before warnings generated by gcc
+	
+2004-05-30 22:24  Dominique BEREZIAT
+
+	* src/files.mak, src/gcc.mak, userdef/extended/gcc.mak:
+
+	Trace messages during compilation are now very short.
+	
+2004-05-27 20:47  Arnaud BERCEGEAY
+
+	* userdef/extended/: Makefile, char.c, draw.c, extend.c, files.mak,
+	gcc.mak, global.h, interface.c, string.c, wsystem.h, wsystem.rh,
+	wsystem.rsh, xedit.c:
+
+	copyright year changed to 2004
+	
+2004-05-27 20:41  Arnaud BERCEGEAY
+
+	* include/: av.h, mt_wndm.h, scancode.h, wdmxobj.h, windom.h:
+
+	copyright year changed to 2004
+	
+2004-05-27 20:36  Arnaud BERCEGEAY
+
+	* src/: Makefile, add_slash.c, appl_control.c, appl_exit.c,
+	appl_get.c, appl_init.c, appl_name.c, appl_set.c, appl_write.c,
+	av_exit.c, av_init.c, av_server.c, av_status.c, av_strfmt.c,
+	av_waitfor.c, bubble_attach.c, bubble_call.c, bubble_do.c,
+	bubble_evnt.c, bubble_find.c, bubble_free.c, bubble_get.c,
+	bubble_modal.c, call_stguide.c, cicon.c, cicon.h, clip_off.c,
+	clip_on.c, close_fontid.c, conf_getline.c, conf_inquire.c,
+	conf_read.c, conf_windom.c, conf_write.c, conv_path.c, cookie.h,
+	cookieptr.c, data.c, debug_windom.c, do_update.c, draw_page.c,
+	draw_submenu.c, evnt_list.c, evnt_redraw.c, evnt_windom.c,
+	files.mak, font_id2name.c, font_name2id.c, font_sel.c, fontsel.h,
+	form_alert.c, form_attach.c, form_begin.c, form_close.c,
+	form_create.c, form_end.c, form_resize.c, form_restore.c,
+	form_save.c, form_thbget.c, form_thbset.c, form_thumb.c,
+	form_wbegin.c, form_wdo.c, form_wend.c, frame_attach.c,
+	frame_calc.c, frame_create.c, frame_find.c, frame_get.c,
+	frame_init.c, frame_remove.c, frame_search.c, frame_set.c,
+	frame_set_widget.c, frm_buttn_ev.c, frm_click.c, frm_cls.c,
+	frm_drw.c, frm_dstry.c, frm_fld.c, frm_keybd_ev.c, frm_keyhd.c,
+	frm_mvd.c, frm_top.c, fsel.c, fsel.h, galloc.c, gcc.mak,
+	gcc281.mak, gemcode2ascii.c, get_appname.c, get_cookie.c,
+	get_next_obj.c, getindexmenu.c, give_iconifyxywh.c, globals.c,
+	globals.h, grectcenter.c, is_menu.c, is_modal.c, is_title.c,
+	keybd2ascii.c, load_fontid.c, menu_attach.c, menu_bar.c,
+	menu_bind.c, menu_disable.c, menu_enable.c, menu_execcmd.c,
+	menu_icheck.c, menu_scroll.c, menu_text.c, menu_tnormal.c,
+	mnscroll.c, mnscroll.h, mouse.h, mouse.rh, mouse.rsh, mouse_objc.c,
+	mouse_sprite.c, mouse_work.c, move_work.c, obj_fd_flag.c,
+	obj_fd_xtype.c, obj_nb.c, obj_root.c, objc_attach.c, objc_change.c,
+	objc_draw.c, objc_dup.c, objc_edit.c, objc_free.c, objc_str3d.c,
+	objc_strfmt.c, objc_string.c, objc_tree.c, objc_wchange.c,
+	objc_wdraw.c, obspec_mem.c, options.h, pc.mak, popup.c,
+	rc_clip_off.c, rc_clip_on.c, rc_set.c, remove_frame.c,
+	rsrc_gaddr.c, rsrc_ghdr.c, rsrc_load.c, rsrc_userdraw.c,
+	rsrc_userfree.c, rsrc_xfree.c, rsrc_xload.c, scrap_txtread.c,
+	scrap_txtwrite.c, set_gadget_pos.c, shel_write.c, slid_attach.c,
+	slid_create.c, slid_getvalue.c, slid_setfunc.c, slid_setsize.c,
+	slid_setupdat.c, slid_setvalue.c, snd_arrw.c, snd_msg.c,
+	snd_mubutton.c, snd_rdw.c, sox.mak, std_dstry.c, std_evnt.c,
+	std_fntchg.c, std_mwk.c, strdup.c, toserror.h, udlib_add_obj.c,
+	udlib_edit.c, udlib_exit.c, udlib_extended.c, udlib_extfree.c,
+	udlib_garbage.c, udlib_get_edpos.c, udlib_get_type.c,
+	udlib_getprev.c, udlib_init.c, udlib_rm_obj.c, udlib_string.c,
+	udlib_unextended.c, vq_extfs.c, vq_magx.c, vq_mint.c, vq_naes.c,
+	vq_nvdi.c, vq_tos.c, vq_winx.c, vq_xaaes.c, vqt_extname.c,
+	vqt_name.c, vqt_xname.c, vqt_xname2.c, vst_font.c, vst_loadfonts.c,
+	vst_unloadfonts.c, w_getbkgr.c, w_getpal.c, w_putbkgr.c,
+	w_setpal.c, wind_attach.c, wind_calc.c, wind_clear.c, wind_close.c,
+	wind_create.c, wind_delete.c, wind_find.c, wind_get.c,
+	wind_handle.c, wind_lst.c, wind_lst2.c, wind_new.c, wind_open.c,
+	wind_set.c, wind_slider.c, wind_top.c, wportab.h, xrsrc.c:
+
+	copyright year changed to 2004
+	
+2004-05-26 20:39  Arnaud BERCEGEAY
+
+	* demo/win-form.c:
+
+	Added the missing (dummy) APPvar variable as first paramter.
+	mt-Windom requieres that callback function has this variable as 1st
+	parameter, but there's no way to check this at compiling time
+	for ObjcAttach()... maybe a good idea will be to deprecate ObjcAttach
+	and use ObjcAttachVar(), ObjcAttachFunc()... instead ?
+	
+2004-05-25 19:48  Arnaud BERCEGEAY
+
+	* src/udlib_garbage.c:
+
+	file udlib_garbage.c was initially added on branch windom-mt-branch.
+	
+2004-05-25 19:48  Arnaud BERCEGEAY
+
+	* src/: appl_init.c, evnt_windom.c, files.mak, globals.h,
+	udlib_exit.c, udlib_extended.c, udlib_extfree.c, udlib_garbage.c,
+	udlib_init.c:
+
+	added garbage mechanism for userdef libraries.
+	Now userdef libraries are loaded only when required, and are
+	freed as soon as they are no more used.
+	
+2004-05-24 21:06  Arnaud BERCEGEAY
+
+	* include/wdmxobj.h:
+
+	rename FIXCICON to UDLIB_FIXCICON
+	
+2004-05-24 20:58  Arnaud BERCEGEAY
+
+	* userdef/extended/: draw.c, global.h, interface.c, xedit.c:
+
+	rename ULIB_DATA to XOBJC_DATA
+	
+2004-05-24 20:53  Arnaud BERCEGEAY
+
+	* src/globals.h, include/wdmxobj.h, userdef/extended/global.h,
+	userdef/extended/interface.c:
+
+	rename ULIB_CONFIG to UDLIB_CONFIG
+	
+2004-05-24 20:49  Arnaud BERCEGEAY
+
+	* src/: globals.h, udlib_add_obj.c, udlib_edit.c, udlib_get_type.c,
+	udlib_getprev.c, udlib_rm_obj.c, udlib_string.c:
+
+	rename ULIB_OBJ to UDLIB_OBJ
+	
+2004-05-24 20:44  Arnaud BERCEGEAY
+
+	* src/: globals.h, udlib_add_obj.c, udlib_edit.c, udlib_exit.c,
+	udlib_extended.c, udlib_extfree.c, udlib_get_edpos.c,
+	udlib_get_type.c, udlib_getprev.c, udlib_init.c, udlib_rm_obj.c,
+	udlib_string.c, udlib_unextended.c:
+
+	rename UDEF_LIB to UDLIB_LIB
+	
+2004-05-20 13:20  Arnaud BERCEGEAY
+
+	* userdef/extended/global.h:
+
+	fix return type for draw_cicon
+	
+2004-05-20 13:17  Arnaud BERCEGEAY
+
+	* src/: objc_dup.c, objc_free.c:
+
+	ObjcDup and ObjcFree reworked for udlib
+	
+2004-05-20 13:16  Arnaud BERCEGEAY
+
+	* src/udlib_get_edpos.c:
+
+	cleanup
+	
+2004-05-20 13:14  Arnaud BERCEGEAY
+
+	* src/: udlib_unextended.c, files.mak, globals.h:
+
+	add udlib_unextended
+	
+2004-05-20 13:14  Arnaud BERCEGEAY
+
+	* src/udlib_unextended.c:
+
+	file udlib_unextended.c was initially added on branch windom-mt-branch.
+	
+2004-05-20 12:04  Arnaud BERCEGEAY
+
+	* src/menu_attach.c:
+
+	this is now udlib compliant
+	
+2004-05-20 11:38  Arnaud BERCEGEAY
+
+	* src/: cicon.c, frm_buttn_ev.c, frm_keybd_ev.c, frm_keyhd.c,
+	is_title.c, menu_attach.c, objc_dup.c, objc_edit.c, objc_free.c,
+	objc_string.c, rsrc_userdraw.c, rsrc_userfree.c, userdef.h:
+
+	useless userdef.h removed
+	
+2004-05-20 11:32  Arnaud BERCEGEAY
+
+	* include/mt_wndm.h:
+
+	XBOXLONGTEXT and ONGLET extended type added
+	
+2004-05-20 11:29  Arnaud BERCEGEAY
+
+	* src/: userdef.h, globals.h:
+
+	XCICON and XSMENU moved to global.h + cleanup
+	
+2004-05-20 11:27  Arnaud BERCEGEAY
+
+	* userdef/extended/global.h:
+
+	cleanup (removed unused constants)
+	
+2004-05-20 11:10  Arnaud BERCEGEAY
+
+	* src/: gcc.mak, gcc281.mak, options.h, pc.mak, sox.mak:
+
+	remove XEDIT stuff (moved to xobjc lib)
+	
+2004-05-20 11:09  Arnaud BERCEGEAY
+
+	* include/mt_wndm.h:
+
+	add MENUTITLE and XEDIT extended ob_type (from userdef.h)
+	
+2004-05-20 11:07  Arnaud BERCEGEAY
+
+	* src/userdef.h:
+
+	MENUTITLE and XEDIT extended type moved to mt_wndm.h
+	
+2004-05-20 10:48  Arnaud BERCEGEAY
+
+	* src/: getindexmenu.c, globals.h, is_title.c, menu_disable.c,
+	menu_enable.c, mnscroll.c:
+
+	is_title now compliant with udlib
+	
+2004-05-20 10:25  Arnaud BERCEGEAY
+
+	* src/: frm_keyhd.c, userdef.h:
+
+	replace private FLAGS11 by gemlib OF_FLAG11 constant
+	
+2004-05-20 10:16  Arnaud BERCEGEAY
+
+	* src/: globals.h, userdef.h:
+
+	moved USERDRAW from userdef.h to global.h
+	
+2004-05-20 10:11  Arnaud BERCEGEAY
+
+	* include/mt_wndm.h:
+
+	add mydial extended ob_type (moved from userdef.h)
+	
+2004-05-20 10:03  Arnaud BERCEGEAY
+
+	* src/userdef.h:
+
+	remove mydial extended ob_type (moved to mt_wndm.h)
+	
+2004-05-20 10:02  Dominique BEREZIAT
+
+	* src/: wind_new.c, wind_slider.c, wind_top.c, windom.doxy,
+	std_dstry.c, wind_attach.c, wind_clear.c, wind_close.c,
+	wind_create.c, wind_delete.c, wind_find.c, wind_handle.c:
+
+	doc Window Library completed
+	
+2004-05-20 09:35  Arnaud BERCEGEAY
+
+	* src/: files.mak, objc_xedit.c:
+
+	remove now useless objc_xedit.o
+	
+2004-05-20 09:34  Arnaud BERCEGEAY
+
+	* src/: files.mak, userdef.c:
+
+	remove now useless userdef.o
+	
+2004-05-20 09:29  Arnaud BERCEGEAY
+
+	* src/: globals.h, wsystem.h, wsystem.hrd, wsystem.rh, wsystem.rsc,
+	wsystem.rsh:
+
+	remove wsystem RSC (moved to xobjc lib)
+	
+2004-05-20 09:26  Arnaud BERCEGEAY
+
+	* src/udlib_init.c:
+
+	add FIXME comment
+	
+2004-05-20 09:24  Arnaud BERCEGEAY
+
+	* userdef/extended/draw.c:
+
+	3D buttons now transparent; fix boxtitle
+	
+2004-05-20 01:05  Arnaud BERCEGEAY
+
+	* include/mt_wndm.h:
+
+	add ATTRIB and ED_xxx (from global.h)
+	
+2004-05-20 00:53  Arnaud BERCEGEAY
+
+	* src/: frm_keybd_ev.c, frm_buttn_ev.c:
+
+	adapted to udlib
+	
+2004-05-20 00:50  Arnaud BERCEGEAY
+
+	* src/: objc_edit.c, frm_keyhd.c:
+
+	adapted to udlib
+	
+2004-05-20 00:47  Arnaud BERCEGEAY
+
+	* src/objc_xedit.c:
+
+	all has been moved to xobjc
+	
+2004-05-20 00:46  Arnaud BERCEGEAY
+
+	* src/: xrsrc.c, objc_string.c:
+
+	adapted to udlib
+	
+2004-05-20 00:44  Arnaud BERCEGEAY
+
+	* src/: userdef.c, userdef.h:
+
+	lot of unused (since udlib) stuff removed
+	
+2004-05-20 00:42  Arnaud BERCEGEAY
+
+	* src/globals.h:
+
+	ATTRIB structure moved to mt_wndm.h
+	ED_xxx constants moved to mt_wndm.h
+	remove XEDIT and USERDEF stuff
+	add udlib stuff
+	
+2004-05-20 00:39  Arnaud BERCEGEAY
+
+	* src/popup.c:
+
+	bug fix (APPvar argument was missing) + cleanup
+	
+2004-05-20 00:36  Arnaud BERCEGEAY
+
+	* src/: font_sel.c, frame_init.c:
+
+	replace "code to detect and replace some extended object by userdef object"
+	by a simple call to objc_extended().
+	
+2004-05-20 00:31  Arnaud BERCEGEAY
+
+	* src/cicon.c:
+
+	some changes required by udlib + cleanup
+	
+2004-05-20 00:27  Arnaud BERCEGEAY
+
+	* src/appl_exit.c:
+
+	add exit of udlib
+	
+2004-05-20 00:26  Arnaud BERCEGEAY
+
+	* src/appl_init.c:
+
+	add initialisation of udlib
+	
+2004-05-20 00:24  Arnaud BERCEGEAY
+
+	* src/gcc.mak:
+
+	add xobjc lib
+	
+2004-05-20 00:21  Arnaud BERCEGEAY
+
+	* src/Makefile:
+
+	the target clean now cleans the xobjc lib too
+	
+2004-05-20 00:19  Arnaud BERCEGEAY
+
+	* src/files.mak:
+
+	add udlib objects
+	
+2004-05-20 00:17  Arnaud BERCEGEAY
+
+	* src/udlib_edit.c:
+
+	file udlib_edit.c was initially added on branch windom-mt-branch.
+	
+2004-05-20 00:17  Arnaud BERCEGEAY
+
+	* src/udlib_exit.c:
+
+	file udlib_exit.c was initially added on branch windom-mt-branch.
+	
+2004-05-20 00:17  Arnaud BERCEGEAY
+
+	* src/udlib_extended.c:
+
+	file udlib_extended.c was initially added on branch windom-mt-branch.
+	
+2004-05-20 00:17  Arnaud BERCEGEAY
+
+	* src/udlib_extfree.c:
+
+	file udlib_extfree.c was initially added on branch windom-mt-branch.
+	
+2004-05-20 00:17  Arnaud BERCEGEAY
+
+	* src/udlib_get_edpos.c:
+
+	file udlib_get_edpos.c was initially added on branch windom-mt-branch.
+	
+2004-05-20 00:17  Arnaud BERCEGEAY
+
+	* src/udlib_get_type.c:
+
+	file udlib_get_type.c was initially added on branch windom-mt-branch.
+	
+2004-05-20 00:17  Arnaud BERCEGEAY
+
+	* src/udlib_getprev.c:
+
+	file udlib_getprev.c was initially added on branch windom-mt-branch.
+	
+2004-05-20 00:17  Arnaud BERCEGEAY
+
+	* src/udlib_init.c:
+
+	file udlib_init.c was initially added on branch windom-mt-branch.
+	
+2004-05-20 00:17  Arnaud BERCEGEAY
+
+	* src/udlib_rm_obj.c:
+
+	file udlib_rm_obj.c was initially added on branch windom-mt-branch.
+	
+2004-05-20 00:17  Arnaud BERCEGEAY
+
+	* src/udlib_string.c:
+
+	file udlib_string.c was initially added on branch windom-mt-branch.
+	
+2004-05-20 00:17  Arnaud BERCEGEAY
+
+	* src/udlib_add_obj.c:
+
+	file udlib_add_obj.c was initially added on branch windom-mt-branch.
+	
+2004-05-20 00:17  Arnaud BERCEGEAY
+
+	* src/: udlib_add_obj.c, udlib_edit.c, udlib_exit.c,
+	udlib_extended.c, udlib_extfree.c, udlib_get_edpos.c,
+	udlib_get_type.c, udlib_getprev.c, udlib_init.c, udlib_rm_obj.c,
+	udlib_string.c:
+
+	initial checkin
+	
+2004-05-18 23:26  Arnaud BERCEGEAY
+
+	* include/wdmxobj.h:
+
+	file wdmxobj.h was initially added on branch windom-mt-branch.
+	
+2004-05-18 23:26  Arnaud BERCEGEAY
+
+	* include/wdmxobj.h:
+
+	initial checkin
+	
+2004-05-18 23:19  Arnaud BERCEGEAY
+
+	* userdef/extended/wsystem.rsc:
+
+	file wsystem.rsc was initially added on branch windom-mt-branch.
+	
+2004-05-18 23:16  Arnaud BERCEGEAY
+
+	* userdef/extended/Makefile:
+
+	file Makefile was initially added on branch windom-mt-branch.
+	
+2004-05-18 23:16  Arnaud BERCEGEAY
+
+	* userdef/extended/global.h:
+
+	file global.h was initially added on branch windom-mt-branch.
+	
+2004-05-18 23:16  Arnaud BERCEGEAY
+
+	* userdef/extended/wsystem.h:
+
+	file wsystem.h was initially added on branch windom-mt-branch.
+	
+2004-05-18 23:16  Arnaud BERCEGEAY
+
+	* userdef/extended/wsystem.rh:
+
+	file wsystem.rh was initially added on branch windom-mt-branch.
+	
+2004-05-18 23:16  Arnaud BERCEGEAY
+
+	* userdef/extended/wsystem.rsh:
+
+	file wsystem.rsh was initially added on branch windom-mt-branch.
+	
+2004-05-18 23:16  Arnaud BERCEGEAY
+
+	* userdef/extended/xedit.c:
+
+	file xedit.c was initially added on branch windom-mt-branch.
+	
+2004-05-18 23:16  Arnaud BERCEGEAY
+
+	* userdef/extended/char.c:
+
+	file char.c was initially added on branch windom-mt-branch.
+	
+2004-05-18 23:16  Arnaud BERCEGEAY
+
+	* userdef/extended/draw.c:
+
+	file draw.c was initially added on branch windom-mt-branch.
+	
+2004-05-18 23:16  Arnaud BERCEGEAY
+
+	* userdef/extended/extend.c:
+
+	file extend.c was initially added on branch windom-mt-branch.
+	
+2004-05-18 23:16  Arnaud BERCEGEAY
+
+	* userdef/extended/files.mak:
+
+	file files.mak was initially added on branch windom-mt-branch.
+	
+2004-05-18 23:16  Arnaud BERCEGEAY
+
+	* userdef/extended/gcc.mak:
+
+	file gcc.mak was initially added on branch windom-mt-branch.
+	
+2004-05-18 23:16  Arnaud BERCEGEAY
+
+	* userdef/extended/interface.c:
+
+	file interface.c was initially added on branch windom-mt-branch.
+	
+2004-05-18 23:16  Arnaud BERCEGEAY
+
+	* userdef/extended/string.c:
+
+	file string.c was initially added on branch windom-mt-branch.
+	
+2004-05-18 23:16  Arnaud BERCEGEAY
+
+	* userdef/extended/: char.c, draw.c, extend.c, files.mak, gcc.mak,
+	interface.c, string.c, Makefile, global.h, wsystem.h, wsystem.rh,
+	wsystem.rsh, xedit.c, wsystem.rsc:
+
+	initial checkin
+	
+2004-05-11 00:31  Dominique BEREZIAT
+
+	* src/wind_delete.c, src/fsel.c, src/wind_attach.c,
+	src/wind_close.c, include/windom.h, include/mt_wndm.h:
+
+	Adding status WS_FOREIGN for external window insered in
+	WinDom with WindAttach(). WindClose() and WindDelete() don't
+	close and delete these windows.
+	Correct a typo error in windom.h
+	
+2004-05-10 22:59  Dominique BEREZIAT
+
+	* src/wind_slider.c, include/windom.h, src/appl_control.c,
+	src/appl_get.c, src/appl_set.c, src/appl_write.c, src/doxygen.c,
+	src/evnt_list.c, src/evnt_redraw.c, src/globals.h, src/std_evnt.c,
+	src/wind_create.c, src/wind_get.c, src/wind_open.c, src/wind_set.c,
+	include/mt_wndm.h:
+
+	Documentation: some corrections, doc structure WINDOW and some constants,
+	starting doc of Windows Library.
+	
+2004-05-07 23:37  Dominique BEREZIAT
+
+	* src/: doxygen.c, evnt_list.c, evnt_windom.c, windom.doxy:
+
+	Documentation of APPvar, EVNTvar, EvntWindom(), and most
+	of function of the Evnt library.
+	change the position of APPvar definition in mt_wndm.h due to some
+	Doxygen problems to parse the file.
+	
+2004-05-01 01:22  Dominique BEREZIAT
+
+	* include/mt_wndm.h, src/doxygen.c, src/gcc281.mak, src/sox.mak:
+
+	Adding Doxygen subgroup classification.
+	
+2004-05-01 00:58  Dominique BEREZIAT
+
+	* src/: doxygen.c, av_exit.c, av_init.c, av_server.c, av_status.c,
+	av_strfmt.c, av_waitfor.c:
+
+	Adding documentation of AV library
+	
+2004-04-28 00:54  Dominique BEREZIAT
+
+	* src/: doxygen.c, windom.doxy:
+
+	Adding additional files for Doxygen.
+	
+2004-04-28 00:54  Dominique BEREZIAT
+
+	* src/doxygen.c:
+
+	file doxygen.c was initially added on branch windom-mt-branch.
+	
+2004-04-28 00:54  Dominique BEREZIAT
+
+	* src/windom.doxy:
+
+	file windom.doxy was initially added on branch windom-mt-branch.
+	
+2004-04-28 00:52  Dominique BEREZIAT
+
+	* src/: appl_write.c, Makefile, appl_control.c, appl_exit.c,
+	appl_get.c, appl_init.c, appl_name.c, appl_set.c:
+
+	Adding documentation for Application Library.
+	
+2004-04-27 20:08  Arnaud BERCEGEAY
+
+	* COMPONENTS:
+
+	file COMPONENTS was initially added on branch windom-mt-branch.
+	
+2004-04-27 20:08  Arnaud BERCEGEAY
+
+	* COMPONENTS:
+
+	initial checkin
+	
+2004-04-27 19:06  Arnaud BERCEGEAY
+
+	* src/frame_create.c:
+
+	dimension of xy array fixed in set_frame (contrib STan)
+	
+2004-03-15 21:05  Arnaud BERCEGEAY
+
+	* src/: vqt_extname.c, vqt_name.c, vst_font.c, vst_loadfonts.c,
+	vst_unloadfonts.c:
+
+	add comments
+	
+2004-03-09 20:50  Arnaud BERCEGEAY
+
+	* src/: userdef.h, wind_new.c:
+
+	add comments
+	
+2004-03-08 22:06  Arnaud BERCEGEAY
+
+	* src/: wind_create.c, wind_delete.c:
+
+	add comments
+	
+2004-03-07 20:23  Arnaud BERCEGEAY
+
+	* src/gcc.mak:
+
+	gcc295 dir is automatically created if needed
+	
+2004-03-07 20:22  Arnaud BERCEGEAY
+
+	* src/Makefile:
+
+	update clean target
+	
+2004-03-07 11:11  Dominique BEREZIAT
+
+	* src/: gcc.mak, gcc281.mak:
+
+	gcc : objects files are written in a separable directory.
+	
+2004-03-05 19:51  Arnaud BERCEGEAY
+
+	* src/: w_getbkgr.c, w_putbkgr.c, w_setpal.c:
+
+	add comments
+	
+2004-03-04 22:31  Arnaud BERCEGEAY
+
+	* src/: std_mwk.c, vq_extfs.c, vq_magx.c, vq_mint.c, vq_naes.c,
+	vq_nvdi.c, vq_tos.c, vq_winx.c:
+
+	add comments
+	
+2004-03-04 22:30  Arnaud BERCEGEAY
+
+	* src/fsel.c:
+
+	mt_fsel_exinput is now an unified fsel_(ex)input function in gemlib43
+	
+2004-03-04 22:24  Arnaud BERCEGEAY
+
+	* src/appl_init.c, src/vq_xaaes.c, include/mt_wndm.h:
+
+	change vq_xaaes binding (add 'app' parameter)
+	
+2004-03-03 23:09  Arnaud BERCEGEAY
+
+	* src/: set_gadget_pos.c, slid_create.c:
+
+	add comments
+	
+2004-03-03 00:05  Arnaud BERCEGEAY
+
+	* src/: popup.c, rsrc_userdraw.c, rsrc_xfree.c, rsrc_xload.c,
+	std_evnt.c, strdup.c:
+
+	add comments
+	
+2004-03-01 20:15  Arnaud BERCEGEAY
+
+	* src/: options.h, rsrc_gaddr.c, rsrc_ghdr.c, rsrc_load.c:
+
+	add comments
+	
+2004-02-26 21:06  Arnaud BERCEGEAY
+
+	* src/objc_xedit.c:
+
+	add comments
+	
+2004-02-25 20:19  Arnaud BERCEGEAY
+
+	* src/: objc_string.c, objc_wdraw.c:
+
+	add comments
+	
+2004-02-25 20:15  Arnaud BERCEGEAY
+
+	* src/objc_str3d.c:
+
+	replace local objcolor struct by GEMlib OBJC_COLORWORD type
+	
+2004-02-25 20:08  Arnaud BERCEGEAY
+
+	* src/objc_free.c:
+
+	add comments
+	
+2004-02-24 19:32  Arnaud BERCEGEAY
+
+	* src/objc_edit.c:
+
+	add comments
+	
+2004-02-23 23:00  Arnaud BERCEGEAY
+
+	* src/: objc_draw.c, objc_dup.c:
+
+	add comments
+	
+2004-02-23 19:30  Arnaud BERCEGEAY
+
+	* src/objc_change.c:
+
+	add comments
+	
+2004-02-20 22:47  Arnaud BERCEGEAY
+
+	* src/std_dstry.c:
+
+	add comments
+	
+2004-02-19 21:19  Arnaud BERCEGEAY
+
+	* include/: mt_wndm.h, windom.h:
+
+	remove new_cookie and set_cookie; remove BubbleConf
+	
+2004-02-19 21:17  Arnaud BERCEGEAY
+
+	* src/: appl_init.c, bubble_call.c, bubble_conf.c, bubble_modal.c,
+	files.mak, globals.h, set_cookie.c:
+
+	remove set_cookie() function
+	remove __bubble_conf parameter and BubbleConf(), unused now.
+	
+2004-02-18 22:27  Arnaud BERCEGEAY
+
+	* src/objc_attach.c:
+
+	remove BIND_xxx (already in mt_wndm.h); add comments
+	
+2004-02-17 21:55  Arnaud BERCEGEAY
+
+	* src/: scrap_txtwrite.c, shel_write.c:
+
+	add comments
+	
+2004-02-16 20:07  Arnaud BERCEGEAY
+
+	* src/obspec_mem.c:
+
+	add comments
+	
+2004-02-16 18:42  Arnaud BERCEGEAY
+
+	* src/: files.mak, new_cookie.c:
+
+	remove new_cookie
+	
+2004-02-13 23:08  Arnaud BERCEGEAY
+
+	* src/: snd_arrw.c, snd_msg.c, snd_mubutton.c, snd_rdw.c:
+
+	add comments
+	
+2004-02-13 23:00  Arnaud BERCEGEAY
+
+	* src/rc_set.c:
+
+	add comments
+	
+2004-02-13 22:15  Arnaud BERCEGEAY
+
+	* src/move_work.c:
+
+	add comments
+	
+2004-02-12 23:01  Arnaud BERCEGEAY
+
+	* src/: obj_fd_xtype.c, obj_nb.c, obj_root.c:
+
+	add comments
+	
+2004-02-11 23:47  Arnaud BERCEGEAY
+
+	* src/mnscroll.c:
+
+	add comments
+	
+2004-02-10 22:24  Arnaud BERCEGEAY
+
+	* src/menu_tnormal.c:
+
+	little cleanup (thx to ObjcWindChange fix)
+	
+2004-02-10 22:22  Arnaud BERCEGEAY
+
+	* src/: menu_attach.c, menu_bind.c, menu_execcmd.c:
+
+	add comments
+	
+2004-02-10 22:20  Arnaud BERCEGEAY
+
+	* src/objc_wchange.c:
+
+	bug fixed: ob_state was not always changed to its new state !
+	
+2004-02-09 23:51  Arnaud BERCEGEAY
+
+	* src/: mouse_sprite.c, mouse_work.c:
+
+	add comments
+	
+2004-02-09 23:49  Arnaud BERCEGEAY
+
+	* include/mt_wndm.h, include/windom.h, src/glue.c, src/wind_get.c:
+
+	remove specific mshort version of WindGet
+	
+2004-02-06 21:52  Arnaud BERCEGEAY
+
+	* src/: grectcenter.c, is_menu.c, is_modal.c, keybd2ascii.c,
+	load_fontid.c:
+
+	add comments
+	
+2004-02-06 21:50  Arnaud BERCEGEAY
+
+	* src/get_cookie.c:
+
+	add mintlib Getcookie with Ssystem support
+	
+2004-02-06 21:48  Arnaud BERCEGEAY
+
+	* include/mt_wndm.h, include/windom.h, src/glue.c, src/wind_set.c:
+
+	remove WindSet() with va_args (specific to MSHORT)
+	
+2004-02-05 23:35  Arnaud BERCEGEAY
+
+	* src/: gemcode2ascii.c, get_appname.c, get_cookie.c,
+	get_next_obj.c, getindexmenu.c, give_iconifyxywh.c, globals.c,
+	globals.h:
+
+	add comments
+	
+2004-02-05 19:54  Arnaud BERCEGEAY
+
+	* src/: fsel.c, galloc.c:
+
+	add comments
+	
+2004-02-03 22:47  Arnaud BERCEGEAY
+
+	* src/: frm_buttn_ev.c, frm_click.c, frm_cls.c, frm_drw.c,
+	frm_dstry.c, frm_keybd_ev.c, frm_keyhd.c, frm_top.c:
+
+	add comments
+	
+2004-02-02 20:47  Arnaud BERCEGEAY
+
+	* src/: frame_create.c, frame_init.c, frame_set.c:
+
+	add comments
+	
+2004-01-30 21:26  Arnaud BERCEGEAY
+
+	* src/: form_begin.c, form_close.c, form_end.c, form_resize.c,
+	form_thbget.c, form_thbset.c, form_thumb.c, form_wbegin.c,
+	form_wdo.c:
+
+	add comments
+	
+2004-01-29 21:36  Arnaud BERCEGEAY
+
+	* src/form_attach.c:
+
+	add comments
+	
+2004-01-29 21:24  Arnaud BERCEGEAY
+
+	* src/: font_id2name.c, font_name2id.c, font_sel.c:
+
+	add comments
+	
+2004-01-28 23:36  Arnaud BERCEGEAY
+
+	* src/evnt_windom.c:
+
+	clean up (remove GOTO); add comments
+	
+2004-01-28 23:33  Arnaud BERCEGEAY
+
+	* src/: draw_page.c, evnt_list.c, evnt_redraw.c:
+
+	add comments
+	
+2004-01-27 21:47  Arnaud BERCEGEAY
+
+	* src/: data.c, debug_windom.c, do_update.c:
+
+	add comments
+	
+2004-01-26 23:42  Arnaud BERCEGEAY
+
+	* src/conv_path.c:
+
+	add comments
+	
+2004-01-26 23:42  Arnaud BERCEGEAY
+
+	* src/cookie.h:
+
+	remove function prototype (already in mt_wndm.h)
+	
+2004-01-25 21:58  Arnaud BERCEGEAY
+
+	* src/: conf_inquire.c, conf_read.c, conf_windom.c, conf_write.c:
+
+	add comments
+	
+2004-01-25 20:29  Arnaud BERCEGEAY
+
+	* src/: bubble_call.c, bubble_do.c, bubble_get.c, bubble_modal.c,
+	call_stguide.c, conf_getline.c:
+
+	add comments
+	
+2004-01-21 22:57  Arnaud BERCEGEAY
+
+	* src/: av_strfmt.c, av_waitfor.c:
+
+	add comments
+	
+2004-01-19 22:29  Arnaud BERCEGEAY
+
+	* src/: av_exit.c, av_init.c, av_server.c, av_status.c:
+
+	replace constant values (fe: 0) by constant names (fe: APP_FIRST)
+	when possible.
+	add some comments
+	
+2004-01-19 22:20  Arnaud BERCEGEAY
+
+	* include/windom.h, src/glue.c:
+
+	remove the MSHORT specific version of ApplWrite
+	
+2004-01-15 22:36  Arnaud BERCEGEAY
+
+	* src/: add_slash.c, appl_control.c:
+
+	add comments
+	
+2004-01-15 22:34  Arnaud BERCEGEAY
+
+	* src/appl_init.c:
+
+	use new mt_ApplSet proto
+	
+2004-01-15 22:33  Arnaud BERCEGEAY
+
+	* src/globals.h:
+
+	replace int by short for CONFIG data
+	
+2004-01-15 22:31  Arnaud BERCEGEAY
+
+	* include/mt_wndm.h, include/windom.h, src/appl_get.c,
+	src/appl_set.c, src/glue.c:
+
+	remove va_args for ApplGet() and ApplSet()
+	
+2004-01-15 20:09  Arnaud BERCEGEAY
+
+	* demo/gcc.mak, src/gcc.mak:
+
+	enhance cross-gcc makefile (contrib STan)
+	
+2004-01-04 22:33  Arnaud BERCEGEAY
+
+	* src/: cicon.c, cicon.h, globals.h, userdef.c:
+
+	CICON now works ! Userdefined CICON now uses the standard W_PARM structure,
+	and so, the userdraw subroutine can get the VDI virtual workstation to
+	draw on (usefull!).
+	
+2004-01-04 20:05  Arnaud BERCEGEAY
+
+	* src/wind_lst2.c:
+
+	new __windowlist management
+	
+2004-01-04 20:01  Arnaud BERCEGEAY
+
+	* src/wind_open.c:
+
+	clean up; use new __windowlist management
+	
+2004-01-04 19:57  Arnaud BERCEGEAY
+
+	* src/wind_set.c:
+
+	clean up; use new __windowlist management
+	
+2004-01-04 19:54  Arnaud BERCEGEAY
+
+	* src/wind_get.c:
+
+	use new __windowlist management
+	
+2004-01-04 19:51  Arnaud BERCEGEAY
+
+	* src/wind_close.c:
+
+	clean up; use new __windowlist management
+	
+2004-01-04 19:48  Arnaud BERCEGEAY
+
+	* src/wind_attach.c:
+
+	clean up; use new __windowlist management
+	
+2004-01-04 19:46  Arnaud BERCEGEAY
+
+	* src/std_evnt.c:
+
+	update of wglb.front is now in WindSet(WF_TOP)
+	
+2004-01-04 19:43  Arnaud BERCEGEAY
+
+	* src/popup.c:
+
+	remove the dirty patch (save and restore appfront). The new
+	__windowlist and wglb management in WindClose should solve the pb.
+	
+2004-01-04 19:41  Arnaud BERCEGEAY
+
+	* src/appl_init.c:
+
+	__windowlist is now a WINDOWLIST structure
+	
+2004-01-04 19:36  Arnaud BERCEGEAY
+
+	* src/: options.h, globals.h:
+
+	the list of opened window is now managed using a WINDOWLIST structure
+	instead of a big array __windowlist[] with the AES handle as index.
+	Add utilities functions to manage the new __windowlist.
+	
+2004-01-04 19:30  Arnaud BERCEGEAY
+
+	* include/mt_wndm.h:
+
+	remove old __windowlist management functions
+	
+2004-01-03 23:46  Arnaud BERCEGEAY
+
+	* src/globals.h:
+
+	remove now unused XUSERBLK structure and rsrc_userdraw.c constants
+	
+2004-01-03 21:39  Arnaud BERCEGEAY
+
+	* src/rsrc_userdraw.c:
+
+	- use mt_ClipOn/Off instead of vs_clip in order to have win->graf.clip
+	  correctly set.
+	- remove global variables. They are now locally defined in user_draw
+	  (safe thread).
+	
+2003-12-22 21:39  Arnaud BERCEGEAY
+
+	* src/userdef.c:
+
+	add the text as parameter for find_shortcut
+	
+2003-12-21 20:36  Arnaud BERCEGEAY
+
+	* demo/: evnt-av.c, evnt-fnc.c, global.h, main.c, setup.c, util.c,
+	win-cust.c, win-divr.c, win-form.c, win-fram.c, win-tool.c:
+
+	somes modifications to be compliant with new MT-windom API:
+	- change app.id to _AESapid
+	- add "APPvar *a" (unused) parameter as 1st parameter for all
+	  callback functions, ie functions attached using EvntAttch(), EvntAdd(),
+	  EvntDataAttach(), EvntDataAdd() and RsrcUserDraw().
+	- change clip to win->graf.clip (the clipping area)
+	- remove some windom proto from global.h !!! (frm_cls and ConfWindom)
+	
+2003-12-21 20:28  Arnaud BERCEGEAY
+
+	* demo/gcc.mak:
+
+	explicit path for libwindom.a (cross requirement)
+	
+2003-12-21 20:26  Arnaud BERCEGEAY
+
+	* demo/demo.rsc:
+
+	sync with main branch (rm GTITLE)
+	
+2003-12-21 20:24  Arnaud BERCEGEAY
+
+	* include/windom.h:
+
+	thread safe
+	
+2003-12-21 20:24  Arnaud BERCEGEAY
+
+	* include/mt_wndm.h:
+
+	aes_global is now dynamically allocated
+	
+2003-12-21 20:20  Arnaud BERCEGEAY
+
+	* src/: files.mak, glue.c:
+
+	add glue.c required for non-mt version
+	
+2003-12-21 20:20  Arnaud BERCEGEAY
+
+	* src/glue.c:
+
+	file glue.c was initially added on branch windom-mt-branch.
+	
+2003-12-21 20:19  Arnaud BERCEGEAY
+
+	* src/: appl_exit.c, appl_init.c:
+
+	app->aes_global is now dynamically allocated. This way, it should be
+	mapped to the gemlib global AES array (see glue.c)
+	
+2003-12-21 10:04  Arnaud BERCEGEAY
+
+	* include/mt_wndm.h, src/bubble_modal.c, src/conf_read.c,
+	src/font_sel.c, src/globals.h, src/popup.c, src/vq_winx.c,
+	src/xrsrc.c:
+
+	thread safe
+	
+2003-12-21 09:50  Arnaud BERCEGEAY
+
+	* include/mt_wndm.h, src/files.mak, src/has_applgetinfo.c:
+
+	remove has_applinfo: gemlib 43 has its built-in "has_agi" test in
+	appl_getinfo, so we just have to call appl_getinfo. We no more have
+	to care of the support of this function by the AES before calling
+	appl_getinfo.
+	
+2003-12-20 20:18  Arnaud BERCEGEAY
+
+	* src/av_init.c, src/close_fontid.c, src/font_id2name.c,
+	src/font_name2id.c, src/font_sel.c, src/fontsel.rsh,
+	src/form_begin.c, src/form_create.c, src/form_end.c,
+	src/form_resize.c, src/globals.h, src/load_fontid.c,
+	src/mnscroll.c, src/objc_edit.c, src/snd_mubutton.c,
+	src/vqt_name.c, src/vqt_xname.c, src/vqt_xname2.c, src/vst_font.c,
+	src/vst_loadfonts.c, src/vst_unloadfonts.c, src/wind_open.c,
+	src/wsystem.rsh, include/mt_wndm.h:
+
+	thread safe
+	
+2003-12-20 20:15  Arnaud BERCEGEAY
+
+	* src/clip_off.c:
+
+	file clip_off.c was initially added on branch windom-mt-branch.
+	
+2003-12-20 20:15  Arnaud BERCEGEAY
+
+	* src/clip_on.c:
+
+	file clip_on.c was initially added on branch windom-mt-branch.
+	
+2003-12-20 20:15  Arnaud BERCEGEAY
+
+	* src/: clip_off.c, clip_on.c:
+
+	rc_clip_on/off replaced by mt_ClipOn/Off
+	
+2003-12-20 18:54  Arnaud BERCEGEAY
+
+	* include/mt_wndm.h:
+
+	thread safe
+	
+2003-12-20 18:39  Arnaud BERCEGEAY
+
+	* src/: appl_exit.c, appl_init.c, call_stguide.c, cicon.c,
+	conf_read.c, conf_write.c, debug_windom.c, do_update.c,
+	draw_page.c, draw_submenu.c, evnt_redraw.c, evnt_windom.c,
+	files.mak, font_sel.c, form_attach.c, form_begin.c, form_create.c,
+	form_end.c, form_wbegin.c, frame_create.c, frame_init.c,
+	frame_remove.c, frm_click.c, frm_cls.c, frm_drw.c, frm_dstry.c,
+	frm_fld.c, frm_keyhd.c, frm_mvd.c, frm_top.c, fsel.c,
+	get_appname.c, globals.c, globals.h, grectcenter.c, mnscroll.c,
+	move_work.c, objc_xedit.c, rc_clip_off.c, rc_clip_on.c,
+	remove_frame.c, rsrc_gaddr.c, rsrc_userdraw.c, rsrc_userfree.c,
+	scrap_txtread.c, scrap_txtwrite.c, set_gadget_pos.c, shel_write.c,
+	std_fntchg.c, userdef.c, userdef.h, vqt_xname.c, w_getbkgr.c,
+	w_getpal.c, w_putbkgr.c, w_setpal.c, wind_new.c, xrsrc.c:
+
+	thread safe
+	
+2003-12-20 09:50  Arnaud BERCEGEAY
+
+	* include/mt_wndm.h, src/appl_init.c, src/evnt_list.c,
+	src/form_close.c, src/frm_buttn_ev.c, src/globals.h,
+	src/mnscroll.c, src/rsrc_xfree.c, src/slid_setfunc.c:
+
+	thread safe; create new type for callback func
+	
+2003-12-19 23:10  Arnaud BERCEGEAY
+
+	* src/: appl_init.c, draw_submenu.c, globals.h, menu_attach.c,
+	mnscroll.c, objc_dup.c, rsrc_ghdr.c, rsrc_load.c, rsrc_xload.c,
+	set_gadget_pos.c, userdef.c, xrsrc.c:
+
+	thread safe
+	
+2003-12-18 23:57  Arnaud BERCEGEAY
+
+	* src/objc_edit.c:
+
+	thread safe
+	
+2003-12-18 23:31  Arnaud BERCEGEAY
+
+	* src/: frm_buttn_ev.c, globals.h, objc_free.c, objc_xedit.c:
+
+	thread safe
+	
+2003-12-18 22:26  Arnaud BERCEGEAY
+
+	* src/: frm_buttn_ev.c, frm_keybd_ev.c, objc_dup.c:
+
+	thread safe
+	
+2003-12-17 20:31  Arnaud BERCEGEAY
+
+	* demo/demo.rsc:
+
+	remove extended obtype in main MENU to make XaAES happy
+	
+2003-12-16 23:20  Dominique BEREZIAT
+
+	* doc/tutorial/messages.ui:
+
+	Updating documentation prior to 1.21.0 changes.
+	
+2003-12-16 22:05  Arnaud BERCEGEAY
+
+	* src/: do_update.c, draw_page.c, evnt_windom.c,
+	give_iconifyxywh.c, globals.h, is_menu.c, is_modal.c, move_work.c,
+	slid_attach.c, slid_create.c, slid_getvalue.c, slid_setfunc.c,
+	slid_setsize.c, slid_setupdat.c, slid_setvalue.c, snd_arrw.c,
+	snd_rdw.c, wind_set.c:
+
+	thread safe
+	
+2003-12-16 22:01  Arnaud BERCEGEAY
+
+	* include/mt_wndm.h:
+
+	thread safe
+	
+2003-12-15 22:09  Arnaud BERCEGEAY
+
+	* src/: appl_exit.c, font_sel.c, form_create.c, frame_create.c,
+	globals.h, menu_scroll.c, objc_draw.c, obspec_mem.c, snd_msg.c,
+	std_dstry.c, std_evnt.c, std_fntchg.c, std_mwk.c, wind_attach.c,
+	wind_calc.c, wind_clear.c, wind_close.c, wind_create.c,
+	wind_delete.c, wind_find.c, wind_get.c, wind_handle.c, wind_lst.c,
+	wind_lst2.c, wind_new.c, wind_open.c, wind_set.c, wind_slider.c,
+	wind_top.c:
+
+	thread safe
+	
+2003-12-14 23:19  Arnaud BERCEGEAY
+
+	* src/appl_exit.c, src/appl_init.c, src/objc_attach.c,
+	src/objc_change.c, src/objc_draw.c, src/objc_dup.c,
+	src/objc_free.c, src/objc_str3d.c, src/objc_string.c,
+	src/objc_tree.c, src/objc_wchange.c, src/objc_wdraw.c,
+	include/mt_wndm.h:
+
+	thread safe
+	
+2003-12-14 21:23  Arnaud BERCEGEAY
+
+	* include/mt_wndm.h:
+
+	safe thread
+	
+2003-12-14 21:21  Arnaud BERCEGEAY
+
+	* src/globals.h:
+
+	thread safe
+	
+2003-12-14 21:18  Arnaud BERCEGEAY
+
+	* src/: menu_attach.c, menu_bar.c, menu_bind.c, menu_disable.c,
+	menu_enable.c, menu_execcmd.c, menu_icheck.c, menu_scroll.c,
+	menu_text.c, menu_tnormal.c, fsel.c, font_sel.c:
+
+	thread safe
+	
+2003-12-14 12:21  Arnaud BERCEGEAY
+
+	* include/mt_wndm.h:
+
+	thread safe
+	
+2003-12-14 12:15  Arnaud BERCEGEAY
+
+	* src/: frame_attach.c, frame_calc.c, frame_create.c, frame_find.c,
+	frame_get.c, frame_init.c, frame_remove.c, frame_search.c,
+	frame_set.c, frame_set_widget.c, mouse_objc.c, mouse_sprite.c,
+	mouse_work.c, globals.c, globals.h:
+
+	thread safe
+	
+2003-12-14 12:10  Arnaud BERCEGEAY
+
+	* src/: evnt_list.c, evnt_redraw.c, evnt_windom.c, form_alert.c,
+	form_attach.c, form_begin.c, form_close.c, form_create.c,
+	form_end.c, form_resize.c, form_restore.c, form_save.c,
+	form_thbget.c, form_thbset.c, form_thumb.c, form_wbegin.c,
+	form_wdo.c, form_wend.c:
+
+	thread safe
+	
+2003-12-14 12:09  Arnaud BERCEGEAY
+
+	* src/appl_set.c:
+
+	safe thread
+	
+2003-12-13 11:34  Arnaud BERCEGEAY
+
+	* src/globals.h:
+
+	DataClear changed to mt_DataClear; add mt_DataTrace
+	
+2003-12-13 11:30  Arnaud BERCEGEAY
+
+	* src/: conf_getline.c, conf_inquire.c, conf_read.c, conf_windom.c,
+	conf_write.c, data.c:
+
+	thread safe
+	
+2003-12-13 11:25  Arnaud BERCEGEAY
+
+	* include/mt_wndm.h:
+
+	thread safe
+	
+2003-12-12 22:18  Arnaud BERCEGEAY
+
+	* include/mt_wndm.h:
+
+	- AvStrfmt doesn't need a mt_function. Add a mt_AvStrfmt macro to remap to
+	  AvStrfmt without the APPvar parameter (unused).
+	- remove get_cookiejar() proto, there is not such function in windom !
+	
+2003-12-12 22:14  Arnaud BERCEGEAY
+
+	* include/windom.h:
+
+	remap ApplXxx to mt_ApplXxxx
+	
+2003-12-12 22:11  Arnaud BERCEGEAY
+
+	* src/options.h:
+
+	add MP_FRIENDLY option (default is 1)
+	
+2003-12-12 22:10  Arnaud BERCEGEAY
+
+	* src/: bubble_attach.c, bubble_call.c, bubble_conf.c, bubble_do.c,
+	bubble_evnt.c, bubble_find.c, bubble_free.c, bubble_get.c,
+	bubble_modal.c:
+
+	thread safe; use CHECK_NULLPTR gemlib feature
+	
+2003-12-12 21:57  Arnaud BERCEGEAY
+
+	* src/: av_exit.c, av_init.c, av_server.c, av_status.c,
+	av_waitfor.c:
+
+	thread safe; use CHECK_NULLPTR gemlib feature
+	
+2003-12-12 21:53  Arnaud BERCEGEAY
+
+	* src/: appl_control.c, appl_exit.c, appl_get.c, appl_init.c,
+	appl_name.c, appl_set.c, appl_write.c:
+
+	thread safe; add MP_FRIENDLY option
+	
+2003-12-11 23:46  Arnaud BERCEGEAY
+
+	* include/mt_wndm.h, include/windom.h, src/appl_init.c, src/fsel.h,
+	src/globals.c, src/globals.h, src/popup.c:
+
+	basis for windom thread safe version
+	
+2003-12-11 23:46  Arnaud BERCEGEAY
+
+	* include/mt_wndm.h:
+
+	file mt_wndm.h was initially added on branch windom-mt-branch.
+	
+2003-12-03 22:40  Arnaud BERCEGEAY
+
+	* include/windom.h:
+
+	this is release 1.21.0
+	
+2003-12-03 22:33  Arnaud BERCEGEAY
+
+	* INSTALL:
+
+	initial checkin
+	
+2003-11-30 21:19  Arnaud BERCEGEAY
+
+	* COPYRIGHT:
+
+	initial checkin
+	
+2003-11-30 21:17  Arnaud BERCEGEAY
+
+	* examples/: frame/gcc.mak, mousexy/gcc.mak, multifrm/gcc.mak,
+	popup/gcc.mak, slider/gcc.mak, bubble/gcc.mak:
+
+	remove old-way (?) /usr/GEM/xxx path
+	
+2003-11-30 21:13  Arnaud BERCEGEAY
+
+	* src/gcc.mak:
+
+	remove path /usr/GEM/include (gemlib 43 has its header files in
+	/usr/include)
+	add install target for gcc and cross-gcc
+	
+2003-11-30 13:50  Arnaud BERCEGEAY
+
+	* src/sox.mak:
+
+	add -f option for rm
+	
+2003-11-30 13:49  Arnaud BERCEGEAY
+
+	* examples/slider/: pc.mak, sox.mak:
+
+	link against floating version of libc, required by slid_xxx
+	
+2003-11-30 13:47  Arnaud BERCEGEAY
+
+	* examples/frame/tstframe.c:
+
+	add newline at end of file
+	
+2003-11-30 11:41  Arnaud BERCEGEAY
+
+	* demo/win-cust.c:
+
+	remove extra wind_set_str(WF_MENU)
+	
+2003-11-29 23:41  Arnaud BERCEGEAY
+
+	* demo/demo.prj:
+
+	pc project now uses gemlib 43
+	
+2003-11-29 20:50  Arnaud BERCEGEAY
+
+	* demo/pc.mak:
+
+	purec build: link local windom.a lib
+	
+2003-11-27 21:11  Arnaud BERCEGEAY
+
+	* demo/gcc.mak:
+
+	fix make for gcc: link local libwindom.a
+	
+2003-11-19 22:49  Arnaud BERCEGEAY
+
+	* src/xrsrc.c:
+
+	objc_extfree() dirty bug fixed
+	
+2003-11-17 22:45  Arnaud BERCEGEAY
+
+	* demo/pc.mak:
+
+	swap PURECINC and ../include directories
+	
+2003-11-17 22:16  Arnaud BERCEGEAY
+
+	* src/globals.h:
+
+	specific toserror.h for sozobon
+	
+2003-11-16 20:23  Arnaud BERCEGEAY
+
+	* demo/win-form.c:
+
+	replace B_MODAL by new name BEVENT_MODAL
+	
+2003-11-16 20:22  Arnaud BERCEGEAY
+
+	* demo/main.c:
+
+	replace antislash by slash for windom.h
+	
+2003-10-21 23:24  Arnaud BERCEGEAY
+
+	* src/: wind_attach.c, wind_calc.c, wind_clear.c, wind_close.c,
+	wind_delete.c, wind_find.c, wind_get.c, wind_lst.c, wind_new.c,
+	wind_open.c, wind_set.c, wind_slider.c, wind_top.c:
+
+	translate comments to english
+	
+2003-10-21 21:24  Arnaud BERCEGEAY
+
+	* src/: frame_attach.c, frame_calc.c, frame_init.c:
+
+	translate some comments to english
+	
+2003-10-08 20:53  Arnaud BERCEGEAY
+
+	* src/std_evnt.c:
+
+	MIN/MAX bug fix (contrib Zorro)
+	
+2003-10-06 23:12  Arnaud BERCEGEAY
+
+	* src/appl_exit.c:
+
+	remove private proto of __confdef_buffer and __confapp_buffer
+	
+2003-10-03 20:24  Arnaud BERCEGEAY
+
+	* src/wind_new.c:
+
+	remove local proto of EvntWindom()
+	
+2003-10-03 20:23  Arnaud BERCEGEAY
+
+	* src/userdef.c:
+
+	remove some dead code (v_box)
+	
+2003-10-03 20:21  Arnaud BERCEGEAY
+
+	* src/shel_write.c:
+
+	remove struct _shelw (already in gemlib43)
+	
+2003-10-02 00:10  Arnaud BERCEGEAY
+
+	* src/fontsel.c:
+
+	unused file (same as font_sel.c)
+	
+2003-10-01 22:00  Arnaud BERCEGEAY
+
+	* src/: frame_create.c, frame_set.c:
+
+	translate comments
+	

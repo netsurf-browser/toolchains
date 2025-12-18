@@ -1,0 +1,1140 @@
+/*
+ * WinDom: a high level GEM library
+ * Copyright (c) 1997-2006 windom authors (see AUTHORS file)
+ *
+ * This library is free software; you can redistribute it and/or
+ * modify it under the terms of the GNU Lesser General Public
+ * License as published by the Free Software Foundation; either
+ * version 2.1 of the License, or (at your option) any later version.
+ *
+ * This library is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+ * Lesser General Public License for more details.
+ *
+ * You should have received a copy of the GNU Lesser General Public
+ * License along with this library; if not, write to the Free Software
+ * Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307 USA
+ *
+ * $Source: /cvsroot/windom/windom/src/globals.h,v $
+ * Module : definition of internal structures
+ *
+ * CVS info:
+ *   $Author: bercegeay $
+ *   $Date: 2006/06/19 18:48:01 $
+ *   $Revision: 1.54 $
+ */
+
+
+#ifndef __WINDOM_GLOBAL__
+#define __WINDOM_GLOBAL__
+
+#include <stdarg.h>
+#include <stddef.h>
+#include <assert.h>
+
+#include "wportab.h"
+#include "options.h"
+
+/* TOS library */
+
+/* Pure C has non-standard libraries */
+#ifdef __PUREC__
+# include <tos.h>
+#else
+# ifdef __SOZOBONX__
+#  include <atari.h>  /* for DTA definition */
+# endif
+# include <osbind.h>
+# include <mintbind.h>
+# include <fcntl.h>
+#endif
+
+/* error codes unified for all libc */
+#include "toserror.h"
+
+#define APPRSVD struct APPprivate_struct
+
+/* AES / VDI library */
+
+#ifndef __COMPILER_H__
+#include <compiler.h>
+#endif
+
+#ifdef __PUREC__
+# include "..\include\windom\list.h"
+# include "..\include\mt_wndm.h"
+# include "..\include\windom\udlib.h"
+#else
+# undef NIL
+# include "../include/windom/list.h"
+# include "../include/mt_wndm.h"
+# include "../include/windom/udlib.h"
+#endif
+
+
+/* some private constantes and structures */
+
+/* Magic */
+#define SCREENMGR		1
+
+#define CONF(ap) (&ap->priv->config)
+#define HI16(a) ((INT16)((long)(a) >> 16) & 0xFFFFL )
+#define LO16(a) ((INT16)(long)(a) & 0xFFFFL )
+/*#define DEBUG()	{int printf( const char *, ...); printf( "%s:%d\n", __FILE__, __LINE__);}*/
+
+/* return a true value if the AES can manage menubar within window and if we want the
+ * AES to handle window-embeded menubar 
+ */
+#define SYSMENU(app) (app->aes4 & AES4_MENUBAR) && (CONF(app)->flag & FLG_MNSYSTEM)
+
+/* defs for form/toolbar */
+#define ROOTS 			0
+#define OUTLINED_WIDTH	3
+
+typedef struct ev_msg {
+		LINKABLE lnk;
+
+		short msg;
+		func_evntdata proc;
+		int flags;
+		void *data;
+	} EV_MSG;
+
+
+/* Frame structres */
+
+typedef struct {
+        struct _window *list, *front,  *widget;
+        int border;
+        int color;
+        int flags;
+        int line, col;
+    } FRAME;
+
+typedef struct {
+        int line, col;
+        int x,y,w,h;
+        int flags;
+        int vsldpos,vsldsize;
+        int hsldpos,hsldsize;
+    } FRAMEINFO;
+
+#define GETFINFO(app,win)	((FRAMEINFO*)mt_DataSearch( app, win, WD_WFRI))
+
+/* Evnt Mesag Flags */
+#define EVM_DISABLE		0x2
+#define EVM_IN_USE 		0x4
+#define EVM_DELETED 	0x8
+
+/* ApplGet/Set values */
+/* nota: similar to WFORM in windom.h */
+#define FCENTER		6
+
+#define SYSFONT		0
+
+/* extended ob_type for G_USERDEF objects; internal to windom */
+#define USERDRAW	0xFF	/* reserved for userdef object created by WinDom */
+#define XCICON		0x0D	/* userdefined color icon */
+#define XSMENU   	0x01  	/* see menu.c (internal) */
+
+/* maybe GEMlib is the right place for this ? */
+#define _FSM 0x5F46534DUL
+
+/* copy GRECT to/from msg[4..7] */
+static inline void grect2msg( const GRECT *grect, short buff[8]) {
+	*(GRECT*)&buff[4] = *grect;
+}
+
+static inline void msg2grect( const short buff[8], GRECT *grect) {
+	*grect = *(const GRECT*)&buff[4];
+}
+
+/** configuration of windom applications
+ *
+ *  This structure is private (not accessible for programmer of application).
+ *  If you want to change a config data, you should use mt_ApplSet() or ask
+ *  the user to modify its windom configuration file.
+ *  
+ */
+typedef struct _config {
+		/** various flags (bitmap variable)
+		 *
+		 *  Equivalent to the the configuration file variable \b windom.evnt.*
+		 *
+		 *  \a flag may have one or more of the following bit set :
+		 *  - \b FLG_KEYMOUSE (equivalent to \b windom.evnt.keybd) : 
+		 *    @code mt_ApplSet(app,APS_FLAG,FLG_KEYMOUSE,0,0,0); // windom.evnt.keybd = front @endcode
+		 *    @code mt_ApplSet(app,APS_FLAG,FLG_KEYMOUSE,1,0,0); // windom.evnt.keybd = mouse @endcode
+		 *    The variable sets the behavior of mt_EvntWindom() with the MU_KEYBD event.
+		 *    The value \b mouse means that mt_EvntWindom() applies
+		 *    the MU_KEYBD event to the window located under the mouse
+		 *    pointer (standard X11 behavior). The value \b front means 
+		 *    that mt_EvntWindom() applies the MU_KEYBD event to the window in
+		 *    the foreground (standard GEM behavior).
+		 *  - \b FLG_BUTMOUSE (equivalent to \b windom.evnt.button)
+		 *    @code mt_ApplSet(app,APS_FLAG,FLG_BUTMOUSE,0,0,0) // windom.evnt.button = front @endcode
+		 *    @code mt_ApplSet(app,APS_FLAG,FLG_BUTMOUSE,1,0,0) // windom.evnt.button = mouse @endcode
+		 *    The variable sets the behavior of mt_EvntWindom() with the MU_BUTTON event.
+		 *    The value \b mouse means that mt_EvntWindom() applies
+		 *    the MU_BUTTON event to the window located under the mouse
+		 *    pointer (standard X11 behavior). The value \b front means 
+		 *    that mt_EvntWindom() applies the MU_BUTTON event to the window in
+		 *    the foreground (standard GEM behavior).
+		 *  - \b FLG_NOPAL 	(no \b windom.evnt.* equivalent)
+		 *    @code mt_ApplSet(app,APS_FLAG,FLG_NOPAL,0,0,0) // enable color palet handling @endcode
+		 *    @code mt_ApplSet(app,APS_FLAG,FLG_NOPAL,1,0,0) // disbale color palet handling @endcode
+		 *    This flag is used to disable color palet handling.
+		 *  - \b FLG_MNSCRL	(equivalent to \b windom.menu.scroll)
+		 *    @code mt_ApplSet(app,APS_FLAG,FLG_MNSCRL,0,0,0) // windom.menu.scroll = false @endcode
+		 *    @code mt_ApplSet(app,APS_FLAG,FLG_MNSCRL,1,0,0) // windom.menu.scroll = true @endcode
+		 *    This flag is used to enable menu scroller widget
+		 *  - \b FLG_NOKEYMENU	(no \b windom.evnt.* equivalent)
+		 *    @code mt_ApplSet(app,APS_FLAG,FLG_NOKEYMENU,0,0,0) // enable menu shortcuts handling @endcode
+		 *    @code mt_ApplSet(app,APS_FLAG,FLG_NOKEYMENU,1,0,0) // disbale menu shortcuts handling @endcode
+		 *    This flag is used to disable menu shortcuts handling
+		 *  - \b FLG_NOMGXFSEL 	(equivalent to \b windom.fsel.fslx)
+		 *    @code mt_ApplSet(app,APS_FLAG,FLG_NOMGXFSEL,0,0,0) // windom.fsel.fslx = false @endcode
+		 *    @code mt_ApplSet(app,APS_FLAG,FLG_NOMGXFSEL,1,0,0) // windom.fsel.fslx = true @endcode
+		 *    This flag is used to disable MagiC file selector.	 
+		 *  - \b FLG_MNSYSTEM	(equivalent to \b windom.menu.system)
+		 *    @code mt_ApplSet(app,APS_FLAG,FLG_MNSYSTEM,0,0,0) // windom.menu.system = false @endcode
+		 *    @code mt_ApplSet(app,APS_FLAG,FLG_MNSYSTEM,1,0,0) // windom.menu.system = true @endcode
+		 *    A true value let the system handles menu window (if system can do).
+		 *
+		 *  The default value is 0 (all bits set to 0).
+		 */ 
+		unsigned short flag;
+		/** set the width of iconified windows
+		 *
+		 *  Equivalent to the the configuration file variable \b windom.evnt.iconify.geometry
+		 *
+		 *  @code mt_ApplSet(app,APS_ICONSIZE,w,h,0,0) // windom.evnt.iconify.geometry = w,h @endcode
+		 *
+		 *  The default value is 72 pixels
+		 */
+		short	wicon;
+		/** set the height of iconified windows
+		 *
+		 *  Equivalent to the the configuration file variable \b windom.evnt.iconify.geometry
+		 *
+		 *  @code mt_ApplSet(app,APS_ICONSIZE,w,h,0,0) // windom.evnt.iconify.geometry = w,h @endcode
+		 *
+		 *  The default value is 72 pixels
+		 */
+		short   hicon;
+		/** set the default background color of a window drawn by mt_WindClear()
+		 *
+		 *  Equivalent to the the configuration file variable \b windom.window.bg.color
+		 *
+		 *  @code mt_ApplSet(app,APS_WINBG,col,pat,sty,0) // windom.window.bg.color = col @endcode
+		 *
+		 *  The parameter col is a VDI color index (as used by vsf_color())
+		 *
+		 *  The default value is WHITE
+		 */
+		short	bgcolor;
+		/** set the default background pattern of a window drawn by mt_WindClear()
+		 *
+		 *  Equivalent to the the configuration file variable \b windom.window.bg.pattern
+		 *
+		 *  @code mt_ApplSet(app,APS_WINBG,col,pat,sty,0) // windom.window.bg.pattern = pat @endcode
+		 *
+		 *  The parameter pat is a VDI pattern index between 0 and 3 (as used by vsf_interior()).
+		 *  See documentation of VDI function vsf_interior() for details.
+		 *
+		 *  The default value is FIS_SOLID
+		 */
+		short	bgpatt;
+		/** set the default background style of a window drawn by mt_WindClear()
+		 *
+		 *  Equivalent to the the configuration file variable \b windom.window.bg.style
+		 *
+		 *  @code mt_ApplSet(app,APS_WINBG,col,pat,sty,0) // windom.window.bg.style = sty @endcode
+		 *
+		 *  The parameter sty is a VDI style index (as used by vsf_style()). See documentation of
+		 *  VDI function vsf_style() for details.
+		 *
+		 *  The default value is 8
+		 */
+		short	bgstyle;
+		/** set the color of keyboard shortcuts
+		 *
+		 *  Equivalent to the the configuration file variable \b windom.shortcut.color
+		 *
+		 *  @code mt_ApplSet(app,APS_KEYCOLOR,col,0,0,0) // windom.shortcut.color = col @endcode
+		 *
+		 *  The parameter col is a VDI color index, with a special bit LTMFLY_COLOR (0x10) set or unset.
+		 *  This bit LTMFLY_COLOR is no more used by windom. 
+		 *
+		 *  This variable set the color of keyboard shortcut in formulars
+		 *	and toolbars. A keyboard shortcut appears as an underlined letter
+		 *	in a object label.
+		 *
+		 *  The default value is LTMFLY_COLOR|BLACK
+		 */
+		short	key_color;
+		/** configures the look of WinDom simple object
+		 *  string: underlined text, boxtitle and popup label
+		 *
+		 *  Equivalent to the the configuration file variable \b windom.string.*
+		 *
+		 *  @code
+mt_ApplSet(app,APS_STRSTYLE,fontid,size,col,0) // windom.string.font = "Font name" 
+											   // windom.string.size = size
+											   // windom.string.color = col @endcode
+		 *
+		 *  The parameter \a fontid is the GDOS font ID of the font "Font name". The parameter \a size
+		 *  is the text size in points, and \a col is an AES color index.
+		 *
+		 *  The default value is {SYSFONT, 13, BLACK}
+		 */
+		ATTRIB	string;
+		/** configures the look of WinDom button (extended
+		 *  objects). Only no EXIT buttons are adressed
+		 *
+		 *  Equivalent to the the configuration file variable \b windom.button.*
+		 *
+		 *  @code
+mt_ApplSet(app,APS_BUTSTYLE,fontid,size,col,0) // windom.button.font = "Font name" 
+											   // windom.button.size = size
+											   // windom.button.color = col @endcode
+		 *
+		 *  The parameter \a fontid is the GDOS font ID of the font "Font name". The parameter \a size
+		 *  is the text size in points, and \a col is an AES color index.
+		 *
+		 *  The default value is {SYSFONT, 13, BLACK}
+		 */
+		ATTRIB	button;
+		/** configures the look of WinDom exit button (default buttons in formulars).
+		 *
+		 *  Equivalent to the the configuration file variable \b windom.exit
+		 *
+		 *  @code
+mt_ApplSet(app,APS_EXITSTYLE,fontid,size,col,0) // windom.exit.font = "Font name" 
+											    // windom.exit.size = size
+											    // windom.exit.color = col @endcode
+		 *
+		 *  The parameter \a fontid is the GDOS font ID of the font "Font name". The parameter \a size
+		 *  is the text size in points, and \a col is an AES color index.
+		 *
+		 *  The default value is {SYSFONT, 13, BLACK}
+		 */
+		ATTRIB	exit;
+		/** configures the look of WinDom menu items/title objects
+		 *
+		 *  Equivalent to the the configuration file variable \b windom.menu.font, \b windom.menu.size
+		 *  and \b windom.menu.col
+		 *
+		 *  @code
+mt_ApplSet(app,APS_TITLESTYLE,fontid,size,col,0) // windom.menu.font = "Font name" 
+											     // windom.menu.size = size
+											     // windom.menu.color = col @endcode
+		 *  
+		 *  The parameter \a fontid is the GDOS font ID of the font "Font name". The parameter \a size
+		 *  is the text size in points, and \a col is an AES color index.
+		 *
+		 *  The default value is {SYSFONT, 13, BLACK}
+		 */
+		ATTRIB	title;
+		/** configures the look of WinDom XEDIT objects (editable part of the object) 
+		 *
+		 *  Equivalent to the the configuration file variable \b windom.xedit.text
+		 *
+		 *  @code
+mt_ApplSet(app,APS_XEDITTEXTSTYLE,fontid,size,col,0) // windom.xedit.text.font = "Font name" 
+											         // windom.xedit.text.size = size
+											         // windom.xedit.text.color = col @endcode
+		 *
+		 *  The parameter \a fontid is the GDOS font ID of the font "Font name". The parameter \a size
+		 *  is the text size in points, and \a col is an AES color index.
+		 *
+		 *  The default value is {SYSFONT, 13, DEFVAL}
+		 */
+		ATTRIB	xedit_text;
+		/** configures the look of WinDom XEDIT objects (label part of the object) 
+		 *
+		 *  Equivalent to the the configuration file variable \b windom.xedit.label
+		 *
+		 *  @code
+mt_ApplSet(app,APS_XEDITLABELSTYLE,fontid,size,col,0) // windom.xedit.label.font = "Font name" 
+											          // windom.xedit.label.size = size
+											          // windom.xedit.label.color = col @endcode
+		 *
+		 *  The parameter \a fontid is the GDOS font ID of the font "Font name". The parameter \a size
+		 *  is the text size in points, and \a col is an AES color index.
+		 *
+		 *  The default value is {SYSFONT, 13, DEFVAL}
+		 */
+		ATTRIB	xedit_label;
+		/** configures the color of the cursor of XEDIT objects
+		 * 
+		 *  Equivalent to the the configuration file variable \b windom.xedit.cursor.color
+		 *
+		 *  @code mt_ApplSet(app,???,col,0,0,0) // windom.xedit.cursor.color = col @endcode
+		 *
+		 *  At the moment, there is no mode to change that parameter at runtime. \a col is the
+		 *  color index.
+		 *
+		 *  The default value is BLACK
+		 */
+		short	xedit_curs_color;
+		/**
+		 *  Equivalent to the the configuration file variable \b windom.xlongedit
+		 *
+		 *  @code
+mt_ApplSet(app,APS_XLONGEDITSTYLE,fontid,size,col,sml) // windom.xlongedit.font = "Font name" 
+											           // windom.xlongedit.size = size
+											           // windom.xlongedit.color = col
+											           // windom.xlongedit.smallsize = sml @endcode
+		 *
+		 *  This parameter _config::xlongedit contains the parameters font, size and color.
+		 *  The parameter _config::xlgedt_smlfnt contains the parameters smallsize.
+		 *
+		 *  The default value is {SYSFONT, 10, DEFVAL}
+		 */
+		ATTRIB	xlongedit;
+		/**
+		 *  Equivalent to the the configuration file variable \b windom.xlongedit.smallsize
+		 *
+		 *  See _config::xlongedit for details
+		 * 
+		 *  The default value is 8
+		 */
+		short	xlgedt_smlfnt;
+		/**
+		 *  Equivalent to the the configuration file variable \b windom.xtedinfo
+		 *
+		 *  @code
+mt_ApplSet(app,APS_XTEDINFOSTYLE,fontid,size,col,sml) // windom.xtedinfo.font = "Font name" 
+											          // windom.xtedinfo.size = size
+											          // windom.xtedinfo.color = col
+											          // windom.xtedinfo.smallsize = sml @endcode
+		 *
+		 *  This parameter _config::xtedinfo contains the parameters font, size and color.
+		 *  The parameter _config::xtdinf_smlfnt contains the parameters smallsize.
+		 *
+		 *  The default value is {SYSFONT, 10, DEFVAL}
+		 */
+		ATTRIB  xtedinfo;
+		/**
+		 *  Equivalent to the the configuration file variable \b windom.xtedinfo.smallsize
+		 *
+		 *  See _config::xtedinfo for details
+		 * 
+		 *  The default value is 8
+		 */
+		short	xtdinf_smlfnt;
+		/** configures the color used to draw the object with a
+		 *  relief effect when the screen is monochrome (actually for
+		 *  resolution with less than 16 color). As the resolution is
+		 *  monochrome, WinDom uses an AES motif style.
+		 *
+		 *  Equivalent to the the configuration file variable \b windom.relief.mono
+		 *
+		 *  @code
+mt_ApplSet(app,APS_3DEFFECT,mono,col,0,0) // windom.relief.mono = mono
+                                          // windom.relief.color = col @endcode
+		 *
+		 *  This parameter _config::actmono contains the parameters mono.
+		 *  The parameter _config::actcol contains the parameters col.
+		 *  
+		 *  The default value is 0
+		 */
+		short	actmono;
+		/** configures the color used to draw the object with a
+		 *  relief effect when the screen supports 16 colors or more.
+		 *
+		 *  Equivalent to the the configuration file variable \b windom.relief.color
+		 *
+		 *  see _config::actmono for details
+		 *
+		 *  The default value is LWHITE
+		 */
+		short	actcol;
+		/** configures the flashing effect when the user selects an item in a window menu
+		 *
+		 *  Equivalent to the the configuration file variable \b windom.menu.effect
+		 *
+		 *  @code mt_ApplSet(app,APS_MENUEFFECT,effect,0,0,0) // windom.menu.effect = effect @endcode
+		 *
+		 * The parameter \a effect is the number of flashs or zero (no flashing effect).
+		 *
+		 *  The default value is 3
+		 */
+		short	menu_effect;
+		/** configures the fonts used in bubble GEM
+		 *
+		 *  Equivalent to the the configuration file variable \b windom.bubble
+		 *
+		 *  @code
+mt_ApplSet(app,APS_BUBBLESTYLE,fontid,size,col,sml) // windom.bubble.font = "Font name" 
+											        // windom.bubble.size = size @endcode
+		 *
+		 *  The default value is {BLACK, 13}
+		 */
+		ATTRIB	bubble;
+		/** define the  menu popup background color 
+		 *
+		 *  Equivalent to the the configuration file variable \b windom.popup.color
+		 *
+		 * @code
+mt_ApplSet(app,APS_POPUPSTYLE,color,border,fcol,patt) // windom.popup.color = color
+											          // windom.popup.border = border
+											          // windom.popup.framec = fcol
+											          // windom.popup.pattern = patt @endcode
+		 *
+		 *  
+		 *  This variable _config::popcolor contains the parameter color
+		 *  The variable _config::popborder contains the parameter border
+		 *  The variable _config::popfcolor contains the parameter fcol
+		 *  The variable _config::poppatt contains the parameter patt
+		 *
+		 *  If a popup is displayed in P_LIST mode, \a color defines the menu popup background color.
+		 *
+		 *  The default value is WHITE
+		 */
+		short	popcolor;
+		/** define the menu popup border size 
+		 *  Equivalent to the the configuration file variable \b windom.popup.border
+		 *
+		 *  see _config::popcolor for details
+		 *
+		 *  If a popup is displayed in P_LIST mode, this
+		 *  variable defines the menu popup border size. A negative
+		 *  value means that the border is exterior of the object menu.
+		 *  
+		 *  The default value is 2
+		 */
+		short	popborder;
+		/** define the color of menu popup frame
+		 *
+		 *  Equivalent to the the configuration file variable \b windom.popup.framec
+		 *
+		 *  see _config::popcolor for details
+		 *
+		 *  If a popup is displayed in P_LIST mode, this
+		 *  variable defines the color of menu popup frame
+		 *
+		 *  The default value is BLACK
+		 */
+		short	popfcolor;
+		/** defines the AES pattern of menu popup background
+		 *
+		 *  Equivalent to the the configuration file variable \b windom.popup.pattern 
+		 *  and \b windom.popup.relief
+		 *
+		 *  see _config::popcolor for details
+		 *
+		 *  If a popup is displayed in P_LIST mode,
+		 *  - low word of \a poppatt defines the pattern of menu popup background. This is
+		 *    the \b windom.popup.pattern parameter
+		 *  - bit 0x100 of \a poppatt enable the relied effect of the popup form. This is
+		 *    the \b windom.popup.relief parameter
+		 *
+		 *  The default value is 0x100
+		 */
+		short	poppatt;
+		/**
+		 *  Equivalent to the the configuration file variable \b windom.popup.window
+		 *
+		 *  @code mt_ApplSet(app,APS_POPUPWIND,0,0,0,0) // windom.popup.window = no @endcode
+		 *  @code mt_ApplSet(app,APS_POPUPWIND,1,0,0,0) // windom.popup.window = yes @endcode
+		 *
+		 *	This variable defines if a menu popup is displayed in a modal window and
+		 *	handled by a modal window formular (true value) or if a menu is handled by a classic
+		 *	formular (false value).
+		 *
+		 *  The default value is DEFVAL
+		 */
+		short	popwind;		/* -1 (defaut), 0 (blocking) ou 1 (preemptive) */
+		/** define how windows and formulars are centered
+		 *
+		 *  Equivalent to the the configuration file variable \b windom.window.center
+		 *
+		 *  @code
+mt_ApplSet(app,APS_WINDOWS,wcenter,weffect,mwidget,0) // windom.window.center = (1) 
+                                                      // windom.window.effect = (2)
+													  // windom.mform.widget = (3)  @endcode
+		 *
+		 *  (1) : the list hereafter make the link between the _config::wcenter variable and
+		 *  the value to put in the config file for \b windom.window.center in place of the (1) label :
+		 *  - \b CENTER : "screen" (the window is centered in the desktop)
+		 *  - \b WMOUSE : "mouse" (the window is centered around the mouse)
+		 *  - \b UP_LEFT : "upleft" (the window is displayed in the up left corner of the desktop)
+		 *  - \b UP_RIGHT : "upright" (the window is displayed in the up right corner of the desktop)
+		 *  - \b DN_LEFT : "dnleft" (the window is displayed in the down left corner of the desktop)
+		 *  - \b DN_RIGHT : "dnright" (the window is displayed in the down right corner of the desktop)
+		 *  - \b FCENTER : "form" (the window is centered using the form_center() function, this
+		 *				function can be controlled by Let's Them Fly. Using this mode
+		 *				allows you to have forms and windows opened like non WinDom 
+		 *				applications.)
+		 *
+		 *  (2) : this value may be "true" or "false". This is the _config::weffect paramter.
+		 *  This variable defines if a graphic effect is produces when a window
+		 *  is opened or closed. This variable is linked to the WS_GRAFGROW bit
+		 *  of the flags field of window descriptor.
+		 *
+		 *  (3) is an hexadecimal value (for example "0x0009" without the quotes). That value is
+		 *  the AES window attributes to set for modal formulars.
+		 *  
+		 *  The default value is CENTER
+		 */
+		short	wcenter;		/* CENTER, MOUSE, UP_RIGHT, UP_LEFT, DN_RIGHT, DU_LEFT */
+		/**
+		 *  Equivalent to the the configuration file variable \b windom.window.effect
+		 *
+		 *  see _config::wcenter for details
+		 *
+		 *  The default value is DEFVAL
+		 */
+		short	weffect;		/* -1 (defaut), 0 (off), 1 (on)	*/
+		/**
+		 *  Equivalent to the the configuration file variable \b windom.mform.widget
+		 *
+		 *  see _config::wcenter for details
+		 *
+		 *  The default value is NAME|MOVER
+		 */
+		short	mwidget;		/* GEM window attribute for modal formulars */
+		/**
+		 *  Equivalent to the the configuration file variable \b windom.frame.widget.size
+		 *
+		 *  @code mt_ApplSet(app,APS_FRAMEWIDGETSIZE,size,0,0,0) // windom.frame.widget.size = size @endcode
+		 *
+		 *  The default value is -1
+		 */
+		short	fwidsize;		/* Frame widgets size */
+		/**
+		 *  Equivalent to the the configuration file variable \b windom.userdef.list.tos or
+		 *  \b windom.userdef.list depending on MonoTOS is detected or not.
+		 *
+		 *  windom adds the following path at runtime, depending on monoTOS is detected or not:
+		 *  - multitask OS : windom\\userdef\\userdef.ldg
+		 *  - monoTOS : windom\\userdef\\tos\\userdef.ldg
+		 *
+		 *  The default value is NULL (modified at runtime)
+		 */
+		char	*udlib_filenames;
+} CONFIG;
+
+typedef struct _bind {
+		short type;  /**< BIND_VAR, BIND_BIT or BIND_FUNC */
+		/** description of the bind, depend on BIND::type */
+		union {
+			/** description for a BIND_VAR type */
+			struct {
+				int *var;  /**< pointer to the variable to modify */
+				int value; /**< value of var when object is selected */
+			} var;
+			/** description for a BIND_BIT type */
+			struct {
+				int *var;  /**< pointer to the variable to modify */
+				unsigned short bit; /**< bit of var to set/unset */
+			} bit;
+			/** description for a BIND_FUNC type */
+			struct {
+				union {
+					func_bind     form;  /**< callback function attached to a formular object */
+					func_bind     tb;    /**< callback function attached to a tool bar object */
+					func_bindmenu menu;  /**< callback function attached to a menu object */
+				} f; /**< pointer to a callback function */
+				void *data;  /**< data sent to the callback function */
+			} func;
+		} desc;
+	} BIND;
+
+/*
+ *	Stucture pointed by ub_parm
+ *	for userdef objects
+ */
+
+typedef struct {
+		long  wp_spec;
+		int   wp_type;
+		APPvar *wp_app;
+	} W_PARM;
+
+/*
+ *	hierachical menus
+ */
+
+typedef struct {
+		char *string;
+		OBJECT *mn_tree;
+		int mn_menu, mn_item, mn_scroll;
+		APPvar *app;
+	} SMENU;
+
+
+/*
+ * APPprivate
+ */
+
+#include "fsel.h" /* SLCT_STR */
+
+struct ty_obspec_dup {
+	OBJECT * p_ob;    /* pointer to the duplicated object */
+	void   * p_mem;   /* address of the allocated memory for this duplicated object */
+	struct ty_obspec_dup * next;
+}; 
+
+/* user_draw special type */
+typedef struct {
+		WINDOW *win;
+		func_userdraw draw;
+		void *data;
+		APPvar *app;
+	} USER_DRAW;
+
+/* list of windows */
+typedef struct __windowlist{
+	WINDOW *win;
+	struct __windowlist *next;
+} WINDOWLIST;
+
+
+typedef struct ulib_obj_struct {
+	LINKABLE lnk;
+	OBJECT *tree;
+	short ob;
+	short ob_type;
+} UDLIB_OBJ;
+
+typedef struct udef_lib_struct {
+	LINKABLE lnk;
+	APPENV *env;
+	enum { udlib_internal, udlib_ldg } type;
+	enum { udlib_simple, udlib_freedom} mode;
+	char filename[256];
+	void *udlib_descriptor;
+	long   __CDECL (* libinit)      ( APPENV *);
+	void   __CDECL (* udconfig)     ( UDLIB_CONFIG *, APPENV *);
+	void   __CDECL (* libexit)      ( APPENV *);
+	long   __CDECL (* objc_extended)( OBJECT *, long , long , APPENV *);
+	void   __CDECL (* objc_extfree) ( OBJECT *, long , APPENV *);
+	char * __CDECL (* objc_string)  ( OBJECT *, long , char *, APPENV *);
+	long   __CDECL (* objc_char)    ( OBJECT *, long , long , APPENV *);
+	long   __CDECL (* objc_edit)    ( OBJECT *, long , long , short* , long , long , GRECT *, APPENV *);
+	long   __CDECL (* objc_edpos)   ( OBJECT *, long , long , long , APPENV *);
+	long   __CDECL (* objc_unextnd) ( OBJECT *, long , APPENV *);
+	LIST ob_list;
+} UDLIB_LIB;
+
+typedef struct APPprivate_struct {
+	
+	/* previously in APPvar */
+ 
+	/* cicon.c */
+	short    xpixelbytes;
+	short    xscrn_planes;
+	
+	/* conf_getline.c */
+	size_t pos ;
+	
+	/* debug_windom.c */
+	char debug[255];
+	int first;
+
+	/* font_sel.c */
+	int init_fontsel;
+	
+	/* fsel.c */
+	SLCT_STR *slct ;
+	long     *fsel ;
+
+	/* galloc.c */
+	int type_mxalloc;
+	
+	/* global.c */
+	CONFIG config;
+	int    _res;     /* screen resolution: 0=low; 1=high */ 
+	WINDOWLIST *__windowlist; /* list of windows, from bottom window to top window */
+
+	WINDOW  *desk;             /* The desktop/application data/binding holding WINDOW instance */
+
+	WORD __iconlist[ MAX_ICON];/* position des icones
+								 * 0 position libre
+								 */
+	int __bubble_quit;
+	int _menu_disabled;   /* used by MenuEnable and MenuDisable */
+	struct bubble *bubble_index;
+	char __confpath [FILE_SIZE]; /* WinConf */
+	struct fontid *listfontid; /* Emulation of Gdos fonts */
+	int maxfontid;             /* Emulation of Gdos fonts */
+	char *__confapp_buffer;    /* Configuration of the application */
+	int __confapp_line_top;    /* Configuration of the application */
+	int __confapp_line_pos;    /* Configuration of the application */
+	char *__confdef_buffer;    /* Default configuration */
+	int __confdef_line_top;    /* Default configuration */
+	int __confdef_line_pos;    /* Default configuration */
+	size_t __confgetline_pos;  /* current position used by mt_ConfGetLine() */
+	char *__av_name;           /* name of the client (our application) */
+	char __av_server[9];       /* name of the AV server */
+	INT16 __av_status[3];      /* action provided by the AV server */
+	
+	/* mouse_work.c: */
+	int mouse;
+
+	/* obspec_mem.c */
+	struct ty_obspec_dup * __list_obspec_dup;
+
+	/* shel_write.c */
+	char file[FILE_SIZE];
+
+	/* xrsrc.c: */
+	int xrsrc_init;
+
+	/* RESOURCE forms: */
+	/* sliders.rsh, frame_init.c */
+	OBJECT * frame_slider;
+	/* mnscroll.rsh, mnscroll.c */
+	OBJECT * mnscroll;
+	
+	/* userdefs... */
+	
+	LIST udef_lib;
+	short udlib_vdih; /**< VDI handle provided to userdef library */
+	int udlib_garbage; /**< 0 means no garbage needed; +1 means userdef lib have
+	                        been loaded but maybe some of them remains unused so a
+							garbage is needed; -1 means an userdef object has been freed
+							and maybe the corresponding userdef lib need to be freed now */
+	
+	} APPprivate;
+	
+/*******************************************************************************
+	RSC header and support struct
+*******************************************************************************/
+
+typedef struct {		/* fichier ressource tendu */
+  UWORD rsh_vrsn;			/* should be 3														     */
+  UWORD rsh_extvrsn;		/* not used, initialised to 'IN' for Interface */
+  ULONG rsh_object;
+  ULONG rsh_tedinfo;
+  ULONG rsh_iconblk; 		/* list of ICONBLKS			  				 	*/
+  ULONG rsh_bitblk;
+  ULONG rsh_frstr;
+  ULONG rsh_string;
+  ULONG rsh_imdata;			/* image data					  					*/
+  ULONG rsh_frimg;
+  ULONG rsh_trindex;
+  ULONG rsh_nobs; 			/* counts of various structs 					*/
+  ULONG rsh_ntree;
+  ULONG rsh_nted;
+  ULONG rsh_nib;
+  ULONG rsh_nbb;
+  ULONG rsh_nstring;
+  ULONG rsh_nimages;
+  ULONG rsh_rssize;			/* total bytes in resource   */
+} RSXHDR;
+
+typedef struct {
+	unsigned long	rlen;
+	unsigned long	cicon_offset;
+} NRSHDR;
+
+#define	NRSC_CIBK			0x0004
+#define	NRSC_LONG			0x0003
+
+typedef struct {
+	int			type;
+	USERBLK		blk;
+	long		spec;
+	unsigned	user1;
+	unsigned	user2;
+	unsigned	user3;
+	unsigned	user4;
+	long		userl;
+}	UBLK;
+
+#include "cicon.h" /* XRSRCFIX */
+
+typedef struct _rsc {
+	rscHDR	head;			/*	RSC Header			*/
+	long	adr;			/*	Adr of memory bloc	*/
+	long	len;			/*	Len of memory bloc	*/
+	UBLK	*ublk;			/*	userdef array		*/
+	CICON	*cicon;			/*	color icon array	*/
+	XRSRCFIX fix;			/*  icone couleurs 		*/
+} RSC;
+
+typedef
+struct slider {
+	short min, max;
+	short sinc, linc;
+	int ori;		/* HORI,VERT*/
+	int upd;		/* */
+	short value;	/* current value */
+	func_doslid doslid;
+	void *data;		/* user data for user function */
+	int mode;
+	WINDOW *win;
+	int up, dn, sld, bsld;
+} SLIDER;
+
+/* for sliders: this adapt the position of the slider box
+ * to the parent object, so that the slider look pretty
+ * (NdT: je ne suis pas sur d'avoir tres bien compris)
+ */
+#define SLID_OFFSET 0
+
+int mt_slid_newpos( APPvar *app, void *_slid);
+
+typedef struct _thumb {
+	/* links between buttons and thumb */
+	int *idxthb;
+	int *idxbut;
+	/* number of thumbs */
+	int nbbut;
+	/* active thumb (index of idxthb and idxbut) */
+	int selbut;
+} THUMB;
+
+/** @addtogroup Callback
+ * @{ */
+void __CDECL frm_drw  ( WINDOW *win, short buff[8], APPvar *app);
+void __CDECL frm_mvd  ( WINDOW *win, short buff[8], APPvar *app);
+void __CDECL frm_tpd  ( WINDOW *win, short buff[8], APPvar *app);
+void __CDECL frm_fld  ( WINDOW *win, short buff[8], APPvar *app);
+void __CDECL frm_click( WINDOW *win, short buff[8], APPvar *app);
+void __CDECL frm_keyhd( WINDOW *win, short buff[8], APPvar *app);
+void __CDECL frm_dstry( WINDOW *win, short buff[8], APPvar *app);
+/** @} */
+
+void * __malloc_obspec(APPvar *app, OBJECT * p_ob, long size);
+void   __free_obspec( APPvar *app, OBJECT * p_ob);
+void   __freeall_obspec( APPvar *app);
+
+int   scrap_txt_write( APPvar *app, char *str);
+char *scrap_txt_read ( APPvar *app);
+
+/* Standard AES WINDOW handlers (that uses mostly gemlib mt_wind_* functions) */
+int __CDECL wind_aes_get_root_handle( APPvar *app, WINDOW *win);
+int __CDECL wind_aes_get( APPvar *app, WINDOW *win, int mode, GRECT *clip, INT16 *x, INT16 *y, INT16 *w, INT16 *h );
+int __CDECL wind_aes_set( APPvar *app, WINDOW *win, int mode, int x, int y, int w, int h );
+int __CDECL wind_aes_calc( APPvar *app, WINDOW *wind, int type, int x, int y, int w, int h,
+	       			INT16 *xout, INT16 *yout, INT16 *wout, INT16 *hout);
+int __CDECL wind_aes_remove( APPvar *app, WINDOW *win);
+
+/* for custom WindGet/Set/Calc behaviour structure */
+typedef struct {
+	int __CDECL (*get_root_handle)(  APPvar *app, WINDOW *win);
+
+	int __CDECL (*get)(  APPvar *app, WINDOW *win, int mode, GRECT *clip, INT16 *x, INT16 *y, INT16* w, INT16 *h );
+	int __CDECL (*set)(  APPvar *app, WINDOW *win, int mode, int par1, int par2, int par3, int par4);
+	int __CDECL (*calc)( APPvar *app, WINDOW *win, int type, int x, int y, int w, int h,
+				INT16 *xout, INT16 *yout, INT16 *wout, INT16 *hout);
+	int __CDECL (*remove)( APPvar *app, WINDOW *win );
+} WIND_HANDLERS;
+
+
+extern OBJECT * get_frame_slider ( APPvar *app);
+extern void set_gadget_pos( APPvar *app, WINDOW *frame, GRECT *r1, int mode);
+extern void __frame_set_widget( APPvar *app, int parm1);
+extern int remove_frame_from_list( APPvar *app, WINDOW *win, WINDOW *child);
+#define PROPOR( mode, wmax, w)	((mode)?((int)((long)wmax * (long)(w) / 100L)):(w))
+#define NO_BACKGROUND	0x0002	/* interne */
+
+extern int  mt_ObjcAttach( APPvar *app, int mode, WINDOW *win, int __index, int type, ...);
+extern void mt_RsrcUserFree( APPvar*, OBJECT *);
+extern int  is_modal 	( APPvar *app);
+extern int  obj_fd_flag	( OBJECT *, int, int);
+extern int  obj_fd_xtype( OBJECT *dial, int racine, int flag);
+extern int 	obj_nb		( OBJECT *);
+extern int  obj_root    ( OBJECT *tree, int idx);
+extern void	mt_DataClear	( APPvar *app, WINDOW *win);
+extern void mt_DataTrace	( APPvar *app, WINDOW *win);
+extern void	mt_AddWindow	( APPvar *app, WINDOW *win);
+extern void	mt_RemoveWindow	( APPvar *app, WINDOW *win);
+extern void	add_slash	( char *path);
+extern void	init_scroll_menu( APPvar *app);
+extern void	exit_scroll_menu( APPvar *app);
+extern WORD __CDECL draw_submenu( PARMBLK *pblk);
+extern void GemCode2Ascii( int key, int kstate, char *txt);
+extern int mt_GetIndexMenu( APPvar *app, OBJECT *menu, int title);
+
+extern void	mt_menu_bind	( APPvar *app, WINDOW *win, int item, int title);
+
+int  get_next_obj		( OBJECT *tree, int __index);
+void objc_extended      ( APPvar *app, int mode, OBJECT *tree);
+void objc_extfree       ( APPvar *app, OBJECT *tree);
+
+int objc_wform_edit( APPvar *app, WINDOW *win, W_FORM *wform, OBJECT *tree, int obj, int val, INT16 *idx, int kind);
+
+int mt_vFormAlert( APPvar *app, int but, char fmt[], va_list list);
+int mt_vConfInquire( APPvar *app, char *keyword, char *fmt, va_list args);
+int mt_vConfWrite( APPvar *app, char *name, char *fmt, va_list args);
+
+
+/* standard callback functions
+ */
+/** @addtogroup Callback
+ * @{ */
+void __CDECL std_apterm	( WINDOW *, short buff[8], APPvar *app);
+void __CDECL std_cls	( WINDOW *, short buff[8], APPvar *app);
+void __CDECL std_tpd	( WINDOW *, short buff[8], APPvar *app);
+void __CDECL std_mvd	( WINDOW *, short buff[8], APPvar *app);
+void __CDECL std_szd	( WINDOW *, short buff[8], APPvar *app);
+void __CDECL std_fld	( WINDOW *, short buff[8], APPvar *app);
+void __CDECL std_icn	( WINDOW *, short buff[8], APPvar *app);
+void __CDECL std_unicn	( WINDOW *, short buff[8], APPvar *app);
+void __CDECL std_allicn	( WINDOW *, short buff[8], APPvar *app);
+void __CDECL std_arw	( WINDOW *, short buff[8], APPvar *app);
+void __CDECL std_sldxy	( WINDOW *, short buff[8], APPvar *app);
+void __CDECL std_dnlnd	( WINDOW *, short buff[8], APPvar *app);
+void __CDECL std_uplnd	( WINDOW *, short buff[8], APPvar *app);
+void __CDECL std_lflnd	( WINDOW *, short buff[8], APPvar *app);
+void __CDECL std_rtlnd	( WINDOW *, short buff[8], APPvar *app);
+void __CDECL std_dnpgd	( WINDOW *, short buff[8], APPvar *app);
+void __CDECL std_uppgd	( WINDOW *, short buff[8], APPvar *app);
+void __CDECL std_rtpgd	( WINDOW *, short buff[8], APPvar *app);
+void __CDECL std_lfpgd	( WINDOW *, short buff[8], APPvar *app);
+void __CDECL std_vsld	( WINDOW *, short buff[8], APPvar *app);
+void __CDECL std_hsld	( WINDOW *, short buff[8], APPvar *app);
+void __CDECL std_dstry	( WINDOW *, short buff[8], APPvar *app);
+void __CDECL std_btm	( WINDOW *, short buff[8], APPvar *app);
+
+void __CDECL std_comp_reflow  ( COMPONENT *c, long buff[8], APPvar *app );
+/** @} */
+void __CDECL std_fntchg ( WINDOW *win, short buff[8], APPvar *app);
+
+void move_screen   ( APPvar *app, int vhandle, GRECT *screen, int dx, int dy);
+void move_work_rect( APPvar *app, WINDOW *win, GRECT *rect, int dx, int dy);
+void move_work     ( APPvar *app, WINDOW *win, int dx, int dy);
+
+void __CDECL std_mwk    ( APPvar *app, WINDOW *win);
+ 
+
+
+int  menu_exec_cmd( APPvar *app, WINDOW *win);
+void menu_draw_grect( APPvar *app, WINDOW *win, OBJECT *menu, GRECT *work, GRECT *clip);
+void wind_menu_draw( APPvar *app, WINDOW *win, GRECT *clip);
+int  wind_menu_set( APPvar *app, WINDOW *win, int mode, void *v1, func_evnt handler);
+int  frm_menu	  ( APPvar *app, WINDOW *win);
+int  frm_keybd_ev ( APPvar *app, OBJECT *tree);
+int  is_menu	  ( APPvar *app, WINDOW *win);
+int ob_istype	  ( APPvar *app, OBJECT *tree, int ob, int type);
+
+/* Directive for experimentation on size of executable */
+int  frm_buttn_ev ( APPvar *app, WINDOW *win, int mode);
+void _do_update   ( APPvar *app, WINDOW *win, short buff[8]);
+
+void list_ev_msg  ( APPvar * app, WINDOW *win, char *str);
+
+void get_appname  ( APPvar *app, char *name);
+
+int 	vq_mint		( void);
+int     vq_magx     ( void);
+int     vq_extfs    ( char *);
+
+/* __windowlist management */
+extern WINDOW *wlst_get_bottom		( APPvar *app);
+extern WINDOW *wlst_get_next		( APPvar *app, WINDOW *win);
+extern WINDOW *wlst_get_top			( APPvar *app);
+extern void    wlst_remove			( APPvar *app, WINDOW *win);
+extern void    wlst_add_bottom		( APPvar *app, WINDOW *win);
+extern void    wlst_add_top			( APPvar *app, WINDOW *win);
+extern void    wlst_recompute_wglb	( APPvar *app);
+
+
+/*	Emulation of Gdos fonts */
+struct fontid {
+	char name[44];
+	int  id;
+	int flags;		/* monospaced, vectoriel, etc ... */
+};
+extern int load_fontid( APPvar *app);
+extern void close_fontid( APPvar *app);
+
+/* bubble GEM */
+struct bubble {
+	OBJECT *tree;
+	int index;
+	char *help;
+	struct bubble *next;
+};
+extern void mt_snd_mu_button( APPvar *app, int mbut, int nbclick);
+
+extern long __cookieptr(void);
+
+#ifdef BETAMENU
+extern int frm_menu_beta( APPvar *app, WINDOW *win);
+#endif
+
+#ifdef WINDOMDEBUG
+	#define	LOGFILE	"C:\\gemsys\\log\\windom.log"
+#endif
+
+/* userdef library */
+int udlib_reinit ( APPvar *app);
+int udlib_exit ( APPvar *app);
+int udlib_garbage ( APPvar *app);
+int udlib_extended( APPvar *app, OBJECT *tree, int ob, int mode);
+int udlib_unextended( APPvar *app, OBJECT *tree, int ob, OBJECT *cpy);
+int udlib_extfree ( APPvar *app, OBJECT *tree, int ob);
+int udlib_add_obj( UDLIB_LIB *udlib, OBJECT *tree, int ob, int ob_type) ;
+int udlib_rm_obj ( UDLIB_LIB *udlib, OBJECT *tree, int ob) ;
+int udlib_string( APPvar *app, OBJECT *tree, int ob, char *put, char **retval);
+int udlib_char( APPvar *app, OBJECT *tree, int ob, int put, int *retval);
+int udlib_edit( APPvar *app, OBJECT *tree, int ob, int val, short *idx, int kind, int nclip, GRECT *gclip);
+int udlib_get_edpos( APPvar *app, OBJECT *tree, long object, long x, long y);
+int udlib_get_type( APPvar *app, OBJECT *tree, int object);
+UDLIB_OBJ * udlib_objfind( UDLIB_LIB *udlib, OBJECT *tree, int ob);
+
+int    udlib_ConfSetLib( APPvar *app, const char *libname);
+int    udlib_ConfAddLib( APPvar *app, const char *libname, short head);
+char * udlib_ConfGetFirstLib( APPvar *app);
+char * udlib_ConfGetNextLib( char *prev);
+
+
+short __CDECL cdecl_draw_cicon( long vdih, OBJECT *tree, long ob, long ob_state, long ob_x, long ob_y);
+
+/* BEGIN: COMPONENT stuff */
+
+/* Internally used by the COMPONENT resize (status field) handler */
+#define CS_FIX_FLEX 0x8000
+
+/* Slider components linked to a WIDGET WINDOW */
+#define CDT_VSLID   	0x455e4dUL  /* 'COM' */
+#define CDT_HSLID   	0x455e4eUL  /* 'COM' */
+
+/* from src/comp_szd.c */
+COMPONENT *comp_reflow( COMPONENT *c, APPvar *app );
+
+/* from src/comp_create.c */
+void comp_dfs( COMPONENT *p, long *buff, APPvar *app );
+
+COMPONENT *win_comp_get( APPvar *app, WINDOW *win);
+void       win_comp_attach( APPvar *app, WINDOW *win, COMPONENT *c);
+COMPONENT *win_comp_getfocus( APPvar *app, WINDOW *win );
+void       win_comp_setfocus( APPvar *app, WINDOW *win, COMPONENT *f );
+ 
+/* from comp_slider.c */
+#define CDT_OBJECT 0x004f424aUL  /* '\0OBJ' */
+int comp_slider_set(  APPvar *app, WINDOW *win, COMPONENT *wgtc, int mode, int par1, int par2, int par3, int par4);
+COMPONENT *comp_objc_create( APPvar *app, OBJECT *o, short type, long size, short flex );
+
+/* from comp_window.c */
+COMPONENT *comp_wind_create( APPvar *app, WINDOW *w, short type, long size, short flex );
+
+/* from comp_widget.c */
+int comp_widget_set(  APPvar *app, WINDOW *win, COMPONENT *wgtc, int mode, int par1, int par2, int par3, int par4);
+COMPONENT *comp_widget_create( APPvar *app, WINDOW *win, int size, int flex );
+
+/* from comp_slider.c */
+COMPONENT *comp_slider_create( APPvar *app, int mode, int width, int sz, int flex );
+void comp_slider_link( APPvar *app, COMPONENT *c, COMPONENT *s, int mode );
+
+/* from comp_split.c */
+COMPONENT *comp_split_create( APPvar *app, int mode, int sz );
+
+/* data.c */
+extern void mt_CompDataClear( APPvar *app, COMPONENT *c);
+extern void mt_CompDataTrace( APPvar *app, COMPONENT *c);
+/* END: COMPONENT stuff */
+
+
+extern APPvar * __mt_ApplInit( short *global);
+extern int      __mt_ApplExit( APPvar *app);
+
+#endif /* __WINDOM_GLOBAL__ */

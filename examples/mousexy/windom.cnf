@@ -1,0 +1,11 @@
+#@ Created automatically by WinConf 2.00 the  21/08/2001 at 23h38
+#@ WinConf is written by Dominique B‚r‚ziat 1997/2000 - all rights reserved
+
+[MOUSEXY]
+mousexy.timer = 200
+mousexy.window = "10,10"
+mousexy.display.mouse = true
+mousexy.display.clock = true
+mousexy.small = false
+[end]
+

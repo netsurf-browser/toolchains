@@ -1,0 +1,22 @@
+=========================================================
+Thank to use WinDom version 2.0.1 (22 June 2006)
+This library is OpenSource and distributed under the GNU
+LESSER GENERAL PUBLIC LICENCE (see COPYRIGHT file).
+
+WinDom has been written by 
+- Arnaud Bercegeay
+- Standa Opichal
+- Dominique Bereziat
+
+Installation and usage of this library is described
+in the HTML documentation 'doc/html/index.html'. It
+includes general documentation, the reference
+documentation and a tutorial.
+
+A demo is available in the DEMO directory
+
+Examples are available in the EXAMPLE directory
+
+Official home page at http://windom.sourceforge.net
+========================================================
+

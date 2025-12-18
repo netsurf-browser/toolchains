@@ -1,0 +1,258 @@
+$Id: COMPONENTS,v 1.3 2005/08/15 21:16:06 opichals Exp $
+
+Some notes about the new COMPONENT feature for windom.
+
+1. GENERAL IDEA OF COMPONENT:
+
+At the moment (windom 1.21.0), the elementary object of windom is a
+WINDOW.
+
+If one wants to create a complex object (text editor, image viewer...),
+he has to develop fonctions to manage this object, and attach theses functions
+to event (redraw, resize, key event, mouse event, timer event...) for a
+given window. Note that each frame of a framed window is a considered as
+being a WINDOW.
+
+The idea of COMPONENT is to create a new elementary object (the COMPONENT),
+to made windom programming much more modular.
+
+All the callback functions will be attached to the COMPONENT instead of
+the window. As for window, Data and EvntData could be attached to COMPONENT.
+This COMPONENT will be attached a to window, and all the event received by
+this window will be redirected to the COMPONENT.
+
+We could then imagine a set of complexes COMPONENTS available (text editor,
+image viewer, database explorer, HTML browser, fileselector...)
+available for every developper.
+Then, one could develop other COMPONENT based on theses component (for
+instance a special fileselector based on the basic fileselector component,
+and the basic image viewer component. This complex fileselector will allow
+the user to preview each file).
+
+
+2. GENERAL RULES
+
+Data, Event and EvntData can be attached to any COMPONENT.
+
+COMPONENT can be nested: a COMPONENT can have any number of children
+COMPONENTS.
+
+COMPONENTS can have borders. This way, nested COMPONENTS appears like
+frames window, and the COMPONENT borders may be used to resize the COMPONENTS
+(if the COMPONENT may be resized).
+
+COMPONENT can have enhanced sliders (see SLIDER chapter for more details).
+
+COMPONENT has global dimensions (external dimensions of the COMPONENT)
+and the dimensions of the work area (the external dimensions without
+borders and sliders).
+
+COMPONENT cannot have MENU, TOOLBAR, TITLE, INFO or any other window
+attribute. If your COMPONENT must include a menu, an info line, and
+a work area, then you'll have to create 3 children COMPONENTs (1 for the
+menu, one for the info line, and one for the work area). The main
+COMPONENT will be a kind of container with no data/event attached to, only
+children.
+
+If this simplify the internal design of windom, COMPONENT may be internally
+used to manage AES menu in window, and AES toolbar in window.
+
+In that case, a field (in COMPONENT structure) should be reserved to
+identify if a given COMPONENT is a menu, a toolbar, or the work area of
+the window. This is requiered for windom to redirect AES message (adressed to
+an AES window handle) to the correct COMPONENT of this window (TOOLBAR
+AES messages redirected to the toolbar component of this window).
+Same thing for sliders: there must a flag in the COMPONENT structure to
+attach the slider of the component to the slider of the root AES structure
+(window or frame). In the previous example (a window contains an "empty"
+component, which one contains 3 children: a menu, a toolbar and a work area),
+the slider of the work area may be the slider of the AES window. Here,
+when windom received a AES message WM_ARROW for this AES window, windom has
+to redirect this message to the "work area" component. So, something in
+the WINDOW structure, or something in the COMPONENT structure must exist to
+made the link between the AES window sliders and the work area component.
+
+If such COMPONENT have to manage sliders and the AES window doesn't have
+the sliders attributes, then the COMPONENT will draw its own sliders.
+
+
+3. NESTED COMPONENTS
+
+Parent COMPONENTS and its children should be linked together (from any of
+these COMPONENT, we can know its parents... up to the root. The link
+between COMPONENT may be similar to the AES structure OBJECT (next, tail).
+This will requiered for windom internal use only: get the
+AES window handle that own this component from any component; compute
+the real coordinates of a component (CompOffset() similar to objc_offset()).
+
+
+4. SLIDERS
+
+The component slider may be the windows
+slider (if the parent of the COMPONENT is a WINDOW or a FRAME), or a
+private slider managed by windom.
+In all cases, the user can force the slider to be the one managed
+by windom (ie force windom to not use the AES window slider; may be a
+good choice if the slider sometime appears, then disappears, etc...
+the AES window attributes modification on the fly is not a native
+feature of the AES)
+
+The sliders management rules may be one of the following:
+- AES_like: the application have to set the slider size and position, and
+  will received AES_like mesages for LINE_UP, PAGE_LEFT, etc... event.
+  something similar to actual window sliders managed by windom.
+- automatic : the application just have to specify the width/height of
+  the object drawn in the work area of the COMPONENT. Then, using the
+  width/height of the work_area, windom will decide (or not) to set the
+  horizontal/vertical slider for this COMPONENT. Furthermore, all the
+  event relative to the sliders will be treated by windom. Windom will scroll
+  the work_area and execute the redraw function of this COMPONENT. If the
+  COMPONENT is resized, the windom will recompute the new slider
+  size/position/existance.
+- horizontal/vertical sliders are independant; A component may have an AES like
+  vertical component, and an automatic horizontal slider.
+
+Nota: if a COMPONENT with sliders have some children COMPONENTS, when the
+slider of the parent COMPONENT changed, then the position of the children
+may be recomputed. This is automaticaly done for automatic sliders, but may
+be done by the application for AES like sliders (the application have to change
+the x-position and y-position of all its children components).
+
+
+3. ATTRIBUTES
+
+OPAQUE/TRANSPARENT:
+if a COMPONENT that need to be redrawn has
+the transparent attribute, then windom start to redraw its background
+executing a WM_REDRAW message addressed to its parent.
+If the COMPONENT has sliders, if the slider move, then the content of
+the COMPONENT wont be scrolled. A redraw mesage will be executed
+instead.
+
+EDITABLE:
+the component handle a text cursor.
+a new message should be created (one to tell the COMPONENT that he's got
+the text cursor, after a TAB key pressed for example, another to tell
+the previous "text cursor" owner that another COMPONENT is the new text
+cursor owner, after the user clic on another editable COMPONENT for
+example).
+
+BORDER WIDTH:
+May be usefull if the COMPONENT is able to be resized using the mouse. This
+parameter is used for the border of the children COMPONENT. One COMPONENT shall
+use its parent "border width" attribute to draw its border.
+
+W_SIZEABLE:
+the user can change the width of the COMPONENT using the right border of
+the COMPONENT.
+
+H_SIZEABLE:
+same, bottom border
+
+X_MOVEABLE:
+if w_sizeable, the left border can be used to resize the width
+and change the x-position of the COMPONENT
+
+Y_MOVEABLE:
+idem for top border and h_sizeable
+
+TOP:
+the topped COMPONENT of the topped window will received the key events. Only
+one COMPONENT may be topped.
+
+HIDE/SHOW:
+like AES objects, a COMPONENT may be hidden without being deleted.
+Just hidden. Then, this COMPONENT may be shown. That way, all the
+context associtated to this component is kept.
+
+
+4. POSITION
+
+The COMPONENT position and dimensions may be set by hand, or automatically computed
+depending on a FREEPOS flag.
+
+If the FREEPOS flag is set, the coordinates of the COMPONENT should be set by hand.
+In this case, (x,y) contains the top corner coordinates of the component (relative to
+the parent component). Width and Height define the size of the COMPONENT.
+
+Otherwise, theses value are internally computer by windom, depending of the autopos value.
+"autopos" may be one of the following value: TOP, LEFT, BOTTOM, RIGHT, CENTER.
+The parameters top-margin, left-margin, right-margin and bottom-margin ... similar to
+margin-width parameter ?
+
+- x,y: a fixed value in pixel, from the top left corner of the parent.
+- TOP/LEFT/BOTTOM/RIGHT alignment. Here windom automaticaly adjust the
+  x/y position of this COMPONENT. Windom do the whole job of repositionning
+  when the window/frame is moved or resized, or when another COMPONENT is
+  added.
+  Example: a COMPONENT has 3 child COMPONENTS. All of them are "TOP aligned"
+  with height=50%. The parent height is 100 pixels. The 1st child position/size
+  is (x=0,y=0,width=parent_width,height=50pixels). The 2n child coordinates
+  is (x=0, y=50, width=parent_width,height=25pixels). The last one is
+  (x=0,y=75,width=parent_width,height=12pixels).
+
+DIMENSIONS:
+- width fixed, in pixels
+- width fixed, in % of the parent available work area.
+- same for height.
+
+
+
+5. INTERNAL
+
+A set of function shall be available to get the work area of a component,
+usign a call similar to WindGet : CompGet(WIN*, COMPONENT*,...);
+
+A COMPONENT is much more simple than a frame. For instance, a component
+use the virtual VDI workstation of its parent WINDOW. A new virtual VDI
+workstation is not created per COMPONENT.
+
+
+6. EXTENSIONS
+
+the windom library (or an external library) will provide some standard
+COMPONENTS, such as MENUBAR, TOOLBAR, INFOLINE.
+
+We can think of a WIDGET COMPONENT. The application creates only window
+without any attribute, and attach a WIDGET COMPONENT as root component
+for the window. This WIDGET component will be in charge of drawing the
+widgets of the window (mover, sizer, iconifier...). That way, the
+application if 100% skinnable, and when could then resize the window
+using borders of the components (like magic6).
+
+This feature should be internally managed by windom. A config option
+may tell WindCreate() to create a window with AES widget, or create
+a window without widget and attach a widget component to this window.
+A field in the COMPONENT structure may be used to identify a widget
+component.
+
+
+7. OTHERS
+
+This design is compatible with the actual windom API. If one want to use
+the COMPONENT feature, he just have to create the parent COMPONENT
+(using CompCreate()), and attach this COMPONENT to a window (frame) using
+CompAttach(). That call will attach all standard event to standard function
+of the Component library, then such standard function will dispatch the
+event to the correct COMPONENT...
+
+
+
+8. SF EPILOG
+
+We may define a special kind of OBJECT type for COMPONENT. Then, it will be
+possible to include very complex COMPONENT with sliders on any formular. For
+that purpose, windom may inlclude some built-in function to replace the
+AES objc_ library (objc_find, objc_offset, objc_draw...) to draw the
+COMPONENT correctly. The idea "transform that special OBJECT to userdef object"
+is a bad idea because that way, the COMPONENT redraw stuff will be done in
+supervisor mode.
+
+This may be done (from the application point of view) using a function
+RsrcComp() similar to RsrcUserDraw(). Important: this requiered the use of
+internal ObjcDraw() functions (objc_draw only used to draw simple AES objects)
+because the callback functions attached to the component may call some
+AES functions, and because of that, theses functions shall not be called by
+the AES. In other words, the idea to create a userdef object and let the AES
+draw the whole formular is a bad idea.
+

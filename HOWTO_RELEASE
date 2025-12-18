@@ -1,0 +1,191 @@
+HOW TO release windom.
+($Id: HOWTO_RELEASE,v 1.6 2006/06/22 09:39:10 bercegeay Exp $)
+
+written by Arnaud BERCEGEAY <arnaud.bercgeay@free.fr>
+December 2005.
+
+
+This is a small document that describes how to make a distribution
+of windom.
+
+a release of windom is made of the following archives :
+- a RPM package of the library
+- a RPM package of the sources
+- a "big" zip file which include the whole windom stuff:
+   * sources
+   * library compiled for GCC 2.95
+   * the documentation, the tutorial
+   * examples
+   * demo
+   * all other stuff i missed to list here
+
+In order to make all these files, you need:
+- a sparemint environment (for building RPMs)
+- standard dev tools (gmake, gcc, zip, tar, gzip...)
+- CVS and PERL (to generate the ChangeLog)
+- DOXYGEN (to generate the documentation)
+
+Windom compiled for other compilers (pure c, sozobon and gcc 2.81) are no
+more part of the "official" windom distribution. BTW, maybe windom still
+compiles fine OOTB for these compilers.
+
+For sozobonx, purec and gcc 2.81 compilers, some variables should be set
+(for example in your $(MAKEFILES) file). Here is an extract of my make.ini file:
+CC_SOX        = K:/SOZOBONX/bin/cc.ttp
+CC_PUREC      = K:/PURE_C/pcc.ttp
+CC_GCC281     = K:/GCC/bin/gcc.ttp
+PURECINC      =/k/pure_c/include
+PURECLIB      =/k/pure_c/lib
+AS_SOX        = K:/SOZOBONX/bin/jas.ttp
+AS_PUREC      = K:/PURE_C/pasm.ttp
+AS_GCC281     = K:/GCC/bin/gcc.ttp
+AR_SOX        = K:/SOZOBONX/BIN/AR.TTP
+AR_PUREC      = K:/PURE_C/PLINK.TTP
+AR_GCC281     = K:/GCC/bin/ar.ttp
+
+
+
+-1. CLEAN CHECKOUT
+
+As the release process doesn't attempt to clean everything that is not in
+the CVS repository it is advisable to do a clean cvs checkout before starting
+to do release related changes.
+
+
+0. BUMPED THE VERSION NUMBER
+
+The version appears in several places:
+$WINDOM/VERSION
+$WINDOM/include/mt_wndm.h  (update version + remove betatag "-cvs")
+$WINDOM/src/windom.doxy
+$WINDOM/src/rpm/windom.spec
+$WINDOM/README
+
+All theses files have to be updated.
+
+
+1. BUILD LIBRARIES AND BINARIES
+
+In the $WINDOM/src directory, type the following commands to build windom for
+all the supported compilers. 
+$ make clean
+$ make gcc
+
+A good idea is to build the documentation now (this will not be the final
+version of the documentation because the ChangeLog is not yet updated, but
+this allows to check the documentation now, and modify the documentation
+if needed... by modifying the sources since the documentation is embedded in
+the source. The entry point of the doc is $WINDOM/doc/html/index.html, and
+the following command builds the doc:
+$ make doc
+
+If one of the build fails, then sources should be fixed, and the library shall
+be rebuild for all compilers.
+
+Now, build the demo. In $WINDOM/demo type the followings commands:
+$ make clean
+$ make gcc
+
+Now, build the examples. In $WINDOM/examples type the following commands:
+$ make clean
+$ make
+
+[[OPTIONAL -- USERDEF.LDG ARE NOT YET OFFICIALLY SUPPORTED
+Now, build the userdef.ldg libraries. In $WINDOM/userdef type the following
+commands:
+$ make clean
+$ make
+]]
+
+2. GET READY FOR THE RELEASE
+
+Now, we are sure that lib, binaries and documentation compiles fine... A good idea
+is to test all of these.
+
+All seems to work fine ? Ok, we are ready for the release.
+
+
+3. UPDATE THE CHANGELOG
+
+The ChangeLog will be used as part of the documentation. To update ChangeLog,
+just remove your existing ChangeLog and make a new one. In the $WINDOM directory
+type the following commands:
+$ rm -f ChangeLog
+$ cd src && make ../ChangeLog
+
+remark: you have to be connected to the CVS server.
+
+Then, just commit the new ChangeLog to CVS :
+$ cvs ci -m "updated for version 2.0.0" ChangeLog
+
+
+4. CREATE THE RELEASE
+
+You can now tag the CVS repository, and tell the world that this is the new
+windom release:
+$ cvs tag windom-2-0-0
+
+will tag the sources for windom 2.0.0
+
+
+5. CREATE THE DOCUMENTATION
+
+To build the documentation, just type (in $WINDOM/src) :
+$ make doc
+
+You have to do it now, because the documentation contains the ChangeLog, which
+just has been updated in previous steps.
+
+
+6. BUILD ARCHIVES
+
+To build archives, just type (in $WINDOM) :
+$ make bigzip
+
+
+6. BUILD THE RPMS
+
+First, build the tarball by typing (in $WINDOM) the following command:
+$ make srctgz
+
+This will create a file ../windom-2.0.0.tar.gz (for example).
+
+Now, copy this tarball and the spec file in the rpm directories:
+$ cp ../windom-2.0.0.tar.gz /usr/src/redhat/SOURCES
+$ cp src/rpm/windom.spec /usr/src/redhat/SPECS
+
+Build the [S]RPMS by typing
+$ rpm -ba windom.spec
+
+The packages generated are 
+- /usr/redhat/RPMS/windom-2.0.0-1.m68kmint.rpm
+- /usr/redhat/SRPMS/windom-2.0.0-1.src.rpm
+
+
+7. WWW
+
+Now, just upload the ZIP & RPMS files in the SF.NET file release system,
+and update the www site.
+
+
+
+99. BUILD WINDOM FOR OTHER COMPILERS
+
+In the $WINDOM/src directory, type the following commands to build windom for
+other compilers. 
+$ make clean
+$ make gcc281
+$ make pc
+$ make sox
+
+Now, build the demo. In $WINDOM/demo type the followings commands:
+$ make clean
+$ make gcc281
+$ make pc
+$ make sox
+
+Make sure that all demos run fine. 
+
+Last, build the archives (to be completed...)
+
+[end]
