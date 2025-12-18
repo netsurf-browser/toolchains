@@ -1,0 +1,94 @@
+; This source code in this file is licensed to You by Castle Technology
+; Limited ("Castle") and its licensors on contractual terms and conditions
+; ("Licence") which entitle you freely to modify and/or to distribute this
+; source code subject to Your compliance with the terms of the Licence.
+; 
+; This source code has been made available to You without any warranties
+; whatsoever. Consequently, Your use, modification and distribution of this
+; source code is entirely at Your own risk and neither Castle, its licensors
+; nor any other person who has contributed to this source code shall be
+; liable to You for any loss or damage which You may suffer as a result of
+; Your use, modification or distribution of this source code.
+; 
+; Full details of Your rights and obligations are set out in the Licence.
+; You should have received a copy of the Licence with this source code file.
+; If You have not received a copy, the text of the Licence is available
+; online at www.castle-technology.co.uk/riscosbaselicence.htm
+; 
+r0              RN      0
+r1              RN      1
+r2              RN      2
+r3              RN      3
+r4              RN      4
+r5              RN      5
+r6              RN      6
+r12             RN     12
+lr              RN     14
+pc              RN     15
+
+OS_GetEnv             EQU &10
+OS_Exit               EQU &11
+XOS_Module            EQU &2001e
+OS_Module             EQU &1e
+OS_GenerateError      EQU &2b
+OS_ChangeEnvironment  EQU &40
+OS_ReadDefaultHandler EQU &55
+
+XWimp_SlotSize  EQU     &600ec
+
+n_module_run    EQU      2
+n_module_load   EQU     11
+
+n_upcall_h      EQU     16
+
+o_run_entry     EQU     &00
+o_title_entry   EQU     &10
+
+                EXPORT  unsqueeze_base
+                EXPORT  unsqueeze_end
+                EXPORT  unsqueeze_limit
+
+                AREA    unsqueeze, CODE, READONLY
+
+unsqueeze_base  MOV     r0, r0
+                MOV     r0, #-1
+                MOV     r1, #-1
+                SWI     XWimp_SlotSize
+                MOV     r6, #0
+                MOVVC   r6, r0
+                ADR     r0, unsqueeze_end
+                LDR     r1, [r0], #4
+                ADD     r0, r0, r1
+                SUB     r0, r0, #&8000
+                MOV     r1, #-1
+                SWI     XWimp_SlotSize
+                MOV     r0, #n_upcall_h
+                ADR     r1, upcall_handler
+                SWI     OS_ChangeEnvironment
+                ADR     r1, unsqueeze_end
+                LDR     r2, [r1], #4
+                MOV     r0, #n_module_load
+                SWI     XOS_Module
+                MOV     r5, r0
+                MOV     r0, #n_upcall_h
+                SWI     OS_ReadDefaultHandler
+                SWI     OS_ChangeEnvironment
+                MOVS    r0, r6
+                MOVNE   r1, #-1
+                SWINE   XWimp_SlotSize
+                MOV     r0, r5
+                CMP     r0, #n_module_load
+                SWINE   OS_GenerateError
+                SWI     OS_Exit
+
+upcall_handler  SUB     r12, r0, #256
+                CMP     r12, #1
+                MOVEQ   r0, #0
+                MOV     pc, lr
+
+unsqueeze_end   DCD     0
+
+unsqueeze_limit
+module_start
+
+                END
