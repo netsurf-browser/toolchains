@@ -1,5 +1,0 @@
-| !Boot file for Otter-Browser
-
-Set Otter-browser$Dir <Obey$Dir>
-Iconsprites <Otter-browser$Dir>.!Sprites
-

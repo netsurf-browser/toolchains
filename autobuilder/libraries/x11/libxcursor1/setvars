@@ -1,5 +1,0 @@
-AB_INSTALL=yes
-
-if [ ! -d man/man3 ] ; then
-  ln -s ../man man/man3
-fi

@@ -1,4 +1,0 @@
-Description: International Components for Unicode
-  ICU is a C++ and C library that provides robust and full-featured
-  Unicode and locale support.  This package contains the runtime
-  libraries for ICU.

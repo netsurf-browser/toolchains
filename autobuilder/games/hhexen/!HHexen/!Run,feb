@@ -1,5 +1,0 @@
-WIMPSLOT
-
-Set HHexen$Dir <Obey$Dir>
-
-Run <HHexen$Dir>.hhexen -waddir /<HHexen$Dir> -g -samplerate 44100 >null: 2><Obey$Dir>.stderr

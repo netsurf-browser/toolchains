@@ -1,3 +1,0 @@
-AB_INSTALL=yes
-
-AB_CONFLAGS='--without-cdda-player --without-cd-drive --without-cd-info --without-cd-read --without-iso-read --without-iso-info'

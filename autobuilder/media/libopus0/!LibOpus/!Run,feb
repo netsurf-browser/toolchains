@@ -1,6 +1,0 @@
-| Run file for LibOpus
-
-IconSprites <Obey$Dir>.!Sprites
-
-Set LibOpus$Dir <Obey$Dir>
-Set LibOpus$Path <Obey$Dir>.

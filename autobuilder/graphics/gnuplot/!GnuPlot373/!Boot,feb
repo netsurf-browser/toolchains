@@ -1,3 +1,0 @@
-| > !Boot
-|
-IF "<GnuPlot373$Dir>" = "" THEN Set GnuPlot373$Dir <Obey$Dir>

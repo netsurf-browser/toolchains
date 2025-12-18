@@ -1,6 +1,0 @@
-| Run file for LibLZMA5
-
-IconSprites <Obey$Dir>.!Sprites
-
-Set LibLZMA5$Dir <Obey$Dir>
-Set LibLZMA5$Path <Obey$Dir>.

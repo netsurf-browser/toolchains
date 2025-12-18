@@ -1,6 +1,0 @@
-| Run file for LibGCrypt20
-
-IfThere <Obey$Dir>.!Sprites then IconSprites <Obey$Dir>.!Sprites
-
-Set LibGCrypt20$Dir <Obey$Dir>
-Set LibGCrypt20$Path <Obey$Dir>.

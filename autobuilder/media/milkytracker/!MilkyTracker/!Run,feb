@@ -1,7 +1,0 @@
-If "<UnixEnv$HOME>" = "" Then Error !UnixHome application has not been seen
-
-WIMPSLOT
-
-Set MilkyTracker$Dir <Obey$Dir>
-
-Run <MilkyTracker$Dir>.milkytracker >null: 2><Obey$Dir>.stderr

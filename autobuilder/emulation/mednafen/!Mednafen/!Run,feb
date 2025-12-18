@@ -1,6 +1,0 @@
-WIMPSLOT
-
-X rmreinit digitalrenderer
-Set Mednafen$Dir <Obey$Dir>
-if "%*0" = "" then Filer_Run <Mednafen$Dir>.!Help
-Run <Mednafen$Dir>.mednafen %*0 ><Obey$Dir>.stdout 2><Obey$Dir>.stderr
