@@ -1,0 +1,16 @@
+
+AB_ROVERSION=1
+
+export gl_cv_func_gettimeofday_clobber=no
+
+ab_package() {
+  ab_create_command_app GZip Apps/Utilities
+  ab_add_commands $S/*$AB_EXEEXT
+
+  echo "Set Alias\$gunzip gzip -d %%*0" >> $A/\!Boot,feb
+  echo "Set Alias\$zcat gzip -cd %%*0" >> $A/\!Boot,feb
+
+  rman -f HTML $S/gzip.1 > $A/\!Help,faf
+
+  $AB_HOME/add-riscpkg -unixlib
+}
