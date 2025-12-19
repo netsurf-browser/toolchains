@@ -79,3 +79,36 @@ directory is found in the source archive it will be renamed to
 
 As for "import-orig", "repack" can be confused by ambiguous names so take
 care to ensure that the resulting repacked sources look sane before use.
+
+
+Updates
+-------
+
+Each of the Makefiles has a "source-archives" target which fetches the
+original sources from wherever they live upstream and, where appropriate,
+repack them into a tarball.  Thus, updating components will generally
+involve the following steps:
+
+  0. Ensure all upstream/* and pristine-tar branches are checked out locally
+     and have no changes
+  1. Bump the version numbers of the components in the Makefile
+  2. Run "make source-archives" to download them all (noting that bitrot
+     is inevitable as URLs are not stable, so fixes to the download rules
+     may also be required)
+  3. Manually verify the authenticity of the archives (i.e. check against
+     published checksums, or validate GPG signatures)
+  4. Manually verify that repacked source archives are sane
+  5. Use "import-orig" to import each of the updated components to git
+  6. Update any local patches/additions (c.f. recipes/*)
+  7. Build the updated sources in the usual way
+
+Steps 6 & 7 likely repeat multiple times until done.
+
+Step 3 might be possible to (semi-)automate if checksum/signature files
+are published in a deterministic manner by the original source.  However,
+this is very much not the case for many sources.
+
+Once complete, ensure all local changes are committed to git and that
+everything (i.e. tags, upstream/* branches, pristine-tar branch, and
+the working branch containing this document) is pushed -- failure to
+do so makes it impossible to reproduce builds later.
