@@ -6,6 +6,7 @@ Pre-requisites for Debian systems
 	$ apt-get install build-essential autoconf automake autogen flex bison
 	$ apt-get install libtool texinfo help2man subversion cvs git
 	$ apt-get install lhasa unzip autoconf2.64 automake1.11
+	$ apt-get install pristine-tar
 
  If you've not got automake 1.15 by default, you'll need:
 
@@ -19,20 +20,62 @@ Pre-requisites for Debian systems
 	$ apt-get update
 	$ apt-get install gcc-multilib
 
-RISC OS
+Building
+--------
+
+It is important that the output prefix (/opt/netsurf by default) is writable.
+
+There are two steps to a build:
+
+  1. building the toolchain (compiler, linkers, etc) for the build system
+  2. building the runtime libraries for the host system using the toolchain
+
+The general pattern is as follows:
+
+	$ make -C {ARCH}
+	$ GCCSDK_INSTALL_CROSSBIN=/opt/netsurf/{ARCH}/cross/bin \
+	  GCCSDK_INSTALL_ENV=/opt/netsurf/{ARCH}/env \
+	  make -C sdk
+
+where {ARCH} is one of the supported host triplets (e.g. arm-unknown-riscos)
+
+
+Sources
 -------
 
-It is important that the output prefix (/opt/netsurf by default) is writable 
- or use sudo to do the make
+The original source tarballs are ingested into git using the "import-orig"
+script found in the tools directory.  This uses pristine-tar to ensure a
+bit-exact copy of the original source tarball is recreated.  Tags are created
+for each upstream version.
 
-	$ make -C arm-unknown-riscos
-	$ GCCSDK_INSTALL_CROSSBIN=/opt/netsurf/arm-unknown-riscos/cross/bin GCCSDK_INSTALL_ENV=/opt/netsurf/arm-unknown-riscos/env make -C sdk
+The tarballs are recreated dynamically as part of the build using the
+relevant sources from the appropriate "upstream/<package>" branch and a
+delta file from the "pristine-tar" branch.  Neither branch need be checked
+out locally but must be known to git in some way or other (i.e. via the
+"origin" remote) -- thus shallow clones and bare branches will not work.
 
+Note that, while source package name and version are usually computed
+without incident from the name of the original source tarball, it may
+be necessary to tell "import-orig" the answer explicitly -- it has
+command line arguments that enable this.  Of particular note are packages
+whose tarball name is ambiguous (i.e. where the package name and/or version
+contain the likely separator characters: underscore and hyphen).
 
-Windows
--------
+Note also that it is only possible to use "import-orig" to import a
+single source artefact for a given version.  Multiple source archives
+for a package are not supported.
 
-The mingw cross build toolchain is made by
+Where the original sources are not provided in (compressed) tar format
+by the original source, it is necessary to repack them before import.
+This may be achieved using the "repack" script found in the tools directory.
+This determines the package name and version from the basename of the
+output path.
 
-	$ make -C i686-w64-mingw32
-	$ GCCSDK_INSTALL_CROSSBIN=/opt/netsurf/i686-w64-mingw32/cross/bin GCCSDK_INSTALL_ENV=/opt/netsurf/i686-w64-mingw32/env make -C sdk
+As a general rule, "repack" will encapsulate the contents of the source
+archive in a directory with a name in the form of {package}-{version} and
+then create the tarball from that.  In the case where a single top-level
+directory is found in the source archive it will be renamed to
+{package}-{version} and then tarred.
+
+As for "import-orig", "repack" can be confused by ambiguous names so take
+care to ensure that the resulting repacked sources look sane before use.
