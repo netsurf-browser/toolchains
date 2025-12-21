@@ -241,7 +241,7 @@ ifeq ($(TARGET),m68k-unknown-amigaos)
   ifeq ($(LIBCURL_SSL),openssl)
     LIBCURL_ENV := LIBS="-lm -lnet"
   else
-    LIBCURL_ENV := CFLAGS="-I$(GCCSDK_INSTALL_ENV)/netinclude -D__NO_NET_API -DHAVE_IOCTLSOCKET_CAMEL_FIONBIO" LIBS="-lm"
+    LIBCURL_ENV := CFLAGS="-I$(GCCSDK_INSTALL_ENV)/netinclude -D__NO_NET_API -DHAVE_IOCTLSOCKET_CAMEL_FIONBIO" LIBS="-lm" curl_disallow_closesocket_camel=yes curl_disallow_ioctlsocket_camel=yes
   endif
   # XXX: libgcc is meant to be implied, but for some reason that
   # results in ld evaluating it after libm and thus failing to find symbols.
