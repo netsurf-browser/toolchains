@@ -151,7 +151,16 @@ NS_SDK_CMAKE_CMD=cmake \
 		-DBUILD_EXAMPLES=OFF \
 		-DBUILD_TEST=OFF \
 		-DBUILD_TESTS=OFF \
-		-DBUILD_TESTING=OFF \
+		-DBUILD_TESTING=OFF
+
+NS_SDK_AUTOTOOLS_DOC_SUPPRESS=\
+		--disable-doc \
+		--disable-docs \
+		--disable-gtk-doc \
+		--disable-gtk-doc-html \
+		--disable-documentation \
+		--with-xmlto=no \
+		--with-fop=no
 
 RECIPES := $(CURDIR)/recipes
 SOURCEDIR := $(CURDIR)/sources
@@ -366,7 +375,7 @@ $(BUILDSTEPS)/zlib-gensrc.d: $(BUILDSTEPS)/builddir.d
 $(eval $(call patched_source_rule,libiconv,$(VERSION_LIBICONV)))
 
 $(BUILDSTEPS)/libiconv.d: $(BUILDSTEPS)/builddir.d $(BUILDSTEP_SRC_LIBICONV)
-	cd $(BUILDDIR_LIBICONV) && $(env) $(LIBICONV_ENV) ./configure --prefix=$(GCCSDK_INSTALL_ENV) --target=$(TARGET) --host=$(TARGET) --disable-shared $(EXTRAARGS_LIBICONV)
+	cd $(BUILDDIR_LIBICONV) && $(env) $(LIBICONV_ENV) ./configure --prefix=$(GCCSDK_INSTALL_ENV) --target=$(TARGET) --host=$(TARGET) $(NS_SDK_AUTOTOOLS_DOC_SUPPRESS) --disable-shared $(EXTRAARGS_LIBICONV)
 	cd $(BUILDDIR_LIBICONV) && $(env) make install
 	touch $@
 
@@ -382,7 +391,7 @@ $(BUILDSTEPS)/libiconv-gensrc.d: $(BUILDSTEPS)/builddir.d
 $(eval $(call patched_source_rule,libgnurx,$(VERSION_LIBGNURX),.tar.gz,mingw-libgnurx))
 
 $(BUILDSTEPS)/libgnurx.d: $(BUILDSTEPS)/builddir.d $(BUILDSTEPS)/libgnurx-src2.d
-	cd $(BUILDDIR_LIBGNURX) && $(env) ./configure --prefix=$(GCCSDK_INSTALL_ENV) --target=$(TARGET) --host=$(TARGET) --enable-static --disable-shared
+	cd $(BUILDDIR_LIBGNURX) && $(env) ./configure --prefix=$(GCCSDK_INSTALL_ENV) --target=$(TARGET) --host=$(TARGET) $(NS_SDK_AUTOTOOLS_DOC_SUPPRESS) --enable-static --disable-shared
 	cd $(BUILDDIR_LIBGNURX) && $(env) make
 	cd $(BUILDDIR_LIBGNURX) && $(env) make install
 	touch $@
@@ -461,7 +470,7 @@ $(BUILDSTEPS)/ldg-gensrc.d: $(BUILDSTEPS)/builddir.d
 $(eval $(call patched_source_rule,hermes,$(VERSION_HERMES),.tar.gz,hermes-pixel-format))
 
 $(BUILDSTEPS)/hermes.d: $(BUILDSTEPS)/builddir.d $(BUILDSTEP_SRC_HERMES)
-	cd $(BUILDDIR_HERMES) && $(env) ./configure --prefix=$(GCCSDK_INSTALL_ENV) --target=$(TARGET) --host=$(TARGET) --disable-shared --disable-x86asm
+	cd $(BUILDDIR_HERMES) && $(env) ./configure --prefix=$(GCCSDK_INSTALL_ENV) --target=$(TARGET) --host=$(TARGET) $(NS_SDK_AUTOTOOLS_DOC_SUPPRESS) --disable-shared --disable-x86asm
 	cd $(BUILDDIR_HERMES) && $(env) make CFLAGS="-D__BIG_ENDIAN__" install
 	touch $@
 
@@ -477,7 +486,7 @@ $(BUILDSTEPS)/hermes-gensrc.d: $(BUILDSTEPS)/builddir.d
 $(eval $(call patched_source_rule,freetype,$(VERSION_FREETYPE)))
 
 $(BUILDSTEPS)/freetype.d: $(BUILDSTEPS)/builddir.d $(BUILDSTEP_SRC_FREETYPE)
-	cd $(BUILDDIR_FREETYPE) && $(env) $(FREETYPE_ENV) ./configure --prefix=$(GCCSDK_INSTALL_ENV) --target=$(TARGET) --host=$(TARGET) --disable-shared --with-harfbuzz=no
+	cd $(BUILDDIR_FREETYPE) && $(env) $(FREETYPE_ENV) ./configure --prefix=$(GCCSDK_INSTALL_ENV) --target=$(TARGET) --host=$(TARGET) $(NS_SDK_AUTOTOOLS_DOC_SUPPRESS) --disable-shared --with-harfbuzz=no
 	cd $(BUILDDIR_FREETYPE) && $(env) make
 	cd $(BUILDDIR_FREETYPE) && $(env) make install 
 	touch $@
@@ -511,7 +520,7 @@ $(BUILDSTEPS)/roadshow-gensrc.d: $(BUILDSTEPS)/builddir.d
 $(eval $(call patched_source_rule,tre,$(VERSION_LIBTRE),.tar.gz))
 
 $(BUILDSTEPS)/tre.d: $(BUILDSTEPS)/builddir.d $(BUILDSTEP_SRC_TRE)
-	cd $(BUILDDIR_TRE) && $(env) ./configure --prefix=$(GCCSDK_INSTALL_ENV) --target=$(TARGET) --host=$(TARGET) --disable-shared
+	cd $(BUILDDIR_TRE) && $(env) ./configure --prefix=$(GCCSDK_INSTALL_ENV) --target=$(TARGET) --host=$(TARGET) $(NS_SDK_AUTOTOOLS_DOC_SUPPRESS) --disable-shared
 	cd $(BUILDDIR_TRE) && $(env) make install
 	cp $(RECIPES)/files/libtre/regex.h $(GCCSDK_INSTALL_ENV)/include/regex.h
 	touch $@
@@ -570,7 +579,7 @@ $(BUILDSTEPS)/openssl-gensrc.d: $(BUILDSTEPS)/builddir.d
 $(eval $(call patched_source_rule,libpng,$(VERSION_LIBPNG)))
 
 $(BUILDSTEPS)/libpng.d: $(BUILDSTEPS)/builddir.d $(BUILDSTEPS)/zlib.d $(BUILDSTEP_SRC_LIBPNG)
-	cd $(BUILDDIR_LIBPNG) && $(env) ./configure --prefix=$(GCCSDK_INSTALL_ENV) --target=$(TARGET) --host=$(TARGET) --disable-shared
+	cd $(BUILDDIR_LIBPNG) && $(env) ./configure --prefix=$(GCCSDK_INSTALL_ENV) --target=$(TARGET) --host=$(TARGET) $(NS_SDK_AUTOTOOLS_DOC_SUPPRESS) --disable-shared
 	cd $(BUILDDIR_LIBPNG) && $(env) make install
 	touch $@
 
@@ -586,7 +595,7 @@ $(BUILDSTEPS)/libpng-gensrc.d: $(BUILDSTEPS)/builddir.d
 $(eval $(call patched_source_rule,libjpeg,$(VERSION_LIBJPEG),.tar.gz,jpeg))
 
 $(BUILDSTEPS)/libjpeg.d: $(BUILDSTEPS)/builddir.d $(BUILDSTEP_SRC_LIBJPEG)
-	cd $(BUILDDIR_LIBJPEG) && $(env) $(LIBJPEG_ENV) ./configure --prefix=$(GCCSDK_INSTALL_ENV) --target=$(TARGET) --host=$(TARGET) --disable-shared
+	cd $(BUILDDIR_LIBJPEG) && $(env) $(LIBJPEG_ENV) ./configure --prefix=$(GCCSDK_INSTALL_ENV) --target=$(TARGET) --host=$(TARGET) $(NS_SDK_AUTOTOOLS_DOC_SUPPRESS) --disable-shared
 	cd $(BUILDDIR_LIBJPEG) && $(env) make install
 	touch $@
 
@@ -638,7 +647,7 @@ $(BUILDSTEPS)/libbrotli-gensrc.d: $(BUILDSTEPS)/builddir.d
 $(eval $(call patched_source_rule,libwebp,$(VERSION_LIBWEBP)))
 
 $(BUILDSTEPS)/libwebp.d: $(BUILDSTEPS)/builddir.d $(BUILDSTEP_SRC_LIBWEBP)
-	cd $(BUILDDIR_LIBWEBP) && $(env) $(LIBWEBP_ENV) LIBPNG_CONFIG="$(GCCSDK_INSTALL_ENV)/bin/libpng-config --static" ./configure --prefix=$(GCCSDK_INSTALL_ENV) --target=$(TARGET) --host=$(TARGET) --disable-shared $(EXTRAARGS_LIBWEBP)
+	cd $(BUILDDIR_LIBWEBP) && $(env) $(LIBWEBP_ENV) LIBPNG_CONFIG="$(GCCSDK_INSTALL_ENV)/bin/libpng-config --static" ./configure --prefix=$(GCCSDK_INSTALL_ENV) --target=$(TARGET) --host=$(TARGET) $(NS_SDK_AUTOTOOLS_DOC_SUPPRESS) --disable-shared $(EXTRAARGS_LIBWEBP)
 	cd $(BUILDDIR_LIBWEBP) && $(env) make install
 	touch $@
 
@@ -654,7 +663,7 @@ $(BUILDSTEPS)/libwebp-gensrc.d: $(BUILDSTEPS)/builddir.d
 $(eval $(call patched_source_rule,libcares,$(VERSION_LIBCARES),.tar.gz,c-ares))
 
 $(BUILDSTEPS)/libcares.d: $(BUILDSTEPS)/builddir.d $(BUILDSTEP_SRC_LIBCARES)
-	cd $(BUILDDIR_LIBCARES) && $(cleanenv) $(LIBCARES_ENV) ./configure --prefix=$(GCCSDK_INSTALL_ENV) --target=$(TARGET) --host=$(TARGET) $(EXTRAARGS_LIBCARES)
+	cd $(BUILDDIR_LIBCARES) && $(cleanenv) $(LIBCARES_ENV) ./configure --prefix=$(GCCSDK_INSTALL_ENV) --target=$(TARGET) --host=$(TARGET) $(NS_SDK_AUTOTOOLS_DOC_SUPPRESS) $(EXTRAARGS_LIBCARES)
 	cd $(BUILDDIR_LIBCARES) && $(cleanenv) make install
 	touch $@
 
@@ -670,7 +679,7 @@ $(BUILDSTEPS)/libcares-gensrc.d: $(BUILDSTEPS)/builddir.d
 $(eval $(call patched_source_rule,libcurl,$(VERSION_LIBCURL),.tar.gz,curl))
 
 $(BUILDSTEPS)/libcurl.d: $(BUILDSTEPS)/builddir.d $(BUILDSTEPS)/zlib.d $(BUILDSTEPS)/openssl.d $(BUILDSTEPS)/libcares.d $(BUILDSTEP_SRC_LIBCURL)
-	cd $(BUILDDIR_LIBCURL) && $(env) CFLAGS="" $(LIBCURL_ENV) ./configure --prefix=$(GCCSDK_INSTALL_ENV) --target=$(TARGET) --host=$(TARGET) --disable-shared --with-$(LIBCURL_SSL) --without-libidn2 --without-libpsl ${EXTRAARGS_LIBCURL}
+	cd $(BUILDDIR_LIBCURL) && $(env) CFLAGS="" $(LIBCURL_ENV) ./configure --prefix=$(GCCSDK_INSTALL_ENV) --target=$(TARGET) --host=$(TARGET) $(NS_SDK_AUTOTOOLS_DOC_SUPPRESS) --disable-shared --with-$(LIBCURL_SSL) --without-libidn2 --without-libpsl ${EXTRAARGS_LIBCURL}
 	cd $(BUILDDIR_LIBCURL) && $(env) make install
 	touch $@
 
@@ -686,7 +695,7 @@ $(BUILDSTEPS)/libcurl-gensrc.d: $(BUILDSTEPS)/builddir.d
 $(eval $(call patched_source_rule,libexpat,$(VERSION_LIBEXPAT),.tar.gz,expat))
 
 $(BUILDSTEPS)/libexpat.d: $(BUILDSTEPS)/builddir.d $(BUILDSTEP_SRC_LIBEXPAT)
-	cd $(BUILDDIR_LIBEXPAT) && $(env) $(LIBEXPAT_ENV) ./configure --prefix=$(GCCSDK_INSTALL_ENV) --target=$(TARGET) --host=$(TARGET) --disable-shared $(EXTRAARGS_LIBEXPAT)
+	cd $(BUILDDIR_LIBEXPAT) && $(env) $(LIBEXPAT_ENV) ./configure --prefix=$(GCCSDK_INSTALL_ENV) --target=$(TARGET) --host=$(TARGET) $(NS_SDK_AUTOTOOLS_DOC_SUPPRESS) --disable-shared $(EXTRAARGS_LIBEXPAT)
 	cd $(BUILDDIR_LIBEXPAT) && $(env) $(LIBEXPAT_ENV) make install
 	touch $@
 
