@@ -6,7 +6,7 @@ on:
 jobs:
   # Clean up temporary releases / tags for deleted branches
   cleanup:
-    name: "Cleanup"
+    name: "Cleanup '${{ github.event.ref }}' temporary release"
     runs-on: ubuntu-latest
     # Only run for branch deletions, not tag deletions
     if: github.event.ref_type == 'branch'
