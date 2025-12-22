@@ -66,6 +66,13 @@ jobs:
         GCCSDK_INSTALL_ENV: /opt/netsurf/${{ matrix.toolchain }}/env
       run: make -C sdk
 
+    - name: Write testament
+      run: |
+        echo "Date: $(date -u +"%Y-%m-%d %H:%M:%S UTC")" > /opt/netsurf/${{ matrix.toolchain }}/BUILD_INFO.txt
+        echo "Branch: ${{ github.ref_name }}" >> /opt/netsurf/${{ matrix.toolchain }}/BUILD_INFO.txt
+        echo "Commit: $(git rev-parse HEAD)" >> /opt/netsurf/${{ matrix.toolchain }}/BUILD_INFO.txt
+        echo "Subject: $(git log -1 --pretty=format:'%s')" >> /opt/netsurf/${{ matrix.toolchain }}/BUILD_INFO.txt
+
     # Have to tar first to retain permissions
     # Exclude unneeded files to reduce size
     - name: Make tarball
