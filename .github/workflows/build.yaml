@@ -67,8 +67,14 @@ jobs:
       run: make -C sdk
 
     # Have to tar first to retain permissions
+    # Exclude unneeded files to reduce size
     - name: Make tarball
-      run: tar -czf ${{ matrix.toolchain }}.tar.gz -C / opt/netsurf
+      run: tar -czf ${{ matrix.toolchain }}.tar.gz
+               --exclude='*/env/bin/*'
+               --exclude='*/share/doc/*'
+               --exclude='*/share/man/*'
+               -C /
+               opt/netsurf
 
     # Can't avoid `upload-artifact` zipping the tarball
     # https://github.com/actions/upload-artifact/issues/426
