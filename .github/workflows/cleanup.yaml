@@ -1,0 +1,90 @@
+name: "Cleanup"
+
+on:
+  delete:
+
+jobs:
+  # Clean up temporary releases / tags for deleted branches
+  cleanup:
+    name: "Cleanup"
+    runs-on: ubuntu-latest
+    # Only run for branch deletions, not tag deletions
+    if: github.event.ref_type == 'branch'
+    
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v5
+
+    - name: Determine deleted branch name
+      id: branch
+      run: |
+        deleted_branch="${{ github.event.ref }}"
+        echo "Deleted branch: $deleted_branch"
+        
+        # Generate the expected tag name using the same logic as build.yaml
+        safe_branch=$(echo "$deleted_branch" | sed 's/[^a-zA-Z0-9._-]/-/g')
+        expected_tag="gh-${safe_branch}-unstable"
+        
+        echo "Expected release tag: $expected_tag"
+        echo "deleted_branch=$deleted_branch" >> $GITHUB_OUTPUT
+        echo "expected_tag=$expected_tag" >> $GITHUB_OUTPUT
+
+    - name: Check if release exists
+      id: check_release
+      run: |
+        expected_tag="${{ steps.branch.outputs.expected_tag }}"
+        
+        echo "Checking if release exists for tag: $expected_tag"
+        
+        release_data=$(curl -s -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" \
+          "https://api.github.com/repos/${{ github.repository }}/releases/tags/$expected_tag")
+        
+        if echo "$release_data" | jq -e '.id' > /dev/null; then
+          release_id=$(echo "$release_data" | jq -r '.id')
+          echo "Found release with ID: $release_id"
+          echo "release_exists=true" >> $GITHUB_OUTPUT
+          echo "release_id=$release_id" >> $GITHUB_OUTPUT
+          
+          # Store asset information for deletion
+          echo "assets_data<<EOF" >> $GITHUB_OUTPUT
+          echo "$release_data" | jq -r '.assets[] | "\(.id) \(.name)"' >> $GITHUB_OUTPUT
+          echo "EOF" >> $GITHUB_OUTPUT
+        else
+          echo "No release found for tag: $expected_tag"
+          echo "release_exists=false" >> $GITHUB_OUTPUT
+        fi
+
+    - name: Delete release assets
+      if: steps.check_release.outputs.release_exists == 'true'
+      run: |
+        expected_tag="${{ steps.branch.outputs.expected_tag }}"
+        echo "Deleting assets for release: $expected_tag"
+        
+        # Read assets data and delete each asset
+        while IFS= read -r line; do
+          if [ -n "$line" ]; then
+            asset_id=$(echo "$line" | cut -d' ' -f1)
+            asset_name=$(echo "$line" | cut -d' ' -f2-)
+            
+            echo "Deleting asset: $asset_name (id: $asset_id)"
+            curl -s -X DELETE \
+              -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" \
+              "https://api.github.com/repos/${{ github.repository }}/releases/assets/$asset_id"
+          fi
+        done <<< "${{ steps.check_release.outputs.assets_data }}"
+
+    - name: Delete release
+      if: steps.check_release.outputs.release_exists == 'true'
+      run: |
+        expected_tag="${{ steps.branch.outputs.expected_tag }}"
+        release_id="${{ steps.check_release.outputs.release_id }}"
+        
+        echo "Deleting release: $expected_tag (id: $release_id)"
+        curl -s -X DELETE \
+          -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" \
+          "https://api.github.com/repos/${{ github.repository }}/releases/$release_id"
+
+    - name: Delete tag
+      run: |
+        echo "Deleting tag: ${{ steps.branch.outputs.expected_tag }}"
+        git push --delete origin "${{ steps.branch.outputs.expected_tag }}"
