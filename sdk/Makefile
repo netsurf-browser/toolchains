@@ -62,6 +62,11 @@ VERSION_LIBCARES := 1.34.5
 # https://curl.se/
 VERSION_LIBCURL := 8.17.0
 
+# Text processing
+
+# https://github.com/JuliaStrings/utf8proc
+VERSION_UTF8PROC := 2.11.3
+
 ############################################################################
 
 # Platforms with no native iconv (AmigaOS, Atari, Windows)
@@ -176,7 +181,7 @@ REPACK := $(CURDIR)/../tools/repack
 # Compute the SDK components
 SDK_ITEMS :=
 
-COMMON_SDK_ITEMS := zlib.d openssl.d libpng.d libcares.d libcurl.d libexpat.d
+COMMON_SDK_ITEMS := zlib.d openssl.d libpng.d libcares.d libcurl.d libexpat.d utf8proc.d
 
 LIBCURL_SSL := openssl
 LIBCURL_DISABLES := $(patsubst %,--disable-%,ftp file dict ldap ldaps mqtt rtsp telnet gopher tftp pop3 imap smb smtp manual)
@@ -383,6 +388,21 @@ $(BUILDSTEPS)/libiconv-gensrc.d: $(BUILDSTEPS)/builddir.d
 	wget -q -O $(BUILDDIR)/$(subst $(SOURCEDIR)/,,$(SOURCETARBALL_LIBICONV)) "https://ftp.gnu.org/pub/gnu/libiconv/$(subst _,-,$(subst $(SOURCEDIR)/,,$(SOURCETARBALL_LIBICONV)))"
 	touch $@
 
+###########
+# utf8proc
+###########
+
+$(eval $(call patched_source_rule,utf8proc,$(VERSION_UTF8PROC)))
+
+$(BUILDSTEPS)/utf8proc.d: $(BUILDSTEPS)/builddir.d $(BUILDSTEP_SRC_UTF8PROC)
+	mkdir -p $(BUILDDIR_UTF8PROC)/ns-sdk-build
+	cd $(BUILDDIR_UTF8PROC)/ns-sdk-build && $(env) $(UTF8PROC_ENV) $(NS_SDK_CMAKE_CMD) -DCMAKE_BUILD_TYPE=Release ..
+	cd $(BUILDDIR_UTF8PROC)/ns-sdk-build && $(env) make install VERBOSE=1
+	touch $@
+
+$(BUILDSTEPS)/utf8proc-gensrc.d: $(BUILDSTEPS)/builddir.d
+	wget -q -O $(BUILDDIR)/$(subst $(SOURCEDIR)/,,$(SOURCETARBALL_UTF8PROC)) "https://github.com/JuliaStrings/utf8proc/archive/refs/tags/v$(VERSION_UTF8PROC).tar.gz"
+	touch $@
 
 ###########
 # libgnurx
