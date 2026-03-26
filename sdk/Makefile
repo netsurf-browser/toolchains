@@ -50,7 +50,7 @@ VERSION_LIBEXPAT := 2.7.3
 # https://libjpeg-turbo.org/
 VERSION_LIBJPEG_TURBO := 3.1.2
 # http://www.libpng.org/pub/png/libpng.html
-VERSION_LIBPNG := 1.6.53
+VERSION_LIBPNG := 1.6.56
 # https://developers.google.com/speed/webp/
 VERSION_LIBWEBP := 1.6.0
 
