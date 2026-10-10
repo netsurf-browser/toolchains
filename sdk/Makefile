@@ -107,12 +107,14 @@ VERSION_LIBGNURX := 2.5.1
 # have been asked to build a target that does not
 # require a toolchain)
 ifeq ($(findstring source-archives,$(MAKECMDGOALS)),)
-  ifeq ($(GCCSDK_INSTALL_ENV),)
-    $(error GCCSDK_INSTALL_ENV not set)
-  endif
+  ifeq ($(findstring check-updates,$(MAKECMDGOALS)),)
+    ifeq ($(GCCSDK_INSTALL_ENV),)
+      $(error GCCSDK_INSTALL_ENV not set)
+    endif
 
-  ifeq ($(GCCSDK_INSTALL_CROSSBIN),)
-    $(error GCCSDK_INSTALL_CROSSBIN not set)
+    ifeq ($(GCCSDK_INSTALL_CROSSBIN),)
+      $(error GCCSDK_INSTALL_CROSSBIN not set)
+    endif
   endif
 endif
 
@@ -133,10 +135,10 @@ ldflags__ := -L$(GCCSDK_INSTALL_ENV)/lib
 pkg_config_libdir__ := $(GCCSDK_INSTALL_ENV)/lib/pkgconfig
 
 # Target
-ifeq ($(MAKECMDGOALS),source-archives)
-  # source-archives: force a placeholder TARGET (important note: the
-  # SDK_ITEMS sanity test further down relies on this not being a
-  # KNOWN_TRIPLET)
+ifneq ($(findstring $(MAKECMDGOALS),source-archives check-updates),)
+  # source-archives or check-updates: force a placeholder TARGET
+  # (important note: the SDK_ITEMS sanity test further down relies
+  # on this not being a KNOWN_TRIPLET)
   TARGET := $(MAKECMDGOALS)
 else
   # If not foo.real (i.e. the internal job for "foo"), derive target
@@ -197,11 +199,13 @@ BUILDSTEPS := $(BUILDDIR)/build-steps
 PATCH := patch -F0
 PRISTINE_TAR := $(CURDIR)/../tools/pristine-tar
 REPACK := $(CURDIR)/../tools/repack
+CHECK_UPDATE := $(CURDIR)/../tools/check-update
 
 # Compute the SDK components
 SDK_ITEMS :=
 
 COMMON_SDK_ITEMS := zlib.d openssl.d libpng.d libcares.d libcurl.d libexpat.d utf8proc.d
+ALL_SDK_ITEMS := $(addprefix $(BUILDSTEPS)/,$(sort $(COMMON_SDK_ITEMS) libbrotli.d libjpeg-turbo.d libwebp.d libiconv.d libjpeg.d libcf.d ldg.d windom.d hermes.d freetype.d roadshow.d tre.d pbl.d libgnurx.d))
 
 LIBCURL_SSL := openssl
 LIBCURL_DISABLES := $(patsubst %,--disable-%,ftp file dict ldap ldaps mqtt rtsp telnet gopher tftp pop3 imap smb smtp manual)
@@ -310,9 +314,10 @@ ifneq ($(findstring $(TARGET),$(KNOWN_TRIPLETS)),)
   endif
 endif
 
-.PHONY: all clean distclean source-archives source-archives.real
+.PHONY: all clean distclean source-archives source-archives.real check-updates
 all: $(SDK_ITEMS)
 
+check-updates: $(foreach item,$(ALL_SDK_ITEMS),$(basename $(item))-chkupd.d)
 
 clean:
 	rm -fr $(BUILDDIR)
@@ -403,6 +408,9 @@ $(BUILDSTEPS)/zlib-gensrc.d: $(BUILDSTEPS)/builddir.d
 	wget -q -O $(BUILDDIR)/$(subst $(SOURCEDIR)/,,$(SOURCETARBALL_ZLIB)) "https://zlib.net/fossils/$(subst _,-,$(subst $(SOURCEDIR)/,,$(SOURCETARBALL_ZLIB)))"
 	touch $@
 
+$(BUILDSTEPS)/zlib-chkupd.d:
+	@$(CHECK_UPDATE) zlib $(VERSION_ZLIB) "https://zlib.net/fossils/" "zlib-(\d+\.\d+(\.\d+)?).tar.gz"
+
 
 ###########
 # libiconv
@@ -419,6 +427,10 @@ $(BUILDSTEPS)/libiconv-gensrc.d: $(BUILDSTEPS)/builddir.d
 	wget -q -O $(BUILDDIR)/$(subst $(SOURCEDIR)/,,$(SOURCETARBALL_LIBICONV)) "https://ftp.gnu.org/pub/gnu/libiconv/$(subst _,-,$(subst $(SOURCEDIR)/,,$(SOURCETARBALL_LIBICONV)))"
 	touch $@
 
+$(BUILDSTEPS)/libiconv-chkupd.d:
+	@$(CHECK_UPDATE) libiconv $(VERSION_LIBICONV) "https://ftp.gnu.org/pub/gnu/libiconv/" "libiconv-(\d+\.\d+(\.\d+)?).tar.gz"
+
+
 ###########
 # utf8proc
 ###########
@@ -434,6 +446,10 @@ $(BUILDSTEPS)/utf8proc.d: $(BUILDSTEPS)/builddir.d $(BUILDSTEP_SRC_UTF8PROC)
 $(BUILDSTEPS)/utf8proc-gensrc.d: $(BUILDSTEPS)/builddir.d
 	wget -q -O $(BUILDDIR)/$(subst $(SOURCEDIR)/,,$(SOURCETARBALL_UTF8PROC)) "https://github.com/JuliaStrings/utf8proc/archive/refs/tags/v$(VERSION_UTF8PROC).tar.gz"
 	touch $@
+
+$(BUILDSTEPS)/utf8proc-chkupd.d:
+	@$(CHECK_UPDATE) utf8proc $(VERSION_UTF8PROC) "https://api.github.com/repos/JuliaStrings/utf8proc/releases" "utf8proc-(\d+\.\d+(\.\d+)?).tar.gz"
+
 
 ###########
 # libgnurx
@@ -458,6 +474,11 @@ $(BUILDSTEPS)/libgnurx-gensrc.d: $(BUILDSTEPS)/builddir.d
 	wget -q -O $(BUILDDIR)/$(subst $(SOURCEDIR)/,,$(SOURCETARBALL_LIBGNURX)) "https://downloads.sourceforge.net/project/mingw/Other/UserContributed/regex/mingw-regex-$(VERSION_LIBGNURX)/mingw-libgnurx-$(VERSION_LIBGNURX)-src.tar.gz"
 	touch $@
 
+# This component has not changed since 2007 and Sourceforge is awkward.
+# Produce a pre-canned answer and assume it'll never change.
+$(BUILDSTEPS)/libgnurx-chkupd.d:
+	@echo '{"component": "libgnurx", "current": "$(VERSION_LIBGNURX)", "newest": "$(VERSION_LIBGNURX)", "url": null}'
+
 
 ###################
 # atari cf library
@@ -477,6 +498,9 @@ $(BUILDSTEPS)/libcf-gensrc.d: $(BUILDSTEPS)/builddir.d
 	wget -q -O $(BUILDDIR)/$(subst $(SOURCEDIR)/,,$(SOURCETARBALL_LIBCF)) "https://ci.netsurf-browser.org/toolchain/sdk/libcf-$(VERSION_LIBCF).tar.bz2"
 	touch $@
 
+$(BUILDSTEPS)/libcf-chkupd.d:
+	@$(CHECK_UPDATE) libcf $(VERSION_LIBCF) "http://vincent.riviere.free.fr/soft/m68k-atari-mint/" "cflib-([A-Za-z]+-\d+).tar.bz2"
+
 
 #######################
 # atari windom library
@@ -493,6 +517,11 @@ $(BUILDSTEPS)/windom-gensrc.d: $(BUILDSTEPS)/builddir.d
 	wget -q -O $(BUILDDIR)/$(basename $(basename $(subst $(SOURCEDIR)/,,$(SOURCETARBALL_WINDOM)))).zip "https://downloads.sourceforge.net/project/windom/windom/$(VERSION_WINDOM)/windom-$(VERSION_WINDOM)-1.zip"
 	$(REPACK) $(BUILDDIR)/$(basename $(basename $(subst $(SOURCEDIR)/,,$(SOURCETARBALL_WINDOM)))).zip $(BUILDDIR)/$(subst $(SOURCEDIR)/,,$(SOURCETARBALL_WINDOM))
 	touch $@
+
+# This component has not changed since 2006 and Sourceforge is awkward.
+# Produce a pre-canned answer and assume it'll never change.
+$(BUILDSTEPS)/windom-chkupd.d:
+	@echo '{"component": "windom", "current": "$(VERSION_WINDOM)", "newest": "$(VERSION_WINDOM)", "url": null}'
 
 
 ####################
@@ -513,6 +542,9 @@ $(BUILDSTEPS)/ldg-gensrc.d: $(BUILDSTEPS)/builddir.d
 	wget -q -O $(BUILDDIR)/$(subst $(SOURCEDIR)/,,$(SOURCETARBALL_LDG)) "http://vincent.riviere.free.fr/soft/m68k-atari-mint/archives/ldg-$(VERSION_LDG).tar.bz2"
 	touch $@
 
+$(BUILDSTEPS)/ldg-chkupd.d:
+	@$(CHECK_UPDATE) ldg $(VERSION_LDG) "http://vincent.riviere.free.fr/soft/m68k-atari-mint/" "ldg-([A-Za-z]+-\d+).tar.bz2"
+
 
 ####################
 # hermes bitmap lib
@@ -528,6 +560,10 @@ $(BUILDSTEPS)/hermes.d: $(BUILDSTEPS)/builddir.d $(BUILDSTEP_SRC_HERMES)
 $(BUILDSTEPS)/hermes-gensrc.d: $(BUILDSTEPS)/builddir.d
 	wget -q -O $(BUILDDIR)/$(subst $(SOURCEDIR)/,,$(SOURCETARBALL_HERMES)) "https://github.com/berkus/hermes-pixel-format/archive/refs/tags/v$(VERSION_HERMES).tar.gz"
 	touch $@
+
+# No release artefacts, so look for the auto-generated tag sources instead
+$(BUILDSTEPS)/hermes-chkupd.d:
+	@$(CHECK_UPDATE) hermes $(VERSION_HERMES) "https://github.com/berkus/hermes-pixel-format/tags" "v(\d+\.\d+(\.\d+)?).tar.gz"
 
 
 ####################
@@ -546,6 +582,9 @@ $(BUILDSTEPS)/freetype-gensrc.d: $(BUILDSTEPS)/builddir.d
 	wget -q -O $(BUILDDIR)/$(subst $(SOURCEDIR)/,,$(SOURCETARBALL_FREETYPE)) "https://download.savannah.gnu.org/releases/freetype/freetype-$(VERSION_FREETYPE).tar.gz"
 	touch $@
 
+$(BUILDSTEPS)/freetype-chkupd.d:
+	@$(CHECK_UPDATE) freetype $(VERSION_FREETYPE) "https://download.savannah.gnu.org/releases/freetype/" "freetype-(\d+\.\d+(\.\d+)?).tar.gz"
+
 
 #####################
 # amiga roadshow sdk
@@ -562,6 +601,10 @@ $(BUILDSTEPS)/roadshow-gensrc.d: $(BUILDSTEPS)/builddir.d
 	wget -q -O $(BUILDDIR)/$(basename $(basename $(subst $(SOURCEDIR)/,,$(SOURCETARBALL_ROADSHOW)))).lha "https://github.com/chris-y/curl/releases/download/curl-$(subst .,_,$(VERSION_ROADSHOW))/Roadshow-SDK-NS.lha"
 	$(REPACK) $(BUILDDIR)/$(basename $(basename $(subst $(SOURCEDIR)/,,$(SOURCETARBALL_ROADSHOW)))).lha $(BUILDDIR)/$(subst $(SOURCEDIR)/,,$(SOURCETARBALL_ROADSHOW))
 	touch $@
+
+# A Chris special: assume he will track this as automation is hard.
+$(BUILDSTEPS)/roadshow-chkupd.d:
+	@echo '{"component": "roadshow", "current": "$(VERSION_ROADSHOW)", "newest": "$(VERSION_ROADSHOW)", "url": null}'
 
 
 ########
@@ -580,6 +623,9 @@ $(BUILDSTEPS)/tre-gensrc.d: $(BUILDSTEPS)/builddir.d
 	wget -q -O $(BUILDDIR)/$(subst $(SOURCEDIR)/,,$(SOURCETARBALL_TRE)) "https://github.com/laurikari/tre/releases/download/v$(VERSION_LIBTRE)/$(subst _,-,$(subst $(SOURCEDIR)/,,$(SOURCETARBALL_TRE)))"
 	touch $@
 
+$(BUILDSTEPS)/tre-chkupd.d:
+	@$(CHECK_UPDATE) tre $(VERSION_LIBTRE) "https://api.github.com/repos/laurikari/tre/releases" "tre-(\d+\.\d+(\.\d+)?).tar.gz"
+
 
 ########
 # libpbl
@@ -596,6 +642,10 @@ $(BUILDSTEPS)/pbl.d: $(BUILDSTEPS)/builddir.d $(BUILDSTEP_SRC_PBL)
 $(BUILDSTEPS)/pbl-gensrc.d: $(BUILDSTEPS)/builddir.d
 	wget -q -O $(BUILDDIR)/$(subst $(SOURCEDIR)/,,$(SOURCETARBALL_PBL)) "https://www.mission-base.com/peter/source/$(subst $(SOURCEDIR)/,,$(SOURCETARBALL_PBL))"
 	touch $@
+
+# No release artefacts, so look for the auto-generated tag sources instead
+$(BUILDSTEPS)/pbl-chkupd.d:
+	@$(CHECK_UPDATE) pbl $(subst _,.,$(VERSION_LIBPBL)) "https://github.com/peterGraf/pbl/tags" "v(\d+\.\d+(\.\d+)?).tar.gz"
 
 
 #########
@@ -622,6 +672,9 @@ $(BUILDSTEPS)/openssl-gensrc.d: $(BUILDSTEPS)/builddir.d
 	wget -q -O $(BUILDDIR)/$(subst $(SOURCEDIR)/,,$(SOURCETARBALL_OPENSSL)) "https://github.com/openssl/openssl/releases/download/openssl-$(VERSION_OPENSSL)/$(subst _,-,$(subst $(SOURCEDIR)/,,$(SOURCETARBALL_OPENSSL)))"
 	touch $@
 
+$(BUILDSTEPS)/openssl-chkupd.d:
+	@$(CHECK_UPDATE) openssl $(VERSION_OPENSSL) "https://api.github.com/repos/openssl/openssl/releases" "openssl-(\d+\.\d+(\.\d+)?).tar.gz"
+
 
 #########
 # libPNG
@@ -637,6 +690,9 @@ $(BUILDSTEPS)/libpng.d: $(BUILDSTEPS)/builddir.d $(BUILDSTEPS)/zlib.d $(BUILDSTE
 $(BUILDSTEPS)/libpng-gensrc.d: $(BUILDSTEPS)/builddir.d
 	wget -q -O $(BUILDDIR)/$(subst $(SOURCEDIR)/,,$(SOURCETARBALL_LIBPNG)) "https://downloads.sourceforge.net/libpng/$(subst _,-,$(subst $(SOURCEDIR)/,,$(SOURCETARBALL_LIBPNG)))"
 	touch $@
+
+$(BUILDSTEPS)/libpng-chkupd.d:
+	@$(CHECK_UPDATE) libpng $(VERSION_LIBPNG) "https://libpng.org/pub/png/libpng.html" "libpng-(\d+\.\d+(\.\d+)?).tar.gz"
 
 
 ##########
@@ -654,9 +710,13 @@ $(BUILDSTEPS)/libjpeg-gensrc.d: $(BUILDSTEPS)/builddir.d
 	wget -q -O $(BUILDDIR)/$(subst $(SOURCEDIR)/,,$(SOURCETARBALL_LIBJPEG)) "https://ijg.org/files/jpegsrc.v$(VERSION_LIBJPEG).tar.gz"
 	touch $@
 
+# Pin v8 as we require that A{B,P}I
+$(BUILDSTEPS)/libjpeg-chkupd.d:
+	@$(CHECK_UPDATE) libjpeg $(VERSION_LIBJPEG) "https://ijg.org/files/" "jpegsrc.v(8[a-z]?).tar.gz"
+
 
 ###############
-# libjpegturbo
+# libjpeg-turbo
 ###############
 
 $(eval $(call patched_source_rule,libjpegturbo,$(VERSION_LIBJPEG_TURBO),.tar.gz,libjpeg-turbo))
@@ -671,6 +731,9 @@ $(BUILDSTEPS)/libjpeg-turbo.d: $(BUILDSTEPS)/builddir.d $(BUILDSTEP_SRC_LIBJPEGT
 $(BUILDSTEPS)/libjpeg-turbo-gensrc.d: $(BUILDSTEPS)/builddir.d
 	wget -q -O $(BUILDDIR)/$(subst $(SOURCEDIR)/,,$(SOURCETARBALL_LIBJPEGTURBO)) "https://github.com/libjpeg-turbo/libjpeg-turbo/releases/download/$(VERSION_LIBJPEG_TURBO)/libjpeg-turbo-$(VERSION_LIBJPEG_TURBO).tar.gz"
 	touch $@
+
+$(BUILDSTEPS)/libjpeg-turbo-chkupd.d:
+	@$(CHECK_UPDATE) libjpeg-turbo $(VERSION_LIBJPEG_TURBO) "https://api.github.com/repos/libjpeg-turbo/libjpeg-turbo/releases" "libjpeg-turbo-(\d+\.\d+(\.\d+)?).tar.gz"
 
 
 ############
@@ -690,6 +753,10 @@ $(BUILDSTEPS)/libbrotli-gensrc.d: $(BUILDSTEPS)/builddir.d
 	wget -q -O $(BUILDDIR)/$(subst $(SOURCEDIR)/,,$(SOURCETARBALL_BROTLI)) "https://github.com/google/brotli/archive/refs/tags/v$(VERSION_BROTLI).tar.gz"
 	touch $@
 
+# No source release artefact, so look for the auto-generated tag sources instead
+$(BUILDSTEPS)/libbrotli-chkupd.d:
+	@$(CHECK_UPDATE) brotli $(VERSION_BROTLI) "https://github.com/google/brotli/tags" "v(\d+\.\d+(\.\d+)?).tar.gz"
+
 
 ##########
 # libwebp
@@ -705,6 +772,9 @@ $(BUILDSTEPS)/libwebp.d: $(BUILDSTEPS)/builddir.d $(BUILDSTEP_SRC_LIBWEBP)
 $(BUILDSTEPS)/libwebp-gensrc.d: $(BUILDSTEPS)/builddir.d
 	wget -q -O $(BUILDDIR)/$(subst $(SOURCEDIR)/,,$(SOURCETARBALL_LIBWEBP)) "https://storage.googleapis.com/downloads.webmproject.org/releases/webp/libwebp-$(VERSION_LIBWEBP).tar.gz"
 	touch $@
+
+$(BUILDSTEPS)/libwebp-chkupd.d:
+	@$(CHECK_UPDATE) libwebp $(VERSION_LIBWEBP) "https://storage.googleapis.com/downloads.webmproject.org/releases/webp/index.html" "libwebp-(\d+\.\d+(\.\d+)?).tar.gz"
 
 
 ###########
@@ -722,6 +792,9 @@ $(BUILDSTEPS)/libcares-gensrc.d: $(BUILDSTEPS)/builddir.d
 	wget -q -O $(BUILDDIR)/$(subst $(SOURCEDIR)/,,$(SOURCETARBALL_LIBCARES)) "https://github.com/c-ares/c-ares/releases/download/v$(VERSION_LIBCARES)/c-ares-$(VERSION_LIBCARES).tar.gz"
 	touch $@
 
+$(BUILDSTEPS)/libcares-chkupd.d:
+	@$(CHECK_UPDATE) libcares $(VERSION_LIBCARES) "https://api.github.com/repos/c-ares/c-ares/releases" "c-ares-(\d+\.\d+(\.\d+)?).tar.gz"
+
 
 ##########
 # libcurl
@@ -738,6 +811,9 @@ $(BUILDSTEPS)/libcurl-gensrc.d: $(BUILDSTEPS)/builddir.d
 	wget -q -O $(BUILDDIR)/$(subst $(SOURCEDIR)/,,$(SOURCETARBALL_LIBCURL)) "https://curl.se/download/curl-$(VERSION_LIBCURL).tar.gz"
 	touch $@
 
+$(BUILDSTEPS)/libcurl-chkupd.d:
+	@$(CHECK_UPDATE) libcurl $(VERSION_LIBCURL) "https://api.github.com/repos/curl/curl/releases" "curl-(\d+\.\d+(\.\d+)?).tar.gz"
+
 
 ###########
 # libexpat
@@ -753,3 +829,6 @@ $(BUILDSTEPS)/libexpat.d: $(BUILDSTEPS)/builddir.d $(BUILDSTEP_SRC_LIBEXPAT)
 $(BUILDSTEPS)/libexpat-gensrc.d: $(BUILDSTEPS)/builddir.d
 	wget -q -O $(BUILDDIR)/$(subst $(SOURCEDIR)/,,$(SOURCETARBALL_LIBEXPAT)) "https://github.com/libexpat/libexpat/releases/download/R_$(subst .,_,$(VERSION_LIBEXPAT))/expat-$(VERSION_LIBEXPAT).tar.gz"
 	touch $@
+
+$(BUILDSTEPS)/libexpat-chkupd.d:
+	@$(CHECK_UPDATE) libexpat $(VERSION_LIBEXPAT) "https://api.github.com/repos/libexpat/libexpat/releases" "expat-(\d+\.\d+(\.\d+)?).tar.gz"

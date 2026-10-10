@@ -1,0 +1,152 @@
+#!/usr/bin/env python3
+
+import argparse
+from html.parser import HTMLParser
+import json
+import os
+import re
+from urllib.parse import urljoin, urlparse
+
+import httpx
+
+
+class IndexParser(HTMLParser):
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self._base = None
+        self._links = []
+
+    @property
+    def base(self) -> str | None:
+        return self._base
+
+    @property
+    def links(self) -> list[str]:
+        return self._links
+
+    def handle_starttag(self, tag: str, attrs: list[tuple[str, str]]):
+        if tag == "base" and self._base is None:
+            hrefs = [val for attr, val in attrs if attr == "href"]
+            if hrefs:
+                self._base = hrefs[0]
+            return
+
+        if tag == "a":
+            hrefs = [val for attr, val in attrs if attr == "href"]
+            if hrefs:
+                self._links.append(hrefs[0])
+
+
+class VersionNumeric(tuple):
+    def __new__(cls, vstr: str):
+        return super(VersionNumeric, cls).__new__(
+            cls, (int(val) for val in vstr.split("."))
+        )
+
+class VersionSymbolic(str):
+    def __new__(cls, vstr: str):
+        return super(VersionSymbolic, cls).__new__(cls, vstr)
+
+
+class UpdateCheck:
+    def __init__(self, args):
+        self._args = args
+
+    def _parse_html_index(
+        self, response: httpx.Response, vcls: VersionNumeric | VersionSymbolic
+    ) -> dict[str, str | tuple]:
+        parser = IndexParser()
+        parser.feed(response.text)
+        parser.close()
+
+        newest = current = vcls(self._args.current_version)
+        pattern = re.compile(self._args.match_pattern)
+        href = None
+        for link in parser.links:
+            basename = link.rsplit("/", 1)[-1]
+            mtch = pattern.fullmatch(basename)
+            if not mtch:
+                continue
+            candidate = vcls(mtch[1])
+            if candidate > newest:
+                newest = candidate
+                href = link
+
+        link = None
+        if newest != current:
+            link = urljoin(parser.base or self._args.index_url, href)
+
+        return {
+            "component": self._args.component,
+            "current": current,
+            "newest": newest,
+            "url": link,
+        }
+
+    def _parse_github_releases(
+        self, response: httpx.Response, vcls: VersionNumeric | VersionSymbolic
+    ) -> dict[str, str | tuple]:
+        newest = current = vcls(self._args.current_version)
+        pattern = re.compile(self._args.match_pattern)
+        href = None
+        for release in response.json():
+            for asset in release["assets"]:
+                mtch = pattern.fullmatch(asset["name"])
+                if not mtch:
+                    continue
+                candidate = vcls(mtch[1])
+                if candidate > newest:
+                    newest = candidate
+                    href = asset["browser_download_url"]
+
+        return {
+            "component": self._args.component,
+            "current": current,
+            "newest": newest,
+            "url": href,
+        }
+
+    def run(self):
+        vcls = VersionNumeric
+        if "." not in self._args.current_version:
+            vcls = VersionSymbolic
+
+        with httpx.Client(http2=True, follow_redirects=True) as client:
+            headers = {}
+            if urlparse(self._args.index_url).hostname == "api.github.com":
+                if "GH_TOKEN" in os.environ:
+                    headers["Authorization"] = (
+                        f'Bearer {os.environ["GH_TOKEN"]}'
+                    )
+                parser = self._parse_github_releases
+            else:
+                parser = self._parse_html_index
+
+            response = client.get(self._args.index_url, headers=headers)
+            response.raise_for_status()
+
+            data = parser(response, vcls)
+
+            result = {}
+            for key, value in data.items():
+                if isinstance(value, VersionNumeric):
+                    result[key] = ".".join(str(v) for v in value)
+                else:
+                    result[key] = value
+            print(json.dumps(result))
+
+
+def main():
+    parser = argparse.ArgumentParser(
+        description="Check for new versions of a component"
+    )
+    parser.add_argument("component")
+    parser.add_argument("current_version")
+    parser.add_argument("index_url")
+    parser.add_argument("match_pattern")
+    args = parser.parse_args()
+    UpdateCheck(args).run()
+
+
+if __name__ == "__main__":
+    main()
