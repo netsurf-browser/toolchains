@@ -5,24 +5,17 @@
 #
 # GCCSDK_INSTALL_ENV      -- /path/to/install/prefix
 # GCCSDK_INSTALL_CROSSBIN -- /path/to/toolchain/bin
-#
-# supported targets are:
-#                       arm-riscos-gnueabi
-#                       arm-unknown-riscos  
-#                       m68k-atari-mint
-#			m5475-atari-mint
-#                       ppc-amigaos 
-#                       i686-w64-mingw32    
-#                       x86_64-w64-mingw32
-#                       m68k-unknown-amigaos
 
-ifeq ($(GCCSDK_INSTALL_ENV),)
-  $(error GCCSDK_INSTALL_ENV not set)
-endif
-
-ifeq ($(GCCSDK_INSTALL_CROSSBIN),)
-  $(error GCCSDK_INSTALL_CROSSBIN not set)
-endif
+# Supported triplets
+KNOWN_TRIPLETS := \
+	arm-riscos-gnueabi \
+	arm-unknown-riscos \
+	m68k-atari-mint \
+	m5475-atari-mint \
+	m68k-unknown-amigaos \
+	ppc-amigaos \
+	i686-w64-mingw32 \
+	x86_64-w64-mingw32
 
 # Upstream package versions
 
@@ -110,6 +103,19 @@ VERSION_LIBGNURX := 2.5.1
 
 ############################################################################
 
+# Enforce environmental requirements (unless we
+# have been asked to build a target that does not
+# require a toolchain)
+ifeq ($(findstring source-archives,$(MAKECMDGOALS)),)
+  ifeq ($(GCCSDK_INSTALL_ENV),)
+    $(error GCCSDK_INSTALL_ENV not set)
+  endif
+
+  ifeq ($(GCCSDK_INSTALL_CROSSBIN),)
+    $(error GCCSDK_INSTALL_CROSSBIN not set)
+  endif
+endif
+
 # Path
 path__ := $(GCCSDK_INSTALL_CROSSBIN):$(PATH)
 
@@ -127,7 +133,21 @@ ldflags__ := -L$(GCCSDK_INSTALL_ENV)/lib
 pkg_config_libdir__ := $(GCCSDK_INSTALL_ENV)/lib/pkgconfig
 
 # Target
-TARGET := $(shell $(cc__) -dumpmachine)
+ifeq ($(MAKECMDGOALS),source-archives)
+  # source-archives: force a placeholder TARGET (important note: the
+  # SDK_ITEMS sanity test further down relies on this not being a
+  # KNOWN_TRIPLET)
+  TARGET := $(MAKECMDGOALS)
+else
+  # If not foo.real (i.e. the internal job for "foo"), derive target
+  ifeq ($(findstring .real,$(MAKECMDGOALS)),)
+    TARGET := $(shell $(cc__) -dumpmachine)
+  endif
+endif
+# Assert we have a target
+ifeq ($(TARGET),)
+  $(error TARGET not set for task $(MAKECMDGOALS))
+endif
 
 ifeq ($(findstring -riscos,$(TARGET)),-riscos)
   cflags__ := $(cflags__) -mpoke-function-name
@@ -284,20 +304,31 @@ ifeq ($(TARGET),x86_64-w64-mingw32)
 endif
 
 
-ifeq ($(SDK_ITEMS),)
-  $(error Unable to compute SDK components for target $(TARGET))
+ifneq ($(findstring $(TARGET),$(KNOWN_TRIPLETS)),)
+  ifeq ($(SDK_ITEMS),)
+    $(error Unable to compute SDK components for target $(TARGET))
+  endif
 endif
 
-.PHONY: all clean distclean source-archives
+.PHONY: all clean distclean source-archives source-archives.real
 all: $(SDK_ITEMS)
 
-source-archives: $(BUILDSTEPS)/sources.d
 
 clean:
 	rm -fr $(BUILDDIR)
 
 distclean: clean
 	rm -fr $(SOURCEDIR)
+
+define force_target
+@TARGET=$(1) make --no-print-directory $(2)
+
+endef
+
+source-archives:
+	$(foreach t,$(KNOWN_TRIPLETS),$(call force_target,$(t),$(MAKECMDGOALS).real))
+
+source-archives.real: $(BUILDSTEPS)/sources.d
 
 # Sourcedir
 $(BUILDSTEPS)/sourcedir.d: $(BUILDSTEPS)/builddir.d | $(SOURCEDIR)
