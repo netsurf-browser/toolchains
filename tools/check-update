@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 
 import argparse
+from contextlib import suppress
 from html.parser import HTMLParser
 import json
 import os
@@ -15,6 +16,8 @@ class IndexParser(HTMLParser):
         super().__init__(*args, **kwargs)
         self._base = None
         self._links = []
+        self._tagstack = []
+        self._textcontent = []
 
     @property
     def base(self) -> str | None:
@@ -24,7 +27,12 @@ class IndexParser(HTMLParser):
     def links(self) -> list[str]:
         return self._links
 
+    @property
+    def textcontent(self) -> str:
+        return "".join(self._textcontent)
+
     def handle_starttag(self, tag: str, attrs: list[tuple[str, str]]):
+        self._tagstack.append(tag)
         if tag == "base" and self._base is None:
             hrefs = [val for attr, val in attrs if attr == "href"]
             if hrefs:
@@ -35,6 +43,18 @@ class IndexParser(HTMLParser):
             hrefs = [val for attr, val in attrs if attr == "href"]
             if hrefs:
                 self._links.append(hrefs[0])
+
+    def handle_endtag(self, tag: str):
+        # Remove most recently opened matching tag (if any) from the stack
+        self._tagstack.reverse()
+        with suppress(ValueError):
+            self._tagstack.remove(tag)
+        self._tagstack.reverse()
+
+    def handle_data(self, data: str):
+        if ("script" in self._tagstack or "style" in self._tagstack):
+            return
+        self._textcontent.append(data)
 
 
 class VersionNumeric(tuple):
@@ -61,7 +81,7 @@ class UpdateCheck:
 
         newest = current = vcls(self._args.current_version)
         pattern = re.compile(self._args.match_pattern)
-        href = None
+        claims, href = None, None
         for link in parser.links:
             basename = link.rsplit("/", 1)[-1]
             mtch = pattern.fullmatch(basename)
@@ -72,15 +92,42 @@ class UpdateCheck:
                 newest = candidate
                 href = link
 
-        link = None
         if newest != current:
-            link = urljoin(parser.base or self._args.index_url, href)
+            chosen = href.rsplit("/", 1)[-1]
+            sig_claim, sig = None, None
+            for link in parser.links:
+                basename = link.rsplit("/", 1)[-1]
+                if basename in (f"{chosen}.asc", f"{chosen}.sig"):
+                    sig = link
+                    break
+            if sig is not None:
+                sig = urljoin(parser.base or self._args.index_url, sig)
+                sig_claim = { "type": "signature", "url": sig }
+
+            digest_claim = None
+            digest = re.search(
+                r"\s([0-9a-fA-F]+)\s+" + chosen,
+                parser.textcontent
+            )
+            if digest is not None and len(digest[1]) == 64:
+                digest_claim = {
+                    "type": "digest", "value": f"sha256:{digest[1]}"
+                }
+
+            href = urljoin(parser.base or self._args.index_url, href)
+            if digest_claim is not None or sig_claim is not None:
+                claims = []
+                if digest_claim is not None:
+                    claims.append(digest_claim)
+                if sig_claim is not None:
+                    claims.append(sig_claim)
 
         return {
             "component": self._args.component,
             "current": current,
             "newest": newest,
-            "url": link,
+            "url": href,
+            "claims": claims,
         }
 
     def _parse_github_releases(
@@ -88,8 +135,9 @@ class UpdateCheck:
     ) -> dict[str, str | tuple]:
         newest = current = vcls(self._args.current_version)
         pattern = re.compile(self._args.match_pattern)
-        href = None
+        claims, href = None, None
         for release in response.json():
+            chosen = None
             for asset in release["assets"]:
                 mtch = pattern.fullmatch(asset["name"])
                 if not mtch:
@@ -97,13 +145,34 @@ class UpdateCheck:
                 candidate = vcls(mtch[1])
                 if candidate > newest:
                     newest = candidate
-                    href = asset["browser_download_url"]
+                    chosen = asset
+            if chosen is not None:
+                sig = None
+                for sigasset in release["assets"]:
+                    if sigasset["name"] in (
+                        f'{chosen["name"]}.asc',
+                        f'{chosen["name"]}.sig',
+                    ):
+                        sig = sigasset
+                        break
+                href = chosen["browser_download_url"]
+                claims = [
+                    { "type": "digest", "value": chosen["digest"] }
+                ]
+                if sig is not None:
+                    claims.append(
+                        {
+                            "type": "signature",
+                            "url": sig["browser_download_url"],
+                        }
+                    )
 
         return {
             "component": self._args.component,
             "current": current,
             "newest": newest,
             "url": href,
+            "claims": claims,
         }
 
     def run(self):
