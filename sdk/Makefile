@@ -409,7 +409,7 @@ $(BUILDSTEPS)/zlib-gensrc.d: $(BUILDSTEPS)/builddir.d
 	touch $@
 
 $(BUILDSTEPS)/zlib-chkupd.d:
-	@$(CHECK_UPDATE) zlib $(VERSION_ZLIB) "https://zlib.net/fossils/" "zlib-(\d+\.\d+(\.\d+)?).tar.gz"
+	@$(CHECK_UPDATE) zlib $(VERSION_ZLIB) "https://api.github.com/repos/madler/zlib/releases" "zlib-(\d+\.\d+(\.\d+)?).tar.gz"
 
 
 ###########
