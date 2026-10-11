@@ -733,7 +733,7 @@ $(BUILDSTEPS)/libjpeg-turbo-gensrc.d: $(BUILDSTEPS)/builddir.d
 	touch $@
 
 $(BUILDSTEPS)/libjpeg-turbo-chkupd.d:
-	@$(CHECK_UPDATE) libjpeg-turbo $(VERSION_LIBJPEG_TURBO) "https://api.github.com/repos/libjpeg-turbo/libjpeg-turbo/releases" "libjpeg-turbo-(\d+\.\d+(\.\d+)?).tar.gz"
+	@$(CHECK_UPDATE) libjpegturbo $(VERSION_LIBJPEG_TURBO) "https://api.github.com/repos/libjpeg-turbo/libjpeg-turbo/releases" "libjpeg-turbo-(\d+\.\d+(\.\d+)?).tar.gz"
 
 
 ############
