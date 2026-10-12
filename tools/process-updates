@@ -1,0 +1,200 @@
+#!/usr/bin/env python3
+
+import argparse
+import hashlib
+import json
+import os
+import subprocess
+import sys
+import tempfile
+
+import httpx
+
+
+class UpdateProcessor:
+    def __init__(self, args):
+        self._args = args
+
+    def _process_updates(self, inf):
+        for line in inf:
+            try:
+                rec = json.loads(line)
+            except:
+                continue
+
+            if rec["newest"] == rec["current"] or rec["url"] is None:
+                print(
+                    "   INFO: No update for"
+                    f' {rec["component"]} @ {rec["current"]}'
+                )
+                continue
+
+            with (
+                tempfile.TemporaryDirectory() as tmpdir,
+                httpx.Client(http2=True, follow_redirects=True) as client
+            ):
+                tarball = os.path.join(tmpdir, rec["url"].rsplit("/", 1)[-1])
+                with (
+                    open(tarball, "wb") as outf,
+                    client.stream("GET", rec["url"]) as response
+                ):
+                    response.raise_for_status()
+                    for chunk in response.iter_bytes():
+                        outf.write(chunk)
+
+                authenticated = False
+                if rec["claims"] is None:
+                    print(
+                        "WARNING: No authenticity claims found for"
+                        f' {rec["component"]} @ {rec["newest"]}',
+                        file=sys.stderr,
+                    )
+                else:
+                    authenticated = True
+                    valid = True
+                    for claim in rec["claims"]:
+                        if claim["type"] == "digest":
+                            alg, exp = claim["value"].split(":")
+                            h = hashlib.new(alg)
+                            with open(tarball, "rb") as inf:
+                                chunk = inf.read(4096)
+                                while chunk != b"":
+                                    h.update(chunk)
+                                    chunk = inf.read(4096)
+                            if h.hexdigest() != exp.lower():
+                                print(
+                                    "  ERROR: Digest mismatch for"
+                                    f' {rec["component"]} @ {rec["newest"]}',
+                                    file=sys.stderr,
+                                )
+                                valid = False
+                        elif claim["type"] == "signature":
+                            response = client.get(claim["url"])
+                            response.raise_for_status()
+                            with open(f"{tarball}.asc", "wb") as outf:
+                                outf.write(response.content)
+                            with tempfile.TemporaryDirectory(
+                                dir=tmpdir
+                            ) as gpgdir:
+                                keyring = os.path.join(
+                                    os.path.dirname(__file__),
+                                    "gpg",
+                                    f'{rec["component"]}.asc'
+                                )
+                                if os.path.exists(keyring):
+                                    rc = subprocess.run(
+                                        [
+                                            "/usr/bin/gpg",
+                                            f"--homedir={gpgdir}",
+                                            "--import",
+                                            keyring,
+                                        ],
+                                        capture_output=True,
+                                        text=True,
+                                    )
+                                    if rc.returncode != 0:
+                                        print(
+                                            "WARNING: Failed to import keyring"
+                                            f' for {rec["component"]}',
+                                            file=sys.stderr,
+                                        )
+                                        if self._args.debug:
+                                            print(rc.stdout, file=sys.stderr)
+                                            print(rc.stderr, file=sys.stderr)
+                                rc = subprocess.run(
+                                    [
+                                        "/usr/bin/gpg",
+                                        f"--homedir={gpgdir}",
+                                        "--verify",
+                                        f"{tarball}.asc",
+                                        tarball,
+                                    ],
+                                    capture_output=True,
+                                    text=True,
+                                )
+                                if rc.returncode != 0:
+                                    print(
+                                        "  ERROR: Signature mismatch for"
+                                        f' {rec["component"]} @ {rec["newest"]}',
+                                        file=sys.stderr,
+                                    )
+                                    if self._args.debug:
+                                        print(rc.stdout, file=sys.stderr)
+                                        print(rc.stderr, file=sys.stderr)
+                                    valid = False
+                        else:
+                            print(
+                                f'WARNING: Unknown claim type {claim["type"]}'
+                                f' for {rec["component"]} @ {rec["newest"]}',
+                                file=sys.stderr,
+                            )
+                    if not valid:
+                        continue
+
+                rc = subprocess.run(
+                    [
+                        os.path.join(os.path.dirname(__file__), "import-orig"),
+                        f'--package-name={rec["component"]}',
+                        f'--package-version={rec["newest"]}',
+                        "--for-review",
+                        tarball,
+                    ],
+                    capture_output=True,
+                    text=True,
+                )
+                if rc.returncode != 0:
+                    print(
+                        "  ERROR: Failed importing orig for"
+                        f' {rec["component"]} @ {rec["newest"]}',
+                        file=sys.stderr,
+                    )
+                    if self._args.debug:
+                        print(rc.stdout, file=sys.stderr)
+                        print(rc.stderr, file=sys.stderr)
+                    continue
+
+                meta = json.loads(rc.stdout.splitlines()[-1])
+                print(
+                    "   INFO: Created review branches for"
+                    f' {rec["component"]} @ {rec["newest"]}',
+                    file=sys.stderr,
+                )
+                print(
+                    json.dumps(
+                        {
+                            "component": rec["component"],
+                            "current-version": rec["current"],
+                            "new-version": rec["newest"],
+                            "authenticated": authenticated,
+                            "merges": [
+                                {
+                                    "base": meta["base"],
+                                    "update": meta["update"]
+                                },
+                                {
+                                    "base": meta["ptbase"],
+                                    "update": meta["ptupdate"],
+                                }
+                            ],
+                        }
+                    )
+                )
+
+    def run(self):
+        if self._args.stream == "-":
+            self._process_updates(sys.stdin)
+        else:
+            with open(self._args.stream, "r") as inf:
+                self._process_updates(inf)
+
+
+def main():
+    parser = argparse.ArgumentParser(description="Process a stream of updates")
+    parser.add_argument("--debug", action="store_true", help="Enable debug")
+    parser.add_argument("stream", help="Path to input stream ('-' for stdin)")
+    args = parser.parse_args()
+    UpdateProcessor(args).run()
+
+
+if __name__ == "__main__":
+    main()
