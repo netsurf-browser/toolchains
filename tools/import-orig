@@ -222,7 +222,7 @@ class ImportTool:
 
         return previous_head
 
-    def _import_for_review(self):
+    def _import_for_review(self, silent=False):
         base_branch_name = f"upstream/{self._package_name}"
         branch_name = f"for-review/{self._package_name}-{self._package_version}"
         pt_branch_name = f"{branch_name}-pristine-tar"
@@ -235,17 +235,18 @@ class ImportTool:
         )
         if rc.stdout:
             # Branches exist: nothing to do
-            print(
-                json.dumps(
-                    {
-                        "id": "BRANCHES_FOR_REVIEW",
-                        "base": base_branch_name,
-                        "update": branch_name,
-                        "ptbase": "pristine-tar",
-                        "ptupdate": pt_branch_name,
-                    }
+            if not silent:
+                print(
+                    json.dumps(
+                        {
+                            "id": "BRANCHES_FOR_REVIEW",
+                            "base": base_branch_name,
+                            "update": branch_name,
+                            "ptbase": "pristine-tar",
+                            "ptupdate": pt_branch_name,
+                        }
+                    )
                 )
-            )
             return
 
         # Import into the base branch
@@ -303,17 +304,18 @@ class ImportTool:
             )
             raise
 
-        print(
-            json.dumps(
-                {
-                    "id": "BRANCHES_FOR_REVIEW",
-                    "base": base_branch_name,
-                    "update": branch_name,
-                    "ptbase": "pristine-tar",
-                    "ptupdate": pt_branch_name,
-                }
+        if not silent:
+            print(
+                json.dumps(
+                    {
+                        "id": "BRANCHES_FOR_REVIEW",
+                        "base": base_branch_name,
+                        "update": branch_name,
+                        "ptbase": "pristine-tar",
+                        "ptupdate": pt_branch_name,
+                    }
+                )
             )
-        )
 
     def _merge_from_review(self):
         base_branch_name = f"upstream/{self._package_name}"
@@ -471,47 +473,8 @@ class ImportTool:
         )
 
     def _import_for_real(self):
-        branch_name = f"upstream/{self._package_name}"
-        tag_name = f"{branch_name}/{self._package_version}"
-
-        previous_head = self._import_source(branch_name)
-
-        try:
-            previous_pt = self._make_pristine_tar(branch_name)
-            try:
-                subprocess.check_call(
-                    [
-                        "/usr/bin/git",
-                        "tag",
-                        "-a",
-                        "-m",
-                        f"{self._package_name} {self._package_version}",
-                        tag_name,
-                        branch_name,
-                    ]
-                )
-            except:
-                if previous_pt is not None:
-                    subprocess.check_call(
-                        [
-                            "/usr/bin/git",
-                            "branch",
-                            "-f",
-                            "pristine-tar",
-                            previous_pt
-                        ],
-                    )
-        except:
-            if previous_head is not None:
-                subprocess.check_call(
-                    [
-                        "/usr/bin/git",
-                        "branch",
-                        "-f",
-                        branch_name,
-                        previous_head,
-                    ],
-                )
+        self._import_for_review(silent=True)
+        self._merge_from_review()
 
     def run(self):
         if not self._archive_path.exists():
