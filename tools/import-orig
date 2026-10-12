@@ -19,7 +19,9 @@ class ImportTool:
         self._git_version = None
 
     def _determine_git_version(self):
-        output = subprocess.check_output(["/usr/bin/git", "--version"])
+        output = subprocess.check_output(
+            ["/usr/bin/git", "--version"], text=True
+        )
         parts = output.split()
         if len(parts) != 3:
             print("ERROR: unexpected 'git --version' format", file=sys.stderr)
@@ -69,8 +71,7 @@ class ImportTool:
                 return
             self._package_version = parts[1].removesuffix(self._package_ext)
 
-    @staticmethod
-    def _ensure_branch(worktree, branch_name):
+    def _ensure_branch(self, worktree, branch_name):
         if subprocess.call(
             [
                 "/usr/bin/git",
