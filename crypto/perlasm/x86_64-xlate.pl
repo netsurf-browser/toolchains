@@ -1,5 +1,5 @@
 #! /usr/bin/env perl
-# Copyright 2005-2025 The OpenSSL Project Authors. All Rights Reserved.
+# Copyright 2005-2026 The OpenSSL Project Authors. All Rights Reserved.
 #
 # Licensed under the Apache License 2.0 (the "License").  You may not use
 # this file except in compliance with the License.  You can obtain a copy
@@ -7,7 +7,7 @@
 # https://www.openssl.org/source/license.html
 
 
-# Ascetic x86_64 AT&T to MASM/NASM assembler translator by <appro>.
+# Ascetic x86_64 AT&T to MASM/NASM assembler translator by <@dot-asm>.
 #
 # Why AT&T to MASM and not vice versa? Several reasons. Because AT&T
 # format is way easier to parse. Because it's simpler to "gear" from
@@ -440,6 +440,7 @@ my %globals;
 	    ($self->{asterisk})				&& ($sz="q") ||
 	    ($mnemonic =~ /^v?mov([qd])$/)		&& ($sz=$1)  ||
 	    ($mnemonic =~ /^v?pinsr([qdwb])$/)		&& ($sz=$1)  ||
+	    ($mnemonic =~ /^vbroadcasti32x4$/)		&& ($sz="x") ||
 	    ($mnemonic =~ /^vpbroadcast([qdwb])$/)	&& ($sz=$1)  ||
 	    ($mnemonic =~ /^v(?!perm)[a-z]+[fi]128$/)	&& ($sz="x");
 
@@ -663,8 +664,7 @@ my %globals;
 	);
 
     # Following constants are defined in x86_64 ABI supplement, for
-    # example available at https://www.uclibc.org/docs/psABI-x86_64.pdf,
-    # see section 3.7 "Stack Unwind Algorithm".
+    # example available at https://gitlab.com/x86-psABIs/x86-64-ABI.
     my %DW_reg_idx = (
 	"%rax"=>0,  "%rdx"=>1,  "%rcx"=>2,  "%rbx"=>3,
 	"%rsi"=>4,  "%rdi"=>5,  "%rbp"=>6,  "%rsp"=>7,

@@ -1,5 +1,5 @@
 #! /usr/bin/env perl
-# Copyright 2025 The OpenSSL Project Authors. All Rights Reserved.
+# Copyright 2025-2026 The OpenSSL Project Authors. All Rights Reserved.
 #
 # Licensed under the Apache License 2.0 (the "License").  You may not use
 # this file except in compliance with the License.  You can obtain a copy
@@ -26,7 +26,7 @@ my @formats = qw(seed-priv priv-only seed-only oqskeypair bare-seed bare-priv);
 plan skip_all => "ML-DSA isn't supported in this build"
     if disabled("ml-dsa");
 
-plan tests => @algs * (23 + 10 * @formats);
+plan tests => @algs * (26 + 10 * @formats);
 my $seed = join ("", map {sprintf "%02x", $_} (0..31));
 my $weed = join ("", map {sprintf "%02x", $_} (1..32));
 my $ikme = join ("", map {sprintf "%02x", $_} (0..31));
@@ -63,7 +63,7 @@ foreach my $alg (@algs) {
         my $pem = sprintf("prv-%s-%s.%d.pem", $alg, $f, $i++);
         ok(run(app(['openssl', 'genpkey', '-out', $pem,
                     '-pkeyopt', "hexseed:$seed", '-algorithm', "ml-dsa-$alg",
-                    '-provparam', "ml-dsa.output_formats=$f"])));
+                    '-encopt', "output_formats:$f"])));
         ok(!compare_text($in, $pem),
             sprintf("prvkey PEM match: %s, %s", $alg, $f));
 
@@ -174,10 +174,9 @@ foreach my $alg (@algs) {
         sprintf("create fake private key: %s", $alg));
     my $realfh = IO::File->new($real, "<:raw");
     my $fakefh = IO::File->new($fake, "<:raw");
-    local $/ = undef;
-    my $realder = <$realfh>;
+    my $realder = do { local $/; <$realfh> };
     $realfh->close();
-    my $fakeder = <$fakefh>;
+    my $fakeder = do { local $/; <$fakefh> };
     $fakefh->close();
     #
     # - 20 bytes PKCS8 fixed overhead,
@@ -212,4 +211,17 @@ foreach my $alg (@algs) {
     ok(!run(app([qw(openssl pkey -provparam ml-dsa.prefer_seed=no),
                  qw(-inform DER -noout -in), $mash])),
         sprintf("reject real private and mutated public: %s", $alg));
+
+    # 3 wrapping tests
+    my $wrapped = sprintf('wrapped-%s.bin', $alg);
+    my $unwrapped = sprintf('unwrapped-%s.bin', $alg);
+    my $aes_key = '0102030405060708091011121314151617181920212223242526272829303132';
+    ok(run(app([qw(openssl enc -pbkdf2 -id-aes256-wrap-pad -k), $aes_key,
+                   '-in', $real, '-out', $wrapped])),
+        sprintf("AES Wrap private: %s", $alg));
+    ok(run(app([qw(openssl enc -d -pbkdf2 -id-aes256-wrap-pad -k), $aes_key,
+                   '-in', $wrapped, '-out', $unwrapped])),
+        sprintf("AES Unwrap private: %s", $alg));
+    ok(!compare($unwrapped, $real),
+        sprintf("Unwrapped DER match: %s, %s", $alg, $real));
 }

@@ -1,5 +1,5 @@
 #! /usr/bin/env perl
-# Copyright 2015-2025 The OpenSSL Project Authors. All Rights Reserved.
+# Copyright 2015-2026 The OpenSSL Project Authors. All Rights Reserved.
 #
 # Licensed under the Apache License 2.0 (the "License").  You may not use
 # this file except in compliance with the License.  You can obtain a copy
@@ -30,7 +30,7 @@ sub verify {
     run(app([@args]));
 }
 
-plan tests => 203;
+plan tests => 218;
 
 # Canonical success
 ok(verify("ee-cert", "sslserver", ["root-cert"], ["ca-cert"]),
@@ -39,6 +39,8 @@ ok(verify("ee-cert", "sslserver", ["root-cert"], ["ca-cert"]),
 # Root CA variants
 ok(!verify("ee-cert", "sslserver", [qw(root-nonca)], [qw(ca-cert)]),
    "fail trusted non-ca root");
+ok(!verify("ee-cert", "sslserver", [qw(root-no-KeyCertSign)], [qw(ca-cert)]),
+   "fail trusted root excluding key usage KeyCertSign");
 ok(!verify("ee-cert", "sslserver", [qw(nroot+serverAuth)], [qw(ca-cert)]),
    "fail server trust non-ca root");
 ok(!verify("ee-cert", "sslserver", [qw(nroot+anyEKU)], [qw(ca-cert)]),
@@ -140,6 +142,19 @@ ok(!verify("ee-cert", "sslserver", [qw(root-cert)], [qw(ca-name2)]),
    "fail wrong intermediate CA DN");
 ok(!verify("ee-cert", "sslserver", [qw(root-cert)], [qw(ca-root2)]),
    "fail wrong intermediate CA issuer");
+
+# CA key rollover: the self-issued transition certificate is not
+# self-signed (regression from 792a760ac2).  It must neither break
+# chain building to the old root nor act as an anchor on its own,
+# while explicit PARTIAL_CHAIN trust in it must keep working.
+ok(verify("rollover-ee", "", ["rollover-root"], ["rollover-ca"],
+          "-attime", "1800000000"),
+   "accept rollover chain through untrusted transition cert");
+ok(!verify("rollover-ee", "", ["rollover-ca"], [], "-attime", "1800000000"),
+   "reject rollover chain when only transition cert is trusted");
+ok(verify("rollover-ee", "", ["rollover-ca"], [],
+          "-partial_chain", "-attime", "1800000000"),
+   "accept rollover transition with explicit partial-chain trust");
 ok(!verify("ee-cert", "sslserver", [], [qw(ca-cert)], "-partial_chain"),
    "fail untrusted partial chain");
 ok(verify("ee-cert", "sslserver", [qw(ca-cert)], [], "-partial_chain"),
@@ -594,6 +609,66 @@ ok(!verify("ee-cert-policies-bad", "", ["root-cert"], ["ca-pol-cert"],
            "-explicit_policy"),
    "Bad certificate policy");
 
+# Verify Validity Period Boundaries with -attime
+# ee-expired2 Not Before: Sep 18 14:37:57 2025 GMT -- 1758206277
+#              Not After: Sep 16 14:37:57 2035 GMT -- 2073566277
+ok(!verify("ee-expired2", "", ["root-cert"], ["ca-cert"], "-attime",
+           "1758206276"), "Certificate invalid at time 1758206276");
+ok(verify("ee-expired2", "", ["root-cert"], ["ca-cert"], "-attime",
+          "1758206277"), "Certificate valid at time 1758206277");
+ok(verify("ee-expired2", "", ["root-cert"], ["ca-cert"], "-attime",
+          "1758206278"), "Certificate valid at time 1758206278");
+ok(verify("ee-expired2", "", ["root-cert"], ["ca-cert"], "-attime",
+          "2073566276"), "Certificate valid at time 2073566276");
+ok(verify("ee-expired2", "", ["root-cert"], ["ca-cert"], "-attime",
+          "2073566277"), "Certificate valid at time 2073566277");
+ok(!verify("ee-expired2", "", ["root-cert"], ["ca-cert"], "-attime",
+           "2073566278"), "Certificate invalid at time 2073566278");
+
+# CVE-2026-28388
+my $cve_28388_stderr = "cve-2026-28388.err";
+run(app(["openssl", "verify",
+         "-attime", "1739527200",
+         "-CAfile", srctop_file(@certspath, "cve-2026-28388-ca.pem"),
+         "-crl_check", "-use_deltas",
+         "-CRLfile", srctop_file(@certspath, "cve-2026-28388-crls.pem"),
+         srctop_file(@certspath, "cve-2026-28388-leaf.pem")],
+         stderr => $cve_28388_stderr));
+ok(grep(/CRL is not yet valid/, do { open my $fh, '<', $cve_28388_stderr; <$fh> }),
+   "CVE-2026-28388");
+
+# Delta CRLs must not be accepted as complete CRLs
+my $delta_crl_as_complete_stderr = "delta-crl-as-complete.err";
+ok(!run(app(["openssl", "verify", "-auth_level", "1",
+             "-CAfile",
+             srctop_file(@certspath, "delta-crl-as-complete-ca.pem"),
+             "-no_check_time", "-crl_check",
+             "-CRLfile",
+             srctop_file(@certspath, "delta-crl-as-complete-delta.pem"),
+             srctop_file(@certspath, "delta-crl-as-complete-leaf.pem")],
+             stderr => $delta_crl_as_complete_stderr))
+   && grep(/unable to get certificate CRL/,
+           do { open my $fh, '<', $delta_crl_as_complete_stderr; <$fh> }),
+   "Delta CRL is not accepted as complete CRL");
+
+my $delta_crl_as_complete_reasons_stderr =
+    "delta-crl-as-complete-reasons.err";
+ok(!run(app(["openssl", "verify", "-auth_level", "1",
+             "-CAfile",
+             srctop_file(@certspath, "delta-crl-as-complete-ca.pem"),
+             "-no_check_time", "-crl_check", "-extended_crl",
+             "-CRLfile",
+             srctop_file(@certspath,
+                         "delta-crl-as-complete-delta-reasons.pem"),
+             srctop_file(@certspath, "delta-crl-as-complete-leaf.pem")],
+             stderr => $delta_crl_as_complete_reasons_stderr))
+   && grep(/unable to get certificate CRL/,
+           do {
+               open my $fh, '<', $delta_crl_as_complete_reasons_stderr;
+               <$fh>
+           }),
+   "Delta CRL with onlySomeReasons is not accepted as complete CRL");
+
 # CAstore option
 my $rootcertname = "root-cert";
 my $rootcert = srctop_file(@certspath, "${rootcertname}.pem");
@@ -604,15 +679,19 @@ ok(vfy_root("-CAstore", $rootcert, "-CAfile", $rootcert), "CAfile and existing C
 ok(!vfy_root("-CAstore", "non-existing", "-CAfile", $rootcert), "CAfile and non-existing CAstore");
 
 SKIP: {
-    skip "file names with colons aren't supported on Windows and VMS", 1
+    skip "file names with colons aren't supported on Windows and VMS", 2
         if $^O =~ /^(MSWin32|VMS)$/;
     my $foo_file = "foo:cert.pem";
     copy($rootcert, $foo_file);
-    ok(vfy_root("-CAstore", $foo_file), "CAstore foo:file");
+    ok(vfy_root("-CAstore", $foo_file), "CAstore foo:cert.pem");
+    ok(vfy_root("-CAstore", "file:".$foo_file), "CAstore file:foo:cert.pem");
 }
-my $foo_file = "cert.pem";
-copy($rootcert, $foo_file);
-ok(vfy_root("-CAstore", $foo_file), "CAstore foo:file");
+
+my $file = "cert.pem";
+copy($rootcert, $file);
+ok(vfy_root("-CAstore", $file), "CAstore cert.pem");
+ok(vfy_root("-CAstore", "file:".$file), "CAstore file:cert.pem");
+
 my $abs_cert = abs_path($rootcert);
 # Windows file: URIs should have a path part starting with a slash, i.e.
 # file://authority/C:/what/ever/foo.pem and file:///C:/what/ever/foo.pem

@@ -66,6 +66,12 @@ parameters or key are written to I<*ppkey>.  If I<*ppkey> is NULL when this
 function is called, it will be allocated, and should be freed by the caller
 when no longer useful, using L<EVP_PKEY_free(3)>.
 
+When a key is generated, EVP_PKEY_generate() does not associate it with I<ctx>
+or change I<ctx> into a context for operations using that key.  To use the
+generated key, create a new context with L<EVP_PKEY_CTX_new_from_pkey(3)>,
+passing I<*ppkey>.  The generation context can be reused for further generation
+operations or freed.
+
 EVP_PKEY_paramgen() and EVP_PKEY_keygen() do exactly the same thing as
 EVP_PKEY_generate(), after checking that the corresponding EVP_PKEY_paramgen_init()
 or EVP_PKEY_keygen_init() was used to initialize I<ctx>.
@@ -86,10 +92,12 @@ If the callback returns 0 then the key generation operation is aborted and an
 error occurs. This might occur during a time consuming operation where
 a user clicks on a "cancel" button.
 
-The functions EVP_PKEY_CTX_set_app_data() and EVP_PKEY_CTX_get_app_data() set
-and retrieve an opaque pointer. This can be used to set some application
-defined value which can be retrieved in the callback: for example a handle
-which is used to update a "progress dialog".
+The functions EVP_PKEY_CTX_set_app_data() and EVP_PKEY_CTX_get_app_data()
+associate an opaque, application-defined pointer with an EVP_PKEY_CTX object.
+
+This pointer is not interpreted by the library and is reserved entirely for use
+by the application. It may be used to store arbitrary context or state that
+needs to be accessible wherever the corresponding EVP_PKEY_CTX is available.
 
 EVP_PKEY_Q_keygen() abstracts from the explicit use of B<EVP_PKEY_CTX> while
 providing a 'quick' but limited way of generating a new asymmetric key pair.
@@ -100,6 +108,9 @@ If I<type> is C<RSA>,
 a B<size_t> parameter must be given to specify the size of the RSA key.
 If I<type> is C<EC>,
 a string parameter must be given to specify the name of the EC curve.
+The list of built-in curves can be obtained programmatically using
+L<EC_get_builtin_curves(3)>, and their names can be retrieved using
+L<OSSL_EC_curve_nid2name(3)>.
 If I<type> is:
 C<ED25519>,
 C<ED448>,
@@ -151,7 +162,7 @@ in functions which require the use of a public key or parameters.
 
 =head1 EXAMPLES
 
-Generate a 2048 bit RSA key:
+Generate a 2048 bit RSA key, then initialize a context for encryption:
 
  #include <openssl/evp.h>
  #include <openssl/rsa.h>
@@ -159,7 +170,7 @@ Generate a 2048 bit RSA key:
  EVP_PKEY_CTX *ctx;
  EVP_PKEY *pkey = NULL;
 
- ctx = EVP_PKEY_CTX_new_id(EVP_PKEY_RSA, NULL);
+ ctx = EVP_PKEY_CTX_new_from_name(NULL, "RSA", NULL);
  if (!ctx)
      /* Error occurred */
  if (EVP_PKEY_keygen_init(ctx) <= 0)
@@ -168,7 +179,15 @@ Generate a 2048 bit RSA key:
      /* Error */
 
  /* Generate key */
- if (EVP_PKEY_keygen(ctx, &pkey) <= 0)
+ if (EVP_PKEY_generate(ctx, &pkey) <= 0)
+     /* Error */
+
+ /* ctx is still a generation context; pkey contains the generated key */
+ EVP_PKEY_CTX_free(ctx);
+ ctx = EVP_PKEY_CTX_new_from_pkey(NULL, pkey, NULL);
+ if (!ctx)
+     /* Error occurred */
+ if (EVP_PKEY_encrypt_init(ctx) <= 0)
      /* Error */
 
 Generate a key from a set of parameters:
@@ -177,11 +196,10 @@ Generate a key from a set of parameters:
  #include <openssl/rsa.h>
 
  EVP_PKEY_CTX *ctx;
- ENGINE *eng;
  EVP_PKEY *pkey = NULL, *param;
 
- /* Assumed param, eng are set up already */
- ctx = EVP_PKEY_CTX_new(param, eng);
+ /* Assumed param is set up already */
+ ctx = EVP_PKEY_CTX_new(param, NULL);
  if (!ctx)
      /* Error occurred */
  if (EVP_PKEY_keygen_init(ctx) <= 0)
@@ -239,7 +257,7 @@ EVP_PKEY_Q_keygen() and EVP_PKEY_generate() were added in OpenSSL 3.0.
 
 =head1 COPYRIGHT
 
-Copyright 2006-2025 The OpenSSL Project Authors. All Rights Reserved.
+Copyright 2006-2026 The OpenSSL Project Authors. All Rights Reserved.
 
 Licensed under the Apache License 2.0 (the "License").  You may not use
 this file except in compliance with the License.  You can obtain a copy
