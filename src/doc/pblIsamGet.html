@@ -41,8 +41,8 @@ the following values for which are possible
 <P>parameter index specifies which of the keys to get,
 the pseudo index value -1 can be used in order to access the file
 sequentially in the order the records were inserted.
-okey is not set in this case, a keylength of 0 is returned in case
-the call went ok.
+okey is not set in this case, a key length of 0 is returned in case
+the call went OK.
 
 <P><P>
 <B>RESTRICTIONS</B>:
@@ -55,7 +55,7 @@ big enough to hold any possible key, i.e 255 bytes
 <BR><B>index</B> -   index of key to use for read              
 <BR><B>okey</B> -   buffer for result key                     <BR><DT><B>Returns:</B><DD>  int rc >= 0:
 <UL>
-<LI>                  call went ok,
+<LI>                  call went OK,
 the value returned is the length
 of the key of the record found,
 <LI>                  the key of the record is copied to okey,
@@ -64,7 +64,7 @@ record found
 </UL>
 <BR>  int rc <  0:
 <UL>
-<LI>                  some error occured, see pbl_errno
+<LI>                  some error occurred, see pbl_errno
 </UL>
 <BR><DD></DL><P><P><I><A HREF="index.html">Alphabetic index</A></I></P><HR>
 <BR>

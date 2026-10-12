@@ -20,18 +20,18 @@
 <H2>Program Base Library Functions</H2>
 </center>
 
-<H2><!1><A HREF="pblKeyFile_t.html">pblKeyFile_t</A>* <A HREF="#DOC.DOCU">pblKfOpen</A></H2><H2>( char*  path,<BR>&nbsp;  int update,<BR>&nbsp;  void*  filesettag )</H2><BLOCKQUOTE> open an existing key file</BLOCKQUOTE>
+<H2><!1><A HREF="pblKeyFile_t.html">pblKeyFile_t</A>* <A HREF="#DOC.DOCU">pblKfOpen</A></H2><H2>( char*  path,<BR>&nbsp;  int update,<BR>&nbsp;  void*  filesettag )</H2><BLOCKQUOTE> Open an existing key file.</BLOCKQUOTE>
 
 <A NAME="DOC.DOCU"></A>
 <HR>
 <H2>Documentation</H2>
 <BLOCKQUOTE>
-open an existing key file
+Open an existing key file.
 
-<P>if update is 0, the file is opened for read access only,
+<P>If update is 0, the file is opened for read access only,
 if update is not 0 the file is opened for reading and writing
 
-<P>a file set tag can be attached to the file,
+<P>A file set tag can be attached to the file,
 if a file having a non NULL file set tag is flushed
 to disk all files having the same file set tag attached
 are flushed as well.

@@ -20,17 +20,17 @@
 <H2>Program Base Library Functions</H2>
 </center>
 
-<H2>long <A HREF="#DOC.DOCU">pblKfFind</A></H2><H2>( <!1><A HREF="pblKeyFile_t.html">pblKeyFile_t</A>*  k,   int mode,   void*  skey,<BR>&nbsp;  size_t skeylen,   void*  okey,<BR>&nbsp;  size_t*  okeylen )</H2><BLOCKQUOTE> find a record in a key file, set the current record</BLOCKQUOTE>
+<H2>long <A HREF="#DOC.DOCU">pblKfFind</A></H2><H2>( <!1><A HREF="pblKeyFile_t.html">pblKeyFile_t</A>*  k,   int mode,   void*  skey,<BR>&nbsp;  size_t skeylen,   void*  okey,<BR>&nbsp;  size_t*  okeylen )</H2><BLOCKQUOTE> Find a record in a key file, set the current record.</BLOCKQUOTE>
 
 <A NAME="DOC.DOCU"></A>
 <HR>
 <H2>Documentation</H2>
 <BLOCKQUOTE>
-find a record in a key file, set the current record
+Find a record in a key file, set the current record.
 
-<P>parameter mode specifies which record to find relative
+<P>The parameter mode specifies which record to find relative
 to the search key specified by skey and skeylen.
-the following values for mode are possible
+The following values for mode are possible
 
 <P><BR><B> PBLEQ </B> - find a record whose key is equal to skey
 <BR><B> PBLFI </B> - find the first record that is equal
@@ -42,7 +42,7 @@ record that is greater
 record that is smaller
 <BR><B> PBLLT </B> - find the biggest record that is smaller
 
-<P>keep in mind that PBL allows multiple records with the same key.
+<P>Keep in mind that PBL allows multiple records with the same key.
 
 <P><P>
 <B>RESTRICTIONS</B>:

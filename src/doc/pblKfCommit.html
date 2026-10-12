@@ -20,19 +20,19 @@
 <H2>Program Base Library Functions</H2>
 </center>
 
-<H2>int <A HREF="#DOC.DOCU">pblKfCommit</A></H2><H2>( <!1><A HREF="pblKeyFile_t.html">pblKeyFile_t</A>*  k,   int rollback )</H2><BLOCKQUOTE> commit or rollback changes done during a transaction.</BLOCKQUOTE>
+<H2>int <A HREF="#DOC.DOCU">pblKfCommit</A></H2><H2>( <!1><A HREF="pblKeyFile_t.html">pblKeyFile_t</A>*  k,   int rollback )</H2><BLOCKQUOTE> Commit or rollback changes done during a transaction.</BLOCKQUOTE>
 
 <A NAME="DOC.DOCU"></A>
 <HR>
 <H2>Documentation</H2>
 <BLOCKQUOTE>
-commit or rollback changes done during a transaction.
+Commit or rollback changes done during a transaction.
 
-<P>transactions can be nested, if so the commit
+<P>Transactions can be nested, if so the commit
 only happens when the outermost transaction
 calls a commit.
 
-<P>the commit only happens to process space buffer cache,
+<P>The commit only happens to process space buffer cache,
 call <!1><A HREF="pblKfFlush.html">pblKfFlush</A>() after <!1><A HREF="pblKfCommit.html">pblKfCommit</A>() if you want to
 flush to kernel space buffer cache.
 

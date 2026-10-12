@@ -20,13 +20,13 @@
 <H2>Program Base Library Functions</H2>
 </center>
 
-<H2>int <A HREF="#DOC.DOCU">pblIsamCommit</A></H2><H2>( int nfiles,   <!1><A HREF="pblIsamFile_t.html">pblIsamFile_t</A>**  isamfiles,<BR>&nbsp;  int rollback )</H2><BLOCKQUOTE> commit or rollback changes done during a transaction</BLOCKQUOTE>
+<H2>int <A HREF="#DOC.DOCU">pblIsamCommit</A></H2><H2>( int nfiles,   <!1><A HREF="pblIsamFile_t.html">pblIsamFile_t</A>**  isamfiles,<BR>&nbsp;  int rollback )</H2><BLOCKQUOTE> commit or roll back changes done during a transaction</BLOCKQUOTE>
 
 <A NAME="DOC.DOCU"></A>
 <HR>
 <H2>Documentation</H2>
 <BLOCKQUOTE>
-commit or rollback changes done during a transaction
+commit or roll back changes done during a transaction
 
 <P>transactions can be nested, if so the commit
 only happens when the outermost transaction
@@ -39,10 +39,10 @@ flush to kernel space buffer cache.
 <P></BLOCKQUOTE>
 <DL><DT><DT><B>Parameters:</B><DD><B>nfiles</B> -   number of files in ISAM file list      
 <BR><B>isamfiles</B> -   ISAM file list to commit changes of    
-<BR><B>rollback</B> -   != 0: roll back the changes, == 0: commit the changes  <BR><DT><B>Returns:</B><DD>  int rc == 0: the commit went ok
-<BR>  int rc >  0: a rollback happened, either because the caller
+<BR><B>rollback</B> -   != 0: roll back the changes, == 0: commit the changes  <BR><DT><B>Returns:</B><DD>  int rc == 0: the commit went OK
+<BR>  int rc >  0: a roll back happened, either because the caller
 requested it or because an inner transaction resulted
-in a rollback
+in a roll back
 <BR>  int rc <  0: some error, see pbl_errno
 <BR><DD></DL><P><P><I><A HREF="index.html">Alphabetic index</A></I></P><HR>
 <BR>

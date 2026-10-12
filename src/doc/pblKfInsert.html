@@ -20,19 +20,19 @@
 <H2>Program Base Library Functions</H2>
 </center>
 
-<H2>int <A HREF="#DOC.DOCU">pblKfInsert</A></H2><H2>( <!1><A HREF="pblKeyFile_t.html">pblKeyFile_t</A>*  k,   void*  key,   size_t keylen,<BR>&nbsp;  void*  data,   size_t datalen )</H2><BLOCKQUOTE> insert a new record with the given key and data into a key file,</BLOCKQUOTE>
+<H2>int <A HREF="#DOC.DOCU">pblKfInsert</A></H2><H2>( <!1><A HREF="pblKeyFile_t.html">pblKeyFile_t</A>*  k,   void*  key,   size_t keylen,<BR>&nbsp;  void*  data,   size_t datalen )</H2><BLOCKQUOTE> Insert a new record with the given key and data into a key file,</BLOCKQUOTE>
 
 <A NAME="DOC.DOCU"></A>
 <HR>
 <H2>Documentation</H2>
 <BLOCKQUOTE>
-insert a new record with the given key and data into a key file,
+Insert a new record with the given key and data into a key file,
 
-<P>multiple records with the same key are allowed,
+<P>Multiple records with the same key are allowed,
 if there are already records with the same key the new
-record will be inserted behind all records with the same key,
+record will be inserted behind all records with the same key.
 
-<P>the current record of the file will be set to the new record
+<P>The current record of the file will be set to the new record
 
 <P><P>
 <B>RESTRICTIONS</B>:
