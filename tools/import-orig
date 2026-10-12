@@ -517,7 +517,7 @@ class ImportTool:
         self._merge_from_review()
 
     def run(self):
-        if not self._archive_path.exists():
+        if not self._from_review and not self._archive_path.exists():
             print("ERROR: non-existent source", file=sys.stderr)
             return
 
