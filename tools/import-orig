@@ -15,6 +15,7 @@ class ImportTool:
         self._source_dir = pathlib.Path(__file__).parent.parent
         self._archive_path = pathlib.Path(args.archive).resolve()
         self._for_review = args.for_review
+        self._from_review = args.from_review
         self._package_version = args.package_version
         self._package_name = args.package_name
         self._package_ext = None
@@ -314,6 +315,161 @@ class ImportTool:
             )
         )
 
+    def _merge_from_review(self):
+        base_branch_name = f"upstream/{self._package_name}"
+        tag_name = f"{base_branch_name}/{self._package_version}"
+        review_branch_name = (
+            f"for-review/{self._package_name}-{self._package_version}"
+        )
+        review_pt_branch_name = f"{review_branch_name}-pristine-tar"
+
+        rc = subprocess.run(
+            [
+                "/usr/bin/git",
+                "branch",
+                "-a",
+                "--list",
+                f"*{review_branch_name}*"
+            ],
+            capture_output=True,
+            text=True,
+            check=True,
+        )
+        if rc.returncode != 0 or not rc.stdout:
+            # Branches missing: abort
+            raise RuntimeError(
+                f"Review branches for {self._package_name} missing"
+            )
+
+        previous_head = None
+        with tempfile.TemporaryDirectory(dir=str(self._source_dir)) as worktree:
+            wt_path = pathlib.Path(worktree)
+
+            subprocess.check_call(
+                ["/usr/bin/git", "worktree", "add", "--orphan", worktree]
+            )
+
+            try:
+                previous_head = self._ensure_branch(worktree, base_branch_name)
+
+                # Merge review branch (fast-forward only, as the commit
+                # hashes must not change)
+                subprocess.check_call(
+                    [
+                        "/usr/bin/git",
+                        "merge",
+                        "--ff-only",
+                        review_branch_name,
+                    ],
+                    cwd=worktree,
+                )
+            finally:
+                subprocess.call(
+                    ["/usr/bin/git", "worktree", "remove", "--force", worktree]
+                )
+
+        try:
+            previous_pt = None
+            with tempfile.TemporaryDirectory(
+                dir=str(self._source_dir)
+            ) as worktree:
+                wt_path = pathlib.Path(worktree)
+
+                subprocess.check_call(
+                    ["/usr/bin/git", "worktree", "add", "--orphan", worktree]
+                )
+
+                try:
+                    previous_pt = self._ensure_branch(worktree, "pristine-tar")
+
+                    # Collect the changes; there must be a single addition
+                    pt_changes = subprocess.check_output(
+                        [
+                            "/usr/bin/git",
+                            "cherry",
+                            "pristine-tar",
+                            review_pt_branch_name,
+                        ],
+                        cwd=worktree,
+                        text=True,
+                    ).splitlines()
+                    if len(pt_changes) != 1 or pt_changes[0][:2] != "+ ":
+                        raise RuntimeError(
+                            f"Unexpected changes on {review_pt_branch_name}"
+                        )
+
+                    # Apply it to the pristine-tar branch.
+                    # We cannot fast-forward here as there may be intervening
+                    # changes relating to other components. There should,
+                    # however, be no conflicts as the commit contents are
+                    # specific to this version of this component.
+                    subprocess.check_call(
+                        [
+                            "/usr/bin/git",
+                            "cherry-pick",
+                            review_pt_branch_name
+                        ],
+                        cwd=worktree,
+                    )
+                finally:
+                    subprocess.call(
+                        [
+                            "/usr/bin/git",
+                            "worktree",
+                            "remove",
+                            "--force",
+                            worktree,
+                        ]
+                    )
+
+            try:
+                # Tag it
+                subprocess.check_call(
+                    [
+                        "/usr/bin/git",
+                        "tag",
+                        "-a",
+                        "-m",
+                        f"{self._package_name} {self._package_version}",
+                        tag_name,
+                        base_branch_name,
+                    ]
+                )
+            except:
+                # Failed: discard changes to pristine-tar branch
+                if previous_pt is not None:
+                    subprocess.check_call(
+                        [
+                            "/usr/bin/git",
+                            "branch",
+                            "-f",
+                            "pristine-tar",
+                            previous_pt,
+                        ],
+                    )
+                raise
+        except:
+            # Failed: discard changes to base branch
+            if previous_head is not None:
+                subprocess.check_call(
+                    [
+                        "/usr/bin/git",
+                        "branch",
+                        "-f",
+                        base_branch_name,
+                        previous_head,
+                    ],
+                )
+            raise
+
+        # Delete now-merged review branches
+        subprocess.call(
+            [ "/usr/bin/git", "branch", "-D", review_branch_name ]
+        )
+        subprocess.call(
+            [ "/usr/bin/git", "branch", "-D", review_pt_branch_name ]
+        )
+
     def _import_for_real(self):
         branch_name = f"upstream/{self._package_name}"
         tag_name = f"{branch_name}/{self._package_version}"
@@ -372,6 +528,8 @@ class ImportTool:
 
         if self._for_review:
             self._import_for_review()
+        elif self._from_review:
+            self._merge_from_review()
         else:
             self._import_for_real()
 
@@ -386,6 +544,9 @@ def main():
     )
     parser.add_argument(
         "--for-review", action="store_true", help="Engage for-review mode"
+    )
+    parser.add_argument(
+        "--from-review", action="store_true", help="Merge from review branches"
     )
     parser.add_argument("archive", help="Path to source tarball")
     args = parser.parse_args()
