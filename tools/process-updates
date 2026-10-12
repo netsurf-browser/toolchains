@@ -25,9 +25,16 @@ class UpdateProcessor:
             if rec["newest"] == rec["current"] or rec["url"] is None:
                 print(
                     "   INFO: No update for"
-                    f' {rec["component"]} @ {rec["current"]}'
+                    f' {rec["component"]} @ {rec["current"]}',
+                    file=sys.stderr,
                 )
                 continue
+
+            print(
+                "   INFO: Processing update for"
+                f' {rec["component"]} @ {rec["current"]} to {rec["newest"]}',
+                file=sys.stderr,
+            )
 
             with (
                 tempfile.TemporaryDirectory() as tmpdir,
@@ -131,12 +138,15 @@ class UpdateProcessor:
                     if not valid:
                         continue
 
+                extra_args = []
+                if not authenticated or self._args.no_merge_authenticated:
+                    extra_args.append("--for-review")
                 rc = subprocess.run(
                     [
                         os.path.join(os.path.dirname(__file__), "import-orig"),
                         f'--package-name={rec["component"]}',
                         f'--package-version={rec["newest"]}',
-                        "--for-review",
+                        *extra_args,
                         tarball,
                     ],
                     capture_output=True,
@@ -153,32 +163,52 @@ class UpdateProcessor:
                         print(rc.stderr, file=sys.stderr)
                     continue
 
-                meta = json.loads(rc.stdout.splitlines()[-1])
-                print(
-                    "   INFO: Created review branches for"
-                    f' {rec["component"]} @ {rec["newest"]}',
-                    file=sys.stderr,
-                )
-                print(
-                    json.dumps(
-                        {
-                            "component": rec["component"],
-                            "current-version": rec["current"],
-                            "new-version": rec["newest"],
-                            "authenticated": authenticated,
-                            "merges": [
-                                {
-                                    "base": meta["base"],
-                                    "update": meta["update"]
-                                },
-                                {
-                                    "base": meta["ptbase"],
-                                    "update": meta["ptupdate"],
-                                }
-                            ],
-                        }
+                if not authenticated or self._args.no_merge_authenticated:
+                    meta = json.loads(rc.stdout.splitlines()[-1])
+                    print(
+                        "   INFO: Created review branches for"
+                        f' {rec["component"]} @ {rec["newest"]}',
+                        file=sys.stderr,
                     )
-                )
+                    print(
+                        json.dumps(
+                            {
+                                "component": rec["component"],
+                                "current-version": rec["current"],
+                                "new-version": rec["newest"],
+                                "authenticated": authenticated,
+                                "state": "pending",
+                                "merges": [
+                                    {
+                                        "base": meta["base"],
+                                        "update": meta["update"]
+                                    },
+                                    {
+                                        "base": meta["ptbase"],
+                                        "update": meta["ptupdate"],
+                                    }
+                                ],
+                            }
+                        )
+                    )
+                else:
+                    print(
+                        "   INFO: Imported"
+                        f' {rec["component"]} @ {rec["newest"]}',
+                        file=sys.stderr,
+                    )
+                    print(
+                        json.dumps(
+                            {
+                                "component": rec["component"],
+                                "current-version": rec["current"],
+                                "new-version": rec["newest"],
+                                "authenticated": authenticated,
+                                "state": "imported",
+                                "merges": [],
+                            }
+                        )
+                    )
 
     def run(self):
         if self._args.stream == "-":
@@ -191,6 +221,11 @@ class UpdateProcessor:
 def main():
     parser = argparse.ArgumentParser(description="Process a stream of updates")
     parser.add_argument("--debug", action="store_true", help="Enable debug")
+    parser.add_argument(
+        "--no-merge-authenticated",
+        action="store_true",
+        help="do not automatically merge authenticated sources"
+    )
     parser.add_argument("stream", help="Path to input stream ('-' for stdin)")
     args = parser.parse_args()
     UpdateProcessor(args).run()
