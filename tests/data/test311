@@ -1,3 +1,4 @@
+<?xml version="1.0" encoding="US-ASCII"?>
 <testcase>
 <info>
 <keywords>
@@ -7,17 +8,16 @@ PEM certificate
 </keywords>
 </info>
 
-#
 # Server-side
 <reply>
 </reply>
 
-#
 # Client-side
 <client>
 <features>
 SSL
 local-http
+!wolfssl-5.9.2
 </features>
 <server>
 https test-localhost0h.pem
@@ -30,7 +30,6 @@ HTTPS wrong subjectAltName but right CN
 </command>
 </client>
 
-#
 # Verify data after the test has been "shot"
 <verify>
 <errorcode>

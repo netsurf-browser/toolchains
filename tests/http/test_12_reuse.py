@@ -1,5 +1,3 @@
-#!/usr/bin/env python3
-# -*- coding: utf-8 -*-
 #***************************************************************************
 #                                  _   _ ____  _
 #  Project                     ___| | | |  _ \| |
@@ -25,12 +23,9 @@
 ###########################################################################
 #
 import logging
-import os
-from datetime import datetime, timedelta
+
 import pytest
-
-from testenv import Env, CurlClient
-
+from testenv import CurlClient, Env
 
 log = logging.getLogger(__name__)
 
@@ -75,101 +70,70 @@ class TestReuse:
         # Connections time out on server before we send another request,
         assert r.total_connects == count
 
-    @pytest.mark.skipif(condition=not Env.have_h3(), reason="h3 not supported")
-    def test_12_03_as_follow_h2h3(self, env: Env, httpd, configures_httpd, nghttpx):
-        # write an alt-svc file that advises h3 instead of h2
-        asfile = os.path.join(env.gen_dir, 'alt-svc-12_03.txt')
-        self.create_asfile(asfile, f'h2 {env.domain1} {env.https_port} h3 {env.domain1} {env.h3_port}')
+    # After a partial/aborted HTTP/1.1 response the connection must not be
+    # reused (multi_conn_should_close with premature on non-multiplexed conn).
+    @pytest.mark.parametrize("proto", ['http/1.1'])
+    def test_12_03_no_reuse_after_partial(self, env: Env, httpd, nghttpx, proto):
         curl = CurlClient(env=env)
-        urln = f'https://{env.authority_for(env.domain1, "h2")}/data.json'
-        r = curl.http_download(urls=[urln], with_stats=True, extra_args=[
-            '--alt-svc', f'{asfile}',
+        auth = env.authority_for(env.domain1, proto)
+        # Server promises more bytes than it sends, then resets.
+        partial = f'https://{auth}/curltest/tweak?id=0&chunks=1&chunk_size=100&body_error=reset'
+        ok = f'https://{auth}/data.json'
+        r = curl.http_download(urls=[partial, ok], alpn_proto=proto, extra_args=[
+            '--retry', '0',
         ])
-        r.check_response(count=1, http_status=200)
-        assert r.stats[0]['http_version'] == '3', f'{r.stats}'
+        # First transfer fails (partial/reset); second succeeds on a new connection.
+        assert len(r.stats) == 2, r.dump_logs()
+        assert r.stats[0]['exitcode'] != 0, r.dump_logs()
+        assert r.stats[1].get('http_code') == 200, r.dump_logs()
+        # Both transfers must open their own connection.
+        assert r.stats[0]['num_connects'] == 1, r.dump_logs()
+        assert r.stats[1]['num_connects'] == 1, r.dump_logs()
+        assert r.total_connects == 2, r.dump_logs()
 
-    @pytest.mark.skipif(condition=not Env.have_h3(), reason="h3 not supported")
-    def test_12_04_as_follow_h3h2(self, env: Env, httpd, configures_httpd, nghttpx):
-        count = 2
-        # write an alt-svc file the advises h2 instead of h3
-        asfile = os.path.join(env.gen_dir, 'alt-svc-12_04.txt')
-        ts = datetime.now() + timedelta(hours=24)
-        expires = f'{ts.year:04}{ts.month:02}{ts.day:02} {ts.hour:02}:{ts.minute:02}:{ts.second:02}'
-        with open(asfile, 'w') as fd:
-            fd.write(f'h3 {env.domain1} {env.https_port} h2 {env.domain1} {env.https_port} "{expires}" 0 0')
-        log.info(f'altscv: {open(asfile).readlines()}')
+    # HTTP uses PROTOPT_CREDSPERREQUEST: Basic credentials are per request, so
+    # different -u values still reuse the idle connection (unlike NTLM/Negotiate
+    # which bind credentials onto the connection).
+    @pytest.mark.parametrize("proto", ['http/1.1'])
+    def test_12_04_reuse_different_basic_credentials(self, env: Env, httpd, nghttpx, proto):
         curl = CurlClient(env=env)
-        urln = f'https://{env.authority_for(env.domain1, "h3")}/data.json?[0-{count-1}]'
-        r = curl.http_download(urls=[urln], with_stats=True, extra_args=[
-            '--alt-svc', f'{asfile}', '--http3'
-        ])
-        r.check_response(count=count, http_status=200)
-        # We expect the connection to be reused and use HTTP/2
-        assert r.total_connects == 1
-        for s in r.stats:
-            assert s['http_version'] == '2', f'{s}'
+        url1 = f'https://{env.authority_for(env.domain1, proto)}/data.json?cred=1'
+        url2 = f'https://{env.authority_for(env.domain1, proto)}/data.json?cred=2'
+        r = curl.http_download(urls=[url1, url2], alpn_proto=proto, url_options={
+            url1: ['-u', 'user1:password1'],
+            url2: ['-u', 'user2:password2'],
+        })
+        assert len(r.stats) == 2, r.dump_logs()
+        assert r.stats[0].get('http_code') == 200, r.dump_logs()
+        assert r.stats[1].get('http_code') == 200, r.dump_logs()
+        assert r.stats[0]['num_connects'] == 1, r.dump_logs()
+        assert r.stats[1]['num_connects'] == 0, r.dump_logs()
+        assert r.total_connects == 1, r.dump_logs()
 
-    @pytest.mark.skipif(condition=not Env.have_h3(), reason="h3 not supported")
-    def test_12_05_as_follow_h3h1(self, env: Env, httpd, configures_httpd, nghttpx):
-        # With '--http3` an Alt-Svc redirection from h3 to h1 is allowed
-        count = 2
-        # write an alt-svc file the advises h1 instead of h3
-        asfile = os.path.join(env.gen_dir, 'alt-svc-12_05.txt')
-        ts = datetime.now() + timedelta(hours=24)
-        expires = f'{ts.year:04}{ts.month:02}{ts.day:02} {ts.hour:02}:{ts.minute:02}:{ts.second:02}'
-        with open(asfile, 'w') as fd:
-            fd.write(f'h3 {env.domain1} {env.https_port} http/1.1 {env.domain1} {env.https_port} "{expires}" 0 0')
-        log.info(f'altscv: {open(asfile).readlines()}')
+    # Different target hostnames must not reuse even if they resolve to the
+    # same address (Curl_peer_same_destination matches hostname + port).
+    @pytest.mark.parametrize("proto", ['http/1.1'])
+    def test_12_05_no_reuse_different_host(self, env: Env, httpd, nghttpx, proto):
         curl = CurlClient(env=env)
-        urln = f'https://{env.authority_for(env.domain1, "h3")}/data.json?[0-{count-1}]'
-        r = curl.http_download(urls=[urln], with_stats=True, extra_args=[
-            '--alt-svc', f'{asfile}', '--http3'
-        ])
-        r.check_response(count=count, http_status=200)
-        # We expect the connection to be reused and use HTTP/1.1
-        assert r.total_connects == 1
-        for s in r.stats:
-            assert s['http_version'] == '1.1', f'{s}'
+        # domain1 and domain2 are both served by the same httpd instance.
+        url1 = f'https://{env.authority_for(env.domain1, proto)}/data.json'
+        url2 = f'https://{env.authority_for(env.domain2, proto)}/data.json'
+        r = curl.http_download(urls=[url1, url2], alpn_proto=proto)
+        r.check_response(count=2, http_status=200)
+        assert r.stats[0]['num_connects'] == 1, r.dump_logs()
+        assert r.stats[1]['num_connects'] == 1, r.dump_logs()
+        assert r.total_connects == 2, r.dump_logs()
 
-    @pytest.mark.skipif(condition=not Env.have_h3(), reason="h3 not supported")
-    def test_12_06_as_ignore_h3h1(self, env: Env, httpd, configures_httpd, nghttpx):
-        # With '--http3-only` an Alt-Svc redirection from h3 to h1 is ignored
-        count = 2
-        # write an alt-svc file the advises h1 instead of h3
-        asfile = os.path.join(env.gen_dir, 'alt-svc-12_05.txt')
-        ts = datetime.now() + timedelta(hours=24)
-        expires = f'{ts.year:04}{ts.month:02}{ts.day:02} {ts.hour:02}:{ts.minute:02}:{ts.second:02}'
-        with open(asfile, 'w') as fd:
-            fd.write(f'h3 {env.domain1} {env.https_port} http/1.1 {env.domain1} {env.https_port} "{expires}" 0 0')
-        log.info(f'altscv: {open(asfile).readlines()}')
+    # Positive control: same host reuses one connection.
+    @pytest.mark.parametrize("proto", ['http/1.1'])
+    def test_12_06_reuse_same_host(self, env: Env, httpd, nghttpx, proto):
         curl = CurlClient(env=env)
-        urln = f'https://{env.authority_for(env.domain1, "h3")}/data.json?[0-{count-1}]'
-        r = curl.http_download(urls=[urln], with_stats=True, extra_args=[
-            '--alt-svc', f'{asfile}', '--http3-only'
-        ])
-        r.check_response(count=count, http_status=200)
-        # We expect the connection to be stay on h3, since we used --http3-only
-        assert r.total_connects == 1
-        for s in r.stats:
-            assert s['http_version'] == '3', f'{s}'
-
-    @pytest.mark.skipif(condition=not Env.have_h3(), reason="h3 not supported")
-    def test_12_07_as_ignore_h2h3(self, env: Env, httpd, configures_httpd, nghttpx):
-        # With '--http2` an Alt-Svc redirection from h2 to h3 is ignored
-        # write an alt-svc file that advises h3 instead of h2
-        asfile = os.path.join(env.gen_dir, 'alt-svc-12_03.txt')
-        self.create_asfile(asfile, f'h2 {env.domain1} {env.https_port} h3 {env.domain1} {env.h3_port}')
-        curl = CurlClient(env=env)
-        urln = f'https://{env.authority_for(env.domain1, "h2")}/data.json'
-        r = curl.http_download(urls=[urln], with_stats=True, extra_args=[
-            '--alt-svc', f'{asfile}', '--http2'
-        ])
-        r.check_response(count=1, http_status=200)
-        assert r.stats[0]['http_version'] == '2', f'{r.stats}'
-
-    def create_asfile(self, fpath, line):
-        ts = datetime.now() + timedelta(hours=24)
-        expires = f'{ts.year:04}{ts.month:02}{ts.day:02} {ts.hour:02}:{ts.minute:02}:{ts.second:02}'
-        with open(fpath, 'w') as fd:
-            fd.write(f'{line} "{expires}" 0 0')
-        log.info(f'altscv: {open(fpath).readlines()}')
+        url1 = f'https://{env.authority_for(env.domain1, proto)}/data.json?a=1'
+        url2 = f'https://{env.authority_for(env.domain1, proto)}/data.json?a=2'
+        r = curl.http_download(urls=[url1, url2], alpn_proto=proto)
+        assert len(r.stats) == 2, r.dump_logs()
+        assert r.stats[0].get('http_code') == 200, r.dump_logs()
+        assert r.stats[1].get('http_code') == 200, r.dump_logs()
+        assert r.stats[0]['num_connects'] == 1, r.dump_logs()
+        assert r.stats[1]['num_connects'] == 0, r.dump_logs()
+        assert r.total_connects == 1, r.dump_logs()

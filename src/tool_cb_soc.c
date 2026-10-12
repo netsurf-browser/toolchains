@@ -30,11 +30,10 @@
 #include "tool_cb_soc.h"
 
 /*
-** callback for CURLOPT_OPENSOCKETFUNCTION
-**
-** Notice that only Linux is supported for the moment.
-*/
-
+ * callback for CURLOPT_OPENSOCKETFUNCTION
+ *
+ * Notice that only Linux is supported for the moment.
+ */
 curl_socket_t tool_socket_open_mptcp_cb(void *clientp,
                                         curlsocktype purpose,
                                         struct curl_sockaddr *addr)
@@ -45,7 +44,7 @@ curl_socket_t tool_socket_open_mptcp_cb(void *clientp,
   (void)purpose;
 
   if(protocol == IPPROTO_TCP)
-#if defined(__linux__)
+#ifdef __linux__
 #  ifndef IPPROTO_MPTCP
 #  define IPPROTO_MPTCP 262
 #  endif

@@ -33,12 +33,13 @@ add_custom_command(OUTPUT ${GENERATEDCERTS}
 add_custom_target(build-certs DEPENDS ${GENERATEDCERTS})
 
 option(_CURL_SKIP_BUILD_CERTS "Skip building certs with testdeps" OFF)  # Internal option to increase perf for build tests
+mark_as_advanced(_CURL_SKIP_BUILD_CERTS)
 if(NOT _CURL_SKIP_BUILD_CERTS)
   add_dependencies(testdeps build-certs)
 endif()
 
 add_custom_target(clean-certs
-  COMMAND ${CMAKE_COMMAND} -E remove ${GENERATEDCERTS}
+  COMMAND ${CMAKE_COMMAND} -E rm -f ${GENERATEDCERTS}
     "test-*.csr"
     "test-*.der"
     "test-*.keyenc"

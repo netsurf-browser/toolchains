@@ -447,10 +447,10 @@ Introduced in 7.9.7. See CURLOPT_TIMECONDITION(3).
 Introduced in 7.9.7. See CURLOPT_TIMECONDITION(3).
 
 ## CURL_TLSAUTH_NONE
-Introduced in 7.21.4.
+Introduced in 7.21.4. Deprecated since 8.22.0.
 
 ## CURL_TLSAUTH_SRP
-Introduced in 7.21.4.
+Introduced in 7.21.4. Deprecated since 8.22.0.
 
 ## CURL_TRAILERFUNC_ABORT
 Introduced in 7.64.0. See CURLOPT_TRAILERFUNCTION(3).
@@ -477,7 +477,7 @@ Introduced in 7.57.0. See curl_version_info(3).
 Introduced in 7.15.4. See curl_version_info(3).
 
 ## CURL_VERSION_CURLDEBUG
-Introduced in 7.19.6. See curl_version_info(3).
+Introduced in 7.19.6. Deprecated since 8.19.0.
 
 ## CURL_VERSION_DEBUG
 Introduced in 7.10.6. See curl_version_info(3).
@@ -546,7 +546,7 @@ Introduced in 7.13.2. See curl_version_info(3).
 Introduced in 7.84.0. See curl_version_info(3).
 
 ## CURL_VERSION_TLSAUTH_SRP
-Introduced in 7.21.4. See curl_version_info(3).
+Introduced in 7.21.4. Deprecated since 8.22.0.
 
 ## CURL_VERSION_UNICODE
 Introduced in 7.72.0. See curl_version_info(3).
@@ -599,6 +599,9 @@ Introduced in 7.10.6. See CURLOPT_HTTPAUTH(3).
 ## CURLAUTH_AWS_SIGV4
 Introduced in 7.75.0. See CURLOPT_HTTPAUTH(3).
 
+## CURLAUTH_HTTPSIG
+Introduced in 8.22.0. See CURLOPT_HTTPAUTH(3).
+
 ## CURLAUTH_BASIC
 Introduced in 7.10.6. See CURLOPT_HTTPAUTH(3).
 
@@ -609,7 +612,7 @@ Introduced in 7.61.0. See CURLOPT_HTTPAUTH(3).
 Introduced in 7.10.6. See CURLOPT_HTTPAUTH(3).
 
 ## CURLAUTH_DIGEST_IE
-Introduced in 7.19.3. See CURLOPT_HTTPAUTH(3).
+Introduced in 7.19.3. Deprecated since 8.21.0.
 
 ## CURLAUTH_GSSAPI
 Introduced in 7.55.0. See CURLOPT_HTTPAUTH(3).
@@ -1253,6 +1256,15 @@ Introduced in 7.74.0. See CURLOPT_HSTS_CTRL(3).
 ## CURLHSTS_READONLYFILE
 Introduced in 7.74.0. See CURLOPT_HSTS_CTRL(3).
 
+## CURLHTTPSIG_ED25519
+Introduced in 8.22.0.
+
+## CURLHTTPSIG_HMAC_SHA256
+Introduced in 8.22.0.
+
+## CURLHTTPSIG_NONE
+Introduced in 8.22.0.
+
 ## CURLINFO_ACTIVESOCKET
 Introduced in 7.45.0.
 
@@ -1469,6 +1481,9 @@ Introduced in 7.20.0.
 ## CURLINFO_SCHEME
 Introduced in 7.52.0.
 
+## CURLINFO_SIZE_DELIVERED
+Introduced in 8.20.0.
+
 ## CURLINFO_SIZE_DOWNLOAD
 Introduced in 7.4.1. Deprecated since 7.55.0.
 
@@ -1673,6 +1688,9 @@ Introduced in 8.17.0.
 ## CURLMNOTIFY_INFO_READ
 Introduced in 8.17.0.
 
+## CURLMNWC_CLEAR_ALL
+Introduced in 8.20.0.
+
 ## CURLMNWC_CLEAR_CONNS
 Introduced in 8.16.0.
 
@@ -1723,6 +1741,12 @@ Introduced in 7.44.0. See CURLMOPT_PUSHDATA(3).
 
 ## CURLMOPT_PUSHFUNCTION
 Introduced in 7.44.0. See CURLMOPT_PUSHFUNCTION(3).
+
+## CURLMOPT_QUICK_EXIT
+Introduced in 8.20.0. See CURLMOPT_QUICK_EXIT(3).
+
+## CURLMOPT_RESOLVE_THREADS_MAX
+Introduced in 8.20.0. See CURLMOPT_RESOLVE_THREADS_MAX(3).
 
 ## CURLMOPT_SOCKETDATA
 Introduced in 7.15.4. See CURLMOPT_SOCKETDATA(3).
@@ -2072,6 +2096,18 @@ Introduced in 7.3. See CURLOPT_HTTPPROXYTUNNEL(3).
 ## CURLOPT_HTTPREQUEST
 Introduced in 7.1. Last used in 7.15.5.
 
+## CURLOPT_HTTPSIG_ALGORITHM
+Introduced in 8.22.0. See CURLOPT_HTTPSIG_ALGORITHM(3).
+
+## CURLOPT_HTTPSIG_HEADERS
+Introduced in 8.22.0. See CURLOPT_HTTPSIG_HEADERS(3).
+
+## CURLOPT_HTTPSIG_KEY
+Introduced in 8.22.0. See CURLOPT_HTTPSIG_KEY(3).
+
+## CURLOPT_HTTPSIG_KEYID
+Introduced in 8.22.0. See CURLOPT_HTTPSIG_KEYID(3).
+
 ## CURLOPT_IGNORE_CONTENT_LENGTH
 Introduced in 7.14.1. See CURLOPT_IGNORE_CONTENT_LENGTH(3).
 
@@ -2355,13 +2391,13 @@ Introduced in 7.52.0. See CURLOPT_PROXY_SSLVERSION(3).
 Introduced in 7.61.0. See CURLOPT_PROXY_TLS13_CIPHERS(3).
 
 ## CURLOPT_PROXY_TLSAUTH_PASSWORD
-Introduced in 7.52.0. See CURLOPT_PROXY_TLSAUTH_PASSWORD(3).
+Introduced in 7.52.0. Deprecated since 8.22.0.
 
 ## CURLOPT_PROXY_TLSAUTH_TYPE
-Introduced in 7.52.0. See CURLOPT_PROXY_TLSAUTH_TYPE(3).
+Introduced in 7.52.0. Deprecated since 8.22.0.
 
 ## CURLOPT_PROXY_TLSAUTH_USERNAME
-Introduced in 7.52.0. See CURLOPT_PROXY_TLSAUTH_USERNAME(3).
+Introduced in 7.52.0. Deprecated since 8.22.0.
 
 ## CURLOPT_PROXY_TRANSFER_MODE
 Introduced in 7.18.0. See CURLOPT_PROXY_TRANSFER_MODE(3).
@@ -2628,10 +2664,10 @@ Introduced in 7.1. See CURLOPT_SSLVERSION(3).
 Introduced in 7.1. See CURLOPT_STDERR(3).
 
 ## CURLOPT_STREAM_DEPENDS
-Introduced in 7.46.0. See CURLOPT_STREAM_DEPENDS(3).
+Introduced in 7.46.0. Deprecated since 8.21.0.
 
 ## CURLOPT_STREAM_DEPENDS_E
-Introduced in 7.46.0. See CURLOPT_STREAM_DEPENDS_E(3).
+Introduced in 7.46.0. Deprecated since 8.21.0.
 
 ## CURLOPT_STREAM_WEIGHT
 Introduced in 7.46.0. See CURLOPT_STREAM_WEIGHT(3).
@@ -2685,13 +2721,13 @@ Introduced in 7.59.0. See CURLOPT_TIMEVALUE_LARGE(3).
 Introduced in 7.61.0. See CURLOPT_TLS13_CIPHERS(3).
 
 ## CURLOPT_TLSAUTH_PASSWORD
-Introduced in 7.21.4. See CURLOPT_TLSAUTH_PASSWORD(3).
+Introduced in 7.21.4. Deprecated since 8.22.0.
 
 ## CURLOPT_TLSAUTH_TYPE
-Introduced in 7.21.4. See CURLOPT_TLSAUTH_TYPE(3).
+Introduced in 7.21.4. Deprecated since 8.22.0.
 
 ## CURLOPT_TLSAUTH_USERNAME
-Introduced in 7.21.4. See CURLOPT_TLSAUTH_USERNAME(3).
+Introduced in 7.21.4. Deprecated since 8.22.0.
 
 ## CURLOPT_TRAILERDATA
 Introduced in 7.64.0. See CURLOPT_TRAILERDATA(3).
@@ -2904,22 +2940,22 @@ Introduced in 7.20.0. See CURLINFO_PROTOCOL(3).
 Introduced in 7.20.0. See CURLINFO_PROTOCOL(3).
 
 ## CURLPROTO_RTMP
-Introduced in 7.21.0. See CURLINFO_PROTOCOL(3).
+Introduced in 7.21.0. Deprecated since 8.20.0.
 
 ## CURLPROTO_RTMPE
-Introduced in 7.21.0. See CURLINFO_PROTOCOL(3).
+Introduced in 7.21.0. Deprecated since 8.20.0.
 
 ## CURLPROTO_RTMPS
-Introduced in 7.21.0. See CURLINFO_PROTOCOL(3).
+Introduced in 7.21.0. Deprecated since 8.20.0.
 
 ## CURLPROTO_RTMPT
-Introduced in 7.21.0. See CURLINFO_PROTOCOL(3).
+Introduced in 7.21.0. Deprecated since 8.20.0.
 
 ## CURLPROTO_RTMPTE
-Introduced in 7.21.0. See CURLINFO_PROTOCOL(3).
+Introduced in 7.21.0. Deprecated since 8.20.0.
 
 ## CURLPROTO_RTMPTS
-Introduced in 7.21.0. See CURLINFO_PROTOCOL(3).
+Introduced in 7.21.0. Deprecated since 8.20.0.
 
 ## CURLPROTO_RTSP
 Introduced in 7.20.0. See CURLINFO_PROTOCOL(3).
@@ -2959,6 +2995,9 @@ Introduced in 7.52.0. See CURLOPT_PROXYTYPE(3).
 
 ## CURLPROXY_HTTPS2
 Introduced in 8.1.0. See CURLOPT_PROXYTYPE(3).
+
+## CURLPROXY_HTTPS3
+Introduced in 8.21.0. See CURLOPT_PROXYTYPE(3).
 
 ## CURLPROXY_SOCKS4
 Introduced in 7.10. See CURLOPT_PROXYTYPE(3).
@@ -3292,6 +3331,9 @@ Introduced in 7.62.0. See curl_url_get(3).
 
 ## CURLU_URLENCODE
 Introduced in 7.62.0. See curl_url_get(3).
+
+## CURLUE_BACKSLASH
+Introduced in 8.22.0. See libcurl-errors(3).
 
 ## CURLUE_BAD_FILE_URL
 Introduced in 7.81.0. See libcurl-errors(3).

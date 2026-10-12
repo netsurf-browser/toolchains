@@ -60,8 +60,7 @@ persisted: either **session_key** or **shamc** and always **sdata**. All
 other parameters are informative, e.g. allow the callback to act only
 on specific session tickets.
 
-Note that SSL sessions that involve a client certificate or SRP
-username/password are not exported.
+Note that SSL sessions that involve a client certificate are not exported.
 
 # Export Function Parameter
 
@@ -83,8 +82,7 @@ a cryptographic hash of the salt and **session_key**. The salt is generated
 for every session individually. Storing **shmac** is recommended when
 placing session tickets in a file, for example.
 
-A third party may brute-force known hostnames, but cannot just "grep" for
-them.
+A third party may brute-force known hostnames, but cannot "grep" for them.
 
 ## Session Data
 
@@ -119,17 +117,17 @@ The maximum amount of bytes the server supports to receive in early data
 # EXAMPLE
 
 ~~~c
-CURLcode my_export_cb(CURL *handle,
-                      void *userptr,
-                      const char *session_key,
-                      const unsigned char *shmac,
-                      size_t shmac_len,
-                      const unsigned char *sdata,
-                      size_t sdata_len,
-                      curl_off_t valid_until,
-                      int ietf_tls_id,
-                      const char *alpn,
-                      size_t earlydata_max)
+static CURLcode my_export_cb(CURL *handle,
+                             void *userptr,
+                             const char *session_key,
+                             const unsigned char *shmac,
+                             size_t shmac_len,
+                             const unsigned char *sdata,
+                             size_t sdata_len,
+                             curl_off_t valid_until,
+                             int ietf_tls_id,
+                             const char *alpn,
+                             size_t earlydata_max)
 {
   /* persist sdata */
   return CURLE_OK;
@@ -139,7 +137,7 @@ int main(void)
 {
   CURLSHcode sh;
   CURLSH *share = curl_share_init();
-  CURLcode rc;
+  CURLcode result;
   CURL *curl;
 
   sh = curl_share_setopt(share, CURLSHOPT_SHARE, CURL_LOCK_DATA_SSL_SESSION);
@@ -150,13 +148,12 @@ int main(void)
   if(curl) {
     curl_easy_setopt(curl, CURLOPT_SHARE, share);
 
-    /* run a transfer, all TLS sessions received will be added
-     * to the share. */
+    /* run a transfer, all TLS sessions received are added to the share. */
     curl_easy_setopt(curl, CURLOPT_URL, "https://example.com/");
     curl_easy_perform(curl);
 
     /* export the TLS sessions collected in the share */
-    rc = curl_easy_ssls_export(curl, my_export_cb, NULL);
+    result = curl_easy_ssls_export(curl, my_export_cb, NULL);
 
     /* always cleanup */
     curl_easy_cleanup(curl);

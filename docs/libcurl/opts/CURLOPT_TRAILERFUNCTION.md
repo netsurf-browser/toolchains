@@ -78,7 +78,8 @@ int main(void)
 {
   CURL *curl = curl_easy_init();
   if(curl) {
-    CURLcode res;
+    CURLcode result;
+    struct curl_slist *headers;
 
     /* Set the URL of the request */
     curl_easy_setopt(curl, CURLOPT_URL, "https://example.com/");
@@ -89,15 +90,14 @@ int main(void)
        Let that function be read_cb */
     curl_easy_setopt(curl, CURLOPT_READFUNCTION, read_cb);
 
-    struct curl_slist *headers = NULL;
-    headers = curl_slist_append(headers, "Trailer: My-super-awesome-trailer");
-    res = curl_easy_setopt(curl, CURLOPT_HTTPHEADER, headers);
+    headers = curl_slist_append(NULL, "Trailer: My-super-awesome-trailer");
+    result = curl_easy_setopt(curl, CURLOPT_HTTPHEADER, headers);
 
     /* Set the trailers filling callback */
     curl_easy_setopt(curl, CURLOPT_TRAILERFUNCTION, trailer_cb);
 
     /* Perform the transfer */
-    res = curl_easy_perform(curl);
+    result = curl_easy_perform(curl);
 
     curl_easy_cleanup(curl);
 

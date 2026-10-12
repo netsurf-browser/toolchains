@@ -53,7 +53,9 @@ libcurl prunes entries from the DNS cache if it exceeds 30,000 entries no
 matter which timeout value is used. (Added in version 8.1.0)
 
 Since curl 8.16.0, failed name resolves are stored in the DNS cache for half
-the set timeout period.
+the set timeout period. Since curl 8.22.0, this only happens when the
+resolver answered that the name does not exist, not on transient or local
+resolver failures.
 
 # DEFAULT
 
@@ -68,17 +70,17 @@ int main(void)
 {
   CURL *curl = curl_easy_init();
   if(curl) {
-    CURLcode res;
+    CURLcode result;
     curl_easy_setopt(curl, CURLOPT_URL, "https://example.com/foo.bin");
 
     /* only reuse addresses for a short time */
     curl_easy_setopt(curl, CURLOPT_DNS_CACHE_TIMEOUT, 2L);
 
-    res = curl_easy_perform(curl);
+    result = curl_easy_perform(curl);
 
     /* in this second request, the cache is not be used if more than
        two seconds have passed since the previous name resolve */
-    res = curl_easy_perform(curl);
+    result = curl_easy_perform(curl);
 
     curl_easy_cleanup(curl);
   }

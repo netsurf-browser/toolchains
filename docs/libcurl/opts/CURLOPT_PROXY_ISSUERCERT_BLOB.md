@@ -66,23 +66,23 @@ NULL
 
 ~~~c
 
-extern char *certificateData; /* point to the data */
-size_t filesize; /* size of the data */
+static char *certificateData; /* point to the data */
+static size_t filesize; /* size of the data */
 
 int main(void)
 {
   CURL *curl = curl_easy_init();
   if(curl) {
-    CURLcode res;
+    CURLcode result;
     struct curl_blob blob;
     curl_easy_setopt(curl, CURLOPT_URL, "https://example.com/");
     /* using an HTTPS proxy */
-    curl_easy_setopt(curl, CURLOPT_PROXY, "https://localhost:443");
+    curl_easy_setopt(curl, CURLOPT_PROXY, "https://proxy.example:443");
     blob.data = certificateData;
     blob.len = filesize;
     blob.flags = CURL_BLOB_COPY;
     curl_easy_setopt(curl, CURLOPT_PROXY_ISSUERCERT_BLOB, &blob);
-    res = curl_easy_perform(curl);
+    result = curl_easy_perform(curl);
     curl_easy_cleanup(curl);
   }
 }

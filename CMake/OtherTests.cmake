@@ -50,19 +50,6 @@ if(NOT DEFINED HAVE_STRUCT_SOCKADDR_STORAGE)
   cmake_pop_check_state()
 endif()
 
-if(NOT WIN32)
-  set(_source_epilogue "#undef inline")
-  curl_add_header_include(HAVE_SYS_TYPES_H "sys/types.h")
-  check_c_source_compiles("${_source_epilogue}
-    #include <sys/socket.h>
-    int main(void)
-    {
-      int flag = MSG_NOSIGNAL;
-      (void)flag;
-      return 0;
-    }" HAVE_MSG_NOSIGNAL)
-endif()
-
 set(_source_epilogue "#undef inline")
 check_c_source_compiles("${_source_epilogue}
   #ifdef _MSC_VER
@@ -90,12 +77,14 @@ if(WIN32)
   set(HAVE_GETADDRINFO_THREADSAFE ${HAVE_GETADDRINFO})
 elseif(NOT HAVE_GETADDRINFO)
   set(HAVE_GETADDRINFO_THREADSAFE FALSE)
-elseif(APPLE OR
-       CMAKE_SYSTEM_NAME STREQUAL "AIX" OR
-       CMAKE_SYSTEM_NAME STREQUAL "FreeBSD" OR
-       CMAKE_SYSTEM_NAME STREQUAL "HP-UX" OR
-       CMAKE_SYSTEM_NAME STREQUAL "MidnightBSD" OR
-       CMAKE_SYSTEM_NAME STREQUAL "NetBSD" OR
+elseif(APPLE OR  # Darwin 9+ / macOS 10.5+
+       AIX OR CMAKE_SYSTEM_NAME STREQUAL "AIX" OR  # 5.2+
+       CMAKE_SYSTEM_NAME STREQUAL "DragonFlyBSD" OR  # 2.2.0+
+       CMAKE_SYSTEM_NAME STREQUAL "FreeBSD" OR  # 5.5+
+       CMAKE_SYSTEM_NAME STREQUAL "HP-UX" OR  # 11.11+
+       CMAKE_SYSTEM_NAME STREQUAL "MidnightBSD" OR  # all versions
+       CMAKE_SYSTEM_NAME STREQUAL "NetBSD" OR  # 4+
+       CMAKE_SYSTEM_NAME STREQUAL "OpenBSD" OR  # 5.4+
        CMAKE_SYSTEM_NAME STREQUAL "SunOS")
   set(HAVE_GETADDRINFO_THREADSAFE TRUE)
 elseif(BSD OR CMAKE_SYSTEM_NAME MATCHES "BSD")

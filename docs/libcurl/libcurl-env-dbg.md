@@ -58,6 +58,10 @@ only send 800.
 The percentage of send() calls that should be answered with EAGAIN at random.
 QUIC only.
 
+## `CURL_DBG_SOCK_FAIL_IPV6`
+
+Fail opening of sockets for the IPv6 address family.
+
 ## `CURL_DEBUG`
 
 Trace logging behavior as an alternative to calling curl_global_trace(3).
@@ -106,6 +110,11 @@ A time of 0 is used for AWS signatures and NTLM if this variable exists.
 A fixed faked value to use instead of a proper random number so that functions
 in libcurl that are otherwise getting random outputs can be tested for what
 they generate.
+
+## `CURL_SIGPIPE_DEBUG`
+
+When present, `curl` does not set `SIGPIPE` to ignore. This allows
+verification that `libcurl` does not cause `SIGPIPE` to be raised.
 
 ## `CURL_SMALLREQSEND`
 
@@ -165,7 +174,53 @@ a multi handle is destroyed. This implicitly triggers for easy handles
 that are run via easy_perform. The value of the environment variable
 gives the shutdown timeout in milliseconds.
 
-## `CURL_H2_STREAM_WIN_MAX`
+## `CURL_DBG_HE_AAAA_AWAIT_MS`
 
-Set to a positive 32-bit number to override the HTTP/2 stream window's
-default of 10MB. Used in testing to verify correct window update handling.
+Overrides the time delaying a connect for AAAA resolve results to arrive
+before continuing with Happy Eyeballing.
+
+## `CURL_DBG_RESOLV_MAX_THREADS`
+
+Overrides the maximum number of threads for resolver.
+
+## `CURL_DBG_RESOLV_DELAY`
+
+Makes ever threaded resolve experience an initial delay in milliseconds.
+
+## `CURL_DBG_RESOLV_FAIL_DELAY`
+
+With a threaded resolver, delay each lookup by the given milliseconds
+and fail it, as if a transient resolver failure happened.
+
+## `CURL_DBG_RESOLV_FAIL_NEGATIVE`
+
+With a threaded resolver, make a lookup failing via
+`CURL_DBG_RESOLV_FAIL_DELAY` count as an authoritative negative answer,
+eligible for negative DNS caching, instead of a transient failure.
+
+## `CURL_DBG_RESOLV_FAIL_IPV6`
+
+Make libcurl fail a resolve for IPv6 only.
+
+## `CURL_DBG_THRDPOOL_FAIL_STARTS`
+
+Fail this many thread starts in a thread pool, as if the system
+refused to spawn more threads. Read when the pool is created.
+
+## `CURL_QUICK_EXIT`
+
+Make `curl` use the quick exit option, even when built in debug mode.
+
+## `CURL_DBG_AWAIT_HTTPSRR`
+
+When happy eyeballing for https: wait for the HTTPS-RR resolve
+answer to arrive before starting any connect attempt.
+
+## `CURL_DBG_NO_USE_SSL_ON_FIRST`
+
+When passing `--ssl-reqd`, clear it for the first URL in a curl command.
+This allows testing of connection reuse in mixed `STARTTLS` needs.
+
+## `CURL_DBG_SUPPRESS_CONNECT_HDS`
+
+Existence of this variable suppresses the collection of CONNECT headers.

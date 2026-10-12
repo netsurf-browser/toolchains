@@ -1,5 +1,3 @@
-#!/usr/bin/env python3
-# -*- coding: utf-8 -*-
 #***************************************************************************
 #                                  _   _ ____  _
 #  Project                     ___| | | |  _ \| |
@@ -29,10 +27,9 @@ import filecmp
 import logging
 import os
 import shutil
+
 import pytest
-
-from testenv import Env, CurlClient, VsFTPD
-
+from testenv import CurlClient, Env, LocalClient, VsFTPD
 
 log = logging.getLogger(__name__)
 
@@ -63,25 +60,29 @@ class TestVsFTPD:
             shutil.rmtree(vsftpd.docs_dir)
         if not os.path.exists(vsftpd.docs_dir):
             os.makedirs(vsftpd.docs_dir)
+        self._make_docs_file(docs_dir=vsftpd.docs_dir, fname='data-0k', fsize=0)
         self._make_docs_file(docs_dir=vsftpd.docs_dir, fname='data-1k', fsize=1024)
-        self._make_docs_file(docs_dir=vsftpd.docs_dir, fname='data-10k', fsize=10*1024)
-        self._make_docs_file(docs_dir=vsftpd.docs_dir, fname='data-1m', fsize=1024*1024)
-        self._make_docs_file(docs_dir=vsftpd.docs_dir, fname='data-10m', fsize=10*1024*1024)
+        self._make_docs_file(docs_dir=vsftpd.docs_dir, fname='data-10k', fsize=10 * 1024)
+        self._make_docs_file(docs_dir=vsftpd.docs_dir, fname='data-1m', fsize=1024 * 1024)
+        self._make_docs_file(docs_dir=vsftpd.docs_dir, fname='data-10m', fsize=10 * 1024 * 1024)
+        env.make_data_file(indir=env.gen_dir, fname="upload-0k", fsize=0)
         env.make_data_file(indir=env.gen_dir, fname="upload-1k", fsize=1024)
-        env.make_data_file(indir=env.gen_dir, fname="upload-100k", fsize=100*1024)
-        env.make_data_file(indir=env.gen_dir, fname="upload-1m", fsize=1024*1024)
+        env.make_data_file(indir=env.gen_dir, fname="upload-100k", fsize=100 * 1024)
+        env.make_data_file(indir=env.gen_dir, fname="upload-1m", fsize=1024 * 1024)
 
     def test_30_01_list_dir(self, env: Env, vsftpd: VsFTPD):
         curl = CurlClient(env=env)
         url = f'ftp://{env.ftp_domain}:{vsftpd.port}/'
         r = curl.ftp_get(urls=[url], with_stats=True)
         r.check_stats(count=1, http_status=226)
-        lines = open(os.path.join(curl.run_dir, 'download_#1.data')).readlines()
-        assert len(lines) == 4, f'list: {lines}'
+        with open(os.path.join(curl.run_dir, 'download_#1.data')) as fd:
+            lines = fd.readlines()
+        assert len(lines) == 5, f'list: {lines}'
+        r.check_stats_timelines()
 
     # download 1 file, no SSL
     @pytest.mark.parametrize("docname", [
-        'data-1k', 'data-1m', 'data-10m'
+        'data-0k', 'data-1k', 'data-1m', 'data-10m'
     ])
     def test_30_02_download_1(self, env: Env, vsftpd: VsFTPD, docname):
         curl = CurlClient(env=env)
@@ -91,9 +92,10 @@ class TestVsFTPD:
         r = curl.ftp_get(urls=[url], with_stats=True)
         r.check_stats(count=count, http_status=226)
         self.check_downloads(curl, srcfile, count)
+        r.check_stats_timelines()
 
     @pytest.mark.parametrize("docname", [
-        'data-1k', 'data-1m', 'data-10m'
+        'data-0k', 'data-1k', 'data-1m', 'data-10m'
     ])
     def test_30_03_download_10_serial(self, env: Env, vsftpd: VsFTPD, docname):
         curl = CurlClient(env=env)
@@ -104,9 +106,10 @@ class TestVsFTPD:
         r.check_stats(count=count, http_status=226)
         self.check_downloads(curl, srcfile, count)
         assert r.total_connects == count + 1, 'should reuse the control conn'
+        r.check_stats_timelines()
 
     @pytest.mark.parametrize("docname", [
-        'data-1k', 'data-1m', 'data-10m'
+        'data-0k', 'data-1k', 'data-1m', 'data-10m'
     ])
     def test_30_04_download_10_parallel(self, env: Env, vsftpd: VsFTPD, docname):
         curl = CurlClient(env=env)
@@ -119,9 +122,10 @@ class TestVsFTPD:
         r.check_stats(count=count, http_status=226)
         self.check_downloads(curl, srcfile, count)
         assert r.total_connects > count + 1, 'should have used several control conns'
+        r.check_stats_timelines()
 
     @pytest.mark.parametrize("docname", [
-        'upload-1k', 'upload-100k', 'upload-1m'
+        'upload-0k', 'upload-1k', 'upload-100k', 'upload-1m'
     ])
     def test_30_05_upload_1(self, env: Env, vsftpd: VsFTPD, docname):
         curl = CurlClient(env=env)
@@ -133,16 +137,17 @@ class TestVsFTPD:
         r = curl.ftp_upload(urls=[url], fupload=f'{srcfile}', with_stats=True)
         r.check_stats(count=count, http_status=226)
         self.check_upload(env, vsftpd, docname=docname)
+        r.check_stats_timelines()
 
     def _rmf(self, path):
         if os.path.exists(path):
-            return os.remove(path)
+            os.remove(path)
 
     # check with `tcpdump` if curl causes any TCP RST packets
     @pytest.mark.skipif(condition=not Env.tcpdump(), reason="tcpdump not available")
     @pytest.mark.skipif(condition=not Env.curl_is_debug(), reason="needs curl debug")
     @pytest.mark.skipif(condition=not Env.curl_is_verbose(), reason="needs curl verbose strings")
-    def test_30_06_shutdownh_download(self, env: Env, vsftpd: VsFTPD):
+    def test_30_06_shutdown_download(self, env: Env, vsftpd: VsFTPD):
         docname = 'data-1k'
         curl = CurlClient(env=env)
         count = 1
@@ -154,13 +159,13 @@ class TestVsFTPD:
         # look only at ports from DATA connection.
         data_ports = vsftpd.get_data_ports(r)
         assert len(data_ports), f'unable to find FTP data port connected to\n{r.dump_logs()}'
-        assert len(r.tcpdump.get_rsts(ports=data_ports)) == 0, 'Unexpected TCP RST packets'
+        assert len(r.tcpdump.get_rsts(port_pairs=data_ports)) == 0, 'Unexpected TCP RST packets'
 
     # check with `tcpdump` if curl causes any TCP RST packets
     @pytest.mark.skipif(condition=not Env.tcpdump(), reason="tcpdump not available")
     @pytest.mark.skipif(condition=not Env.curl_is_debug(), reason="needs curl debug")
     @pytest.mark.skipif(condition=not Env.curl_is_verbose(), reason="needs curl verbose strings")
-    def test_30_07_shutdownh_upload(self, env: Env, vsftpd: VsFTPD):
+    def test_30_07_shutdown_upload(self, env: Env, vsftpd: VsFTPD):
         docname = 'upload-1k'
         curl = CurlClient(env=env)
         srcfile = os.path.join(env.gen_dir, docname)
@@ -175,7 +180,7 @@ class TestVsFTPD:
         # look only at ports from DATA connection.
         data_ports = vsftpd.get_data_ports(r)
         assert len(data_ports), f'unable to find FTP data port connected to\n{r.dump_logs()}'
-        assert len(r.tcpdump.get_rsts(ports=data_ports)) == 0, 'Unexpected TCP RST packets'
+        assert len(r.tcpdump.get_rsts(port_pairs=data_ports)) == 0, 'Unexpected TCP RST packets'
 
     def test_30_08_active_download(self, env: Env, vsftpd: VsFTPD):
         docname = 'data-10k'
@@ -188,6 +193,7 @@ class TestVsFTPD:
         ])
         r.check_stats(count=count, http_status=226)
         self.check_downloads(curl, srcfile, count)
+        r.check_stats_timelines()
 
     def test_30_09_active_up_file(self, env: Env, vsftpd: VsFTPD):
         docname = 'upload-1k'
@@ -202,6 +208,7 @@ class TestVsFTPD:
         ])
         r.check_stats(count=count, http_status=226)
         self.check_upload(env, vsftpd, docname=docname)
+        r.check_stats_timelines()
 
     def test_30_10_active_up_ascii(self, env: Env, vsftpd: VsFTPD):
         docname = 'upload-1k'
@@ -216,6 +223,7 @@ class TestVsFTPD:
         ])
         r.check_stats(count=count, http_status=226)
         self.check_upload(env, vsftpd, docname=docname, binary=False)
+        r.check_stats_timelines()
 
     def test_30_11_download_non_existing(self, env: Env, vsftpd: VsFTPD):
         curl = CurlClient(env=env)
@@ -223,6 +231,18 @@ class TestVsFTPD:
         r = curl.ftp_get(urls=[url], with_stats=True)
         r.check_exit_code(78)
         r.check_stats(count=1, exitcode=78)
+        r.check_stats_timelines()
+
+    def test_30_12_upload_eprt(self, env: Env, vsftpd: VsFTPD):
+        docname = 'test_30_12'
+        client = LocalClient(name='cli_ftp_upload', env=env)
+        if not client.exists():
+            pytest.skip(f'example client not built: {client.name}')
+        url = f'ftp://{env.ftp_domain}:{vsftpd.port}/{docname}'
+        r = client.run(args=['-r', f'{env.ftp_domain}:{vsftpd.port}:127.0.0.1', url])
+        r.check_exit_code(0)
+        dstfile = os.path.join(vsftpd.docs_dir, docname)
+        assert os.path.exists(dstfile), f'{r.dump_logs()}'
 
     def check_downloads(self, client, srcfile: str, count: int,
                         complete: bool = True):
@@ -230,8 +250,10 @@ class TestVsFTPD:
             dfile = client.download_file(i)
             assert os.path.exists(dfile)
             if complete and not filecmp.cmp(srcfile, dfile, shallow=False):
-                diff = "".join(difflib.unified_diff(a=open(srcfile).readlines(),
-                                                    b=open(dfile).readlines(),
+                with open(srcfile) as fa, open(dfile) as fb:
+                    a = fa.readlines()
+                    b = fb.readlines()
+                diff = "".join(difflib.unified_diff(a=a, b=b,
                                                     fromfile=srcfile,
                                                     tofile=dfile,
                                                     n=1))
@@ -243,8 +265,10 @@ class TestVsFTPD:
         assert os.path.exists(srcfile)
         assert os.path.exists(dstfile)
         if not filecmp.cmp(srcfile, dstfile, shallow=False):
-            diff = "".join(difflib.unified_diff(a=open(srcfile).readlines(),
-                                                b=open(dstfile).readlines(),
+            with open(srcfile) as fa, open(dstfile) as fb:
+                a = fa.readlines()
+                b = fb.readlines()
+            diff = "".join(difflib.unified_diff(a=a, b=b,
                                                 fromfile=srcfile,
                                                 tofile=dstfile,
                                                 n=1))

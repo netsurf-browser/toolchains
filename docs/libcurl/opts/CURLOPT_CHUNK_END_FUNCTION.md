@@ -50,7 +50,7 @@ NULL
 #include <stdio.h>
 
 struct callback_data {
-   FILE *output;
+  FILE *output;
 };
 
 static long file_is_downloaded(void *ptr)
@@ -63,7 +63,7 @@ static long file_is_downloaded(void *ptr)
   return CURL_CHUNK_END_FUNC_OK;
 }
 
-int main()
+int main(void)
 {
   /* data for callback */
   struct callback_data callback_info;

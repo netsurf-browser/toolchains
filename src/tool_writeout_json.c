@@ -32,10 +32,8 @@
 /* provide the given string in dynbuf as a quoted json string, but without the
    outer quotes. The buffer is not inited by this function.
 
-   Return 0 on success, non-zero on error.
-*/
-int jsonquoted(const char *in, size_t len,
-               struct dynbuf *out, bool lowercase)
+   Return 0 on success, non-zero on error. */
+int jsonquoted(const char *in, size_t len, struct dynbuf *out, bool lowercase)
 {
   const unsigned char *i = (const unsigned char *)in;
   const unsigned char *in_end = &i[len];
@@ -106,7 +104,7 @@ void ourWriteOutJSON(FILE *stream, const struct writeoutvar mappings[],
 
   for(i = 0; i < nentries; i++) {
     if(mappings[i].writefunc &&
-       mappings[i].writefunc(stream, &mappings[i], per, per_result, true))
+       mappings[i].writefunc(stream, &mappings[i], per, per_result, TRUE))
       fputs(",", stream);
   }
 
@@ -143,8 +141,7 @@ void headerJSON(FILE *stream, struct per_transfer *per)
           if(++i >= a)
             break;
           fputc(',', stream);
-          if(curl_easy_header(per->curl, name, i, CURLH_HEADER,
-                              -1, &header))
+          if(curl_easy_header(per->curl, name, i, CURLH_HEADER, -1, &header))
             break;
         } while(1);
         fputc(']', stream);

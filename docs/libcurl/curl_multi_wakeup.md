@@ -46,7 +46,7 @@ This function has no effect on curl_multi_wait(3) calls.
 ~~~c
 extern int time_to_die(void);
 extern int set_something_to_signal_thread_1_to_exit(void);
-extern int decide_to_stop_thread1();
+extern int decide_to_stop_thread1(void);
 
 int main(void)
 {
@@ -61,14 +61,14 @@ int main(void)
 
   /* this is thread 1 */
   do {
-    CURLMcode mc;
+    CURLMcode mresult;
     int numfds;
 
-    mc = curl_multi_perform(multi, &still_running);
+    mresult = curl_multi_perform(multi, &still_running);
 
-    if(mc == CURLM_OK) {
+    if(mresult == CURLM_OK) {
       /* wait for activity, timeout or wakeup */
-      mc = curl_multi_poll(multi, NULL, 0, 10000, &numfds);
+      mresult = curl_multi_poll(multi, NULL, 0, 10000, &numfds);
     }
 
     if(time_to_die())

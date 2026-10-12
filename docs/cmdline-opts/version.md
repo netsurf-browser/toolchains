@@ -121,12 +121,6 @@ This build supports TLS session export/import, like with the --ssl-sessions.
 ## `SSPI`
 SSPI is supported.
 
-## `TLS-SRP`
-SRP (Secure Remote Password) authentication is supported for TLS.
-
-## `TrackMemory`
-Debug memory tracking is supported.
-
 ## `Unicode`
 Unicode support on Windows.
 

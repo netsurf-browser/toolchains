@@ -22,7 +22,7 @@ CURLOPT_SOCKOPTFUNCTION - callback for setting socket options
 ~~~c
 #include <curl/curl.h>
 
-typedef enum  {
+typedef enum {
   CURLSOCKTYPE_IPCXN,  /* socket created for a specific IP connection */
   CURLSOCKTYPE_ACCEPT, /* socket created by accept() call */
   CURLSOCKTYPE_LAST    /* never use */
@@ -50,9 +50,9 @@ been created, but before the connect call to allow applications to change
 specific socket options. The callback's *purpose* argument identifies the
 exact purpose for this particular socket:
 
-*CURLSOCKTYPE_IPCXN* for actively created connections or since 7.28.0
-*CURLSOCKTYPE_ACCEPT* for FTP when the connection was setup with PORT/EPSV
-(in earlier versions these sockets were not passed to this callback).
+*CURLSOCKTYPE_IPCXN* for actively created connections or *CURLSOCKTYPE_ACCEPT*
+for FTP when the connection was setup with PORT/EPSV (in earlier versions
+these sockets were not passed to this callback).
 
 Future versions of libcurl may support more purposes. libcurl passes the newly
 created socket descriptor to the callback in the *curlfd* parameter so
@@ -72,6 +72,9 @@ The callback function may return *CURL_SOCKOPT_ALREADY_CONNECTED* for
 then libcurl does no attempt to connect. This allows an application to pass in
 an already connected socket with CURLOPT_OPENSOCKETFUNCTION(3) and then have
 this function make libcurl not attempt to connect (again).
+
+The *CURL_SOCKOPT_ALREADY_CONNECTED* feature does not work for HTTP/3 (QUIC)
+connections.
 
 # DEFAULT
 
@@ -105,7 +108,7 @@ int main(void)
 {
   CURL *curl = curl_easy_init();
   if(curl) {
-    CURLcode res;
+    CURLcode result;
     int sockfd; /* our custom file descriptor */
     /* libcurl thinks that you connect to the host
      * and port that you specify in the URL option. */
@@ -117,7 +120,7 @@ int main(void)
     /* call this function to set options for the socket */
     curl_easy_setopt(curl, CURLOPT_SOCKOPTFUNCTION, sockopt_callback);
 
-    res = curl_easy_perform(curl);
+    result = curl_easy_perform(curl);
 
     curl_easy_cleanup(curl);
   }

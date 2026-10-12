@@ -1,3 +1,4 @@
+<?xml version="1.0" encoding="US-ASCII"?>
 <testcase>
 <info>
 <keywords>
@@ -27,7 +28,7 @@ foo
 http
 </server>
 <name>
---proxy, override NO_PROXY by --noproxy and access target URL through proxy
+--proxy, override NO_PROXY by --noproxy and access URL through proxy
 </name>
 <setenv>
 NO_PROXY=example.com

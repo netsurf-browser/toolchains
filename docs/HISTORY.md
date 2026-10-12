@@ -4,28 +4,25 @@ Copyright (C) Daniel Stenberg, <daniel@haxx.se>, et al.
 SPDX-License-Identifier: curl
 -->
 
-How curl Became Like This
-=========================
+# How curl Became Like This
 
 Towards the end of 1996, Daniel Stenberg was spending time writing an IRC bot
 for an Amiga related channel on EFnet. He then came up with the idea to make
-currency-exchange calculations available to Internet Relay Chat (IRC)
-users. All the necessary data were published on the Web; he just needed to
-automate their retrieval.
+currency-exchange calculations available to Internet Relay Chat (IRC) users.
+All the necessary data were published on the Web; he only needed to automate
+their retrieval.
 
-1996
-----
+## 1996
 
 On November 11, 1996 the Brazilian developer Rafael Sagula wrote and released
 HttpGet version 0.1.
 
 Daniel extended this existing command-line open-source tool. After a few minor
-adjustments, it did just what he needed. The first release with Daniel's
-additions was 0.2, released on December 17, 1996. Daniel quickly became the
-new maintainer of the project.
+adjustments, it did what he needed. The first release with Daniel's additions
+was 0.2, released on December 17, 1996. Daniel quickly became the new
+maintainer of the project.
 
-1997
-----
+## 1997
 
 HttpGet 0.3 was released in January 1997 and now it accepted HTTP URLs on the
 command line.
@@ -43,8 +40,7 @@ November 24 1997: Version 3.1 added FTP upload support.
 
 Version 3.5 added support for HTTP POST.
 
-1998
-----
+## 1998
 
 February 4: urlget 3.10
 
@@ -71,14 +67,14 @@ code, we switched over to the MPL license to restrict the effects of
 "copyleft".
 
 November: configure script and reported successful compiles on several
-major operating systems. The never-quite-understood -F option was added and
-curl could now simulate quite a lot of a browser. TELNET support was added.
+major operating systems. The often-misunderstood -F option was added, and
+curl could now simulate significant browser functionality. TELNET support was
+added.
 
 curl 5 was released in December 1998 and introduced the first ever curl man
 page. People started making Linux RPM packages out of it.
 
-1999
-----
+## 1999
 
 January: DICT support added.
 
@@ -86,16 +82,17 @@ OpenSSL took over and SSLeay was abandoned.
 
 May: first Debian package.
 
-August: LDAP:// and FILE:// support added. The curl website gets 1300 visits
-weekly. Moved site to curl.haxx.nu.
+August: `ldap://` and `file://` support added. The curl website gets 1300
+visits weekly. Moved site to curl.haxx.nu.
+
+September: started using CVS for source code version control.
 
 September: Released curl 6.0. 15000 lines of code.
 
 December 28: added the project on Sourceforge and started using its services
 for managing the project.
 
-2000
-----
+## 2000
 
 Spring: major internal overhaul to provide a suitable library interface.
 The first non-beta release was named 7.1 and arrived in August. This offered
@@ -117,8 +114,7 @@ September: kerberos4 support was added.
 November: started the work on a test suite for curl. It was later re-written
 from scratch again. The libcurl major SONAME number was set to 1.
 
-2001
-----
+## 2001
 
 January: Daniel released curl 7.5.2 under a new license again: MIT (or
 MPL). The MIT license is extremely liberal and can be combined with GPL
@@ -130,7 +126,7 @@ deemed "GPL incompatible".)
 March 22: curl supports HTTP 1.1 starting with the release of 7.7. This
 also introduced libcurl's ability to do persistent connections. 24000 lines of
 code. The libcurl major SONAME number was bumped to 2 due to this overhaul.
-The first experimental ftps:// support was added.
+The first experimental `ftps://` support was added.
 
 August: The curl website gets 8000 visits weekly. Curl Corporation contacted
 Daniel to discuss "the name issue". After Daniel's reply, they have never
@@ -144,8 +140,7 @@ September 25: curl (7.7.2) is bundled in Mac OS X (10.1) for the first time. It 
 already becoming more and more of a standard utility of Linux distributions
 and a regular in the BSD ports collections.
 
-2002
-----
+## 2002
 
 June: the curl website gets 13000 visits weekly. curl and libcurl is
 35000 lines of code. Reported successful compiles on more than 40 combinations
@@ -161,8 +156,7 @@ only.
 
 Starting with 7.10, curl verifies SSL server certificates by default.
 
-2003
-----
+## 2003
 
 January: Started working on the distributed curl tests. The autobuilds.
 
@@ -177,10 +171,11 @@ to the website. Five official web mirrors.
 
 December: full-fledged SSL for FTP is supported.
 
-2004
-----
+## 2004
 
 January: curl 7.11.0 introduced large file support.
+
+March: added asynch name resolves using the c-ares library
 
 June: curl 7.12.0 introduced IDN support. 10 official web mirrors.
 
@@ -197,8 +192,7 @@ August: curl and libcurl 7.12.1
     Amount of public website mirrors:          12
     Number of known libcurl bindings:          26
 
-2005
-----
+## 2005
 
 April: GnuTLS can now optionally be used for the secure layer when curl is
 built.
@@ -211,8 +205,7 @@ More than 100,000 unique visitors of the curl website. 25 mirrors.
 
 December: security vulnerability: libcurl URL Buffer Overflow
 
-2006
-----
+## 2006
 
 January: We dropped support for Gopher. We found bugs in the implementation
 that turned out to have been introduced years ago, so with the conclusion that
@@ -228,15 +221,13 @@ curl website.
 
 November: Added SCP and SFTP support
 
-2007
-----
+## 2007
 
 February: Added support for the Mozilla NSS library to do the SSL/TLS stuff
 
 July: security vulnerability: libcurl GnuTLS insufficient cert verification
 
-2008
-----
+## 2008
 
 November:
 
@@ -246,10 +237,9 @@ November:
     Known libcurl bindings:        37
     Contributors:                 683
 
- 145,000 unique visitors. >100 GB downloaded.
+145,000 unique visitors. >100 GB downloaded.
 
-2009
-----
+## 2009
 
 March: security vulnerability: libcurl Arbitrary File Access
 
@@ -259,8 +249,7 @@ August: security vulnerability: libcurl embedded zero in cert name
 
 December: Added support for IMAP, POP3 and SMTP
 
-2010
-----
+## 2010
 
 January: Added support for RTSP
 
@@ -282,161 +271,153 @@ August:
     Known libcurl bindings:        39
     Contributors:                 808
 
- Gopher support added (re-added actually, see January 2006)
+Gopher support added (re-added actually, see January 2006)
 
-2011
-----
+## 2011
 
 February: added support for the axTLS backend
 
 April: added the cyassl backend (later renamed to wolfSSL)
 
-2012
-----
+## 2012
 
- July: Added support for Schannel (native Windows TLS backend) and Darwin SSL
- (Native Mac OS X and iOS TLS backend).
+July: Added support for Schannel (native Windows TLS backend) and Darwin SSL
+(Native Mac OS X and iOS TLS backend).
 
- Supports Metalink
+Supports Metalink
 
- October: SSH-agent support.
+October: SSH-agent support.
 
-2013
-----
+## 2013
 
- February: Cleaned up internals to always uses the "multi" non-blocking
- approach internally and only expose the blocking API with a wrapper.
+February: Cleaned up internals to always uses the "multi" non-blocking
+approach internally and only expose the blocking API with a wrapper.
 
- September: First small steps on supporting HTTP/2 with nghttp2.
+September: First small steps on supporting HTTP/2 with nghttp2.
 
- October: Removed krb4 support.
+October: Removed krb4 support.
 
- December: Happy eyeballs.
+December: Happy eyeballs.
 
-2014
-----
+## 2014
 
- March: first real release supporting HTTP/2
+March: first real release supporting HTTP/2
 
- September: Website had 245,000 unique visitors and served 236GB data
+September: Website had 245,000 unique visitors and served 236GB data
 
- SMB and SMBS support
+SMB and SMBS support
 
-2015
-----
+## 2015
 
- June: support for multiplexing with HTTP/2
+June: support for multiplexing with HTTP/2
 
- August: support for HTTP/2 server push
+August: support for HTTP/2 server push
 
- September: started "everything curl". A separate stand-alone book documenting
- curl and related info in perhaps a more tutorial style rather than just a
- reference,
+September: started "everything curl". A separate stand-alone book documenting
+curl and related info in perhaps a more tutorial style rather than a
+reference,
 
- December: Public Suffix List
+September: initial support for the Public Suffix List for cookies.
 
-2016
-----
+December: Public Suffix List
 
- January: the curl tool defaults to HTTP/2 for HTTPS URLs
+## 2016
 
- December: curl 7.52.0 introduced support for HTTPS-proxy
+January: the curl tool defaults to HTTP/2 for HTTPS URLs
 
- First TLS 1.3 support
+June 26: Rafael Sagula, author of the original httpget tool in 1996 died.
 
-2017
-----
+December: curl 7.52.0 introduced support for HTTPS-proxy
 
- May: Fastly starts hosting the curl website
+First TLS 1.3 support
 
- July: OSS-Fuzz started fuzzing libcurl
+## 2017
 
- September: Added MultiSSL support
+May: Fastly starts hosting the curl website
 
- The website serves 3100 GB/month
+July: OSS-Fuzz started fuzzing libcurl
 
-    Public curl releases:         169
-    Command line options:         211
-    curl_easy_setopt() options:   249
-    Public functions in libcurl:  74
-    Contributors:                 1609
+September: Added MultiSSL support
 
- October: SSLKEYLOGFILE support, new MIME API
+The website serves 3100 GB/month
 
- October: Daniel received the Polhem Prize for his work on curl
+   Public curl releases:         169
+   Command line options:         211
+   curl_easy_setopt() options:   249
+   Public functions in libcurl:  74
+   Contributors:                 1609
 
- November: brotli
+October: SSLKEYLOGFILE support, new MIME API
 
-2018
-----
+October: Daniel received the Polhem Prize for his work on curl
 
- January: new SSH backend powered by libssh
+November: brotli
 
- March: starting with the 1803 release of Windows 10, curl is shipped bundled
- with Microsoft's operating system.
+## 2018
 
- July: curl shows headers using bold type face
+January: new SSH backend powered by libssh
 
- October: added DNS-over-HTTPS (DoH) and the URL API
+March: starting with the 1803 release of Windows 10, curl is shipped bundled
+with Microsoft's operating system.
 
- MesaLink is a new supported TLS backend
+July: curl shows headers using bold type face
 
- libcurl now does HTTP/2 (and multiplexing) by default on HTTPS URLs
+October: added DNS-over-HTTPS (DoH) and the URL API
 
- curl and libcurl are installed in an estimated 5 *billion* instances
- world-wide.
+MesaLink is a new supported TLS backend
 
- October 31: curl and libcurl 7.62.0
+libcurl now does HTTP/2 (and multiplexing) by default on HTTPS URLs
 
-    Public curl releases:         177
-    Command line options:         219
-    curl_easy_setopt() options:   261
-    Public functions in libcurl:  80
-    Contributors:                 1808
+curl and libcurl are installed in an estimated 5 *billion* instances
+world-wide.
 
- December: removed axTLS support
+October 31: curl and libcurl 7.62.0
 
-2019
-----
+   Public curl releases:         177
+   Command line options:         219
+   curl_easy_setopt() options:   261
+   Public functions in libcurl:  80
+   Contributors:                 1808
 
- January: Daniel started working full-time on curl, employed by wolfSSL
+December: removed axTLS support
 
- March: added experimental alt-svc support
+## 2019
 
- August: the first HTTP/3 requests with curl.
+January: Daniel started working full-time on curl, employed by wolfSSL
 
- September: 7.66.0 is released and the tool offers parallel downloads
+March: added experimental alt-svc support
 
-2020
-----
+August: the first HTTP/3 requests with curl.
 
- curl and libcurl are installed in an estimated 10 *billion* instances
- world-wide.
+September: 7.66.0 is released and the tool offers parallel downloads
 
- January: added BearSSL support
+## 2020
 
- March: removed support for PolarSSL, added wolfSSH support. Created the first
- dashboard on the website.
+curl and libcurl are installed in an estimated 10 *billion* instances
+world-wide.
 
- April: experimental MQTT support
+January: added BearSSL support
 
- August: zstd support
+March: removed support for PolarSSL, added wolfSSH support. Created the first
+dashboard on the website.
 
- November: the website moves to curl.se. The website serves 10TB data monthly.
+April: experimental MQTT support
 
- December: alt-svc support
+August: zstd support
 
-2021
-----
+November: the website moves to curl.se. The website serves 10TB data monthly.
 
- February 3: curl 7.75.0 ships with support for Hyper as an HTTP backend
+December: alt-svc support
 
- March 31: curl 7.76.0 ships with support for Rustls
+## 2021
 
- July: HSTS is supported
+February 3: curl 7.75.0 ships with support for Hyper as an HTTP backend
 
-2022
-----
+March 31: curl 7.76.0 ships with support for Rustls
+
+July: HSTS is supported
+
+## 2022
 
 March: added --json, removed mesalink support
 
@@ -446,15 +427,14 @@ March: added --json, removed mesalink support
     Public functions in libcurl:  86
     Contributors:                 2601
 
- The curl.se website serves 16,500 GB/month over 462M requests, the
- official docker image has been pulled 4,098,015,431 times.
+The curl.se website serves 16,500 GB/month over 462M requests, the
+official docker image has been pulled 4,098,015,431 times.
 
 April: added support for msh3 as another HTTP/3 backend
 
 October: initial WebSocket support
 
-2023
-----
+## 2023
 
 March: remove support for curl_off_t < 8 bytes
 
@@ -473,8 +453,7 @@ October: added support for IPFS via HTTP gateway
 
 December: HTTP/3 support with ngtcp2 is no longer experimental
 
-2024
-----
+## 2024
 
 January: switched to "curldown" for all documentation
 
@@ -490,10 +469,9 @@ November 6: TLS 1.3 early data, WebSocket is official
 
 December 21: dropped hyper
 
-2025
-----
+## 2025
 
-February 5: first 0RTT for QUIC, ssl session import/export
+February 5: first 0RTT for QUIC, SSL session import/export
 
 February: experimental HTTPS RR support
 
@@ -519,3 +497,9 @@ November:
 We drop support for krb-ftp, Heimdal, wolfSSH and the winbuild build system.
 
 Add support for Apple SecTrust, native CA certs on Apple systems.
+
+December 15: the website served 78 TB over the last month.
+
+## 2026
+
+April: removed support for RTMP

@@ -30,17 +30,17 @@ struct t1662_WriteThis {
 static size_t t1662_read_cb(char *ptr, size_t size, size_t nmemb, void *userp)
 {
   static const char testdata[] = "mooaaa";
+  static const size_t testdatalen = CURL_CSTRLEN(testdata);
 
   struct t1662_WriteThis *pooh = (struct t1662_WriteThis *)userp;
-  size_t len = strlen(testdata);
 
-  if(size*nmemb < len)
+  if(size * nmemb < 1)
     return 0;
 
   if(pooh->sizeleft) {
-    memcpy(ptr, testdata, strlen(testdata));
-    pooh->sizeleft = 0;
-    return len;
+    *ptr = testdata[testdatalen - pooh->sizeleft];
+    --pooh->sizeleft;
+    return 1;
   }
 
   return 0;                         /* no more data left to deliver */
@@ -48,11 +48,11 @@ static size_t t1662_read_cb(char *ptr, size_t size, size_t nmemb, void *userp)
 
 static CURLcode test_lib1662(const char *URL)
 {
-  CURLcode res = CURLE_OK;
+  CURLcode result = CURLE_OK;
   CURL *curl;
   curl_mime *mime1;
   curl_mimepart *part1;
-  struct t1662_WriteThis pooh = { 1 };
+  struct t1662_WriteThis pooh = { CURL_CSTRLEN("mooaaa") };
 
   mime1 = NULL;
 
@@ -77,12 +77,12 @@ static CURLcode test_lib1662(const char *URL)
       curl_easy_setopt(curl, CURLOPT_VERBOSE, 1L);
       curl_easy_setopt(curl, CURLOPT_FTP_SKIP_PASV_IP, 1L);
       curl_easy_setopt(curl, CURLOPT_TCP_KEEPALIVE, 1L);
-      res = curl_easy_perform(curl);
+      result = curl_easy_perform(curl);
     }
   }
 
   curl_easy_cleanup(curl);
   curl_mime_free(mime1);
   curl_global_cleanup();
-  return res;
+  return result;
 }

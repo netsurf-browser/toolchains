@@ -55,11 +55,11 @@ compared to the *previous* pollset. If relevant changes are detected,
  * a socket was also in the previous one, but IN/OUT flags changed
  * a socket in the previous one is no longer part of the current
 
-`multi_ev.c` keeps a `struct mev_sh_entry` for each sockets in a hash
+`multi_ev.c` keeps a `struct mev_sh_entry` for each socket in a hash
 with the socket as key. It tracks in each entry which transfers are
-interested in this particular socket. How many transfer want to read
-and/or write and what the summarized `POLLIN/POLLOUT` action, that
-had been reported to `multi->socket_cb` was.
+interested in this particular socket, how many transfers want to read
+and/or write and the summarized `POLLIN/POLLOUT` action reported to
+`multi->socket_cb`.
 
 This is necessary as a socket may be in use by several transfers
 at the same time (think HTTP/2 on the same connection). When a transfer
@@ -115,12 +115,12 @@ in the middle of things. Also, a transfer might be interested in several
 sockets at the same time (resolving, eye balling, ftp are all examples of
 those).
 
-### And Come Again
+### Come Again
 
-While transfer and connection identifier are practically unique in a
-libcurl application, sockets are not. Operating systems are keen on reusing
-their resources, and the next socket may get the same identifier as
-one just having been closed with high likelihood.
+While transfer and connection identifiers are practically unique in a libcurl
+application, sockets are not. Operating systems are keen on reusing their
+resources, and the next socket may get the same identifier as a recently
+closed one with high likelihood.
 
 This means that multi event handling needs to be informed *before* a close,
 clean up all its tracking and be ready to see that same socket identifier
