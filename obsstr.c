@@ -1,0 +1,67 @@
+/*
+ * CFLIB, a GEM library for ATARI/TOS
+ * Copyright (C) 1999, 2000 Christian Felsch
+ * 
+ * Modified for FreeMiNT CVS by Frank Naumann <fnaumann@freemint.de>
+ * 
+ * Please send suggestions, patches or bug reports to me or
+ * the MiNT mailing list.
+ * 
+ * 
+ * This library is free software; you can redistribute it and/or
+ * modify it under the terms of the GNU Lesser General Public
+ * License as published by the Free Software Foundation; either
+ * version 2.1 of the License, or (at your option) any later version.
+ * 
+ * This library is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+ * Lesser General Public License for more details.
+ * 
+ * You should have received a copy of the GNU Lesser General Public
+ * License along with this library; if not, write to the Free Software
+ * Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA 02111-1307  USA
+ * 
+ */
+
+#include "intern.h"
+
+
+void set_string(OBJECT *tree, _WORD obj, char *text)
+{
+	long spec;
+	_WORD type;
+
+	spec = get_obspec(tree, obj);
+	type = get_obtype(tree, obj, NULL);
+	switch (type)
+	{
+	case G_BUTTON:
+	case G_STRING:
+	case G_TITLE:
+	case G_SHORTCUT:
+		strcpy((char *) spec, text);
+		break;
+
+	case G_CICON:
+	case G_ICON:
+		strcpy(((ICONBLK *) spec)->ib_ptext, text);
+		break;
+
+	case G_TEXT:
+	case G_BOXTEXT:
+	case G_FTEXT:
+	case G_FBOXTEXT:
+		strcpy(((TEDINFO *) spec)->te_ptext, text);
+		break;
+
+	default:
+		{
+			char s[96];
+
+			sprintf(s, "[3][CF-Lib Panic: set_string()!|Objekt %d hat unbekannten Typ %d|!][Abbruch]", obj, type);
+			form_alert(1, s);
+		}
+		break;
+	}
+}

@@ -1,7 +1,173 @@
 # This file gets included by the Makefile in this directory to determine
 # the files that should go only into source distributions.
 
-HEADER = 
-COBJS = 
+HEADER = \
+	app.h \
+	dragdrop.h \
+	file.h \
+	inline.h \
+	inline.rsh \
+	intern.h \
+	magx.h \
+	mdial.h \
+	menu.h \
+	wdial.h \
+	xfsl.h
 
-SRCFILES = $(HEADER) $(COBJS)
+COBJS = \
+	alerts.c \
+	\
+	app.c \
+	appexit.c \
+	appexitg.c \
+	apphidem.c \
+	apphiden.c \
+	appinit.c \
+	appshowm.c \
+	xgetinfo.c \
+	\
+	asciiset.c \
+	asciitab.c \
+	\
+	cicon.c \
+	\
+	colorpop.c \
+	\
+	sendspec.c \
+	sendchan.c \
+	sendstrt.c \
+	\
+	cookie.c \
+	\
+	debug.c \
+	\
+	dragdrop.c \
+	ddclose.c \
+	ddcreate.c \
+	ddopen.c \
+	ddreply.c \
+	ddrtry.c \
+	ddstry.c \
+	\
+	fexists.c \
+	fscase.c \
+	fslong.c \
+	fsgetpth.c \
+	fsnorm.c \
+	fsshort.c \
+	fsexists.c \
+	fssetext.c \
+	fssetpth.c \
+	fssplite.c \
+	fssplitf.c \
+	\
+	filesel.c \
+	fontsel.c \
+	\
+	cfformdo.c \
+	cfformkb.c \
+	cfobjced.c \
+	cfobjcfd.c \
+	fdeditva.c \
+	fdfinded.c \
+	fdfindsc.c \
+	fdsimple.c \
+	\
+	globals.c \
+	\
+	magxobj.c \
+	magxsc.c \
+	magxver.c \
+	\
+	mdial.c \
+	mdchange.c \
+	mdclose.c \
+	mddo.c \
+	mdmesag.c \
+	mdopen.c \
+	mdredraw.c \
+	mdrdrobj.c \
+	mdwincb.c \
+	mdsimple.c \
+	\
+	menu.c \
+	menucre.c \
+	menudel.c \
+	menuisk.c \
+	menutogg.c \
+	\
+	backgrd.c \
+	cfmalloc.c \
+	patchlev.c \
+	mallocg.c \
+	ol2ts.c \
+	purec.c \
+	ts2ol.c \
+	\
+	nkccgton.c \
+	nkccntog.c \
+	nkcclowr.c \
+	nkccuppr.c \
+	\
+	obfindfl.c \
+	obgflag.c \
+	obglong.c \
+	obgframe.c \
+	obgspec.c \
+	obgtype.c \
+	obgshort.c \
+	obgstate.c \
+	obgstr.c \
+	obredraw.c \
+	obsflag.c \
+	obslong.c \
+	obsspec.c \
+	obsshort.c \
+	obsstate.c \
+	obsstr.c \
+	obsulong.c \
+	obtstate.c \
+	\
+	ppappend.c \
+	ppcreate.c \
+	ppdo.c \
+	ppfree.c \
+	pphandle.c \
+	ppmenu.c \
+	ppvalid.c \
+	\
+	scclear.c \
+	scdir.c \
+	scrtxt.c \
+	scwtxt.c \
+	\
+	userdef.c \
+	\
+	vheight.c \
+	vopnvwk.c \
+	vclip.c \
+	vstr2a.c \
+	vqtrext.c \
+	\
+	wdial.c \
+	wdcallcb.c \
+	wdchange.c \
+	wdclick.c \
+	wdclose.c \
+	wdcreate.c \
+	wddelete.c \
+	wddraw.c \
+	wddrawcr.c \
+	wdget.c \
+	wdiconif.c \
+	wdkey.c \
+	wdmesag.c \
+	wdopen.c \
+	wdredri.c \
+	wdredro.c \
+	wdunico.c
+
+SOBJS = \
+	nkcc-gc.S
+
+SRCFILES = $(HEADER) $(COBJS) $(SOBJS)

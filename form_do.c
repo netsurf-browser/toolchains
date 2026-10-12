@@ -1,0 +1,8 @@
+#include "cfformdo.c"
+#include "cfformkb.c"
+#include "cfobjced.c"
+#include "cfobjcfd.c"
+#include "fdeditva.c"
+#include "fdfinded.c"
+#include "fdfindsc.c"
+#include "fdsimple.c"
