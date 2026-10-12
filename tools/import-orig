@@ -271,29 +271,36 @@ class ImportTool:
                     [ "/usr/bin/git", "branch", "-D", base_branch_name ]
                 )
 
-        # Create pristine tar data on pristine-tar branch
-        previous_pt = self._make_pristine_tar(branch_name)
-        # Create review branch from it
         try:
+            # Create pristine tar data on pristine-tar branch
+            previous_pt = self._make_pristine_tar(branch_name)
+            # Create review branch from it
+            try:
+                subprocess.check_call(
+                    [ "/usr/bin/git", "branch", pt_branch_name, "pristine-tar" ]
+                )
+            finally:
+                # Reset pristine-tar branch back to where it was
+                if previous_pt is not None:
+                    subprocess.check_call(
+                        [
+                            "/usr/bin/git",
+                            "branch",
+                            "-f",
+                            "pristine-tar",
+                            previous_pt
+                        ],
+                    )
+                else:
+                    subprocess.check_call(
+                        [ "/usr/bin/git", "branch", "-D", "pristine-tar" ]
+                    )
+        except:
+            # Failed: clean up and bail out
             subprocess.check_call(
-                [ "/usr/bin/git", "branch", pt_branch_name, "pristine-tar" ]
+                [ "/usr/bin/git", "branch", "-D", branch_name ]
             )
-        finally:
-            # Reset pristine-tar branch back to where it was
-            if previous_pt is not None:
-                subprocess.check_call(
-                    [
-                        "/usr/bin/git",
-                        "branch",
-                        "-f",
-                        "pristine-tar",
-                        previous_pt
-                    ],
-                )
-            else:
-                subprocess.check_call(
-                    [ "/usr/bin/git", "branch", "-D", "pristine-tar" ]
-                )
+            raise
 
         print(
             json.dumps(
