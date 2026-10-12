@@ -1,4 +1,4 @@
-/* C++ compilation harness for the test suite.
+/*
                             __  __            _
                          ___\ \/ /_ __   __ _| |_
                         / _ \\  /| '_ \ / _` | __|
@@ -6,7 +6,7 @@
                         \___/_/\_\ .__/ \__,_|\__|
                                  |_| XML parser
 
-   Copyright (c) 2023 Sebastian Pipping <sebastian@pipping.org>
+   Copyright (c) 2022-2026 Sebastian Pipping <sebastian@pipping.org>
    Licensed under the MIT license:
 
    Permission is  hereby granted,  free of charge,  to any  person obtaining
@@ -27,6 +27,64 @@
    DAMAGES OR  OTHER LIABILITY, WHETHER  IN AN  ACTION OF CONTRACT,  TORT OR
    OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE
    USE OR OTHER DEALINGS IN THE SOFTWARE.
+
+   SPDX-License-Identifier: MIT
 */
 
-#include "basic_tests.c"
+#include "xcs.h"
+
+#if defined(XML_UNICODE)
+#  if defined(XML_UNICODE_WCHAR_T)
+#    include <wchar.h> // for wcscmp, wcslen, wcsncmp
+#  endif
+#else
+#  include <string.h> // for strcmp, strlen, strncmp
+#endif
+
+size_t
+xcslen(const XML_Char *s) {
+#ifdef XML_UNICODE
+#  ifdef XML_UNICODE_WCHAR_T
+  return wcslen(s);
+#  else
+  // XML_Char is unsigned short
+  size_t len = 0;
+  while (s[len]) {
+    len++;
+  }
+  return len;
+#  endif
+#else
+  return strlen(s);
+#endif
+}
+
+int
+xcscmp(const XML_Char *a, const XML_Char *b) {
+#if defined(XML_UNICODE)
+#  if defined(XML_UNICODE_WCHAR_T)
+  return wcscmp(a, b);
+#  else
+  for (; a[0] && b[0] && a[0] == b[0]; a++, b++)
+    ;
+  return a[0] - b[0];
+#  endif
+#else
+  return strcmp(a, b);
+#endif
+}
+
+int
+xcsncmp(const XML_Char *a, const XML_Char *b, size_t len) {
+#if defined(XML_UNICODE)
+#  if defined(XML_UNICODE_WCHAR_T)
+  return wcsncmp(a, b, len);
+#  else
+  for (; len > 0 && a[0] && b[0] && a[0] == b[0]; len--, a++, b++) {
+  }
+  return (len == 0) ? 0 : (a[0] - b[0]);
+#  endif
+#else
+  return strncmp(a, b, len);
+#endif
+}

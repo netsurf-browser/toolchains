@@ -6,7 +6,7 @@
 #                      \___/_/\_\ .__/ \__,_|\__|
 #                               |_| XML parser
 #
-# Copyright (c) 2017-2025 Sebastian Pipping <sebastian@pipping.org>
+# Copyright (c) 2017-2026 Sebastian Pipping <sebastian@pipping.org>
 # Copyright (c) 2018      KangLin <kl222@126.com>
 # Copyright (c) 2022      Johnny Jazeix <jazeix@gmail.com>
 # Copyright (c) 2023      Sony Corporation / Snild Dolkow <snild@sony.com>
@@ -32,13 +32,6 @@
 # DAMAGES OR  OTHER LIABILITY, WHETHER  IN AN  ACTION OF CONTRACT,  TORT OR
 # OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE
 # USE OR OTHER DEALINGS IN THE SOFTWARE.
-
-AUTOMAKE_OPTIONS = \
-    dist-bzip2 \
-    dist-lzip \
-    dist-xz \
-    foreign \
-    subdir-objects
 
 ACLOCAL_AMFLAGS = -I m4
 LIBTOOLFLAGS = --verbose
@@ -75,7 +68,8 @@ _EXTRA_DIST_CMAKE = \
     cmake/autotools/expat-noconfig__macos.cmake.in \
     cmake/autotools/expat-noconfig__windows.cmake.in \
     cmake/autotools/expat-package-init.cmake \
-    cmake/mingw-toolchain.cmake \
+    cmake/mingw-toolchain-win32.cmake \
+    cmake/mingw-toolchain-win64.cmake \
     \
     CMakeLists.txt \
     CMake.README \
@@ -94,7 +88,6 @@ EXTRA_DIST = \
     $(_EXTRA_DIST_CMAKE) \
     $(_EXTRA_DIST_WINDOWS) \
     \
-    conftools/expat.m4 \
     conftools/get-version.sh \
     \
     fuzz/xml_lpm_fuzzer.cpp \
