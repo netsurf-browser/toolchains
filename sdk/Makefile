@@ -108,12 +108,14 @@ VERSION_LIBGNURX := 2.5.1
 # require a toolchain)
 ifeq ($(findstring source-archives,$(MAKECMDGOALS)),)
   ifeq ($(findstring check-updates,$(MAKECMDGOALS)),)
-    ifeq ($(GCCSDK_INSTALL_ENV),)
-      $(error GCCSDK_INSTALL_ENV not set)
-    endif
+    ifeq ($(findstring process-updates,$(MAKECMDGOALS)),)
+      ifeq ($(GCCSDK_INSTALL_ENV),)
+        $(error GCCSDK_INSTALL_ENV not set)
+      endif
 
-    ifeq ($(GCCSDK_INSTALL_CROSSBIN),)
-      $(error GCCSDK_INSTALL_CROSSBIN not set)
+      ifeq ($(GCCSDK_INSTALL_CROSSBIN),)
+        $(error GCCSDK_INSTALL_CROSSBIN not set)
+      endif
     endif
   endif
 endif
@@ -135,8 +137,8 @@ ldflags__ := -L$(GCCSDK_INSTALL_ENV)/lib
 pkg_config_libdir__ := $(GCCSDK_INSTALL_ENV)/lib/pkgconfig
 
 # Target
-ifneq ($(findstring $(MAKECMDGOALS),source-archives check-updates),)
-  # source-archives or check-updates: force a placeholder TARGET
+ifneq ($(findstring $(MAKECMDGOALS),source-archives check-updates process-updates),)
+  # source-archives or *-updates: force a placeholder TARGET
   # (important note: the SDK_ITEMS sanity test further down relies
   # on this not being a KNOWN_TRIPLET)
   TARGET := $(MAKECMDGOALS)
@@ -200,6 +202,7 @@ PATCH := patch -F0
 PRISTINE_TAR := $(CURDIR)/../tools/pristine-tar
 REPACK := $(CURDIR)/../tools/repack
 CHECK_UPDATE := $(CURDIR)/../tools/check-update
+PROCESS_UPDATES := $(CURDIR)/../tools/process-updates
 
 # Compute the SDK components
 SDK_ITEMS :=
@@ -314,10 +317,13 @@ ifneq ($(findstring $(TARGET),$(KNOWN_TRIPLETS)),)
   endif
 endif
 
-.PHONY: all clean distclean source-archives source-archives.real check-updates
+.PHONY: all clean distclean source-archives source-archives.real check-updates process-updates
 all: $(SDK_ITEMS)
 
 check-updates: $(foreach item,$(ALL_SDK_ITEMS),$(basename $(item))-chkupd.d)
+
+process-updates:
+	@make -C $(CURDIR) check-updates | $(PROCESS_UPDATES) -
 
 clean:
 	rm -fr $(BUILDDIR)
