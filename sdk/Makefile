@@ -291,8 +291,8 @@ ifeq ($(TARGET),m68k-unknown-amigaos)
   LIBCURL_SSL := amissl
   EXTRAARGS_LIBCURL := --disable-ntlm-wb --without-random --disable-threaded-resolver --with-zlib --disable-rt --disable-ipv6
   LIBICONV_ENV := CFLAGS="$(cflags__) -DPATH_MAX=1024 -DRLIMIT_NOFILE=6"
-  LIBJPEG_ENV := LDFLAGS="-lm"
-  LIBJPEG_TURBO_ENV := LDFLAGS="-lm"
+  LIBJPEG_ENV := LDFLAGS="$(ldflags__) -lm"
+  LIBJPEG_TURBO_ENV := LDFLAGS="$(ldflags__) -lm"
   # XXX: build openssl against bsdsocket.library?
   # ENV_OPENSSL := CFLAGS="-I$(GCCSDK_INSTALL_ENV)/netinclude" CPPFLAGS="-D__NO_NET_API"
   ENV_OPENSSL := CPPFLAGS="-DOPENSSL_NO_UNIX_SOCK"
