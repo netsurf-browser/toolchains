@@ -222,7 +222,7 @@ ifeq ($(TARGET),arm-riscos-gnueabi)
   SDK_ITEMS := $(addprefix $(BUILDSTEPS)/, libbrotli.d $(COMMON_SDK_ITEMS) libjpeg-turbo.d libwebp.d)
   EXTRAARGS_LIBCARES := --disable-shared 'ac_cv_have_decl_getservbyport_r=no'
   LIBCURL_ENV := LIBS="-lbrotlidec -lbrotlicommon"
-  EXTRAARGS_LIBCURL := --enable-nonblocking --enable-ares --with-random="/dev/urandom" $(LIBCURL_DISABLES)
+  EXTRAARGS_LIBCURL := --enable-nonblocking --enable-ares $(LIBCURL_DISABLES)
   EXTRAARGS_LIBEXPAT := --with-dev-urandom
   EXTRAARGS_OPENSSL := no-asm
   ENV_OPENSSL := CPPFLAGS="-DOPENSSL_NO_UNIX_SOCK"
@@ -233,7 +233,7 @@ ifeq ($(TARGET),arm-unknown-riscos)
   LIBBROTLI_ENV := CFLAGS="$(cflags__) -std=c99"
   EXTRAARGS_LIBCARES := --disable-shared 'ac_cv_have_decl_getservbyport_r=no'
   LIBCURL_ENV := LIBS="-lbrotlidec -lbrotlicommon"
-  EXTRAARGS_LIBCURL := --enable-nonblocking --enable-ares --with-random="/dev/urandom" $(LIBCURL_DISABLES)
+  EXTRAARGS_LIBCURL := --enable-nonblocking --enable-ares $(LIBCURL_DISABLES)
   # Disable the expat testsuite as it requires C++11, which GCC4.7 does not support
   EXTRAARGS_LIBEXPAT := --with-tests=no --with-dev-urandom
   EXTRAARGS_OPENSSL := no-asm
@@ -243,7 +243,7 @@ endif
 ifeq ($(TARGET),m68k-atari-mint)
   SDK_ITEMS := $(addprefix $(BUILDSTEPS)/, libiconv.d $(COMMON_SDK_ITEMS) libjpeg.d libcf.d ldg.d windom.d hermes.d freetype.d)
   EXTRAARGS_LIBCARES := --disable-shared 'ac_cv_have_decl_getservbyport_r=no'
-  EXTRAARGS_LIBCURL := --enable-optimize --enable-nonblocking --enable-ares --with-random="/dev/urandom" --disable-manual --disable-curldebug --disable-thread --disable-threaded-resolver 
+  EXTRAARGS_LIBCURL := --enable-optimize --enable-nonblocking --enable-ares --disable-manual --disable-curldebug --disable-thread --disable-threaded-resolver 
   # actually not urandom: we've patched it to use libcrypto
   EXTRAARGS_LIBEXPAT := --with-dev-urandom
   LIBEXPAT_ENV := LDFLAGS="$(ldflags__) -lcrypto"
@@ -256,7 +256,7 @@ endif
 ifeq ($(TARGET),m5475-atari-mint)
   SDK_ITEMS := $(addprefix $(BUILDSTEPS)/, libiconv.d $(COMMON_SDK_ITEMS) libjpeg.d libcf.d ldg.d windom.d hermes.d freetype.d)
   EXTRAARGS_LIBCARES := --disable-shared 'ac_cv_have_decl_getservbyport_r=no'
-  EXTRAARGS_LIBCURL := --enable-optimize --enable-nonblocking --enable-ares --with-random="/dev/urandom" --disable-manual --disable-curldebug --disable-thread --disable-threaded-resolver
+  EXTRAARGS_LIBCURL := --enable-optimize --enable-nonblocking --enable-ares --disable-manual --disable-curldebug --disable-thread --disable-threaded-resolver
   # actually not urandom: we've patched it to use libcrypto
   EXTRAARGS_LIBEXPAT := --with-dev-urandom
   LIBEXPAT_ENV := LDFLAGS="$(ldflags__) -lcrypto"
@@ -270,7 +270,7 @@ ifeq ($(TARGET),ppc-amigaos)
   SDK_ITEMS := $(addprefix $(BUILDSTEPS)/, libiconv.d tre.d pbl.d $(COMMON_SDK_ITEMS) libjpeg-turbo.d)
   LIBCURL_SSL := amissl
   EXTRAARGS_LIBCARES := --disable-shared
-  EXTRAARGS_LIBCURL := --disable-ntlm-wb --without-random --enable-threaded-resolver --disable-ipv6 LIBS=-lpthread
+  EXTRAARGS_LIBCURL := --disable-ntlm-wb --enable-threaded-resolver --disable-ipv6 LIBS=-lpthread
   ifeq ($(LIBCURL_SSL),openssl)
     # OpenSSL
     LIBEXPAT_CRYPTO_LIB := -lcrypto
@@ -289,7 +289,7 @@ ifeq ($(TARGET),m68k-unknown-amigaos)
   EXTRAARGS_LIBCARES := --disable-shared --without-random
   LIBCARES_ENV := LIBS="-lm -lnet -lunix"
   LIBCURL_SSL := amissl
-  EXTRAARGS_LIBCURL := --disable-ntlm-wb --without-random --disable-threaded-resolver --with-zlib --disable-rt --disable-ipv6
+  EXTRAARGS_LIBCURL := --disable-ntlm-wb --disable-threaded-resolver --with-zlib --disable-rt --disable-ipv6
   LIBICONV_ENV := CFLAGS="$(cflags__) -DPATH_MAX=1024 -DRLIMIT_NOFILE=6"
   LIBJPEG_ENV := LDFLAGS="$(ldflags__) -lm"
   LIBJPEG_TURBO_ENV := LDFLAGS="$(ldflags__) -lm"
@@ -319,7 +319,7 @@ endif
 ifeq ($(TARGET),i686-w64-mingw32)
   SDK_ITEMS := $(addprefix $(BUILDSTEPS)/, libiconv.d libgnurx.d $(COMMON_SDK_ITEMS) libjpeg.d libwebp.d)
   EXTRAARGS_LIBCARES := --disable-shared
-  EXTRAARGS_LIBCURL := --enable-nonblocking --enable-ares --disable-ldap --without-random
+  EXTRAARGS_LIBCURL := --enable-nonblocking --enable-ares --disable-ldap
   LIBCURL_ENV := CFLAGS="$(cflags__) -DCARES_STATICLIB" LIBS="-lgdi32 -lcrypt32 -liphlpapi"
   TARGET_OPENSSL := mingw
   ENV_OPENSSL := CPPFLAGS="-DOPENSSL_NO_UNIX_SOCK" WINDRES="$(windres__)"
@@ -329,7 +329,7 @@ endif
 ifeq ($(TARGET),x86_64-w64-mingw32)
   SDK_ITEMS := $(addprefix $(BUILDSTEPS)/, libiconv.d libgnurx.d $(COMMON_SDK_ITEMS) libjpeg.d libwebp.d)
   EXTRAARGS_LIBCARES := --disable-shared
-  EXTRAARGS_LIBCURL := --enable-nonblocking --enable-ares --disable-ldap --without-random
+  EXTRAARGS_LIBCURL := --enable-nonblocking --enable-ares --disable-ldap
   LIBCURL_ENV := CFLAGS="$(cflags__) -DCARES_STATICLIB" LIBS="-lgdi32 -lcrypt32 -liphlpapi"
   TARGET_OPENSSL := mingw64
   EXTRAARGS_OPENSSL := no-asm
