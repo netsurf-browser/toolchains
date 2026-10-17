@@ -1,6 +1,6 @@
 --- srclib/unistd.in.h.orig	2017-03-27 23:12:52.149619622 +0100
 +++ srclib/unistd.in.h	2017-03-27 23:13:12.582243962 +0100
-@@ -1997,44 +1997,6 @@
+@@ -1961,43 +1961,6 @@
  #endif
  
  
@@ -34,7 +34,6 @@
 -# endif
 -_GL_CXXALIASWARN (readlink);
 -#elif defined GNULIB_POSIXCHECK
--# undef readlink
 -# if HAVE_RAW_DECL_READLINK
 -_GL_WARN_ON_USE (readlink, "readlink is unportable - "
 -                 "use gnulib module readlink for portability");

@@ -1,6 +1,6 @@
 --- srclib/getprogname.c	2019-04-26 19:29:00.000000000 +0100
 +++ srclib/getprogname.c	2020-03-06 19:32:44.157018596 +0000
-@@ -298,7 +298,7 @@ getprogname (void)
+@@ -252,7 +252,7 @@ getprogname (void)
      }
    return "?";
  # else

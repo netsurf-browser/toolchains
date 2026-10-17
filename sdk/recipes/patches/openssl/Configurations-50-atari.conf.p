@@ -6,7 +6,7 @@
 +        inherit_from     => [ "BASE_unix" ],
 +        template         => 1,
 +        cc               => "m68k-atari-mint-gcc",
-+        cflags           => add_before(picker(default => "-DB_ENDIAN -DTERMIOS -DNO_SYSLOG -DNO_SYS_UN_H -DOPENSSL_USE_IPV6=0 -Wall",
++        cflags           => add_before(picker(default => "-DB_ENDIAN -DTERMIOS -DNO_SYSLOG -DNO_SYS_UN_H -DOPENSSL_USE_IPV6=0 -D_POSIX_C_SOURCE=200809 -Wall",
 +                                              debug   => "-g -O0",
 +                                              release => "-O3 -fomit-frame-pointer")),
 +        sys_id           => "MINT",

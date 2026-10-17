@@ -26,24 +26,24 @@ KNOWN_TRIPLETS := \
 # https://github.com/google/brotli
 VERSION_BROTLI := 1.2.0
 # https://zlib.net/
-VERSION_ZLIB := 1.3.1
+VERSION_ZLIB := 1.3.2
 
 # Cryptography
 
 # https://openssl-library.org/
-VERSION_OPENSSL := 3.5.4
+VERSION_OPENSSL := 4.0.3
 
 # Document parsers
 
 # https://github.com/libexpat/libexpat
-VERSION_LIBEXPAT := 2.7.3
+VERSION_LIBEXPAT := 2.9.0
 
 # Image formats
 
 # https://libjpeg-turbo.org/
-VERSION_LIBJPEG_TURBO := 3.1.2
+VERSION_LIBJPEG_TURBO := 3.2.0
 # http://www.libpng.org/pub/png/libpng.html
-VERSION_LIBPNG := 1.6.53
+VERSION_LIBPNG := 1.6.59
 # https://developers.google.com/speed/webp/
 VERSION_LIBWEBP := 1.6.0
 
@@ -51,21 +51,21 @@ VERSION_LIBWEBP := 1.6.0
 
 # https://c-ares.org/
 # https://github.com/c-ares/c-ares/releases/download/
-VERSION_LIBCARES := 1.34.5
+VERSION_LIBCARES := 1.34.8
 # https://curl.se/
-VERSION_LIBCURL := 8.17.0
+VERSION_LIBCURL := 8.22.0
 
 # Text processing
 
 # https://github.com/JuliaStrings/utf8proc
-VERSION_UTF8PROC := 2.11.3
+VERSION_UTF8PROC := 2.12.0
 
 ############################################################################
 
 # Platforms with no native iconv (AmigaOS, Atari, Windows)
 
 # https://www.gnu.org/software/libiconv/
-VERSION_LIBICONV := 1.18
+VERSION_LIBICONV := 1.19
 
 # Platforms that don't use libjpeg-turbo (AmigaOS 3, Atari, Windows)
 
@@ -76,7 +76,7 @@ VERSION_LIBJPEG := 8d
 
 # http://mission-base.com/peter/source/
 # 1.7.0: https://github.com/peterGraf/pbl/releases
-VERSION_LIBPBL := 1_04
+VERSION_LIBPBL := 1.7.0
 # https://github.com/laurikari/tre/
 VERSION_LIBTRE := 0.9.0
 #
@@ -85,14 +85,14 @@ VERSION_ROADSHOW := 7.64.0-amissl
 # Atari only components
 
 # https://www.freetype.org/
-VERSION_FREETYPE := 2.14.1
+VERSION_FREETYPE := 2.14.3
 
 # https://github.com/berkus/hermes-pixel-format/archive/refs/tags/v1.3.3.tar.gz
 VERSION_HERMES := 1.3.3
 #
 VERSION_LDG := SVN-20150827
-# Git-20170304
-VERSION_LIBCF := CVS-20130415
+#
+VERSION_LIBCF := Git-20221026
 #
 VERSION_WINDOM := 2.0.1
 
@@ -223,40 +223,47 @@ ifeq ($(TARGET),arm-riscos-gnueabi)
   EXTRAARGS_LIBCARES := --disable-shared 'ac_cv_have_decl_getservbyport_r=no'
   LIBCURL_ENV := LIBS="-lbrotlidec -lbrotlicommon"
   EXTRAARGS_LIBCURL := --enable-nonblocking --enable-ares --with-random="/dev/urandom" $(LIBCURL_DISABLES)
+  EXTRAARGS_LIBEXPAT := --with-dev-urandom
   EXTRAARGS_OPENSSL := no-asm
   ENV_OPENSSL := CPPFLAGS="-DOPENSSL_NO_UNIX_SOCK"
 endif
 
 ifeq ($(TARGET),arm-unknown-riscos)
   SDK_ITEMS := $(addprefix $(BUILDSTEPS)/, libbrotli.d $(COMMON_SDK_ITEMS) libjpeg-turbo.d libwebp.d)
-  LIBBROTLI_ENV := CFLAGS="-std=c99"
+  LIBBROTLI_ENV := CFLAGS="$(cflags__) -std=c99"
   EXTRAARGS_LIBCARES := --disable-shared 'ac_cv_have_decl_getservbyport_r=no'
   LIBCURL_ENV := LIBS="-lbrotlidec -lbrotlicommon"
   EXTRAARGS_LIBCURL := --enable-nonblocking --enable-ares --with-random="/dev/urandom" $(LIBCURL_DISABLES)
   # Disable the expat testsuite as it requires C++11, which GCC4.7 does not support
-  EXTRAARGS_LIBEXPAT := --with-tests=no
+  EXTRAARGS_LIBEXPAT := --with-tests=no --with-dev-urandom
   EXTRAARGS_OPENSSL := no-asm
-  ENV_OPENSSL := CPPFLAGS="-DOPENSSL_NO_UNIX_SOCK"
+  ENV_OPENSSL := CPPFLAGS="-DOPENSSL_NO_UNIX_SOCK" CFLAGS="$(cflags__) -std=c99"
 endif
 
 ifeq ($(TARGET),m68k-atari-mint)
   SDK_ITEMS := $(addprefix $(BUILDSTEPS)/, libiconv.d $(COMMON_SDK_ITEMS) libjpeg.d libcf.d ldg.d windom.d hermes.d freetype.d)
   EXTRAARGS_LIBCARES := --disable-shared 'ac_cv_have_decl_getservbyport_r=no'
   EXTRAARGS_LIBCURL := --enable-optimize --enable-nonblocking --enable-ares --with-random="/dev/urandom" --disable-manual --disable-curldebug --disable-thread --disable-threaded-resolver 
+  # actually not urandom: we've patched it to use libcrypto
+  EXTRAARGS_LIBEXPAT := --with-dev-urandom
+  LIBEXPAT_ENV := LDFLAGS="$(ldflags__) -lcrypto"
   EXTRAARGS_LIBICONV := --enable-extra-encodings
-  LIBICONV_ENV := CFLAGS="-DPATH_MAX=1024"
-  EXTRAARGS_OPENSSL := no-tests
-  ENV_OPENSSL := CPPFLAGS="-DOPENSSL_NO_UNIX_SOCK"
+  LIBICONV_ENV := CFLAGS="$(cflags__) -DPATH_MAX=1024"
+  EXTRAARGS_OPENSSL := no-tests no-ui-console
+  ENV_OPENSSL := CPPFLAGS="-DOPENSSL_NO_UNIX_SOCK -DOPENSSL_USE_USLEEP" CFLAGS="$(cflags__) -std=c99"
 endif
 
 ifeq ($(TARGET),m5475-atari-mint)
   SDK_ITEMS := $(addprefix $(BUILDSTEPS)/, libiconv.d $(COMMON_SDK_ITEMS) libjpeg.d libcf.d ldg.d windom.d hermes.d freetype.d)
   EXTRAARGS_LIBCARES := --disable-shared 'ac_cv_have_decl_getservbyport_r=no'
   EXTRAARGS_LIBCURL := --enable-optimize --enable-nonblocking --enable-ares --with-random="/dev/urandom" --disable-manual --disable-curldebug --disable-thread --disable-threaded-resolver
+  # actually not urandom: we've patched it to use libcrypto
+  EXTRAARGS_LIBEXPAT := --with-dev-urandom
+  LIBEXPAT_ENV := LDFLAGS="$(ldflags__) -lcrypto"
   EXTRAARGS_LIBICONV := --enable-extra-encodings
-  LIBICONV_ENV := CFLAGS="-DPATH_MAX=1024"
-  EXTRAARGS_OPENSSL := no-asm no-tests
-  ENV_OPENSSL := CPPFLAGS="-DOPENSSL_NO_UNIX_SOCK"
+  LIBICONV_ENV := CFLAGS="$(cflags__) -DPATH_MAX=1024"
+  EXTRAARGS_OPENSSL := no-asm no-tests no-ui-console
+  ENV_OPENSSL := CPPFLAGS="-DOPENSSL_NO_UNIX_SOCK -DOPENSSL_USE_USLEEP" CFLAGS="$(cflags__) -std=c99"
 endif
 
 ifeq ($(TARGET),ppc-amigaos)
@@ -264,6 +271,16 @@ ifeq ($(TARGET),ppc-amigaos)
   LIBCURL_SSL := amissl
   EXTRAARGS_LIBCARES := --disable-shared
   EXTRAARGS_LIBCURL := --disable-ntlm-wb --without-random --enable-threaded-resolver --disable-ipv6 LIBS=-lpthread
+  ifeq ($(LIBCURL_SSL),openssl)
+    # OpenSSL
+    LIBEXPAT_CRYPTO_LIB := -lcrypto
+  else
+    # AmiSSL
+    LIBEXPAT_CRYPTO_LIB := -lamisslauto
+  endif
+  LIBEXPAT_ENV := CPPFLAGS="$(cppflags__) -D__USE_INLINE__" LDFLAGS="$(ldflags__) $(LIBEXPAT_CRYPTO_LIB)"
+  # actually not urandom: we've patched it to use libcrypto/amissl
+  EXTRAARGS_LIBEXPAT := --with-dev-urandom
   ENV_OPENSSL := CPPFLAGS="-DOPENSSL_NO_UNIX_SOCK"
 endif
 
@@ -273,7 +290,7 @@ ifeq ($(TARGET),m68k-unknown-amigaos)
   LIBCARES_ENV := LIBS="-lm -lnet -lunix"
   LIBCURL_SSL := amissl
   EXTRAARGS_LIBCURL := --disable-ntlm-wb --without-random --disable-threaded-resolver --with-zlib --disable-rt --disable-ipv6
-  LIBICONV_ENV := CFLAGS="-DPATH_MAX=1024 -DRLIMIT_NOFILE=6"
+  LIBICONV_ENV := CFLAGS="$(cflags__) -DPATH_MAX=1024 -DRLIMIT_NOFILE=6"
   LIBJPEG_ENV := LDFLAGS="-lm"
   LIBJPEG_TURBO_ENV := LDFLAGS="-lm"
   # XXX: build openssl against bsdsocket.library?
@@ -284,29 +301,38 @@ ifeq ($(TARGET),m68k-unknown-amigaos)
   else
     LIBCURL_ENV := CFLAGS="-I$(GCCSDK_INSTALL_ENV)/netinclude -D__NO_NET_API -DHAVE_IOCTLSOCKET_CAMEL_FIONBIO" LIBS="-lm"
   endif
+  ifeq ($(LIBCURL_SSL),openssl)
+    # OpenSSL
+    LIBEXPAT_CRYPTO_LIB := -lcrypto
+  else
+    # AmiSSL
+    LIBEXPAT_CRYPTO_LIB := -lamisslauto
+  endif
   # XXX: libgcc is meant to be implied, but for some reason that
   # results in ld evaluating it after libm and thus failing to find symbols.
   # Hack around it by forcing the link order here.
-  LIBEXPAT_ENV := LDFLAGS="-lgcc -lm"
+  LIBEXPAT_ENV := LDFLAGS="$(ldflags__) $(LIBEXPAT_CRYPTO_LIB) -lgcc -lm"
+  # actually not urandom: we've patched it to use libcrypto/amissl
+  EXTRAARGS_LIBEXPAT := --with-dev-urandom
 endif
 
 ifeq ($(TARGET),i686-w64-mingw32)
   SDK_ITEMS := $(addprefix $(BUILDSTEPS)/, libiconv.d libgnurx.d $(COMMON_SDK_ITEMS) libjpeg.d libwebp.d)
   EXTRAARGS_LIBCARES := --disable-shared
   EXTRAARGS_LIBCURL := --enable-nonblocking --enable-ares --disable-ldap --without-random
-  LIBCURL_ENV := CFLAGS="-DCARES_STATICLIB" LIBS="-lgdi32 -lcrypt32 -liphlpapi"
+  LIBCURL_ENV := CFLAGS="$(cflags__) -DCARES_STATICLIB" LIBS="-lgdi32 -lcrypt32 -liphlpapi"
   TARGET_OPENSSL := mingw
   ENV_OPENSSL := CPPFLAGS="-DOPENSSL_NO_UNIX_SOCK" WINDRES="$(windres__)"
-  EXTRAARGS_OPENSSL := no-asm enable-capieng
+  EXTRAARGS_OPENSSL := no-asm
 endif
 
 ifeq ($(TARGET),x86_64-w64-mingw32)
   SDK_ITEMS := $(addprefix $(BUILDSTEPS)/, libiconv.d libgnurx.d $(COMMON_SDK_ITEMS) libjpeg.d libwebp.d)
   EXTRAARGS_LIBCARES := --disable-shared
   EXTRAARGS_LIBCURL := --enable-nonblocking --enable-ares --disable-ldap --without-random
-  LIBCURL_ENV := CFLAGS="-DCARES_STATICLIB" LIBS="-lgdi32 -lcrypt32 -liphlpapi"
+  LIBCURL_ENV := CFLAGS="$(cflags__) -DCARES_STATICLIB" LIBS="-lgdi32 -lcrypt32 -liphlpapi"
   TARGET_OPENSSL := mingw64
-  EXTRAARGS_OPENSSL := no-asm enable-capieng
+  EXTRAARGS_OPENSSL := no-asm
   ENV_OPENSSL := CPPFLAGS="-DOPENSSL_NO_UNIX_SOCK" WINDRES="$(windres__)"
 endif
 
@@ -493,11 +519,11 @@ $(BUILDSTEPS)/libgnurx-chkupd.d:
 $(eval $(call patched_source_rule,libcf,$(VERSION_LIBCF),.tar.bz2,cflib))
 
 $(BUILDSTEPS)/libcf.d: $(BUILDSTEPS)/builddir.d $(BUILDSTEP_SRC_LIBCF)
-	$(env) make -C $(BUILDDIR_LIBCF)/cflib CROSSPREFIX=${TARGET}- PREFIX=$(GCCSDK_INSTALL_ENV) CROSS=yes
+	$(env) make -C $(BUILDDIR_LIBCF) CROSSPREFIX=${TARGET}- PREFIX=$(GCCSDK_INSTALL_ENV) CROSS=yes
 	mkdir -p $(GCCSDK_INSTALL_ENV)/lib/mshort
 	mkdir -p $(GCCSDK_INSTALL_ENV)/lib/m68020-60
 	mkdir -p $(GCCSDK_INSTALL_ENV)/lib/m5475
-	$(env) make -C $(BUILDDIR_LIBCF)/cflib CROSSPREFIX=${TARGET}- PREFIX=$(GCCSDK_INSTALL_ENV) CROSS=yes install
+	$(env) make -C $(BUILDDIR_LIBCF) CROSSPREFIX=${TARGET}- PREFIX=$(GCCSDK_INSTALL_ENV) CROSS=yes install
 	touch $@
 
 $(BUILDSTEPS)/libcf-gensrc.d: $(BUILDSTEPS)/builddir.d
@@ -638,8 +664,6 @@ $(BUILDSTEPS)/tre-chkupd.d:
 ########
 
 $(eval $(call patched_source_rule,pbl,$(VERSION_LIBPBL)))
-# This one is awkward so we get to override the generated value
-BUILDDIR_PBL := $(BUILDDIR)/pbl/pbl_$(VERSION_LIBPBL)_04
 
 $(BUILDSTEPS)/pbl.d: $(BUILDSTEPS)/builddir.d $(BUILDSTEP_SRC_PBL)
 	cd $(BUILDDIR_PBL) && $(env) make install PREFIX=$(GCCSDK_INSTALL_ENV)
@@ -827,9 +851,17 @@ $(BUILDSTEPS)/libcurl-chkupd.d:
 
 $(eval $(call patched_source_rule,libexpat,$(VERSION_LIBEXPAT),.tar.gz,expat))
 
-$(BUILDSTEPS)/libexpat.d: $(BUILDSTEPS)/builddir.d $(BUILDSTEP_SRC_LIBEXPAT)
+$(BUILDSTEPS)/libexpat.d: $(BUILDSTEPS)/builddir.d $(BUILDSTEPS)/openssl.d $(BUILDSTEPS)/libexpat-src2.d
 	cd $(BUILDDIR_LIBEXPAT) && $(env) $(LIBEXPAT_ENV) ./configure --prefix=$(GCCSDK_INSTALL_ENV) --target=$(TARGET) --host=$(TARGET) $(NS_SDK_AUTOTOOLS_DOC_SUPPRESS) --disable-shared $(EXTRAARGS_LIBEXPAT)
 	cd $(BUILDDIR_LIBEXPAT) && $(env) $(LIBEXPAT_ENV) make install
+	touch $@
+
+$(BUILDSTEPS)/libexpat-src2.d: $(BUILDSTEP_SRC_LIBEXPAT)
+ifeq ($(LIBCURL_SSL),amissl)
+ifneq ($(realpath $(RECIPES)/patches/libexpat/$(TARGET)),)
+	for p in `ls $(RECIPES)/patches/libexpat/$(TARGET)/*.p.amissl` ; do $(PATCH) -d $(BUILDDIR_LIBEXPAT) -p0 <$$p ; done
+endif
+endif
 	touch $@
 
 $(BUILDSTEPS)/libexpat-gensrc.d: $(BUILDSTEPS)/builddir.d

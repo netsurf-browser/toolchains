@@ -6,7 +6,7 @@
 +    "arm-unknown-riscos" => {
 +        inherit_from     => [ "BASE_unix" ],
 +        cc               => "arm-unknown-riscos-gcc",
-+        cflags           => picker(default => "-DL_ENDIAN -DTERMIOS -DNO_SYS_UN_H",
++        cflags           => picker(default => "-DL_ENDIAN -DTERMIOS -DNO_SYS_UN_H -D_POSIX_C_SOURCE",
 +                                   debug   => "-O0 -g",
 +                                   release => "-O3 ",
 +				   threads("-D_REENTRANT")),

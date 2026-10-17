@@ -1,6 +1,6 @@
 --- Configure.orig	2017-10-17 14:53:18.369801491 +0100
 +++ Configure	2017-10-17 15:11:04.312242542 +0100
-@@ -1454,6 +1454,8 @@
+@@ -1477,6 +1477,8 @@
  $target{cxxflags}//=$target{cflags} if $target{CXX};
  $target{exe_extension}=".exe" if ($config{target} eq "DJGPP");
  $target{exe_extension}=".pm"  if ($config{target} =~ /vos/);

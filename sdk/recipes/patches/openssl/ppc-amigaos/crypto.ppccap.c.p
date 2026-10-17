@@ -9,7 +9,7 @@
  static sigjmp_buf ill_jmp;
  static void ill_handler(int sig)
  {
-@@ -323,3 +325,29 @@
+@@ -322,3 +324,29 @@
      sigaction(SIGILL, &ill_oact, NULL);
      sigprocmask(SIG_SETMASK, &oset, NULL);
  }

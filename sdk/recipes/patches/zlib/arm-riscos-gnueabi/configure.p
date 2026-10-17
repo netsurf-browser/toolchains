@@ -1,6 +1,6 @@
 --- configure.orig	2012-05-02 05:17:08.000000000 +0100
 +++ configure	2012-07-17 17:57:01.000000000 +0100
-@@ -423,18 +423,18 @@
+@@ -593,18 +593,18 @@
  echo >> configure.log
  
  # check for large file support, and if none, check for fseeko()
@@ -31,7 +31,7 @@
    echo "Checking for off64_t... No." | tee -a configure.log
    echo >> configure.log
    cat > $test.c <<EOF
-@@ -451,7 +451,7 @@
+@@ -621,7 +621,7 @@
      SFLAGS="${SFLAGS} -DNO_FSEEKO"
      echo "Checking for fseeko... No." | tee -a configure.log
    fi
