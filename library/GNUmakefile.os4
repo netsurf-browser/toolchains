@@ -29,7 +29,11 @@ RANLIB := ppc-amigaos-ranlib
 COPY := cp -p
 DELETE := rm -rf
 MAKEDIR := mkdir -p
-LOG_COMMAND := 2>&1 | tee -a compiler.log
+# Enabling the LOG_COMMAND has the consequence that a rule will not
+# fail on an error because only the exit status from the tee command
+# will be considered
+#LOG_COMMAND := 2>&1 | tee -a compiler.log
+LOG_COMMAND :=
 # You may need to request a specific compiler version in order to
 # build the baserel versions of the library. At this time of
 # writing (2008-11-06) GCC 4.0.4 and below support the -mbaserel
@@ -54,13 +58,13 @@ LOG_COMMAND := 2>&1 | tee -a compiler.log
 
 WARNINGS := \
 	-Wall -W -Wpointer-arith -Wsign-compare -Wmissing-prototypes \
-	-Wundef -Wbad-function-cast -Wmissing-declarations -Wunused -Wwrite-strings \
-	-Wno-deprecated-declarations \
+	-Wundef -Wmissing-declarations -Wunused -Wwrite-strings \
+	-Wno-deprecated-declarations -Wno-unused-label \
 
-#	-Wconversion -Wshadow
+#	-Wconversion -Wshadow -Wbad-function-cast
 
 INCLUDES   := -Iinclude -I. -I$(SDK_INCLUDE)
- OPTIONS   := -DUSE_64_BIT_INTS -D__USE_INLINE__ -Wa,-mregnames -fno-common -std=gnu99 -mcrt=clib2
+ OPTIONS   := -DUSE_64_BIT_INTS -D__USE_INLINE__ -Wa,-mregnames -fno-builtin -fno-common -std=c99 -nostdlib
 OPTIMIZE   := -DNDEBUG -O3
 
 #DEBUG     := -ggdb
@@ -160,6 +164,10 @@ cvs-tag:
 
 # General build rules for all object files and the individual libraries
 
+lib/crtbegin.o : CFLAGS += -fno-aggressive-loop-optimizations
+lib/crtbegin.o : crtbegin.c
+	@$(COMPILE)
+
 lib/%.o : AFLAGS += $(LARGEDATA)
 lib/%.o : %.S
 	@$(ASSEMBLE)
@@ -171,6 +179,11 @@ lib/small-data/%.o : AFLAGS += $(SMALLDATA)
 lib/small-data/%.o : %.S
 	@$(ASSEMBLE)
 
+lib/small-data/crtbegin.o : CFLAGS += $(SMALLDATA) -fno-aggressive-loop-optimizations
+lib/small-data/crtbegin.o : crtbegin.c
+	@$(COMPILE)
+
+lib/small-data/%.o : CFLAGS += $(SMALLDATA)
 lib/small-data/%.o : %.c
 	@$(COMPILE)
 
@@ -178,6 +191,11 @@ lib/soft-float/%.o : AFLAGS += $(SOFTFLOAT)
 lib/soft-float/%.o : %.S
 	@$(ASSEMBLE)
 
+lib/soft-float/crtbegin.o : CFLAGS += $(SOFTFLOAT) -fno-aggressive-loop-optimizations
+lib/soft-float/crtbegin.o : crtbegin.c
+	@$(COMPILE)
+
+lib/soft-float/%.o : CFLAGS += $(SOFTFLOAT)
 lib/soft-float/%.o : %.c
 	@$(COMPILE)
 
@@ -185,6 +203,11 @@ lib/baserel/%.o : AFLAGS += $(BASEREL)
 lib/baserel/%.o : %.S
 	@$(ASSEMBLE)
 
+lib/baserel/crtbegin.o : CFLAGS += $(BASEREL) -fno-aggressive-loop-optimizations
+lib/baserel/crtbegin.o : crtbegin.c
+	@$(COMPILE)
+
+lib/baserel/%.o : CFLAGS += $(BASEREL)
 lib/baserel/%.o : %.c
 	@$(COMPILE)
 
@@ -192,6 +215,11 @@ lib.threadsafe/%.o : AFLAGS += $(LARGEDATA) $(THREADSAFE)
 lib.threadsafe/%.o : %.S
 	@$(ASSEMBLE)
 
+lib.threadsafe/crtbegin.o : CFLAGS += $(THREADSAFE) $(LARGEDATA) -fno-aggressive-loop-optimizations
+lib.threadsafe/crtbegin.o : crtbegin.c
+	@$(COMPILE)
+
+lib.threadsafe/%.o : CFLAGS += $(THREADSAFE) $(LARGEDATA)
 lib.threadsafe/%.o : %.c
 	@$(COMPILE)
 
@@ -199,6 +227,11 @@ lib.threadsafe/small-data/%.o : AFLAGS += $(SMALLDATA) $(THREADSAFE)
 lib.threadsafe/small-data/%.o : %.S
 	@$(ASSEMBLE)
 
+lib.threadsafe/small-data/crtbegin.o : CFLAGS += $(THREADSAFE) $(SMALLDATA) -fno-aggressive-loop-optimizations
+lib.threadsafe/small-data/crtbegin.o : crtbegin.c
+	@$(COMPILE)
+
+lib.threadsafe/small-data/%.o : CFLAGS += $(THREADSAFE) $(SMALLDATA)
 lib.threadsafe/small-data/%.o : %.c
 	@$(COMPILE)
 
@@ -206,6 +239,11 @@ lib.threadsafe/soft-float/%.o : AFLAGS += $(SOFTFLOAT) $(THREADSAFE)
 lib.threadsafe/soft-float/%.o : %.S
 	@$(ASSEMBLE)
 
+lib.threadsafe/soft-float/crtbegin.o : CFLAGS += $(THREADSAFE) $(SOFTFLOAT) -fno-aggressive-loop-optimizations
+lib.threadsafe/soft-float/crtbegin.o : crtbegin.c
+	@$(COMPILE)
+
+lib.threadsafe/soft-float/%.o : CFLAGS += $(THREADSAFE) $(SOFTFLOAT)
 lib.threadsafe/soft-float/%.o : %.c
 	@$(COMPILE)
 
@@ -213,6 +251,11 @@ lib.threadsafe/baserel/%.o : AFLAGS += $(BASEREL) $(THREADSAFE)
 lib.threadsafe/baserel/%.o : %.S
 	@$(ASSEMBLE)
 
+lib.threadsafe/baserel/crtbegin.o : CFLAGS += $(THREADSAFE) $(BASEREL) -fno-aggressive-loop-optimizations
+lib.threadsafe/baserel/crtbegin.o : crtbegin.c
+	@$(COMPILE)
+
+lib.threadsafe/baserel/%.o : CFLAGS += $(THREADSAFE) $(BASEREL)
 lib.threadsafe/baserel/%.o : %.c
 	@$(COMPILE)
 
@@ -231,7 +274,7 @@ $(CC) $(AFLAGS) -o $@ -c $< $(LOG_COMMAND)
 endef
 
 define MAKELIB
--$(MAKEDIR) $@
+-$(MAKEDIR) $(@D)
 $(DELETE) $@
 echo "Making $@"
 $(AR) $@ $^ $(LOG_COMMAND)
