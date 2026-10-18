@@ -1,0 +1,38 @@
+name: "Check updates"
+
+on:
+  schedule:
+    - cron: '0 0 * * 0' # Weekly, Sundays 00:00 UTC
+  push:
+
+permissions:
+  contents: read
+
+jobs:
+  check-updates:
+    name: 'Check SDK component updates'
+    runs-on: ubuntu-24.04
+
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v5
+
+    - name: Install packages
+      run: sudo apt-get update -qq &&
+           sudo apt-get install --no-install-recommends -y
+               jq
+               python3
+               python3-h2
+               python3-httpx
+
+    - name: Check for updates
+      env:
+        # Used by tools/check-update
+        GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      run: make -k -s --no-print-directory -C sdk/ check-updates > updates.jsonl
+
+    - name: Report results
+      run: |
+        jq -r 'select(.newest != .current) |
+            "::warning title=\(.component) update available::" +
+            "\(.component) \(.current) → \(.newest) (\(.url))"' updates.jsonl
