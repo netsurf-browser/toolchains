@@ -24,7 +24,7 @@ KNOWN_TRIPLETS := \
 # Compression libraries
 
 # https://github.com/google/brotli
-VERSION_BROTLI := 1.2.0
+VERSION_BROTLI := 1.2.1
 # https://zlib.net/
 VERSION_ZLIB := 1.3.2
 
@@ -51,9 +51,9 @@ VERSION_LIBWEBP := 1.6.0
 
 # https://c-ares.org/
 # https://github.com/c-ares/c-ares/releases/download/
-VERSION_LIBCARES := 1.34.8
+VERSION_LIBCARES := 1.34.9
 # https://curl.se/
-VERSION_LIBCURL := 8.22.0
+VERSION_LIBCURL := 8.23.0
 
 # Text processing
 
@@ -85,7 +85,7 @@ VERSION_ROADSHOW := 7.64.0-amissl
 # Atari only components
 
 # https://www.freetype.org/
-VERSION_FREETYPE := 2.14.3
+VERSION_FREETYPE := 2.15.0
 
 # https://github.com/berkus/hermes-pixel-format/archive/refs/tags/v1.3.3.tar.gz
 VERSION_HERMES := 1.3.3
