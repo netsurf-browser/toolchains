@@ -208,7 +208,7 @@ PROCESS_UPDATES := $(CURDIR)/../tools/process-updates
 SDK_ITEMS :=
 
 COMMON_SDK_ITEMS := zlib.d openssl.d libpng.d libcares.d libcurl.d libexpat.d utf8proc.d
-ALL_SDK_ITEMS := $(addprefix $(BUILDSTEPS)/,$(sort $(COMMON_SDK_ITEMS) libbrotli.d libjpeg-turbo.d libwebp.d libiconv.d libjpeg.d libcf.d ldg.d windom.d hermes.d freetype.d roadshow.d tre.d pbl.d libgnurx.d))
+ALL_SDK_ITEMS := $(addprefix $(BUILDSTEPS)/,$(sort $(COMMON_SDK_ITEMS) brotli.d libjpeg-turbo.d libwebp.d libiconv.d libjpeg.d libcf.d ldg.d windom.d hermes.d freetype.d roadshow.d tre.d pbl.d libgnurx.d))
 
 LIBCURL_SSL := openssl
 LIBCURL_DISABLES := $(patsubst %,--disable-%,ftp file dict ldap ldaps mqtt rtsp telnet gopher tftp pop3 imap smb smtp manual)
@@ -219,7 +219,7 @@ TARGET_OPENSSL:=$(TARGET)
 
 # Target Specific setup
 ifeq ($(TARGET),arm-riscos-gnueabi)
-  SDK_ITEMS := $(addprefix $(BUILDSTEPS)/, libbrotli.d $(COMMON_SDK_ITEMS) libjpeg-turbo.d libwebp.d)
+  SDK_ITEMS := $(addprefix $(BUILDSTEPS)/, brotli.d $(COMMON_SDK_ITEMS) libjpeg-turbo.d libwebp.d)
   EXTRAARGS_LIBCARES := --disable-shared 'ac_cv_have_decl_getservbyport_r=no'
   LIBCURL_ENV := LIBS="-lbrotlidec -lbrotlicommon"
   EXTRAARGS_LIBCURL := --enable-nonblocking --enable-ares $(LIBCURL_DISABLES)
@@ -229,8 +229,8 @@ ifeq ($(TARGET),arm-riscos-gnueabi)
 endif
 
 ifeq ($(TARGET),arm-unknown-riscos)
-  SDK_ITEMS := $(addprefix $(BUILDSTEPS)/, libbrotli.d $(COMMON_SDK_ITEMS) libjpeg-turbo.d libwebp.d)
-  LIBBROTLI_ENV := CFLAGS="$(cflags__) -std=c99"
+  SDK_ITEMS := $(addprefix $(BUILDSTEPS)/, brotli.d $(COMMON_SDK_ITEMS) libjpeg-turbo.d libwebp.d)
+  BROTLI_ENV := CFLAGS="$(cflags__) -std=c99"
   EXTRAARGS_LIBCARES := --disable-shared 'ac_cv_have_decl_getservbyport_r=no'
   LIBCURL_ENV := LIBS="-lbrotlidec -lbrotlicommon"
   EXTRAARGS_LIBCURL := --enable-nonblocking --enable-ares $(LIBCURL_DISABLES)
@@ -766,25 +766,25 @@ $(BUILDSTEPS)/libjpeg-turbo-chkupd.d:
 	@$(CHECK_UPDATE) libjpegturbo $(VERSION_LIBJPEG_TURBO) "https://api.github.com/repos/libjpeg-turbo/libjpeg-turbo/releases" "libjpeg-turbo-(\d+\.\d+(\.\d+)?).tar.gz"
 
 
-############
-# libbrotli
-############
+#########
+# brotli
+#########
 
 $(eval $(call patched_source_rule,brotli,$(VERSION_BROTLI)))
 
 # build brotli with cmake
-$(BUILDSTEPS)/libbrotli.d: $(BUILDSTEPS)/builddir.d $(BUILDSTEP_SRC_BROTLI)
+$(BUILDSTEPS)/brotli.d: $(BUILDSTEPS)/builddir.d $(BUILDSTEP_SRC_BROTLI)
 	mkdir -p $(BUILDDIR_BROTLI)/ns-sdk-build
-	cd $(BUILDDIR_BROTLI)/ns-sdk-build && $(env) $(LIBBROTLI_ENV) $(NS_SDK_CMAKE_CMD) -DCMAKE_BUILD_TYPE=Release ..
+	cd $(BUILDDIR_BROTLI)/ns-sdk-build && $(env) $(BROTLI_ENV) $(NS_SDK_CMAKE_CMD) -DCMAKE_BUILD_TYPE=Release ..
 	cd $(BUILDDIR_BROTLI)/ns-sdk-build && $(env) make install VERBOSE=1
 	touch $@
 
-$(BUILDSTEPS)/libbrotli-gensrc.d: $(BUILDSTEPS)/builddir.d
+$(BUILDSTEPS)/brotli-gensrc.d: $(BUILDSTEPS)/builddir.d
 	wget -q -O $(BUILDDIR)/$(subst $(SOURCEDIR)/,,$(SOURCETARBALL_BROTLI)) "https://github.com/google/brotli/archive/refs/tags/v$(VERSION_BROTLI).tar.gz"
 	touch $@
 
 # No source release artefact, so look for the auto-generated tag sources instead
-$(BUILDSTEPS)/libbrotli-chkupd.d:
+$(BUILDSTEPS)/brotli-chkupd.d:
 	@$(CHECK_UPDATE) brotli $(VERSION_BROTLI) "https://github.com/google/brotli/tags" "v(\d+\.\d+(\.\d+)?).tar.gz"
 
 
