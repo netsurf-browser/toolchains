@@ -203,6 +203,7 @@ PRISTINE_TAR := $(CURDIR)/../tools/pristine-tar
 REPACK := $(CURDIR)/../tools/repack
 CHECK_UPDATE := $(CURDIR)/../tools/check-update
 PROCESS_UPDATES := $(CURDIR)/../tools/process-updates
+MAKE_SBOM := $(CURDIR)/../tools/make-sbom
 
 # Compute the SDK components
 SDK_ITEMS :=
@@ -344,7 +345,7 @@ ifneq ($(findstring $(TARGET),$(KNOWN_TRIPLETS)),)
 endif
 
 .PHONY: all clean distclean source-archives source-archives.real check-updates process-updates
-all: $(SDK_ITEMS)
+all: $(SDK_ITEMS) $(BUILDSTEPS)/sbom.d
 
 check-updates: $(foreach item,$(ALL_SDK_ITEMS),$(basename $(item))-chkupd.d)
 
@@ -382,6 +383,10 @@ $(BUILDSTEPS):
 	mkdir -p $(BUILDSTEPS)
 
 $(BUILDSTEPS)/sources.d: $(BUILDSTEPS)/builddir.d $(foreach item,$(SDK_ITEMS),$(basename $(item))-gensrc.d)
+	touch $@
+
+$(BUILDSTEPS)/sbom.d: $(BUILDSTEPS)/builddir.d
+	$(MAKE_SBOM) "netsurf-sdk-$(TARGET)" "$(shell git describe --always 2>/dev/null)" $(foreach item,$(SDK_ITEMS),$(notdir $(basename $(item)))@$(VERSION_$(call uc,$(subst -,_,$(notdir $(basename $(item))))))) >$(GCCSDK_INSTALL_ENV)/sdk.sbom
 	touch $@
 
 define uc
