@@ -68,11 +68,12 @@ PREFIX ?= /opt/netsurf/$(TARGET_NAME)/cross
 
 PRISTINE_TAR := $(TOP)/../tools/pristine-tar
 REPACK := $(TOP)/../tools/repack
+MAKE_SBOM := $(TOP)/../tools/make-sbom
 
 GCC_ENV_PARAMS := AUTOCONF=$(GCC_AUTOCONF) AUTOHEADER=$(GCC_AUTOHEADER) AUTOM4TE=$(GCC_AUTOM4TE) PATH="$(PREFIX)/bin:$(PATH)"
 
 .PHONY: all clean distclean source-archives
-all: $(BUILDSTEPS)/stage2.d
+all: $(BUILDSTEPS)/stage2.d $(BUILDSTEPS)/sbom.d
 
 source-archives: $(BUILDSTEPS)/sources.d
 
@@ -81,6 +82,14 @@ clean:
 
 distclean: clean
 	rm -fr $(SOURCESDIR)
+
+define pkgdesc_from_tarball
+$(word 1,$(subst _, ,$(basename $(basename $(1)))))@$(patsubst $(word 1,$(subst _, ,$(basename $(basename $(1)))))_%,%,$(basename $(basename $(1))))
+endef
+
+$(BUILDSTEPS)/sbom.d: $(BUILDSTEPS)/buildsteps.d
+	$(MAKE_SBOM) "netsurf-toolchain-$(TARGET_NAME)" "$(shell git describe --always 2>/dev/null)" $(foreach item,$(filter UPSTREAM_%_TARBALL,$(.VARIABLES)),$(call pkgdesc_from_tarball,$($(item)))) >$(PREFIX)/toolchain.sbom
+	touch $@
 
 ###
 # Rules to build the full compiler
