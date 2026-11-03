@@ -300,7 +300,7 @@ ifeq ($(TARGET),m68k-unknown-amigaos)
   ifeq ($(LIBCURL_SSL),openssl)
     LIBCURL_ENV := LIBS="-lm -lnet"
   else
-    LIBCURL_ENV := CFLAGS="-I$(GCCSDK_INSTALL_ENV)/netinclude -D__NO_NET_API -DHAVE_IOCTLSOCKET_CAMEL_FIONBIO" LIBS="-lm" ac_cv_func_realpath=no
+    LIBCURL_ENV := CFLAGS="-I$(GCCSDK_INSTALL_ENV)/netinclude -D__NO_NET_API -DHAVE_IOCTLSOCKET_CAMEL_FIONBIO -fomit-frame-pointer -m68020-60 -msoft-float" LIBS="-lm" ac_cv_func_realpath=no
   endif
   ifeq ($(LIBCURL_SSL),openssl)
     # OpenSSL
