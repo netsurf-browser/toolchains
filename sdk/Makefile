@@ -271,7 +271,7 @@ ifeq ($(TARGET),ppc-amigaos)
   SDK_ITEMS := $(addprefix $(BUILDSTEPS)/, libiconv.d tre.d pbl.d $(COMMON_SDK_ITEMS) libjpeg-turbo.d)
   LIBCURL_SSL := amissl
   EXTRAARGS_LIBCARES := --disable-shared
-  EXTRAARGS_LIBCURL := --disable-ntlm-wb --enable-threaded-resolver --disable-ipv6 LIBS=-lpthread
+  EXTRAARGS_LIBCURL := --disable-ntlm-wb --enable-threaded-resolver --disable-ipv6 $(LIBCURL_DISABLES) LIBS=-lpthread
   ifeq ($(LIBCURL_SSL),openssl)
     # OpenSSL
     LIBEXPAT_CRYPTO_LIB := -lcrypto
@@ -290,7 +290,7 @@ ifeq ($(TARGET),m68k-unknown-amigaos)
   EXTRAARGS_LIBCARES := --disable-shared --without-random
   LIBCARES_ENV := LIBS="-lm -lnet -lunix"
   LIBCURL_SSL := amissl
-  EXTRAARGS_LIBCURL := --disable-ntlm-wb --disable-threaded-resolver --with-zlib --disable-rt --disable-ipv6
+  EXTRAARGS_LIBCURL := --disable-ntlm-wb --disable-threaded-resolver --with-zlib --disable-rt --disable-ipv6 $(LIBCURL_DISABLES)
   LIBICONV_ENV := CFLAGS="$(cflags__) -DPATH_MAX=1024 -DRLIMIT_NOFILE=6"
   LIBJPEG_ENV := LDFLAGS="$(ldflags__) -lm"
   # LIBJPEG_TURBO tests need _random which we don't have
