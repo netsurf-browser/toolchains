@@ -286,14 +286,15 @@ ifeq ($(TARGET),ppc-amigaos)
 endif
 
 ifeq ($(TARGET),m68k-unknown-amigaos)
-  SDK_ITEMS := $(addprefix $(BUILDSTEPS)/, roadshow.d libiconv.d tre.d pbl.d $(COMMON_SDK_ITEMS) libjpeg.d)
+  SDK_ITEMS := $(addprefix $(BUILDSTEPS)/, roadshow.d libiconv.d tre.d pbl.d $(COMMON_SDK_ITEMS) libjpeg-turbo.d)
   EXTRAARGS_LIBCARES := --disable-shared --without-random
   LIBCARES_ENV := LIBS="-lm -lnet -lunix"
   LIBCURL_SSL := amissl
   EXTRAARGS_LIBCURL := --disable-ntlm-wb --disable-threaded-resolver --with-zlib --disable-rt --disable-ipv6
   LIBICONV_ENV := CFLAGS="$(cflags__) -DPATH_MAX=1024 -DRLIMIT_NOFILE=6"
   LIBJPEG_ENV := LDFLAGS="$(ldflags__) -lm"
-  LIBJPEG_TURBO_ENV := LDFLAGS="$(ldflags__) -lm"
+  # LIBJPEG_TURBO tests need _random which we don't have
+  EXTRAARGS_LIBJPEG_TURBO := -DCMAKE_C_STANDARD_LIBRARIES="-lm -lgcc" -DWITH_TESTS=OFF
   # XXX: build openssl against bsdsocket.library?
   # ENV_OPENSSL := CFLAGS="-I$(GCCSDK_INSTALL_ENV)/netinclude" CPPFLAGS="-D__NO_NET_API"
   ENV_OPENSSL := CPPFLAGS="-DOPENSSL_NO_UNIX_SOCK"
@@ -759,7 +760,7 @@ $(eval $(call patched_source_rule,libjpegturbo,$(VERSION_LIBJPEG_TURBO),.tar.gz,
 # build jpeg turbo library with cmake
 $(BUILDSTEPS)/libjpeg-turbo.d: $(BUILDSTEPS)/builddir.d $(BUILDSTEP_SRC_LIBJPEGTURBO)
 	mkdir -p $(BUILDDIR_LIBJPEGTURBO)/ns-sdk-build
-	cd $(BUILDDIR_LIBJPEGTURBO)/ns-sdk-build && $(env) $(LIBJPEG_TURBO_ENV) $(NS_SDK_CMAKE_CMD) -DENABLE_STATIC=ON -DENABLE_SHARED=OFF ..
+	cd $(BUILDDIR_LIBJPEGTURBO)/ns-sdk-build && $(env) $(LIBJPEG_TURBO_ENV) $(NS_SDK_CMAKE_CMD) -DENABLE_STATIC=ON -DENABLE_SHARED=OFF $(EXTRAARGS_LIBJPEG_TURBO)  ..
 	cd $(BUILDDIR_LIBJPEGTURBO)/ns-sdk-build && $(env) make install VERBOSE=1
 	touch $@
 
