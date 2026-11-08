@@ -9,3 +9,12 @@
  /* Structure for scatter/gather I/O. */
  struct iovec {
    void  *iov_base; /* Pointer to data. */
+@@ -171,7 +171,7 @@ static int setsocknonblock(ares_socket_t
+ 
+   /* Amiga */
+   long flags = nonblock ? 1L : 0L;
+-  return IoctlSocket(sockfd, FIONBIO, flags);
++  return IoctlSocket(sockfd, FIONBIO, &flags);
+ 
+ #elif defined(HAVE_SETSOCKOPT_SO_NONBLOCK)
+ 

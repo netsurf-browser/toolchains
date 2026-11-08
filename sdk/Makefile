@@ -302,8 +302,8 @@ ifeq ($(TARGET),m68k-unknown-amigaos)
     LIBCURL_ENV := LIBS="-lm -lnet"
     LIBCARES_ENV := LIBS="-lm -lnet -lunix"
   else
-    LIBCURL_ENV := CFLAGS="-I$(GCCSDK_INSTALL_ENV)/netinclude -D__NO_NET_API -DHAVE_IOCTLSOCKET_CAMEL_FIONBIO -fomit-frame-pointer -m68020-60 -msoft-float" LIBS="-lm" ac_cv_func_realpath=no
-    LIBCARES_ENV := CFLAGS="-I$(GCCSDK_INSTALL_ENV)/netinclude -include proto/bsdsocket.h -D__NO_NET_API -DINADDR_LOOPBACK=0x7f000001UL -fomit-frame-pointer -m68020-60 -msoft-float" LIBS="-lm" ac_cv_c_undeclared_builtin_options='none needed'
+    LIBCURL_ENV := CFLAGS="-I$(GCCSDK_INSTALL_ENV)/netinclude -D__NO_NET_API -DHAVE_IOCTLSOCKET_CAMEL_FIONBIO -fomit-frame-pointer -m68020-60 -msoft-float" LIBS="-lm" ac_cv_func_realpath=no ac_cv_have_decl_O_NONBLOCK=no
+    LIBCARES_ENV := CFLAGS="-I$(GCCSDK_INSTALL_ENV)/netinclude -include proto/bsdsocket.h -D__NO_NET_API -DHAVE_IOCTLSOCKET_CAMEL_FIONBIO -DINADDR_LOOPBACK=0x7f000001UL -fomit-frame-pointer -m68020-60 -msoft-float" LIBS="-lm" ac_cv_c_undeclared_builtin_options='none needed' ac_cv_have_decl_O_NONBLOCK=no
   endif
   ifeq ($(LIBCURL_SSL),openssl)
     # OpenSSL
