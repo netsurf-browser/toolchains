@@ -289,9 +289,8 @@ endif
 ifeq ($(TARGET),m68k-unknown-amigaos)
   SDK_ITEMS := $(addprefix $(BUILDSTEPS)/, roadshow.d libiconv.d tre.d pbl.d $(COMMON_SDK_ITEMS) libjpeg-turbo.d)
   EXTRAARGS_LIBCARES := --disable-shared --without-random
-  LIBCARES_ENV := LIBS="-lm -lnet -lunix"
   LIBCURL_SSL := amissl
-  EXTRAARGS_LIBCURL := --disable-ntlm-wb --disable-threaded-resolver --with-zlib --disable-rt --disable-ipv6 $(LIBCURL_DISABLES)
+  EXTRAARGS_LIBCURL := --enable-nonblocking --enable-ares --disable-ntlm-wb --without-random --disable-threaded-resolver --with-zlib --disable-rt --disable-ipv6 $(LIBCURL_DISABLES)
   LIBICONV_ENV := CFLAGS="$(cflags__) -DPATH_MAX=1024 -DRLIMIT_NOFILE=6"
   LIBJPEG_ENV := LDFLAGS="$(ldflags__) -lm"
   # LIBJPEG_TURBO tests need _random which we don't have
@@ -301,8 +300,10 @@ ifeq ($(TARGET),m68k-unknown-amigaos)
   ENV_OPENSSL := CPPFLAGS="-DOPENSSL_NO_UNIX_SOCK"
   ifeq ($(LIBCURL_SSL),openssl)
     LIBCURL_ENV := LIBS="-lm -lnet"
+    LIBCARES_ENV := LIBS="-lm -lnet -lunix"
   else
     LIBCURL_ENV := CFLAGS="-I$(GCCSDK_INSTALL_ENV)/netinclude -D__NO_NET_API -DHAVE_IOCTLSOCKET_CAMEL_FIONBIO -fomit-frame-pointer -m68020-60 -msoft-float" LIBS="-lm" ac_cv_func_realpath=no
+    LIBCARES_ENV := CFLAGS="-I$(GCCSDK_INSTALL_ENV)/netinclude -include proto/bsdsocket.h -D__NO_NET_API -DINADDR_LOOPBACK=0x7f000001UL -fomit-frame-pointer -m68020-60 -msoft-float" LIBS="-lm" ac_cv_c_undeclared_builtin_options='none needed'
   endif
   ifeq ($(LIBCURL_SSL),openssl)
     # OpenSSL
