@@ -1,7 +1,7 @@
 From a8864a85357cb4e0d490b87ee732404b71c23cb6 Mon Sep 17 00:00:00 2001
 From: Chris Young <chris@unsatisfactorysoftware.co.uk>
 Date: Wed, 9 Oct 2024 14:14:29 +0100
-Subject: [PATCH 1/8] Use bsdsocket.library ObtainDomainNameServerList() This
+Subject: [PATCH 1/9] Use bsdsocket.library ObtainDomainNameServerList() This
  is the native Roadshow (may also be available in other Amiga TCP/IP stacks)
  function for obtaining the system's list of DNS server addresses.
 
@@ -125,7 +125,7 @@ index 9f0d7e5061..d30bddedec 100644
 From a89d47d90466fa1b29e4528552c7b45fa20532dc Mon Sep 17 00:00:00 2001
 From: Chris Young <chris@unsatisfactorysoftware.co.uk>
 Date: Wed, 11 Nov 2026 13:22:42 +0000
-Subject: [PATCH 2/8] IoctlSocket() takes pointer to flags
+Subject: [PATCH 2/9] IoctlSocket() takes pointer to flags
 
 ---
  src/lib/ares_set_socket_functions.c | 2 +-
@@ -148,7 +148,7 @@ index 615fbfa28b..742faf5e3a 100644
 From c6466e8ea769b7e6a409ecd1bbe8c3d1b184f135 Mon Sep 17 00:00:00 2001
 From: Chris Young <chris@unsatisfactorysoftware.co.uk>
 Date: Wed, 11 Nov 2026 15:41:56 +0000
-Subject: [PATCH 3/8] bsdsocket.library should be opened by the calling
+Subject: [PATCH 3/9] bsdsocket.library should be opened by the calling
  program, not the lib itself
 
 ---
@@ -374,7 +374,7 @@ index 1bd6da17b4..03361d8cc7 100644
 From 3f56b99cf3011af44bd36eaac6389ef48a706040 Mon Sep 17 00:00:00 2001
 From: Chris Young <chris@unsatisfactorysoftware.co.uk>
 Date: Wed, 11 Nov 2026 15:54:22 +0000
-Subject: [PATCH 4/8] Make Amiga code generic to OS3 and OS4
+Subject: [PATCH 4/9] Make Amiga code generic to OS3 and OS4
 
 ---
  src/lib/ares_sysconfig.c |  6 +++---
@@ -503,7 +503,7 @@ index 03361d8cc7..380f4e69ed 100644
 From 7e796a320a6255f3a5fe0e16c21a8d41a6691813 Mon Sep 17 00:00:00 2001
 From: Chris Young <chris@unsatisfactorysoftware.co.uk>
 Date: Wed, 11 Nov 2026 18:16:28 +0000
-Subject: [PATCH 5/8] Define global SocketBase
+Subject: [PATCH 5/9] Define global SocketBase
 
 ---
  src/tools/adig.c  | 2 ++
@@ -540,7 +540,7 @@ index 380f4e69ed..fa5388513e 100644
 From 038b70e5174bd178b34710dace06a61099b8d6b1 Mon Sep 17 00:00:00 2001
 From: Chris Young <chris@unsatisfactorysoftware.co.uk>
 Date: Wed, 11 Nov 2026 18:16:46 +0000
-Subject: [PATCH 6/8] Define missing functions for AmigaOS3
+Subject: [PATCH 6/9] Define missing functions for AmigaOS3
 
 ---
  src/lib/ares_sysconfig.c | 25 +++++++++++++++++++++++++
@@ -586,7 +586,7 @@ index 5b385a62b8..1017fd6ed9 100644
 From d680d0226b7a5e4444cae655b8672dcabb0a85b0 Mon Sep 17 00:00:00 2001
 From: Chris Young <chris@unsatisfactorysoftware.co.uk>
 Date: Wed, 11 Nov 2026 18:57:34 +0000
-Subject: [PATCH 7/8] Free DNS entries on error
+Subject: [PATCH 7/9] Free DNS entries on error
 
 ---
  src/lib/ares_sysconfig.c | 3 ++-
@@ -617,7 +617,7 @@ index 1017fd6ed9..5916d1f7e6 100644
 From 5aca13d6192931c0e2f3c8d7a59c0c67e3d89e45 Mon Sep 17 00:00:00 2001
 From: Chris Young <chris@unsatisfactorysoftware.co.uk>
 Date: Thu, 12 Nov 2026 09:39:12 +0000
-Subject: [PATCH 8/8] Skip fcntl call on AmigaOS
+Subject: [PATCH 8/9] Skip fcntl call on AmigaOS
 
 ---
  src/lib/ares_set_socket_functions.c | 2 +-
@@ -636,3 +636,26 @@ index 742faf5e3a..029aae851c 100644
    /* Configure the socket fd as close-on-exec. */
    if (fcntl(s, F_SETFD, FD_CLOEXEC) != 0) {
      goto fail; /* LCOV_EXCL_LINE */
+
+From 2f8077d7a8e99a00dda41b32953412c3ff6330cc Mon Sep 17 00:00:00 2001
+From: Chris Young <chris@unsatisfactorysoftware.co.uk>
+Date: Thu, 12 Nov 2026 10:14:26 +0000
+Subject: [PATCH 9/9] AmigaOS has struct iovec
+
+---
+ src/lib/ares_set_socket_functions.c | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git src/lib/ares_set_socket_functions.c src/lib/ares_set_socket_functions.c
+index 029aae851c..3c341a3698 100644
+--- src/lib/ares_set_socket_functions.c
++++ src/lib/ares_set_socket_functions.c
+@@ -78,7 +78,7 @@
+ #  define TFO_SUPPORTED 0
+ #endif
+ 
+-#ifndef HAVE_WRITEV
++#if !defined(HAVE_WRITEV) && !defined(__amigaos__)
+ /* Structure for scatter/gather I/O. */
+ struct iovec {
+   void  *iov_base; /* Pointer to data. */
