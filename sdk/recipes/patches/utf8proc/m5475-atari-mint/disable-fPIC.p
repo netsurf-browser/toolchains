@@ -1,7 +1,7 @@
 --- CMakeLists.txt.orig
 +++ CMakeLists.txt
-@@ -46,7 +46,7 @@ if (NOT MSVC)
- endif ()
+@@ -40,7 +40,7 @@ if (NOT MSVC)
+ target_compile_definitions(utf8proc PRIVATE "UTF8PROC_EXPORTS")
  
  set_target_properties (utf8proc PROPERTIES
 -  POSITION_INDEPENDENT_CODE ON

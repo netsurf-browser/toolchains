@@ -1,0 +1,11 @@
+--- expat.pc.in.orig	2026-10-16 11:35:02.015528911 +0100
++++ expat.pc.in	2026-10-16 11:35:16.727647137 +0100
+@@ -7,7 +7,7 @@
+ Version: @PACKAGE_VERSION@
+ Description: expat XML parser
+ URL: https://libexpat.github.io/
+-Libs: -L${libdir} -l@PACKAGE_NAME@ -lcrypto
++Libs: -L${libdir} -l@PACKAGE_NAME@ -lamisslauto
+ Libs.private: @LIBM@
+ Cflags: -I${includedir}
+ Cflags.private: -DXML_STATIC

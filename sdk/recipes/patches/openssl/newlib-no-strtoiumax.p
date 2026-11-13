@@ -1,11 +1,11 @@
 --- apps/lib/opt.c.orig	2017-10-10 15:19:45.611896396 +0100
 +++ apps/lib/opt.c	2017-10-17 15:42:25.304921197 +0100
-@@ -592,7 +592,7 @@
+@@ -594,7 +594,7 @@
+     return 1;
+ }
  
- #if defined(__STDC_VERSION__) && __STDC_VERSION__ >= 199901L && \
-     defined(INTMAX_MAX) && defined(UINTMAX_MAX) && \
--    !defined(OPENSSL_NO_INTTYPES_H)
-+    !defined(OPENSSL_NO_INTTYPES_H) && !defined(OPENSSL_SYS_AMIGAOS3) && !defined(OPENSSL_SYS_AMIGAOS4)
+-#if defined(__STDC_VERSION__) && __STDC_VERSION__ >= 199901L && defined(INTMAX_MAX) && defined(UINTMAX_MAX) && !defined(OPENSSL_NO_INTTYPES_H)
++#if defined(__STDC_VERSION__) && __STDC_VERSION__ >= 199901L && defined(INTMAX_MAX) && defined(UINTMAX_MAX) && !defined(OPENSSL_NO_INTTYPES_H) && !defined(OPENSSL_SYS_AMIGAOS3) && !defined(OPENSSL_SYS_AMIGAOS4)
  
  /* Parse an intmax_t, put it into *result; return 0 on failure, else 1. */
  int opt_intmax(const char *value, ossl_intmax_t *result)
@@ -15,8 +15,8 @@
  /* On machines that dont support <inttypes.h> just disable the tests */
  #if !defined(OPENSSL_NO_INTTYPES_H)
  
--# ifdef OPENSSL_SYS_VMS
-+# if defined(OPENSSL_SYS_VMS) || defined(OPENSSL_SYS_AMIGAOS3) || defined(OPENSSL_SYS_AMIGAOS4)
- #  define strtoumax strtoull
- #  define strtoimax strtoll
- # endif
+-#ifdef OPENSSL_SYS_VMS
++#if defined(OPENSSL_SYS_VMS) || defined(OPENSSL_SYS_AMIGAOS3) || defined(OPENSSL_SYS_AMIGAOS4)
+ #define strtoumax strtoull
+ #define strtoimax strtoll
+ #endif

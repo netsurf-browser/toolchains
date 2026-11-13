@@ -1,6 +1,6 @@
 --- apps/lib/apps.c.orig	2014-10-15 13:53:39.000000000 +0100
 +++ apps/lib/apps.c	2015-01-05 21:02:13.650018727 +0000
-@@ -2873,10 +2873,11 @@ double app_tminterval(int stop, int user
+@@ -3079,10 +3079,11 @@ double app_tminterval(int stop, int user
      struct rusage rus;
      struct timeval now;
      static struct timeval tmstart;

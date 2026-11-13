@@ -84,10 +84,13 @@ care to ensure that the resulting repacked sources look sane before use.
 Updates
 -------
 
-Each of the Makefiles has a "source-archives" target which fetches the
-original sources from wherever they live upstream and, where appropriate,
-repack them into a tarball.  Thus, updating components will generally
-involve the following steps:
+Toolchain sources
+~~~~~~~~~~~~~~~~~
+
+Each of the toolchain Makefiles has a "source-archives" target which fetches
+the original sources from wherever they live upstream and, where appropriate,
+repacks them into a tarball.  Thus, updating toolchain components will
+generally involve the following steps:
 
   0. Ensure all upstream/* and pristine-tar branches are checked out locally
      and have no changes
@@ -99,16 +102,46 @@ involve the following steps:
      published checksums, or validate GPG signatures)
   4. Manually verify that repacked source archives are sane
   5. Use "import-orig" to import each of the updated components to git
-  6. Update any local patches/additions (c.f. recipes/*)
-  7. Build the updated sources in the usual way
-
-Steps 6 & 7 likely repeat multiple times until done.
 
 Step 3 might be possible to (semi-)automate if checksum/signature files
 are published in a deterministic manner by the original source.  However,
 this is very much not the case for many sources.
 
-Once complete, ensure all local changes are committed to git and that
+SDK sources
+~~~~~~~~~~~
+
+The SDK Makefile has a "process-updates" target which may be used to
+automate most of the steps described for the toolchains. Usage is
+as follows:
+
+  0. Ensure all upstream/* and pristine-tar branches are checked out locally
+     and have no changes
+  1. Run "make process-updates" to discover, download, verify (where possible)
+     and import the updated source archives
+  2. Sources which could not have their authenticitiy determined will be
+     staged for manual review. Two branches will be created:
+       * for-review/<package>-<version>
+       * for-review/<package>-<version>-pristine-tar
+     Once happy that the sources are sensible, they may be merged into the
+     relevant branches by invoking:
+       "import-orig --from-review <package>_<version>.tar.<compression>"
+  3. Bump the version numbers of the components in the Makefile
+
+Local changes and build
+~~~~~~~~~~~~~~~~~~~~~~~
+
+After updating the component sources, ensure that the new component
+versions work by:
+
+  1. Updating any local patches/additions (c.f. recipes/*)
+  2. Building the updated sources in the usual way
+
+These two steps likely repeat multiple times until done.
+
+Updating git
+~~~~~~~~~~~~
+
+Once complete, ensure *all* local changes are committed to git and that
 everything (i.e. tags, upstream/* branches, pristine-tar branch, and
 the working branch containing this document) is pushed -- failure to
 do so makes it impossible to reproduce builds later.

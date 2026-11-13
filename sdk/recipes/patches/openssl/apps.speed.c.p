@@ -1,6 +1,6 @@
 --- apps/speed.c.orig	2017-11-21 22:49:00.185608040 +0000
 +++ apps/speed.c	2017-11-21 22:49:21.488219518 +0000
-@@ -78,6 +78,12 @@
+@@ -76,6 +76,12 @@
  #include "./testdsa.h"
  #include <openssl/modes.h>
  
@@ -11,9 +11,9 @@
 +#endif
 +
  #ifndef HAVE_FORK
- # if defined(OPENSSL_SYS_VMS) || defined(OPENSSL_SYS_WINDOWS) || defined(OPENSSL_SYS_VXWORKS)
- #  define HAVE_FORK 0
-@@ -209,6 +215,18 @@
+ #if defined(OPENSSL_SYS_VMS) || defined(OPENSSL_SYS_WINDOWS) || defined(OPENSSL_SYS_VXWORKS)
+ #define HAVE_FORK 0
+@@ -205,6 +211,18 @@
  
      return ret;
  }
@@ -30,5 +30,5 @@
 +    return ret;
 +}
  #else
- # error "SIGALRM not defined and the platform is not Windows"
+ #error "SIGALRM not defined and the platform is not Windows"
  #endif

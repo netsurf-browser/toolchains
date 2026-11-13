@@ -1,6 +1,6 @@
 --- lib/amigaos.c	2024-09-18 06:56:40.000000000 +0100
 +++ lib/amigaos.c	2024-10-01 10:00:47.428000000 +0100
-@@ -83,16 +83,6 @@ CURLcode Curl_amiga_init(void)
+@@ -77,16 +77,6 @@ CURLcode Curl_amiga_init(void)
    if(base) {
      ISocket = (struct SocketIFace *)GetInterface(base, "main", 1, NULL);
      if(ISocket) {

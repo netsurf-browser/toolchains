@@ -3,10 +3,10 @@
 @@ -112,7 +112,8 @@
  
  #if !(defined(OPENSSL_SYS_WINDOWS) || defined(OPENSSL_SYS_WIN32) \
-     || defined(OPENSSL_SYS_VMS) || defined(OPENSSL_SYS_VXWORKS) \
+     || defined(OPENSSL_SYS_VMS) || defined(OPENSSL_SYS_VXWORKS)  \
 -    || defined(OPENSSL_SYS_UEFI))
 +    || defined(OPENSSL_SYS_UEFI) || defined(OPENSSL_SYS_AMIGAOS3) \
 +    || defined(OPENSSL_SYS_AMIGAOS4))
  
- # if defined(OPENSSL_SYS_VOS)
+ #if defined(OPENSSL_SYS_VOS)
  

@@ -1,0 +1,110 @@
+#!/usr/bin/env python3
+
+import argparse
+import datetime
+import json
+import sys
+import uuid
+
+
+class MakeSBOM:
+    def __init__(self, args):
+        self._args = args
+
+    def run(self):
+        genid = str(uuid.uuid4())
+        now = datetime.datetime.now(tz=datetime.UTC)
+
+        doc_uri = f"https://spdx.netsurf-browser.org/{genid}"
+
+        packages = []
+        for pkgdesc in self._args.package:
+            package, version = pkgdesc.split("@", 1)
+            packages.append(
+                {
+                    "type": "software_Package",
+                    "spdxId": f"{doc_uri}#package{len(packages)+1}",
+                    "creationInfo": "_:creationinfo",
+                    "name": package,
+                    "software_packageVersion": version,
+                }
+            )
+
+        graph = [
+            {
+                "type": "CreationInfo",
+                "@id": "_:creationinfo",
+                "createdBy": [ f"{doc_uri}#make-sbom" ],
+                "specVersion": "3.0.1",
+                "created": now.strftime("%Y-%m-%dT%H:%M:%SZ"),
+            },
+            {
+                "type": "SoftwareAgent",
+                "spdxId": f"{doc_uri}#make-sbom",
+                "creationInfo": "_:creationinfo",
+            },
+            {
+                "type": "SpdxDocument",
+                "spdxId": doc_uri,
+                "creationInfo": "_:creationinfo",
+                "rootElement": [ f"{doc_uri}#BOM" ],
+                "element": [
+                    f"{doc_uri}#make-sbom",
+                    f"{doc_uri}#BOM",
+                    f"{doc_uri}#RootPackage",
+                    f"{doc_uri}#rel",
+                    *[pkg["spdxId"] for pkg in packages],
+                ],
+                "profileConformance": [ "core", "software" ],
+            },
+            {
+                "type": "software_Sbom",
+                "spdxId": f"{doc_uri}#BOM",
+                "creationInfo": "_:creationinfo",
+                "rootElement": [ f"{doc_uri}#RootPackage" ],
+                "element": [
+                    f"{doc_uri}#RootPackage",
+                    f"{doc_uri}#rel",
+                    *[pkg["spdxId"] for pkg in packages],
+                ],
+                "software_sbomType": [ "build" ],
+            },
+            {
+                "type": "software_Package",
+                "spdxId": f"{doc_uri}#RootPackage",
+                "creationInfo": "_:creationinfo",
+                "name": self._args.product,
+                "software_packageVersion": self._args.version,
+            },
+            {
+                "type": "Relationship",
+                "spdxId": f"{doc_uri}#rel",
+                "creationInfo": "_:creationinfo",
+                "from": f"{doc_uri}#RootPackage",
+                "relationshipType": "contains",
+                "to": [pkg["spdxId"] for pkg in packages],
+            },
+            *packages,
+        ]
+
+        json.dump(
+            {
+                "@context": "https://spdx.org/rdf/3.0.1/spdx-context.jsonld",
+                "@graph": graph,
+            },
+            sys.stdout,
+            indent=2,
+        )
+
+
+def main():
+    parser = argparse.ArgumentParser(description="Create an SBOM")
+    parser.add_argument("product", help="Name of product")
+    parser.add_argument("version", help="Product version")
+    parser.add_argument("package", nargs="+", help="<package>@<version>")
+    args = parser.parse_args()
+    MakeSBOM(args).run()
+
+
+if __name__ == "__main__":
+    main()

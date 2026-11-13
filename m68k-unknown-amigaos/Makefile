@@ -21,7 +21,7 @@ UPSTREAM_MPFR_TARBALL := mpfr_$(UPSTREAM_MPFR_VERSION).tar.bz2
 UPSTREAM_MPC_VERSION := 0.8.2
 UPSTREAM_MPC_TARBALL := mpc_$(UPSTREAM_MPC_VERSION).tar.gz
 
-UPSTREAM_CLIB2_VERSION := 1_214
+UPSTREAM_CLIB2_VERSION := 1_215
 UPSTREAM_CLIB2_TARBALL := clib2_$(UPSTREAM_CLIB2_VERSION).tar.gz
 
 UPSTREAM_NDK_TARBALL := ndk-includes_3.9.tar.bz2
@@ -29,7 +29,7 @@ UPSTREAM_NDK_TARBALL := ndk-includes_3.9.tar.bz2
 UPSTREAM_OPENURL_VERSION := 7.16
 UPSTREAM_OPENURL_TARBALL := openurl_$(UPSTREAM_OPENURL_VERSION).tar.gz
 
-UPSTREAM_AMISSL_VERSION := 5.17
+UPSTREAM_AMISSL_VERSION := 5.27
 UPSTREAM_AMISSL_TARBALL := amissl_$(UPSTREAM_AMISSL_VERSION).tar.xz
 
 UPSTREAM_GUIGFX_VERSION := 20.0
@@ -68,11 +68,12 @@ PREFIX ?= /opt/netsurf/$(TARGET_NAME)/cross
 
 PRISTINE_TAR := $(TOP)/../tools/pristine-tar
 REPACK := $(TOP)/../tools/repack
+MAKE_SBOM := $(TOP)/../tools/make-sbom
 
 GCC_ENV_PARAMS := AUTOCONF=$(GCC_AUTOCONF) AUTOHEADER=$(GCC_AUTOHEADER) AUTOM4TE=$(GCC_AUTOM4TE) PATH="$(PREFIX)/bin:$(PATH)"
 
 .PHONY: all clean distclean source-archives
-all: $(BUILDSTEPS)/stage2.d
+all: $(BUILDSTEPS)/stage2.d $(BUILDSTEPS)/sbom.d
 
 source-archives: $(BUILDSTEPS)/sources.d
 
@@ -81,6 +82,14 @@ clean:
 
 distclean: clean
 	rm -fr $(SOURCESDIR)
+
+define pkgdesc_from_tarball
+$(word 1,$(subst _, ,$(basename $(basename $(1)))))@$(patsubst $(word 1,$(subst _, ,$(basename $(basename $(1)))))_%,%,$(basename $(basename $(1))))
+endef
+
+$(BUILDSTEPS)/sbom.d: $(BUILDSTEPS)/buildsteps.d
+	$(MAKE_SBOM) "netsurf-toolchain-$(TARGET_NAME)" "$(shell git describe --always 2>/dev/null)" $(foreach item,$(filter UPSTREAM_%_TARBALL,$(.VARIABLES)),$(call pkgdesc_from_tarball,$($(item)))) >$(PREFIX)/toolchain.sbom
+	touch $@
 
 ###
 # Rules to build the full compiler
