@@ -236,8 +236,9 @@ ifeq ($(TARGET),ppc-amigaos)
   SDK_ITEMS := $(addprefix $(BUILDSTEPS)/, libiconv.d tre.d pbl.d $(COMMON_SDK_ITEMS) libjpeg-turbo.d)
   LIBCURL_SSL := amissl
   EXTRAARGS_LIBCARES := --disable-shared
-  EXTRAARGS_LIBCURL := --disable-ntlm-wb --without-random --enable-threaded-resolver --disable-ipv6 LIBS=-lpthread
+  EXTRAARGS_LIBCURL := --enable-nonblocking --enable-ares --disable-ntlm-wb --without-random --disable-ipv6 LIBS=-lpthread
   ENV_OPENSSL := CPPFLAGS="-DOPENSSL_NO_UNIX_SOCK"
+  LIBCARES_ENV := CFLAGS="-include proto/bsdsocket.h -DHAVE_IOCTLSOCKET_CAMEL_FIONBIO -D__USE_INLINE__" ac_cv_c_undeclared_builtin_options='none needed' ac_cv_have_decl_O_NONBLOCK=no ac_cv_have_decl_ioctl=no
 endif
 
 ifeq ($(TARGET),m68k-unknown-amigaos)
