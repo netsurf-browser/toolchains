@@ -95,8 +95,6 @@ AC_DEFUN([gl_EARLY],
   # Code from module libc-config:
   # Code from module libiconv-misc:
   # Code from module limits-h:
-  # Code from module locale-h:
-  # Code from module lock:
   # Code from module lstat:
   # Code from module malloc-posix:
   # Code from module malloca:
@@ -108,13 +106,9 @@ AC_DEFUN([gl_EARLY],
   # Code from module msvc-nothrow:
   # Code from module multiarch:
   # Code from module nocrash:
-  # Code from module once:
   # Code from module open:
   # Code from module pathmax:
   # Code from module progname:
-  # Code from module pthread-h:
-  gl_ANYTHREADLIB_EARLY
-  # Code from module pthread-once:
   # Code from module raise:
   # Code from module rawmemchr:
   # Code from module read:
@@ -124,7 +118,6 @@ AC_DEFUN([gl_EARLY],
   # Code from module relocatable-prog-wrapper:
   AC_REQUIRE([AC_SYS_LARGEFILE])
   # Code from module safe-read:
-  # Code from module sched-h:
   # Code from module signal-h:
   # Code from module sigpipe:
   # Code from module sigprocmask:
@@ -152,8 +145,6 @@ AC_DEFUN([gl_EARLY],
   # Code from module sys_stat-h:
   # Code from module sys_types-h:
   AC_REQUIRE([AC_USE_SYSTEM_EXTENSIONS])
-  # Code from module threadlib:
-  gl_THREADLIB_EARLY
   # Code from module time-h:
   # Code from module unistd-h:
   # Code from module unitypes-h:
@@ -163,10 +154,9 @@ AC_DEFUN([gl_EARLY],
   # Code from module unlocked-io-internal:
   # Code from module vararrays:
   # Code from module wchar-h:
-  # Code from module windows-mutex:
   # Code from module windows-once:
-  # Code from module windows-recmutex:
-  # Code from module windows-rwlock:
+  # Code from module windows-spin:
+  # Code from module windows-tls:
   # Code from module xalloc:
   # Code from module xalloc-oversized:
   # Code from module xreadlink:
@@ -280,7 +270,7 @@ AC_DEFUN([gl_INIT],
   ])
   gl_STDLIB_MODULE_INDICATOR([getprogname])
   dnl you must add AM_GNU_GETTEXT([external]) or similar to configure.ac.
-  AM_GNU_GETTEXT_VERSION([0.22])
+  AM_GNU_GETTEXT_VERSION([0.24])
   gl_GETTEXT_H
   AC_PROG_MKDIR_P
   GNULIB_I18N
@@ -294,11 +284,6 @@ AC_DEFUN([gl_INIT],
   gl_LIMITS_H
   gl_CONDITIONAL_HEADER([limits.h])
   AC_PROG_MKDIR_P
-  gl_LOCALE_H
-  gl_LOCALE_H_REQUIRE_DEFAULTS
-  AC_PROG_MKDIR_P
-  gl_LOCK
-  gl_MODULE_INDICATOR([lock])
   gl_FUNC_LSTAT
   gl_CONDITIONAL([GL_COND_OBJ_LSTAT], [test $REPLACE_LSTAT = 1])
   AM_COND_IF([GL_COND_OBJ_LSTAT], [
@@ -331,7 +316,6 @@ AC_DEFUN([gl_INIT],
                  [test $HAVE_MSVC_INVALID_PARAMETER_HANDLER = 1])
   gl_MODULE_INDICATOR([msvc-nothrow])
   gl_MULTIARCH
-  gl_ONCE
   gl_FUNC_OPEN
   gl_CONDITIONAL([GL_COND_OBJ_OPEN], [test $REPLACE_OPEN = 1])
   AM_COND_IF([GL_COND_OBJ_OPEN], [
@@ -341,13 +325,6 @@ AC_DEFUN([gl_INIT],
   gl_PATHMAX
   AC_CHECK_DECLS([program_invocation_name], [], [], [#include <errno.h>])
   AC_CHECK_DECLS([program_invocation_short_name], [], [], [#include <errno.h>])
-  gl_PTHREAD_H
-  gl_PTHREAD_H_REQUIRE_DEFAULTS
-  AC_PROG_MKDIR_P
-  gl_PTHREAD_ONCE
-  gl_CONDITIONAL([GL_COND_OBJ_PTHREAD_ONCE],
-                 [test $HAVE_PTHREAD_ONCE = 0 || test $REPLACE_PTHREAD_ONCE = 1])
-  gl_PTHREAD_MODULE_INDICATOR([pthread-once])
   gl_FUNC_RAISE
   gl_CONDITIONAL([GL_COND_OBJ_RAISE],
                  [test $HAVE_RAISE = 0 || test $REPLACE_RAISE = 1])
@@ -396,9 +373,6 @@ AC_DEFUN([gl_INIT],
   gl_RELOCATABLE_LIBRARY
   gl_FUNC_SETENV_SEPARATE
   gl_PREREQ_SAFE_READ
-  gl_SCHED_H
-  gl_SCHED_H_REQUIRE_DEFAULTS
-  AC_PROG_MKDIR_P
   gl_SIGNAL_H
   gl_SIGNAL_H_REQUIRE_DEFAULTS
   AC_PROG_MKDIR_P
@@ -484,6 +458,7 @@ AC_DEFUN([gl_INIT],
   case "$host_os" in
     mingw* | windows*)
       AC_EGREP_CPP([Special], [
+  #include <stdio.h>
   #ifndef _UCRT
    Special
   #endif
@@ -492,7 +467,7 @@ AC_DEFUN([gl_INIT],
       ;;
   esac
   gl_CONDITIONAL([GL_COND_OBJ_STDIO_CONSOLESAFE], [test $USES_MSVCRT = 1])
-  AC_CHECK_FUNCS([vasprintf])
+  AC_CHECK_FUNCS_ONCE([vasprintf])
   gl_STDLIB_H
   gl_STDLIB_H_REQUIRE_DEFAULTS
   AC_PROG_MKDIR_P
@@ -518,7 +493,6 @@ AC_DEFUN([gl_INIT],
   gl_SYS_TYPES_H
   gl_SYS_TYPES_H_REQUIRE_DEFAULTS
   AC_PROG_MKDIR_P
-  AC_REQUIRE([gl_THREADLIB])
   gl_TIME_H
   gl_TIME_H_REQUIRE_DEFAULTS
   AC_PROG_MKDIR_P
@@ -530,15 +504,13 @@ AC_DEFUN([gl_INIT],
   gl_UNITYPES_H
   gl_LIBUNISTRING_LIBHEADER([0.9.11], [uniwidth.h])
   AC_PROG_MKDIR_P
-  gl_LIBUNISTRING_MODULE([1.4], [uniwidth/width])
+  gl_LIBUNISTRING_MODULE([1.5], [uniwidth/width])
   AC_DEFINE([GNULIB_STDIO_SINGLE_THREAD], [1],
     [Define to 1 if you want the FILE stream functions getc, putc, etc.
      to use unlocked I/O if available, throughout the package.
      Unlocked I/O can improve performance, sometimes dramatically.
-     But unlocked I/O is safe only in single-threaded programs,
-     as well as in multithreaded programs for which you can guarantee that
-     every FILE stream, including stdin, stdout, stderr, is used only
-     in a single thread.])
+     But unlocked I/O is safe only in processes in which two threads
+     never simultaneously access the same FILE stream.])
   AC_DEFINE([USE_UNLOCKED_IO], [GNULIB_STDIO_SINGLE_THREAD],
     [An alias of GNULIB_STDIO_SINGLE_THREAD.])
   gl_FUNC_GLIBC_UNLOCKED_IO
@@ -547,16 +519,13 @@ AC_DEFUN([gl_INIT],
   gl_WCHAR_H_REQUIRE_DEFAULTS
   AC_PROG_MKDIR_P
   AC_REQUIRE([AC_CANONICAL_HOST])
-  gl_CONDITIONAL([GL_COND_OBJ_WINDOWS_MUTEX],
-                 [case "$host_os" in mingw* | windows*) true;; *) false;; esac])
-  AC_REQUIRE([AC_CANONICAL_HOST])
   gl_CONDITIONAL([GL_COND_OBJ_WINDOWS_ONCE],
                  [case "$host_os" in mingw* | windows*) true;; *) false;; esac])
   AC_REQUIRE([AC_CANONICAL_HOST])
-  gl_CONDITIONAL([GL_COND_OBJ_WINDOWS_RECMUTEX],
+  gl_CONDITIONAL([GL_COND_OBJ_WINDOWS_SPIN],
                  [case "$host_os" in mingw* | windows*) true;; *) false;; esac])
   AC_REQUIRE([AC_CANONICAL_HOST])
-  gl_CONDITIONAL([GL_COND_OBJ_WINDOWS_RWLOCK],
+  gl_CONDITIONAL([GL_COND_OBJ_WINDOWS_TLS],
                  [case "$host_os" in mingw* | windows*) true;; *) false;; esac])
   # End of code from modules
   m4_ifval(gl_LIBSOURCES_LIST, [
@@ -775,7 +744,6 @@ AC_DEFUN([gl_FILE_LIST], [
   lib/cloexec.h
   lib/close.c
   lib/dup2.c
-  lib/eloop-threshold.h
   lib/errno.in.h
   lib/error.c
   lib/error.in.h
@@ -792,11 +760,6 @@ AC_DEFUN([gl_FILE_LIST], [
   lib/getprogname.c
   lib/getprogname.h
   lib/gettext.h
-  lib/glthread/lock.c
-  lib/glthread/lock.h
-  lib/glthread/once.c
-  lib/glthread/once.h
-  lib/glthread/threadlib.c
   lib/idx.h
   lib/intprops-internal.h
   lib/intprops.h
@@ -804,7 +767,6 @@ AC_DEFUN([gl_FILE_LIST], [
   lib/libc-config.h
   lib/limits.in.h
   lib/localcharset.h
-  lib/locale.in.h
   lib/lstat.c
   lib/malloc.c
   lib/malloc/scratch_buffer.h
@@ -815,6 +777,7 @@ AC_DEFUN([gl_FILE_LIST], [
   lib/malloca.h
   lib/memeq.c
   lib/mempcpy.c
+  lib/min-eloop-threshold.h
   lib/minmax.h
   lib/msvc-inval.c
   lib/msvc-inval.h
@@ -825,8 +788,6 @@ AC_DEFUN([gl_FILE_LIST], [
   lib/progname.c
   lib/progname.h
   lib/progreloc.c
-  lib/pthread-once.c
-  lib/pthread.in.h
   lib/raise.c
   lib/rawmemchr.c
   lib/rawmemchr.valgrind
@@ -838,7 +799,6 @@ AC_DEFUN([gl_FILE_LIST], [
   lib/relocwrapper.c
   lib/safe-read.c
   lib/safe-read.h
-  lib/sched.in.h
   lib/scratch_buffer.h
   lib/setenv.c
   lib/signal.in.h
@@ -882,15 +842,12 @@ AC_DEFUN([gl_FILE_LIST], [
   lib/verify.h
   lib/warn-on-use.h
   lib/wchar.in.h
-  lib/windows-initguard.h
-  lib/windows-mutex.c
-  lib/windows-mutex.h
   lib/windows-once.c
   lib/windows-once.h
-  lib/windows-recmutex.c
-  lib/windows-recmutex.h
-  lib/windows-rwlock.c
-  lib/windows-rwlock.h
+  lib/windows-spin.c
+  lib/windows-spin.h
+  lib/windows-tls.c
+  lib/windows-tls.h
   lib/xalloc-oversized.h
   lib/xalloc.h
   lib/xmalloc.c
@@ -944,8 +901,6 @@ AC_DEFUN([gl_FILE_LIST], [
   m4/libunistring-base.m4
   m4/limits-h.m4
   m4/locale-en.m4
-  m4/locale_h.m4
-  m4/lock.m4
   m4/lstat.m4
   m4/malloc.m4
   m4/malloca.m4
@@ -962,7 +917,6 @@ AC_DEFUN([gl_FILE_LIST], [
   m4/nocrash.m4
   m4/off64_t.m4
   m4/off_t.m4
-  m4/once.m4
   m4/open-cloexec.m4
   m4/open-slash.m4
   m4/open.m4
@@ -970,10 +924,6 @@ AC_DEFUN([gl_FILE_LIST], [
   m4/pid_t.m4
   m4/po.m4
   m4/progtest.m4
-  m4/pthread-once.m4
-  m4/pthread-spin.m4
-  m4/pthread_h.m4
-  m4/pthread_rwlock_rdlock.m4
   m4/raise.m4
   m4/rawmemchr.m4
   m4/read.m4
@@ -982,7 +932,6 @@ AC_DEFUN([gl_FILE_LIST], [
   m4/relocatable-lib.m4
   m4/relocatable.m4
   m4/safe-read.m4
-  m4/sched_h.m4
   m4/setenv.m4
   m4/signal_h.m4
   m4/signalblocking.m4
@@ -1001,11 +950,9 @@ AC_DEFUN([gl_FILE_LIST], [
   m4/streq.m4
   m4/strerror.m4
   m4/string_h.m4
-  m4/sys_cdefs_h.m4
   m4/sys_socket_h.m4
   m4/sys_stat_h.m4
   m4/sys_types_h.m4
-  m4/threadlib.m4
   m4/time_h.m4
   m4/unistd_h.m4
   m4/unitypes_h.m4

@@ -1,5 +1,5 @@
 # stdcountof_h.m4
-# serial 2
+# serial 4
 dnl Copyright 2025-2026 Free Software Foundation, Inc.
 dnl This file is free software; the Free Software Foundation
 dnl gives unlimited permission to copy and/or distribute it,
@@ -21,7 +21,7 @@ AC_DEFUN_ONCE([gl_STDCOUNTOF_H],
   dnl it uses _Countof, which is not a compiler built-in in C++ mode.
   m4_ifdef([gl_ANSI_CXX], [AC_REQUIRE([gl_ANSI_CXX])])
   CXX_HAVE_STDCOUNTOF_H=1
-  if test "$CXX" != no; then
+  if test -n "$CXX" && test "$CXX" != no; then
     AC_CACHE_CHECK([whether the C++ compiler has <stdcountof.h>],
       [gl_cv_cxx_have_stdcountof_h],
       [dnl We can't use AC_LANG_PUSH([C++]) and AC_LANG_POP([C++]) here, due to
@@ -31,7 +31,7 @@ AC_DEFUN_ONCE([gl_STDCOUNTOF_H],
 int a[] = { 86, 47 };
 unsigned int a_n = countof (a);
 EOF
-       gl_command="$CXX $CXXFLAGS $CPPFLAGS -c conftest.cpp"
+       gl_command="$CXX $CXXFLAGS $CPPFLAGS -c conftest.cpp > /dev/null"
        if AC_TRY_EVAL([gl_command]); then
          gl_cv_cxx_have_stdcountof_h=yes
        else

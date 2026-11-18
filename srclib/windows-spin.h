@@ -1,5 +1,5 @@
-/* Init guards, somewhat like spinlocks (native Windows implementation).
-   Copyright (C) 2005-2026 Free Software Foundation, Inc.
+/* Spin locks (native Windows implementation).
+   Copyright (C) 2019-2026 Free Software Foundation, Inc.
 
    This file is free software: you can redistribute it and/or modify
    it under the terms of the GNU Lesser General Public License as
@@ -14,22 +14,34 @@
    You should have received a copy of the GNU Lesser General Public License
    along with this program.  If not, see <https://www.gnu.org/licenses/>.  */
 
-/* Written by Bruno Haible <bruno@clisp.org>, 2005.
-   Based on GCC's gthr-win32.h.  */
+/* Written by Bruno Haible <bruno@clisp.org>, 2019.  */
 
-#ifndef _WINDOWS_INITGUARD_H
-#define _WINDOWS_INITGUARD_H
+#ifndef _WINDOWS_SPIN_H
+#define _WINDOWS_SPIN_H
 
 #define WIN32_LEAN_AND_MEAN  /* avoid including junk */
 #include <windows.h>
 
 typedef struct
         {
-          volatile int done;
-          volatile LONG started;
+          LONG volatile word;
         }
-        glwthread_initguard_t;
+        glwthread_spinlock_t;
 
-#define GLWTHREAD_INITGUARD_INIT { 0, -1 }
+#define GLWTHREAD_SPIN_INIT { 0 }
 
-#endif /* _WINDOWS_INITGUARD_H */
+#ifdef __cplusplus
+extern "C" {
+#endif
+
+extern void glwthread_spin_init (glwthread_spinlock_t *lock);
+extern int glwthread_spin_lock (glwthread_spinlock_t *lock);
+extern int glwthread_spin_trylock (glwthread_spinlock_t *lock);
+extern int glwthread_spin_unlock (glwthread_spinlock_t *lock);
+extern int glwthread_spin_destroy (glwthread_spinlock_t *lock);
+
+#ifdef __cplusplus
+}
+#endif
+
+#endif /* _WINDOWS_SPIN_H */
