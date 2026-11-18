@@ -1,6 +1,6 @@
 --- srclib/time.in.h	2019-01-06 08:51:41.000000000 +0000
 +++ srclib/time.in.h	2020-03-06 19:46:37.429016156 +0000
-@@ -89,7 +89,7 @@ extern "C" {
+@@ -91,7 +91,7 @@ extern "C" {
  #    define timespec rpl_timespec
  struct timespec
  {

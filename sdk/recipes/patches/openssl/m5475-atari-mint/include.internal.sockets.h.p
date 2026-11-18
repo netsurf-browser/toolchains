@@ -1,6 +1,6 @@
 --- include/internal/sockets.h.orig	2018-06-03 03:19:29.000000000 +0200
 +++ include/internal/sockets.h	2018-06-03 03:19:36.000000000 +0200
-@@ -153,6 +153,16 @@
+@@ -155,6 +155,16 @@
  #define OPENSSL_USE_IPV6 0
  #endif
  #endif

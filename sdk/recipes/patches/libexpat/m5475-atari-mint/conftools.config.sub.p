@@ -1,6 +1,6 @@
 --- conftools/config.sub.orig	2023-10-01 08:53:00.740777146 +0100
 +++ conftools/config.sub	2023-10-01 08:59:22.657161841 +0100
-@@ -1209,7 +1209,7 @@
+@@ -1230,7 +1230,7 @@
  			| lm32 \
  			| loongarch32 | loongarch64 | loongarchx32 \
  			| m32c | m32r | m32rle \

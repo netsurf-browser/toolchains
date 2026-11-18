@@ -1,6 +1,6 @@
 --- include/internal/e_os.h.orig	2019-02-13 14:25:17.725058588 +0000
 +++ include/internal/e_os.h	2019-02-13 14:35:39.790029062 +0000
-@@ -335,6 +335,10 @@
+@@ -338,6 +338,10 @@
  #ifndef OPENSSL_NO_SECURE_MEMORY
  /* unistd.h defines _POSIX_VERSION */
  #if (defined(OPENSSL_SYS_UNIX)                                 \

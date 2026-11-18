@@ -11,7 +11,7 @@
      CFLAGS="${CFLAGS} ${ARCHS}"
 --- Makefile.in.orig	2026-10-13 14:48:49.104630963 +0100
 +++ Makefile.in	2026-10-13 14:48:59.472732196 +0100
-@@ -138,7 +138,7 @@
+@@ -140,7 +140,7 @@
  
  match.lo: match.S
  	$(CPP) match.S > _match.s

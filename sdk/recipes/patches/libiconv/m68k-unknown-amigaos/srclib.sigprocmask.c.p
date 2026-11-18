@@ -1,6 +1,6 @@
---- srclib/sigprocmask.c.orig	2011-08-07 14:42:06.000000000 +0100
-+++ srclib/sigprocmask.c	2014-01-15 00:59:33.130968152 +0000
-@@ -116,77 +116,6 @@
+--- srclib/sigprocmask.c.orig	2026-11-18 22:26:10.210920426 +0000
++++ srclib/sigprocmask.c	2026-11-18 22:26:32.567122528 +0000
+@@ -123,79 +123,6 @@
  # define signal ext_signal
  #endif
  
@@ -17,7 +17,10 @@
 -      return (*set >> sig) & 1;
 -    }
 -  else
--    return 0;
+-    {
+-      errno = EINVAL;
+-      return -1;
+-    }
 -}
 -
 -int
@@ -67,7 +70,6 @@
 -    }
 -}
 -
--
 -int
 -sigfillset (sigset_t *set)
 -{
@@ -75,6 +77,6 @@
 -  return 0;
 -}
 -
- /* Set of currently blocked signals.  */
- static sigset_t blocked_set /* = 0 */;
- 
+ /* Thread-local storage.
+    We don't use 'thread_local' here, since on mingw it (or '__thread') pulls in
+    libwinpthread, which we want to avoid.  See gl_AVOID_WINPTHREAD.  */

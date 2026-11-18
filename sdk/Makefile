@@ -26,22 +26,22 @@ KNOWN_TRIPLETS := \
 # https://github.com/google/brotli
 VERSION_BROTLI := 1.2.1
 # https://zlib.net/
-VERSION_ZLIB := 1.3.2
+VERSION_ZLIB := 1.4
 
 # Cryptography
 
 # https://openssl-library.org/
-VERSION_OPENSSL := 4.0.3
+VERSION_OPENSSL := 4.1.0
 
 # Document parsers
 
 # https://github.com/libexpat/libexpat
-VERSION_LIBEXPAT := 2.9.0
+VERSION_LIBEXPAT := 2.10.0
 
 # Image formats
 
 # https://libjpeg-turbo.org/
-VERSION_LIBJPEG_TURBO := 3.2.0
+VERSION_LIBJPEG_TURBO := 3.2.1
 # http://www.libpng.org/pub/png/libpng.html
 VERSION_LIBPNG := 1.6.59
 # https://developers.google.com/speed/webp/
@@ -65,7 +65,7 @@ VERSION_UTF8PROC := 2.12.0
 # Platforms with no native iconv (AmigaOS, Atari, Windows)
 
 # https://www.gnu.org/software/libiconv/
-VERSION_LIBICONV := 1.19
+VERSION_LIBICONV := 1.19.1
 
 # Platforms that don't use libjpeg-turbo (AmigaOS 3, Atari, Windows)
 
@@ -225,6 +225,7 @@ ifeq ($(TARGET),arm-riscos-gnueabi)
   LIBCURL_ENV := LIBS="-lbrotlidec -lbrotlicommon"
   EXTRAARGS_LIBCURL := --enable-nonblocking --enable-ares $(LIBCURL_DISABLES)
   EXTRAARGS_LIBEXPAT := --with-dev-urandom
+  EXTRAARGS_LIBJPEG_TURBO := -DCMAKE_SYSTEM_NAME=Generic -DCMAKE_SYSTEM_PROCESSOR=arm
   EXTRAARGS_OPENSSL := no-asm
   ENV_OPENSSL := CPPFLAGS="-DOPENSSL_NO_UNIX_SOCK"
 endif
@@ -237,6 +238,7 @@ ifeq ($(TARGET),arm-unknown-riscos)
   EXTRAARGS_LIBCURL := --enable-nonblocking --enable-ares $(LIBCURL_DISABLES)
   # Disable the expat testsuite as it requires C++11, which GCC4.7 does not support
   EXTRAARGS_LIBEXPAT := --with-tests=no --with-dev-urandom
+  EXTRAARGS_LIBJPEG_TURBO := -DCMAKE_SYSTEM_NAME=Generic -DCMAKE_SYSTEM_PROCESSOR=arm
   EXTRAARGS_OPENSSL := no-asm
   ENV_OPENSSL := CPPFLAGS="-DOPENSSL_NO_UNIX_SOCK" CFLAGS="$(cflags__) -std=c99"
 endif
@@ -249,7 +251,7 @@ ifeq ($(TARGET),m68k-atari-mint)
   EXTRAARGS_LIBEXPAT := --with-dev-urandom
   LIBEXPAT_ENV := LDFLAGS="$(ldflags__) -lcrypto"
   EXTRAARGS_LIBICONV := --enable-extra-encodings
-  LIBICONV_ENV := CFLAGS="$(cflags__) -DPATH_MAX=1024"
+  LIBICONV_ENV := CFLAGS="$(cflags__) -DPATH_MAX=1024" CPPFLAGS="$(cppflags__) -DGNULIB_SIGPROCMASK_SINGLE_THREAD=1"
   EXTRAARGS_OPENSSL := no-tests no-ui-console
   ENV_OPENSSL := CPPFLAGS="-DOPENSSL_NO_UNIX_SOCK -DOPENSSL_USE_USLEEP" CFLAGS="$(cflags__) -std=c99"
 endif
@@ -262,7 +264,7 @@ ifeq ($(TARGET),m5475-atari-mint)
   EXTRAARGS_LIBEXPAT := --with-dev-urandom
   LIBEXPAT_ENV := LDFLAGS="$(ldflags__) -lcrypto"
   EXTRAARGS_LIBICONV := --enable-extra-encodings
-  LIBICONV_ENV := CFLAGS="$(cflags__) -DPATH_MAX=1024"
+  LIBICONV_ENV := CFLAGS="$(cflags__) -DPATH_MAX=1024" CPPFLAGS="$(cppflags__) -DGNULIB_SIGPROCMASK_SINGLE_THREAD=1"
   EXTRAARGS_OPENSSL := no-asm no-tests no-ui-console
   ENV_OPENSSL := CPPFLAGS="-DOPENSSL_NO_UNIX_SOCK -DOPENSSL_USE_USLEEP" CFLAGS="$(cflags__) -std=c99"
 endif
@@ -282,8 +284,10 @@ ifeq ($(TARGET),ppc-amigaos)
   LIBEXPAT_ENV := CPPFLAGS="$(cppflags__) -D__USE_INLINE__" LDFLAGS="$(ldflags__) $(LIBEXPAT_CRYPTO_LIB)"
   # actually not urandom: we've patched it to use libcrypto/amissl
   EXTRAARGS_LIBEXPAT := --with-dev-urandom
+  EXTRAARGS_LIBJPEG_TURBO := -DCMAKE_SYSTEM_NAME=Generic -DCMAKE_SYSTEM_PROCESSOR=ppc
   ENV_OPENSSL := CPPFLAGS="-DOPENSSL_NO_UNIX_SOCK"
   LIBCARES_ENV := CFLAGS="-include proto/bsdsocket.h -DHAVE_IOCTLSOCKET_CAMEL_FIONBIO -D__USE_INLINE__" ac_cv_c_undeclared_builtin_options='none needed' ac_cv_have_decl_O_NONBLOCK=no ac_cv_have_decl_ioctl=no
+  LIBICONV_ENV := CPPFLAGS="$(cppflags__) -DGNULIB_SIGPROCMASK_SINGLE_THREAD=1"
 endif
 
 ifeq ($(TARGET),m68k-unknown-amigaos)
@@ -291,10 +295,10 @@ ifeq ($(TARGET),m68k-unknown-amigaos)
   EXTRAARGS_LIBCARES := --disable-shared --without-random
   LIBCURL_SSL := amissl
   EXTRAARGS_LIBCURL := --enable-nonblocking --enable-ares --disable-ntlm-wb --without-random --disable-threaded-resolver --with-zlib --disable-rt --disable-ipv6 $(LIBCURL_DISABLES)
-  LIBICONV_ENV := CFLAGS="$(cflags__) -DPATH_MAX=1024 -DRLIMIT_NOFILE=6"
+  LIBICONV_ENV := CFLAGS="$(cflags__) -DPATH_MAX=1024 -DRLIMIT_NOFILE=6" CPPFLAGS="$(cppflags__) -DGNULIB_SIGPROCMASK_SINGLE_THREAD=1"
   LIBJPEG_ENV := LDFLAGS="$(ldflags__) -lm"
   # LIBJPEG_TURBO tests need _random which we don't have
-  EXTRAARGS_LIBJPEG_TURBO := -DCMAKE_C_STANDARD_LIBRARIES="-lm -lgcc" -DWITH_TESTS=OFF
+  EXTRAARGS_LIBJPEG_TURBO := -DCMAKE_SYSTEM_NAME=Generic -DCMAKE_SYSTEM_PROCESSOR=m68k -DCMAKE_C_STANDARD_LIBRARIES="-lm -lgcc" -DWITH_TESTS=OFF
   # XXX: build openssl against bsdsocket.library?
   # ENV_OPENSSL := CFLAGS="-I$(GCCSDK_INSTALL_ENV)/netinclude" CPPFLAGS="-D__NO_NET_API"
   ENV_OPENSSL := CPPFLAGS="-DOPENSSL_NO_UNIX_SOCK"
@@ -324,7 +328,7 @@ ifeq ($(TARGET),i686-w64-mingw32)
   SDK_ITEMS := $(addprefix $(BUILDSTEPS)/, libiconv.d libgnurx.d $(COMMON_SDK_ITEMS) libjpeg.d libwebp.d)
   EXTRAARGS_LIBCARES := --disable-shared
   EXTRAARGS_LIBCURL := --enable-nonblocking --enable-ares --disable-ldap
-  LIBCURL_ENV := CFLAGS="$(cflags__) -DCARES_STATICLIB" LIBS="-lgdi32 -lcrypt32 -liphlpapi"
+  LIBCURL_ENV := CFLAGS="$(cflags__) -DCARES_STATICLIB" LIBS="-lgdi32 -lcrypt32 -lbcrypt -liphlpapi"
   TARGET_OPENSSL := mingw
   ENV_OPENSSL := CPPFLAGS="-DOPENSSL_NO_UNIX_SOCK" WINDRES="$(windres__)"
   EXTRAARGS_OPENSSL := no-asm
@@ -334,7 +338,7 @@ ifeq ($(TARGET),x86_64-w64-mingw32)
   SDK_ITEMS := $(addprefix $(BUILDSTEPS)/, libiconv.d libgnurx.d $(COMMON_SDK_ITEMS) libjpeg.d libwebp.d)
   EXTRAARGS_LIBCARES := --disable-shared
   EXTRAARGS_LIBCURL := --enable-nonblocking --enable-ares --disable-ldap
-  LIBCURL_ENV := CFLAGS="$(cflags__) -DCARES_STATICLIB" LIBS="-lgdi32 -lcrypt32 -liphlpapi"
+  LIBCURL_ENV := CFLAGS="$(cflags__) -DCARES_STATICLIB" LIBS="-lgdi32 -lcrypt32 -lbcrypt -liphlpapi"
   TARGET_OPENSSL := mingw64
   EXTRAARGS_OPENSSL := no-asm
   ENV_OPENSSL := CPPFLAGS="-DOPENSSL_NO_UNIX_SOCK" WINDRES="$(windres__)"
@@ -760,9 +764,9 @@ $(BUILDSTEPS)/libjpeg-chkupd.d:
 $(eval $(call patched_source_rule,libjpegturbo,$(VERSION_LIBJPEG_TURBO),.tar.gz,libjpeg-turbo))
 
 # build jpeg turbo library with cmake
-$(BUILDSTEPS)/libjpeg-turbo.d: $(BUILDSTEPS)/builddir.d $(BUILDSTEP_SRC_LIBJPEGTURBO)
+$(BUILDSTEPS)/libjpeg-turbo.d: $(BUILDSTEPS)/builddir.d $(BUILDSTEPS)/zlib.d $(BUILDSTEP_SRC_LIBJPEGTURBO)
 	mkdir -p $(BUILDDIR_LIBJPEGTURBO)/ns-sdk-build
-	cd $(BUILDDIR_LIBJPEGTURBO)/ns-sdk-build && $(env) $(LIBJPEG_TURBO_ENV) $(NS_SDK_CMAKE_CMD) -DENABLE_STATIC=ON -DENABLE_SHARED=OFF $(EXTRAARGS_LIBJPEG_TURBO)  ..
+	cd $(BUILDDIR_LIBJPEGTURBO)/ns-sdk-build && $(env) $(LIBJPEG_TURBO_ENV) $(NS_SDK_CMAKE_CMD) -DENABLE_STATIC=ON -DENABLE_SHARED=OFF -DWITH_SYSTEM_ZLIB=ON -DZLIB_ROOT=$(GCCSDK_INSTALL_ENV) $(EXTRAARGS_LIBJPEG_TURBO)  ..
 	cd $(BUILDDIR_LIBJPEGTURBO)/ns-sdk-build && $(env) make install VERBOSE=1
 	touch $@
 
